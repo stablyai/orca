@@ -3,6 +3,7 @@ import { GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT } from '../../../../shared/agent-
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import type { AppState } from '../types'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
@@ -294,6 +295,278 @@ Implement task B worker instructions for the next dispatch`,
         (context) => String(context).length > GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT
       )
     ).toBe(false)
+  })
+
+  it('regenerates the tab title after /clear replaces the provider session', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const sessionA = { key: 'session_id' as const, id: 'session-a' }
+    const sessionB = { key: 'session_id' as const, id: 'session-b' }
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: sessionA }
+    )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+
+    // /clear: Claude announces a fresh session on the same pane before any new prompt.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: '', agentType: 'claude', sessionBoundary: true },
+        'Claude',
+        undefined,
+        undefined,
+        { providerSession: sessionB }
+      )
+
+    const cleared = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(cleared.generatedTitle).toBeUndefined()
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBeUndefined()
+    expect(resolveTerminalTabTitle(cleared, true)).not.toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+
+    // The new session's first prompt titles the tab from scratch.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Add pagination to the users endpoint', agentType: 'claude' },
+        'Claude',
+        undefined,
+        undefined,
+        { providerSession: sessionB }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Add pagination to the users endpoint'
+    )
+  })
+
+  it('keeps the generated title when a resume reuses the same provider session id', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const session = { key: 'session_id' as const, id: 'session-a' }
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: session }
+    )
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: '', agentType: 'claude', sessionBoundary: true },
+        'Claude',
+        undefined,
+        undefined,
+        { providerSession: session }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
+  it('keeps a user custom title across a provider session replacement', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setTabCustomTitle(tabId, 'My status work')
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id' as const, id: 'session-a' } }
+    )
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: '', agentType: 'claude', sessionBoundary: true },
+        'Claude',
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id' as const, id: 'session-b' } }
+      )
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.customTitle).toBe('My status work')
+    expect(resolveTerminalTabTitle(tab, true)).toBe('My status work')
+  })
+
+  it('regenerates the title when the next prompt alone carries a new session id', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const sessionA = { key: 'session_id' as const, id: 'session-a' }
+    const sessionB = { key: 'session_id' as const, id: 'session-b' }
+    // The non-boundary `done` below queues a PR refresh microtask; keep it out of the real slice.
+    store.setState({
+      refreshGitHubForWorktreeIfStale: vi.fn().mockResolvedValue(undefined)
+    } as Partial<AppState>)
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: sessionA }
+    )
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'done',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: sessionA }
+    )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+
+    // /clear whose SessionStart never reached the pane: the new prompt alone carries the new id.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Add pagination to the users endpoint', agentType: 'claude' },
+        'Claude',
+        undefined,
+        undefined,
+        { providerSession: sessionB }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Add pagination to the users endpoint'
+    )
+  })
+
+  it('clears and regenerates within one batched hook transaction', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id' as const, id: 'session-a' } }
+    )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+
+    // Production hook frames arrive as one transaction: SessionStart(clear), then the new prompt.
+    store.getState().setAgentStatuses([
+      {
+        paneKey,
+        payload: { state: 'done', prompt: '', agentType: 'claude', sessionBoundary: true },
+        metadata: { providerSession: { key: 'session_id' as const, id: 'session-b' } }
+      },
+      {
+        paneKey,
+        payload: {
+          state: 'working',
+          prompt: 'Add pagination to the users endpoint',
+          agentType: 'claude'
+        },
+        metadata: { providerSession: { key: 'session_id' as const, id: 'session-b' } }
+      }
+    ])
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Add pagination to the users endpoint'
+    )
+  })
+
+  it('still drops a stale generated title on session replacement while auto-generation is off', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT tokens',
+        agentType: 'claude'
+      },
+      'Claude',
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id' as const, id: 'session-a' } }
+    )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+
+    store.setState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false }
+    })
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: '', agentType: 'claude', sessionBoundary: true },
+        'Claude',
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id' as const, id: 'session-b' } }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBeUndefined()
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBeUndefined()
   })
 
   it('keeps manual rename precedence over generated and live titles', () => {
