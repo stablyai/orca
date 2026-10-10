@@ -34,6 +34,7 @@ async function mountRemoteRelay(options?: { promptStatus?: false; raise?: false 
   const relayDirectory = join(fixture.directory, 'relay')
   const relay = new RuntimeMobileNotificationController()
   relay.configureDismissalStore(relayDirectory)
+  fixture.notificationControllers.push(relay)
   const delivery = createNotificationDeliveryService({
     readNotificationSettings: () => NOTIFICATION_SETTINGS,
     findActiveWindow: () => null,
@@ -106,10 +107,13 @@ async function mountRemoteRelay(options?: { promptStatus?: false; raise?: false 
   await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
   await waitFor(() => expect(fixture.status).toBeTypeOf('function'))
   act(() => publishStatus())
-  const live = (kind: 'prompt' | 'completion') =>
-    new MobileNotificationDismissalStore(relayDirectory)
+  const live = async (kind: 'prompt' | 'completion') => {
+    // Disk assertions model recovery after the host's pending snapshot has drained.
+    await relay.flushPersistence()
+    return new MobileNotificationDismissalStore(relayDirectory)
       .liveDeliveries()
       .filter((entry) => entry.structuredOrigin?.cause.kind === kind)
+  }
   if (options?.raise === false) {
     return { live }
   }
@@ -120,7 +124,7 @@ async function mountRemoteRelay(options?: { promptStatus?: false; raise?: false 
     }
     publishView()
   })
-  await waitFor(() => expect(live('prompt')).toHaveLength(1))
+  await waitFor(async () => expect(await live('prompt')).toHaveLength(1))
   return { live }
 }
 
@@ -195,7 +199,7 @@ it.each([
       fixture.hostFeed.observe(SESSION)
       publishStatus()
     })
-    await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+    await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
     expect(readCalls()).toBe(0)
     expect(transport.settle).toHaveBeenCalledOnce()
     // Prompt settlement never touches a completion alert.
@@ -203,7 +207,7 @@ it.each([
       ([request]: [NotificationDispatchRequest]) =>
         request.structuredOrigin?.cause.kind === 'completion'
     )
-    expect(relay.live('completion')).toHaveLength(relayedCompletions.length)
+    expect(await relay.live('completion')).toHaveLength(relayedCompletions.length)
   }
 )
 
@@ -214,7 +218,7 @@ it('withdraws it when a restarted remote host comes back with the prompt cancell
   revise((item) => interrupt(resolveA('cancelled')(item)))
   await waitFor(() => expect(fixture.status).not.toBe(before))
   act(() => publishStatus())
-  await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+  await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
 })
 
 it('keeps the relayed prompt alert while the host still reports a prompt pending', async () => {
@@ -225,7 +229,7 @@ it('keeps the relayed prompt alert while the host still reports a prompt pending
   })
   await act(async () => {})
   expect(transport.settle).not.toHaveBeenCalled()
-  expect(relay.live('prompt')).toHaveLength(1)
+  expect(await relay.live('prompt')).toHaveLength(1)
 })
 
 it('never settles from a status the desktop lost contact with', async () => {
@@ -234,7 +238,7 @@ it('never settles from a status the desktop lost contact with', async () => {
   act(() => endStatusStream())
   await act(async () => {})
   expect(transport.settle).not.toHaveBeenCalled()
-  expect(relay.live('prompt')).toHaveLength(1)
+  expect(await relay.live('prompt')).toHaveLength(1)
 })
 
 it('settles once per relayed prompt, not on every later status update', async () => {
@@ -261,7 +265,7 @@ it('keeps the pending prompt alert when the edge outruns its status and another 
   act(() => publishStatus())
   await act(async () => {})
   expect(transport.settle).not.toHaveBeenCalled()
-  expect(relay.live('prompt')).toHaveLength(1)
+  expect(await relay.live('prompt')).toHaveLength(1)
 })
 
 it('keeps it when a queued frame lands in the same task as the edge', async () => {
@@ -272,7 +276,7 @@ it('keeps it when a queued frame lands in the same task as the edge', async () =
   })
   await act(async () => {})
   expect(transport.settle).not.toHaveBeenCalled()
-  expect(relay.live('prompt')).toHaveLength(2)
+  expect(await relay.live('prompt')).toHaveLength(2)
 })
 
 it('retries a settlement that failed on the next qualifying row', async () => {
@@ -285,13 +289,13 @@ it('retries a settlement that failed on the next qualifying row', async () => {
     publishStatus()
   })
   await waitFor(() => expect(transport.settle).toHaveBeenCalledOnce())
-  expect(relay.live('prompt')).toHaveLength(1)
+  expect(await relay.live('prompt')).toHaveLength(1)
   transport.settle.mockImplementation(settle ?? (async () => {}))
   act(() => {
     revise((item) => item)
     publishStatus()
   })
-  await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+  await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
   expect(transport.settle).toHaveBeenCalledTimes(2)
 })
 
@@ -314,7 +318,7 @@ it('settles a prompt answered while the previous settle call was still out', asy
     addPrompt('B')
     publishStatus()
   })
-  await waitFor(() => expect(relay.live('prompt')).toHaveLength(1))
+  await waitFor(async () => expect(await relay.live('prompt')).toHaveLength(1))
   act(() => {
     revise(resolvePrompt('B', 'resolved'))
     fixture.hostFeed.observe(SESSION)
@@ -324,7 +328,7 @@ it('settles a prompt answered while the previous settle call was still out', asy
   expect(replies).toHaveLength(1)
   // The host goes quiet; the reply alone must re-judge the mirror.
   await act(async () => replies[0]?.())
-  await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+  await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
 })
 
 it('settles a prompt whose edge arrives after its own resolution row', async () => {
@@ -349,6 +353,6 @@ it('settles a prompt whose edge arrives after its own resolution row', async () 
       )
     ).toBe(true)
   )
-  await waitFor(() => expect(relay.live('prompt')).toEqual([]))
+  await waitFor(async () => expect(await relay.live('prompt')).toEqual([]))
   expect(transport.settle).toHaveBeenCalledOnce()
 })

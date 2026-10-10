@@ -46,6 +46,7 @@ async function mountPausedRelay({ viewed = true, away = false } = {}) {
   const relayDirectory = join(fixture.directory, 'relay')
   const relay = new RuntimeMobileNotificationController()
   relay.configureDismissalStore(relayDirectory)
+  fixture.notificationControllers.push(relay)
   const relayEvents: MobileNotificationEvent[] = []
   relay.onDispatched((event) => relayEvents.push(event))
   const delivery = createNotificationDeliveryService({
@@ -152,7 +153,10 @@ async function mountPausedRelay({ viewed = true, away = false } = {}) {
         result: edge
       })
     },
-    liveDeliveries: () => new MobileNotificationDismissalStore(relayDirectory).liveDeliveries()
+    liveDeliveries: async () => {
+      await relay.flushPersistence()
+      return new MobileNotificationDismissalStore(relayDirectory).liveDeliveries()
+    }
   }
 }
 
@@ -202,7 +206,7 @@ it.each(['visible', 'read then away', 'tab/store rerender', 'failed retirement']
     await act(async () => relay.release())
     expect(transport.dispatch).not.toHaveBeenCalled()
     expect(relay.relayEvents).toEqual([])
-    expect(relay.liveDeliveries()).toEqual([])
+    expect(await relay.liveDeliveries()).toEqual([])
     expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBeUndefined()
   }
 )
@@ -227,7 +231,7 @@ it('reading A does not cover unseen B on the same remote subject', async () => {
   expect(relay.relayEvents).toMatchObject([
     { type: 'notification', notificationId: agentSessionPromptAttentionKey(SCOPE, SESSION, 'B') }
   ])
-  expect(relay.liveDeliveries()).toHaveLength(1)
+  expect(await relay.liveDeliveries()).toHaveLength(1)
   expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
 })
 
@@ -268,7 +272,7 @@ it('accepting a transcript while away does not fabricate a read frontier', async
   expect(dismissIds()).toEqual([])
   await act(async () => relay.release())
   expect(relay.relayEvents).toMatchObject([{ type: 'notification' }])
-  expect(relay.liveDeliveries()).toHaveLength(1)
+  expect(await relay.liveDeliveries()).toHaveLength(1)
 })
 
 it('a genuine read during unread writes prevents the final relay delivery', async () => {
@@ -291,7 +295,7 @@ it('a genuine read during unread writes prevents the final relay delivery', asyn
     expect(readDuringUnread).toBe(true)
     await waitFor(() => expect(dismissIds()).toHaveLength(1))
     expect(relay.relayEvents).toEqual([])
-    expect(relay.liveDeliveries()).toEqual([])
+    expect(await relay.liveDeliveries()).toEqual([])
   } finally {
     stop()
   }
@@ -348,7 +352,7 @@ it.each(['missing cursor', 'different epoch', 'different target'] as const)(
       )
     }
     expect(relay.relayEvents).toMatchObject([{ type: 'notification' }])
-    expect(relay.liveDeliveries()).toHaveLength(1)
+    expect(await relay.liveDeliveries()).toHaveLength(1)
   }
 )
 
@@ -392,6 +396,6 @@ it.each(['success', 'failure'] as const)(
         notificationId: `${agentSessionAttentionSubjectPrefix(SCOPE, SESSION)}turn:turn-1`
       }
     ])
-    expect(relay.liveDeliveries()).toHaveLength(1)
+    expect(await relay.liveDeliveries()).toHaveLength(1)
   }
 )

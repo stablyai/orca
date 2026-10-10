@@ -71,6 +71,10 @@ export class RuntimeMobileNotificationController {
     this.dismissalStore = new MobileNotificationDismissalStore(userDataPath)
   }
 
+  flushPersistence(): Promise<void> {
+    return this.dismissalStore?.flush() ?? Promise.resolve()
+  }
+
   reconcileDismissedPushes(
     delivered: readonly DeliveredNotificationIdentity[]
   ): DeliveredNotificationIdentity[] {

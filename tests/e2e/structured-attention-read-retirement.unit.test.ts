@@ -225,13 +225,13 @@ it.each(['transport-error', 'false-result'] as const)(
 
 it('retries a failed local desktop relay withdrawal on a later explicit read', async () => {
   const relayDirectory = mkdtempSync(join(tmpdir(), 'orca-relay-read-retry-'))
+  const relay = new RuntimeMobileNotificationController()
   try {
     addPrompt('A')
     const sent = fixture.events.find((event) => event.type === 'notification')
     if (!sent?.notificationId || sent.type !== 'notification') {
       throw new Error('prompt not sent')
     }
-    const relay = new RuntimeMobileNotificationController()
     relay.configureDismissalStore(relayDirectory)
     relay.dispatch(sent)
     const withdrawals: string[] = []
@@ -267,6 +267,7 @@ it('retries a failed local desktop relay withdrawal on a later explicit read', a
       2
     )
   } finally {
+    await relay.flushPersistence()
     rmSync(relayDirectory, { recursive: true, force: true })
   }
 })

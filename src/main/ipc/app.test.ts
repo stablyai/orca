@@ -182,7 +182,7 @@ describe('registerAppHandlers', () => {
     expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
   })
 
-  it('marks relaunch as expected shutdown before exiting', async () => {
+  it('marks relaunch as expected shutdown before quitting through the normal pipeline', async () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
@@ -195,16 +195,14 @@ describe('registerAppHandlers', () => {
     await relaunchPromise
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
+    expect(destroySystemTrayMock).not.toHaveBeenCalled()
     expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
-    expect(appExitMock).toHaveBeenCalledWith(0)
-    expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
-      appExitMock.mock.invocationCallOrder[0]
-    )
+    expect(appQuitMock).toHaveBeenCalledOnce()
+    expect(appExitMock).not.toHaveBeenCalled()
   })
 
-  it('waits for pre-relaunch cleanup before exiting', async () => {
+  it('waits for pre-relaunch cleanup before quitting through the normal pipeline', async () => {
     let finishCleanup!: () => void
     const onBeforeRelaunch = vi.fn(
       () =>
@@ -221,13 +219,15 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
     expect(appRelaunchMock).not.toHaveBeenCalled()
     expect(appExitMock).not.toHaveBeenCalled()
+    expect(appQuitMock).not.toHaveBeenCalled()
 
     finishCleanup()
     await relaunchPromise
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
-    expect(appExitMock).toHaveBeenCalledWith(0)
+    expect(appQuitMock).toHaveBeenCalledOnce()
+    expect(appExitMock).not.toHaveBeenCalled()
   })
 
   it('marks restart as expected shutdown before quitting through the normal pipeline', async () => {

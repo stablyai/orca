@@ -247,6 +247,11 @@ function installWillQuitHandler(): void {
           })
           .catch((error) => console.error('[runtime] Failed to stop local RPC transport:', error))
       : Promise.resolve()
+    // Session teardown may retire notifications; flush after its producers have stopped.
+    const notificationFlush = Promise.allSettled([
+      structuredAgentSessionShutdown,
+      rpcStopAndClear
+    ]).then(() => state.runtime?.flushMobileNotificationPersistence?.())
     // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
     // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
     // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
@@ -272,6 +277,7 @@ function installWillQuitHandler(): void {
       { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
       { name: 'structured-agent-session', promise: structuredAgentSessionShutdown },
       { name: 'usage-cache', promise: usageCacheFlush },
+      { name: 'notification-dismissals', promise: notificationFlush },
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
     ])

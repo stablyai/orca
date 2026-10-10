@@ -14,7 +14,6 @@ import { isPwshAvailableAsync } from '../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray } from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
   trustFloatingWorkspaceDirectory,
@@ -152,10 +151,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
-      destroySystemTray()
       relaunchApp('renderer-request')
-      app.exit(0)
+      // Stop notification producers and drain persistence through the existing bounded quit barrier.
+      quitProcess()
     }, 150)
   })
 

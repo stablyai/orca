@@ -66,6 +66,7 @@ export const SCOPE = {
 export let fixture: {
   directory: string
   controller: RuntimeMobileNotificationController
+  notificationControllers: RuntimeMobileNotificationController[]
   events: MobileNotificationEvent[]
   items: AgentJournalRenderItem[]
   sequence: number
@@ -227,6 +228,7 @@ beforeEach(() => {
   fixture = {
     directory,
     controller,
+    notificationControllers: [controller],
     events,
     items,
     sequence,
@@ -338,12 +340,15 @@ beforeEach(() => {
     settings: createGlobalSettingsFixture({ experimentalTerminalAttention: true })
   })
 })
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   clearStructuredHostStub()
   resetStructuredAgentSessionReadOwnersForTests()
   resetStructuredAgentSessionTurnCompletionFeedsForTests()
   resetStructuredAgentSessionStatusFeedsForTests()
+  await Promise.all(
+    fixture.notificationControllers.map((controller) => controller.flushPersistence())
+  )
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   rmSync(fixture.directory, { recursive: true, force: true })

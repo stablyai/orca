@@ -38,6 +38,7 @@ const SCOPE = {
   workspaceId: 'folder-1',
   workspaceKind: 'folder'
 } as const
+const notificationControllers: RuntimeMobileNotificationController[] = []
 function prompt(id: string, sequence: number): AgentJournalRenderItem {
   return {
     itemId: id,
@@ -56,6 +57,7 @@ function prompt(id: string, sequence: number): AgentJournalRenderItem {
 function attentionPath(directory: string) {
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
+  notificationControllers.push(controller)
   const events: MobileNotificationEvent[] = []
   controller.onDispatched((event) => events.push(event))
   let items: AgentJournalRenderItem[] = [
@@ -131,8 +133,11 @@ beforeEach(() => {
   installStructuredHostStub()
   vi.clearAllMocks()
 })
-afterEach(() => {
+afterEach(async () => {
   clearStructuredHostStub()
+  await Promise.all(
+    notificationControllers.splice(0).map((controller) => controller.flushPersistence())
+  )
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -213,8 +218,10 @@ it('a restart sends the original delivery fence in the existing native gateway f
   if (!original) {
     throw new Error('prompt not delivered')
   }
+  await h.controller.flushPersistence()
   const restarted = new RuntimeMobileNotificationController()
   restarted.configureDismissalStore(directory)
+  notificationControllers.push(restarted)
   const gateway = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration() }]
   })

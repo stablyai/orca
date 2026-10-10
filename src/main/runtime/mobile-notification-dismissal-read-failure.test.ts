@@ -8,7 +8,7 @@ vi.mock('node:fs', async (original) => {
   const f = await original<typeof fs>()
   return { ...f, readFileSync: vi.fn(f.readFileSync) }
 })
-it('preserves dismissal history after EIO', () => {
+it('preserves dismissal history after EIO', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'push-comment-'))
   try {
     const store = new MobileNotificationDismissalStore(dir)
@@ -18,6 +18,7 @@ it('preserves dismissal history after EIO', () => {
       notificationEpoch: 'epoch',
       notificationSeq: 1
     })
+    await store.flush()
     const path = join(dir, 'mobile-notification-dismissals.json')
     const before = readFileSync(path, 'utf8')
     vi.mocked(readFileSync).mockImplementationOnce(() => {
@@ -30,6 +31,7 @@ it('preserves dismissal history after EIO', () => {
       notificationEpoch: 'epoch',
       notificationSeq: 2
     })
+    await restarted.flush()
     expect(readFileSync(path, 'utf8')).toBe(before)
   } finally {
     vi.restoreAllMocks()

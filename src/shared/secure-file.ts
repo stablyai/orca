@@ -41,6 +41,15 @@ type HardenedPathCacheEntry = {
 
 const UNSUPPORTED_DIRECTORY_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP'])
 
+export function isUnsupportedDirectoryFsyncError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    UNSUPPORTED_DIRECTORY_FSYNC_CODES.has(error.code)
+  )
+}
+
 // Why: hardening spawns icacls synchronously (once when the DACL already verifies, four times when it must be rewritten), so cache idempotent re-hardens per process.
 let hardenedPathsThisProcess = new SecurePathHardeningCache<HardenedPathCacheEntry>(
   DEFAULT_HARDENING_CACHE_BOUNDS
@@ -66,7 +75,8 @@ function hardenSecureDirectoryOnce(dirPath: string): void {
   })
 }
 
-function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean {
+/** Exported for `secure-file-async-write`, the async twin of the write path below. */
+export function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean {
   if (isDirectory && process.platform === 'win32') {
     hardenSecureDirectoryOnce(targetPath)
     return true
@@ -119,6 +129,11 @@ export function writeDurableSecureJsonFile(targetPath: string, value: unknown): 
  * The return value covers the *file* only. The parent directory is hardened fire-and-forget — on
  * Windows that lane is async and answers `pending` regardless — so a `true` here says nothing
  * about the directory's ACL.
+ *
+ * Blocking twin of `writeSecureFileAsync`, kept for the stores that are synchronous by construction
+ * and have no await to give (`device-registry`, `plugin-*-store`, `artifact-share-record-store`,
+ * `profile-cloud-*`, `runtime-environment-store`). It also bypasses that lane's per-path
+ * serialization, so a given file must be written through one lane or the other, not both.
  */
 export function writeSecureFile(
   targetPath: string,
@@ -181,10 +196,7 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
   try {
     fsyncPathSync(directory, 'r')
   } catch (error) {
-    if (
-      error instanceof Error &&
-      UNSUPPORTED_DIRECTORY_FSYNC_CODES.has((error as NodeJS.ErrnoException).code ?? '')
-    ) {
+    if (isUnsupportedDirectoryFsyncError(error)) {
       return
     }
     throw error
@@ -251,7 +263,7 @@ export function hardenSecurePath(
  * reporting it as `applied` is what let a dead ACL look like a working one. The real outcome
  * arrives through `onAsyncSettled`.
  */
-type HardeningOutcome = 'applied' | 'pending' | 'failed'
+export type HardeningOutcome = 'applied' | 'pending' | 'failed'
 
 function applySecurePathRestriction(
   targetPath: string,
@@ -291,7 +303,7 @@ function applySecurePathRestriction(
 }
 
 /** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */
-function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
+export function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
   const entry = getHardenedPathCacheEntry(targetPath, isDirectory)
   if (entry) {
     hardenedPathsThisProcess.set(targetPath, entry)
