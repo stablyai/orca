@@ -12,8 +12,10 @@ import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
 import {
   AgentCommandOverrideInput,
   AgentDefaultArgsInput,
-  AgentDefaultEnvInput
+  AgentDefaultEnvInput,
+  AgentPostPasteSubmitInputControl
 } from './AgentLaunchDefaultsEditor'
+import type { AgentPostPasteSubmitInput } from '../../../../shared/tui-agent-post-paste-submit'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -68,11 +70,13 @@ export type AgentCatalogRowProps = {
   cmdOverride: string | undefined
   argsOverride: string
   envOverride: Record<string, string>
+  postPasteSubmitInput: AgentPostPasteSubmitInput
   onSetDefault: () => void
   onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
+  onSavePostPasteSubmitInput: (value: AgentPostPasteSubmitInput) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
 }
 
@@ -89,11 +93,13 @@ export function AgentCatalogRow({
   cmdOverride,
   argsOverride,
   envOverride,
+  postPasteSubmitInput,
   onSetDefault,
   onSetEnabled,
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
+  onSavePostPasteSubmitInput,
   sessionSourceHome
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
@@ -149,7 +155,7 @@ export function AgentCatalogRow({
                     ? translate('auto.components.settings.AgentsPane.d7625cf8b2', 'Default agent')
                     : translate('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')
                 }
-                className="h-7 w-full justify-center gap-1 text-xs"
+                className="w-full"
               >
                 {isDefault && <Check className="size-3" />}
                 {isDefault
@@ -176,7 +182,7 @@ export function AgentCatalogRow({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                size="icon-xs"
                 onClick={() => setCmdOpen((previous) => !previous)}
                 aria-label={
                   cmdOpen
@@ -189,7 +195,6 @@ export function AgentCatalogRow({
                         'Expand command override'
                       )
                 }
-                className="size-7 text-muted-foreground hover:text-foreground"
               >
                 <ChevronDown
                   className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
@@ -226,6 +231,12 @@ export function AgentCatalogRow({
               />
             </div>
           )}
+          <div className="mt-2">
+            <AgentPostPasteSubmitInputControl
+              value={postPasteSubmitInput}
+              onSave={onSavePostPasteSubmitInput}
+            />
+          </div>
           {sessionSourceHome && (
             <div className="mt-2">
               <AgentSessionSourceHomeInput
