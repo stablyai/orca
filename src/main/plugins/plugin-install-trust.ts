@@ -18,10 +18,17 @@ export function pluginInstallTrustError(
     return null
   }
   if (source.kind === 'local-path') {
-    return `reserved plugin identity ${pluginKey} cannot be installed from a local path`
+    // Why: keep "reserved plugin identity" as the stable error prefix for UI matching,
+    // and spell out the fork-and-test fix so the dialog is actionable (#12598).
+    return (
+      `reserved plugin identity ${pluginKey} cannot be installed from a local path. ` +
+      `Forked official templates still use publisher "stablyai" and/or an id starting with "orca-". ` +
+      `Change publisher and id in orca-plugin.json to your own identity before local testing.`
+    )
   }
   const url = source.kind === 'git' ? source.url : source.plugin.url
   return isOfficialOrganizationGitSource(url)
     ? null
-    : `reserved plugin identity ${pluginKey} must resolve to the stablyai organization`
+    : `reserved plugin identity ${pluginKey} must resolve to the stablyai organization. ` +
+        `Forks must either publish from github.com/stablyai/... or rename publisher/id away from the reserved namespace.`
 }
