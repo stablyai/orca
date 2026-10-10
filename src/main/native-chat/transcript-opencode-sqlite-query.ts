@@ -16,6 +16,11 @@ import {
 } from './transcript-opencode-part-blocks'
 // Cursors are opaque provider order: SQLite rowid in v1, session sequence in v2.
 
+// ZCode stores hidden bookkeeping transcripts in the same message table; the
+// same predicate the AI Vault scan applies keeps them out of chat renders.
+const ZCODE_HIDDEN_MESSAGE_FILTER =
+  "AND COALESCE(json_extract(data, '$.semantics.transcriptVisibility'), 'visible') != 'hidden'"
+
 export type OpenCodeTranscriptItem = {
   rowid: number
   fingerprint: string
@@ -70,7 +75,8 @@ function rowsWithinBudget<T>(
 
 export function readOpenCodeTranscriptSignal(
   dbPath: string,
-  sessionId: string
+  sessionId: string,
+  agent?: 'zcode'
 ): OpenCodeTranscriptSignal | null {
   const db = openOpenCodeDatabaseReadonly(dbPath)
   try {
@@ -84,14 +90,22 @@ export function readOpenCodeTranscriptSignal(
     // Aggregates without GROUP BY always yield exactly one row, so [0] is it.
     const [messageRow] = rowsOf<{ message_count: number; max_message_rowid: number }>(
       db.prepare(
-        'SELECT COUNT(*) AS message_count, COALESCE(MAX(rowid), 0) AS max_message_rowid FROM message WHERE session_id = ?'
+        `SELECT COUNT(*) AS message_count, COALESCE(MAX(rowid), 0) AS max_message_rowid FROM message WHERE session_id = ? ${
+          agent === 'zcode' ? ZCODE_HIDDEN_MESSAGE_FILTER : ''
+        }`
       ),
       sessionId
     )
     const [partRow] = rowsOf<{ part_count: number; max_part_time_updated: number }>(
       db.prepare(
-        'SELECT COUNT(*) AS part_count, COALESCE(MAX(time_updated), 0) AS max_part_time_updated FROM part WHERE session_id = ?'
+        `SELECT COUNT(*) AS part_count, COALESCE(MAX(time_updated), 0) AS max_part_time_updated
+         FROM part WHERE session_id = ? AND message_id IN (
+           SELECT id FROM message WHERE session_id = ? ${
+             agent === 'zcode' ? ZCODE_HIDDEN_MESSAGE_FILTER : ''
+           }
+         )`
       ),
+      sessionId,
       sessionId
     )
     return {
@@ -110,6 +124,7 @@ export function readOpenCodeTranscriptPage(args: {
   sessionId: string
   limit: number
   beforeMessageRowId?: number
+  agent?: 'zcode'
 }): OpenCodeTranscriptPage | null {
   const db = openOpenCodeDatabaseReadonly(args.dbPath)
   try {
@@ -127,7 +142,9 @@ export function readOpenCodeTranscriptPage(args: {
     const select = db.prepare(
       `SELECT rowid AS message_rowid, id, time_created, time_updated, CASE WHEN length(CAST(data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data
          FROM message
-         WHERE session_id = ? AND rowid < ?
+         WHERE session_id = ? AND rowid < ? ${
+           args.agent === 'zcode' ? ZCODE_HIDDEN_MESSAGE_FILTER : ''
+         }
          ORDER BY rowid DESC
          LIMIT ?`
     )
