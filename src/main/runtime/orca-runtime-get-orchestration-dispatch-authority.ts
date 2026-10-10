@@ -13,6 +13,10 @@ import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-out
 import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import {
+  resolveWorkspaceAgentDetectionHost,
+  type AgentDetectionHost
+} from '../preflight/workspace-agent-detection'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   localOrchestrationCliCommand,
@@ -246,6 +250,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     return this.store && worktreeId
       ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), worktreeId)
       : undefined
+  }
+
+  resolveAgentDetectionHost(worktreeId: string | null | undefined): AgentDetectionHost {
+    return resolveWorkspaceAgentDetectionHost(this.store ?? undefined, worktreeId)
   }
 
   getOrchestrationFleetAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[] {

@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 
 export type DashboardLaunchDetectionState = Pick<
   AppState,
@@ -58,7 +59,11 @@ function detectedAgentsForWorktree(
     const group = folder ? catalog.groupsById.get(folder.projectGroupId) : undefined
     const host = parseExecutionHostId(group?.executionHostId)
     if (host?.kind === 'runtime') {
-      return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
+      return (
+        state.runtimeDetectedAgentIds?.[
+          getRuntimeAgentInventoryKey(host.environmentId, worktreeId)
+        ] ?? []
+      )
     }
     const connectionId = folder?.connectionId ?? group?.connectionId
     return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
@@ -68,7 +73,11 @@ function detectedAgentsForWorktree(
   const repo = catalog.reposById.get(worktree?.repoId ?? repoId)
   const host = parseExecutionHostId(worktree?.hostId ?? repo?.executionHostId)
   if (host?.kind === 'runtime') {
-    return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
+    return (
+      state.runtimeDetectedAgentIds?.[
+        getRuntimeAgentInventoryKey(host.environmentId, worktreeId)
+      ] ?? []
+    )
   }
   const connectionId = host?.kind === 'ssh' ? host.targetId : repo?.connectionId
   return connectionId
