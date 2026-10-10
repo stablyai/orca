@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import {
-  captureRuntimeAgentDetectionOwner,
-  runtimeAgentDetectionCacheMatchesOwner
-} from '@/runtime/runtime-agent-detection-owner'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -28,7 +23,7 @@ export type AgentDetectionTarget =
   | { kind: 'local'; worktreeId?: string | null; contextKey?: string }
   | { kind: 'ssh'; connectionId: string }
   // worktreeId: the host resolves that workspace's runtime; absent means the host default.
-  | { kind: 'runtime'; environmentId: string; worktreeId?: string | null; pairingRevision?: number }
+  | { kind: 'runtime'; environmentId: string; worktreeId?: string | null }
 
 function normalizeAgentDetectionTarget(
   target: AgentDetectionTarget | string | null | undefined
@@ -66,6 +61,7 @@ export function useDetectedAgents(
   // Why: undefined means "store not yet hydrated" — we don't know if the
   // worktree is local or remote yet. This prevents flashing local agents for
   // remote worktrees during hydration.
+  const isUnknown = target === undefined
   const targetKind = target?.kind
   const targetId =
     target?.kind === 'ssh'
@@ -81,28 +77,11 @@ export function useDetectedAgents(
       ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
   const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
-  const expectedPairingRevision = target?.kind === 'runtime' ? target.pairingRevision : undefined
-  const currentPairingRevision = useAppStore((s) =>
-    targetKind === 'runtime' && targetId
-      ? captureRuntimeAgentDetectionOwner(s.runtimeEnvironments, targetId).pairingRevision
-      : undefined
-  )
-  const pairingRevision = expectedPairingRevision ?? currentPairingRevision
-  const runtimeOwner =
-    targetKind === 'runtime' && targetId ? { environmentId: targetId, pairingRevision } : undefined
-  // A runtime record is shown only to the pairing that produced it.
-  const ownsRuntimeRecord = (s: AppState): boolean =>
-    !!runtimeOwner &&
-    !!recordKey &&
-    runtimeAgentDetectionCacheMatchesOwner(s.runtimeDetectedAgentOwnerKeys[recordKey], runtimeOwner)
-  const isUnknown =
-    target === undefined ||
-    (expectedPairingRevision !== undefined && expectedPairingRevision !== currentPairingRevision)
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
       : targetKind === 'runtime' && recordKey
-        ? `runtime:${JSON.stringify([recordKey, pairingRevision ?? null])}`
+        ? `runtime:${recordKey}`
         : null
 
   const detectedIds = useAppStore((s) => {
@@ -113,7 +92,7 @@ export function useDetectedAgents(
       return s.remoteDetectedAgentIds[targetId] ?? null
     }
     if (targetKind === 'runtime' && recordKey) {
-      return ownsRuntimeRecord(s) ? (s.runtimeDetectedAgentIds[recordKey] ?? null) : null
+      return s.runtimeDetectedAgentIds[recordKey] ?? null
     }
     return localContextKey
       ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
@@ -127,18 +106,15 @@ export function useDetectedAgents(
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
     if (targetKind === 'runtime' && recordKey) {
-      return ownsRuntimeRecord(s) && (s.isDetectingRuntimeAgents[recordKey] ?? false)
+      return s.isDetectingRuntimeAgents[recordKey] ?? false
     }
     return localContextKey
       ? (s.isDetectingLocalAgentsByContext[localContextKey] ?? false)
       : s.isDetectingAgents
   })
   const isRefreshing = useAppStore((s) => {
-    if (isUnknown) {
-      return false
-    }
     if (targetKind === 'runtime' && recordKey) {
-      return ownsRuntimeRecord(s) && (s.isRefreshingRuntimeAgents[recordKey] ?? false)
+      return s.isRefreshingRuntimeAgents[recordKey] ?? false
     }
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
@@ -151,7 +127,7 @@ export function useDetectedAgents(
       : s.isRefreshingAgents
   })
   const needsServerUpdate = useAppStore((s) =>
-    !isUnknown && targetKind === 'runtime' && recordKey && ownsRuntimeRecord(s)
+    targetKind === 'runtime' && recordKey
       ? s.runtimeAgentDetectionNeedsServerUpdate[recordKey] === true
       : false
   )
@@ -171,13 +147,13 @@ export function useDetectedAgents(
     // no-op Zustand subscriptions per hook during unrelated store churn.
     const state = useAppStore.getState()
     if (targetKind === 'runtime' && targetId) {
-      return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId, pairingRevision)
+      return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
     }
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
     return state.refreshDetectedAgents(localWorktreeId)
-  }, [isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId, pairingRevision])
+  }, [isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {
     if (isUnknown) {
@@ -204,14 +180,14 @@ export function useDetectedAgents(
       }
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
-        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId, pairingRevision)
+        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       } else if (isNewRemoteTarget && detectedIds.length > 0) {
         // Why: a host can install an agent after its cached list was populated;
         // refresh once when a new launch surface first observes that host.
-        void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId, pairingRevision)
+        void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       } else if (isNewRemoteTarget) {
         // Empty results are intentionally retryable through the normal probe.
-        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId, pairingRevision)
+        void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       }
     } else {
       if (detectedIds === null) {
@@ -222,7 +198,6 @@ export function useDetectedAgents(
     isUnknown,
     targetKind,
     targetId,
-    pairingRevision,
     remoteTargetKey,
     detectedIds,
     localWorktreeId,

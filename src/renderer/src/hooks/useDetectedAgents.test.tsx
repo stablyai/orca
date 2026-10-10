@@ -15,7 +15,6 @@ import {
 } from '../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -446,53 +445,5 @@ describe('useDetectedAgents (runtime call site)', () => {
 
     expect(detectCalls).toBe(2)
     expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
-  })
-})
-
-describe('captured runtime detection owner', () => {
-  it('passes the captured pairing and refuses to probe its replacement until retargeted', async () => {
-    const environment: PublicKnownRuntimeEnvironment = {
-      id: 'env-1',
-      name: 'Host',
-      createdAt: 1,
-      updatedAt: 7,
-      pairingRevision: 7,
-      lastUsedAt: null,
-      runtimeId: null,
-      endpoints: [],
-      preferredEndpointId: 'host'
-    }
-    useAppStore.getState().setRuntimeEnvironments([environment])
-    const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1', pairingRevision: 7 })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'preflight.detectAgents',
-        expectedEnvironmentPairingRevision: 7
-      })
-    )
-    await act(async () => {
-      useAppStore.getState().setRuntimeEnvironments([{ ...environment, pairingRevision: 8 }])
-    })
-    await flushEffects()
-    runtimeEnvironmentCall.mockClear()
-    await latestHookResult?.refresh()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(latestHookResult?.detectedIds).toBeNull()
-    await act(async () => {
-      root.render(
-        createElement(HookProbe, {
-          target: { kind: 'runtime', environmentId: 'env-1', pairingRevision: 8 }
-        })
-      )
-    })
-    await flushEffects()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'preflight.detectAgents',
-        expectedEnvironmentPairingRevision: 8
-      })
-    )
   })
 })

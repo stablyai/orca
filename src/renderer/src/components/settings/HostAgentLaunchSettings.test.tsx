@@ -135,11 +135,7 @@ describe('host launch settings form', () => {
   it('renders host arguments and masked values, then writes the selected host', async () => {
     const { container } = render(pane(17))
     await screen.findByDisplayValue('--host-marker')
-    expect(transport.detection).toHaveBeenCalledWith({
-      kind: 'runtime',
-      environmentId: 'ssh-host',
-      pairingRevision: 17
-    })
+    expect(transport.detection).toHaveBeenCalledWith({ kind: 'runtime', environmentId: 'ssh-host' })
     expect(screen.getByRole('textbox', { name: 'Environment variable name' })).toBeTruthy()
     const secret = container.querySelector<HTMLInputElement>('[aria-label="Value for API_KEY"]')
     expect(secret?.type).toBe('password')

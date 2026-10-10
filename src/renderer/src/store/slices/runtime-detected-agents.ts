@@ -1,22 +1,21 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import {
-  callRuntimeAgentDetection,
-  RuntimeAgentDetectionNeedsServerUpdateError
-} from './runtime-workspace-agent-detection'
+  callRuntimeRpc,
+  getRuntimeEnvironmentStatus,
+  RuntimeRpcCallError,
+  runtimeEnvironmentSupportsCapability
+} from '@/runtime/runtime-rpc-client'
+import {
+  captureRuntimeEnvironmentRequestRevision,
+  getRuntimeEnvironmentRevision
+} from '@/runtime/runtime-environment-revision'
+import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   getRuntimeAgentInventoryEnvironmentId,
   getRuntimeAgentInventoryKey
 } from './runtime-agent-inventory-key'
-import {
-  captureRuntimeAgentDetectionOwner,
-  runtimeAgentDetectionCacheMatchesOwner,
-  runtimeAgentDetectionOwnerIsCurrent,
-  runtimeAgentDetectionOwnerKey,
-  type RuntimeAgentDetectionOwner
-} from '@/runtime/runtime-agent-detection-owner'
 
 // Why: remote runtime hosts are not SSH connections, but their launch surfaces
 // (tab bar, quick launch, Settings → Agents under an Active Server) still have
@@ -25,24 +24,20 @@ import {
 // the host-default list, or environment + workspace for a workspace's list.
 export type RuntimeDetectedAgentsSlice = {
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
-  /** Which pairing produced each record, so a re-paired host never shows its predecessor's list. */
-  runtimeDetectedAgentOwnerKeys: Record<string, string>
   isDetectingRuntimeAgents: Record<string, boolean>
   isRefreshingRuntimeAgents: Record<string, boolean>
   /** Keys whose host is too old to list that workspace's agents; their list is empty. */
   runtimeAgentDetectionNeedsServerUpdate: Record<string, boolean>
   ensureRuntimeDetectedAgents: (
     environmentId: string,
-    worktreeId?: string | null,
-    expectedPairingRevision?: number
+    worktreeId?: string | null
   ) => Promise<TuiAgent[]>
   /** Forces a re-detect on the runtime host via `preflight.refreshAgents`
    *  (login-shell PATH re-read), falling back to `preflight.detectAgents` for
    *  servers that predate the refresh RPC. */
   refreshRuntimeDetectedAgents: (
     environmentId: string,
-    worktreeId?: string | null,
-    expectedPairingRevision?: number
+    worktreeId?: string | null
   ) => Promise<TuiAgent[]>
   clearRuntimeDetectedAgents: (environmentId: string) => void
   /** Drops runtime detected-agent caches for environments not in the kept set.
@@ -53,17 +48,49 @@ export type RuntimeDetectedAgentsSlice = {
 
 // Why: these are module-scoped (not in the store) so we can deduplicate
 // concurrent callers without storing a Promise in Zustand state.
-type PendingDetection = { owner: RuntimeAgentDetectionOwner; promise: Promise<TuiAgent[]> }
-const runtimeDetectPromises = new Map<string, PendingDetection>()
-const runtimeRefreshPromises = new Map<string, PendingDetection>()
-
-// Why: a same-id re-pair must neither join nor be settled by the retired pairing's probe.
-function pendingDetectionKey(key: string, ownerKey: string): string {
-  return JSON.stringify([key, ownerKey])
-}
+const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const runtimeRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+}
+
+export class RuntimeAgentDetectionNeedsServerUpdateError extends Error {
+  constructor() {
+    super("Update Orca on this server to list this workspace's agents.")
+    this.name = 'RuntimeAgentDetectionNeedsServerUpdateError'
+  }
+}
+
+/**
+ * Sends `preflight.detectAgents` / `refreshAgents` scoped to a workspace. A host without the
+ * workspace-scoped capability can only answer its own default, which is the workspace's list only
+ * on a known non-Windows host. The host default goes out synchronously, as it always has.
+ */
+export function callRuntimeAgentDetection<T>(
+  environmentId: string,
+  worktreeId: string | null | undefined,
+  call: (params: { worktreeId: string } | undefined) => Promise<T>
+): Promise<T> {
+  if (!worktreeId) {
+    return call(undefined)
+  }
+  const capability = PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
+  return runtimeEnvironmentSupportsCapability(environmentId, capability).then(async (supported) => {
+    if (supported) {
+      return call({ worktreeId })
+    }
+    // Why: a fresh status both reports the platform and catches an in-place upgrade.
+    const status = await getRuntimeEnvironmentStatus(environmentId)
+    if (status.capabilities?.includes(capability)) {
+      return call({ worktreeId })
+    }
+    // Why: an old Windows host's default omits a WSL workspace's agents; an absent platform may be one.
+    if (!status.hostPlatform || status.hostPlatform === 'win32') {
+      throw new RuntimeAgentDetectionNeedsServerUpdateError()
+    }
+    return call(undefined)
+  })
 }
 
 export function _getRuntimeDetectPromiseCountForTest(): number {
@@ -93,15 +120,14 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
   const dropEnvironments = (drop: (environmentId: string) => boolean): void => {
     const dropKey = (key: string) => drop(getRuntimeAgentInventoryEnvironmentId(key))
     for (const promises of [runtimeDetectPromises, runtimeRefreshPromises]) {
-      for (const [key, pending] of promises) {
-        if (drop(pending.owner.environmentId)) {
+      for (const key of promises.keys()) {
+        if (dropKey(key)) {
           promises.delete(key)
         }
       }
     }
     set((s) => {
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
-      const runtimeDetectedAgentOwnerKeys = withoutKeys(s.runtimeDetectedAgentOwnerKeys, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
       const isRefreshingRuntimeAgents = withoutKeys(s.isRefreshingRuntimeAgents, dropKey)
       const runtimeAgentDetectionNeedsServerUpdate = withoutKeys(
@@ -109,14 +135,12 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         dropKey
       )
       return runtimeDetectedAgentIds === s.runtimeDetectedAgentIds &&
-        runtimeDetectedAgentOwnerKeys === s.runtimeDetectedAgentOwnerKeys &&
         isDetectingRuntimeAgents === s.isDetectingRuntimeAgents &&
         isRefreshingRuntimeAgents === s.isRefreshingRuntimeAgents &&
         runtimeAgentDetectionNeedsServerUpdate === s.runtimeAgentDetectionNeedsServerUpdate
         ? s
         : {
             runtimeDetectedAgentIds,
-            runtimeDetectedAgentOwnerKeys,
             isDetectingRuntimeAgents,
             isRefreshingRuntimeAgents,
             runtimeAgentDetectionNeedsServerUpdate
@@ -136,100 +160,56 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
     }))
   }
 
-  const captureOwner = (environmentId: string, expectedPairingRevision?: number) => {
-    const owner = captureRuntimeAgentDetectionOwner(
-      get().runtimeEnvironments,
-      environmentId,
-      expectedPairingRevision
-    )
-    const isCurrent = () => runtimeAgentDetectionOwnerIsCurrent(get().runtimeEnvironments, owner)
-    return { owner, ownerKey: runtimeAgentDetectionOwnerKey(owner), isCurrent }
-  }
-
-  // Claims `key` for `owner`; a record left by a retired pairing is discarded, never shown.
-  const claimRecord = (
-    s: AppState,
-    key: string,
-    owner: RuntimeAgentDetectionOwner,
-    ownerKey: string
-  ): Partial<AppState> => {
-    const matches = runtimeAgentDetectionCacheMatchesOwner(
-      s.runtimeDetectedAgentOwnerKeys[key],
-      owner
-    )
-    return {
-      runtimeDetectedAgentIds: {
-        ...s.runtimeDetectedAgentIds,
-        [key]: matches ? (s.runtimeDetectedAgentIds[key] ?? null) : null
-      },
-      runtimeDetectedAgentOwnerKeys: { ...s.runtimeDetectedAgentOwnerKeys, [key]: ownerKey },
-      runtimeAgentDetectionNeedsServerUpdate: matches
-        ? s.runtimeAgentDetectionNeedsServerUpdate
-        : withoutKeys(s.runtimeAgentDetectionNeedsServerUpdate, (k) => k === key)
-    }
-  }
-
   return {
     runtimeDetectedAgentIds: {},
-    runtimeDetectedAgentOwnerKeys: {},
     isDetectingRuntimeAgents: {},
     isRefreshingRuntimeAgents: {},
     runtimeAgentDetectionNeedsServerUpdate: {},
 
-    ensureRuntimeDetectedAgents: (environmentId, worktreeId, expectedPairingRevision) => {
+    ensureRuntimeDetectedAgents: (environmentId: string, worktreeId?: string | null) => {
       const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
-      const { owner, ownerKey, isCurrent } = captureOwner(environmentId, expectedPairingRevision)
-      if (!isCurrent()) {
-        return Promise.resolve([])
-      }
-      const pendingKey = pendingDetectionKey(key, ownerKey)
-      const inflightRefresh = runtimeRefreshPromises.get(pendingKey)
+      const inflightRefresh = runtimeRefreshPromises.get(key)
       if (inflightRefresh) {
-        return inflightRefresh.promise
+        return inflightRefresh
       }
-      const { runtimeDetectedAgentIds, runtimeDetectedAgentOwnerKeys } = get()
-      const existing = runtimeAgentDetectionCacheMatchesOwner(
-        runtimeDetectedAgentOwnerKeys[key],
-        owner
-      )
-        ? runtimeDetectedAgentIds[key]
-        : null
+      const existing = get().runtimeDetectedAgentIds[key]
       // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
       // must not be treated as cached — re-detect so a later install / PATH fix is
       // picked up without a reconnect. Non-empty results still short-circuit.
       if (existing?.length) {
         return Promise.resolve(existing)
       }
-      const inflight = runtimeDetectPromises.get(pendingKey)
+      const inflight = runtimeDetectPromises.get(key)
       if (inflight) {
-        return inflight.promise
+        return inflight
       }
 
       set((s) => ({
-        ...claimRecord(s, key, owner, ownerKey),
         isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: true }
       }))
 
       const target = { kind: 'environment', environmentId } as const
-      const fence = { expectedEnvironmentPairingRevision: owner.pairingRevision }
-      const isLatest = () => runtimeDetectPromises.get(pendingKey)?.promise === pending
+      // Why: captured before the capability wait, so a re-pair during it cannot retarget the probe.
+      const fence = {
+        expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(environmentId)
+      }
       const pending = callRuntimeAgentDetection(environmentId, worktreeId, (params) =>
         callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
       )
         .then((typed) => {
-          // Why: skip committing if the environment was removed (retained out)
-          // or re-paired while the detect was in flight — otherwise it re-adds a
-          // stale entry that retainRuntimeDetectedAgents just pruned.
-          if (isCurrent() && isLatest()) {
+          // Why: skip committing if the environment was removed (retained out) or
+          // re-paired while the detect was in flight — otherwise it re-adds a stale
+          // entry that retainRuntimeDetectedAgents or clearRuntimeDetectedAgents just pruned.
+          if (runtimeDetectPromises.get(key) === pending) {
             commitDetection(key, typed, false)
           }
-          return isCurrent() ? typed : []
+          return typed
         })
         .catch((error: unknown): TuiAgent[] => {
           // Why: a remote runtime may be disconnected or version-incompatible.
           // Keep the menu retryable instead of pinning a failed probe forever.
           // Same in-flight guard as the .then() above.
-          if (!isCurrent() || !isLatest()) {
+          if (runtimeDetectPromises.get(key) !== pending) {
             return []
           }
           if (error instanceof RuntimeAgentDetectionNeedsServerUpdateError) {
@@ -242,43 +222,41 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
           return []
         })
         .finally(() => {
-          if (isLatest()) {
-            runtimeDetectPromises.delete(pendingKey)
+          if (runtimeDetectPromises.get(key) === pending) {
+            runtimeDetectPromises.delete(key)
           }
         })
 
-      runtimeDetectPromises.set(pendingKey, { owner, promise: pending })
+      runtimeDetectPromises.set(key, pending)
       return pending
     },
 
-    refreshRuntimeDetectedAgents: (environmentId, worktreeId, expectedPairingRevision) => {
+    refreshRuntimeDetectedAgents: (environmentId: string, worktreeId?: string | null) => {
       const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
-      const { owner, ownerKey, isCurrent } = captureOwner(environmentId, expectedPairingRevision)
-      if (!isCurrent()) {
-        return Promise.resolve([])
-      }
-      const pendingKey = pendingDetectionKey(key, ownerKey)
-      const inflight = runtimeRefreshPromises.get(pendingKey)
+      const inflight = runtimeRefreshPromises.get(key)
       if (inflight) {
-        return inflight.promise
+        return inflight
       }
 
       // Why: a refresh is newer and authoritative; detach an older detect so its
       // late result cannot overwrite the freshly hydrated PATH result.
-      runtimeDetectPromises.delete(pendingKey)
+      runtimeDetectPromises.delete(key)
       set((s) => ({
-        ...claimRecord(s, key, owner, ownerKey),
         isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: true }
       }))
 
       const target = { kind: 'environment', environmentId } as const
-      const fence = { expectedEnvironmentPairingRevision: owner.pairingRevision }
-      const isLatest = () => runtimeRefreshPromises.get(pendingKey)?.promise === pending
+      const fence = {
+        expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(environmentId)
+      }
       const pending = callRuntimeAgentDetection(environmentId, worktreeId, (params) =>
         callRuntimeRpc<{ agents: TuiAgent[] }>(target, 'preflight.refreshAgents', params, fence)
           .then((result) => result.agents)
           .catch((error) => {
-            if (!isRuntimeMethodNotFoundError(error) || !isCurrent()) {
+            const repaired =
+              getRuntimeEnvironmentRevision(environmentId) !==
+              fence.expectedEnvironmentPairingRevision
+            if (!isRuntimeMethodNotFoundError(error) || repaired) {
               throw error
             }
             // Why: only older servers need the fallback; retrying disconnects and
@@ -289,22 +267,22 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         .then((typed) => {
           // Why: same guard as ensureRuntimeDetectedAgents — if the environment
           // was retained out or re-paired mid-refresh, don't re-add a pruned entry.
-          if (isCurrent() && isLatest()) {
+          if (runtimeRefreshPromises.get(key) === pending) {
             commitDetection(key, typed, false)
           }
-          return isCurrent() ? typed : []
+          return typed
         })
         .catch((error: unknown) => {
-          if (!isCurrent()) {
-            return []
-          }
-          if (error instanceof RuntimeAgentDetectionNeedsServerUpdateError && isLatest()) {
+          if (
+            error instanceof RuntimeAgentDetectionNeedsServerUpdateError &&
+            runtimeRefreshPromises.get(key) === pending
+          ) {
             commitDetection(key, [], true)
             return []
           }
           // Why: a disconnected runtime must keep Refresh retryable and must not
           // wipe the last known agent list.
-          if (isLatest()) {
+          if (runtimeRefreshPromises.get(key) === pending) {
             set((s) => ({
               isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
               isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: false }
@@ -313,12 +291,12 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
           return get().runtimeDetectedAgentIds[key] ?? []
         })
         .finally(() => {
-          if (isLatest()) {
-            runtimeRefreshPromises.delete(pendingKey)
+          if (runtimeRefreshPromises.get(key) === pending) {
+            runtimeRefreshPromises.delete(key)
           }
         })
 
-      runtimeRefreshPromises.set(pendingKey, { owner, promise: pending })
+      runtimeRefreshPromises.set(key, pending)
       return pending
     },
 

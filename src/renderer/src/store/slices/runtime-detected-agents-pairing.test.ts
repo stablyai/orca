@@ -4,10 +4,12 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 
-const rpc = vi.hoisted(() => ({ call: vi.fn() }))
+const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(), status: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
   ...(await original<typeof RuntimeRpcClientModule>()),
-  callRuntimeRpc: rpc.call
+  callRuntimeRpc: rpc.call,
+  runtimeEnvironmentSupportsCapability: rpc.supports,
+  getRuntimeEnvironmentStatus: rpc.status
 }))
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -20,6 +22,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // @ts-expect-error -- minimal API stub for the store under test
 globalThis.window = { api: {} }
 import { createTestStore } from './store-test-helpers'
+import { getRuntimeAgentInventoryKey } from './runtime-agent-inventory-key'
 
 function environment(pairingRevision: number): PublicKnownRuntimeEnvironment {
   return {
@@ -43,24 +46,17 @@ function deferredAgents() {
   return { promise, resolve }
 }
 
+const WORKTREE = 'repo::/workspace'
+const WORKSPACE_KEY = getRuntimeAgentInventoryKey('detection-peer', WORKTREE)
+
 beforeEach(() => {
   rpc.call.mockReset()
+  rpc.supports.mockReset()
+  rpc.status.mockReset()
   createTestStore().getState().clearRuntimeDetectedAgents('detection-peer')
 })
 
-describe('runtime detection pairing ownership', () => {
-  it('refuses detection and refresh captured against a retired pairing', async () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments([environment(2)])
-    await expect(
-      store.getState().ensureRuntimeDetectedAgents('detection-peer', undefined, 1)
-    ).resolves.toEqual([])
-    await expect(
-      store.getState().refreshRuntimeDetectedAgents('detection-peer', undefined, 1)
-    ).resolves.toEqual([])
-    expect(rpc.call).not.toHaveBeenCalled()
-  })
-
+describe('runtime detection across a re-pair', () => {
   it('does not retarget an old refresh fallback to the replacement pairing', async () => {
     const store = createTestStore()
     let failOld!: (error: Error) => void
@@ -70,10 +66,10 @@ describe('runtime detection pairing ownership', () => {
       })
     )
     store.getState().setRuntimeEnvironments([environment(1)])
-    const old = store.getState().refreshRuntimeDetectedAgents('detection-peer', undefined, 1)
+    const old = store.getState().refreshRuntimeDetectedAgents('detection-peer')
     store.getState().setRuntimeEnvironments([environment(2)])
     rpc.call.mockResolvedValueOnce(['codex'])
-    await store.getState().ensureRuntimeDetectedAgents('detection-peer', undefined, 2)
+    await store.getState().ensureRuntimeDetectedAgents('detection-peer')
     failOld(
       new RuntimeRpcCallError({
         id: 'refresh',
@@ -81,7 +77,7 @@ describe('runtime detection pairing ownership', () => {
         error: { code: 'method_not_found', message: 'Unsupported method' }
       })
     )
-    await expect(old).resolves.toEqual([])
+    await old
     expect(rpc.call).toHaveBeenCalledTimes(2)
     expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toEqual(['codex'])
   })
@@ -129,16 +125,52 @@ describe('runtime detection pairing ownership', () => {
     expect(rpc.call).toHaveBeenCalledTimes(2)
     if (oldFirst) {
       oldReply.resolve(['claude'])
-      await expect(old).resolves.toEqual([])
-      expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toBeNull()
+      await old
+      expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toBeUndefined()
       expect(store.getState().isDetectingRuntimeAgents['detection-peer']).toBe(true)
     }
     replacementReply.resolve(['codex'])
     await expect(current).resolves.toEqual(['codex'])
     if (!oldFirst) {
       oldReply.resolve(['claude'])
-      await expect(old).resolves.toEqual([])
+      await old
     }
     expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toEqual(['codex'])
+  })
+
+  it('sends a workspace probe whose capability check straddles a re-pair fenced to the retired pairing', async () => {
+    const store = createTestStore()
+    let answerCapability!: (supported: boolean) => void
+    rpc.supports.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        answerCapability = resolve
+      })
+    )
+    rpc.call.mockResolvedValue(['claude'])
+    store.getState().setRuntimeEnvironments([environment(1)])
+    const old = store.getState().ensureRuntimeDetectedAgents('detection-peer', WORKTREE)
+    store.getState().setRuntimeEnvironments([environment(2)])
+    answerCapability(true)
+    await old
+    expect(rpc.call).toHaveBeenCalledTimes(1)
+    expect(rpc.call.mock.calls[0]?.[3]).toEqual({ expectedEnvironmentPairingRevision: 1 })
+    expect(store.getState().runtimeDetectedAgentIds[WORKSPACE_KEY]).toBeUndefined()
+  })
+
+  it("drops a retired pairing's needs-update flag", async () => {
+    const store = createTestStore()
+    rpc.supports.mockResolvedValue(false)
+    rpc.status.mockResolvedValue({ capabilities: [], hostPlatform: 'win32' })
+    store.getState().setRuntimeEnvironments([environment(1)])
+    await store.getState().ensureRuntimeDetectedAgents('detection-peer', WORKTREE)
+    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[WORKSPACE_KEY]).toBe(true)
+    store.getState().setRuntimeEnvironments([environment(2)])
+    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[WORKSPACE_KEY]).toBeUndefined()
+    rpc.supports.mockResolvedValue(true)
+    rpc.call.mockResolvedValue(['codex'])
+    await expect(
+      store.getState().ensureRuntimeDetectedAgents('detection-peer', WORKTREE)
+    ).resolves.toEqual(['codex'])
+    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[WORKSPACE_KEY]).toBeUndefined()
   })
 })
