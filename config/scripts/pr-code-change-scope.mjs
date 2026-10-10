@@ -126,7 +126,7 @@ const SHELL_PREFIXES = [
   'src/main/zsh-',
   'src/main/runtime/structured-session-cli-login-shell',
   'src/main/runtime/structured-session-login-shell-test-harness',
-  'src/main/runtime/structured-session-child-identity-env',
+  'src/main/runtime/structured-session-child-env',
   'src/renderer/src/components/terminal-pane/fish-color-scheme',
   'src/shared/fish-',
   'src/shared/pty-reply-echo-shapes',
