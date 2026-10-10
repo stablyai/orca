@@ -1,4 +1,5 @@
-import { BrowserWindow, Menu, webContents } from 'electron'
+import { BrowserWindow, Menu } from 'electron'
+import { resolveEditMenuTarget } from './edit-menu-focus-target'
 
 export type AppMenuSelectionAction = 'copy' | 'select-all'
 
@@ -17,12 +18,12 @@ export function createAppMenuSelectionItem({
     click: () => {
       const focusedWindow = BrowserWindow.getFocusedWindow()
       if (focusedWindow) {
-        const focusedContents = webContents.getFocusedWebContents()
-        if (focusedContents && focusedContents !== focusedWindow.webContents) {
+        const editTarget = resolveEditMenuTarget(focusedWindow)
+        if (editTarget) {
           if (action === 'copy') {
-            focusedContents.copy()
+            editTarget.copy()
           } else {
-            focusedContents.selectAll()
+            editTarget.selectAll()
           }
           return
         }

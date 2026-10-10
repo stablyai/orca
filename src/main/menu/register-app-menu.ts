@@ -7,6 +7,7 @@ import {
 } from '../../shared/keybindings'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
+import { createAppMenuPasteItem } from './app-menu-paste-item'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { createAppMenuQuitItem } from './app-menu-quit-item'
 import { createAppWindowMenu } from './app-menu-window'
@@ -190,25 +191,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         label: translateMain('menu.copy', 'Copy'),
         isMac
       }),
-      {
+      createAppMenuPasteItem({
         label: translateMain('menu.paste', 'Paste'),
-        accelerator: 'CmdOrCtrl+V',
-        click: () => {
-          // Why: a focused terminal/native-chat pane is not a native editable
-          // control, so raw Electron paste cannot know which Orca surface owns it.
-          const focusedWindow = BrowserWindow.getFocusedWindow()
-          if (focusedWindow) {
-            focusedWindow.webContents.send('ui:appMenuPaste')
-            return
-          }
-
-          // Why: a macOS native panel (open/save, Go to Folder) leaves no focused
-          // BrowserWindow, so overriding the paste role would strand Cmd+V as a no-op.
-          if (isMac) {
-            Menu.sendActionToFirstResponder('paste:')
-          }
-        }
-      },
+        isMac
+      }),
       createAppMenuSelectionItem({
         action: 'select-all',
         label: translateMain('menu.selectAll', 'Select All'),
