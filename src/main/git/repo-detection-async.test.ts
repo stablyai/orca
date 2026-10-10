@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -87,5 +87,56 @@ describe('asynchronous repository detection with real Git', () => {
       await expectSameDetection(path)
       expect(await isGitRepoAsync(path)).toBe(false)
     }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves newlines, dollar signs and trailing spaces in roots and linked identity',
+    async () => {
+      const repo = join(fixture, 'repo\nwith dollar$ and trailing space ')
+      const nested = join(repo, 'nested\n')
+      mkdirSync(nested, { recursive: true })
+      await git(repo, ['init', '--quiet'])
+      await git(repo, [
+        '-c',
+        'user.name=Orca Test',
+        '-c',
+        'user.email=orca@example.invalid',
+        'commit',
+        '--allow-empty',
+        '--quiet',
+        '-m',
+        'fixture'
+      ])
+      const linked = join(fixture, 'linked\n ')
+      await git(repo, ['worktree', 'add', '--quiet', '-b', 'edge-linked', linked])
+      for (const path of [repo, nested, linked]) {
+        await expectSameDetection(path)
+      }
+      expect((await inspectGitRepoForRegistrationAsync(nested)).rootPath).toBe(realpathSync(repo))
+      expect((await inspectGitRepoForRegistrationAsync(linked)).mainRepoPath).toBe(
+        realpathSync(repo)
+      )
+    }
+  )
+
+  it('preserves symlink target identity and rejects its invalid nested marker without Git', async () => {
+    const repo = join(fixture, 'target')
+    const nested = join(repo, 'nested')
+    mkdirSync(nested, { recursive: true })
+    await git(repo, ['init', '--quiet'])
+    const alias = join(fixture, 'alias')
+    symlinkSync(nested, alias, process.platform === 'win32' ? 'junction' : 'dir')
+    await expectSameDetection(alias)
+    vi.spyOn(runner, 'gitExecFileSync').mockImplementation(() => {
+      throw new Error('Git unavailable')
+    })
+    vi.spyOn(runner, 'gitExecFileAsync').mockRejectedValue(new Error('Git unavailable'))
+    await expectSameDetection(alias)
+    expect((await inspectGitRepoForRegistrationAsync(alias)).rootPath).toBe(
+      realpathSync(repo).replaceAll('\\', '/')
+    )
+    writeFileSync(join(nested, '.git'), 'gitdir: missing-metadata')
+    await expectSameDetection(alias)
+    expect(await isGitRepoAsync(alias)).toBe(false)
   })
 })
