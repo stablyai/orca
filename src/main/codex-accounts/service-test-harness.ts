@@ -79,6 +79,7 @@ export function createRateLimits(): RateLimitsStub {
 
 /** Runtime-home collaborator surface the accounts service calls into. */
 export type RuntimeHomeStub = {
+  getSelectedHostAccountCodexHomePath: Mock<() => string | null>
   syncForCurrentSelection: Mock<(...args: unknown[]) => void>
   clearLastWrittenAuthJson: Mock<(...args: unknown[]) => void>
   prepareForRateLimitFetch: Mock<(...args: unknown[]) => CodexRateLimitHomeResolution>
@@ -86,6 +87,7 @@ export type RuntimeHomeStub = {
 
 export function createRuntimeHome(): RuntimeHomeStub {
   return {
+    getSelectedHostAccountCodexHomePath: vi.fn(() => null),
     syncForCurrentSelection: vi.fn(),
     clearLastWrittenAuthJson: vi.fn(),
     prepareForRateLimitFetch: vi.fn((): CodexRateLimitHomeResolution => ({
