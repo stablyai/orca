@@ -144,7 +144,7 @@ export function managedServerOutcomeLabel(result: {
   if (code === 'orcad_stop_active_environment') {
     return translate(
       'auto.components.settings.managedServers.outcome.activeServer',
-      'Not done: choose another Active Server in Advanced before stopping this server.'
+      'Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it.'
     )
   }
   if (result.verdict === 'live' || LIVE_TERMINAL_CODES.has(code)) {

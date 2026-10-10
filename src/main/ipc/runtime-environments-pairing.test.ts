@@ -476,7 +476,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     )
 
     expect(() => remove(null, { selector: added.environment.id })).toThrow(
-      'Choose another Active Server in Advanced'
+      'Choose another one in Advanced before removing it.'
     )
     expect(activeRuntimeEnvironmentId).toBe(added.environment.id)
     expect(store.updateSettings).not.toHaveBeenCalled()

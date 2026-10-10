@@ -156,7 +156,7 @@ export function getActiveServerModeDescription(allowLocalRuntime: boolean): stri
   return allowLocalRuntime
     ? translate(
         'auto.components.settings.RuntimeEnvironmentsPane.3f67e8078a',
-        'Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.'
+        'New projects are created on this computer unless you choose a saved server here. Existing projects, files and terminals stay on their own host.'
       )
     : translate(
         'auto.components.settings.RuntimeEnvironmentsPane.2c85efb3e8',

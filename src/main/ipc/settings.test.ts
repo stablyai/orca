@@ -279,7 +279,7 @@ describe('registerSettingsHandlers', () => {
     )
 
     expect(() => handler(settingsInvokeEvent, { environmentId: 42 as never })).toThrow(
-      'Invalid Active Server preference'
+      'Invalid default host for new projects'
     )
     expect(() => handler(settingsInvokeEvent, { environmentId: 'does-not-exist' })).toThrow(
       'Runtime environment not found'

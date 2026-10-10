@@ -1458,7 +1458,6 @@
           "1826bd0608": "Saved Servers",
           "54ebacc600": "Server name",
           "55fcc964cd": "on the server and paste the printed pairing URL.",
-          "7b5986c8df": "Saved {{value0}}. Use Active Server to switch when ready.",
           "8cf8790697": "Saved servers route this browser through a paired Orca runtime.",
           "960e901ae4": "orca serve --pairing-address <host>",
           "9bc9b83474": "Pairing code",
@@ -1788,14 +1787,6 @@
             "remote": "remote",
             "ssh": "ssh",
             "vm": "vm"
-          }
-        },
-        "runtime": {
-          "environments": {
-            "search": {
-              "3517fb2ec0": "Active Server",
-              "4575341c77": "Choose local desktop, add a saved remote Orca server, or generate a pairing URL."
-            }
           }
         },
         "settingOwnership": {

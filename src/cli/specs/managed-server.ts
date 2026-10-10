@@ -59,7 +59,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Stops orcad on the SSH host and, once the host proves it exited, removes the server from this machine. Its terminals end. Requires --yes.',
       'If the host cannot prove orcad exited, the server stays linked and the refusal says why; nothing is removed on a guess. For a host that is gone for good, use `orca environment forget`.',
-      'Pick another Active Server first if this one is active. `orca environment cancel-stop` withdraws a stop orcad has not acted on yet.',
+      'If this server is the default host for new projects, choose another one first. `orca environment cancel-stop` withdraws a stop orcad has not acted on yet.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],

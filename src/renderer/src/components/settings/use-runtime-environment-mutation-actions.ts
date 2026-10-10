@@ -105,7 +105,7 @@ export function useRuntimeEnvironmentMutationActions({
           toast.success(
             translate(
               'auto.components.settings.RuntimeEnvironmentsPane.7b5986c8df',
-              'Connected to {{value0}}. Use Advanced > Active Server to make it the default.',
+              'Connected to {{value0}}. To create new projects there by default, choose it under Advanced > Default host for new projects.',
               { value0: result.environment.name }
             )
           )
@@ -143,7 +143,7 @@ export function useRuntimeEnvironmentMutationActions({
           setRemoveError(
             translate(
               'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerBlocked',
-              'Choose another Active Server in Advanced before removing this server.'
+              'This server is the default host for new projects. Choose another one in Advanced before removing it.'
             )
           )
         }

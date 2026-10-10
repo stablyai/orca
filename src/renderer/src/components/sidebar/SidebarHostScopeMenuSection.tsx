@@ -53,7 +53,7 @@ function getHostMetadata(host: SidebarHostOption): string {
     host.presence === 'active'
       ? translate(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.activeRuntimeHost',
-          'Active server'
+          'Default for new projects'
         )
       : translate(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectRuntimeHost',

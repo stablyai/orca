@@ -50,7 +50,7 @@ export function getProviderAccountScope(
       ),
       description: translate(
         'auto.components.settings.providerAccountScope.remoteServerCredentials',
-        'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.'
+        'Credentials and account checks for this provider are owned by this remote server. Choose another host in the Host menu at the top of Settings to see its credentials.'
       )
     }
   }
@@ -58,7 +58,7 @@ export function getProviderAccountScope(
     label: getLocalExecutionHostLabel(),
     description: translate(
       'auto.components.settings.providerAccountScope.localCredentials',
-      'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'
+      'Credentials and account checks for this provider are owned by this desktop client. Choose a server in the Host menu at the top of Settings to see its credentials.'
     )
   }
 }
@@ -77,7 +77,7 @@ export function getProviderRateLimitScope(
       ),
       description: translate(
         'auto.components.settings.providerAccountScope.remoteServerRateLimit',
-        '{{value0}} API budget is fetched from the CLI on this remote server. Use Settings > Remote Orca Servers > Advanced to view another default runtime budget.',
+        '{{value0}} API budget is fetched from the CLI on this remote server. Choose another host in the Host menu at the top of Settings to see its budget.',
         { value0: providerLabel }
       )
     }
@@ -86,7 +86,7 @@ export function getProviderRateLimitScope(
     label: getLocalExecutionHostLabel(),
     description: translate(
       'auto.components.settings.providerAccountScope.localRateLimit',
-      '{{value0}} API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets.',
+      '{{value0}} API budget is fetched from the CLI on this desktop client. Choose a server in the Host menu at the top of Settings to see its budget.',
       { value0: providerLabel }
     )
   }
