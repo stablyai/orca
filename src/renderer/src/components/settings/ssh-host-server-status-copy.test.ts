@@ -1,36 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { sshHostServerStatusLine } from './ssh-host-server-status-copy'
+import { sshConnectFailureText, sshHostServerStatusLine } from './ssh-host-server-status-copy'
 
 const plain = {}
 
 describe('SSH host server status line', () => {
   it('says nothing for a plain host before any decision', () => {
     expect(sshHostServerStatusLine(plain, undefined)).toBeNull()
-  })
-
-  it('stays quiet for a healthy managed server, names setup progress and why a host stays on the relay', () => {
-    expect(
-      sshHostServerStatusLine(plain, { managedServer: { kind: 'managed', environmentId: 'e' } })
-    ).toBeNull()
-    expect(
-      sshHostServerStatusLine(plain, { managedServer: { kind: 'setting-up', phase: 'converting' } })
-        ?.text
-    ).toContain('Moving this host')
-    expect(
-      sshHostServerStatusLine(plain, {
-        managedServer: { kind: 'relay', reason: 'relay_terminals_live', terminals: 3 }
-      })?.text
-    ).toContain('3 open terminals')
-    expect(
-      sshHostServerStatusLine(plain, {
-        managedServer: { kind: 'relay', reason: 'refused', detail: 'An automation runs here.' }
-      })
-    ).toMatchObject({ tone: 'destructive', detail: 'An automation runs here.' })
-    expect(
-      sshHostServerStatusLine(plain, {
-        managedServer: { kind: 'relay', reason: 'relay_terminals_live' }
-      })?.text
-    ).not.toMatch(/\d/)
   })
 
   it('shows startup progress and preserves the cause of unverifiable server contact', () => {
@@ -75,34 +50,6 @@ describe('SSH host server status line', () => {
     })
   })
 
-  it('offers the move only while live relay terminals keep the host on the relay', () => {
-    expect(
-      sshHostServerStatusLine(plain, {
-        managedServer: { kind: 'relay', reason: 'relay_terminals_live', terminals: 3 }
-      })
-    ).toMatchObject({ action: 'move', text: expect.stringContaining('3 open terminals') })
-    expect(
-      sshHostServerStatusLine(plain, {
-        managedServer: { kind: 'relay', reason: 'relay_terminals_unverifiable' }
-      })
-    ).not.toHaveProperty('action')
-    expect(
-      sshHostServerStatusLine(plain, { managedServer: { kind: 'managed', environmentId: 'e' } })
-    ).toBeNull()
-  })
-
-  it('offers the setup failure, log tail included, beside a retry line', () => {
-    const detail = 'No readiness line.\nLast lines of orcad.log:\nError: EADDRINUSE'
-    expect(
-      sshHostServerStatusLine(plain, {
-        managedServer: { kind: 'relay', reason: 'deferred', detail }
-      })
-    ).toMatchObject({ tone: 'muted', detail })
-    expect(
-      sshHostServerStatusLine(plain, { managedServer: { kind: 'relay', reason: 'failed' } })
-    ).not.toHaveProperty('detail')
-  })
-
   it('shows a managed server being updated, and why it kept its version', () => {
     expect(
       sshHostServerStatusLine(plain, { managedServer: { kind: 'setting-up', phase: 'updating' } })
@@ -121,42 +68,6 @@ describe('SSH host server status line', () => {
       tone: 'warning',
       detail: 'readiness timed out'
     })
-  })
-
-  it('names terminals another desktop runs, with no move action', () => {
-    const line = sshHostServerStatusLine(plain, {
-      managedServer: {
-        kind: 'relay',
-        reason: 'relay_terminals_live',
-        terminals: 1,
-        terminalsElsewhere: true
-      }
-    })
-    expect(line?.text).toBe(
-      'Runs the relay while 1 terminal another Orca desktop or session opened on this host is running.'
-    )
-    expect(line).not.toHaveProperty('action')
-  })
-
-  it('counts terminals in singular and plural on the status line', () => {
-    const live = (terminals: number, terminalsElsewhere?: boolean) =>
-      sshHostServerStatusLine(plain, {
-        managedServer: {
-          kind: 'relay',
-          reason: 'relay_terminals_live',
-          terminals,
-          ...(terminalsElsewhere ? { terminalsElsewhere } : {})
-        }
-      })?.text
-    expect(live(1)).toBe(
-      'Runs the relay until its 1 open terminal is closed, then moves to a managed server.'
-    )
-    expect(live(2)).toBe(
-      'Runs the relay until its 2 open terminals are closed, then moves to a managed server.'
-    )
-    expect(live(3, true)).toBe(
-      'Runs the relay while 3 terminals another Orca desktop or session opened on this host are running.'
-    )
   })
 
   it('keeps durable reasons visible without a live state', () => {
@@ -181,7 +92,18 @@ describe('SSH host server status line', () => {
     ).toMatchObject({ text: expect.not.stringContaining('future_reason'), detail: 'future_reason' })
   })
 
-  it('says plainly when neither port forwarding nor the SSH session reaches a managed server', () => {
+  it('tells an unsupported host to install an older Orca, never to fall back', () => {
+    const line = sshHostServerStatusLine(plain, {
+      managedServer: { kind: 'relay', reason: 'orcad_unavailable', detail: 'native_preflight' }
+    })
+    expect(line).toEqual({
+      tone: 'destructive',
+      text: 'This host isn’t supported by this version of Orca (the host is missing system libraries the server needs). To keep using it, install an older version of Orca.'
+    })
+    expect(line?.text).not.toContain('relay')
+  })
+
+  it('says plainly when neither port forwarding nor the SSH session reaches the server', () => {
     const live = sshHostServerStatusLine(plain, {
       managedServer: {
         kind: 'relay',
@@ -195,9 +117,48 @@ describe('SSH host server status line', () => {
     )
     for (const line of [live, recorded]) {
       expect(line).toMatchObject({
-        tone: 'warning',
-        text: expect.stringContaining('doesn’t allow port forwarding')
+        tone: 'destructive',
+        text: expect.stringContaining('install an older version of Orca')
       })
     }
+  })
+
+  it('asks for a reconnect while an older Orca’s terminals still run, counting them', () => {
+    const live = (terminals?: number) =>
+      sshHostServerStatusLine(plain, {
+        managedServer: { kind: 'relay', reason: 'relay_terminals_live', terminals }
+      })?.text
+    expect(live(1)).toBe(
+      '1 terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.'
+    )
+    expect(live(2)).toContain('2 terminals started by an older version of Orca')
+    // Why: an absent count is unreported, never zero open terminals.
+    expect(live(undefined)).not.toMatch(/\d/)
+    expect(
+      sshHostServerStatusLine(plain, {
+        managedServer: { kind: 'relay', reason: 'relay_terminals_unverifiable' }
+      })?.text
+    ).toContain('Reconnect to try again')
+  })
+
+  it('offers a failed setup’s log tail beside a try-again line', () => {
+    const detail = 'No readiness line.\nLast lines of orcad.log:\nError: EADDRINUSE'
+    expect(
+      sshHostServerStatusLine(plain, {
+        managedServer: { kind: 'relay', reason: 'deferred', detail }
+      })
+    ).toMatchObject({
+      tone: 'warning',
+      text: expect.stringContaining('Try connecting again'),
+      detail
+    })
+  })
+
+  it('puts an unserved host’s translated reason in the connect toast', () => {
+    const state = {
+      managedServer: { kind: 'relay' as const, reason: 'orcad_unavailable' as const }
+    }
+    expect(sshConnectFailureText(plain, state, 'raw')).toContain('install an older version of Orca')
+    expect(sshConnectFailureText(plain, undefined, 'raw')).toBe('raw')
   })
 })

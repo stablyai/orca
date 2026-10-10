@@ -5,7 +5,5 @@
 inline src/main/ipc/worktree-remote.ts
 inline src/main/ssh/ssh-channel-multiplexer.ts
 inline src/main/ssh/ssh-connection.ts
-inline src/main/ssh/ssh-relay-deploy.ts
-inline src/main/ssh/ssh-relay-session.ts
 inline src/relay/pty-handler.ts
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts

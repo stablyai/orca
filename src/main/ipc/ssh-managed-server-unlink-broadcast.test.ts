@@ -18,15 +18,13 @@ vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
   getSshTargetRegistryStore: () => null
 }))
 
-const { clearPublishedManagedServer, relayStateOverrides } =
-  await import('./ssh-renderer-broadcast')
+const { clearPublishedManagedServer } = await import('./ssh-renderer-broadcast')
 const { getSshHostServerStatus, setSshHostServerStatus } =
   await import('../ssh/ssh-host-server-status')
 
 describe('clearing a host’s managed server once it is unlinked', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    relayStateOverrides.clear()
   })
 
   it('forgets the environment and republishes the connection without it', () => {
@@ -47,19 +45,6 @@ describe('clearing a host’s managed server once it is unlinked', () => {
       'ssh:state-changed',
       expect.objectContaining({ targetId: 'ssh-1' })
     )
-  })
-
-  it('strips the environment from a relay override too', () => {
-    relayStateOverrides.set('ssh-1', {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      managedServer: { kind: 'managed', environmentId: 'env-1' }
-    })
-    clearPublishedManagedServer('ssh-1')
-    expect(relayStateOverrides.get('ssh-1')).not.toHaveProperty('managedServer')
-    expect(mocks.notify.mock.calls[0]?.[1]).not.toHaveProperty('managedServer')
   })
 
   it('only clears when the host has no connection to republish', () => {

@@ -1,61 +1,28 @@
 import { appendFileSync } from 'node:fs'
-import type { SshConnection } from '../ssh/ssh-connection'
-import { SshRelaySession } from '../ssh/ssh-relay-session'
-import type { SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import type { SshConnectionState } from '../../shared/ssh-types'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
-import { isAuthError } from '../ssh/ssh-connection-utils'
 import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
-import { allowsDirectSshRelay } from '../ssh/ssh-connection-store'
 import { adoptSshConnection, runAttributedToSshOwner } from '../ssh/ssh-connection-attribution'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import {
   decideHostServer,
   recheckWhenManagedFenceClears,
   publishHostServerDecisionFailure,
-  refineRelayTerminalDecision,
   publishManagedServerConnect,
-  recordRelayDecision
+  publishUnservedHostServer
 } from './ssh-host-server-connect'
-import { activeSessions } from './ssh-active-relay-sessions'
 import {
   assertSshConnectsNotFenced,
   connectInFlight,
-  credentialRequestedForTarget,
-  isCurrentConnectAttempt,
-  pendingTransportReconnects,
-  resetRelayInFlight
+  isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
-import {
-  handleSshConnectionStateChange,
-  relayGracePeriodForTarget
-} from './ssh-connection-state-callbacks'
-import {
-  connectionManager,
-  currentRuntime,
-  getCurrentMainWindow,
-  persistedStore,
-  portForwardManager
-} from './ssh-ipc-context'
-import { clearRelayLostBackoff, relayLostBackoff } from './ssh-relay-lost-backoff'
-import { configureRelaySessionCallbacks } from './ssh-relay-session-callbacks'
-import {
-  broadcastDetectedPortsFromCurrentWindow,
-  broadcastSshState,
-  clearRelayStateOverride,
-  getPublicSshState,
-  relayStateOverrides
-} from './ssh-renderer-broadcast'
-import {
-  abandonCancelledConnectAttempt,
-  abandonDecisionTransport,
-  abandonFailedSshSession
-} from './ssh-session-teardown'
+import { connectionManager } from './ssh-ipc-context'
+import { abandonDecisionTransport } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { errorMessage } from '../../shared/error-message'
 
 export async function connectTarget(targetId: string): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
@@ -66,10 +33,6 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
   const admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
-  const reset = resetRelayInFlight.get(targetId)
-  if (reset) {
-    await reset
-  }
 
   // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
   const existing = connectInFlight.get(targetId)
@@ -96,7 +59,6 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
   assertSshConnectsNotFenced()
 
-  pendingTransportReconnects.delete(targetId)
   const promise = doConnect(targetId, replacePendingTransport)
   const attempt = { authority: getSshProviderAuthority(targetId), promise }
   connectInFlight.set(targetId, attempt)
@@ -118,69 +80,14 @@ async function doConnect(
     throw new Error(`SSH target "${targetId}" not found`)
   }
 
-  const existingSession = activeSessions.get(targetId)
-  const existingState = connectionManager!.getState(targetId)
-  const existingMux = existingSession?.getMux()
-  // Why: plain SSH mode (runtime rung D) is live without a mux; a refresh must not kill its shells.
-  const existingTransportLive = existingMux
-    ? !existingMux.isDisposed()
-    : existingSession?.getPlainSshSession?.() != null
-  if (
-    existingSession?.getState() === 'ready' &&
-    existingState?.status === 'connected' &&
-    connectionManager!.getConnection(targetId) &&
-    existingTransportLive &&
-    !relayStateOverrides.has(targetId) &&
-    !relayLostBackoff.has(targetId)
-  ) {
-    // Why: BrowserWindow reactivation re-fires ssh:connect for already-live targets; treat as a refresh instead of tearing down the relay and its forwards.
-    broadcastSshState(getCurrentMainWindow, targetId, existingState)
-    return getPublicSshState(targetId)!
-  }
-
   const authority = rotateSshProviderAuthority(targetId)
-  clearRelayStateOverride(targetId)
-  const pendingTransportDisconnect = replacePendingTransport
-    ? connectionManager!.disconnect(targetId).then(
-        () => ({ ok: true }) as const,
-        (error: unknown) => ({ ok: false, error }) as const
-      )
-    : null
-  let conn
-  // Why: tear down any existing session first to avoid leaking its multiplexer, providers, and timers (double-connect / reconnect-after-error).
-  if (existingSession) {
-    // Why: await port teardown before disposing, else the new session's restorePortForwards can hit EADDRINUSE on not-yet-released ports.
-    await portForwardManager!.removeAllForwards(targetId)
-    if (!isCurrentConnectAttempt(targetId, authority)) {
-      throw createCancelledConnectAttemptError()
-    }
-    try {
-      await existingSession.detachAndPersist()
-    } finally {
-      // Why finally: detachAndPersist runs its in-memory half synchronously, so the session is
-      // dead even when the lease write rejects — keeping it in activeSessions would strand every
-      // later connect on the same dead session. Why still after the await, not before it: the
-      // write has settled by now, so it can no longer clobber the replacement's 'attached' write.
-      if (activeSessions.get(targetId) === existingSession) {
-        activeSessions.delete(targetId)
-        clearRelayLostBackoff(targetId)
-        clearRelayStateOverride(targetId)
-      }
-    }
-  }
-
-  if (pendingTransportDisconnect) {
-    const disconnectResult = await pendingTransportDisconnect
-    if (!disconnectResult.ok) {
-      throw disconnectResult.error
-    }
+  if (replacePendingTransport) {
+    await connectionManager!.disconnect(targetId)
     if (!isCurrentConnectAttempt(targetId, authority)) {
       throw createCancelledConnectAttemptError()
     }
   }
 
-  // Why before the decision: a transport the relay connect below reuses was not this attempt's.
-  const priorConnection = connectionManager!.getConnection(targetId)
   // A transport the decision's census, deploy or conversion opens is attributed to this attempt,
   // so a cancelled attempt closes exactly that one and nothing a newer owner took over.
   const owner = Symbol(targetId)
@@ -205,7 +112,7 @@ async function doConnect(
     throw createCancelledConnectAttemptError()
   }
   adoptCurrentTransport(targetId, owner)
-  if (server?.route === 'managed') {
+  if (server.route === 'managed') {
     if (server.fenceHeld) {
       recheckWhenManagedFenceClears(target, server.environmentId)
     }
@@ -216,125 +123,9 @@ async function doConnect(
       server.serving
     )
   }
-  if (server) {
-    recordRelayDecision(target, server)
-  }
-  // Re-read: a conversion attempt may have fenced the host since the lookup above.
-  const relayTarget = getSshTargetRegistryStore()!.getTarget(targetId) ?? target
-  if (!allowsDirectSshRelay(relayTarget)) {
-    // A setup that failed but kept its fence: the relay decision's detail is the real cause.
-    const blocked = new Error(
-      server?.detail ??
-        'This SSH host serves a managed Orca server; it is reached through that server.'
-    )
-    await abandonDecisionTransport(targetId, owner, authority)
-    publishHostServerDecisionFailure(targetId, blocked)
-    throw blocked
-  }
-
-  // Why here and not only at entry: this is the publication point, and it is the last statement
-  // before the transport opens. Checking it in the same synchronous block as activeSessions.set
-  // means a connect either registers before the shutdown drain snapshots, or registers never and
-  // owns nothing to clean up.
-  assertSshConnectsNotFenced()
-  // Why: create the session early so onStateChange sees it in 'deploying' and skips reconnect logic.
-  const session = new SshRelaySession(
-    targetId,
-    getCurrentMainWindow,
-    persistedStore!,
-    portForwardManager!,
-    currentRuntime,
-    broadcastDetectedPortsFromCurrentWindow
-  )
-  configureRelaySessionCallbacks(session)
-  activeSessions.set(targetId, session)
-  const ownsSession = (): boolean =>
-    isCurrentConnectAttempt(targetId, authority) && activeSessions.get(targetId) === session
-
-  const mintedConnection = (): SshConnection | null =>
-    conn && conn !== priorConnection ? conn : null
-
-  try {
-    conn = await connectionManager!.connect(target)
-    adoptSshConnection(conn, owner)
-    if (!ownsSession()) {
-      throw createCancelledConnectAttemptError()
-    }
-  } catch (err) {
-    // Why: connect()'s internal state may not have reached the renderer; broadcast explicitly so the UI leaves 'connecting'.
-    const errObj = err instanceof Error ? err : new Error(String(err))
-    const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
-    if (!ownsSession()) {
-      await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
-      throw createCancelledConnectAttemptError()
-    }
-    // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
-    credentialRequestedForTarget.delete(targetId)
-    await abandonFailedSshSession(targetId, session)
-    clearRelayLostBackoff(targetId)
-    clearRelayStateOverride(targetId)
-    broadcastSshState(getCurrentMainWindow, targetId, {
-      targetId,
-      status,
-      error: errObj.message,
-      reconnectAttempt: 0
-    })
-    throw err
-  }
-
-  try {
-    handleSshConnectionStateChange(targetId, {
-      targetId,
-      status: 'deploying-relay',
-      error: null,
-      reconnectAttempt: 0
-    })
-
-    await session.establish(conn, relayGracePeriodForTarget(target))
-    if (!ownsSession()) {
-      throw createCancelledConnectAttemptError()
-    }
-    await refineRelayTerminalDecision(target, server, ownsSession)
-    // The re-check can wait seconds on the relay; a connect cancelled meanwhile must not report.
-    if (!ownsSession()) {
-      throw createCancelledConnectAttemptError()
-    }
-
-    // Why: we manually pushed `deploying-relay`, so send `connected` straight to the renderer — routing through onStateChange would trigger reconnect logic.
-    clearRelayStateOverride(targetId)
-    broadcastSshState(getCurrentMainWindow, targetId, {
-      targetId,
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      supportsFolderDownload: conn.usesSystemSshTransport?.() !== true
-    })
-  } catch (err) {
-    if (!ownsSession()) {
-      await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
-      throw createCancelledConnectAttemptError()
-    }
-    await abandonFailedSshSession(targetId, session)
-    clearRelayLostBackoff(targetId)
-    try {
-      await connectionManager!.disconnect(targetId)
-    } catch (disconnectError) {
-      // Why: the establish failure is the actionable error; a teardown throw must not replace it.
-      console.warn(
-        `[ssh] Failed to disconnect transport after failed establish for ${targetId}: ${errorMessage(disconnectError)}`
-      )
-    }
-    throw err
-  }
-
-  // Why: persist whether this connect needed a credential so startup can partition targets into eager vs deferred without re-probing keys.
-  const requiredPassphrase = credentialRequestedForTarget.has(targetId)
-  credentialRequestedForTarget.delete(targetId)
-  getSshTargetRegistryStore()!.updateTarget(targetId, {
-    lastRequiredPassphrase: requiredPassphrase
-  })
-
-  return getPublicSshState(targetId)!
+  // This version has no relay to fall back to: a host its managed server doesn't serve fails here.
+  await abandonDecisionTransport(targetId, owner, authority)
+  throw publishUnservedHostServer(target, server)
 }
 
 function adoptCurrentTransport(targetId: string, owner: symbol): void {

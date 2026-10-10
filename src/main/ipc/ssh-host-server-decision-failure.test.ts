@@ -37,12 +37,6 @@ const fenced: SshTarget = {
 beforeEach(() => vi.clearAllMocks())
 
 describe('a managed-server decision that fails', () => {
-  it('keeps the relay path on a host that may still use it', async () => {
-    mocks.getTarget.mockReturnValue(target)
-    mocks.resolve.mockRejectedValue(new Error('All configured authentication methods failed'))
-    await expect(decideHostServer(target)).resolves.toBeNull()
-  })
-
   it('surfaces the real error on a host only its managed server can reach', async () => {
     mocks.getTarget.mockReturnValue(fenced)
     const auth = new Error('All configured authentication methods failed')

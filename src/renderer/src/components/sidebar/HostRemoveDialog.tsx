@@ -17,7 +17,6 @@ import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { removeSshTargetWithBestEffortCleanup } from '../settings/ssh-target-remove'
 import { clearHostRename } from './host-rename-remove'
 import type { HostRemovalTarget } from './host-rename-remove'
 import { resolveSshHostRemoval } from './ssh-host-remove-resolution'
@@ -78,7 +77,8 @@ export function HostRemoveDialog({
   }
 
   const removeSshTarget = async (targetId: string): Promise<void> => {
-    await removeSshTargetWithBestEffortCleanup(window.api.ssh, targetId)
+    // Main refuses a managed server's host; the error says why.
+    await window.api.ssh.removeTarget({ id: targetId })
     // Why: clear deferred reconnect metadata so focused SSH tabs stop retrying
     // the deleted target — mirrors the SSH settings pane removal flow.
     useAppStore.getState().clearRemovedSshTargetState(targetId)

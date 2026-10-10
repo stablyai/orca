@@ -194,8 +194,6 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-claude-auth-policy-wiring.test.ts',
   'src/main/runtime/structured-codex-child-work-runtime.test.ts',
   'src/main/runtime/structured-worker-at-rest.test.ts',
-  'src/main/ssh/ssh-remote-orca-cli.test.ts',
-  'src/main/ssh/ssh-remote-orchestration-compatibility.test.ts',
   'tests/e2e/completed-worker-retirement-resume.unit.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts'

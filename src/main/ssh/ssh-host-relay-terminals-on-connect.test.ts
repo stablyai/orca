@@ -55,13 +55,14 @@ describe('the connect-time relay terminal verdict', () => {
     await expect(decide(census).verdict).resolves.toMatchObject({ verdict: 'unverifiable' })
   })
 
-  it('keeps a lease-backed verdict without asking the host', async () => {
+  // With no relay session, a lease an older build left proves nothing; the host census decides.
+  it('lets an idle host census prove a lease an older build left', async () => {
     const { censusHost, verdict } = decide(
       { verdict: 'none', count: 0 },
       { leases: [{ ptyId: 'a', state: 'attached' }] }
     )
-    await expect(verdict).resolves.toEqual({ verdict: 'live', count: 1 })
-    expect(censusHost).not.toHaveBeenCalled()
+    await expect(verdict).resolves.toEqual({ verdict: 'exited', count: 0 })
+    expect(censusHost).toHaveBeenCalledTimes(1)
   })
 
   // Astra pass 4 §2: this target's empty lists cannot see another desktop's relay on the account.
@@ -74,17 +75,12 @@ describe('the connect-time relay terminal verdict', () => {
     expect(censusHost).toHaveBeenCalledTimes(1)
   })
 
-  it('attributes terminals this target leases or lists to this desktop', async () => {
+  it('attributes terminals this target lists to this desktop', async () => {
     const listed = decide(
       { verdict: 'live', count: 3 },
       { lister: Object.assign(async () => ['pty-1'], { previous: async () => [] }) }
     )
     await expect(listed.verdict).resolves.toEqual({ verdict: 'live', count: 1 })
-    const leased = decide(
-      { verdict: 'live', count: 3 },
-      { leases: [{ ptyId: 'a', state: 'attached' }] }
-    )
-    await expect(leased.verdict).resolves.not.toHaveProperty('elsewhere')
   })
 
   // A session whose relays could not answer proves nothing, and no lease here changes that.

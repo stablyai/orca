@@ -1,12 +1,8 @@
 /**
  * A relay-era SSH host converts to managed orcad on connect (#24979), on a real host:
  *
- * 1. Without an orcad template the connect keeps the relay, so the host gains relay-era state: a
- *    repository, a folder workspace, an editor tab, and a relay terminal that has exited.
- * 2. With the template in place and no relay terminal running, the next connect converts it, and
- *    the new server lists that repository and folder and the editor tab.
- * 3. The source rows stay retained and hidden (downgrade safety), across a later connect too:
- *    nothing deletes them automatically.
+ * A relay-era profile (repository, folder workspace, editor tab) converts on its first connect,
+ * and the new server lists them. The source rows stay retained and hidden.
  *
  * A managed host also updates to a relaunched app's bundled orcad on its next idle connect, and
  * reaches its server when another runtime already holds orcad's preferred port.
@@ -19,21 +15,13 @@ import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import {
-  ensureTerminalVisible,
-  switchToWorktree,
-  waitForActiveWorktree,
-  waitForSessionReady
-} from './helpers/store'
-import { execInTerminal, waitForActivePanePtyId, waitForTerminalOutput } from './helpers/terminal'
-import { connectSshTestTarget } from './helpers/ssh-test-target-connection'
+import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import {
   convertAndRetain,
   managedServer,
   reconnect,
-  serverCall,
-  targetLeases
+  serverCall
 } from './helpers/orcad-convert-flow'
 import {
   isOrcadFullVersion,
@@ -52,7 +40,6 @@ import {
   openPairedClientTab
 } from './helpers/paired-host-terminal'
 import { expectTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
-import { toSshExecutionHostId } from '../../src/shared/execution-host'
 
 const HOST = process.env[ORCAD_CONVERT_HOST_ENV]
 const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
@@ -87,136 +74,6 @@ test.use({
   orcaAppExtraEnv: {
     ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_DIR
   }
-})
-
-test('a relay host converts to managed orcad on connect and keeps its source', async ({
-  orcaPage: page,
-  electronApp
-}, testInfo) => {
-  // Why Docker only: a relay era without the template needs host Node, which the Windows lane hides.
-  test.skip(HOST !== 'docker', 'The runtime relay era runs on the Docker host only')
-  test.setTimeout(20 * 60_000)
-  const host = startHost(testInfo)
-  const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-  await waitForSessionReady(page)
-  const localWorktreeId = await waitForActiveWorktree(page)
-
-  // 1. Relay era: no template, so the connect keeps the relay.
-  const remote = await connectSshTestTarget(page, host.input, {
-    remotePath: host.remoteRepoPath,
-    displayName: 'orcad convert E2E',
-    seedInitialTab: true
-  })
-  expect(await managedServer(page, remote.targetId)).toMatchObject({
-    kind: 'relay',
-    reason: 'orcad_unavailable'
-  })
-  const folderPath = await page.evaluate(
-    async ({ targetId, folder }) => {
-      const group = await window.api.projectGroups.create({
-        name: 'orcad convert folders',
-        parentPath: folder,
-        connectionId: targetId
-      })
-      const workspace = await window.api.folderWorkspaces.create({
-        projectGroupId: group.id,
-        folderPath: folder,
-        connectionId: targetId
-      })
-      return workspace.folderPath
-    },
-    { targetId: remote.targetId, folder: host.remoteFolderPath }
-  )
-  await ensureTerminalVisible(page, 45_000)
-  const ptyId = await waitForActivePanePtyId(page, 60_000)
-  const marker = `ORCAD-CONVERT-${Date.now()}`
-  await execInTerminal(page, ptyId, `echo ${marker}`)
-  await waitForTerminalOutput(page, marker, 30_000)
-  // The session tab is an editor: every mounted terminal tab runs a shell, and an exited one closes.
-  const sessionFilePath = `${host.remoteRepoPath}/README.md`
-  await page.evaluate(
-    ({ filePath, worktreeId, hostId }) => {
-      // As a sidebar click does: with its host, so the new tab is stamped as that host's.
-      window.__store!.getState().setActiveWorktree(worktreeId, hostId)
-      window.__store!.getState().openFile({
-        filePath,
-        relativePath: 'README.md',
-        worktreeId,
-        language: 'markdown',
-        mode: 'edit'
-      })
-    },
-    {
-      filePath: sessionFilePath,
-      worktreeId: remote.worktreeId,
-      hostId: toSshExecutionHostId(remote.targetId)
-    }
-  )
-  // Off the remote worktree first, so nothing there restarts a shell once this one exits.
-  await switchToWorktree(page, localWorktreeId)
-  // An exited shell leaves an exit record, which is what lets the gate prove no terminal runs.
-  await execInTerminal(page, ptyId, 'exit')
-  // The connect's terminal gate asks the relay the same question, so a timeout names the blocker.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          async (connectionId) =>
-            JSON.stringify(await window.api.pty.listSessions({ connectionId })),
-          remote.targetId
-        ),
-      { timeout: 30_000 }
-    )
-    .toBe('[]')
-  // The gate's other input: no lease may still read as a running terminal.
-  await expect
-    .poll(
-      () => {
-        const live = targetLeases(userData, remote.targetId).filter(
-          (lease) => lease.state === 'attached' || lease.state === 'detached'
-        )
-        return JSON.stringify(live)
-      },
-      { timeout: 30_000 }
-    )
-    .toBe('[]')
-  // An SSH worktree's session lives in its host's partition, not the local one.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          async ({ hostId, filePath }) =>
-            JSON.stringify(await window.api.session.get(hostId)).includes(filePath),
-          { hostId: toSshExecutionHostId(remote.targetId), filePath: sessionFilePath }
-        ),
-      { timeout: 30_000 }
-    )
-    .toBe(true)
-
-  // 2. Template in place: the next connect converts the host.
-  cpSync(TEMPLATE_SOURCE!, TEMPLATE_DIR, { recursive: true })
-  // A shell that starts after the checks above still blocks the gate: it must stay empty a while.
-  for (const deadline = Date.now() + 5_000; Date.now() < deadline;) {
-    expect(
-      JSON.stringify({
-        sessions: await page.evaluate(
-          (connectionId) => window.api.pty.listSessions({ connectionId }),
-          remote.targetId
-        ),
-        leases: targetLeases(userData, remote.targetId).filter(
-          (lease) => lease.state === 'attached' || lease.state === 'detached'
-        )
-      })
-    ).toBe(JSON.stringify({ sessions: [], leases: [] }))
-    await new Promise((settle) => setTimeout(settle, 500))
-  }
-  await convertAndRetain(page, userData, {
-    targetId: remote.targetId,
-    worktreeId: remote.worktreeId,
-    repoPath: host.remoteRepoPath,
-    folderPath,
-    sessionFilePath
-  })
 })
 
 test('a relay-era profile converts its SSH host on the first connect after upgrading', async ({
@@ -476,6 +333,10 @@ function connectOnce(page: Page, targetId: string): Promise<string> {
 test('reconnect restores the managed host name after its conversion catalog fails', async ({
   testRepoPath
 }, testInfo) => {
+  test.fixme(
+    true,
+    'Its relay era came from a template-less connect, which now refuses the host; seed it from a profile instead'
+  )
   test.skip(HOST !== 'docker', 'Catalog fault injection uses the isolated Linux Docker host')
   test.setTimeout(180_000)
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-catalog-retry-'))

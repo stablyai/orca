@@ -8,37 +8,13 @@ import {
   makeWindowsPublishStagedFileCommand,
   makeWindowsWriteFileCommand
 } from './system-ssh-windows-file-write'
-import {
-  cleanupOwnedRelayUploadStageCommand,
-  promoteOwnedRelayUploadStageCommand,
-  recoverOneStaleRelayUploadStageCommand,
-  reserveRelayUploadStageCommand,
-  type RelayUploadStageSlot
-} from './ssh-relay-upload-stage-commands'
 
 const windows = getRemoteHostPlatform('win32-x64')
-const owner = '.sftp-namespace-123e4567e89b12d3a456426614174000'
-const pool = 'C:\\Users\\orca\\.orca-remote\\.upload-stages'
-const stage: RelayUploadStageSlot = {
-  poolDir: pool,
-  slotName: 'slot-0',
-  slotDir: `${pool}\\slot-0`,
-  claimDir: `${pool}\\claim-0`,
-  deleteDir: `${pool}\\delete-0`
-}
-
 // Why: sshd runs an exec request through its DefaultShell, which is cmd.exe on a
 // stock Windows OpenSSH install, and cmd.exe refuses a longer line with exit 1
 // and a localized "The command line is too long" — the whole connect dies there.
 describe('Windows remote command line limit', () => {
   it.each([
-    ['recover stale upload stage', recoverOneStaleRelayUploadStageCommand(windows, pool)],
-    ['reserve upload stage', reserveRelayUploadStageCommand(windows, pool, owner)],
-    [
-      'promote upload stage',
-      promoteOwnedRelayUploadStageCommand(windows, stage, owner, 'C:\\Users\\orca\\.orca-remote')
-    ],
-    ['cleanup upload stage', cleanupOwnedRelayUploadStageCommand(windows, stage, owner)],
     [
       'steal stale install lock',
       tryStealInstallLockCommand(windows, 'C:\\Users\\orca\\.orca-remote\\relay', 1_200)

@@ -82,49 +82,6 @@ test('registration resolves nested and linked paths to one existing project', as
   ).toEqual(result.persistedIds)
 })
 
-test('SSH registration reads the repository on its execution host', async ({
-  orcaPage
-}, testInfo) => {
-  test.skip(process.env.ORCA_E2E_SSH_DOCKER !== '1', 'Requires the existing Docker SSH fixture')
-  test.setTimeout(180_000)
-  const {
-    startDockerSshRelayTarget,
-    cleanupDockerSshRelayTarget,
-    execDockerSshRelayTargetCommand,
-    DOCKER_SSH_RELAY_REMOTE_REPO_PATH
-  } = await import('./helpers/docker-ssh-relay-target')
-  const { connectDockerSshRelayTarget, disconnectDockerSshRelayTarget } =
-    await import('./helpers/docker-ssh-relay-connection')
-  const target = startDockerSshRelayTarget(testInfo)
-  let targetId: string | null = null
-  try {
-    await waitForSessionReady(orcaPage)
-    const connected = await connectDockerSshRelayTarget(orcaPage, target, { seedInitialTab: false })
-    targetId = connected.targetId
-    execDockerSshRelayTargetCommand(target, `mkdir -p ${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/nested`)
-    const nested = await orcaPage.evaluate(
-      async ({ connectionId, remotePath }) =>
-        window.api.repos.addRemote({ connectionId, remotePath }),
-      { connectionId: targetId, remotePath: `${DOCKER_SSH_RELAY_REMOTE_REPO_PATH}/nested` }
-    )
-    expect('repo' in nested && nested.repo.id).toBe(connected.repoId)
-    expect('repo' in nested && nested.repo.connectionId).toBe(targetId)
-    expect('repo' in nested && nested.repo.executionHostId).toBe(`ssh:${targetId}`)
-    const missing = await orcaPage.evaluate(
-      async (connectionId) =>
-        window.api.repos.addRemote({ connectionId, remotePath: '/tmp/or60risk-missing' }),
-      targetId
-    )
-    expect('error' in missing).toBe(true)
-    await orcaPage.screenshot({ path: testInfo.outputPath('ssh-project.png') })
-  } finally {
-    if (targetId) {
-      await disconnectDockerSshRelayTarget(orcaPage, targetId)
-    }
-    cleanupDockerSshRelayTarget(target)
-  }
-})
-
 test('real WSL registration preserves literal paths and fences login output', async ({
   orcaPage
 }, testInfo) => {

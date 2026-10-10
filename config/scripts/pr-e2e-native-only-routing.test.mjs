@@ -17,7 +17,6 @@ describe('native-only PR E2E routing', () => {
     }
     expect(shouldRunReusablePrE2e([])).toBe(false)
     for (const spec of [
-      'tests/e2e/ssh-startup-exec-readiness.spec.ts',
       'tests/e2e/paired-startup-exec-readiness.spec.ts',
       'tests/e2e/terminal-ime-exact-byte.spec.ts',
       'tests/e2e/future.spec.ts'

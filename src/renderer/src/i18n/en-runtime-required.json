@@ -1813,10 +1813,8 @@
           }
         },
         "sshHostServer": {
-          "terminalsElsewhere_one": "Runs the relay while {{count}} terminal another Orca desktop or session opened on this host is running.",
-          "terminalsElsewhere_other": "Runs the relay while {{count}} terminals another Orca desktop or session opened on this host are running.",
-          "terminalsLive_one": "Runs the relay until its {{count}} open terminal is closed, then moves to a managed server.",
-          "terminalsLive_other": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server."
+          "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
+          "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect."
         },
         "terminal": {
           "windows": {
@@ -2750,16 +2748,6 @@
     "runtime": {
       "githubCheckDetailsTimeout": {
         "timedOut": "Timed out loading check details."
-      }
-    },
-    "ssh": {
-      "managedServerMove": {
-        "offer_one": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminal will restart.",
-        "offer_other": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminals will restart.",
-        "refusedLive_one": "Not moved: {{count}} terminal on {{host}} is still running.",
-        "refusedLive_other": "Not moved: {{count}} terminals on {{host}} are still running.",
-        "refusedUnverifiable_one": "Not moved: Orca couldn’t confirm that {{count}} terminal on {{host}} stopped.",
-        "refusedUnverifiable_other": "Not moved: Orca couldn’t confirm that {{count}} terminals on {{host}} stopped."
       }
     },
     "store": {

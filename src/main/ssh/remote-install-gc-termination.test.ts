@@ -10,7 +10,6 @@ import type { SshConnection } from './ssh-connection'
 import { gcOldRelayVersions } from './remote-install-gc'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { gcRelayNativeDepsCache } from './ssh-relay-native-deps-cache-gc'
-import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
 import { REMOTE_INSTALL_ORDER_OK } from './remote-install-previous-version'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
@@ -118,13 +117,6 @@ const caches = [
     collect: () => gcRelayNativeDepsCache(conn, host, home),
     listing: `ENTRY ${nativeKey}\nENTRY linux-x64-fedcba9876543210\n__ORCA_NATIVE_CACHE__LIST_OK`,
     references: '__ORCA_NATIVE_CACHE__REFS_OK'
-  },
-  {
-    name: 'ripgrep',
-    collect: () => gcRemoteRipgrepCache(conn, host, home),
-    listing:
-      'ENTRY 0123456789abcdef-linux-x64\nENTRY fedcba9876543210-linux-x64\n__ORCA_RG_CACHE__LIST_OK',
-    references: '__ORCA_RG_CACHE__REFS_OK'
   }
 ]
 

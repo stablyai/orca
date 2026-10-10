@@ -3,7 +3,6 @@ import {
   enrichSshForwardEntries,
   getWorktreeIdsForConnection
 } from '../ports/ssh-advertised-url-enrichment'
-import { activeSessions } from './ssh-active-relay-sessions'
 import {
   connectionManager,
   getCurrentMainWindow,
@@ -101,8 +100,7 @@ export function registerSshPortForwardHandlers(): void {
   })
 
   ipcMain.handle('ssh:listDetectedPorts', (_event, args: { targetId: string }) => {
-    const session = activeSessions.get(args.targetId)
-    const ports = session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
-    return enrichDetected(args.targetId, ports)
+    // Detected ports came from the relay's port scanner; a managed host reports them through its runtime.
+    return enrichDetected(args.targetId, [])
   })
 }

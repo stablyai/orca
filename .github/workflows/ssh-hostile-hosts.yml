@@ -26,7 +26,7 @@ on:
       - 'config/scripts/verify-packaged-orcad-template.cjs'
       - 'config/patches/node-pty*'
       - '!src/**/*.test.ts'
-      - 'src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts'
+      - 'src/main/ssh/ssh-hostile-hosts.docker.test.ts'
       - '.github/workflows/ssh-hostile-hosts.yml'
       - '.github/actions/restore-pnpm-verification/**'
   workflow_dispatch:
@@ -201,7 +201,7 @@ jobs:
         env:
           ORCA_RUN_SSH_HOSTILE_HOSTS: '1'
           ORCA_SSH_HOSTILE_HOST_CELLS: ${{ github.event.inputs.cells || '' }}
-        run: pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts
+        run: pnpm test:node src/main/ssh/ssh-hostile-hosts.docker.test.ts
 
   # Design D6 on macOS: the runner is the SSH host. A user-level sshd on a loopback port logs in
   # as the runner user with PATH cut to the toolchain shims and /usr/bin:/bin, so Homebrew's node
@@ -240,4 +240,4 @@ jobs:
         env:
           ORCA_RUN_SSH_HOSTILE_HOSTS: '1'
           ORCA_SSH_HOSTILE_HOST_CELLS: ${{ matrix.cell }}
-        run: pnpm test:node src/main/ssh/ssh-relay-hostile-hosts.docker.test.ts
+        run: pnpm test:node src/main/ssh/ssh-hostile-hosts.docker.test.ts

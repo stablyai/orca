@@ -67,6 +67,30 @@ describe('migration terminal gate', () => {
     ).resolves.toMatchObject({ verdict: 'unverifiable' })
   })
 
+  it('lets an idle host census prove leases an older build left, with no relay session', async () => {
+    const leftover = store([
+      { ptyId: 'pty-attached', state: 'attached' },
+      { ptyId: 'pty-detached', state: 'detached' },
+      { ptyId: 'pty-expired', state: 'expired' }
+    ])
+    await expect(assessOrcadMigrationTerminals(leftover, 'ssh-1', null, hostIdle)).resolves.toEqual(
+      {
+        verdict: 'exited',
+        provenPtyIds: ['pty-attached', 'pty-detached', 'pty-expired']
+      }
+    )
+    await expect(
+      assessOrcadMigrationTerminals(leftover, 'ssh-1', null, async () => ({
+        verdict: 'live',
+        count: 2
+      }))
+    ).resolves.toMatchObject({ verdict: 'live', hostTerminals: 2 })
+    // Without a census the leases still block: silence is never exit.
+    await expect(assessOrcadMigrationTerminals(leftover, 'ssh-1', null)).resolves.toMatchObject({
+      verdict: 'live'
+    })
+  })
+
   it('blocks an attached lease as live', async () => {
     await expect(
       assessOrcadMigrationTerminals(

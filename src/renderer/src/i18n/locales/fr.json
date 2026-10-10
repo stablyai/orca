@@ -6306,7 +6306,6 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Un hôte ou un alias de config SSH est requis.",
           "sshPortInvalid": "Le port doit être compris entre 1 et 65535.",
-          "sshRelayGraceInvalid": "Le délai d'expiration du terminal doit être compris entre 60 et {{value0}} secondes.",
           "sshSaved": "Hôte SSH ajouté.",
           "sshSaveFailed": "Échec de l'ajout de l'hôte SSH.",
           "serverFieldsRequired": "Le nom du serveur et le code d'appairage sont requis.",
@@ -8631,10 +8630,6 @@
           "f8050f6307": "Synchronisation terminée : {{value0}} serveur{{value1}}",
           "68c13b4589": "Échec du test",
           "81d08bcddf": "Connexion réussie",
-          "2c4ee7332b": "Échec de la réinitialisation du relais distant",
-          "db2e48975e": "Relais distant réinitialisé",
-          "025e107643": "Échec de l'arrêt des terminaux distants",
-          "90e308c98b": "Terminaux distants arrêtés",
           "a43de1d3ee": "Échec de la déconnexion",
           "e95d5ae10e": "Échec de la connexion",
           "c2a69510e3": "Échec de la suppression de la cible",
@@ -8642,12 +8637,10 @@
           "2227ce47b6": "Échec de l'enregistrement de la cible",
           "f602009125": "Cible ajoutée",
           "b4ba0ce33d": "Cible mise à jour",
-          "3879cbaa52": "Le délai d'inactivité du terminal doit être compris entre 60 et {{value0}} secondes, ou maintenez les terminaux actifs jusqu'à la réinitialisation.",
           "4db9afce1c": "Le port doit être compris entre 1 et 65535",
           "0e5aa04161": "Un hôte ou un alias de config SSH est requis",
           "f1fc50dad2": "Échec du chargement des cibles SSH",
-          "0cda732f43": "Échec du test de connexion",
-          "terminateUnverifiable": "Le(s) terminal(s) distant(s) {{terminals}} n'ont pas pu être atteints. Reconnectez-vous pour y mettre fin."
+          "0cda732f43": "Échec du test de connexion"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "Annuler",
@@ -8669,8 +8662,6 @@
           "c624f64b86": "Continuer"
         },
         "SshTargetCard": {
-          "a883f5a00f": "délai d'inactivité du terminal : {{value0}}",
-          "8ce71262f4": "terminaux jusqu'à la réinitialisation",
           "ec6543cee9": "Se connecter",
           "0e53e9f8e8": "Tester",
           "1810b51482": "Connexion",
@@ -8678,30 +8669,17 @@
           "7f7b3d7ab4": "Supprimer la cible",
           "3d21a22d0e": "Suppression de la cible",
           "3d8af2949f": "Modifier la cible",
-          "762a48c662": "Réinitialiser le relais distant",
-          "97dea4e8cf": "Réinitialisation du relais distant",
-          "da16e108e6": "Arrêter les terminaux distants",
-          "c77f1abfe3": "Arrêt des terminaux distants",
           "18968ede9e": "Erreur",
           "f0871e6bfb": "connect",
           "47e94bd6ba": "connecté"
         },
         "SshTargetDestructiveActions": {
-          "7e66942808": "Ceci arrêtera les sessions de terminal actives sur cette cible SSH. La reconnexion ne les restaurera pas.",
-          "accf177a03": "Arrêter les terminaux distants ?",
-          "26be00392d": "Ceci force l'arrêt du relais distant pour cette cible SSH. Les terminaux distants actifs et les redirections de port de cette cible seront terminés.",
-          "570a7a0574": "Réinitialiser le relais distant ?",
           "3bb0cf0ee4": "Ceci supprimera la cible et arrêtera tous les terminaux distants actifs.",
           "4808966c41": "Supprimer la cible SSH"
         },
         "SshTargetForm": {
           "fea9cb402e": "Annuler",
-          "1b19b00e93": "Les délais limités doivent être compris entre 60 secondes et 7 jours.",
-          "7c13f58c91": "Jusqu'à la réinitialisation",
-          "55c56cf2c7": "Délai après déconnexion (secondes)",
           "137e88ce8d": "Les terminaux distants continuent de s'exécuter après la déconnexion d'Orca de cet hôte.",
-          "b574994adc": "Utilisez « Arrêter les terminaux distants » ou « Réinitialiser le relais » quand vous voulez les arrêter.",
-          "71fc546097": "Garder les terminaux actifs jusqu'à la réinitialisation",
           "92f80edbfd": "Persistance des terminaux distants",
           "feae1d1e69": "Facultatif. Équivalent à ProxyJump / ssh -J.",
           "11bcb4507a": "bastion.example.com",
@@ -8731,12 +8709,7 @@
           "addTitle": "Ajouter un hôte SSH",
           "editDescription": "Mettez à jour les détails de connexion de cette machine. Les modifications s'appliquent à la prochaine connexion.",
           "addDescription": "Ajoutez une machine permanente sur laquelle vous pouvez vous connecter en SSH.",
-          "editingPrefix": "Modification",
-          "remoteRuntime": "Durée d'exécution",
-          "remoteRuntimeHelp": "Quel Node.js exécute Orca sur cet hôte. Le nœud géré par Orca télécharge le sien et n'a besoin d'aucun npm ; Host Node utilise le Node.js déjà installé là-bas.",
-          "remoteRuntimeAuto": "Auto ",
-          "remoteRuntimePinnedNode": "Nœud géré par Orca",
-          "remoteRuntimeHostNode": "Nœud hôte"
+          "editingPrefix": "Modification"
         },
         "TasksPane": {
           "f71d8a9dd3": "Fournisseurs de tâches",
@@ -12497,8 +12470,6 @@
         },
         "sshHostServer": {
           "sourceChanged": "Modifié sur une version plus ancienne d'Orca : exécute le relais jusqu'à ce qu'il soit de nouveau déplacé vers son serveur géré.",
-          "unavailable": "Exécute le relais : un serveur Orca géré ne peut pas s'exécuter sur cet hôte ({{reason}}).",
-          "tunnelUnavailable": "Exécute le relais : le serveur SSH de cet hôte n'autorise pas les redirections de port, et Orca n'a pas non plus pu atteindre un serveur géré via la session SSH.",
           "deploying": "Configuration d'un serveur Orca géré…",
           "converting": "Déplacement des projets de cet hôte vers son serveur Orca géré…",
           "connecting": "Connexion au serveur Orca géré…",
@@ -12506,13 +12477,7 @@
           "starting": "Démarrage du serveur géré…",
           "notServing": "Orca n’a pas pu confirmer que le serveur géré répond.",
           "hostNewer": "Exécute un serveur Orca géré issu d'une version plus récente d'Orca ; il conserve cette version.",
-          "terminalsLive": "Exécute le relais jusqu'à la fermeture de ses {{count}} terminaux ouverts, puis bascule vers un serveur géré.",
-          "terminalsLive_one": "Exécute le relais jusqu'à la fermeture de son {{count}} terminal ouvert, puis bascule vers un serveur géré.",
-          "terminalsLive_other": "Exécute le relais jusqu'à la fermeture de ses {{count}} terminaux ouverts, puis bascule vers un serveur géré.",
-          "terminalsUnverifiable": "Exécute le relais : Orca n'a pas pu confirmer que ses terminaux sont fermés. Il bascule lors d'une prochaine connexion.",
-          "retry": "Exécute le relais pour cette session ; il bascule vers un serveur géré lors d'une prochaine connexion.",
           "failureDetails": "Détails",
-          "unavailableUnknown": "Exécute le relais : un serveur Orca géré ne peut pas s'exécuter sur cet hôte.",
           "cause": {
             "unsupportedHost": "Orca n'a pas de build de serveur pour ce système",
             "artifactsUnavailable": "cette version d'Orca n'inclut pas le serveur",
@@ -12523,12 +12488,16 @@
           },
           "updateDeferredLater": "Exécute un serveur Orca géré ; il se met à jour lors d'une prochaine connexion.",
           "updateFailedPrevious": "Exécute un serveur Orca géré sur sa version précédente ; sa mise à jour a échoué.",
-          "terminalsLiveUncounted": "Exécute le relais jusqu'à la fermeture de ses terminaux ouverts, puis bascule vers un serveur géré.",
           "refusedBlocked": "Non basculé vers un serveur géré : un élément de cet hôte bloque le déplacement.",
-          "terminalsElsewhere": "Exécute le relais tant que {{count}} terminaux ouverts sur cet hôte par un autre bureau ou une autre session Orca sont en cours.",
-          "terminalsElsewhere_one": "Exécute le relais tant que {{count}} terminal ouvert sur cet hôte par un autre bureau ou une autre session Orca est en cours.",
-          "terminalsElsewhere_other": "Exécute le relais tant que {{count}} terminaux ouverts sur cet hôte par un autre bureau ou une autre session Orca sont en cours.",
-          "terminalsElsewhereUncounted": "Exécute le relais tant que des terminaux ouverts sur cet hôte par un autre bureau ou une autre session Orca sont en cours."
+          "unsupported": "Cette version d’Orca ne prend pas en charge cet hôte ({{reason}}). Pour continuer à l’utiliser, installez une version antérieure d’Orca.",
+          "unsupportedUnknown": "Cette version d’Orca ne prend pas en charge cet hôte. Pour continuer à l’utiliser, installez une version antérieure d’Orca.",
+          "tunnelUnsupported": "Cette version d’Orca ne prend pas en charge cet hôte : son serveur SSH n’autorise pas le transfert de port, et Orca n’a pas non plus pu joindre son serveur via la session SSH. Pour continuer à l’utiliser, installez une version antérieure d’Orca.",
+          "setupRetry": "Orca n’a pas pu démarrer son serveur sur cet hôte. Réessayez de vous connecter.",
+          "olderTerminalsUncounted": "Des terminaux lancés par une version antérieure d’Orca sont toujours en cours d’exécution sur cet hôte et ne s’arrêtent pas d’eux-mêmes. Fermez-les dans cette version d’Orca ou arrêtez-les sur l’hôte, puis reconnectez-vous.",
+          "olderTerminalsUnverifiable": "Orca n’a pas pu confirmer que les terminaux lancés par une version antérieure d’Orca sont terminés. Reconnectez-vous pour réessayer.",
+          "olderTerminals_one": "{{count}} terminal lancé par une version antérieure d’Orca est toujours en cours d’exécution sur cet hôte et ne s’arrête pas de lui-même. Fermez-le dans cette version d’Orca ou arrêtez-le sur l’hôte, puis reconnectez-vous.",
+          "olderTerminals_other": "{{count}} terminaux lancés par une version antérieure d’Orca sont toujours en cours d’exécution sur cet hôte et ne s’arrêtent pas d’eux-mêmes. Fermez-les dans cette version d’Orca ou arrêtez-les sur l’hôte, puis reconnectez-vous.",
+          "olderTerminals": "{{count}} terminaux lancés par une version antérieure d’Orca sont toujours en cours d’exécution sur cet hôte et ne s’arrêtent pas d’eux-mêmes. Fermez-les dans cette version d’Orca ou arrêtez-les sur l’hôte, puis reconnectez-vous."
         },
         "deltaMove": {
           "action": "Déplacer les nouveaux projets…",
@@ -17838,28 +17807,6 @@
         "retry": "Réessayer",
         "connect": "Se connecter",
         "connecting": "Connexion…"
-      },
-      "managedServerMove": {
-        "offer": "Déplacez {{host}} vers un serveur Orca géré pour des connexions plus fiables. Ses {{count}} terminaux ouverts redémarreront.",
-        "offer_one": "Déplacez {{host}} vers un serveur Orca géré pour des connexions plus fiables. Son {{count}} terminal ouvert redémarrera.",
-        "offer_other": "Déplacez {{host}} vers un serveur Orca géré pour des connexions plus fiables. Ses {{count}} terminaux ouverts redémarreront.",
-        "moved": "{{host}} exécute désormais un serveur Orca géré.",
-        "refusedLive": "Non déplacé : {{count}} terminaux sur {{host}} sont encore en cours.",
-        "refusedLive_one": "Non déplacé : {{count}} terminal sur {{host}} est encore en cours.",
-        "refusedLive_other": "Non déplacé : {{count}} terminaux sur {{host}} sont encore en cours.",
-        "refusedUnverifiable": "Non déplacé : Orca n'a pas pu confirmer que {{count}} terminaux sur {{host}} se sont arrêtés.",
-        "refusedUnverifiable_one": "Non déplacé : Orca n'a pas pu confirmer que {{count}} terminal sur {{host}} s'est arrêté.",
-        "refusedUnverifiable_other": "Non déplacé : Orca n'a pas pu confirmer que {{count}} terminaux sur {{host}} se sont arrêtés.",
-        "stayed": "{{host}} exécute toujours le relais. La section Hôtes SSH des Paramètres en indique la raison.",
-        "failed": "Impossible de déplacer {{host}} : {{reason}}",
-        "running": "Déplacement de {{host}} vers un serveur Orca géré…",
-        "title": "Déplacer vers un serveur géré",
-        "confirm": "Déplacer",
-        "notNow": "Pas maintenant",
-        "close": "Fermer",
-        "offerUncounted": "Déplacez {{host}} vers un serveur Orca géré pour des connexions plus fiables. Ses terminaux ouverts redémarreront.",
-        "refusedUnverifiableUncounted": "Non déplacé : Orca n'a pas pu confirmer que les terminaux sur {{host}} se sont arrêtés.",
-        "retry": "Réessayer"
       }
     },
     "main": {
@@ -17970,8 +17917,7 @@
         "agentNotSignedIn": "Connectez-vous à {{agent}}.",
         "thenSendAgain": "Puis envoyez à nouveau votre message.",
         "runCommandWhenDone": "Lancez /{{command}} quand il aura terminé.",
-        "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}.",
-        "sessionNotRestored": "{{agent}} n'a pas pu rouvrir sa session précédente, cette discussion continue donc dans une nouvelle. {{agent}} ne se souvient pas des messages précédents."
+        "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",

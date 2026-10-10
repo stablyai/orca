@@ -86,7 +86,7 @@ it('avoids extraction for unrelated CI, documentation, and native changes', () =
   expect(
     affectsLocalizationExtraction([
       '.github/workflows/e2e.yml',
-      'config/scripts/run-ssh-docker-e2e.mjs',
+      'config/scripts/run-terminal-scale-perf-e2e.mjs',
       'docs/reference/ci-runner-efficiency.md',
       'native/windows-registry/src/addon.cc'
     ])

@@ -185,15 +185,6 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
-    id: 'ssh.localhost-agent-hooks',
-    specs: ['tests/e2e/ssh-localhost.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/(?:relay\/(?:agent-hook|relay-agent-hook-runtime|plugin-overlay)|wsl-guest\/(?:agent-hook|plugin-overlay)|main\/(?:agent-hooks\/|ssh\/ssh-relay-session\.ts$)|shared\/agent-hook)/.test(
-        file
-      )
-  },
-  {
     id: 'browser-network.ssh-docker-route',
     specs: ['tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'],
     matches: (file) =>
@@ -205,17 +196,6 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
-    // Why the host-connection phase: the route gate waits on it, so a phase change can strand the
-    // SSH-unavailable card without touching a browser file.
-    id: 'browser.local-ssh-workspace-route',
-    specs: ['tests/e2e/local-ssh-browser-routing.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/(?:main\/browser\/local-ssh-browser-(?:route|partitions)\.ts|renderer\/src\/(?:components\/browser-pane\/(?:use-ssh-workspace-browser-route\.ts|assemble-chrome\/ssh-routed-browser-page-gate\.tsx)|lib\/worktree-host-connection-phase\.ts))$/.test(
-        file
-      )
-  },
-  {
     id: 'terminal.windows-wsl-launch-and-paste',
     specs: [
       'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
@@ -224,55 +204,6 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       isProductSource(file) &&
       /^(?:config\/scripts\/(?:verify-wsl-e2e-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
-        file
-      )
-  },
-  {
-    id: 'ephemeral-vm-runtime.rollback-readable-sidecar',
-    specs: ['tests/e2e/ephemeral-vm-provisioned-root.spec.ts'],
-    matches: (file) =>
-      /^(?:src\/main\/ephemeral-vm-(?:runtime-(?:service|provisioning-persistence)|failed-start-cleanup)|src\/shared\/(?:ephemeral-vm-runtime-(?:store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh-terminal-source',
-    specs: [
-      'tests/e2e/pty-input-write-queue-ssh.spec.ts',
-      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
-      'tests/e2e/ssh-cold-activation-restore.spec.ts',
-      'tests/e2e/ssh-docker-half-open-link.spec.ts',
-      'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
-      'tests/e2e/ssh-docker-relay-stall-credential.spec.ts',
-      'tests/e2e/ssh-docker-resource-accumulation.spec.ts',
-      'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
-      'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
-      'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
-      'tests/e2e/ssh-startup-exec-readiness.spec.ts',
-      'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts'
-    ],
-    // Why the store/startup/shared additions: the SSH-named authorities stop at the main
-    // process and the pane component, but the reconnect ledgers and retained-payload
-    // admission that decide whether a pane rebinds live in the renderer store.
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/main\/runtime\/(?:public-ssh-state|ssh-file-explorer-chunk-read)\.ts|src\/relay\/|src\/wsl-guest\/|src\/shared\/(?:ssh-|skill-ssh-relay-contract)|src\/renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts|src\/renderer\/src\/store\/slices\/(?:ssh|direct-ssh-)|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
-        file
-      )
-  },
-  {
-    // Why a sibling route rather than more paths on ssh-terminal-source: these modules carry
-    // no "ssh" in their names, and only the two restore specs gate them. Folding them in
-    // would run the whole SSH terminal list for a tab-tombstone edit.
-    id: 'ssh-workspace-session-restore',
-    specs: [
-      'tests/e2e/ssh-cold-activation-restore.spec.ts',
-      'tests/e2e/ssh-reconnect-tab-destruction.spec.ts'
-    ],
-    matches: (file) =>
-      isProductSource(file) &&
-      !file.endsWith('-test-harness.ts') &&
-      /^(?:src\/main\/ipc\/remote-workspace|src\/shared\/remote-workspace-|src\/renderer\/src\/hooks\/remote-workspace-|src\/renderer\/src\/lib\/worktree-(?:initial-terminal-seeding|default-terminal-tabs)\.ts|src\/renderer\/src\/components\/terminal\/initial-terminal)/.test(
         file
       )
   },
@@ -446,23 +377,11 @@ export function selectPrE2eSpecs(changedPaths, reportRoute = () => undefined) {
   return [...specs].sort((left, right) => left.localeCompare(right))
 }
 
-/** Routes whose authorities are SSH execution source, and so require the Docker-SSH lane. */
-export const SSH_SOURCE_ROUTE_IDS = ['ssh-terminal-source', 'ssh-workspace-session-restore']
-
-// Why derive this from the routes instead of a second path list: the Docker-SSH lane used to
-// trigger only because one route happened to list a startup-readiness spec, so pruning that
-// spec would have silently retired the lane. Two lists that must agree is how that drifted.
-export function hasSshSourceChange(changedPaths) {
-  return PR_E2E_SOURCE_ROUTES.filter((route) => SSH_SOURCE_ROUTE_IDS.includes(route.id)).some(
-    (route) => changedPaths.some(route.matches)
-  )
-}
-
 /** Routes whose authorities a real input method can judge, and so require the native IME lane. */
 export const NATIVE_IME_SOURCE_ROUTE_IDS = ['terminal-ime.native-input-method']
 
-// Why derived from the routes, like hasSshSourceChange: the native lane must trigger on IME
-// source, not on the native spec surviving in some route's spec list.
+// Why derived from the routes: the native lane must trigger on IME source, not on the native
+// spec surviving in some route's spec list.
 export function hasNativeImeSourceChange(changedPaths) {
   return PR_E2E_SOURCE_ROUTES.filter((route) =>
     NATIVE_IME_SOURCE_ROUTE_IDS.includes(route.id)
@@ -470,12 +389,9 @@ export function hasNativeImeSourceChange(changedPaths) {
 }
 
 export function shouldRunReusablePrE2e(changedPaths) {
-  // Native IME has its own workflow; SSH still runs inside the reusable workflow.
-  return (
-    hasSshSourceChange(changedPaths) ||
-    selectPrE2eSpecs(changedPaths).some(
-      (spec) => spec !== 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
-    )
+  // Native IME has its own workflow.
+  return selectPrE2eSpecs(changedPaths).some(
+    (spec) => spec !== 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
   )
 }
 
@@ -493,9 +409,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     input += chunk
   }
   const changedPaths = input.split(/\r?\n/).filter(Boolean)
-  if (process.argv.includes('--ssh-source')) {
-    process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
-  } else if (process.argv.includes('--reusable-workflow')) {
+  if (process.argv.includes('--reusable-workflow')) {
     process.stdout.write(`${shouldRunReusablePrE2e(changedPaths)}\n`)
   } else if (process.argv.includes('--wsl-source')) {
     process.stdout.write(`${hasWslSourceChange(changedPaths)}\n`)

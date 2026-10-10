@@ -100,9 +100,7 @@ export default function globalSetup(): void {
     }
   }
   if (
-    process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
     process.env.ORCA_E2E_SSH_DOCKER === '1' ||
-    process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1' ||
     (process.env.ORCA_E2E_SKILL_STAGING === '1' && Boolean(process.env.ORCA_E2E_SKILL_SSH_HOST))
   ) {
     if (process.env.SKIP_BUILD && existsSync(outLinuxRelay)) {
@@ -117,7 +115,7 @@ export default function globalSetup(): void {
       })
     }
   }
-  if (process.env.ORCA_E2E_SSH_DOCKER === '1' || process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') {
+  if (process.env.ORCA_E2E_SSH_DOCKER === '1') {
     console.error('[e2e] Preparing Docker OpenSSH fixture image...')
     prepareDockerSshRelayImage(root)
   }

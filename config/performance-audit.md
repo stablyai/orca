@@ -31,8 +31,7 @@ Incremental Claude scans and persisted Claude cache checkpoints are also include
 macOS and Windows, and on PRs changing this tooling or any listed contract file.
 It uploads per-OS JSON test results, plus the source inventory once from Linux
 because that scan is OS-independent. Its schedule starts after merge. Run the existing
-`test:e2e:terminal-perf:scale:report` for rendered typing/frame budgets and
-`test:e2e:ssh-docker-perf` for real transport behavior. Relay unit tests do not
+`test:e2e:terminal-perf:scale:report` for rendered typing/frame budgets. Unit tests do not
 measure SSH RTT, WSL scheduling or a packaged Electron renderer.
 
 To extend coverage, select a production-path regression with an operation-count,

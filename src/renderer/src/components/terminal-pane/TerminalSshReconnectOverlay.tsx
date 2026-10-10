@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { sshTargetConnectFailureText } from '@/ssh/ssh-connect-failure-text'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -122,12 +123,14 @@ export function TerminalSshReconnectOverlay({
       }
     } catch (err) {
       toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
-              'SSH connection failed'
-            )
+        sshTargetConnectFailureText(
+          targetId,
+          err,
+          translate(
+            'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectFailed',
+            'SSH connection failed'
+          )
+        )
       )
       // Why: a failed connect usually means the renderer's target metadata is
       // stale (target removed, or re-added under a new id). Resync it so the

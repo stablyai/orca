@@ -1,4 +1,4 @@
-/** User-facing words for which server an SSH host runs; every string goes through the catalog. */
+/** User-facing words for whether an SSH host's managed server serves it; all go through the catalog. */
 import type {
   SSH_MANAGED_SERVER_PHASES,
   SshConnectionState,
@@ -10,8 +10,6 @@ import { translate } from '@/i18n/i18n'
 export type SshHostServerStatusLine = {
   text: string
   tone: 'muted' | 'warning' | 'destructive'
-  /** Offers "Move to managed server", which restarts the live relay terminals. */
-  action?: 'move'
   /** Main's untranslated cause, with the host's orcad.log tail when there is one; shown on request. */
   detail?: string
 }
@@ -45,12 +43,24 @@ export function sshHostServerStatusLine(
     return { tone: 'muted', text: settingUpLabel(status.phase) }
   }
   if (status?.kind === 'relay') {
-    return relayLine(status)
+    return unservedLine(status)
   }
   if (target.managedServerUnavailable) {
     return unavailableLine(target.managedServerUnavailable.reason)
   }
   return null
+}
+
+/** A failed connect's toast: an unserved host's translated reason, else main's message. */
+export function sshConnectFailureText(
+  target: Pick<SshTarget, 'orcadFence' | 'managedServerUnavailable'> | undefined,
+  state: Pick<SshConnectionState, 'managedServer'> | undefined,
+  fallback: string
+): string {
+  if (target && state?.managedServer?.kind === 'relay') {
+    return sshHostServerStatusLine(target, state)?.text ?? fallback
+  }
+  return fallback
 }
 
 // Mirror main's ORCAD_TUNNEL_UNAVAILABLE_REASON.
@@ -74,19 +84,19 @@ function unavailableLine(reason: string | undefined): SshHostServerStatusLine {
   const cause = reason ? unavailableCause(reason) : null
   if (cause) {
     return {
-      tone: 'muted',
+      tone: 'destructive',
       text: translate(
-        'auto.components.settings.sshHostServer.unavailable',
-        'Runs the relay: a managed Orca server can’t run on this host ({{reason}}).',
+        'auto.components.settings.sshHostServer.unsupported',
+        'This host isn’t supported by this version of Orca ({{reason}}). To keep using it, install an older version of Orca.',
         { reason: cause }
       )
     }
   }
   return {
-    tone: 'muted',
+    tone: 'destructive',
     text: translate(
-      'auto.components.settings.sshHostServer.unavailableUnknown',
-      'Runs the relay: a managed Orca server can’t run on this host.'
+      'auto.components.settings.sshHostServer.unsupportedUnknown',
+      'This host isn’t supported by this version of Orca. To keep using it, install an older version of Orca.'
     ),
     ...(reason ? { detail: reason } : {})
   }
@@ -131,20 +141,20 @@ function unavailableCause(reason: string): string | null {
 
 function tunnelUnavailableLine(): SshHostServerStatusLine {
   return {
-    tone: 'warning',
+    tone: 'destructive',
     text: translate(
-      'auto.components.settings.sshHostServer.tunnelUnavailable',
-      'Runs the relay: this host’s SSH server doesn’t allow port forwarding, and Orca couldn’t reach a managed server through the SSH session either.'
+      'auto.components.settings.sshHostServer.tunnelUnsupported',
+      'This host isn’t supported by this version of Orca: its SSH server doesn’t allow port forwarding, and Orca couldn’t reach its server through the SSH session either. To keep using it, install an older version of Orca.'
     )
   }
 }
 
 function retryLine(): SshHostServerStatusLine {
   return {
-    tone: 'muted',
+    tone: 'warning',
     text: translate(
-      'auto.components.settings.sshHostServer.retry',
-      'Runs the relay this session; it moves to a managed server on a later connect.'
+      'auto.components.settings.sshHostServer.setupRetry',
+      'Orca couldn’t start its server on this host. Try connecting again.'
     )
   }
 }
@@ -210,35 +220,31 @@ function settingUpLabel(phase: (typeof SSH_MANAGED_SERVER_PHASES)[number]): stri
   }
 }
 
-function relayLine(
+function unservedLine(
   status: Extract<NonNullable<SshConnectionState['managedServer']>, { kind: 'relay' }>
 ): SshHostServerStatusLine {
   switch (status.reason) {
     case 'relay_terminals_live':
-      if (status.terminalsElsewhere) {
-        return { tone: 'muted', text: terminalsElsewhereText(status.terminals) }
-      }
       return {
-        tone: 'muted',
+        tone: 'warning',
         // Why: an absent count is unreported, never zero open terminals.
         text: status.terminals
           ? translate(
-              'auto.components.settings.sshHostServer.terminalsLive',
-              'Runs the relay until its {{count}} open terminals are closed, then moves to a managed server.',
+              'auto.components.settings.sshHostServer.olderTerminals',
+              '{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.',
               { count: status.terminals }
             )
           : translate(
-              'auto.components.settings.sshHostServer.terminalsLiveUncounted',
-              'Runs the relay until its open terminals are closed, then moves to a managed server.'
-            ),
-        action: 'move'
+              'auto.components.settings.sshHostServer.olderTerminalsUncounted',
+              'Terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.'
+            )
       }
     case 'relay_terminals_unverifiable':
       return {
-        tone: 'muted',
+        tone: 'warning',
         text: translate(
-          'auto.components.settings.sshHostServer.terminalsUnverifiable',
-          'Runs the relay: Orca couldn’t confirm its terminals are closed. It moves on a later connect.'
+          'auto.components.settings.sshHostServer.olderTerminalsUnverifiable',
+          'Orca couldn’t confirm that terminals started by an older version of Orca have exited. Reconnect to try again.'
         )
       }
     case 'orcad_unavailable':
@@ -263,18 +269,4 @@ function relayLine(
 
 function withDetail(detail: string | undefined): Pick<SshHostServerStatusLine, 'detail'> {
   return detail ? { detail } : {}
-}
-
-/** No move action: stopping this desktop's terminals can't end another desktop's. */
-function terminalsElsewhereText(terminals: number | undefined): string {
-  return terminals
-    ? translate(
-        'auto.components.settings.sshHostServer.terminalsElsewhere',
-        'Runs the relay while {{count}} terminals another Orca desktop or session opened on this host are running.',
-        { count: terminals }
-      )
-    : translate(
-        'auto.components.settings.sshHostServer.terminalsElsewhereUncounted',
-        'Runs the relay while terminals another Orca desktop or session opened on this host are running.'
-      )
 }

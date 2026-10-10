@@ -36,8 +36,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       setCallbacks: vi.fn(),
       callbacksRef: { current: null as unknown }
     },
-    mockDeployAndLaunchRelay: vi.fn(),
-    mockForceStopRelayForTarget: vi.fn(),
     mockAcceptSshPtyOutputData: vi.fn().mockResolvedValue({}),
     mockAcceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
     mockMux: {
@@ -93,8 +91,6 @@ export function createSshIpcMocks(): SshIpcMocks {
     powerMonitorOnMock,
     mockSshStore,
     mockConnectionManager,
-    mockDeployAndLaunchRelay,
-    mockForceStopRelayForTarget,
     mockAcceptSshPtyOutputData,
     mockAcceptSshPtyOutputExit,
     mockMux,
@@ -145,14 +141,21 @@ export function createSshIpcMocks(): SshIpcMocks {
       installSshPtySourceAckPublisher: vi.fn().mockReturnValue(() => {}),
       installSshPtySourceCancellationPublisher: vi.fn().mockReturnValue(() => {})
     },
-    // Null keeps today's relay path; the real decision is covered by its own tests.
+    // A managed host by default; the real decision is covered by its own tests.
     hostServerConnect: {
-      decideHostServer: vi.fn(async () => null),
+      decideHostServer: vi.fn(async (): Promise<{ route: 'managed'; environmentId: string }> => ({
+        route: 'managed',
+        environmentId: 'env-test'
+      })),
       recheckWhenManagedFenceClears: vi.fn(),
       publishHostServerDecisionFailure: vi.fn(),
-      publishManagedServerConnect: vi.fn(),
-      recordRelayDecision: vi.fn(),
-      refineRelayTerminalDecision: vi.fn(async () => {})
+      publishManagedServerConnect: vi.fn((targetId: string) => ({
+        targetId,
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })),
+      publishUnservedHostServer: vi.fn(() => new Error('This SSH host isn’t supported'))
     },
     sshConnectionStore: {
       isRuntimeOwnedSshTarget: (target: { owner?: unknown }) => target.owner !== undefined,
@@ -179,12 +182,7 @@ export function createSshIpcMocks(): SshIpcMocks {
         }
       }
     },
-    sshRelayDeploy: {
-      deployAndLaunchRelay: mockDeployAndLaunchRelay
-    },
-    sshRelayReset: {
-      forceStopRelayForTarget: mockForceStopRelayForTarget
-    },
+
     sshChannelMultiplexer: {
       SshChannelMultiplexer: class MockSshChannelMultiplexer {
         constructor() {

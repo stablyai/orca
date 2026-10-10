@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { sshConnectFailureText } from '@/components/settings/ssh-host-server-status-copy'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   resolveWorktreeHostConnection,
@@ -22,6 +23,19 @@ export type TerminalPaneHostState = {
   sshReconnectTargetRemoved: boolean
 }
 
+/** An unserved local host's translated reason; main's error stays the English twin. */
+function reconnectErrorText(
+  state: AppState,
+  environmentId: string | null,
+  targetId: string,
+  error: string | null
+): string | null {
+  if (error === null || environmentId !== null) {
+    return error
+  }
+  return sshConnectFailureText({}, state.sshConnectionStates.get(targetId), error)
+}
+
 function computeTerminalPaneHostState(state: AppState, worktreeId: string): TerminalPaneHostState {
   const connectionId = getConnectionIdFromState(state, worktreeId)
   const nativeChatTranscriptIsLocalReadableResult =
@@ -42,10 +56,11 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,
-    sshReconnectError: selectRuntimeAwareSshError(
+    sshReconnectError: reconnectErrorText(
       state,
       sshReconnectEnvironmentId,
-      sshReconnectTargetId
+      sshReconnectTargetId,
+      selectRuntimeAwareSshError(state, sshReconnectEnvironmentId, sshReconnectTargetId)
     ),
     sshReconnectStatus: host.publishedStatus,
     sshReconnectTargetId,

@@ -27,10 +27,6 @@ on:
         required: false
         type: boolean
         default: true
-      ssh_source_changed:
-        description: '"true" when the PR touches SSH execution source; gates the Docker-SSH lane'
-        required: false
-        type: string
   workflow_dispatch:
     inputs:
       ref:
@@ -285,8 +281,6 @@ jobs:
       - name: Install native build and headless UI tools
         # Why ripgrep: Quick Open's bounded host-side search requires rg instead of an
         # unbounded inventory fallback; the paired fixture exercises that real boundary.
-        # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
-        # lane now receives those specs from pr.yml's SSH source mapping.
         env: *e2e_tool_packages
         run: *install_e2e_tools
 
@@ -309,42 +303,7 @@ jobs:
           else
             # Dispatching an older ref retains its existing dedicated-owner exclusions.
             jq -r '.[] | select(
-              . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
-              . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
-              . != "tests/e2e/pty-input-write-queue-ssh.spec.ts" and
-              . != "tests/e2e/ssh-ai-vault-session-history.spec.ts" and
-              . != "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts" and
-              . != "tests/e2e/ssh-cold-activation-restore.spec.ts" and
-              . != "tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts" and
-              . != "tests/e2e/ssh-emptied-worktree-reactivation.spec.ts" and
-              . != "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts" and
-              . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
-              . != "tests/e2e/ssh-docker-half-open-link.spec.ts" and
-              . != "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts" and
-              . != "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts" and
-              . != "tests/e2e/ssh-docker-relay-stall-credential.spec.ts" and
-              . != "tests/e2e/ssh-docker-resource-accumulation.spec.ts" and
-              . != "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts" and
-              . != "tests/e2e/ssh-external-image-preview.spec.ts" and
-              . != "tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts" and
-              . != "tests/e2e/ssh-pi-compatible-agent-title.spec.ts" and
-              . != "tests/e2e/ssh-port-forward-lifecycle.spec.ts" and
-              . != "tests/e2e/ssh-reattach-home-partition.spec.ts" and
-              . != "tests/e2e/ssh-reconnect-tab-destruction.spec.ts" and
-              . != "tests/e2e/ssh-restart-tab-accumulation.spec.ts" and
-              . != "tests/e2e/ssh-skill-installation.spec.ts" and
-              . != "tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts" and
-              . != "tests/e2e/ssh-startup-local-shadow.spec.ts" and
-              . != "tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts" and
-              . != "tests/e2e/terminal-inline-images-ssh.spec.ts" and
-              . != "tests/e2e/ssh-docker-watcher-isolation.spec.ts" and
-              . != "tests/e2e/ssh-terminal-parking.spec.ts" and
-              . != "tests/e2e/terminal-retention-budget.spec.ts" and
-              . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
-              . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
-              . != "tests/e2e/workspace-layout-oracle-ssh.spec.ts" and
               . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
-              . != "tests/e2e/ssh-localhost.spec.ts" and
               . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
               . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
               . != "tests/e2e/workspace-layout-oracle-headless.spec.ts" and
@@ -372,13 +331,6 @@ jobs:
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
-          # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
-          # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
-          # The first clause stays because that spec needs Docker without referencing the variable.
-          if printf '%s\n' "${TEST_FILES[@]}" | grep -qx 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' \
-            || grep -l 'ORCA_E2E_SSH_DOCKER' "${TEST_FILES[@]}" >/dev/null 2>&1; then
-            E2E_ENV+=(ORCA_E2E_SSH_DOCKER=1)
-          fi
           E2E_PROJECT_ARGS=()
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
@@ -392,124 +344,6 @@ jobs:
         with:
           name: playwright-traces-changed
           path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  ssh-docker-watcher-isolation:
-    name: ssh docker watcher isolation (${{ matrix.shard }}/4)
-    needs: [build, prepare-native-cache]
-    # Each excluded changed spec must trigger its dedicated owner.
-    if: >-
-      inputs.test_files == '' ||
-      inputs.ssh_source_changed == 'true' ||
-      contains(inputs.test_files, 'tests/e2e/local-ssh-browser-routing.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/pty-input-write-queue-ssh.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-ai-vault-session-history.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-cold-activation-restore.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-emptied-worktree-reactivation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-half-open-link.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-relay-stall-credential.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-resource-accumulation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-external-image-preview.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-pi-compatible-agent-title.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-port-forward-lifecycle.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-reconnect-tab-destruction.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-restart-tab-accumulation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-skill-installation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/terminal-inline-images-ssh.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-docker-watcher-isolation.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-terminal-parking.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/terminal-retention-budget.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-ssh.spec.ts')
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    timeout-minutes: 60
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-
-      - name: Install native build and headless UI tools
-        env: *e2e_tool_packages
-        run: *install_e2e_tools
-
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: electron
-
-      - name: Download E2E build output
-        uses: actions/download-artifact@v8
-        with:
-          name: e2e-build-out
-          path: out/
-
-      # Why: this is the release-path proof that the deployed Linux relay keeps
-      # its PTY and explorer live across a real watcher SIGSEGV.
-      - name: Run Docker SSH watcher isolation E2E
-        if: matrix.shard == 1
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
-
-      # Why: Playwright empties test-results/ when it starts, so each step here used to
-      # destroy the previous step's traces. Only the last lane's failure was ever
-      # diagnosable from the artifact; set each lane aside before the next one runs.
-      - name: Keep watcher-isolation traces
-        if: always() && matrix.shard == 1
-        run: |
-          if [ -d test-results ]; then
-            mkdir -p e2e-traces
-            mv test-results "e2e-traces/watcher-isolation"
-          fi
-
-      # Keep every SSH journey after a test failure; stop work on superseded commits.
-      - name: Run Docker SSH terminal parking + startup readiness E2E
-        if: '!cancelled() && matrix.shard == 1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
-
-      - name: Keep terminal-parking traces
-        if: always() && matrix.shard == 1
-        run: |
-          if [ -d test-results ]; then
-            mkdir -p e2e-traces
-            mv test-results "e2e-traces/terminal-parking"
-          fi
-
-      # Separate VMs isolate destructive SSH fixtures while keeping one worker per shard.
-      - name: Run remaining Docker SSH E2E
-        if: '!cancelled()'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker --shard=${{ matrix.shard }}/4
-
-      - name: Keep remaining-ssh-docker traces
-        if: always()
-        run: |
-          if [ -d test-results ]; then
-            mkdir -p e2e-traces
-            mv test-results "e2e-traces/remaining-ssh-docker"
-          fi
-
-      - name: Upload watcher isolation traces
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-traces-ssh-docker-watcher-isolation-${{ matrix.shard }}
-          path: e2e-traces/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -693,70 +527,6 @@ jobs:
         if: failure()
         with:
           name: orcad-serve-mode-switch-windows-traces
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  ssh-localhost:
-    name: localhost SSH terminal and hooks
-    needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-localhost.spec.ts')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - name: Install SSH server and headless tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client openssh-server python3 ripgrep xvfb zsh openbox x11-utils
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: electron
-      - uses: actions/download-artifact@v8
-        with:
-          name: e2e-build-out
-          path: out/
-      - name: Start isolated localhost SSH server
-        shell: bash
-        run: |
-          # Bare shells install Pi extensions only for an existing agent home.
-          mkdir -p "$HOME/.pi/agent"
-          fixture="$RUNNER_TEMP/orca-localhost-sshd"
-          mkdir -p "$fixture"
-          ssh-keygen -q -t ed25519 -N '' -f "$fixture/host_key"
-          ssh-keygen -q -t ed25519 -N '' -f "$fixture/client_key"
-          cat > "$fixture/sshd_config" <<EOF
-          Port 22222
-          ListenAddress 127.0.0.1
-          HostKey $fixture/host_key
-          PidFile $fixture/sshd.pid
-          AuthorizedKeysFile $fixture/client_key.pub
-          StrictModes no
-          PasswordAuthentication no
-          KbdInteractiveAuthentication no
-          UsePAM yes
-          AllowUsers $(id -un)
-          Subsystem sftp internal-sftp
-          EOF
-          sudo mkdir -p /run/sshd
-          sudo /usr/sbin/sshd -f "$fixture/sshd_config" -E "$fixture/sshd.log"
-          ssh -i "$fixture/client_key" -p 22222 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 127.0.0.1 true || { sudo cat "$fixture/sshd.log"; exit 1; }
-          {
-            echo "ORCA_E2E_SSH_PORT=22222"
-            echo "ORCA_E2E_SSH_USER=$(id -un)"
-            echo "ORCA_E2E_SSH_IDENTITY_FILE=$fixture/client_key"
-          } >> "$GITHUB_ENV"
-      - name: Run localhost SSH terminal and hook journey
-        env:
-          SKIP_BUILD: '1'
-          ORCA_E2E_SSH_LOCALHOST: '1'
-          ORCA_FEATURE_REMOTE_AGENT_HOOKS: '1'
-          ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1
-      - uses: actions/upload-artifact@v7
-        if: failure() || cancelled()
-        with:
-          name: localhost-ssh-traces
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

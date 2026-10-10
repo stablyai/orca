@@ -105,7 +105,6 @@ src/main/runtime/windows-mobile-firewall.ts
 src/main/skills/skill-update-run.ts
 src/main/ssh/ssh-connection.ts
 src/main/ssh/ssh-proxy-command.ts
-src/main/ssh/ssh-remote-cli-host-passthrough.ts
 src/main/ssh/system-ssh-command.ts
 src/main/ssh/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-ssh-file-transfer.ts

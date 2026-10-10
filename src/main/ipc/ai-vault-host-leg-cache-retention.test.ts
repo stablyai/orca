@@ -100,29 +100,6 @@ afterEach(() => {
 })
 
 describe('host session result cache lifetime', () => {
-  it('releases both host legs and merged lists at the strict idle TTL with one unref timer', async () => {
-    const timeouts = vi.spyOn(globalThis, 'setTimeout')
-    const owner = await cacheOwner(async () => {
-      for (let scope = 0; scope < 8; scope++) {
-        await _internals.listAiVaultSessions({
-          executionHostScope: 'all',
-          scopePaths: [`/workspaces/project-${scope}`]
-        })
-      }
-    }, '|ssh:one')
-    expect(owner.size).toBe(40)
-    const pending = vi.getTimerCount()
-    const timer = timeouts.mock.results[0]?.value
-    await vi.advanceTimersByTimeAsync(AI_VAULT_CACHE_TTL_MS - 1)
-    expect(owner.size).toBe(40)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(owner.size).toBe(0)
-    expect(pending).toBe(1)
-    expect(timer?.hasRef()).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
-    expect(mocks.ssh).toHaveBeenCalledTimes(32)
-  })
-
   it('keeps the refreshed deadline and cached scoped depth when the old timer fires', async () => {
     const scan = vi.fn().mockResolvedValue(result('old'))
     const owner = await cacheOwner(() => scanHostLegWithCache(args(scan)))

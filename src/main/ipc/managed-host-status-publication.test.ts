@@ -16,7 +16,6 @@ vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
 
 const { clearManagedServerNotes, publishHostServerStatus } =
   await import('./runtime-environment-managed-tunnel')
-const { getPublicSshState, relayStateOverrides } = await import('./ssh-renderer-broadcast')
 const { clearSshHostServerStatus, getSshHostServerStatus, setSshHostServerStatus } =
   await import('../ssh/ssh-host-server-status')
 
@@ -33,7 +32,6 @@ function connection(status: 'connected' | 'disconnected') {
 describe('publishing a verified managed host status', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    relayStateOverrides.clear()
     clearSshHostServerStatus('ssh-1')
     clearSshHostServerStatus('ssh-2')
   })
@@ -51,13 +49,6 @@ describe('publishing a verified managed host status', () => {
       'ssh:state-changed',
       expect.objectContaining({ state: expect.objectContaining({ managedServer: ready }) })
     )
-  })
-
-  it('refreshes a retained override so later reads also forget the deferral', () => {
-    relayStateOverrides.set('ssh-1', connection('connected'))
-    publishHostServerStatus('ssh-1', ready)
-    expect(relayStateOverrides.get('ssh-1')?.managedServer).toEqual(ready)
-    expect(getPublicSshState('ssh-1')?.managedServer).toEqual(ready)
   })
 
   it('preserves disconnected contact instead of inventing a connection', () => {

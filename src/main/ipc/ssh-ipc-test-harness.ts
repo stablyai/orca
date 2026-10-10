@@ -1,4 +1,4 @@
-import { expect, vi } from 'vitest'
+import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
 import { PTY_CONSUMER_SESSION_PROTOCOL_VERSION } from '../../shared/pty-consumer-session'
@@ -15,8 +15,6 @@ import type {
   SshIpcTestSource,
   SshPortForwardManagerMock
 } from './ssh-ipc-mock-shapes'
-
-export type RelayDisposeCallback = (reason: 'shutdown' | 'connection_lost') => void
 
 /** Lease + consumer-recovery slice of the app store the SSH handlers write through. */
 export type SshLeaseStoreMock = {
@@ -41,12 +39,6 @@ export type SshLeaseStoreMock = {
 
 export type MockBrowserWindow = { isDestroyed: () => boolean; webContents: { send: Mock } }
 
-export type RelayLaunchResultMock = {
-  transport: { write: Mock; onData: Mock; onClose: Mock }
-  platform: string
-  serverBuildId: string
-}
-
 export type SshIpcHarness = {
   relayBuildId: string
   ipcTestSource: SshIpcTestSource
@@ -57,11 +49,6 @@ export type SshIpcHarness = {
   createConnectionManagerMock: () => SshConnectionManagerMock
   /** Replacement forwarders never exercise the await-able removal path. */
   createPortForwardManagerMock: () => Omit<SshPortForwardManagerMock, 'removeForwardAndWait'>
-  relayReconnectDelaysMs: readonly number[]
-  relayLostStabilizedMs: number
-  createRelayLaunchResult: () => RelayLaunchResultMock
-  getLatestRelayDisposeCallback: () => RelayDisposeCallback
-  useSlowRelayLaunchOnce: (delayMs: number) => void
   reset: () => Promise<void>
 }
 
@@ -74,8 +61,6 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     powerMonitorOnMock,
     mockSshStore,
     mockConnectionManager,
-    mockDeployAndLaunchRelay,
-    mockForceStopRelayForTarget,
     mockAcceptSshPtyOutputData,
     mockAcceptSshPtyOutputExit,
     mockMux,
@@ -145,28 +130,6 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     setCallbacks: vi.fn(),
     callbacksRef: { current: null as unknown }
   })
-  const relayReconnectDelaysMs = [500, 1000, 2000, 4000, 8000, 15_000] as const
-  const relayLostStabilizedMs = 5_000
-  const createRelayLaunchResult = () => ({
-    transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
-    platform: 'linux-x64',
-    serverBuildId: relayBuildId
-  })
-  const getLatestRelayDisposeCallback = (): RelayDisposeCallback => {
-    const calls = mockMux.onDispose.mock.calls
-    const callback = calls.at(-1)?.[0] as RelayDisposeCallback | undefined
-    expect(callback).toBeDefined()
-    return callback!
-  }
-  const useSlowRelayLaunchOnce = (delayMs: number): void => {
-    mockDeployAndLaunchRelay.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          setTimeout(() => resolve(createRelayLaunchResult()), delayMs)
-        })
-    )
-  }
-
   const reset = async (): Promise<void> => {
     await resetSshHandlerStateForTests()
     handlers.clear()
@@ -203,15 +166,9 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockConnectionManager.disconnectAll.mockReset()
     mockConnectionManager.setCallbacks.mockReset()
     mockConnectionManager.callbacksRef.current = null
-    mockForceStopRelayForTarget.mockReset().mockResolvedValue(undefined)
     mockAcceptSshPtyOutputData.mockReset().mockResolvedValue({})
     mockAcceptSshPtyOutputExit.mockReset().mockResolvedValue(undefined)
 
-    mockDeployAndLaunchRelay.mockReset().mockResolvedValue({
-      transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
-      platform: 'linux-x64',
-      serverBuildId: relayBuildId
-    })
     mockMux.dispose.mockReset()
     mockMux.isDisposed.mockReset().mockReturnValue(false)
     mockMux.onNotification.mockReset()
@@ -272,11 +229,6 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     createMockWindow,
     createConnectionManagerMock,
     createPortForwardManagerMock,
-    relayReconnectDelaysMs,
-    relayLostStabilizedMs,
-    createRelayLaunchResult,
-    getLatestRelayDisposeCallback,
-    useSlowRelayLaunchOnce,
     reset
   }
 }

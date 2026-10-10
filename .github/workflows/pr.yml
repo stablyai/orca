@@ -53,7 +53,6 @@ jobs:
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       e2e_run_changed: ${{ steps.e2e_filter.outputs.e2e_run_changed }}
       e2e_needs_build: ${{ steps.e2e_filter.outputs.e2e_needs_build }}
-      ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
       native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
       wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
     steps:
@@ -131,12 +130,7 @@ jobs:
           # authorities, exclusions, and sentinels without evaluating workflow shell.
           TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
-          # Why a separate signal: the Docker-SSH lane must trigger on SSH source, not on a
-          # spec name surviving in a route's list. Same routes, so the two cannot drift.
-          SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
-          echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          echo "SSH source changed: $SSH_SOURCE_CHANGED"
-          printf '%s\n' "$TEST_FILES_JSON" | E2E_SSH_SOURCE_CHANGED="$SSH_SOURCE_CHANGED" node config/scripts/ci-e2e-job-selection.mjs --job-outputs >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs --job-outputs >> "$GITHUB_OUTPUT"
           # Why its own signal: the real-IME lane is a whole ibus session, not a spec, so it must
           # trigger on IME source rather than on a spec name in some route's list.
           NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
@@ -1275,7 +1269,6 @@ jobs:
           src/main/ipc/preflight-provider-command-selection.test.ts
           src/main/ipc/preflight-runnable-local-cli.test.ts
           src/relay/windows-port-scan.win32.test.ts
-          src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts
           src/main/ssh/remote-node-runtime-store-windows.test.ts
           config/scripts/node-pty-windows-pty-teardown-patch.test.mjs
 
@@ -1350,7 +1343,6 @@ jobs:
       # workflow is queued. The head SHA is immutable and works for every PR.
       ref: ${{ github.event.pull_request.head.sha }}
       test_files: ${{ needs.code_paths.outputs.test_files }}
-      ssh_source_changed: ${{ needs.code_paths.outputs.ssh_source_changed }}
       run_changed_e2e: ${{ needs.code_paths.outputs.e2e_run_changed != 'false' }}
       needs_build: ${{ needs.code_paths.outputs.e2e_needs_build != 'false' }}
 

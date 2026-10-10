@@ -6226,7 +6226,6 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "호스트 또는 SSH 구성 별칭이 필요합니다.",
           "sshPortInvalid": "포트는 1에서 65535 사이여야 합니다.",
-          "sshRelayGraceInvalid": "Terminal 시간 초과는 60~{{value0}}초 사이여야 합니다.",
           "sshSaved": "SSH 호스트가 추가되었습니다.",
           "sshSaveFailed": "SSH 호스트를 추가하지 못했습니다.",
           "serverFieldsRequired": "서버 이름과 페어링 코드가 필요합니다.",
@@ -8472,10 +8471,6 @@
           "f8050f6307": "동기화된 {{value0}} 서버{{value1}}",
           "68c13b4589": "테스트 실패",
           "81d08bcddf": "연결 성공",
-          "2c4ee7332b": "원격 릴레이를 재설정하지 못했습니다.",
-          "db2e48975e": "원격 릴레이 재설정",
-          "025e107643": "원격 terminal을 종료하지 못했습니다.",
-          "90e308c98b": "원격 terminal 종료됨",
           "a43de1d3ee": "연결 해제 실패",
           "e95d5ae10e": "연결 실패",
           "c2a69510e3": "대상을 제거하지 못했습니다.",
@@ -8483,12 +8478,10 @@
           "2227ce47b6": "대상을 저장하지 못했습니다.",
           "f602009125": "대상이 추가됨",
           "b4ba0ce33d": "타겟이 업데이트되었습니다.",
-          "3879cbaa52": "terminals 시간 제한은 60~{{value0}}초 사이여야 하며, 그렇지 않으면 재설정될 때까지 terminals을 활성 상태로 유지해야 합니다.",
           "4db9afce1c": "포트는 1에서 65535 사이여야 합니다.",
           "0e5aa04161": "호스트 또는 SSH 구성 별칭이 필요합니다.",
           "f1fc50dad2": "SSH 대상을 로드하지 못했습니다.",
-          "0cda732f43": "연결 테스트 실패",
-          "terminateUnverifiable": "{{terminals}} 원격 터미널에 연결할 수 없습니다. 종료하려면 다시 연결하세요."
+          "0cda732f43": "연결 테스트 실패"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "취소",
@@ -8517,30 +8510,17 @@
           "7f7b3d7ab4": "대상 제거",
           "3d21a22d0e": "대상 제거",
           "3d8af2949f": "대상 편집",
-          "762a48c662": "원격 릴레이 재설정",
-          "97dea4e8cf": "원격 릴레이 재설정",
-          "da16e108e6": "원격 terminals 종료",
-          "c77f1abfe3": "원격 terminals 종료 중",
           "18968ede9e": "오류",
           "f0871e6bfb": "연결",
-          "47e94bd6ba": "연결됨",
-          "a883f5a00f": "terminal 시간 초과: {{value0}}",
-          "8ce71262f4": "재설정될 때까지 terminals"
+          "47e94bd6ba": "연결됨"
         },
         "SshTargetDestructiveActions": {
-          "7e66942808": "그러면 이 SSH 대상에서 활성 terminal 세션이 중지됩니다. 다시 연결해도 복원되지 않습니다.",
-          "accf177a03": "원격 Terminals을 종료하시겠습니까?",
-          "26be00392d": "이 SSH 대상의 원격 릴레이를 강제로 중지합니다. 이 대상의 활성 원격 terminals과 포트 포워딩이 종료됩니다.",
-          "570a7a0574": "원격 릴레이를 재설정하시겠습니까?",
           "3bb0cf0ee4": "그러면 대상이 제거되고 활성 원격 terminals이 종료됩니다.",
           "4808966c41": "SSH 대상 제거"
         },
         "SshTargetForm": {
           "fea9cb402e": "취소",
-          "1b19b00e93": "제한된 시간 초과는 60초에서 7일 사이여야 합니다.",
           "137e88ce8d": "Orca가 이 호스트에서 연결 해제된 뒤에도 원격 터미널은 계속 실행됩니다.",
-          "b574994adc": "중지하려면 원격 터미널 종료 또는 릴레이 재설정을 사용하세요.",
-          "71fc546097": "재설정할 때까지 터미널 유지",
           "92f80edbfd": "원격 터미널 지속성",
           "feae1d1e69": "선택 사항. ProxyJump / ssh -J와 동일합니다.",
           "11bcb4507a": "bastion.example.com",
@@ -8562,8 +8542,6 @@
           "a62b4cb39a": "변경 사항 저장",
           "29af933cd5": "새로운 SSH 대상",
           "f2331ce599": "SSH 대상 편집",
-          "7c13f58c91": "재설정할 때까지",
-          "55c56cf2c7": "연결 해제 후 시간 제한(초)",
           "4a342f44c1": "고급 연결",
           "e9609ddca6": "프록시, 점프 호스트, 연결 재사용",
           "8c922dffba": "더 빠른 설정을 위해 SSH 연결 재사용",
@@ -8572,12 +8550,7 @@
           "addTitle": "SSH 호스트 추가",
           "editDescription": "이 머신의 연결 세부 정보를 업데이트합니다. 변경 사항은 다음 연결 시 적용됩니다.",
           "addDescription": "SSH로 로그인할 수 있는 영구 머신을 추가합니다.",
-          "editingPrefix": "편집 중",
-          "remoteRuntime": "런타임",
-          "remoteRuntimeHelp": "어떤 Node.js가 이 호스트에서 ORCA를 실행하는지. Orca 관리 노드는 자체적으로 업로드하며 npm이 필요하지 않습니다. 호스트 노드는 이미 설치된 Node.js를 사용합니다.",
-          "remoteRuntimeAuto": "자동",
-          "remoteRuntimePinnedNode": "ORCA 관리 노드",
-          "remoteRuntimeHostNode": "호스트 노드"
+          "editingPrefix": "편집 중"
         },
         "TasksPane": {
           "f71d8a9dd3": "작업 제공자",
@@ -12391,8 +12364,6 @@
         },
         "sshHostServer": {
           "sourceChanged": "이전 Orca에서 변경됨: 관리형 서버로 다시 이동할 때까지 릴레이를 실행합니다.",
-          "unavailable": "릴레이를 실행합니다: 이 호스트에서는 관리형 Orca 서버를 실행할 수 없습니다({{reason}}).",
-          "tunnelUnavailable": "릴레이를 실행합니다: 이 호스트의 SSH 서버가 포트 포워딩을 허용하지 않으며, Orca도 SSH 세션을 통해 관리형 서버에 연결할 수 없었습니다.",
           "deploying": "관리형 Orca 서버 설정 중…",
           "converting": "이 호스트의 프로젝트를 관리형 Orca 서버로 이동하는 중…",
           "connecting": "관리형 Orca 서버에 연결 중…",
@@ -12400,13 +12371,7 @@
           "starting": "관리형 서버 시작 중…",
           "notServing": "Orca가 관리형 서버의 응답 여부를 확인하지 못했습니다.",
           "hostNewer": "더 새로운 Orca의 관리형 Orca 서버를 실행합니다. 해당 버전을 유지합니다.",
-          "terminalsLive": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
-          "terminalsLive_one": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
-          "terminalsLive_other": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
-          "terminalsUnverifiable": "릴레이를 실행합니다: Orca가 터미널이 닫혔는지 확인하지 못했습니다. 다음 연결 시 이동합니다.",
-          "retry": "이 세션에서는 릴레이를 실행합니다. 다음 연결 시 관리형 서버로 이동합니다.",
           "failureDetails": "세부 정보",
-          "unavailableUnknown": "릴레이를 실행합니다: 이 호스트에서는 관리형 Orca 서버를 실행할 수 없습니다.",
           "cause": {
             "unsupportedHost": "Orca에는 이 시스템용 서버 빌드가 없습니다",
             "artifactsUnavailable": "이 Orca 빌드에는 서버가 포함되어 있지 않습니다",
@@ -12417,12 +12382,16 @@
           },
           "updateDeferredLater": "관리형 Orca 서버를 실행합니다. 다음 연결 시 업데이트됩니다.",
           "updateFailedPrevious": "관리형 Orca 서버를 이전 버전으로 실행합니다. 업데이트에 실패했습니다.",
-          "terminalsLiveUncounted": "열린 터미널이 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
           "refusedBlocked": "관리형 서버로 이동하지 않음: 이 호스트의 무언가가 이동을 막고 있습니다.",
-          "terminalsElsewhere": "다른 Orca 데스크톱 또는 세션이 이 호스트에서 연 터미널 {{count}}개가 실행되는 동안 릴레이를 실행합니다.",
-          "terminalsElsewhere_one": "다른 Orca 데스크톱 또는 세션이 이 호스트에서 연 터미널 {{count}}개가 실행되는 동안 릴레이를 실행합니다.",
-          "terminalsElsewhere_other": "다른 Orca 데스크톱 또는 세션이 이 호스트에서 연 터미널 {{count}}개가 실행되는 동안 릴레이를 실행합니다.",
-          "terminalsElsewhereUncounted": "다른 Orca 데스크톱 또는 세션이 이 호스트에서 연 터미널이 실행되는 동안 릴레이를 실행합니다."
+          "unsupported": "이 버전의 Orca는 이 호스트를 지원하지 않습니다({{reason}}). 계속 사용하려면 이전 버전의 Orca를 설치하세요.",
+          "unsupportedUnknown": "이 버전의 Orca는 이 호스트를 지원하지 않습니다. 계속 사용하려면 이전 버전의 Orca를 설치하세요.",
+          "tunnelUnsupported": "이 버전의 Orca는 이 호스트를 지원하지 않습니다. 호스트의 SSH 서버가 포트 포워딩을 허용하지 않으며, SSH 세션을 통해서도 Orca 서버에 연결할 수 없었습니다. 계속 사용하려면 이전 버전의 Orca를 설치하세요.",
+          "setupRetry": "Orca가 이 호스트에서 서버를 시작하지 못했습니다. 다시 연결해 보세요.",
+          "olderTerminalsUncounted": "이전 버전의 Orca에서 시작한 터미널이 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요.",
+          "olderTerminalsUnverifiable": "이전 버전의 Orca에서 시작한 터미널이 종료되었는지 확인할 수 없습니다. 다시 연결하여 다시 시도하세요.",
+          "olderTerminals_one": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요.",
+          "olderTerminals_other": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요.",
+          "olderTerminals": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요."
         },
         "deltaMove": {
           "action": "새 프로젝트 이동…",
@@ -17736,28 +17705,6 @@
         "connecting": "연결 중…",
         "reconnect": "다시 연결",
         "retry": "재시도"
-      },
-      "managedServerMove": {
-        "offer": "더 안정적인 연결을 위해 {{host}}을(를) 관리형 Orca 서버로 이동합니다. 열린 터미널 {{count}}개가 다시 시작됩니다.",
-        "offer_one": "더 안정적인 연결을 위해 {{host}}을(를) 관리형 Orca 서버로 이동합니다. 열린 터미널 {{count}}개가 다시 시작됩니다.",
-        "offer_other": "더 안정적인 연결을 위해 {{host}}을(를) 관리형 Orca 서버로 이동합니다. 열린 터미널 {{count}}개가 다시 시작됩니다.",
-        "moved": "{{host}}이(가) 이제 관리형 Orca 서버를 실행합니다.",
-        "refusedLive": "이동하지 않음: {{host}}의 터미널 {{count}}개가 아직 실행 중입니다.",
-        "refusedLive_one": "이동하지 않음: {{host}}의 터미널 {{count}}개가 아직 실행 중입니다.",
-        "refusedLive_other": "이동하지 않음: {{host}}의 터미널 {{count}}개가 아직 실행 중입니다.",
-        "refusedUnverifiable": "이동하지 않음: Orca가 {{host}}의 터미널 {{count}}개가 중지되었는지 확인하지 못했습니다.",
-        "refusedUnverifiable_one": "이동하지 않음: Orca가 {{host}}의 터미널 {{count}}개가 중지되었는지 확인하지 못했습니다.",
-        "refusedUnverifiable_other": "이동하지 않음: Orca가 {{host}}의 터미널 {{count}}개가 중지되었는지 확인하지 못했습니다.",
-        "stayed": "{{host}}은(는) 여전히 릴레이를 실행합니다. 이유는 설정의 SSH 호스트에서 확인할 수 있습니다.",
-        "failed": "{{host}}을(를) 이동하지 못했습니다: {{reason}}",
-        "running": "{{host}}을(를) 관리형 Orca 서버로 이동하는 중…",
-        "title": "관리형 서버로 이동",
-        "confirm": "이동",
-        "notNow": "나중에",
-        "close": "닫기",
-        "offerUncounted": "더 안정적인 연결을 위해 {{host}}을(를) 관리형 Orca 서버로 이동합니다. 열린 터미널이 다시 시작됩니다.",
-        "refusedUnverifiableUncounted": "이동하지 않음: Orca가 {{host}}의 터미널이 중지되었는지 확인하지 못했습니다.",
-        "retry": "다시 시도"
       }
     },
     "main": {
@@ -17903,8 +17850,7 @@
         "agentNotSignedIn": "{{agent}}에 로그인하세요.",
         "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
         "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
-        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
-        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
