@@ -1,4 +1,4 @@
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/agent-detection-refusal'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,

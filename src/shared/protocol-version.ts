@@ -328,6 +328,8 @@ export const PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY =
 // refuses with WORKSPACE_ON_OTHER_RUNTIME, so a client may let it decide for a shared repo id.
 export const PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY =
   'preflight.other-runtime-refusal.v1' as const
+/** What such a host answers, instead of probing itself, for another runtime's workspace. */
+export const WORKSPACE_ON_OTHER_RUNTIME = 'workspace_on_other_runtime'
 // Hosts without this capability have no workspacePorts.scanHost/killHost; their scan and Stop act
 // only on the endpoint itself, never on a workspace's SSH host.
 export const WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY =

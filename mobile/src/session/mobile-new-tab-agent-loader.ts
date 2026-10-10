@@ -1,5 +1,7 @@
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/agent-detection-refusal'
-import { parseExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+  WORKSPACE_ON_OTHER_RUNTIME
+} from '../../../src/shared/protocol-version'
 import { newTabSettingsRead } from '../transport/settings-read-operations'
 import {
   type MobileRuntimeRepoSummary,
@@ -34,6 +36,12 @@ export type MobileAgentLaunchContext = {
   settings: unknown
   detectedAgents: unknown[]
   repo: MobileRuntimeRepoSummary | null
+}
+
+export function hostRefusesOtherRuntimeWorkspace(
+  hostCapabilities: readonly string[] | null | undefined
+): boolean {
+  return hostCapabilities?.includes(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY) === true
 }
 
 type MobileAgentLaunchContextArgs = {
@@ -100,13 +108,14 @@ async function loadDetectedAgents(
   if (!repo) {
     throw new Error('worktree_repo_not_found')
   }
-  const owners = repos
+  // A prefix test, not parseExecutionHostId: importing execution-host here splits a web bundle chunk.
+  const runtimeOwned = repos
     .filter((candidate) => candidate.id === repoId)
-    .map((candidate) => parseExecutionHostId(candidate.executionHostId)?.kind)
-  if (owners.includes('runtime')) {
+    .map((candidate) => candidate.executionHostId?.startsWith('runtime:') === true)
+  if (runtimeOwned.includes(true)) {
     // Why: rows on several hosts can share a repo id, and then only a host that refuses another
     // runtime's workspace may decide; the first row's connection could name this host's SSH target.
-    if (!hostRefusesOtherRuntime || owners.every((kind) => kind === 'runtime')) {
+    if (!hostRefusesOtherRuntime || !runtimeOwned.includes(false)) {
       throw new MobileWorkspaceOnOtherRuntimeError()
     }
     return {

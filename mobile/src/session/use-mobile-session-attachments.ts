@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
-import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import {
+  hostRefusesOtherRuntimeWorkspace,
   loadMobileNewTabAgentOptions,
   MobileWorkspaceOnOtherRuntimeError
 } from './mobile-new-tab-agent-loader'
@@ -125,8 +125,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     }
   }, [clipboardContents, selectModeActive, setCanPaste])
 
-  const hostRefusesOtherRuntime =
-    hostCapabilities?.includes(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY) === true
+  const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(hostCapabilities)
   useEffect(() => {
     const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
     if (!shouldLoadAgentOptions) {

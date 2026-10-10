@@ -10,10 +10,10 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/agent-detection-refusal'
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
+  RUNTIME_CAPABILITIES,
+  WORKSPACE_ON_OTHER_RUNTIME
 } from '../../shared/protocol-version'
 import {
   resolveWorkspaceAgentDetectionHost,

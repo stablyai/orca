@@ -6,8 +6,10 @@ import {
   launchAgentInExistingWorkspace,
   supportsMobileExistingAgentLaunch
 } from './mobile-existing-agent-launch'
-import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { loadMobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
+import {
+  hostRefusesOtherRuntimeWorkspace,
+  loadMobileAgentLaunchContext
+} from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
 
 // Launch path for the phone's AI buttons ("Fix checks with AI", "Resolve conflicts with AI", commit
@@ -42,9 +44,7 @@ export async function launchAgentWithPrompt(args: {
       await loadMobileAgentLaunchContext({
         client: args.client,
         worktreeId: args.worktreeId,
-        hostRefusesOtherRuntime:
-          args.hostCapabilities?.includes(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY) ===
-          true
+        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
       }),
       args.actionId
     )
