@@ -1,7 +1,10 @@
 import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
 import { vi } from 'vitest'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { store } from './worktrees-test-ipc-surface'
 
 export type WorktreeRuntimeStub = {
+  showRepo: ReturnType<typeof vi.fn<OrcaRuntimeService['showRepo']>>
   resolveRemoteTrackingBase: ReturnType<typeof vi.fn>
   hasRemoteTrackingRef: ReturnType<typeof vi.fn>
   getOrStartRemoteTrackingBaseRefresh: ReturnType<typeof vi.fn>
@@ -22,6 +25,8 @@ export type WorktreeRuntimeStub = {
   publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
 }
 
+let selectorRuntime: OrcaRuntimeService | undefined
+
 /** Why: create-flow tests need a minimal runtime; full fetchRemoteWithCache behavior lives in fetch-remote-cache.test.ts. */
 export function createWorktreeRuntimeStub(mainWindow?: {
   webContents: { send: (channel: string, ...args: unknown[]) => unknown }
@@ -29,6 +34,11 @@ export function createWorktreeRuntimeStub(mainWindow?: {
   // Why here: every harness setup builds a stub, so no removal from an earlier test leaks in.
   _resetPendingWorktreeRemovalsForTests()
   const runtimeStub: WorktreeRuntimeStub = {
+    showRepo: vi.fn<OrcaRuntimeService['showRepo']>((selector, executionHostId) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Repository selection uses only the reset catalog methods on this mock store.
+      selectorRuntime ??= new OrcaRuntimeService(store as never)
+      return selectorRuntime.showRepo(selector, executionHostId)
+    }),
     resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
     hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
     getOrStartRemoteTrackingBaseRefresh: vi.fn().mockResolvedValue({ ok: true }),
