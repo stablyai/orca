@@ -211,6 +211,14 @@ describe('bulk git helpers', () => {
 
   it('preserves bulk discard action selection and original path order for path edges', async () => {
     const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+    const untrackedPaths =
+      process.platform === 'win32'
+        ? ['new', 'new', 'src/file']
+        : ['new', 'docs\\', 'new', 'src/file', 'docs\\']
+    const restoreInput =
+      process.platform === 'win32'
+        ? ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0'
+        : ':(literal)[ab].txt\0:(literal)docs///\0'
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'docs/readme\0src/file-extra\0[ab].txt\0' })
       .mockResolvedValue({ stdout: '' })
@@ -220,11 +228,9 @@ describe('bulk git helpers', () => {
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
       ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
       ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
-      ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
+      ['clean', '-ffdx', '--', ...untrackedPaths.map((filePath) => `:(literal)${filePath}`)]
     ])
-    expect(gitExecFileAsyncMock.mock.calls[1][1].stdin).toBe(
-      ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0'
-    )
+    expect(gitExecFileAsyncMock.mock.calls[1][1].stdin).toBe(restoreInput)
     expect(rmMock).not.toHaveBeenCalled()
   })
 

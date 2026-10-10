@@ -305,6 +305,14 @@ describe('GitHandler', () => {
 
     it('preserves bulk discard action selection and original path order for path edges', async () => {
       const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+      const untrackedPaths =
+        process.platform === 'win32'
+          ? ['new', 'new', 'src/file']
+          : ['new', 'docs\\', 'new', 'src/file', 'docs\\']
+      const restoreInput =
+        process.platform === 'win32'
+          ? ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0'
+          : ':(literal)[ab].txt\0:(literal)docs///\0'
       const gitMock = vi
         .spyOn(
           handler as unknown as {
@@ -320,13 +328,13 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls.map(([args]) => args)).toEqual([
         ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
         ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
-        ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
+        ['clean', '-ffdx', '--', ...untrackedPaths.map((filePath) => `:(literal)${filePath}`)]
       ])
       expect(gitMock).toHaveBeenNthCalledWith(
         2,
         ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
         tmpDir,
-        { stdin: ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0' }
+        { stdin: restoreInput }
       )
     })
 
