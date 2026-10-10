@@ -895,15 +895,26 @@ export class RelayAssignmentStore {
     placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
     // evacuateDeadCells re-enters placement from a sweep; it must not take the
     // bounded wait, whose 55P03 would surface as a terminal sweep failure.
-    lockMode: CellInventoryLockMode = 'request'
+    lockMode: CellInventoryLockMode = 'request',
+    // Step 5: a fresh placement may first be booked on a reserve-mode cell, outside any
+    // transaction; and a database mint stays above every epoch the director's map knew.
+    step5: { epochFloor?: number; placeFresh?: () => Promise<RelayAssignment | null> } = {}
   ): Promise<RelayAssignment> {
     const sticky = await this.assignStickyWithLockRetry(identity, lockMode, preferredRegion)
     if (sticky) return sticky
+    const booked = await step5.placeFresh?.()
+    if (booked) return booked
     // Only placement needs the global inventory critical section; queueing those
     // attempts locally avoids turning true placement bursts into NOWAIT storms.
     return await this.serializeAssignment(
       async () =>
-        await this.assignWithLockRetry(identity, lockMode, preferredRegion, placementRegion)
+        await this.assignWithLockRetry(
+          identity,
+          lockMode,
+          preferredRegion,
+          placementRegion,
+          step5.epochFloor ?? 0
+        )
     )
   }
 
@@ -922,7 +933,8 @@ export class RelayAssignmentStore {
     identity: AssignmentIdentity,
     lockMode: CellInventoryLockMode,
     preferredRegion?: RelayRegion,
-    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    epochFloor = 0
   ): Promise<RelayAssignment> {
     const deadline = Date.now() + ASSIGNMENT_LOCK_RETRY_DEADLINE_MS
     let inventoryScope: AssignmentInventoryScope = 'none'
@@ -933,7 +945,8 @@ export class RelayAssignmentStore {
           inventoryScope,
           lockMode,
           preferredRegion,
-          placementRegion
+          placementRegion,
+          epochFloor
         )
       } catch (error) {
         if (error instanceof AssignmentInventoryScopeChanged) {
@@ -1198,7 +1211,8 @@ export class RelayAssignmentStore {
     inventoryScope: AssignmentInventoryScope,
     lockMode: CellInventoryLockMode,
     preferredRegion?: RelayRegion,
-    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    epochFloor = 0
   ): Promise<RelayAssignment> {
     const now = this.now()
     // An isolated retry takes its tier's rows before anything reassigns this,
@@ -1491,7 +1505,9 @@ export class RelayAssignmentStore {
         }
       }
       await this.adjustCellReservation(transaction, target.cellId, 1)
-      const assignmentEpoch = existing ? integer(existing, 'assignment_epoch') + 1 : 1
+      // A host that left a reserve-mode cell inside the ledger's lag never reuses an epoch.
+      const assignmentEpoch =
+        Math.max(existing ? integer(existing, 'assignment_epoch') : 0, epochFloor) + 1
       // Counters follow the leases the host still holds, plus the new control.
       const counts = activityCounts(keptLeases)
       counts.control += 1
@@ -8101,7 +8117,8 @@ export class RelayAssignmentStore {
     const now = this.now()
     const rows = await this.database.query(
       `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
-              admission.roll_isolated_at, runtime.ready, runtime.last_heartbeat_at
+              admission.admission_state, admission.roll_isolated_at, runtime.ready,
+              runtime.last_heartbeat_at
        FROM relay_cells cell
        LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
        LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
@@ -8124,7 +8141,12 @@ export class RelayAssignmentStore {
           heartbeatExpiresAt !== null &&
           heartbeatExpiresAt > now &&
           integer(row, 'capacity_requests') > 0 &&
-          optionalInteger(row, 'roll_isolated_at') === undefined
+          optionalInteger(row, 'roll_isolated_at') === undefined,
+        // Step 5 places only on general cells that are not isolated for a roll.
+        general:
+          optionalText(row, 'admission_state') === 'general' &&
+          optionalInteger(row, 'roll_isolated_at') === undefined &&
+          integer(row, 'capacity_requests') > 0
       }
     })
   }
