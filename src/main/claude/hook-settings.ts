@@ -14,7 +14,10 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
-import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
+import {
+  wrapRuntimeHomeHookCommand,
+  wrapRuntimeHomePosixHookCommand
+} from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
 
@@ -83,16 +86,37 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
+function getScriptBaseName(scriptPath: string): string {
+  const scriptFileName = basename(scriptPath)
+  const extension = extname(scriptFileName)
+  return extension ? scriptFileName.slice(0, -extension.length) : scriptFileName
+}
+
 export function getManagedCommand(
   scriptPath: string,
   options: { neutralJsonWhenMissing?: boolean } = {}
 ): string {
-  const scriptFileName = basename(scriptPath)
-  const extension = extname(scriptFileName)
-  return wrapRuntimeHomeHookCommand(
-    extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
-    options
-  )
+  return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
+}
+
+export function getManagedEventHook(
+  eventName: string,
+  scriptPath: string,
+  settings = CLAUDE_HOOK_SETTINGS
+): HookCommandConfig {
+  // Why: on a POSIX host the lifecycle hook is the remote command already; Windows keeps its launcher.
+  return process.platform === 'win32'
+    ? getManagedLifecycleHook(scriptPath, settings)
+    : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
+}
+
+// Why: Claude echoes every PostCompact hook's full command into the post-compact transcript, which
+// the model then reads, so that event gets the short POSIX branch, not the ~3KB wrapper. It gives up
+// the wrapper's cross-OS portability and neutral-JSON fallback, which PostCompact does not need.
+export function getRemoteManagedEventCommand(eventName: string, scriptPath: string): string {
+  return eventName === 'PostCompact'
+    ? wrapRuntimeHomePosixHookCommand(getScriptBaseName(scriptPath))
+    : getRemoteManagedCommand(scriptPath)
 }
 
 export function getManagedLifecycleHook(
@@ -155,7 +179,7 @@ export function getRemoteManagedCommand(scriptPath: string): string {
 
 export function applyManagedHooks(
   config: HooksConfig,
-  hook: HookCommandConfig,
+  hookForEvent: (eventName: string) => HookCommandConfig,
   scriptFileName: string,
   plan: ClaudeManagedHookPlan
 ): HooksConfig {
@@ -165,7 +189,10 @@ export function applyManagedHooks(
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
     const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
-    const definition: HookDefinition = { ...event.definition, hooks: [hook] }
+    const definition: HookDefinition = {
+      ...event.definition,
+      hooks: [hookForEvent(event.eventName)]
+    }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
