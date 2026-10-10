@@ -41,7 +41,9 @@ export const CELL_FLAG_SPECS = {
   reserveDryRun: { parse: booleanValue, default: false },
   rejectionFence: { parse: booleanValue, default: true },
   // Absent keeps the cell's boot value.
-  readTimeoutMarginMs: { parse: numberIn(1_000, 60_000, true) }
+  readTimeoutMarginMs: { parse: numberIn(1_000, 60_000, true) },
+  // Flip-back leases in flight; absent is a third of the cell's pool.
+  reregisterInFlight: { parse: numberIn(1, 16, true) }
 }
 
 export const RESERVE_CONFIRMATION = 'RESERVE'

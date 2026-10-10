@@ -31,7 +31,8 @@ const SUPPORTED = {
   intakePerSec: { type: 'number', min: 0, max: 1_000 },
   reserveDryRun: { type: 'boolean' },
   rejectionFence: { type: 'boolean' },
-  readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true }
+  readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true },
+  reregisterInFlight: { type: 'number', min: 1, max: 16, integer: true }
 }
 
 function fakeGoogleAndCell({
@@ -254,6 +255,8 @@ test('changes only the named switches and keeps every other key the object alrea
   assert.deepEqual(desiredObject(request, null).flags, { admitMode: 'reserve', intakePerSec: 40 })
   assert.throws(() => desiredObject(request, { v: 1, cellId: 'production-gce-c27', flags: {} }), /by hand/)
   assert.deepEqual(parseFlagChanges('rejectionFence=false'), { rejectionFence: false })
+  assert.deepEqual(parseFlagChanges('reregisterInFlight=8'), { reregisterInFlight: 8 })
+  assert.throws(() => parseFlagChanges('reregisterInFlight=32'), /cannot be/)
 })
 
 test('a write keeps the switches it did not name, end to end', async () => {

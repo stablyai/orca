@@ -24,7 +24,8 @@ on:
         description: >-
           Switches to change, e.g. readinessLocal=true,admitMode=reserve (key=default removes a
           key). Every other switch keeps its current value. Known: readinessLocal, ticketCheck,
-          admitMode, intakePerSec, reserveDryRun, rejectionFence, readTimeoutMarginMs
+          admitMode, intakePerSec, reserveDryRun, rejectionFence, readTimeoutMarginMs,
+          reregisterInFlight
         required: true
         type: string
       expected-generation:
