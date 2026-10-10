@@ -155,6 +155,7 @@ export function prepareWebSessionTabsSnapshotBase(
     environmentId,
     existingTerminalById,
     state.terminalLayoutsByTabId,
+    state.ptyIdsByTabId,
     retainedTerminalTabs.length,
     now,
     callerFocusIntentTab?.type === 'terminal'

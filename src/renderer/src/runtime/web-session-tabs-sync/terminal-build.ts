@@ -57,6 +57,7 @@ export function buildMirroredTerminalTabs(
   environmentId: string,
   existingById: ReadonlyMap<string, TerminalTab>,
   existingLayoutsByTabId: Readonly<Record<string, TerminalLayoutSnapshot>>,
+  existingLivePtyIdsByTabId: Readonly<Record<string, readonly string[]>>,
   sortOffset: number,
   now: number,
   focusTarget?: { parentTabId: string; leafId: string },
@@ -101,7 +102,14 @@ export function buildMirroredTerminalTabs(
       chooseRemoteTerminalLayout(surfaces, ptyIdsByLeafId, existingLayout, requestedActiveLeafId)
     ).snapshot
     const layoutPtyEntries = Object.entries(layout.ptyIdsByLeafId ?? {})
-    const ptyIds = layoutPtyEntries.map(([, ptyId]) => ptyId)
+    // Wake bindings survive Sleep; only ready surfaces or already-live bindings count as activity.
+    const livePtyIds = new Set([
+      ...Object.values(freshPtyIdsByLeafId),
+      ...(existingLivePtyIdsByTabId[localTabId] ?? [])
+    ])
+    const ptyIds = layoutPtyEntries
+      .map(([, ptyId]) => ptyId)
+      .filter((ptyId) => livePtyIds.has(ptyId))
     let retainedSurfaceByPrunedLeafId: Map<string, TerminalSurface> | undefined
     if (layoutPtyEntries.length < Object.keys(ptyIdsByLeafId).length) {
       const retainedLeafIdByPtyId = new Map(

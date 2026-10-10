@@ -60,18 +60,14 @@ export function findUnhydratedHostMirrorForPane(
   // whatever the individual leaf's fate.
   //
   // TAB-GRANULAR, and everything below this line is leaf-aware — the asymmetry is a known residual,
-  // not an oversight. For a single-leaf tab (every agent tab Orca creates) it is exact: the mirror
-  // builds `ptyIdsByTabId[tab]` out of the same map it writes to the layout's `ptyIdsByLeafId`
-  // (web-session-tabs-sync/terminal-build.ts), so a non-empty entry means this leaf is bound and
-  // live. For a SPLIT mirrored tab it is not. A leaf that has ever been bound keeps its binding
-  // across the gap — `retainPendingTerminalBindings` carries it — so the residual needs a leaf that
-  // was NEVER bound, i.e. a cold start or a re-pair with no layout to retain from. There, a sibling
-  // surface that reaches `ready` first publishes a handle for the tab while this leaf has none, the
-  // pane reads decidable, and the resume fires: #19735 narrowed to a split tab's first frame.
-  // It cannot be closed here, because such a leaf holds no binding and the binding is what names a
-  // pane in a handle-gap verdict. Closing it means keeping each surface's `pending-handle` status
-  // per leaf, which the host already publishes
-  // (main/runtime/runtime-mobile-session-projection.ts) and the client consumes but does not retain.
+  // not an oversight. For a single-leaf tab, a non-empty live entry identifies that leaf.
+  // Layout bindings also retain inactive wake hints; they do not imply a published live handle.
+  // A slept binding with no live entry therefore takes the bounded handle wait below.
+  // For a SPLIT mirrored tab, a sibling's live handle can still make a pending leaf decidable,
+  // whether that pending leaf retains a wake binding or has never been bound. There, a sibling
+  // surface that reaches `ready` first publishes a handle for the tab while this leaf has none.
+  // Closing the residual needs per-leaf handle status, including leaves without a prior binding;
+  // the host publishes it, but the client does not retain it.
   // Pinned as current behaviour by "resumes a pending leaf when a sibling leaf of the same tab
   // holds the only handle" in host-mirror-handle-gap-resume.test.ts.
   if ((state.ptyIdsByTabId[tabId]?.length ?? 0) > 0) {

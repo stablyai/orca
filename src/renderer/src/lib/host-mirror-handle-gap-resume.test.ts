@@ -1,4 +1,9 @@
 import path from 'node:path'
+import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync'
+import {
+  makeSnapshot,
+  resetWebSessionTabsSyncTestState
+} from '@/runtime/web-session-tabs-sync-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
@@ -294,6 +299,48 @@ describe('resume across the mirror handle gap', () => {
   // binds a PTY this environment minted, so there is no handle on its way and no wait to arm —
   // parking would be the latch-that-never-releases defect, since mirror settlement has already run
   // and will not replay the sweep a second time.
+  it('waits before fallback resume after a pending snapshot retains a slept binding', () => {
+    resetWebSessionTabsSyncTestState()
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    const paneKey = seedActiveSleepingRecord(worktree.id)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    const snapshot = makeSnapshot(
+      [
+        {
+          type: 'terminal',
+          id: `host-tab-1::${LEAF_ID}`,
+          title: 'Claude',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'pending-handle',
+          terminal: null
+        }
+      ],
+      { worktree: worktree.id }
+    )
+    useAppStore.setState(
+      applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, RUNTIME_ENV_ID, Date.now())
+    )
+
+    expect(
+      useAppStore.getState().terminalLayoutsByTabId[WEB_TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID]
+    ).toBe('remote:env-handle-gap@@term_1')
+    expect(useAppStore.getState().ptyIdsByTabId[WEB_TAB_ID] ?? []).toEqual([])
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS - 1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    vi.advanceTimersByTime(1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(Object.values(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toEqual([
+      expect.objectContaining({ providerSession: { key: 'session_id', id: 'handle-gap-session' } })
+    ])
+    resetWebSessionTabsSyncTestState()
+  })
+
   it('still resumes a published row no leaf of which binds this environment', () => {
     const worktree = makeRuntimeOwnedWorktree()
     seedMirroredWorkspace(worktree)
