@@ -74,7 +74,10 @@ describe('OMP session status ownership', () => {
       await settle()
     }
     expect(
-      harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).payload.session_id)
+      harness.fetchMock.mock.calls
+        .map((call) => JSON.parse(call[1].body).payload)
+        .filter((payload) => payload.hook_event_name === 'agent_start')
+        .map((payload) => payload.session_id)
     ).toEqual(['initial', 'new', 'resumed'])
   })
   it('uses a distinct ownership key when pane and launch change before callbacks', async () => {
@@ -91,7 +94,9 @@ describe('OMP session status ownership', () => {
     harness.reload()
     await harness.callHook('agent_start', {}, separate)
     await settle()
-    expect(JSON.parse(harness.fetchMock.mock.calls[0][1].body).payload.session_id).toBe('separate')
+    expect(JSON.parse(harness.fetchMock.mock.lastCall?.[1].body).payload.session_id).toBe(
+      'separate'
+    )
   })
 
   it('uses OMP parent metadata and nested task paths when the root already owns the pane', async () => {
@@ -131,6 +136,8 @@ describe('OMP session status ownership', () => {
       }
     }
     await harness.callHook('session_start', {}, root)
+    await settle()
+    harness.fetchMock.mockClear()
     harness.reload()
     const child = {
       sessionManager: {

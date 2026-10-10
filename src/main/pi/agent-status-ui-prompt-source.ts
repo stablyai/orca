@@ -33,6 +33,7 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
     '    isIdle &&= !isHeldByChildren()',
     "    post('ui_prompt_end', { is_idle: isIdle })",
     '  })',
+
     ''
   ]
 }

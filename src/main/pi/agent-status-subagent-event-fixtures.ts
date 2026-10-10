@@ -1,4 +1,7 @@
 import { vi } from 'vitest'
+import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
+import { normalizeAndAccept } from '../../shared/agent-hook-listener-test-harness'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 
 import {
   AGENT_STATUS_EXTENSION_SELF_PID,
@@ -22,6 +25,18 @@ export function posts(harness: AgentStatusExtensionHarness): PostedPayload[] {
     const body: { payload: PostedPayload } = JSON.parse(String(call[1]?.body))
     return body.payload
   })
+}
+
+export function normalizedOmpPosts(harness: AgentStatusExtensionHarness): AgentHookEventPayload[] {
+  const state = createHookListenerState()
+  const rows: AgentHookEventPayload[] = []
+  for (const payload of posts(harness)) {
+    const row = normalizeAndAccept(state, 'omp', payload)
+    if (row) {
+      rows.push(row)
+    }
+  }
+  return rows
 }
 
 export function postedHookNames(harness: AgentStatusExtensionHarness): string[] {

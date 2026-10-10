@@ -15,7 +15,6 @@ describe('OMP prefill through the explicitly loaded status extension', () => {
     h.reload()
     await h.callHook('session_start', {}, { ui: { setEditorText } })
     expect(setEditorText).toHaveBeenCalledTimes(1)
-    expect(h.fetchMock).not.toHaveBeenCalled()
   })
 
   it('preserves the draft until an editor is available', async () => {

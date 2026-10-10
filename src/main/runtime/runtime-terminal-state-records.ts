@@ -65,6 +65,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
+  launchNeedsHookAttestation: boolean
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
   foregroundAgent: TerminalAgent | null

@@ -1,5 +1,35 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
+export function getAgentStatusSessionStartHandlerSourceLines(kind: PiAgentKind): string[] {
+  return kind !== 'omp'
+    ? [
+        "  onStatus('session_start', (event, ctx) => {",
+        '    updateSessionMetadata(ctx)',
+        '    if (isOmpRuntime()) { invalidateOmpUiDialogs(); post("session_start", readOmpActivity(ctx)); return }',
+        ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
+        '    // Why: /reload re-registers the active session, but it is not a',
+        '    // turn boundary and must not clear the visible status or unread state.',
+        "    if (event.reason === 'reload') return",
+        "    post('session_start')",
+        ...(kind === 'pi'
+          ? [
+              '    restoreParkedSubagents()',
+              // Why: the host reads session_start as an idle session; children still hold this one.
+              "    if (lifecycleState.waiting) post('agent_start')"
+            ]
+          : []),
+        '  })',
+        ''
+      ]
+    : [
+        "  onStatus('session_start', (_event, ctx) => {",
+        '    invalidateOmpUiDialogs()',
+        '    updateRuntimeOmpSessionMetadata(ctx)',
+        "    post('session_start', readOmpActivity(ctx))",
+        '  })'
+      ]
+}
+
 // What the generated extension does when a session ends or is replaced. A run belongs to one
 // session: once that session is gone its children never report here again, so the run ends with it.
 
@@ -9,6 +39,9 @@ function getPiSessionShutdownHandlerSourceLines(): string[] {
     "  onStatus('session_shutdown', (event) => {",
     '    clearPendingAgentEndCheck()',
     '    if (isOmpRuntime()) {',
+    '      invalidateOmpUiDialogs()',
+    '      ompCompletionExtra = {}',
+    '      ompCompletionContext = null',
     '      clearRunnerExitCheck()',
     '      resetPostQueue()',
     '      return',
@@ -40,7 +73,7 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
   return [
     ...(kind !== 'pi'
       ? [
-          "  pi.on('session_shutdown', () => { resetSubagentRoster(); resetPostQueue(); clearPendingAgentEndCheck() })"
+          "  onStatus('session_shutdown', () => { resetSubagentRoster(); resetPostQueue(); clearPendingAgentEndCheck(); invalidateOmpUiDialogs(); ompCompletionExtra = {}; ompCompletionContext = null })"
         ]
       : []),
     ...(kind !== 'prime-agent'
@@ -50,6 +83,10 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
           // and reporting here.
           '  const onOmpSessionChange = (event, ctx) => {',
           '    if (!isOmpRuntime()) return',
+          '    clearPendingAgentEndCheck()',
+          '    invalidateOmpUiDialogs()',
+          '    ompCompletionExtra = {}',
+          '    ompCompletionContext = null',
           "    if (event?.reason === 'fork' || event?.reason === 'resume') {",
           // Why: a resume cuts a running turn off without an agent_end.
           '      if (isTurnInFlight()) {',
@@ -60,9 +97,10 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
           '      closeOutRun()',
           '    }',
           '    updateRuntimeOmpSessionMetadata(ctx)',
+          "    post('session_switch', { ...readOmpActivity(ctx), ...(isHeldByChildren() ? { has_active_jobs: true } : {}) })",
           '  }',
-          "  pi.on('session_switch', onOmpSessionChange)",
-          "  pi.on('session_branch', onOmpSessionChange)"
+          "  onStatus('session_switch', onOmpSessionChange)",
+          "  onStatus('session_branch', onOmpSessionChange)"
         ]
       : []),
     ...(kind === 'pi' ? getPiSessionShutdownHandlerSourceLines() : [])

@@ -216,18 +216,6 @@ describe('host-owned hook presence', () => {
     }
   )
 
-  it('reports a checkable agent process only for an identified, running owner', async () => {
-    const server = await createServer()
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
-    await hook(server, 'SessionStart', 'unidentified', undefined, null)
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
-    const identified = await createServer()
-    await hook(identified, 'SessionStart')
-    expect(identified.hasVerifiableAgentProcess(PANE)).toBe(true)
-    await hook(identified, 'SessionEnd', 'session-a', 'prompt_input_exit')
-    expect(identified.hasVerifiableAgentProcess(PANE)).toBe(false)
-  })
-
   it('checks each pane once after replaying its spooled hooks', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-presence-spool-'))
     const first = new AgentHookServer()

@@ -42,19 +42,16 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
-      const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
+      let claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,
         connectionId: workspace.connectionId,
         tabId,
         leafId
       })
-      let stablePaneCreateReleased = false
       const releaseStablePaneCreate = (): void => {
-        if (stablePaneCreateReleased) {
-          return
-        }
-        stablePaneCreateReleased = true
-        claimedStablePaneCreate?.()
+        const release = claimedStablePaneCreate
+        claimedStablePaneCreate = undefined
+        release?.()
       }
       try {
         if (launchOpts.signal?.aborted) {
@@ -230,6 +227,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               : null
             pty.launchToken = launchToken ?? null
             pty.launchIncarnationId = launchToken ? pty.incarnationId : null
+            pty.launchNeedsHookAttestation = false
             pty.launchAgent = launchOpts.launchAgent ?? null
           }
           recordPtySurface(pty, tabId, paneKey, spawnSurfaceClaimSequence(this.graphSequence))

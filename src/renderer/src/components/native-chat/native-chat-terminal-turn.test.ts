@@ -119,6 +119,20 @@ describe('nativeChatHookLatestTurnWorkedSeconds', () => {
     ).toBe(30)
   })
 
+  it('keeps the completed main-agent duration after readiness returns', () => {
+    expect(
+      nativeChatHookLatestTurnWorkedSeconds(
+        {
+          ...done,
+          stateStartedAt: 200_000,
+          sessionBoundary: true,
+          mainAgent: { state: 'done', stateStartedAt: 31_000 }
+        },
+        false
+      )
+    ).toBe(30)
+  })
+
   // Staleness ages the row out of the pane, not the host's record that the turn finished.
   it('keeps a host-ended duration once the row is stale', () => {
     expect(nativeChatHookLatestTurnWorkedSeconds(done, true)).toBe(90)

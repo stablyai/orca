@@ -277,9 +277,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  // Why the title before the body: both are tier 1, so either settles, but the title is a
-  // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
-  if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
+  if (hasExplicitIdleTitle(input.record, input.rendererTitle)) {
     return READY_STRONG
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
@@ -304,6 +302,9 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       input.readScreenInputVeto() === false
       ? READY_STRONG
       : { kind: 'pending', quietForeground: 'closed' }
+  }
+  if (input.readPositiveBodyEvidence()) {
+    return READY_STRONG
   }
   // Why after the veto: a first-party working account outranks inferred body evidence.
   // Why before the working title: Codex can leave a stale spinner title after a turn, and a

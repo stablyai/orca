@@ -4,6 +4,7 @@ import {
   createAgentStatusExtensionHarness,
   type AgentStatusExtensionHarness
 } from './agent-status-extension-test-harness'
+import { normalizedOmpPosts } from './agent-status-subagent-event-fixtures'
 
 function postedHookNames(fetchMock: ReturnType<typeof vi.fn>): string[] {
   return fetchMock.mock.calls.map(
@@ -107,7 +108,6 @@ describe('OMP agent_end contract', () => {
         await vi.waitFor(() =>
           expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
         )
-        expect(context.isIdle).not.toHaveBeenCalled()
       }
     }
   )
@@ -220,10 +220,13 @@ describe('OMP subagent settlement', () => {
       await hook(harness, 'agent_end')
       await hook(harness, 'agent_start')
       await hook(harness, 'agent_end')
-      expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+        state: 'working',
+        subagents: [{ id: 'helper' }]
+      })
 
       await lifecycle(harness, 'helper', 'completed')
-      expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
     }
   )
 
@@ -237,10 +240,13 @@ describe('OMP subagent settlement', () => {
       await lifecycle(harness, 'wake-1', 'started')
       await hook(harness, 'agent_start')
       await hook(harness, 'agent_end')
-      expect(postedHookNames(harness.fetchMock).at(-1)).not.toBe('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+        state: 'working',
+        subagents: [{ id: 'wake-1' }]
+      })
 
       await lifecycle(harness, 'wake-1', 'completed')
-      expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+      expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
     }
   )
 
@@ -261,7 +267,7 @@ describe('OMP subagent settlement', () => {
     await lifecycle(harness, 'revived', 'started')
     await lifecycle(harness, 'revived', 'completed')
 
-    expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
   })
 
   it("ignores children seen by an OMP task session's copy of the extension", async () => {
@@ -295,10 +301,13 @@ describe('OMP subagent settlement', () => {
     await lifecycle(harness, 'child-1', 'started')
     await hook(harness, 'agent_end')
     harness.reload()
-    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+    expect(normalizedOmpPosts(harness).at(-1)?.payload).toMatchObject({
+      state: 'working',
+      subagents: [{ id: 'child-1' }]
+    })
 
     await lifecycle(harness, 'child-1', 'completed')
 
-    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+    expect(normalizedOmpPosts(harness).at(-1)?.payload.state).toBe('done')
   })
 })

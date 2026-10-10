@@ -29,6 +29,27 @@ export function normalizePiCompatibleEvent(
     }
   }
 
+  const isOmp = agentType === 'omp'
+  const sessionBoundary = isOmp && (eventName === 'session_start' || eventName === 'session_switch')
+  if (sessionBoundary) {
+    clearPaneTurnCacheState(state, paneKey)
+  }
+  const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
+  const active = hookPayload.has_pending_messages === true || hookPayload.has_active_jobs === true
+  const ready =
+    hookPayload.is_idle === true &&
+    hookPayload.has_pending_messages === false &&
+    hookPayload.has_active_jobs === false
+  const reliabilityStart =
+    isOmp &&
+    (eventName === 'auto_retry_start' ||
+      eventName === 'auto_compaction_start' ||
+      eventName === 'retry_fallback_applied')
+  const reliabilityEnd =
+    isOmp &&
+    (eventName === 'auto_retry_end' ||
+      eventName === 'auto_compaction_end' ||
+      eventName === 'retry_fallback_succeeded')
   // Why: the OMP extension stamps `provider/id` on every post; Pi posts carry none.
   const model = readString(hookPayload, 'model')
   const modelSwitchCommand =
@@ -92,6 +113,32 @@ export function normalizePiCompatibleEvent(
   } else if (isPiUiPromptEnd) {
     stateName = hookPayload.is_idle === true ? 'done' : 'working'
   }
+  if (isOmp) {
+    if (sessionBoundary) {
+      stateName = ready ? 'done' : 'working'
+    }
+    if (reliabilityStart) {
+      stateName = 'working'
+    }
+    if (reliabilityEnd) {
+      stateName =
+        ready && hookPayload.willRetry !== true && hookPayload.willContinue !== true
+          ? 'done'
+          : 'working'
+    }
+    if (isOmpApprovalResolution || eventName === 'ui_prompt_end') {
+      stateName = ready ? 'done' : 'working'
+    }
+    if (eventName === 'agent_end') {
+      stateName = active ? 'working' : 'done'
+    }
+    if (
+      !isOmpApprovalRequest &&
+      (eventName === 'ui_prompt_start' || hookPayload.ui_prompt_active === true)
+    ) {
+      stateName = 'waiting'
+    }
+  }
 
   if (
     !stateName ||
@@ -107,12 +154,34 @@ export function normalizePiCompatibleEvent(
     { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
   )
 
+  const previousMain = previous?.agentType === agentType ? previous.mainAgent : undefined
+  const outcome =
+    hookPayload.turn_outcome === 'success' ||
+    hookPayload.turn_outcome === 'failure' ||
+    hookPayload.turn_outcome === 'cancellation'
+      ? hookPayload.turn_outcome
+      : undefined
+  const mainAgent =
+    isOmp && !sessionBoundary && !isNewTurnEvent(agentType, eventName)
+      ? eventName === 'agent_end'
+        ? {
+            state: 'done',
+            outcome,
+            stateStartedAt:
+              previousMain?.state === 'done' ? previousMain.stateStartedAt : Date.now()
+          }
+        : previousMain
+      : undefined
+  const idleBoundary = isOmp && stateName === 'done' && eventName !== 'agent_end'
   return normalizeAgentStatusPayload({
     state: stateName,
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: isNewTurnEvent(agentType, eventName)
     }),
     agentType,
+    sessionBoundary: sessionBoundary || idleBoundary || undefined,
+    mainAgent,
+    interrupted: mainAgent?.outcome === 'cancellation' ? true : undefined,
     model,
     modelSwitchCommand,
     toolName: snapshot.toolName,

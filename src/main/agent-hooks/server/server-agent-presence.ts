@@ -21,14 +21,6 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     }
   }
 
-  /** Whether this pane's owner carries a process identity that its execution host can check. */
-  hasVerifiableAgentProcess(paneKey: string): boolean {
-    const presence = this.state.lastStatusByPaneKey.get(
-      this.resolvePaneKeyAlias(paneKey)
-    )?.agentPresence
-    return presence?.process !== undefined && !presence.ended
-  }
-
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
