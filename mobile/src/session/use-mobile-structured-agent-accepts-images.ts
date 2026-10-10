@@ -5,6 +5,7 @@ import {
   structuredAgentAcceptsImages,
   type AgentSessionRegisteredAgent
 } from '../../../src/shared/agent-session-registered-agents'
+import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
 import type { RpcClient } from '../transport/rpc-client'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
@@ -25,7 +26,8 @@ const registeredAgentsRead = bindDeferredRpcOperation(
 
 type RegisteredAgents = readonly AgentSessionRegisteredAgent[]
 type RegisteredAgentsCache = {
-  read: Promise<RegisteredAgents> | null
+  /** Resolves null when the host refuses phones the method: kept for the connection. */
+  read: Promise<RegisteredAgents | null> | null
   agents: RegisteredAgents | null
 }
 
@@ -49,12 +51,19 @@ function registeredAgentsCache(client: RpcClient): RegisteredAgentsCache {
   return cache
 }
 
-function readRegisteredAgents(client: RpcClient): Promise<RegisteredAgents> {
+function readRegisteredAgents(client: RpcClient): Promise<RegisteredAgents | null> {
   const cache = registeredAgentsCache(client)
   if (cache.read) {
     return cache.read
   }
   const read = registeredAgentsRead.request(client, {}).then((response) => {
+    // Released hosts advertise the list but refuse it to phones; asking again won't change that.
+    if (
+      !response.ok &&
+      isMobileMethodUnavailableError(response.error.code, response.error.message)
+    ) {
+      return null
+    }
     const agents = registeredAgentsRead.interpret(response)
     if (!agents) {
       throw new Error('agentSession.agents returned no list')
@@ -65,7 +74,7 @@ function readRegisteredAgents(client: RpcClient): Promise<RegisteredAgents> {
     return agents
   })
   cache.read = read
-  // A failed read is forgotten, so the next ask retries.
+  // A transient failure is forgotten, so the next ask retries.
   read.catch(() => {
     if (cache.read === read) {
       cache.read = null
@@ -75,7 +84,8 @@ function readRegisteredAgents(client: RpcClient): Promise<RegisteredAgents> {
 }
 
 /** Whether the active structured chat's agent takes images, by the record its host listed, as on
- *  desktop. A host that lists no agents is asked nothing and offers only Claude and Codex. */
+ *  desktop. A host that lists no agents, or refuses the list to phones, offers only Claude and
+ *  Codex. */
 export function useMobileStructuredAgentAcceptsImages(args: {
   client: RpcClient | null
   /** The host advertises `agentSession.agents`. */
@@ -91,7 +101,7 @@ export function useMobileStructuredAgentAcceptsImages(args: {
     let current = true
     readRegisteredAgents(client)
       .then((agents) => {
-        if (current) {
+        if (current && agents) {
           setListed({ client, agents })
         }
       })

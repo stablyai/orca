@@ -105,6 +105,35 @@ describe('useMobileStructuredAgentAcceptsImages', () => {
     expect(accepts).toBe(true)
   })
 
+  it('keeps a host refusing phones the list for the connection, without asking again', async () => {
+    const client = createFakeRpcClient()
+    await mount({ client, hostListsAgents: true, agent: 'opencode' })
+    // What a host whose mobile allowlist predates the method answers.
+    await act(async () => {
+      client.requests[0]!.resolve({
+        id: 'agents',
+        ok: false,
+        error: {
+          code: 'forbidden',
+          message: "Method 'agentSession.agents' is not available to mobile clients"
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    })
+    expect(accepts).toBe(false)
+    await act(async () => {
+      renderer!.update(createElement(Harness, { client, hostListsAgents: true, agent: 'pi' }))
+    })
+    expect(client.requests).toHaveLength(1)
+    // An updated host may answer on the next connection.
+    act(() => client.pushState('reconnecting'))
+    act(() => client.pushState('connected'))
+    await act(async () => {
+      renderer!.update(createElement(Harness, { client, hostListsAgents: true, agent: 'opencode' }))
+    })
+    expect(client.requests).toHaveLength(2)
+  })
+
   it('asks a host that lists no agents nothing and offers images only to the built-ins', async () => {
     const client = createFakeRpcClient()
     await mount({ client, hostListsAgents: false, agent: 'claude' })
