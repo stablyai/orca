@@ -70,3 +70,9 @@ export const browserDialogDismiss = browserPageCommand(
   'browser.dialog-dismiss',
   'browser.dialogDismiss'
 )
+
+/** Fire-and-forget frame credit; the stream itself shows whether acks land, so no reply is read. */
+export const browserScreencastFrameAck = browserPageCommand(
+  'browser.screencast-frame-ack',
+  'browser.screencast.ack'
+)

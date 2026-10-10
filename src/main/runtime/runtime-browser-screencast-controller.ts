@@ -6,6 +6,12 @@ import {
   type BrowserScreencastSubscriber
 } from './browser-screencast-driver-scope'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { readBrowserScreencastFrameSeq } from '../../shared/browser-screencast-protocol'
+import {
+  createScreencastFrameAckWindow,
+  screencastFrameAckWindowSize,
+  type ScreencastFrameAckWindow
+} from './browser-screencast-frame-ack-window'
 
 type RuntimeBrowserScreencastControllerDeps = {
   getCommands: () => RuntimeBrowserCommands
@@ -27,6 +33,10 @@ export class RuntimeBrowserScreencastController {
   >()
   private readonly activeByPage = new Map<string, Set<BrowserScreencastSubscriber>>()
   private readonly remoteViewerPages = new Set<string>()
+  private readonly ackWindows = new Map<
+    string,
+    { window: ScreencastFrameAckWindow; connectionKey: string }
+  >()
 
   constructor(private readonly deps: RuntimeBrowserScreencastControllerDeps) {}
 
@@ -35,6 +45,14 @@ export class RuntimeBrowserScreencastController {
       if (stream.drivesAsMobile) {
         stream.cancel(emitEnd)
       }
+    }
+  }
+
+  /** The viewer on `connectionId` holds every frame of `subscriptionId` up to `seq`. */
+  ack(subscriptionId: string, seq: number, connectionId?: string): void {
+    const entry = this.ackWindows.get(subscriptionId)
+    if (entry && entry.connectionKey === (connectionId ?? 'local')) {
+      entry.window.ack(seq)
     }
   }
 
@@ -114,11 +132,20 @@ export class RuntimeBrowserScreencastController {
       end(emitEnd)
     }
     const abortScreencast = (): void => cancel()
+    const ackWindowSize = screencastFrameAckWindowSize(params.ackWindow)
+    const ackWindow = ackWindowSize
+      ? createScreencastFrameAckWindow({
+          size: ackWindowSize,
+          onOpen: () => screencast?.flushPendingFrame()
+        })
+      : null
     const sendBinaryAfterReady = (bytes: Uint8Array<ArrayBufferLike>): boolean | void => {
       if (!readyEmitted) {
         return false
       }
-      return options.sendBinary?.(bytes)
+      const deliver = (): boolean => options.sendBinary?.(bytes) !== false
+      const seq = ackWindow ? readBrowserScreencastFrameSeq(bytes) : null
+      return ackWindow && seq !== null ? ackWindow.send(seq, deliver) : deliver()
     }
 
     // Why: rotation can happen before ready, so replacements are connection-scoped immediately.
@@ -151,7 +178,12 @@ export class RuntimeBrowserScreencastController {
         options.connectionId
       )
       registeredSubscriptionId = screencast.subscriptionId
-      options.emit(screencast.ready)
+      if (ackWindow && ackWindowSize) {
+        this.ackWindows.set(screencast.subscriptionId, { window: ackWindow, connectionKey })
+        options.emit({ ...screencast.ready, frameAck: { window: ackWindowSize } })
+      } else {
+        options.emit(screencast.ready)
+      }
       readyEmitted = true
       screencast.flushPendingFrame()
       await screencast.session.done
@@ -164,7 +196,9 @@ export class RuntimeBrowserScreencastController {
       }
       if (registeredSubscriptionId) {
         this.deps.cleanupSubscription(registeredSubscriptionId)
+        this.ackWindows.delete(registeredSubscriptionId)
       }
+      ackWindow?.dispose()
       const active = this.activeByConnection.get(connectionKey)
       if (active?.done === activeDone) {
         this.activeByConnection.delete(connectionKey)

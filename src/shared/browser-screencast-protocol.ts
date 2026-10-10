@@ -113,6 +113,18 @@ export function encodeBrowserScreencastFrame(frame: BrowserScreencastFrame): Uin
   return out
 }
 
+/** The frame's sequence number without decoding the frame; null when `bytes` is not a frame. */
+export function readBrowserScreencastFrameSeq(bytes: Uint8Array): number | null {
+  if (bytes.byteLength < HEADER_BYTES) {
+    return null
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  return view.getUint8(0) === BROWSER_SCREENCAST_KIND &&
+    view.getUint8(2) === BrowserScreencastOpcode.Frame
+    ? view.getUint32(4, true)
+    : null
+}
+
 export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreencastFrame | null {
   if (bytes.byteLength < HEADER_BYTES) {
     return null

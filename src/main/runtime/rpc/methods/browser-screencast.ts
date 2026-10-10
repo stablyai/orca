@@ -3,7 +3,10 @@ import { Screencast } from './browser-schemas'
 import { BrowserError } from '../../../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-types'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../../runtime-browser-commands-factory'
-import { ScreencastUnsubscribe } from '../../../../shared/rpc-contract/browser-screencast-params'
+import {
+  ScreencastAck,
+  ScreencastUnsubscribe
+} from '../../../../shared/rpc-contract/browser-screencast-params'
 
 export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
@@ -24,6 +27,15 @@ export const BROWSER_SCREENCAST_METHODS = [
         signal,
         emit
       })
+  }),
+  defineMethod({
+    name: 'browser.screencast.ack',
+    permission: 'workspace',
+    params: ScreencastAck,
+    handler: async (params, { runtime, connectionId }) => {
+      runtime.ackScreencastFrame(params.subscriptionId, params.seq, connectionId)
+      return { acked: true }
+    }
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',

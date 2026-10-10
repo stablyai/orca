@@ -1,6 +1,8 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
+import { MOBILE_BROWSER_RPC_METHODS } from './runtime-rpc-mobile-browser-methods'
 
 export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
+  ...MOBILE_BROWSER_RPC_METHODS,
   'accounts.list',
   'accounts.consumeCodexResetCredit',
   'accounts.selectClaude',
@@ -15,23 +17,6 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'aiVault.searchStatus',
   'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',
-  'browser.back',
-  'browser.dialogAccept',
-  'browser.dialogDismiss',
-  'browser.forward',
-  'browser.goto',
-  'browser.keyboardInsertText',
-  'browser.keypress',
-  'browser.mouseDown',
-  'browser.mouseClick',
-  'browser.mouseMove',
-  'browser.mouseUp',
-  'browser.mouseWheel',
-  'browser.reload',
-  'browser.screencast',
-  'browser.screencast.unsubscribe',
-  'browser.tabCreate',
-  'browser.viewport',
   'clipboard.abortImageUpload',
   'clipboard.appendImageUploadChunk',
   'clipboard.commitImageUpload',

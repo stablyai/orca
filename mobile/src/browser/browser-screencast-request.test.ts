@@ -12,7 +12,8 @@ describe('buildMobileBrowserScreencastRequest', () => {
       maxWidth: 975,
       maxHeight: 1600,
       everyNthFrame: 1,
-      minFrameIntervalMs: 100
+      minFrameIntervalMs: 100,
+      ackWindow: 2
     })
     expect(Object.keys(request ?? {})).not.toEqual(
       expect.arrayContaining(['viewportWidth', 'viewportHeight', 'deviceScaleFactor', 'mobile'])

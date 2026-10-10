@@ -165,6 +165,10 @@ export class RuntimeEdgeCommandController {
     this.screencasts.cancelMobilePage(browserPageId, true)
   }
 
+  ackScreencastFrame(subscriptionId: string, seq: number, connectionId?: string): void {
+    this.screencasts.ack(subscriptionId, seq, connectionId)
+  }
+
   getBrowserRemoteViewerPages(): string[] {
     return this.screencasts.getRemoteViewerPages()
   }

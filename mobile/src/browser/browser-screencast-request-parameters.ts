@@ -1,3 +1,4 @@
+import { BROWSER_SCREENCAST_ACK_WINDOW } from './browser-screencast-frame-acks'
 import type { BrowserScreencastFormat } from '../transport/browser-screencast-protocol'
 
 /**
@@ -26,6 +27,7 @@ export type MobileBrowserScreencastRequest = {
   mobile?: boolean
   everyNthFrame: number
   minFrameIntervalMs: number
+  ackWindow: number
 }
 
 export type MobileBrowserViewMode = 'web' | 'mobile'
@@ -76,6 +78,7 @@ export function assembleMobileBrowserScreencastRequest(
     ),
     everyNthFrame: BROWSER_FRAME_EVERY_NTH_FRAME,
     minFrameIntervalMs: MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS,
+    ackWindow: BROWSER_SCREENCAST_ACK_WINDOW,
     ...(viewMode === 'mobile'
       ? {
           // Why: mobile view should trigger responsive CSS while matching the

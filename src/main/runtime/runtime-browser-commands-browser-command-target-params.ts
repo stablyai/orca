@@ -45,6 +45,7 @@ export type BrowserScreencastParams = {
   mobile?: boolean
   everyNthFrame?: number
   minFrameIntervalMs?: number
+  ackWindow?: number
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {

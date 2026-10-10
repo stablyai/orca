@@ -23,8 +23,11 @@ const BROWSER_RPC_METHODS = [
  */
 const UNROUTABLE_RUNTIME_COMMANDS = new Set(['browserConsoleLog', 'browserNetworkLog'])
 
-/** `browser.screencast.unsubscribe` cleans up a subscription without a browser command. */
-const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set(['browser.screencast.unsubscribe'])
+/** Screencast unsubscribe and ack act on the runtime's own subscription, not a browser command. */
+const RPC_METHODS_WITHOUT_BROWSER_COMMAND = new Set([
+  'browser.screencast.ack',
+  'browser.screencast.unsubscribe'
+])
 
 /** Records the `runtime.browserX` the handler dispatches to, without a live runtime. */
 async function runtimeCommandFor(

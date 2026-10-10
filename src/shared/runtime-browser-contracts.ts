@@ -33,6 +33,8 @@ export type BrowserScreencastReadyResult = {
   browserPageId: string
   format: 'jpeg' | 'png'
   tab: BrowserTabInfo
+  /** Present when the host honors the requested ackWindow; only then may the viewer ack frames. */
+  frameAck?: { window: number }
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
