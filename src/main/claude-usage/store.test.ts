@@ -709,7 +709,7 @@ describe('ClaudeUsageStore', () => {
 
     expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
       path: join(tempUserData, 'orca-claude-usage-sources.json'),
-      schemaVersion: 6,
+      schemaVersion: 7,
       worktreeFingerprint: '[]',
       reuse: false
     })

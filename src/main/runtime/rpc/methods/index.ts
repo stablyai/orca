@@ -5,6 +5,7 @@ import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
+import { REFERENCE_METHODS } from './reference'
 import { TERMINAL_METHODS } from './terminal'
 import { TERMINAL_ORPHAN_METHODS } from './terminal-orphan'
 import { BROWSER_CORE_METHODS } from './browser-core'
@@ -70,6 +71,7 @@ export const ALL_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS,

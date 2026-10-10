@@ -1,5 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import type { PreloadApi } from '../../../../preload/api-types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../../../shared/managed-account-types'
+import { callRuntimeResult } from './web-runtime-calls'
+import { fetchAccountsSnapshot } from './web-rate-limits-api'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
   Partial<PreloadApi>['minimaxCredentials']
@@ -88,44 +94,86 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
   }
 }
 
-function createEmptyManagedAccountsState(): {
-  accounts: never[]
-  activeAccountId: null
-  activeAccountIdsByRuntime: { host: null; wsl: Record<string, string | null> }
-} {
-  return {
-    accounts: [],
-    activeAccountId: null,
-    activeAccountIdsByRuntime: { host: null, wsl: {} }
-  }
+// Why: select/remove await provider usage refreshes on the server; give an applied switch room.
+const ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
+
+function rejectHostOnlySignIn(): Promise<never> {
+  return Promise.reject(
+    new Error(
+      translate(
+        'auto.components.web.preloadApi.accounts.signInHostOnly',
+        'Adding or re-signing an account is only available in the desktop app on the computer running Orca.'
+      )
+    )
+  )
 }
 
+// Why: the paired server owns Claude and Codex accounts; list, select and remove
+// use its accounts.* RPCs. Sign-in needs the host's own login flow.
 export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
-  const empty = createEmptyManagedAccountsState()
   return {
-    list: () => Promise.resolve(empty),
-    add: () => Promise.resolve(empty),
+    list: async () => (await fetchAccountsSnapshot(false)).claude,
+    add: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
-    reauthenticate: () => Promise.resolve(empty),
+    reauthenticate: rejectHostOnlySignIn,
     waitForSignInLink: () => Promise.resolve(null),
-    remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    remove: ({ accountId }) =>
+      callRuntimeResult<ClaudeRateLimitAccountsState>(
+        'accounts.removeClaude',
+        { accountId },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      ),
+    select: ({ accountId, runtime }) => {
+      // Why: no targeted Claude select RPC exists and the server reads an untargeted
+      // null as the host lane; a concrete account id carries its own lane.
+      if (runtime === 'wsl' && accountId === null) {
+        return Promise.reject(
+          new Error(
+            translate(
+              'auto.components.web.preloadApi.accounts.claudeWslDefaultUnavailable',
+              'Switching a WSL lane back to the system default is only available in the desktop app.'
+            )
+          )
+        )
+      }
+      return callRuntimeResult<ClaudeRateLimitAccountsState>(
+        'accounts.selectClaude',
+        { accountId },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      )
+    }
   }
 }
 
 export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
-  const empty = createEmptyManagedAccountsState()
   return {
-    list: () => Promise.resolve(empty),
-    add: () => Promise.resolve(empty),
+    list: async () => (await fetchAccountsSnapshot(false)).codex,
+    add: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
     // Why: the login runs on the desktop host that owns the browser, so a web
     // client has no link to offer and nothing to publish changes from.
     getPendingLoginUrl: () => Promise.resolve(null),
     onPendingLoginUrlChanged: () => () => {},
-    reauthenticate: () => Promise.resolve(empty),
-    remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty),
+    reauthenticate: rejectHostOnlySignIn,
+    remove: ({ accountId }) =>
+      callRuntimeResult<CodexRateLimitAccountsState>(
+        'accounts.removeCodex',
+        { accountId },
+        ACCOUNT_MUTATION_TIMEOUT_MS
+      ),
+    // Why: a WSL lane needs the targeted RPC, or a null selection would clear the host lane.
+    select: ({ accountId, runtime, wslDistro }) =>
+      runtime === 'wsl'
+        ? callRuntimeResult<CodexRateLimitAccountsState>(
+            'accounts.selectCodexForTarget',
+            { accountId, target: { runtime: 'wsl', wslDistro: wslDistro ?? null } },
+            ACCOUNT_MUTATION_TIMEOUT_MS
+          )
+        : callRuntimeResult<CodexRateLimitAccountsState>(
+            'accounts.selectCodex',
+            { accountId },
+            ACCOUNT_MUTATION_TIMEOUT_MS
+          ),
     // Why: launch accounts are recorded on the host that owns the PTY, which the
     // web client never is — report no stale panes rather than reject the sweep.
     listStalePanes: () => Promise.resolve([]),

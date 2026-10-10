@@ -4,7 +4,7 @@
 // a Stop naming no turn. Against any other host, one that accepts sends first included, it stays
 // exactly what it was: a running turn only, named.
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
@@ -134,6 +134,7 @@ function cancels(): unknown[] {
 }
 
 afterEach(() => {
+  cleanup()
   setLocalRuntimeCapabilitiesForTests(null)
 })
 

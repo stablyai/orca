@@ -19,6 +19,15 @@ export function registerCellSeatFeedRoute(
     isDraining?: () => boolean
     runtimeCounts?: () => RelayRuntimeCounts
     cellFlags?: () => AppliedControlFlags<CellFlags>
+    // A placing director's poll (reserver=1) feeds the cell's dead-man.
+    onReserverPoll?: () => void
+    admitModeEffective?: () => 'db' | 'reserve'
+    // Step 5: what a director needs to estimate a seat and a booking here.
+    reserveCounts?: () => {
+      bookings: number
+      intake: { perSec: number; burst: number; tokens: number }
+    } | null
+    placementCeiling?: number
     now?: () => number
   }
 ): void {
@@ -33,12 +42,14 @@ export function registerCellSeatFeedRoute(
     if (!bearer || !(await input.verifyRegionalRehomeToken(bearer))) {
       return context.json({ error: 'invalid_token' }, 401)
     }
+    if (context.req.query('reserver') === '1') input.onReserverPoll?.()
     const cursor = parseCellSeatCursor(context.req.query('since'))
     if (cursor === 'invalid') return context.json({ error: 'invalid_request' }, 400)
     const sinceSeq =
       cursor !== null && cursor.incarnation === input.cellIncarnation ? cursor.seq : null
     const { seats, ...page } = input.seatFeed(sinceSeq)
     const counts = input.runtimeCounts?.()
+    const reserve = input.reserveCounts?.() ?? null
     return context.json({
       v: 1,
       cellId: config.cellId,
@@ -49,10 +60,20 @@ export function registerCellSeatFeedRoute(
         controls: counts?.controls ?? 0,
         // The feed's own view: a reader that applied every change holds exactly this many.
         // `controls` drops when a socket starts closing, `seats` when its close lands.
-        seats
+        seats,
+        ...(reserve && input.placementCeiling !== undefined
+          ? {
+              bookings: reserve.bookings,
+              // Every unit the ledger counts against the ceiling, bookings and phones included.
+              units: counts?.enforcedConnectionUnits ?? 0,
+              ceiling: input.placementCeiling
+            }
+          : {})
       },
+      ...(reserve ? { intake: reserve.intake } : {}),
       // Applied, never desired: generation 0 means no object has been read since boot.
       ...(input.cellFlags ? { flagsApplied: input.cellFlags() } : {}),
+      ...(input.admitModeEffective ? { admitModeEffective: input.admitModeEffective() } : {}),
       ...page
     })
   })

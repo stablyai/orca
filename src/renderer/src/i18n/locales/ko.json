@@ -3426,7 +3426,8 @@
             "ec2adf093e": "새 terminal에서 {{value0}} 실행",
             "465e432ef1": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
             "e518f544b1": "감지된 agents가 없습니다.",
-            "8dea9b5cdf": "활성화된 agents가 없습니다."
+            "8dea9b5cdf": "활성화된 agents가 없습니다.",
+            "needsServerUpdate": "이 워크스페이스의 에이전트를 보려면 이 서버의 Orca를 업데이트하세요"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -11462,7 +11463,6 @@
           "pathGroup": "휴대폰이 이 컴퓨터에 연결되는 방식",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "휴대폰이 모바일 네트워크 또는 모든 Wi‑Fi에서 연결할 수 있습니다. 로그인은 Relay에만 필요합니다.",
-          "signInRequired": "Relay만 해당 — LAN에는 계정이 필요하지 않습니다.",
           "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "Relay용 다시 로그인",
           "localTitle": "LAN",
@@ -18036,6 +18036,7 @@
         "model": "모델",
         "effort": "추론 수준",
         "fastMode": "빠른 모드",
+        "speed": "속도",
         "thinking": "사고",
         "options": "옵션",
         "sessionOptions": "세션 옵션",
@@ -18056,7 +18057,8 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
-          "ultra": "울트라"
+          "ultra": "울트라",
+          "standard": "표준"
         },
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
@@ -19270,6 +19272,7 @@
       "sortResultsAriaLabel": "결과 정렬: {{value0}}",
       "consent": "전체 텍스트 검색을 활성화하시겠습니까? Orca는 전체 대화와 도구 출력당 최대 3,072자를 포함하여 로컬 에이전트 기록에서 이 컴퓨터에 인덱스를 구축합니다. 내용은 편집되지 않습니다. 인증된 페어링 클라이언트는 검색이 가능합니다.",
       "remoteDisabled": "이 컴퓨터에서는 검색이 비활성화되어 있습니다. 세션을 검색하려면 해당 컴퓨터에서 기록 색인화를 활성화하십시오.",
+      "titleOnly": "이 컴퓨터에서는 전체 텍스트 검색이 꺼져 있어 세션 제목만 일치시킵니다.",
       "notReady": "검색 색인이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
       "noService": "이 컴퓨터에서는 검색을 사용할 수 없습니다. Orca 업데이트나 검색 지원이 가능한 런타임이 필요할 수 있습니다.",
       "failed": "이 컴퓨터를 검색할 수 없습니다. 연결을 확인하고 다시 시도하세요.",

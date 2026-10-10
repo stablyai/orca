@@ -1,8 +1,5 @@
-import type {
-  AgentSessionOptionCatalog,
-  CatalogModel,
-  CatalogOption
-} from './agent-session-option-catalog'
+import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog'
+import { discoveredModel } from './structured-agent-session-discovered-model'
 import {
   buildNativeChatSessionOptionSnapshot,
   resolveEffectiveNativeChatModelId,
@@ -25,51 +22,6 @@ import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
 } from './structured-agent-session-option-codec'
-
-function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
-  if (model.efforts.length <= 1) {
-    return null
-  }
-  return {
-    id: 'effort',
-    label: 'Reasoning effort',
-    category: 'thought_level',
-    kind: {
-      type: 'select',
-      choices: model.efforts,
-      defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
-      ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
-    },
-    apply: { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }
-  }
-}
-
-function fastModeOption(): CatalogOption {
-  return {
-    id: 'fastMode',
-    label: 'Fast mode',
-    category: 'mode',
-    kind: { type: 'boolean', defaultValue: false },
-    apply: {}
-  }
-}
-
-function discoveredModel(
-  model: AgentSessionOptionsResult['models'][number],
-  sessionSupportsFastMode: boolean
-): CatalogModel {
-  const effort = effortOption(model)
-  return {
-    id: model.id,
-    label: model.label,
-    ...(model.description ? { description: model.description } : {}),
-    ...(model.isDefault ? { isDefault: true } : {}),
-    options: [
-      ...(effort ? [effort] : []),
-      ...(sessionSupportsFastMode && model.supportsFastMode === true ? [fastModeOption()] : [])
-    ]
-  }
-}
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
@@ -170,12 +122,16 @@ export function applyStructuredAgentSessionOptions(
   if (result.current.fastMode === undefined) {
     clearTrackedSessionOption(state.record, result.current.model ?? null, 'fastMode')
   }
+  if (result.current.serviceTier === undefined) {
+    clearTrackedSessionOption(state.record, result.current.model ?? null, 'serviceTier')
+  }
   applyNativeChatReportedSessionOptions(
     state.record,
     {
       ...(result.current.model ? { model: result.current.model } : {}),
       ...(result.current.effort ? { effort: result.current.effort } : {}),
-      ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {})
+      ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {}),
+      ...(result.current.serviceTier ? { serviceTier: result.current.serviceTier } : {})
     },
     result.current.confirmed ?? []
   )

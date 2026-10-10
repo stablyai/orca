@@ -217,7 +217,7 @@ export function NativeChatDiffCard({
           {hasBody ? (
             <ChevronRight
               className={cn(
-                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform',
+                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
                 expanded && 'rotate-90'
               )}
             />

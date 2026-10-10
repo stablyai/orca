@@ -218,6 +218,7 @@ it('pins every foreground and background step to its selected phase', () => {
       .filter((step) => step.background)
       .map((step) => [step.id, step.env.PREFLIGHT_PHASE_SELECTED])
   ).toEqual([
+    ['process-host-imports', `\${{ ${staticPhase} }}`],
     ['root-lint', `\${{ ${staticPhase} }}`],
     ['native-code-quality', `\${{ ${staticPhase} }}`],
     ['changed-code-quality', `\${{ ${staticPhase} }}`],

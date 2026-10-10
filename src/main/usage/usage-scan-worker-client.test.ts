@@ -122,6 +122,34 @@ describe('UsageScanWorkerClient', () => {
     await expect(pending).resolves.toEqual({ reportText: '{}', migrated: true })
   })
 
+  it('keeps worker verification attached to the exact returned report text', async () => {
+    const worker = new FakeWorker()
+    const client = createClient(() => worker)
+    const pending = client.splitCacheFile({
+      cacheFile: '/tmp/usage.json',
+      sourceKey: 'processedFiles',
+      providerId: 'claude'
+    })
+    await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+    const reportText = '{"usageIntegrity":"verified-by-worker","schemaVersion":7}'
+    worker.emit('message', {
+      id: worker.lastId(),
+      ok: true,
+      value: {
+        operation: 'splitCacheFile',
+        reportText,
+        migrated: false,
+        reportIntegrityVerified: true
+      }
+    })
+
+    await expect(pending).resolves.toEqual({
+      reportText,
+      migrated: false,
+      reportIntegrityVerified: true
+    })
+  })
+
   it('fails closed instead of scanning on the calling thread when spawn fails', async () => {
     const client = createClient(() => {
       throw new Error('no thread available')

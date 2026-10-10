@@ -3,7 +3,11 @@ import type { Store } from '../../../persistence'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { makePaneSpawnReservationKey, paneSpawnReservationsByOwnerKey } from './spawn-reservation'
+import {
+  joinPaneSpawn,
+  makePaneSpawnReservationKey,
+  paneSpawnReservationsByOwnerKey
+} from './spawn-reservation'
 import {
   attachStablePaneOwner,
   resolveStablePaneOwner,
@@ -26,8 +30,8 @@ export async function adoptStablePane(
     ownerKey && !args.ownsPaneSpawnReservation
       ? paneSpawnReservationsByOwnerKey.get(ownerKey)
       : undefined
-  if (activePaneSpawn) {
-    const result = await activePaneSpawn.promise
+  const result = activePaneSpawn ? await joinPaneSpawn(activePaneSpawn) : null
+  if (result) {
     const owner = resolveStablePaneOwner(
       runtime,
       store,

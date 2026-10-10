@@ -42,7 +42,7 @@ describe('CI dependency download caches', () => {
       steps.findIndex((step) => step.name === 'Prepare native runtime')
     )
     expect(steps[buildIndex].if).toBeUndefined()
-    expect(steps[buildIndex].run).toBe('pnpm run build:packages')
+    expect(steps[buildIndex].run).toBe('pnpm run --if-present build:packages')
   })
 
   it('restores PR stores except measured Windows, Linux and macOS installs, without a post-job save', () => {

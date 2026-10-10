@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
+import {
+  uniqueDirs,
+  wslHomeSessionDirs,
+  type SessionHomeAgent
+} from '../ai-vault/session-scanner-roots'
 import { getWslHomeAsync, listRunningWslDistrosAsync, listRunningWslHomeDirsAsync } from '../wsl'
 import {
   filterPathsToRunningWslDistrosAsync,
@@ -260,18 +264,19 @@ function rankDistrosForGuestPath(wslHomeUncDirs: readonly string[], guestPath: s
 }
 
 /**
- * WSL Codex sessions live under the guest home, not Windows AppData. Mirror AI
- * Vault's dual-root discovery so the id-based resolve still finds them when the
- * hook path is absent.
+ * Each running distro's session roots for one agent: they live under the guest
+ * home, not the Windows profile, so lookup by id needs them when there is no
+ * hook path. Same roots AI Vault discovery lists.
  */
-export async function wslCodexSessionsDirs(
+export async function wslAgentSessionsDirs(
+  agent: SessionHomeAgent,
   deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs' | 'wslSnapshot'> = {}
 ): Promise<string[]> {
   const platform = deps.platform ?? process.platform
   if (platform !== 'win32') {
     return []
   }
-  const additionalHomes = getAdditionalCodexHomePaths?.() ?? []
+  const additionalHomes = agent === 'codex' ? (getAdditionalCodexHomePaths?.() ?? []) : []
   const [homeDirs, runningAdditionalHomes] = await Promise.all([
     deps.wslSnapshot
       ? snapshotHomeDirs(deps.wslSnapshot)
@@ -280,16 +285,13 @@ export async function wslCodexSessionsDirs(
       ? filterPathsToWslDistros(additionalHomes, deps.wslSnapshot.runningDistros)
       : filterPathsToRunningWslDistrosAsync(additionalHomes)
   ])
-  const dirs = homeDirs.flatMap((home) => [
-    joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
-    joinUnderWslHome(home, '.codex', 'sessions')
-  ])
+  const dirs = wslHomeSessionDirs(agent, homeDirs, joinUnderWslHome)
   for (const home of runningAdditionalHomes) {
     if (parseWslUncPath(home)) {
       dirs.push(joinUnderWslHome(home, 'sessions'))
     }
   }
-  return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
+  return uniqueDirs(dirs)
 }
 
 // Why: node:path.join is posix-flavoured off Windows and would mangle the
