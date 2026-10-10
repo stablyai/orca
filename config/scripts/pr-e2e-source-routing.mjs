@@ -430,6 +430,23 @@ export const PR_E2E_SOURCE_ROUTES = [
       /^src\/.*(?:[Cc]lient-?[Hh]osted|browser-host-(?:lease|page|client-page)|browser-client-(?:host|page)|runtime-browser-(?:client-)?page|session-tabs-sync|host-session-snapshot-authority|orca-runtime(?:-browser)?\.ts|\/runtime-(?:status|types)\.ts)/.test(
         file
       )
+  },
+  {
+    // Why: every writer of panes, tabs and groups must keep the stored layout agreeing with what
+    // each client shows, and only the oracle reads all of them back. Runtime is limited to its
+    // top-level session/tab/terminal/pane modules; rpc and orchestration only call into them.
+    id: 'workspace-layout.oracle',
+    specs: [
+      'tests/e2e/workspace-layout-oracle-headless.spec.ts',
+      'tests/e2e/workspace-layout-oracle-ssh.spec.ts',
+      'tests/e2e/workspace-layout-oracle.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      !/\.spec\.ts$|-fixtures?\.ts$/.test(file) &&
+      /^(?:src\/shared\/workspace-layout\/|src\/main\/persistence\/(?:terminal-topology\/|restoring-sessions\/|loading-store\/pty-binding-)|src\/main\/runtime\/(?:[^/]*-)?(?:sessions?|tabs?|terminals?|panes?)(?:-[^/]*)?\.ts$|src\/renderer\/src\/store\/slices\/tabs|src\/renderer\/src\/runtime\/|tests\/e2e\/(?:helpers\/)?(?:workspace-layout-oracle|headless-layout-oracle|terminal-layout-journeys))/.test(
+        file
+      )
   }
 ]
 

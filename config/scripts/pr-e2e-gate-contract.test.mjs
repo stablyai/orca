@@ -19,6 +19,9 @@ import {
 } from './terminal-ime-engagement-receipt.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const LAYOUT_ORACLE_SPECS = PR_E2E_SOURCE_ROUTES.find(
+  (route) => route.id === 'workspace-layout.oracle'
+).specs
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 const e2eWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
@@ -403,21 +406,25 @@ describe('PR E2E gate contract', () => {
       ['src/main/runtime/orca-runtime-files.ts', 'tests/e2e/paired-quick-open-large-tree.spec.ts'],
       [
         'src/renderer/src/runtime/sync-runtime-graph.ts',
-        'tests/e2e/host-parked-pane-remote-viewer.spec.ts'
+        'tests/e2e/host-parked-pane-remote-viewer.spec.ts',
+        ...LAYOUT_ORACLE_SPECS
       ],
       [
         'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts',
-        'tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts'
+        'tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts',
+        ...LAYOUT_ORACLE_SPECS
       ],
       [
         'src/renderer/src/components/terminal-pane/remote-pane-layout-push.ts',
         'tests/e2e/paired-remote-pane-layout-retry.spec.ts'
       ]
     ]
-    for (const [source, spec] of cases) {
-      expect(selectPrE2eSpecs([source]), source).toEqual([spec])
+    for (const [source, ...specs] of cases) {
+      expect(selectPrE2eSpecs([source]), source).toEqual(specs.toSorted())
       expect(selectPrE2eSpecs([source.replace(/\.tsx?$/, '.test.ts')]), source).toEqual([])
-      expect(existsSync(join(projectDir, spec)), spec).toBe(true)
+      for (const spec of specs) {
+        expect(existsSync(join(projectDir, spec)), spec).toBe(true)
+      }
     }
     const parkedSplitSpec = 'tests/e2e/terminal-parked-cli-split.spec.ts'
     for (const source of [
