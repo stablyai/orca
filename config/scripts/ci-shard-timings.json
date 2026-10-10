@@ -1710,7 +1710,6 @@
       "src/main/git/status-branch-line-total-exec-contract.test.ts": 1673,
       "src/main/git/status-branch-line-total-real-git.test.ts": 1107,
       "src/main/git/status-conflict-operations.test.ts": 216,
-      "src/main/git/status-conflict-overlap.bench.test.ts": 272,
       "src/main/git/status-cquoted-paths.test.ts": 237,
       "src/main/git/status-diff-settled-cache.test.ts": 426,
       "src/main/git/status-diff.test.ts": 235,
