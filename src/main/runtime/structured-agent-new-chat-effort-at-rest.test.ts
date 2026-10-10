@@ -170,12 +170,13 @@ function host(agent: string, record: AgentSessionRecord) {
   const store = new AgentModelCatalogStore()
   const fingerprint = agentModelCatalogFingerprintForRecord(record)
   const account = ACCOUNTS[agent]!
-  store.recordSuccess(
-    fingerprint,
-    agent,
-    { models: account.models, fastModeTierByModel: new Map(), origin: 'probe' },
-    'discovery'
-  )
+  // Not inline: this base's listing still requires the tier map that main has since dropped.
+  const listing = {
+    models: account.models,
+    fastModeTierByModel: new Map(),
+    origin: 'probe' as const
+  }
+  store.recordSuccess(fingerprint, agent, listing, 'discovery')
   if (account.configured) {
     store.recordConfiguredDefault(fingerprint, account.configured)
   }

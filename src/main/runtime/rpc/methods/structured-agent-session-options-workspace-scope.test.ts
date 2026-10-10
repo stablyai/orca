@@ -75,25 +75,27 @@ async function chatInConfiguredRepo(): Promise<void> {
   await writeFile(join(repo, '.git'), 'gitdir: /elsewhere')
   await writeFile(join(repo, '.codex', 'config.toml'), 'model_reasoning_effort = "high"\n')
   const store = new AgentModelCatalogStore()
+  // Not inline: this base's listing still requires the tier map that main has since dropped.
+  const listing = {
+    models: [
+      {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        isDefault: true,
+        defaultEffort: 'medium',
+        efforts: [
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High' }
+        ]
+      }
+    ],
+    fastModeTierByModel: new Map(),
+    origin: 'probe' as const
+  }
   store.recordSuccess(
     agentModelCatalogFingerprintForRecord(rig.store.getRecord(SESSION)!),
     'codex',
-    {
-      models: [
-        {
-          id: 'gpt-5.5',
-          label: 'GPT-5.5',
-          isDefault: true,
-          defaultEffort: 'medium',
-          efforts: [
-            { value: 'medium', label: 'Medium' },
-            { value: 'high', label: 'High' }
-          ]
-        }
-      ],
-      fastModeTierByModel: new Map(),
-      origin: 'probe'
-    },
+    listing,
     'discovery'
   )
   const modelCatalog = createAgentModelCatalogService({
