@@ -164,6 +164,8 @@ describe('gitlab client — MR operations', () => {
         ],
         { cwd: '/repo' }
       )
+      expect(mr?.approval).toBeUndefined()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
 
     // Why: GitLab does not proactively recompute merge status on list endpoints, so without the
@@ -226,11 +228,116 @@ describe('gitlab client — MR operations', () => {
       const mr = await getMergeRequestForBranch('/repo', 'local-review-branch', 9)
       expect(mr?.number).toBe(9)
       expect(mr?.pipelineStatus).toBe('success')
-      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(
+        glabExecFileAsyncMock.mock.calls.some(([args]) =>
+          String(args.at(-1)).includes('source_branch')
+        )
+      ).toBe(false)
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', 'projects/g%2Fp/merge_requests/9?with_merge_status_recheck=true'],
         { cwd: '/repo' }
       )
+    })
+
+    it('attaches approval to an open linked MR', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({ iid: 9, title: 'Linked', state: 'opened' })
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            approvals_required: 1,
+            approvals_left: 1,
+            approved_by: [],
+            user_can_approve: true,
+            user_has_approved: false
+          })
+        })
+
+      const mr = await getMergeRequestForBranch('/repo', 'b', 9)
+
+      expect(mr?.approval).toEqual({
+        approvalsRequired: 1,
+        approvalsLeft: 1,
+        approvedCount: 0,
+        userCanApprove: true,
+        userHasApproved: false
+      })
+      expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(
+        2,
+        ['api', 'projects/g%2Fp/merge_requests/9/approvals'],
+        { cwd: '/repo' }
+      )
+      expect(acquireMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('attaches approval to an open branch-matched MR', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([{ iid: 4, title: 'Branch MR', state: 'opened', sha: 'abc' }])
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({ user_can_approve: false, user_has_approved: true })
+        })
+
+      const mr = await getMergeRequestForBranch('/repo', 'feature/approve')
+
+      expect(mr?.approval).toMatchObject({ userHasApproved: true })
+    })
+
+    it.each([
+      {
+        name: 'linked',
+        branch: 'b',
+        linkedIid: 9,
+        first: { iid: 9, title: 'Linked', state: 'opened' }
+      },
+      {
+        name: 'branch-matched',
+        branch: 'feature/approve',
+        linkedIid: undefined,
+        first: [{ iid: 4, title: 'Branch MR', state: 'opened', sha: 'abc' }]
+      }
+    ])(
+      'holds the glab gate until /approvals finishes for a $name MR',
+      async ({ branch, linkedIid, first }) => {
+        getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+        let finishApprovals: (value: { stdout: string }) => void = () => {}
+        glabExecFileAsyncMock
+          .mockResolvedValueOnce({ stdout: JSON.stringify(first) })
+          .mockReturnValueOnce(
+            new Promise<{ stdout: string }>((resolve) => {
+              finishApprovals = resolve
+            })
+          )
+
+        const lookup = getMergeRequestForBranch('/repo', branch, linkedIid)
+        await vi.waitFor(() => expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2))
+        // Why: an unawaited return inside try runs finally (release) while /approvals is still in flight.
+        expect(releaseMock).not.toHaveBeenCalled()
+
+        finishApprovals({
+          stdout: JSON.stringify({ user_can_approve: true, user_has_approved: false })
+        })
+        await expect(lookup).resolves.toMatchObject({ approval: { userCanApprove: true } })
+        expect(releaseMock).toHaveBeenCalledTimes(1)
+      }
+    )
+
+    it('still returns the open MR when the approvals call fails', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({ iid: 9, title: 'Linked', state: 'opened' })
+        })
+        .mockRejectedValueOnce(new Error('HTTP 403'))
+
+      const mr = await getMergeRequestForBranch('/repo', 'b', 9)
+
+      expect(mr?.number).toBe(9)
+      expect(mr).not.toHaveProperty('approval')
     })
 
     it('uses the explicitly linked MR when the branch still matches a different MR', async () => {
@@ -252,7 +359,11 @@ describe('gitlab client — MR operations', () => {
         title: 'Replacement linked MR',
         pipelineStatus: 'pending'
       })
-      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(
+        glabExecFileAsyncMock.mock.calls.some(([args]) =>
+          String(args.at(-1)).includes('source_branch')
+        )
+      ).toBe(false)
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', 'projects/g%2Fp/merge_requests/2?with_merge_status_recheck=true'],
         { cwd: '/repo' }
@@ -274,7 +385,11 @@ describe('gitlab client — MR operations', () => {
       await expect(
         getMergeRequestForBranch('/repo', 'qa/replacement-mr', 2)
       ).resolves.toMatchObject({ number: 2 })
-      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(
+        glabExecFileAsyncMock.mock.calls.some(([args]) =>
+          String(args.at(-1)).includes('source_branch')
+        )
+      ).toBe(false)
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', 'projects/g%2Fp/merge_requests/2?with_merge_status_recheck=true'],
         { cwd: '/repo' }

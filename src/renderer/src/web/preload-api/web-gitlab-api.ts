@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
+  GITLAB_MR_APPROVAL_RUNTIME_CAPABILITY,
+  GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
 } from '../../../../shared/protocol-version'
@@ -54,10 +56,22 @@ export function createGitLabApi(): WebGitLabApi {
       }),
     mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
     updateMR: async (args) => {
-      if (args.updates.readyForReview) {
+      // Why: an old server's schema drops unknown update keys and reports success without acting.
+      const gate = args.updates.readyForReview
+        ? {
+            capability: GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
+            message: GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE
+          }
+        : args.updates.approval
+          ? {
+              capability: GITLAB_MR_APPROVAL_RUNTIME_CAPABILITY,
+              message: GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE
+            }
+          : null
+      if (gate) {
         const status = await getRemoteRuntimeStatus().catch(() => null)
-        if (!status?.capabilities?.includes(GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY)) {
-          return { ok: false, error: GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE }
+        if (!status?.capabilities?.includes(gate.capability)) {
+          return { ok: false, error: gate.message }
         }
       }
       return route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args)

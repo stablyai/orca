@@ -30,6 +30,7 @@ export async function updateMR(
     projectRef,
     async (projectRef) => {
       if (
+        !updates.approval &&
         !updates.readyForReview &&
         updates.title === undefined &&
         updates.body === undefined &&
@@ -45,6 +46,32 @@ export async function updateMR(
         }
 
         const endpoint = `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
+        if (updates.approval) {
+          if (
+            updates.readyForReview ||
+            updates.title !== undefined ||
+            updates.body !== undefined ||
+            (updates.addLabels ?? []).length > 0 ||
+            (updates.removeLabels ?? []).length > 0
+          ) {
+            return {
+              ok: false,
+              error: 'Approval cannot be combined with other merge request updates'
+            }
+          }
+          // Why: explicit -X POST keeps this out of glab's transient-retry path (gh-idempotency.ts).
+          await glabExecFileAsync(
+            [
+              'api',
+              ...glabHostnameArgs(projectRef, connectionId),
+              '-X',
+              'POST',
+              `${endpoint}/${updates.approval}`
+            ],
+            glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+          )
+          return { ok: true }
+        }
         let title = updates.title?.trim()
         if (updates.readyForReview) {
           const response = await glabExecFileAsync(

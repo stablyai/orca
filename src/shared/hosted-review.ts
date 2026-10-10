@@ -27,6 +27,15 @@ export function isPositiveHostedReviewNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
+/** Current user's view of review approvals. GitLab-only today; absent when the host could not read it. */
+export type HostedReviewApproval = {
+  approvalsRequired: number
+  approvalsLeft: number
+  approvedCount: number
+  userCanApprove: boolean
+  userHasApproved: boolean
+}
+
 export type HostedReviewInfo = {
   provider: HostedReviewProvider
   number: number
@@ -50,6 +59,7 @@ export type HostedReviewInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+  approval?: HostedReviewApproval
 }
 
 export type HostedReviewForBranchArgs = {

@@ -14208,6 +14208,13 @@
             "sourceMissing": "Transcript is no longer available",
             "metadataMatch": "Match in session metadata",
             "sourceActionsUnavailable": "The transcript source is unavailable."
+          },
+          "GitLabApprovalAction": {
+            "progress": "{{given}} of {{required}} approvals",
+            "approved": "Approved",
+            "approve": "Approve",
+            "revoke": "Revoke approval",
+            "failed": "Failed to update approval"
           }
         }
       },

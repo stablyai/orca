@@ -1,4 +1,5 @@
 import type { GitLabAssignableUser, GitLabMRApprovalState } from '../../shared/gitlab-types'
+import type { HostedReviewApproval } from '../../shared/hosted-review'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
 import {
@@ -90,5 +91,49 @@ export async function fetchMRApprovalState(
       approvalsRequired: rule.approvals_required ?? 0,
       approved: Boolean(rule.approved)
     }))
+  }
+}
+
+function nonNegativeInt(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0
+}
+
+/** Best-effort: undefined hides approval UI rather than failing the review lookup. Caller holds the glab gate. */
+export async function fetchMRApproval(
+  repoPath: string,
+  projectRef: ProjectRef,
+  iid: number,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<HostedReviewApproval | undefined> {
+  try {
+    const { stdout } = await glabExecFileAsync(
+      [
+        'api',
+        ...glabHostnameArgs(projectRef, connectionId),
+        `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/approvals`
+      ],
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+    )
+    const raw: unknown = JSON.parse(stdout)
+    if (typeof raw !== 'object' || raw === null) {
+      return undefined
+    }
+    const userCanApprove: unknown = Reflect.get(raw, 'user_can_approve')
+    const userHasApproved: unknown = Reflect.get(raw, 'user_has_approved')
+    // Why: missing flags mean unknown, never permission; without them we cannot tell whether to offer Approve.
+    if (typeof userCanApprove !== 'boolean' || typeof userHasApproved !== 'boolean') {
+      return undefined
+    }
+    const approvedBy: unknown = Reflect.get(raw, 'approved_by')
+    return {
+      approvalsRequired: nonNegativeInt(Reflect.get(raw, 'approvals_required')),
+      approvalsLeft: nonNegativeInt(Reflect.get(raw, 'approvals_left')),
+      approvedCount: Array.isArray(approvedBy) ? approvedBy.length : 0,
+      userCanApprove,
+      userHasApproved
+    }
+  } catch {
+    return undefined
   }
 }
