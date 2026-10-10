@@ -4,6 +4,10 @@ import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
+import type {
+  BrowserBasicAuthRequest,
+  BrowserBasicAuthResponse
+} from '../../shared/browser-basic-auth'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
@@ -49,6 +53,20 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
     ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
+  onBasicAuthRequest: (callback: (request: BrowserBasicAuthRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: BrowserBasicAuthRequest): void =>
+      callback(request)
+    ipcRenderer.on('browser:basic-auth-requested', listener)
+    return () => ipcRenderer.removeListener('browser:basic-auth-requested', listener)
+  },
+  onBasicAuthRequestClosed: (callback: (event: { requestId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
+      callback(data)
+    ipcRenderer.on('browser:basic-auth-request-closed', listener)
+    return () => ipcRenderer.removeListener('browser:basic-auth-request-closed', listener)
+  },
+  respondBasicAuth: (response: BrowserBasicAuthResponse): Promise<boolean> =>
+    ipcRenderer.invoke('browser:respondBasicAuth', response),
   openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:openDevTools', args),
   setViewportOverride: (args: {

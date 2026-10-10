@@ -4,6 +4,7 @@ import { applyBackgroundActivationPolicy } from '../window/foreground-activation
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
+import { handleBrowserBasicAuthLogin } from '../browser/browser-basic-auth-prompt'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
 import { preservePreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
 import { browserCertificateTrustController } from '../browser/browser-manager'
@@ -53,6 +54,13 @@ export async function initializeReadyFoundation(): Promise<void> {
   applyBackgroundActivationPolicy({ warn: console.warn })
   installElectronProxyRequestGuard(session.defaultSession)
   app.on('login', (event, webContents, details, authInfo, callback) => {
+    if (!authInfo.isProxy) {
+      // Why: server basic-auth challenges had no handler at all, so the login
+      // callback was never called and the request failed with 401 immediately
+      // instead of prompting (#25894). Proxy challenges keep their own path.
+      handleBrowserBasicAuthLogin(event, webContents, details, authInfo, callback)
+      return
+    }
     handleElectronProxyLogin(
       event,
       webContents,
