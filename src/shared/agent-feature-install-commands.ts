@@ -90,6 +90,33 @@ export function buildAgentFeatureSkillUpdateCommand(
   return `npx ${buildAgentFeatureSkillUpdateArgs(skillNames, options).join(' ')}`
 }
 
+export function buildAgentFeatureSkillRemoveArgs(
+  skillNames: string | readonly string[],
+  options: AgentFeatureSkillCommandOptions = {}
+): string[] {
+  const rawNames = typeof skillNames === 'string' ? [skillNames] : skillNames
+  const names = rawNames.map((name) => name.trim()).filter((name) => name.length > 0)
+  if (names.length === 0) {
+    throw new Error('A skill name is required.')
+  }
+  const global = options.global ?? true
+  return [
+    'skills',
+    'remove',
+    ...names,
+    // Why: skills remove uses -g/--global like update; project-local drops the flag.
+    ...(global ? ['--global'] : []),
+    ...(options.yes ? ['-y'] : [])
+  ]
+}
+
+export function buildAgentFeatureSkillRemoveCommand(
+  skillNames: string | readonly string[],
+  options: AgentFeatureSkillCommandOptions = {}
+): string {
+  return `npx ${buildAgentFeatureSkillRemoveArgs(skillNames, options).join(' ')}`
+}
+
 export const ORCA_CLI_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME
 ])
@@ -103,6 +130,9 @@ export const COMPUTER_USE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallC
 
 export const COMPUTER_USE_SKILL_UPDATE_COMMAND =
   buildAgentFeatureSkillUpdateCommand(COMPUTER_USE_SKILL_NAME)
+
+export const COMPUTER_USE_SKILL_REMOVE_COMMAND =
+  buildAgentFeatureSkillRemoveCommand(COMPUTER_USE_SKILL_NAME)
 
 export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
