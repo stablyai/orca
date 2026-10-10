@@ -66,6 +66,7 @@ import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
 import { registerEmulatorScrcpyTouchHandler } from '../emulator-scrcpy-touch'
 import { registerEmulatorScrcpyKeyboardHandler } from '../emulator-scrcpy-keyboard'
 import { registerSpeechHandlers } from '../speech'
+import { registerVoiceControlHandlers } from '../voice-control'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../codex-accounts'
@@ -297,4 +298,5 @@ export function registerCoreHandlers(
   })
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
+  registerVoiceControlHandlers(store, runtime)
 }

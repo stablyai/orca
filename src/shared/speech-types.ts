@@ -1,4 +1,6 @@
 import type { DictationTerm } from './dictation-dictionary'
+import type { VoiceControlSettings } from './voice-control-types'
+
 export type SpeechModelType =
   | 'transducer'
   | 'paraformer'
@@ -138,6 +140,7 @@ export type VoiceSettings = {
   dictationTerms?: DictationTerm[]
   /** Adds the current repo's name as a hint (DictationTerm.hint). Absent = on. */
   dictationRepoNameHint?: boolean
+  control: VoiceControlSettings
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */

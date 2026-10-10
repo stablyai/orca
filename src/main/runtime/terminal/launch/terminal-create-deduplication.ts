@@ -194,6 +194,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
       wslUserAct?: true
       surfaceOwner?: false
+      preAllocatedHandle?: string
     },
     resolvedTarget?: { worktree: ResolvedWorktree; repo: Repo; folderWorkspace?: FolderWorkspace }
   ): Promise<RuntimeTerminalCreate> {
@@ -223,7 +224,10 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         title: opts.title,
         ...(opts.wslUserAct ? { wslUserAct: true } : {}),
-        ...ownerSurfacing(opts.surfaceOwner !== false)
+        ...ownerSurfacing(opts.surfaceOwner !== false),
+        // Why: voice dispatch preambles bake the handle in before the PTY exists;
+        // createTerminal exports it as ORCA_TERMINAL_HANDLE, same as the agent-session create flow.
+        ...(opts.preAllocatedHandle ? { preAllocatedHandle: opts.preAllocatedHandle } : {})
       },
       undefined,
       worktree,

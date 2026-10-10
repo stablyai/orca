@@ -183,6 +183,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     isMaximized: () => Promise.resolve(false),
     isWindowActive: () => Promise.resolve(document.hasFocus()),
     onOpenSettings: () => noopUnsubscribe,
+    onCloseSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so it never queues an open-settings or quit request.
     consumePendingOpenSettings: () => Promise.resolve(false),
     onQuitAndStopAllSessions: () => noopUnsubscribe,
@@ -241,6 +242,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
+    onVoiceControlToggle: () => noopUnsubscribe,
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
