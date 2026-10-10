@@ -12,7 +12,7 @@ import watercolorIcon from '../../resources/app-icons/orca-watercolor.png?asset'
 import watercolorMacDockIcon from '../../resources/app-icons/orca-watercolor.png?asset&asarUnpack'
 import blueIcon from '../../resources/app-icons/orca-blue.png?asset'
 import blueMacDockIcon from '../../resources/app-icons/orca-blue.png?asset&asarUnpack'
-import { normalizeAppIconId, type AppIconId } from '../shared/app-icon'
+import { DEFAULT_APP_ICON_ID, normalizeAppIconId, type AppIconId } from '../shared/app-icon'
 
 const APP_ICON_PATHS = {
   classic: is.dev ? classicDevIcon : classicIcon,
@@ -293,7 +293,11 @@ export function applyAppIcon(value: unknown): void {
     return
   }
   if (process.platform === 'darwin') {
-    app.dock?.setIcon(image)
+    // Why: a packaged app's Dock tile is its bundle icon, which macOS draws at the tile's size and
+    // in the user's icon style. setIcon swaps in one flat 256 px PNG, so the default icon clears the
+    // override instead: Electron hands AppKit an empty image as nil, which restores the bundle icon.
+    const restoreBundleIcon = app.isPackaged && normalizeAppIconId(value) === DEFAULT_APP_ICON_ID
+    app.dock?.setIcon(restoreBundleIcon ? nativeImage.createEmpty() : image)
   }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
