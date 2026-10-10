@@ -151,4 +151,35 @@ describe('adoptFromEndpoint', () => {
       expect(adopted.executionHostId).toBe(expectedHostId)
     })
   })
+
+  describe('worktreeEvent', () => {
+    const renamed = { oldWorktreeId: 'repo-1::/a', newWorktreeId: 'repo-1::/b' }
+
+    it('pins an event from this app to this app, keeping the rename', () => {
+      expect(
+        adoptFromEndpoint(LOCAL, { kind: 'worktreeEvent', row: { repoId: 'repo-1', renamed } })
+      ).toEqual({ repoId: 'repo-1', renamed, forceLocalOwner: true })
+    })
+
+    it('stamps an event from a server with that server', () => {
+      expect(
+        adoptFromEndpoint(SERVER, { kind: 'worktreeEvent', row: { repoId: 'repo-1' } })
+      ).toEqual({ repoId: 'repo-1', executionHostId: 'runtime:env-a' })
+    })
+  })
+
+  describe('createdWorktree', () => {
+    const resolveOwnHostId = (): 'ssh:own' => 'ssh:own'
+
+    it.each([
+      ['this app, no requested host', LOCAL, undefined, 'ssh:own'],
+      ['this app, requested SSH host', LOCAL, 'ssh:t', 'ssh:t'],
+      ['server, no requested host', SERVER, undefined, 'runtime:env-a'],
+      ['server, requested host', SERVER, 'runtime:env-a', 'runtime:env-a']
+    ] as const)('%s', (_name, target, requestedHostId, expectedHostId) => {
+      expect(
+        adoptFromEndpoint(target, { kind: 'createdWorktree', requestedHostId, resolveOwnHostId })
+      ).toBe(expectedHostId)
+    })
+  })
 })
