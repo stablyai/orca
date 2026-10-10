@@ -49,7 +49,7 @@ async function pinnedScrollbackTerminal(): Promise<TerminalWithBufferService> {
     scrollback: 1000,
     allowProposedApi: true
   }) as TerminalWithBufferService
-  await writeLines(term, 100, 'before')
+  await write(term, Array.from({ length: 100 }, (_, index) => `before${index}\r\n`).join(''))
   term.scrollLines(-30)
   markTerminalPinnedViewport(term)
   return term

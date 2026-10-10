@@ -17,6 +17,16 @@ import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
+import type * as AgentSessionVisibleFailures from '../../../src/shared/agent-session-visible-failures'
+
+vi.mock('../../../src/shared/agent-session-visible-failures', async (importOriginal) => {
+  const original = await importOriginal<typeof AgentSessionVisibleFailures>()
+  return {
+    ...original,
+    agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+  }
+})
 import {
   CAPABLE,
   LEGACY,
@@ -143,6 +153,26 @@ describe('mobile structured queued messages', () => {
   })
 
   describe('capability-gated delivery', () => {
+    it('scans failure facts only when a returned card needs them', async () => {
+      await mountSession(CAPABLE)
+      act(() => listener?.(snapshotEvent({ runningTurn: true })))
+      expect(agentSessionVisibleFailureFacts).not.toHaveBeenCalled()
+      act(() =>
+        listener?.(
+          snapshotEvent({
+            queuedMessages: [
+              queuedDraft({
+                messageId: 'returned',
+                state: 'returned',
+                returnedRejection: { kind: 'notSignedIn' }
+              })
+            ]
+          })
+        )
+      )
+      expect(agentSessionVisibleFailureFacts).toHaveBeenCalledTimes(1)
+      expect(hook!.queued.cards[0]?.caption).toContain('claude auth login')
+    })
     it('sends delivery: queue-if-active — fingerprint included — only on a capable host', async () => {
       sendRequest.mockImplementation(async (method) => {
         if (method === 'agentSession.send') {

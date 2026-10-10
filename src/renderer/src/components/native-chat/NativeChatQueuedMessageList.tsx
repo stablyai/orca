@@ -1,10 +1,13 @@
-import { useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { NativeChatQueuedMessageCard } from './NativeChatQueuedMessageCard'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
+import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 
 /**
  * Host-held drafts stacked between the transcript and the composer — never in
@@ -13,35 +16,69 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
  */
 export function NativeChatQueuedMessageList({
   controller,
+  chatWorktreeId,
+  agentName,
+  statedFailures,
   steerHeld = false,
   focusComposer
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
+  /** Where a card's sender is opened from; null shows it unlinked. */
+  chatWorktreeId: string | null
+  agentName?: string
+  statedFailures?: readonly AgentSessionFailureFact[]
   /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
   steerHeld?: boolean
-  /** Where focus goes once Steer, Edit or Delete takes the focused card away. */
+  /** Where focus goes once Steer, Delete or a closing edit takes the focused card away. */
   focusComposer?: () => void
 }): React.JSX.Element {
   const updateSettings = useAppStore((store) => store.updateSettings)
+  const regionRef = useRef<HTMLDivElement>(null)
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards, pause } = controller
   const newest = cards.at(-1)
+  const listRef = useRef<HTMLUListElement>(null)
+  const newestPosition = newest?.position ?? 0
+  const newestIsPersons = newest !== undefined && !newest.from
+  const shownPosition = useRef(newestPosition)
+  // Before paint, so the new card never shows a frame before the scroll.
+  useLayoutEffect(() => {
+    // From 0 the queue is loading or holds one card: nothing to scroll to.
+    const appended = shownPosition.current > 0 && newestPosition > shownPosition.current
+    shownPosition.current = newestPosition
+    // The list opens on the next card to send; a card the person just queued is shown instead.
+    if (appended && newestIsPersons && listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [newestPosition, newestIsPersons])
   // Only a host that queues sends has queueing to turn off; a kept card shows without it.
   const turnOffQueueing = controller.queueCapable
     ? () => void updateSettings({ nativeChatQueueFollowUps: false })
     : undefined
   // Only when focus was on the queue (a card, or Resume) — never pull it from wherever the user
-  // moved on to.
+  // moved on to. A question or approval holding the composer's slot takes it instead.
   const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
       const active = document.activeElement
       if (!active || active === document.body || queueRef.current?.contains(active)) {
-        focusComposer?.()
+        const root = regionRef.current?.closest(NATIVE_CHAT_ROOT_SELECTOR)
+        if (!root || !focusNativeChatPromptCard(root, null)) {
+          focusComposer?.()
+        }
       }
     })
   }
+  const editingId = controller.editor?.messageId
+  const wasEditing = useRef(editingId)
+  useEffect(() => {
+    const closed = wasEditing.current !== undefined && editingId === undefined
+    wasEditing.current = editingId
+    if (closed) {
+      refocusAfter(Promise.resolve())
+    }
+  })
   return (
-    <div aria-live="polite">
+    <div ref={regionRef} aria-live="polite">
       {cards.length > 0 ? (
         <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
           {/* One box: the pause row, when shown, is its first row, and each card a row below it. */}
@@ -54,21 +91,32 @@ export function NativeChatQueuedMessageList({
               />
             ) : null}
             <ul
+              ref={listRef}
               aria-label={translate(
                 'components.native-chat.queuedMessages.listLabel',
                 'Queued messages'
               )}
-              className="divide-y divide-border"
+              // Scrolls on its own so a long queue never squeezes the transcript or the composer.
+              className="scrollbar-sleek max-h-40 divide-y divide-border overflow-y-auto"
             >
               {cards.map((card) => (
                 <NativeChatQueuedMessageCard
                   key={card.messageId}
                   card={card}
+                  chatWorktreeId={chatWorktreeId}
+                  agentName={agentName}
+                  statedFailures={statedFailures}
                   showsSteerShortcut={controller.queueCapable && card === newest}
                   steerHeld={steerHeld}
                   onSteer={() => refocusAfter(controller.steer(card.messageId))}
                   onDelete={() => refocusAfter(controller.remove(card.messageId))}
-                  onEdit={() => refocusAfter(controller.edit(card.messageId))}
+                  onEdit={
+                    controller.editCapable ? () => void controller.edit(card.messageId) : undefined
+                  }
+                  editor={
+                    controller.editor?.messageId === card.messageId ? controller.editor : undefined
+                  }
+                  editDisabled={controller.editor !== undefined}
                   onTurnOffQueueing={turnOffQueueing}
                 />
               ))}

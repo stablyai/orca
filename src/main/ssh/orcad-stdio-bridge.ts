@@ -5,7 +5,7 @@ import {
   OrcadStdioBridgeUnavailableError
 } from './orcad-host-unavailable'
 import { resolveOrcadRemoteContext } from './orcad-remote-context'
-import { orcadRemoteBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import {
   orcadPosixStdioBridgeCommand,
   type OrcadStdioBridgeMode
@@ -40,12 +40,7 @@ export async function resolveOrcadStdioBridge(
   // Stages this client's pinned node.exe and host script, which an app update may have changed.
   const context = await resolveOrcadRemoteContext(conn.getTarget(), conn, undefined, host)
   return {
-    command: orcadWindowsHostOpCommand(
-      host,
-      orcadRemoteBaseDir(host, context.remoteHome),
-      'stdio-bridge',
-      [String(port)]
-    ),
+    command: orcadWindowsHomeOpCommand(host, context.remoteHome, 'stdio-bridge', [String(port)]),
     mode: 'base64',
     wrapCommand: host.commandDialect !== 'powershell'
   }

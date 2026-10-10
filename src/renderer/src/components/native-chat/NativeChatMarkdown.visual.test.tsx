@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,7 +25,6 @@ import { getDefaultSettings } from '../../../../shared/constants'
 const owner: NativeChatVisualOwner = {
   target: { kind: 'local' },
   sessionId: 'session-alpha',
-  tabId: 'tab-1',
   worktreeId: 'wt-1'
 }
 const LINE = '::orca-visual{file="usage.html" title="Usage"}'
@@ -76,6 +75,27 @@ describe('NativeChatMarkdown visuals', () => {
       expect(container).not.toHaveTextContent('::orca-visual')
     } finally {
       useAppStore.setState({ settings })
+    }
+  })
+
+  it('opens the visual in its own workspace tab', async () => {
+    const openChatVisualTab = vi.fn()
+    const original = useAppStore.getState().openChatVisualTab
+    useAppStore.setState({ openChatVisualTab })
+    try {
+      const { container } = render(
+        withOwner(<NativeChatMarkdown content={LINE} visualMessageId="m1" />)
+      )
+      await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
+      fireEvent.click(screen.getByRole('button', { name: 'Open in new tab' }))
+      expect(openChatVisualTab).toHaveBeenCalledWith('wt-1', {
+        target: { kind: 'local' },
+        sessionId: 'session-alpha',
+        file: 'usage.html',
+        title: 'Usage'
+      })
+    } finally {
+      useAppStore.setState({ openChatVisualTab: original })
     }
   })
 

@@ -50,6 +50,12 @@ import {
 } from '../acp/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../pi/rpc-runtime-registration'
+import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
+import {
+  acpModelCatalogDiscovery,
+  claudeModelCatalogDiscovery,
+  codexModelCatalogDiscovery
+} from './structured-agent-model-catalog-discovery'
 
 /** What an agent's adapter is built from: the open store and the runtime around it. */
 export type StructuredAgentAdapterContext = {
@@ -90,9 +96,18 @@ export type StructuredAgentAccountHomeServices = {
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
 }
 
+/** What a catalog probe is built from: the same runtime resolvers its sessions launch through. */
+export type StructuredAgentModelCatalogContext = Pick<
+  StructuredAgentAdapterContext,
+  'deps' | 'environment'
+>
+
 export type StructuredAgentRuntimeRegistration = {
   definition: StructuredAgentDefinition
   createAdapter: (context: StructuredAgentAdapterContext) => StructuredAgentRuntimeAdapter
+  /** How this agent's models are listed before any session of it runs. Required: an agent that
+   *  cannot list says so, rather than being left out of the shared catalog. */
+  modelCatalog: (context: StructuredAgentModelCatalogContext) => AgentModelCatalogDiscovery
   /** Whether this agent's chats can run at `location`; answered without building the host. */
   supportsLocation: (location: AgentSessionExecutionLocation) => boolean
   /** Whether the agent installed on this host runs a structured chat, asked at create with the
@@ -126,6 +141,7 @@ function nativeChatVisualsFor(deps: StructuredAgentSessionRuntimeDeps): {
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, store, followUps, host } = context
   return new CodexStructuredSessionAdapter({
+    resolveAccountKind: deps.resolveCodexAccountKind,
     resolveLaunch: createCodexStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -179,8 +195,7 @@ function createClaudeAdapter(
     onDispatchSettledLate: followUps.onDispatchSettledLate,
     onSessionIdle: followUps.releaseUnansweredDispatches,
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
-    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-    modelCatalog: agentModelCatalogStore
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }
 
@@ -207,6 +222,7 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
         }
       : {}),
     resolveAccountHome: ({ launchEnv }) => spec.account.resolve({ launchEnv }),
+    modelCatalog: (context) => acpModelCatalogDiscovery(spec, context),
     createAdapter: (context) => {
       const { deps, store, followUps } = context
       const readJournal = (sessionId: string) =>
@@ -223,9 +239,15 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
           ...(deps.resolveAgentCommandSettings
             ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
             : {}),
-          ...(deps.resolveAgentFullAccess ? { resolveFullAccess: deps.resolveAgentFullAccess } : {})
+          ...(deps.resolveAgentFullAccess
+            ? { resolveFullAccess: deps.resolveAgentFullAccess }
+            : {}),
+          ...nativeChatVisualsFor(deps),
+          logger: deps.logger
         }),
         connect: (launch, options) => createAcpAgentConnection(launch, options),
+        onChildWorkEvidence: (sessionId, evidence) =>
+          context.host()?.publishChildWorkEvidence(sessionId, evidence),
         ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
         onDispatchSettledLate: followUps.onDispatchSettledLate,
         logger: deps.logger,
@@ -265,6 +287,7 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
     {
       definition: CODEX_STRUCTURED_AGENT,
       createAdapter: createCodexAdapter,
+      modelCatalog: codexModelCatalogDiscovery,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
       resolveAccountHome: async (request, services) =>
         agentSessionAccountHome(
@@ -275,6 +298,7 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
     {
       definition: CLAUDE_STRUCTURED_AGENT,
       createAdapter: createClaudeAdapter,
+      modelCatalog: claudeModelCatalogDiscovery,
       supportsLocation: supportsClaudeStructuredLocation,
       resolveAccountHome: async ({ launchEnv, location }, services) =>
         agentSessionAccountHome(

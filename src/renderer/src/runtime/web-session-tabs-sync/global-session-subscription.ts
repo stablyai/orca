@@ -1,4 +1,3 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent'
 import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
@@ -16,8 +15,11 @@ import { loadInitialWebSessionTabs } from './load-initial'
 import { handleGlobalSessionEvent } from './global-session-events'
 import { VisibilityResumeCoordinator } from './visibility-resume-coordinator'
 import type { VisibilityResumeOmission, SessionTabsStreamEvent } from './state'
-import type { MirroredRuntimeEnvironment } from './visibility-resume-types'
-import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
+import type {
+  MirroredRuntimeEnvironment,
+  SessionTabsSnapshotHandler
+} from './visibility-resume-types'
+import { isSessionTabsStreamEnd, WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
 import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
@@ -26,30 +28,9 @@ export type GlobalSubscriptionRefs = {
   activeRuntimeEnvironmentId: Ref<string | null>
   activeRuntimeWorktreeKey: Ref<string | null>
   visibilityResumeOmissions: Ref<Map<string, VisibilityResumeOmission>>
-  snapshotReceipt: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
-  snapshotApply: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => boolean
-  >
-  snapshotAccepted: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
+  snapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
+  snapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
+  snapshotAccepted: Ref<SessionTabsSnapshotHandler<void>>
   ownerRevisions: Ref<Map<string, number | undefined>>
 }
 
@@ -143,7 +124,7 @@ export function installGlobalSessionTabsSubscriptions({
     const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
     environmentIdBySpec.push(environmentId)
     subscriptionSpecs.push({
-      subscribe: (isCurrent, { visibilityGeneration }) => {
+      subscribe: (isCurrent, { visibilityGeneration, ended }) => {
         const awaitingVisibilityResumeInventory = { value: visibilityGeneration > 0 }
         if (!requestedInitialLoad) {
           requestedInitialLoad = true
@@ -171,6 +152,10 @@ export function installGlobalSessionTabsSubscriptions({
               ) {
                 return
               }
+              // Why: an end frame never reaches onClose, and an error response leaves the stream dead.
+              if (!response.ok || isSessionTabsStreamEnd(response.result)) {
+                ended()
+              }
               handleGlobalSessionEvent({
                 environmentId,
                 expectedEnvironmentConnectionGeneration,
@@ -189,6 +174,11 @@ export function installGlobalSessionTabsSubscriptions({
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+              }
+            },
+            onClose: () => {
+              if (isCurrent()) {
+                ended()
               }
             }
           }

@@ -30,6 +30,17 @@ export async function ensureOrcadManagedTunnel(
   )
 }
 
+/** After a redeploy: the reused forward may target the port the previous server bound. */
+export async function rebuildOrcadManagedTunnel(
+  userDataPath: string,
+  selector: string
+): Promise<void> {
+  const environment = resolveEnvironment(userDataPath, selector)
+  await managedTunnels.rebuild(environment, () =>
+    resolveEnvironmentOrNull(userDataPath, environment.id)
+  )
+}
+
 function resolveEnvironmentOrNull(userDataPath: string, id: string) {
   try {
     return resolveEnvironment(userDataPath, id)

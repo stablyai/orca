@@ -152,7 +152,7 @@ afterEach(async () => {
 })
 
 describe("a Claude chat whose Claude isn't running shows the `/` surface from its folders", () => {
-  it('after /clear, before the new chat has started', async () => {
+  it('after /clear, before the fresh agent context starts', async () => {
     const cleared = await host.conversationCommand(caller, {
       command: 'clear',
       envelope: {
@@ -166,7 +166,8 @@ describe("a Claude chat whose Claude isn't running shows the `/` surface from it
         })
       }
     })
-    const replacement = cleared.ok ? cleared.value.replacementSessionId! : ''
+    expect(cleared).toMatchObject({ ok: true })
+    const replacement = SESSION
     const menu = await menuOf(replacement)
     expect(namesOf(menu, 'skill')).toEqual(['review-pr'])
     // Everything the menu offered before a list existed, then what the folders add.

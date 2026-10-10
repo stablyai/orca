@@ -41,7 +41,8 @@ describe('structured chat coverage', () => {
     'src/main/acp/acp-structured-session-adapter.ts': 'export {}',
     'src/main/jsonl-rpc/peer.ts': 'export {}',
     'src/main/pi/rpc-launch.ts': 'export {}',
-    'src/shared/agent-session-record.ts': 'export {}'
+    'src/shared/agent-session-record.ts': 'export {}',
+    'src/packages/process-host/src/run-process.ts': 'export {}'
   }
 
   it('covers whole lane directories, structured runtime files at any depth, and no test code', () => {
@@ -53,6 +54,7 @@ describe('structured chat coverage', () => {
       'src/main/codex/codex-provider-timeline-identity.ts',
       'src/shared/nested/agent-session-account-home.ts',
       'src/shared/relay-runtime-self-test-report.ts',
+      'src/packages/process-host/src/nested/process-state.ts',
       'src/main/runtime/agent-session-record.ts',
       'src/main/runtime/structured-agent-runtime-registrations.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-agents.ts',
@@ -75,6 +77,8 @@ describe('structured chat coverage', () => {
       'src/main/native-chat/test-support/reader.ts',
       'src/main/runtime/orca-runtime-tests/structured-agent-session-host.ts',
       'src/shared/types.d.ts',
+      'src/packages/process-host/src/run-process.test.ts',
+      'src/packages/process-host/src/__fixtures__/spawned-child.ts',
       'src/main/runtime/other.ts',
       'src/main/runtime/rpc/methods/browser.ts',
       'src/main/jsonl-rpc/peer.test.ts',
@@ -142,6 +146,24 @@ describe('structured chat coverage', () => {
     }
   )
 
+  it('checks public workspace imports against source without requiring a built package', async () => {
+    const root = fixture({ 'entry.ts': "import '@orca/process-host'" })
+    const target = path.join(process.cwd(), 'src/packages/process-host/src/run-process.ts')
+    const current = await collectElectronImporters([path.join(root, 'entry.ts')], {
+      plugins: [
+        {
+          name: 'inject-process-host-electron-import',
+          setup(pluginBuild) {
+            pluginBuild.onLoad({ filter: /run-process\.ts$/ }, (args) =>
+              args.path === target ? { contents: "import 'electron'", loader: 'ts' } : undefined
+            )
+          }
+        }
+      ]
+    })
+    expect(current).toEqual(['src/packages/process-host/src/run-process.ts'])
+  })
+
   it('bounds shared dependency output without dropping any entry point', async () => {
     const entries = Array.from({ length: 40 }, (_, index) => `entry-${index}.ts`)
     const root = fixture({
@@ -186,7 +208,7 @@ describe('the default entry points', () => {
       'src/main/runtime/runtime-rpc.ts',
       'src/main/orcad/main.ts'
     ])
-    for (const lane of [...lanes, 'src/shared/']) {
+    for (const lane of [...lanes, 'src/shared/', 'src/packages/process-host/src/']) {
       expect(entries.some((file) => file.startsWith(lane))).toBe(true)
     }
   })

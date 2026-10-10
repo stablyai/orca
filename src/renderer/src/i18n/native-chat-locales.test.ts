@@ -45,19 +45,17 @@ describe('native chat locale copy', () => {
   })
 
   it.each(Object.entries(localizedCatalogs))(
-    '%s keeps provider-neutral copy localized',
+    '%s falls back to current Chat UI copy until it is translated',
     (_code, catalog) => {
       const setting = catalog.auto.components.settings.ExperimentalPane.nativeChat
       const search = catalog.auto.components.settings.experimental.search.nativeChat
-      for (const [localized, english] of [
-        [setting.description, englishSetting.description],
-        [setting.copy, englishSetting.copy],
-        [setting.defaultCopy, englishSetting.defaultCopy],
-        [search.description, englishSearch.description]
-      ]) {
-        expect(localized.trim()).not.toBe('')
-        expect(localized).not.toBe(english)
-      }
+      expect(englishSetting.description).toContain('Chat UI')
+      expect(englishSetting.copy).toContain('structured chat')
+      expect(englishSearch.description).toContain('Chat UI')
+      expect(setting).not.toHaveProperty('description')
+      expect(setting).not.toHaveProperty('copy')
+      expect(setting).not.toHaveProperty('defaultCopy')
+      expect(search).not.toHaveProperty('description')
       expect(search.grok).toBe('grok')
       const composer = catalog.components['native-chat'].composer
       for (const key of [
@@ -87,11 +85,15 @@ describe('account-aware Send fixes', () => {
     '%s includes the same fixes for Send and post-send failures',
     (_locale, catalog) => {
       const words = catalog.components['native-chat'].failureWords
-      expect(words.claudeSystemNotSignedIn).toContain('`claude`')
-      expect(words.claudeSystemNotSignedIn).toContain('/login')
-      expect(words.codexSystemNotSignedIn).toContain('`codex login`')
+      expect(words.claudeSystemNotSignedIn).toContain('`{{loginCommand}}`')
+      expect(words.codexSystemNotSignedIn).toContain('`{{loginCommand}}`')
       expect(words.claudeManagedNotSignedIn).not.toContain('/login')
       expect(words.codexManagedNotSignedIn).not.toContain('`codex login`')
+      expect(words.claudeManagedNotSignedIn).not.toContain('{{loginCommand}}')
+      expect(words.codexManagedNotSignedIn).not.toContain('{{loginCommand}}')
+      expect(words.agentCommandNotSignedIn).toContain('{{agent}}')
+      expect(words.agentCommandNotSignedIn).toContain('`{{loginCommand}}`')
+      expect(words.interactiveAgentNotSignedIn).toContain('`{{slashCommand}}`')
       expect(words.cliMissing).toContain('{{agent}}')
       for (const key of ['claudeManagedNotSignedIn', 'codexManagedNotSignedIn'] as const) {
         expect(words[key].trim()).not.toBe('')

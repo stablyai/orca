@@ -15,7 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
 const { execMock } = vi.hoisted(() => ({ execMock: vi.fn() }))
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: execMock }))

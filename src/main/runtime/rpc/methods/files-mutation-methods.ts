@@ -36,6 +36,7 @@ function sshMutationArguments(
 export const FILE_MUTATION_METHODS = [
   defineMethod({
     name: 'files.write',
+    permission: 'workspace',
     params: FileWrite,
     handler: async (params, { runtime }) =>
       runtime.writeFileExplorerFile(
@@ -47,6 +48,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.writeBase64',
+    permission: 'workspace',
     params: FileWriteBase64,
     handler: async (params, { runtime }) =>
       runtime.writeFileExplorerFileBase64(
@@ -58,6 +60,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.writeBase64Chunk',
+    permission: 'workspace',
     params: FileWriteBase64Chunk,
     handler: async (params, { runtime }) =>
       runtime.writeFileExplorerFileBase64Chunk(
@@ -70,6 +73,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.createFile',
+    permission: 'workspace',
     params: FileMutationOpen,
     handler: async (params, { runtime }) =>
       runtime.createFileExplorerFile(
@@ -80,6 +84,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.createDir',
+    permission: 'workspace',
     params: FileMutationOpen,
     handler: async (params, { runtime }) =>
       runtime.createFileExplorerDir(
@@ -90,6 +95,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.createDirNoClobber',
+    permission: 'workspace',
     params: FileMutationOpen,
     handler: async (params, { runtime }) =>
       runtime.createFileExplorerDirNoClobber(
@@ -100,6 +106,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.commitUpload',
+    permission: 'workspace',
     params: FileCommitUpload,
     handler: async (params, { runtime }) =>
       runtime.commitFileExplorerUpload(
@@ -111,6 +118,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.rename',
+    permission: 'workspace',
     params: FileRename,
     handler: async (params, { runtime }) =>
       runtime.renameFileExplorerPath(
@@ -122,6 +130,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.copy',
+    permission: 'workspace',
     params: FileCopy,
     handler: async (params, { runtime }) =>
       runtime.copyFileExplorerPath(
@@ -133,6 +142,7 @@ export const FILE_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'files.delete',
+    permission: 'workspace',
     params: FileDelete,
     handler: async (params, { runtime }) =>
       runtime.deleteFileExplorerPath(

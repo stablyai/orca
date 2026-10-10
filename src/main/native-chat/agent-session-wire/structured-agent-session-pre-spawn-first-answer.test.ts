@@ -100,6 +100,7 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
       probe: { outcome: 'reservation-unused' as const }
     },
     callerKey: 'client-1',
+    optionRevision: () => 0,
     params: createParams(),
     now: () => NOW,
     onAttached: () => {}
@@ -159,7 +160,7 @@ describe('a create that fails before any process spawns', () => {
       'a Claude account added in WSL',
       'structured Claude is not offered under the active managed Claude account',
       'managedAccountUnsupported',
-      'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings, then send your message again.'
+      'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings.'
     ],
     [
       'a floating chat whose launch folder is gone',

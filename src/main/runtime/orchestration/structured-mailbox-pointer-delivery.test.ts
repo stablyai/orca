@@ -54,6 +54,9 @@ function harness(options: {
       : { kind: 'sent' as const, state: options.dispatchState ?? ('accepted' as const) }
   )
   const sendMock = vi.mocked(send)
+  const readContext = vi.fn<StructuredMailboxPointerHost['currentContextClearOperationId']>(
+    () => undefined
+  )
   const stored = new Map<string, StructuredPointerOperationRow>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
@@ -77,6 +80,7 @@ function harness(options: {
     host: {
       readSessionFacts: async () => (attached ? { submissions } : null),
       currentFence: () => 4,
+      currentContextClearOperationId: readContext,
       send
     }
   })
@@ -84,6 +88,7 @@ function harness(options: {
     delivery,
     markAsDelivered,
     send: sendMock,
+    readContext,
     stored,
     setAttached: (next: boolean) => {
       attached = next
@@ -100,6 +105,35 @@ function harness(options: {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('structured mailbox pointer delivery', () => {
+  it.each(['rejected', 'unknown', 'throws'] as const)(
+    'attempts an unchanged record context once when its journal has no marker and send is %s',
+    async (outcome) => {
+      const { delivery, send, readContext, stored, markAsDelivered } = harness({})
+      let contextReads = 0
+      readContext.mockImplementation(() => {
+        if (++contextReads > 8) {
+          throw new Error('hard regression-test cap on context reads')
+        }
+        return 'record-clear-1'
+      })
+      send.mockImplementation(async () => {
+        if (outcome === 'throws') {
+          throw new Error('send failed')
+        }
+        return { kind: 'sent', state: outcome }
+      })
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      await flush()
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(contextReads).toBeLessThan(8)
+      expect(markAsDelivered).not.toHaveBeenCalled()
+      expect(stored.get('dispatch:d1')?.batch_fingerprint).toBe(
+        structuredPointerBatchFingerprint(IDENTITY.sessionId, ['m1'], 'record-clear-1')
+      )
+    }
+  )
+
   it('claims only mailboxes whose assignee is a structured worker', () => {
     const { delivery } = harness({})
     expect(delivery.deliverForHandle('dispatch:d1')).toBe(true)
@@ -130,6 +164,20 @@ describe('structured mailbox pointer delivery', () => {
     expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
       text: expect.not.stringContaining('--run')
     })
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+  })
+
+  it('releases its in-flight lane when reading the context fails', async () => {
+    const { delivery, send, readContext, markAsDelivered } = harness({})
+    readContext.mockImplementationOnce(() => {
+      throw new Error('record unavailable')
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).not.toHaveBeenCalled()
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledOnce()
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
   })
 
@@ -427,6 +475,7 @@ describe('forgetting one settled worker', () => {
       host: {
         readSessionFacts: async () => (attached ? { submissions: [] } : null),
         currentFence: () => 4,
+        currentContextClearOperationId: () => undefined,
         send
       }
     })
@@ -485,7 +534,8 @@ describe('forgetting one settled worker', () => {
 })
 
 describe('a mailbox a /clear moves while its nudge is in flight', () => {
-  function clearingHarness() {
+  function clearingHarness(inPlace = false) {
+    let contextClearOperationId: string | undefined
     let target = 'session-1'
     const mail = [
       { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
@@ -503,10 +553,11 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       deleteStructuredPointerOperation: (key: string) => stored.delete(key)
     }
     let settleHeld: ((state: 'accepted' | 'rejected' | 'throws') => void) | null = null
+    let sendAttempts = 0
     const send = vi.fn(
-      ({ sessionId }: { sessionId: string }) =>
+      (_input: Parameters<StructuredMailboxPointerHost['send']>[0]) =>
         new Promise<{ kind: 'sent'; state: 'accepted' | 'rejected' }>((resolve, reject) => {
-          if (sessionId === 'session-1') {
+          if (++sendAttempts === 1) {
             settleHeld = (state) =>
               state === 'throws'
                 ? reject(new Error('the operation-admission write failed'))
@@ -525,6 +576,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       host: {
         readSessionFacts: async () => ({ submissions: [] }),
         currentFence: () => 4,
+        currentContextClearOperationId: () => contextClearOperationId,
         send
       }
     })
@@ -533,7 +585,11 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       send,
       pointed,
       clear: () => {
-        target = 'clear-successor'
+        if (inPlace) {
+          contextClearOperationId = 'clear-1'
+        } else {
+          target = 'clear-successor'
+        }
       },
       settle: (state: 'accepted' | 'rejected' | 'throws') => settleHeld?.(state)
     }
@@ -557,6 +613,25 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
         'session-1',
         'clear-successor'
       ])
+      expect(pointed.has('m1')).toBe(true)
+    }
+  )
+
+  it.each(['rejected', 'throws'] as const)(
+    'delivers once to the fresh context when the in-flight old send is %s',
+    async (outcome) => {
+      const { delivery, send, pointed, clear, settle } = clearingHarness(true)
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      clear()
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      expect(send).toHaveBeenCalledTimes(1)
+      settle(outcome)
+      await flush()
+      await flush()
+      expect(send.mock.calls.map(([input]) => input.sessionId)).toEqual(['session-1', 'session-1'])
+      expect(send.mock.calls[1]![0].operationId).not.toBe(send.mock.calls[0]![0].operationId)
       expect(pointed.has('m1')).toBe(true)
     }
   )

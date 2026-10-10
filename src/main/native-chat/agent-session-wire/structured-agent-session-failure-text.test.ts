@@ -21,6 +21,7 @@ import {
   structuredAgentSessionStartFailure,
   withObservedProviderExit
 } from './structured-agent-session-failure-text'
+import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 
 /** What Orca's own error text looks like: a code, a marker, a uuid, a path, an exception. */
 const ORCA_INTERNAL =
@@ -106,10 +107,62 @@ describe('structuredAgentSessionStartFailure', () => {
     expect(structuredAgentSessionStartFailure({ error: refusal }, { agentName: 'Claude' })).toEqual(
       {
         reason:
-          "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings.",
+          "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
         rejection: { kind: 'notSignedIn' }
       }
     )
+  })
+
+  it('keeps a person-facing ACP diagnostic through both typed startup paths', () => {
+    const detail = providerDiagnostic(
+      'Grok needs a configured API key. Literal {{agent}}.',
+      'person'
+    )
+    const error = withProviderDiagnostic(
+      new AgentSessionAcquisitionRefusal('signed out', 'notSignedIn'),
+      detail
+    )
+    const direct = structuredAgentSessionStartFailure({ error }, { agentName: 'Grok' })
+    const refused = structuredAgentSessionStartFailure(
+      {
+        refusal: refuse('agent_session_operation_invalid', { reason: 'notSignedIn' }, 'log'),
+        diagnostic: detail
+      },
+      { agentName: 'Grok' }
+    )
+    expect(direct.rejection).toEqual({ kind: 'notSignedIn', detail })
+    expect(refused).toEqual(direct)
+    expect(structuredAgentSessionStartFailureRow('generation', direct)).toMatchObject({
+      body: { kind: 'status', failure: { kind: 'notSignedIn', detail }, text: direct.reason }
+    })
+    expect(direct.reason).toContain('Grok needs a configured API key. Literal {{agent}}.')
+  })
+
+  it.each(['Grok', 'Pi', 'OMP', 'OpenCode'])(
+    'never asks to resend a message when %s fails before one was submitted',
+    (agentName) => {
+      const refusal = refuse('agent_session_operation_invalid', { reason: 'notSignedIn' }, 'log')
+      const startup = structuredAgentSessionStartFailure(
+        { refusal, newSession: true },
+        { agentName }
+      )
+      expect(startup.reason).toContain(`Sign in to ${agentName}`)
+      expect(startup.reason).not.toContain('send your message again')
+      const rejected = structuredAgentSessionStartFailure({ refusal }, { agentName })
+      expect(rejected.reason).toContain('Then send your message again.')
+    }
+  )
+
+  it('keeps direct-create managed account guidance free of resend instructions', () => {
+    const refusal = refuse(
+      'agent_session_operation_invalid',
+      { reason: 'managedAccountUnsupported' },
+      'log'
+    )
+    expect(
+      structuredAgentSessionStartFailure({ refusal, newSession: true }, { agentName: 'Claude' })
+        .reason
+    ).not.toContain('send your message again')
   })
 
   it.each(['managed', 'system'] as const)(

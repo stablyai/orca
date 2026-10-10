@@ -19,7 +19,14 @@ export type RestoredEditorWorkspaceRuntimeOwner = {
  */
 export function findRestoredEditorWorkspaceRuntimeOwner(
   state: AppState,
-  file: OpenFile,
+  file: Pick<
+    OpenFile,
+    | 'worktreeId'
+    | 'filePath'
+    | 'externalSshTargetId'
+    | 'operationProvenance'
+    | 'runtimeEnvironmentId'
+  >,
   worktreeId: string | undefined
 ): RestoredEditorWorkspaceRuntimeOwner | null {
   if (!worktreeId || file.worktreeId !== worktreeId || hasOpenFileExecutionHostEvidence(file)) {

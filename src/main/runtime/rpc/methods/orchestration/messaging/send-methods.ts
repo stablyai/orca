@@ -32,6 +32,7 @@ import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
+    permission: 'workspace',
     params: SendParams,
     handler: async (
       params,

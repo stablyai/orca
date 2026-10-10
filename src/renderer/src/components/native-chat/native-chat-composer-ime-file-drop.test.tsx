@@ -128,7 +128,7 @@ function ComposerProbe({
     setDraft,
     setNotice
   })
-  useNativeChatFileDrops({
+  const { pickAttachments } = useNativeChatFileDrops({
     paneKey: `pane:${workspaceId}`,
     draftScopeKey: `pane:${workspaceId}`,
     targetPtyId: 'pty-1',
@@ -188,6 +188,7 @@ function ComposerProbe({
           sessionOptionsSnapshot={[]}
         />
       </div>
+      <button onClick={pickAttachments}>Attach</button>
       <output data-testid="draft">{draft}</output>
     </div>
   )
@@ -202,7 +203,8 @@ beforeEach(() => {
       getPathForFile: (file: File) => `/drop/${file.name}`,
       prepareDroppedPaths: prepare,
       stat: vi.fn(async () => ({ isDirectory: false }))
-    }
+    },
+    shell: { pickAttachments: vi.fn(async () => ['/picked/browser issues.md']) }
   })
 })
 afterEach(() => {
@@ -258,4 +260,23 @@ describe('OS file drops through the real composing chat field', () => {
       expect(promptValue(editor).match(/@\/drop\/notes.txt/g)).toHaveLength(1)
     }
   )
+
+  it('shows a dropped file and a file picked with the attach button as the same filename pill', async () => {
+    render(
+      <NativeChatPaneFileDropSurface className="chat">
+        <ComposerProbe />
+      </NativeChatPaneFileDropSurface>
+    )
+    const editor = screen.getByRole('textbox')
+    await osDrop(editor)
+    await act(async () => fireEvent.click(screen.getByText('Attach')))
+    expect(
+      [...editor.querySelectorAll('[data-native-chat-file-reference]')].map(
+        (pill) => pill.textContent
+      )
+    ).toEqual(['notes.txt', 'browser issues.md'])
+    expect(screen.getByTestId('draft').textContent).toBe(
+      '@/drop/notes.txt @"/picked/browser issues.md" '
+    )
+  })
 })

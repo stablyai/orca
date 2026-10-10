@@ -46,7 +46,7 @@ export type ClaudeAccountRuntime = Pick<
 > & {
   router: Pick<
     ClaudeRuntimeAuthService['router'],
-    'accountHome' | 'userConfigDir' | 'copiedLoginIntoSystemDefault'
+    'accountHome' | 'userConfigDir' | 'copiedLoginIntoSystemDefault' | 'coveredBySystemDefault'
   >
 }
 
@@ -107,13 +107,17 @@ export class ClaudeAccountSelection {
     const login = readClaudeFolderLogin(
       claudeStateFile(this.runtimeAuth.router.accountHome(account.id))
     )
-    return login
-      ? {
-          ...summary,
-          email: login.email,
-          organizationUuid: login.organizationUuid,
-          organizationName: login.organizationName
-        }
+    if (login) {
+      return {
+        ...summary,
+        email: login.email,
+        organizationUuid: login.organizationUuid,
+        organizationName: login.organizationName
+      }
+    }
+    // Why: an account System default is signed in to runs there until it signs in on its own.
+    return this.runtimeAuth.router.coveredBySystemDefault(account.id)
+      ? summary
       : { ...summary, needsSignIn: true }
   }
 

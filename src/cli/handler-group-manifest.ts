@@ -13,6 +13,11 @@ export type HandlerGroup = {
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'reference',
+    keys: ['reference list', 'reference add', 'reference remove', 'reference find'],
+    load: async () => (await import('./handlers/reference.js')).REFERENCE_HANDLERS
+  },
+  {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
@@ -225,7 +230,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'environment rollback',
       'environment recover',
       'environment stop',
-      'environment cancel-stop'
+      'environment cancel-stop',
+      'environment forget'
     ],
     load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },

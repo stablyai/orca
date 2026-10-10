@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { RELAY_RUNTIME_SELF_TEST_PREFIX } from '../../shared/relay-runtime-self-test-report'
 import type { SshConnection } from './ssh-connection'
@@ -46,6 +46,13 @@ function report(nonce: string, fields: Record<string, unknown>): string {
     ...fields
   })}`
 }
+
+const NIXOS_STUB_LD_OUTPUT = [
+  'Could not start dynamically linked executable: /home/u/.orca-remote/runtimes/node-x/bin/node',
+  'NixOS cannot run dynamically linked executables intended for generic',
+  'linux environments out of the box. For more information, see:',
+  'https://nix.dev/permalink/stub-ld'
+].join('\n')
 
 describe('pinned runtime refusal classification', () => {
   it.each([
@@ -108,6 +115,13 @@ describe('pinned runtime refusal classification', () => {
 
   it('leaves an unrecognized failure unclassified', () => {
     expect(classifyPinnedRuntimeFailure(1, 'TypeError: something else')).toBeNull()
+  })
+
+  it("classifies NixOS's stub loader refusing a generic Linux binary as wrong_libc", () => {
+    expect(classifyPinnedRuntimeFailure(127, NIXOS_STUB_LD_OUTPUT)).toBe('wrong_libc')
+    // Only the loader's own exit; an unrelated 127 stays unclassified.
+    expect(classifyPinnedRuntimeFailure(1, NIXOS_STUB_LD_OUTPUT)).toBeNull()
+    expect(classifyPinnedRuntimeFailure(127, 'relay.js exited')).toBeNull()
   })
 })
 

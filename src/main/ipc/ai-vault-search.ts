@@ -22,7 +22,7 @@ import type {
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
+  parseRoutableExecutionHostId,
   toSshExecutionHostId,
   type ParsedExecutionHost
 } from '../../shared/execution-host'
@@ -127,7 +127,7 @@ function requestedSearchScope(raw: unknown): ParsedExecutionHost {
   if (value === undefined) {
     return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
   }
-  const parsed = parseExecutionHostId(value)
+  const parsed = parseRoutableExecutionHostId(value)
   if (!parsed) {
     throw new Error(UNROUTABLE_HOST_MESSAGE)
   }

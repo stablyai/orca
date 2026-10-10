@@ -3,6 +3,7 @@ import type {
   CheckRunDetailsTabPatch,
   OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
+import type { OpenChatVisualTabState } from '@/components/native-chat/native-chat-visual-tab'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -163,6 +164,7 @@ export type EditorFilesSlice = {
     state: CheckRunDetailsTabPatch
   ) => void
   reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
+  openChatVisualTab: (worktreeId: string, visual: OpenChatVisualTabState) => void
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,

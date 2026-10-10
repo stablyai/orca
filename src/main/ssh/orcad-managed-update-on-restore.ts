@@ -53,6 +53,49 @@ export function updateManagedOrcadOnRestore(
   )
 }
 
+const redeploying = new Map<string, Promise<boolean>>()
+
+/**
+ * Redeploys a server another desktop stopped while this session uses it, so the call that found it
+ * stopped can still reach it. Not limited to once per session: a stop can come at any time.
+ * Resolves true when a server was activated; concurrent callers share one attempt.
+ */
+export function redeployStoppedManagedOrcad(
+  environmentId: string,
+  createDeps: () => ManagedOrcadRestoreUpdateDeps
+): Promise<boolean> {
+  let attempt = redeploying.get(environmentId)
+  if (!attempt) {
+    attempt = runRedeploy(environmentId, createDeps).finally(() =>
+      redeploying.delete(environmentId)
+    )
+    redeploying.set(environmentId, attempt)
+  }
+  return attempt
+}
+
+async function runRedeploy(
+  environmentId: string,
+  createDeps: () => ManagedOrcadRestoreUpdateDeps
+): Promise<boolean> {
+  try {
+    const deps = createDeps()
+    const target = deps.target(environmentId)
+    if (!target) {
+      return false
+    }
+    const { note, reason } = await checkManagedServerUpdate(target, environmentId, deps, () =>
+      deps.publish(target, environmentId, 'updating')
+    )
+    deps.publish(target, environmentId, 'settled', note)
+    return reason === 'updated'
+  } catch (error) {
+    console.warn('[ssh] Could not redeploy a stopped managed Orca server:', error)
+    return false
+  }
+}
+
 export function resetManagedOrcadRestoreUpdatesForTests(): void {
   checked.clear()
+  redeploying.clear()
 }

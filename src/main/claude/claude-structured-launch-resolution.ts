@@ -1,3 +1,4 @@
+import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type {
@@ -5,19 +6,11 @@ import type {
   PermissionMode
 } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleRoot
-} from '../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
-import {
-  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  hasClaudeAuthEnvConflict
-} from '../claude-accounts/environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeChildEnv,
   claudeProbeEnv,
@@ -122,12 +115,8 @@ export type ClaudeStructuredLaunchResolverDeps = {
     | undefined
   /** The env the child inherits before auth stripping; absent inherits Orca's own process env. */
   resolveInheritedEnv?: () => Promise<Record<string, string>>
-  /**
-   * Required, and deliberately not defaulted. `stripAuthEnv` used to be a literal
-   * `true` here, so a missing dependency could not under-strip. Now it can, and the
-   * failure is silent — so every caller states the account's policy rather than
-   * inherit a guess. Build it with claudeStructuredAuthPolicyForSettings.
-   */
+  /** Required, so every caller states which login a failed sign-in names rather than inherit a
+   *  guess. Build it with claudeStructuredAuthPolicyForSettings. */
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting, re-read per acquisition. Absent means prompting. */
   resolvePermissionMode?: () => Promise<PermissionMode> | PermissionMode
@@ -166,17 +155,11 @@ export async function resolveClaudeStructuredInvocation(
 ): Promise<ClaudeStructuredInvocation> {
   const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
   const auth = await deps.resolveAuthPolicy()
-  // Under a managed account the pinned credential is the only auth this launch may
-  // use, so an explicit override is refused rather than silently beating the pin.
-  if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(sources.overlay)) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE), {
-      reason: 'managedAccountEnvOverride'
-    })
-  }
+  // Why never strip: a shell proxy's key must travel with its ANTHROPIC_BASE_URL, on every account.
   return {
     command: sources.command,
-    env: claudeChildEnv(sources, auth.stripAuthEnv, decorateEnv),
-    account: auth.stripAuthEnv ? 'managed' : 'system'
+    env: claudeChildEnv(sources, decorateEnv),
+    account: auth.account
   }
 }
 
@@ -206,7 +189,8 @@ export function createClaudeStructuredLaunchResolver(
     }
     const router = getClaudeProfileRouter()
     // A Claude record's chain holds only Claude handles; the attach admission refuses anything else.
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle ?? null
+    const active = activeProviderContext(record)
+    const head = active.head?.handle ?? null
     if (
       head &&
       (!identity.providerHandle ||
@@ -217,7 +201,10 @@ export function createClaudeStructuredLaunchResolver(
     }
     const providerSessionId = head
       ? head.nativeId
-      : claudeSessionIdForOrcaSession(identity.sessionId)
+      : claudeSessionIdForOrcaSession(
+          identity.sessionId,
+          active.pendingClear ? record.providerContextBoundary?.operationId : undefined
+        )
     const continuesChain = head !== null
     const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
     const sources = await resolveClaudeChildEnvSources(deps)
@@ -234,6 +221,21 @@ export function createClaudeStructuredLaunchResolver(
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )
+    // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
+    // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
+    const leafUuid = head ? claudeProviderHandleLeafUuid(head) : null
+    const resumes = async (claudeConfigDir: string): Promise<boolean> =>
+      (head !== null || active.pendingClear) &&
+      (await claudeLaunchResumesTranscript({
+        router,
+        leafUuid,
+        providerSessionId,
+        claudeConfigDir,
+        hasTranscript: deps.hasTranscript
+      }))
+    // Why: without a router the home is fixed, so check it before the recheck that must stay last.
+    const resumedWithoutRouter = router ? undefined : await resumes(accountHome.path)
+    // Last: it rechecks the account switch, which may have begun during any await above.
     const { command, env, account } = await resolveClaudeStructuredInvocation(
       deps,
       (base) =>
@@ -252,18 +254,7 @@ export function createClaudeStructuredLaunchResolver(
       sources
     )
     const launchHome = await resolveClaudeStructuredLaunchHome(router, env, accountHome.path)
-    // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
-    // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
-    const leafUuid = head ? claudeProviderHandleLeafUuid(head) : null
-    const resumesTranscript =
-      head !== null &&
-      (await claudeLaunchResumesTranscript({
-        router,
-        leafUuid,
-        providerSessionId,
-        claudeConfigDir: launchHome,
-        hasTranscript: deps.hasTranscript
-      }))
+    const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     return {
       pathToClaudeCodeExecutable: command,
       account,

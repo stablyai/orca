@@ -1,7 +1,8 @@
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
@@ -71,6 +72,8 @@ export type ClaudeStreamJsonConnectionHandlers = {
   /** The root process exited, reported once. `expected`: a close had begun, so it is that close's
    *  end, even one that ran out of its own escalation first and came back unproven. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
+  /** Any stdout or stderr chunk from the child. */
+  onOutput?: () => void
 }
 
 /**
@@ -123,11 +126,11 @@ function exitError(stderrTail: string, status: ExitStatus | null, cause?: Error)
 export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
-  spawnImpl: typeof spawnProcess = spawnProcess,
+  spawnImpl: PipedProcessSpawner = spawnProcess,
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl)
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, handlers.onOutput)
   const inbox = createClaudeUserMessageQueue()
   const session = (queryImpl ?? query)({
     prompt: inbox.messages,

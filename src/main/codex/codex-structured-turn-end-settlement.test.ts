@@ -409,3 +409,25 @@ describe('a send bound to a turn', () => {
     expect(echoes.size).toBe(1)
   })
 })
+
+it('settles the first un-echoed unauthorized turn as signed out, with Codex detail', async () => {
+  const rig = await turnEndRig()
+  await rig.sendAndOpen('auth-first')
+  const error = { codexErrorInfo: 'unauthorized', message: 'The authentication token has expired.' }
+  const notify = rig.codex.connections[0]?.handlers.onNotification
+  notify?.('error', { threadId: CODEX_TEST_THREAD_ID, turnId: 'turn-1', willRetry: false, error })
+  notify?.('turn/completed', {
+    threadId: CODEX_TEST_THREAD_ID,
+    turn: { id: 'turn-1', status: 'failed', error }
+  })
+  expect(rig.settlements).toEqual([
+    expect.objectContaining({
+      clientMessageId: 'auth-first',
+      state: 'rejected',
+      rejection: { kind: 'notSignedIn', detail: { text: error.message, audience: 'person' } }
+    })
+  ])
+  expect(
+    rig.settlements[0] && 'reason' in rig.settlements[0] ? rig.settlements[0].reason : ''
+  ).toContain('codex login')
+})

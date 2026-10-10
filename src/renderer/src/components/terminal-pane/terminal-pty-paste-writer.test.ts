@@ -15,6 +15,22 @@ describe('terminal PTY paste writer', () => {
     expect(sendInput).not.toHaveBeenCalled()
   })
 
+  it('lets the caller withdraw an acknowledged write it stopped waiting for', async () => {
+    const sendInputAccepted = vi.fn().mockResolvedValue(true)
+    const controller = new AbortController()
+
+    await writeTerminalPastePtyInput(
+      { sendInput: vi.fn(), sendInputAccepted },
+      'payload',
+      'driving',
+      controller.signal
+    )
+
+    expect(sendInputAccepted).toHaveBeenCalledWith('payload', 'driving', {
+      signal: controller.signal
+    })
+  })
+
   it('falls back to queued PTY writes when acknowledged writes are unavailable', () => {
     const sendInput = vi.fn().mockReturnValue(true)
 

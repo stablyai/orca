@@ -14,6 +14,26 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
+  it('keeps the typed auth fact beside guidance until the transcript can explain it', () => {
+    const result = structuredSendResultFixture('rejected', 'Sign in to Grok with `grok login`.')
+    if (!('submission' in result)) {
+      throw new Error('expected submission')
+    }
+    const fact = {
+      kind: 'notSignedIn' as const,
+      detail: { text: 'Key expired.', audience: 'person' as const }
+    }
+    result.submission.rejection = fact
+    expect(mobileStructuredSendDelivery({ status: 'accepted', value: result })).toEqual({
+      outcome: 'rejected',
+      error: 'Sign in to Grok with `grok login`.',
+      failure: fact
+    })
+    result.submission.rejection = { kind: 'providerRejected' }
+    expect(mobileStructuredSendDelivery({ status: 'accepted', value: result }).error).toContain(
+      'Sign in'
+    )
+  })
   it('reports transport and host uncertainty on this send', () => {
     expect(mobileStructuredSendDelivery({ status: 'unknown' })).toEqual({
       outcome: 'unknown',

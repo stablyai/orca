@@ -481,6 +481,20 @@ describe('getWorkspaceFileBrowserOpenTarget', () => {
       message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
     })
   })
+
+  it('refuses paired files even when their connection ID is null', () => {
+    mocks.environmentId = 'managed-host'
+    expect(
+      getWorkspaceFileBrowserOpenTarget({
+        filePath: '/srv/repo/report.html',
+        worktreeId: 'wt-1'
+      })
+    ).toEqual({
+      status: 'unsupported',
+      reason: 'remote-worktree',
+      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
+    })
+  })
 })
 
 // Why the reuse case is pinned here too: the address bar's way into a document must obey the same

@@ -1,10 +1,11 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getWorktreeIdFromVisitKey, getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
-import { findRepoForHost, repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -31,8 +32,17 @@ export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: str
   return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
 }
 
+type HostScopedWorktreeRef = { id: string; hostId?: string }
+
+type RepoWorktreeCatalog = {
+  worktreesByRepo: Readonly<Record<string, readonly HostScopedWorktreeRef[] | undefined>>
+  detectedWorktreesByRepo: Readonly<
+    Record<string, { worktrees: readonly HostScopedWorktreeRef[] } | undefined>
+  >
+}
+
 export function getKnownRepoWorktreeIds(
-  state: AppState,
+  state: RepoWorktreeCatalog,
   projectId: string,
   hostId?: string
 ): string[] {
@@ -50,6 +60,26 @@ export function getKnownRepoWorktreeIds(
   return [...ids]
 }
 
+/** Terminal tabs that removing this project's host row will close. */
+export function countOpenRepoTerminalTabs(
+  state: RepoWorktreeCatalog & {
+    tabsByWorktree: Readonly<Record<string, readonly { id: string }[] | undefined>>
+    ptyIdsByTabId: Readonly<Record<string, readonly string[] | undefined>>
+  },
+  projectId: string,
+  hostId: string
+): number {
+  let count = 0
+  for (const worktreeId of getKnownRepoWorktreeIds(state, projectId, hostId)) {
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      if ((state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0) {
+        count += 1
+      }
+    }
+  }
+  return count
+}
+
 export function createRepoRemovalActions(
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
@@ -57,11 +87,10 @@ export function createRepoRemovalActions(
   return {
     removeProject: async (projectId, options) => {
       try {
-        // Why: pass an explicit hostId so a duplicate id across hosts resolves to the intended row, not the focused-host fallback.
-        const ownerRepo = findRepoForHost(get().repos, projectId, {
-          settings: get().settings,
-          hostId: options?.hostId
-        })
+        // Why: exact host match only; the unique-candidate/focused fallbacks could pick another host's row (#13071).
+        const ownerRepo = get().repos.find((repo) =>
+          repoMatchesHostIdentity(repo, projectId, options.hostId)
+        )
         if (!ownerRepo) {
           return
         }
@@ -79,14 +108,8 @@ export function createRepoRemovalActions(
             )
           }
         }
-        // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
-        const target = getActiveRuntimeTarget(
-          settingsForRepoOwner(get(), projectId, options?.hostId)
-        )
-        // Why: repos:remove is id-only and would delete every host's row; scope local removal to the owning host so cross-host duplicates keep other rows.
-        const idExistsOnOtherHost = get().repos.some(
-          (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
-        )
+        // Why: derive the target from the owner row's host so an SSH host removal never routes repo.rm to the focused runtime.
+        const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, ownerHostId))
         // Why before the host call: its announcement can start a listing refresh that drops these tabs.
         const chatDraftKeys = captureWorkspaceChatDraftKeys(
           get(),
@@ -96,10 +119,9 @@ export function createRepoRemovalActions(
           }))
         )
         try {
+          // Why: always host-scoped; this catalog may be stale and miss a same-id row on another host (#13071).
           await (target.kind === 'local'
-            ? idExistsOnOtherHost
-              ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
-              : window.api.repos.remove({ repoId: projectId })
+            ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
             : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
         } catch (err) {
           // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
@@ -159,7 +181,7 @@ export function createRepoRemovalActions(
           for (const tab of tabs) {
             killedTabIds.add(tab.id)
             for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-              if (!ptyId.startsWith('remote:')) {
+              if (!isRemoteRuntimePtyId(ptyId)) {
                 window.api.pty.kill(ptyId)
               }
             }
@@ -285,7 +307,7 @@ export function createRepoRemovalActions(
       } catch (err) {
         console.error('Failed to remove repo:', err)
         // Why: bulk and background callers aggregate their own failures, so only opted-in single-project entry points toast (#11994).
-        if (options?.errorFeedback === 'toast') {
+        if (options.errorFeedback === 'toast') {
           toast.error(
             translate('auto.store.slices.repos.removeProjectFailed', 'Failed to remove project'),
             {

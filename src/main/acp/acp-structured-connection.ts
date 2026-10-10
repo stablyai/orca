@@ -14,6 +14,7 @@ export type AcpStructuredConnection = Pick<
   | 'cancel'
   | 'setConfigOption'
   | 'setModel'
+  | 'requestExtension'
   | 'subscribe'
   | 'closed'
   | 'spawned'

@@ -10,17 +10,13 @@ import type {
 } from './use-structured-agent-session-mutate'
 import { holdStructuredAgentSessionSends } from './structured-agent-session-pending-sends'
 
-/**
- * Sends a conversation command. A /clear keeps the chat's sends out while it runs, as its host
- * refuses them, so text typed meanwhile stays in the box. Once it moves the chat to a new
- * conversation, the old one, which its host also refuses, takes nothing until this view leaves it.
- * Either way the hold ends by the command's deadline: the local call has none of its own.
- */
+/** Holds sends during clear; an older host's replacement keeps the hold until the view leaves. */
 export function useStructuredAgentSessionCommandWrite(
   sessionId: string,
   write: StructuredAgentSessionWrite
 ): (
-  command: AgentSessionConversationCommand
+  command: AgentSessionConversationCommand,
+  delivery?: 'queue-if-active'
 ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>> {
   // Null once the view left or unmounted, so a reply that lands later releases its hold.
   const shown = useRef<string | null>(sessionId)
@@ -34,12 +30,12 @@ export function useStructuredAgentSessionCommandWrite(
     }
   }, [sessionId])
   return useCallback(
-    async (command) => {
+    async (command, delivery) => {
       const send = () =>
         write<AgentSessionConversationCommandResult>(
           'agentSession.conversationCommand',
           'agentSession.conversationCommand',
-          { command }
+          { command, ...(delivery ? { delivery } : {}) }
         )
       if (command !== 'clear') {
         return send()

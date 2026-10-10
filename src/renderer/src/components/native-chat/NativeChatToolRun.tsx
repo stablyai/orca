@@ -153,8 +153,8 @@ export function NativeChatToolRun({
   } = useMemo(() => nativeChatAskRunBlocks(blocks), [blocks])
   const hasAskCall = asks.length > 0
   const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
-  const showsHeader = !hasAskCall || countToolCalls(headerBlocks) > 0
-  const callCount = countToolCalls(headerBlocks) || headerBlocks.length
+  const callCount = countToolCalls(headerBlocks)
+  const showsHeader = !hasAskCall || callCount > 0
   const askIsActive = selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
   // Live is the turn's state, not a call's. Deriving it from "some call is
   // running" flipped the header to settled and back around every call, and a
@@ -194,11 +194,13 @@ export function NativeChatToolRun({
   // to a check would read as a change of identity.
   const settledHeaderIcon = nativeChatToolRunIconName(headerBlocks.filter(isToolCallBlock))
   const fallbackLabel =
-    callCount === 1
-      ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
-      : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
-          value0: callCount
-        })
+    callCount === 0
+      ? translate('components.native-chat.tool.result', 'Result')
+      : callCount === 1
+        ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
+        : translate('components.native-chat.tool.countN', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countN, {
+            value0: callCount
+          })
 
   // A roster with no tool calls beside it is the whole run: rendering the tool
   // header too would announce "1 tool call" for activity that has none.

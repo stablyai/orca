@@ -34,7 +34,6 @@ export type RepositoryApi = {
     kind?: 'git' | 'folder'
     displayName?: string
   }) => Promise<{ repo: Repo } | { error: string }>
-  remove: (args: { repoId: string }) => Promise<void>
   // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
   removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
   reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>

@@ -13,6 +13,7 @@ import { OptionsParams } from './structured-agent-session-schemas'
 export const STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS = [
   defineMethod({
     name: 'agentSession.conversationOutline',
+    permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) =>
       readAgentSessionConversationOutline(

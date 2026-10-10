@@ -16,6 +16,7 @@ import {
 } from './acp-structured-adapter.test-support'
 import { GrokFixtureReplay } from './acp-structured-fixture-replay.test-support'
 import { readAcpFixture } from './acp-timeline-fixture.test-support'
+import { SessionNotificationSchema } from './generated/acp-protocol.generated'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -67,6 +68,67 @@ async function allowOnce(rig: AcpAdapterRig, replay: GrokFixtureReplay) {
 }
 
 describe('OMP recordings through the adapter', () => {
+  it.each(['omp-v17-reply-without-thought', 'omp-v17-reply-after-thought'])(
+    'keeps both ordinary answers from %s',
+    async (name) => {
+      const frames = await readAcpFixture(name)
+      const replay = new GrokFixtureReplay(frames)
+      const rig = await openAcpAdapterRig({
+        spec: acpLaunchSpecFor('omp')!,
+        script: (scripted) => replay.attach(scripted)
+      })
+      await rig.acquire()
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId: 'send-1',
+        body: ask,
+        fence: 1
+      })
+      await waitFor(async () => expect(await turns(rig)).toHaveLength(1))
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId: 'send-2',
+        body: ask,
+        fence: 1
+      })
+      await waitFor(() => expect(replay.awaiting).toBeNull())
+      await waitFor(async () => expect(await turns(rig)).toHaveLength(2))
+      const recordedAnswers = frames
+        .flatMap((frame) => {
+          const parsed = SessionNotificationSchema.safeParse(frame.message.params)
+          const update = parsed.data?.update
+          return update?.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'
+            ? [update.content.text]
+            : []
+        })
+        .join('')
+      const rows = await rig.rig.rows()
+      const answers = rows
+        .flatMap((row) =>
+          row.body.kind === 'message' && row.body.role === 'assistant'
+            ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            : []
+        )
+        .join('')
+      expect(await turns(rig)).toMatchObject([
+        { state: 'completed', outcome: 'success' },
+        { state: 'completed', outcome: 'success' }
+      ])
+      expect(answers).toBe(recordedAnswers)
+      if (name === 'omp-v17-reply-after-thought') {
+        expect(
+          rows.filter((row) => row.body.kind === 'message' && row.body.role === 'reasoning')
+        ).toHaveLength(1)
+      }
+      await rig.adapter.closeSession(SESSION)
+      const savedMessages = (await rig.rig.rows()).filter((row) => row.body.kind === 'message')
+      const reopened = await rig.rig.reopenJournal()
+      expect(reopened.snapshot().items.filter((row) => row.body.kind === 'message')).toEqual(
+        savedMessages
+      )
+    }
+  )
+
   it("a failed command's row shows its output and exit code, not the command again", async () => {
     const { rig, replay } = await replaying('omp-v17-shell-exit-3')
     await allowOnce(rig, replay)
@@ -82,17 +144,19 @@ describe('OMP recordings through the adapter', () => {
     })
   })
 
-  it("a successful command's row shows its output", async () => {
+  it("a successful command's row shows its output and exit code 0", async () => {
     const { rig, replay } = await replaying('omp-v17-shell-ok')
     await allowOnce(rig, replay)
     await waitFor(() => expect(replay.awaiting).toBeNull())
     await waitFor(async () =>
       expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
     )
-    const tool = await toolRow(rig)
-    expect(tool).toMatchObject({ state: 'completed', output: { head: 'ok', truncated: false } })
-    // OMP reports an exit code only when it is not zero.
-    expect(tool).not.toHaveProperty('exitCode')
+    // OMP reports an exit code only when it is not zero; a completed foreground command exited 0.
+    expect(await toolRow(rig)).toMatchObject({
+      state: 'completed',
+      exitCode: 0,
+      output: { head: 'ok', truncated: false }
+    })
   })
 
   it('Stop during a running command ends the turn and leaves the row without the command as output', async () => {

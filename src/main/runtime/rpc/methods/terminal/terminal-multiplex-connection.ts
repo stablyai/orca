@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
 import type {
+  TerminalInputAckKind,
   TerminalStreamFrame,
   TerminalStreamOpcode
 } from '../../../../../shared/terminal-stream-protocol'
@@ -50,6 +51,12 @@ export type TerminalMultiplexFrameDelivery = {
     stream: TerminalMultiplexStream,
     outcome: 'delivered' | 'rejected' | 'failed'
   ) => void
+  /** Cumulative ack of sequenced input through `appliedSeq`; `resend` also asks for everything after it. */
+  sendInputAck: (
+    stream: TerminalMultiplexStream,
+    appliedSeq: number,
+    kind: TerminalInputAckKind
+  ) => void
   sendResizedFrame: (
     stream: TerminalMultiplexStream,
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
@@ -95,17 +102,16 @@ export type TerminalMultiplexSubscribeFrame = {
   handleSubscribeFrame: (payload: Uint8Array<ArrayBufferLike>) => Promise<void>
 }
 
-export type TerminalMultiplexFrameDeliveryStage = TerminalMultiplexConnectionBase &
-  TerminalMultiplexFrameDelivery
-
-export type TerminalMultiplexFlowControlStage = TerminalMultiplexFrameDeliveryStage &
-  TerminalMultiplexFlowControl
-
-export type TerminalMultiplexCleanupStage = TerminalMultiplexFlowControlStage &
-  TerminalMultiplexCleanup
-
-export type TerminalMultiplexSlotFramesStage = TerminalMultiplexCleanupStage &
-  TerminalMultiplexSlotFrames
-
-export type TerminalMultiplexConnection = TerminalMultiplexSlotFramesStage &
+export type TerminalMultiplexConnection = TerminalMultiplexConnectionBase &
+  TerminalMultiplexFrameDelivery &
+  TerminalMultiplexFlowControl &
+  TerminalMultiplexCleanup &
+  TerminalMultiplexSlotFrames &
   TerminalMultiplexSubscribeFrame
+
+export function isMultiplexStreamAttached(
+  state: Pick<TerminalMultiplexConnection, 'closed' | 'streams'>,
+  stream: TerminalMultiplexStream
+): boolean {
+  return !state.closed && state.streams.get(stream.streamId) === stream
+}

@@ -14,7 +14,6 @@ import {
   resolveDismissedOnboardingFolderAgentLaunch,
   revealOnboardingFolderWithAgentLaunch
 } from '@/lib/onboarding-folder-agent-launch'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -92,8 +91,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               store: useAppStore.getState(),
               onboarding,
               hasExistingProject: hadProjectBeforeAdd,
-              executionHostId: ownerOptions.executionHostId ?? connectionId,
-              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+              executionHostId: ownerOptions.executionHostId ?? connectionId
             })
             await revealOnboardingFolderWithAgentLaunch({
               worktreeId: folderWorktree.id,

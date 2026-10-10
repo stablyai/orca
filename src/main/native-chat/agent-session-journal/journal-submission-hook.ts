@@ -18,12 +18,16 @@ export type JournalAttachmentClaim = (
 export function journalSubmissionHook(
   queuedMessages: JournalQueuedMessages,
   claimAttachments: JournalAttachmentClaim,
-  input: Pick<JournalSubmissionInput, 'clientMessageId' | 'body' | 'origin'>,
+  input: Pick<JournalSubmissionInput, 'clientMessageId' | 'body' | 'origin' | 'payloadFingerprint'>,
   consume: JournalSubmissionConsume | undefined
 ): JournalRowTransactionHook {
   return (db) => {
     if (consume) {
-      queuedMessages.consumeInTransaction(db, { ...consume, consumedAs: input.clientMessageId })
+      queuedMessages.consumeInTransaction(db, {
+        ...consume,
+        consumedAs: input.clientMessageId,
+        fingerprint: input.payloadFingerprint
+      })
     }
     claimAttachments(db, input.body, input.origin === 'client' && !consume)
   }

@@ -69,7 +69,9 @@ function resetRuntimeTestMocks(): void {
   // Why: constructing the browser commands is what pulls the Chromium cluster in, so
   // production installs this at the Electron entry. A Node host installs none and the
   // browser RPCs reject rather than silently succeeding.
-  setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+  setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+    clientHosting: true
+  })
   setRuntimeBrowserUnavailableCause(null)
   setRuntimeTerminalUnavailableCause(null)
   // Why: the runtime's notification, window lookup and tab-create-reply channel are

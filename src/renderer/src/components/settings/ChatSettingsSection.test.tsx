@@ -34,7 +34,7 @@ function renderChat(
   showDesktopOnlySettings = true,
   hasUnsavedChatPromptChanges = false
 ) {
-  const settings = { ...getDefaultSettings('/tmp'), experimentalStructuredNativeChat: enabled }
+  const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
   state.settings = settings
   const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
     if (state.settings) {
@@ -73,7 +73,7 @@ describe('Chat settings page', () => {
       isMac: false,
       isWindows: false,
       isWebClient: true,
-      experimentalStructuredNativeChat: true,
+      nativeChatEnabled: true,
       repos: []
     })
     const results = buildCmdJSettingsResults(sections).filter((entry) => entry.sectionId === 'chat')
@@ -141,7 +141,7 @@ describe('Chat settings page', () => {
     rerender(
       <ActiveSettingsSectionProvider value="chat">
         <ChatSettingsSection
-          settings={{ ...getDefaultSettings('/tmp'), experimentalStructuredNativeChat: false }}
+          settings={{ ...getDefaultSettings('/tmp'), experimentalNativeChat: false }}
           updateSettings={vi.fn()}
           writeSourceControlAiSettings={async () => {}}
           searchEntries={[]}
@@ -166,7 +166,7 @@ describe('Chat settings page', () => {
       isMac: true,
       isWindows: false,
       isWebClient: false,
-      experimentalStructuredNativeChat: true,
+      nativeChatEnabled: true,
       repos: []
     })
     const results = buildCmdJSettingsResults(sections)
@@ -191,7 +191,7 @@ describe('Chat settings page', () => {
         isMac: false,
         isWindows: true,
         isWebClient: false,
-        experimentalStructuredNativeChat: true,
+        nativeChatEnabled: true,
         repos: []
       })
       const result = buildCmdJSettingsResults(sections).find(
@@ -231,7 +231,7 @@ describe('Chat settings page', () => {
       isMac: true,
       isWindows: false,
       isWebClient: false,
-      experimentalStructuredNativeChat: true,
+      nativeChatEnabled: true,
       repos: []
     })
     const result = buildCmdJSettingsResults(sections).find(
@@ -264,7 +264,7 @@ describe('Chat settings page', () => {
       isMac: true,
       isWindows: false,
       isWebClient: false,
-      experimentalStructuredNativeChat: true,
+      nativeChatEnabled: true,
       repos: []
     })
     const result = buildCmdJSettingsResults(sections).find(

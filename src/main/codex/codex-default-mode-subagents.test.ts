@@ -503,7 +503,10 @@ describe('a helper whose spawn was never seen', () => {
       turn('turn/started', HELPER, HELPER_TURN),
       helperShell('item/started')
     )
-    expect(run.strip()).toEqual([expect.objectContaining({ kind: 'command' })])
+    expect(run.strip()).toEqual([])
+    expect(run.commands()).toEqual([
+      expect.objectContaining({ membership: 'live', residency: 'foreground' })
+    ])
 
     run.send(sendInput)
     // No spawn named it, so it reads as any unnamed subagent does.

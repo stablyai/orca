@@ -376,4 +376,16 @@ describe('createLinearSlice caching', () => {
     ).resolves.toMatchObject({ title: 'Correct source' })
     expect(linearGetIssue).toHaveBeenCalledWith(sourceContext, 'same-id', 'source-workspace')
   })
+  it('keeps the previous scoped detail when a deadline aborts its revalidation', async () => {
+    const store = createTestStore()
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    const cacheKey = `${getTaskSourceCacheScope(sourceContext)}::source-workspace::same-id`
+    const previous = { data: issue('same-id'), fetchedAt: 0 }
+    store.setState({ linearIssueCache: { [cacheKey]: previous } })
+    linearGetIssue.mockRejectedValueOnce(new Error('Linear issue detail lookup timed out'))
+    await expect(
+      store.getState().fetchLinearIssue('same-id', 'source-workspace', { sourceContext })
+    ).resolves.toBeNull()
+    expect(store.getState().linearIssueCache[cacheKey]).toBe(previous)
+  })
 })

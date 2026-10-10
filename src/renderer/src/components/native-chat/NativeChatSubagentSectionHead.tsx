@@ -29,7 +29,10 @@ export function NativeChatSubagentSectionHead({
     >
       <ChevronRight
         aria-hidden
-        className={cn('size-3.5 shrink-0 transition-transform', expanded && 'rotate-90')}
+        className={cn(
+          'size-3.5 shrink-0 transition-transform motion-reduce:transition-none',
+          expanded && 'rotate-90'
+        )}
       />
       <Bot aria-hidden className="size-3.5 shrink-0" />
       {state === null ? null : <StatusDot state={state} pulsing={state === 'working'} />}

@@ -19,14 +19,14 @@ import {
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn } from './send-agent-turn'
 
-/** Per-dispatch so one worker's nudges cannot exhaust the shared runtime operation-ledger budget. */
+/** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
   return `trusted-local:orchestration:${dispatchId}`
 }
 
 /**
- * The same budget for direct peer mail, which is addressed to the worker's own handle and has no
- * dispatch to scope to.
+ * The caller key for direct peer mail, which is addressed to the worker's own handle and has no
+ * dispatch to name.
  *
  * A separate key rather than a reshaped one: the ledger is keyed on (callerKey, operationId), so
  * changing the dispatch key's shape would orphan every nudge already in flight under the old one.
@@ -55,7 +55,16 @@ async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? { submissions: snapshot.submissions } : null
+  if (!snapshot) {
+    return null
+  }
+  const boundary =
+    getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  return {
+    submissions: boundary
+      ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
+      : snapshot.submissions
+  }
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -85,6 +94,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return (
         getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
       )
+    },
+
+    currentContextClearOperationId(sessionId) {
+      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+        ?.providerContextBoundary?.operationId
     },
 
     async send(input) {

@@ -94,14 +94,17 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
     expect(await failureRows(host)).toEqual([])
   })
 
-  it('rejects a message it wrote as a start that could not happen when init names another session', async () => {
+  it('rejects a message held for it as a start that could not happen when init names another session', async () => {
     claude.behave(SESSION, { initHangs: true, initNamesForeignSession: true })
     const host = await claude.install()
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
       ok: true
     })
     const held = await send(host, 'hello')
-    await vi.waitFor(() => expect(claude.child(SESSION).calls).toContain('send'))
+    await vi.waitFor(() =>
+      expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
+    )
+    expect(claude.child(SESSION).calls).not.toContain('send')
 
     claude.child(SESSION).answerInit()
     await released(host)
@@ -116,6 +119,7 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
     expect(await failureRows(host)).toEqual([
       { text: expect.stringMatching(/^Claude couldn't start\./), kind: 'startFailed' }
     ])
+    expect(claude.child(SESSION).calls).not.toContain('send')
   })
 
   it('still says Claude stopped when the CLI exits on its own before its start lands', async () => {

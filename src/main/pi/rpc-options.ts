@@ -33,6 +33,10 @@ const commandsSchema = z.object({
 })
 
 const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+/** The levels a reasoning model offers unless its thinking map removes one; the rest need a map entry. */
+export const PI_UNMAPPED_THINKING_LEVELS = THINKING_LEVELS.filter(
+  (level) => level !== 'xhigh' && level !== 'max'
+)
 
 export function piModelOptionId(provider: string, modelId: string): string {
   if (!provider || !modelId || provider.includes('/')) {

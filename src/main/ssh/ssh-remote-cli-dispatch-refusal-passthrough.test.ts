@@ -13,6 +13,7 @@ vi.mock('../persistence', () => ({
 
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
 
 // Why: the SSH bridge captures the host CLI child's stdout and exit code without reparsing; this
 // pins that a typed refusal envelope and its nonzero exit reach the remote agent unchanged.
@@ -42,6 +43,7 @@ it('relays typed dispatch refusal codes from the host CLI unchanged', async () =
   const resultPromise = runRemoteOrcaCli(
     new OrcaRuntimeService(),
     {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_w', '--json'],
       cwd: '/home/alice/repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }

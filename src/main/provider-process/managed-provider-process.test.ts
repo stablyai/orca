@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 import { spawnManagedProviderProcess } from './managed-provider-process'
@@ -21,16 +21,15 @@ afterEach(() => {
 })
 
 function fakeChild(pid: number | null = 9_999_999) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: pid ?? undefined,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<typeof spawnProcess>(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The managed lifecycle reads only events, pid, streams and kill from this fixture.
-    return child as unknown as ReturnType<typeof spawnProcess>
+  const spawn = vi.fn<PipedProcessSpawner>(() => {
+    return child
   })
   return { child, spawn }
 }

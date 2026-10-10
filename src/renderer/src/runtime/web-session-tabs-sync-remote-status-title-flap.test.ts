@@ -58,11 +58,9 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
-import {
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  shouldApplyWebSessionTabsSnapshot
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 
 // Why: web-session-tabs-sync imports the app-level store singleton; this
 // harness drives a createTestStore instance instead, like the sibling suite.

@@ -1,7 +1,7 @@
 import { readFile, unlink, writeFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as processRunner from '../shared/child-process/run-process'
+import * as processRunner from '@orca/process-host'
 import { GitAdmissionScheduler } from '../shared/git-admission-scheduler'
 import { GIT_READ_TIMEOUT_MS } from '../shared/git-command-timeout'
 import type { GitHandler } from './git-handler'

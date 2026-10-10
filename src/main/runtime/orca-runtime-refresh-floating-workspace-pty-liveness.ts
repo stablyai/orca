@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './orca-runtime-refresh-pty-worktree-records-with-controller-inventory'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { DISCONNECTED_PTY_RECORD_MAX } from './orca-runtime-postlude'
 
@@ -11,8 +11,11 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     if (!controller?.hasPty) {
       return null
     }
-    const knownPtyIds = new Set<string>()
-    const persistedBindingByPtyId = new Map<string, { tabId: string; paneKey: string }>()
+    const persistedBindingByPtyId = indexFloatingSnapshotPtyBindings(
+      this.mobileSessionTabsByWorktree.get(FLOATING_TERMINAL_WORKTREE_ID),
+      (tab) => this.getMobileTerminalPaneKey(tab)
+    )
+    const knownPtyIds = new Set<string>(persistedBindingByPtyId.keys())
     for (const pty of this.ptysById.values()) {
       if (pty.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
         knownPtyIds.add(pty.ptyId)
@@ -21,28 +24,6 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === FLOATING_TERMINAL_WORKTREE_ID && leaf.ptyId) {
         knownPtyIds.add(leaf.ptyId)
-      }
-    }
-    const snapshot = this.mobileSessionTabsByWorktree.get(FLOATING_TERMINAL_WORKTREE_ID)
-    for (const tab of snapshot?.tabs ?? []) {
-      if (tab.type !== 'terminal') {
-        continue
-      }
-      if (tab.ptyId) {
-        knownPtyIds.add(tab.ptyId)
-        persistedBindingByPtyId.set(tab.ptyId, {
-          tabId: tab.parentTabId,
-          paneKey: this.getMobileTerminalPaneKey(tab)
-        })
-      }
-      for (const [leafId, ptyId] of Object.entries(tab.parentLayout?.ptyIdsByLeafId ?? {})) {
-        knownPtyIds.add(ptyId)
-        persistedBindingByPtyId.set(ptyId, {
-          tabId: tab.parentTabId,
-          paneKey: isTerminalLeafId(leafId)
-            ? makePaneKey(tab.parentTabId, leafId)
-            : `${tab.parentTabId}:${/^pane:(\d+)$/.exec(leafId)?.[1] ?? leafId}`
-        })
       }
     }
 

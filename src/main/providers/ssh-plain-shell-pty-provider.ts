@@ -55,7 +55,8 @@ const LOST_NOTICE =
 
 export class SshPlainShellPtyProvider implements IPtyProvider {
   private readonly shells = new Map<string, PlainShell>()
-  private readonly lost = new Set<string>()
+  // Why only confirmed exits answer absent: an id this provider never minted may still run on an earlier relay.
+  private readonly exited = new Set<string>()
   private readonly dataListeners = new Set<SshPtyDataCallback>()
   private readonly exitListeners = new Set<SshPtyExitCallback>()
   private disposed = false
@@ -137,10 +138,10 @@ export class SshPlainShellPtyProvider implements IPtyProvider {
     this.shells.delete(id)
     if (shell.exitCode === null && !shell.closeRequested) {
       // Why: no exit-status means nothing proved the shell ended; report it lost, never exited.
-      this.lost.add(id)
       this.emitData(id, shell, LOST_NOTICE)
       return
     }
+    this.exited.add(id)
     const payload = {
       id,
       code: shell.exitCode ?? 0,
@@ -180,7 +181,7 @@ export class SshPlainShellPtyProvider implements IPtyProvider {
     if (this.shells.has(id)) {
       return true
     }
-    return this.lost.has(id) ? null : false
+    return this.exited.has(id) ? false : null
   }
 
   write(id: string, data: string): boolean {
@@ -304,10 +305,9 @@ export class SshPlainShellPtyProvider implements IPtyProvider {
       return
     }
     this.disposed = true
-    const open = [...this.shells]
+    const open = [...this.shells.values()]
     this.shells.clear()
-    for (const [id, shell] of open) {
-      this.lost.add(id)
+    for (const shell of open) {
       try {
         shell.channel.close()
       } catch {

@@ -10,10 +10,10 @@ import type { RuntimeCapability } from '../../../shared/protocol-version'
 type Statuses = Map<string, RuntimeEnvironmentStatus>
 type StoreState = {
   runtimeStatusByEnvironmentId: Statuses
-  settings: { experimentalStructuredNativeChat: boolean } | null
+  settings: { experimentalNativeChat: boolean } | null
 }
 
-const ON = { experimentalStructuredNativeChat: true }
+const ON = { experimentalNativeChat: true }
 
 const mocks = vi.hoisted(() => {
   const state: StoreState = { runtimeStatusByEnvironmentId: new Map(), settings: null }
@@ -36,7 +36,7 @@ vi.mock('./local-runtime-capabilities', () => ({
 }))
 vi.mock('./local-structured-chats', () => ({
   localStructuredChatsInUse: async (settings: StoreState['settings']) =>
-    settings?.experimentalStructuredNativeChat === true
+    settings?.experimentalNativeChat === true
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -168,7 +168,7 @@ describe('host structured agents', () => {
 
   // Asking installs a host's structured store; a profile with structured chat off never pays it.
   it('asks no host until structured chat is turned on', async () => {
-    mocks.state = { ...mocks.state, settings: { experimentalStructuredNativeChat: false } }
+    mocks.state = { ...mocks.state, settings: { experimentalNativeChat: false } }
     uninstall = installHostStructuredAgentsSync()
     setStatuses(new Map([['env-1', pairedStatus('rt-1', REGISTERED)]]))
     await Promise.resolve()

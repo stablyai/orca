@@ -8,6 +8,15 @@ import {
   routeNativeChatHref
 } from '../../../../shared/native-chat-href-routing'
 import CommentMarkdown from './CommentMarkdown'
+import type { FileLinkExists } from './comment-markdown-native-chat-file-links'
+
+const everyPathExists: FileLinkExists = () => true
+
+/** The host's files, by the path text a reply names them with. */
+function filesAt(...pathTexts: string[]): FileLinkExists {
+  const files = new Set(pathTexts)
+  return (link) => files.has(link.pathText)
+}
 
 describe('CommentMarkdown link click handler', () => {
   let root: Root | null = null
@@ -66,7 +75,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Open src/foo.ts"
           onLinkClick={onLinkClick}
-          linkifyFilePaths
+          fileLinkExists={filesAt('src/foo.ts')}
         />
       )
     })
@@ -98,7 +107,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Open src/foo.ts"
           onLinkClick={onLinkClick}
-          linkifyFilePaths
+          fileLinkExists={filesAt('src/foo.ts')}
         />
       )
     })
@@ -228,7 +237,13 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content={String.raw`Open /tmp/sta-6481-explainer.html, docs/review.docx, C:\Reports\final.pages, ./scripts/release, and src/release:12.`}
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt(
+            '/tmp/sta-6481-explainer.html',
+            'docs/review.docx',
+            String.raw`C:\Reports\final.pages`,
+            './scripts/release',
+            'src/release'
+          )}
         />
       )
     })
@@ -257,7 +272,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content={'Open `C:\\Reports\\release.docx`.'}
           onLinkClick={onLinkClick}
-          linkifyFilePaths
+          fileLinkExists={filesAt(String.raw`C:\Reports\release.docx`)}
         />
       )
     })
@@ -277,7 +292,7 @@ describe('CommentMarkdown link click handler', () => {
     expect(onLinkClick).toHaveBeenCalledOnce()
   })
 
-  it('leaves prose-shaped slash tokens and numeric versions unlinked', () => {
+  it('leaves prose-shaped slash tokens and numeric versions unlinked even when they exist', () => {
     const proseFalsePositives = ['and/or', 'TCP/IP', '24/7', 'N/A', 'km/h', 'A/B test']
     const inlineCodeFalsePositives = ['origin/main', 'v1.2.3', '1.0']
     const quotedFalsePositives = ['"and/or"', '"A/B test"']
@@ -291,7 +306,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content={`${proseFalsePositives.join(', ')}; ${inlineCodeFalsePositives.map((value) => `\`${value}\``).join(', ')}; ${quotedFalsePositives.join(', ')}`}
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={everyPathExists}
         />
       )
     })
@@ -308,6 +323,116 @@ describe('CommentMarkdown link click handler', () => {
     )
   })
 
+  it('underlines an inline-code path only when the host has that file', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CommentMarkdown
+          variant="document"
+          content="An example like `src/app.ts`; the real file is `src/renderer/src/App.tsx`."
+          onLinkClick={vi.fn()}
+          fileLinkExists={filesAt('src/renderer/src/App.tsx')}
+        />
+      )
+    })
+
+    expect(Array.from(container.querySelectorAll('a')).map((anchor) => anchor.textContent)).toEqual(
+      ['src/renderer/src/App.tsx']
+    )
+    const example = Array.from(container.querySelectorAll('code')).find(
+      (code) => code.textContent === 'src/app.ts'
+    )
+    expect(example?.closest('a')).toBeNull()
+  })
+
+  it('does not underline a bare file name or a folder, even when it exists', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CommentMarkdown
+          variant="document"
+          content="Updated package.json and `notes.md`; look in src/components for the button, or `src/renderer`."
+          onLinkClick={vi.fn()}
+          fileLinkExists={everyPathExists}
+        />
+      )
+    })
+
+    expect(container.querySelectorAll('a')).toHaveLength(0)
+  })
+
+  it('links a rooted path and a later relative path in one sentence', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CommentMarkdown
+          variant="document"
+          content="I changed /Users/me/repo/src/x.ts to use src/app.ts."
+          onLinkClick={vi.fn()}
+          fileLinkExists={filesAt('/Users/me/repo/src/x.ts', 'src/app.ts')}
+        />
+      )
+    })
+
+    expect(Array.from(container.querySelectorAll('a')).map((anchor) => anchor.textContent)).toEqual(
+      ['/Users/me/repo/src/x.ts', 'src/app.ts']
+    )
+  })
+
+  it('links a rooted path that ends a sentence and a later relative path', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CommentMarkdown
+          variant="document"
+          content="I updated /Users/me/r/a.ts. The test in src/b.ts now passes."
+          onLinkClick={vi.fn()}
+          fileLinkExists={filesAt('/Users/me/r/a.ts', 'src/b.ts')}
+        />
+      )
+    })
+
+    expect(Array.from(container.querySelectorAll('a')).map((anchor) => anchor.textContent)).toEqual(
+      ['/Users/me/r/a.ts', 'src/b.ts']
+    )
+    expect(container.textContent).toBe(
+      'I updated /Users/me/r/a.ts. The test in src/b.ts now passes.'
+    )
+  })
+
+  it('links a spaced rooted path as one link when it and its pieces all exist', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <CommentMarkdown
+          variant="document"
+          content="Open /Users/A/Foo Bar/file.ts for details."
+          onLinkClick={vi.fn()}
+          fileLinkExists={filesAt('/Users/A/Foo Bar/file.ts', '/Users/A/Foo', 'Bar/file.ts')}
+        />
+      )
+    })
+
+    expect(Array.from(container.querySelectorAll('a')).map((anchor) => anchor.textContent)).toEqual(
+      ['/Users/A/Foo Bar/file.ts']
+    )
+  })
+
   it('links each relative path separately when prose joins them', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -319,7 +444,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Updated src/foo.ts and src/bar.ts, then docs/My Folder/notes.md."
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt('src/foo.ts', 'src/bar.ts', 'docs/My Folder/notes.md')}
         />
       )
     })
@@ -340,7 +465,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content={"Don't skip \"Brennan's Folder/notes.md\"; open 'My Folder/guide.md'."}
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt("Brennan's Folder/notes.md", 'My Folder/guide.md')}
         />
       )
     })
@@ -372,7 +497,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Open `My Folder/notes.md`."
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt('My Folder/notes.md')}
         />
       )
     })
@@ -397,7 +522,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content='Keep `aspect 16:9` and "John 3:16" as references.'
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={everyPathExists}
         />
       )
     })
@@ -420,7 +545,11 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content={content}
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt(
+            'My Folder/notes',
+            'My Notes.md',
+            String.raw`C:\My Folder\notes.txt`
+          )}
         />
       )
     })
@@ -447,7 +576,12 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Open /tmp/报告.html, docs/报告/file.html, docs/café/report.pdf, and docs/archive.7z."
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt(
+            '/tmp/报告.html',
+            'docs/报告/file.html',
+            'docs/café/report.pdf',
+            'docs/archive.7z'
+          )}
         />
       )
     })
@@ -468,7 +602,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Leave /tmp/$draft/report.html as one path or plain text."
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={everyPathExists}
         />
       )
     })
@@ -488,7 +622,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Open src/foo.ts! Read docs/guide.md? View assets/report.pdf—then continue."
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt('src/foo.ts', 'docs/guide.md', 'assets/report.pdf')}
         />
       )
     })
@@ -509,7 +643,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Run --config=./config.yaml。然后打开 docs/指南.md！再看 docs/报告.pdf？"
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={filesAt('./config.yaml', 'docs/指南.md', 'docs/报告.pdf')}
         />
       )
     })
@@ -530,7 +664,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Leave src/foo.ts!draft/file.html, src/foo.ts—draft/file.html."
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={everyPathExists}
         />
       )
     })
@@ -550,7 +684,7 @@ describe('CommentMarkdown link click handler', () => {
           variant="document"
           content="Open ~/x"
           onLinkClick={onLinkClick}
-          linkifyFilePaths
+          fileLinkExists={everyPathExists}
         />
       )
     })
@@ -567,7 +701,8 @@ describe('CommentMarkdown link click handler', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  it('normalizes Windows markdown hrefs but leaves fenced paths as source text', () => {
+  it('keeps explicit markdown file links without asking the host, and leaves fenced paths as source text', () => {
+    const exists = vi.fn<FileLinkExists>(everyPathExists)
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -584,11 +719,12 @@ describe('CommentMarkdown link click handler', () => {
             '```'
           ].join('\n')}
           onLinkClick={vi.fn()}
-          linkifyFilePaths
+          fileLinkExists={exists}
         />
       )
     })
 
+    expect(exists).not.toHaveBeenCalled()
     const anchors = container.querySelectorAll<HTMLAnchorElement>('a')
     expect(anchors).toHaveLength(1)
     expect(routeNativeChatHref(anchors[0]?.getAttribute('href'))).toEqual({

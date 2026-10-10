@@ -20,6 +20,7 @@ const target = {
 }
 const state = {
   settings: {},
+  repos: [],
   worktreesByRepo: { repo: [{ id: 'wt', path: '/repo' }] },
   openFile: vi.fn(),
   openMarkdownPreview: vi.fn()
@@ -30,7 +31,7 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => runtimeConnectionId }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
 vi.mock('@/runtime/runtime-file-client', () => ({ statRuntimePath: runtime.stat }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({ owner })

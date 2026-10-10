@@ -1,7 +1,10 @@
+import {
+  CLAUDE_MODEL_LIST_ARGS,
+  CLAUDE_MODEL_LIST_STDIN
+} from '../../shared/claude-model-list-probe'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { parseClaudeModels } from '../../shared/commit-message-model-parsers'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
-import { discoverModelsLocal } from '../text-generation/commit-message-model-discovery'
-import { commandBackslashMode } from '../text-generation/commit-message-text-generation'
-import { spawnSourceControlAgent } from '../text-generation/source-control-agent-launch'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
   resolveClaudeStructuredInvocation,
@@ -11,59 +14,57 @@ import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import {
+  AgentModelCatalogProbeError,
+  runAgentModelCatalogListing
+} from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 
 export type ClaudeModelCatalogProbeDeps = Pick<
   ClaudeStructuredLaunchResolverDeps,
   'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
 > & {
-  /** Test seams; production runs the one-shot listing child. */
-  discover?: typeof discoverModelsLocal
-  spawnAgent?: typeof spawnSourceControlAgent
+  /** Test seam; production runs the shared supervised listing. */
+  runListing?: typeof runAgentModelCatalogListing
 }
 
 /**
- * Lists models without a live session, through the existing one-shot CLI
- * listing — but under the SAME binary and environment the structured session
- * launch resolves, so a probe can never list under a different install or
- * shell env than the sessions it stands in for.
+ * Lists models without a live session: one `list_models` control request, under the SAME binary
+ * and environment the structured session launch resolves, so a probe can never list under a
+ * different install or shell env than the sessions it stands in for.
  */
 export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
-  return async (accountHomePath: string): Promise<AgentModelCatalogSuccess> => {
+  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+    const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
     // Same pin rule as the session spawn: naming the CLI's default dir would move
     // it off the default Keychain item and list under another identity.
     const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
       ...base,
       ...claudeConfigDirEnvPatch(accountHomePath, { env: base })
     }))
-    const result = await (deps.discover ?? discoverModelsLocal)({
-      agentId: 'claude',
-      binary: command,
-      env,
-      options: {},
-      backslash: commandBackslashMode({ kind: 'local', cwd: '' }),
-      // The resolved absolute command replaces the plan's bare binary directly:
-      // routing it through the command-override template would re-tokenize a
-      // path that may contain spaces.
-      spawnAgent: (input) =>
-        (deps.spawnAgent ?? spawnSourceControlAgent)({ ...input, binary: command })
+    const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
+      { command, args: [...CLAUDE_MODEL_LIST_ARGS], stdin: CLAUDE_MODEL_LIST_STDIN },
+      { site: 'claude-model-catalog-probe', inheritedEnv: env, signal: options?.signal }
+    ).catch((error: unknown) => {
+      // Claude has no pre-send sign-in verdict; a missing CLI is the one this probe can find.
+      if (error instanceof AgentModelCatalogProbeError && error.executableMissing) {
+        throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })
+      }
+      throw error
     })
-    if (!result.success && result.unavailable) {
-      throw new AgentModelCatalogUnavailableError(result.unavailable)
-    }
-    // The spec's static fallback must never pass as a listing: Claude's real
-    // list replaces the seed, so only a probe-origin answer is a catalog.
-    if (!result.success || result.catalogOrigin !== 'probe' || result.models.length === 0) {
-      throw new Error(result.success ? 'claude listed no models' : result.error)
+    // A CLI that predates the request answers a control error: no models, so no catalog.
+    const listed = parseClaudeModels(stdout)
+    if (listed.length === 0) {
+      throw new Error('claude listed no models')
     }
     return {
-      models: result.models.map((model) => ({
+      models: listed.map((model) => ({
         id: model.id,
         label: model.label,
         ...(model.description ? { description: model.description } : {}),
         isDefault: model.isDefault === true,
-        // No defaultEffort: the listing's thinking default is the commit-message generator's
+        // No defaultEffort: the parser's thinking default is the commit-message generator's
         // choice, not the effort Claude runs; the store keeps the one a live child reported.
         efforts: (model.thinkingLevels ?? []).map((level) => ({
           value: level.id,
@@ -73,7 +74,6 @@ export function createClaudeModelCatalogProbe(
           ? { supportsFastMode: model.supportsFastMode }
           : {})
       })),
-      fastModeTierByModel: new Map(),
       origin: 'probe'
     }
   }

@@ -10,7 +10,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/client-user-data') },
-  clipboard: { readImage: mocks.readImage },
+  clipboard: {
+    readImage: mocks.readImage,
+    availableFormats: () => ['image/png'],
+    readBuffer: () => Buffer.alloc(0)
+  },
   ipcMain: { removeHandler: vi.fn(), handle: mocks.handle },
   nativeImage: { createFromBuffer: vi.fn() }
 }))

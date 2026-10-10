@@ -78,13 +78,17 @@ function derivePhase(
 /** The shared signal for a caller that already resolved the worktree's connection id. */
 export function resolveWorktreeHostConnection(
   state: AppState,
-  worktreeId: string,
-  targetId: string | null | undefined
+  worktreeId: string | null,
+  targetId: string | null | undefined,
+  environmentIdOverride?: string | null
 ): WorktreeHostConnection {
   if (!targetId || isRuntimeOwnedSshTargetId(targetId)) {
     return LOCAL_HOST_CONNECTION
   }
-  const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const environmentId =
+    environmentIdOverride === undefined
+      ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      : environmentIdOverride
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)
   return {
@@ -114,6 +118,15 @@ export function selectWorktreeHostConnectionPhase(
   )
 }
 
-export function useWorktreeHostConnection(worktreeId: string | null): WorktreeHostConnection {
-  return useAppStore(useShallow((state) => selectWorktreeHostConnectionPhase(state, worktreeId)))
+export function useWorktreeHostConnection(
+  worktreeId: string | null,
+  localSshTargetId?: string | null
+): WorktreeHostConnection {
+  return useAppStore(
+    useShallow((state) =>
+      localSshTargetId === undefined
+        ? selectWorktreeHostConnectionPhase(state, worktreeId)
+        : resolveWorktreeHostConnection(state, worktreeId, localSshTargetId, null)
+    )
+  )
 }

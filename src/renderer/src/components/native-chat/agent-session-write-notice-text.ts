@@ -110,6 +110,27 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.messagesUnsettled', COPY.messagesUnsettled),
   settleEarlierMessage: () =>
     translate('components.native-chat.writeNotice.settleEarlierMessage', COPY.settleEarlierMessage),
+  agentStillWorking: () =>
+    translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
+  runClearWhenDone: () =>
+    translate('components.native-chat.writeNotice.runClearWhenDone', COPY.runClearWhenDone),
+  clearAfterAnswer: () =>
+    translate('components.native-chat.writeNotice.clearAfterAnswer', COPY.clearAfterAnswer),
+  runCompactWhenDone: () =>
+    translate('components.native-chat.writeNotice.runCompactWhenDone', COPY.runCompactWhenDone),
+  compactAfterAnswer: () =>
+    translate('components.native-chat.writeNotice.compactAfterAnswer', COPY.compactAfterAnswer),
+  clearAfterRetry: () =>
+    translate('components.native-chat.writeNotice.clearAfterRetry', COPY.clearAfterRetry),
+  compactAfterRetry: () =>
+    translate('components.native-chat.writeNotice.compactAfterRetry', COPY.compactAfterRetry),
+  clearAfterSending: () =>
+    translate('components.native-chat.writeNotice.clearAfterSending', COPY.clearAfterSending),
+  compactAfterSending: () =>
+    translate('components.native-chat.writeNotice.compactAfterSending', COPY.compactAfterSending),
+  queueTooLarge: () =>
+    translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
+  shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),
   optionRejected: () =>
     translate('components.native-chat.writeNotice.optionRejected', COPY.optionRejected),
   goalsUnsupported: () =>

@@ -15,6 +15,7 @@ import { HoldParams } from './structured-agent-session-schemas'
 export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
   defineMethod({
     name: 'agentSession.hold',
+    permission: 'workspace',
     params: HoldParams,
     handler: async (params, ctx) => {
       await requireInstalledStructuredHost(ctx, params.sessionId)
@@ -23,6 +24,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
   }),
   defineMethod({
     name: 'agentSession.release',
+    permission: 'workspace',
     params: HoldParams,
     handler: async (_params, ctx) => {
       requireStructuredCleanupHost(ctx)

@@ -10,6 +10,7 @@ import {
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 export async function sendMobileStructuredAgentSessionMessage(input: {
   client: RpcClient
@@ -20,7 +21,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   /** Sent only when the host advertises `agent-session.queued-messages.v1`. */
   delivery?: 'queue-if-active'
   deadline?: number
-  onError: (message: string) => void
+  onError: MobileNativeChatSendErrorReporter
 }): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs = timeoutForDeadline(input.deadline)
   if (timeoutMs === null) {
@@ -42,7 +43,11 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   })
   const outcome = mobileStructuredSendDelivery(result)
   if (outcome.error !== null) {
-    input.onError(outcome.error)
+    if (outcome.failure) {
+      input.onError(outcome.error, { failure: outcome.failure })
+    } else {
+      input.onError(outcome.error)
+    }
   }
   return outcome.outcome
 }

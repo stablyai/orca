@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
@@ -15,7 +16,7 @@ import {
 import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createCodexSessionJournalTranslator } from './codex-structured-session-journal'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import {
   codexProviderHandleLink,
@@ -30,14 +31,8 @@ import {
 } from './codex-structured-session-close'
 import { restoredCodexSessionOptions } from './codex-structured-session-options'
 import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
-import {
-  codexAcquireCatalogAccess,
-  codexAcquireFastModeCatalog
-} from './codex-structured-acquire-catalog'
-import {
-  reconcileCodexFastModeOption,
-  reportedCodexThreadOptions
-} from './codex-structured-fast-mode'
+import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
+import { reportedCodexThreadOptions } from './codex-structured-service-tier'
 import {
   assertCodexConnectionOpen,
   codexSessionLifecycle,
@@ -84,30 +79,20 @@ export async function acquireCodexStructuredSession(input: {
       : null
   const subagentExecutions = new CodexSubagentExecutions()
   const dispatchEchoes = createCodexDispatchEchoes()
+  let account: AgentSessionAccountKind | undefined
   // Minted before the translator, which names this connection's frame rows with it.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
-  const translator = acquireInput.events
-    ? createCodexJournalTranslator({
-        sink: acquireInput.events,
-        sessionId,
-        acquisitionId: acquisitionGeneration,
-        ...(deps.now ? { now: deps.now } : {}),
-        primaryThreadId: () => primaryThreadId,
-        onPrimaryThreadStoppedRunning: () => deps.onPrimaryThreadStoppedRunning?.({ sessionId }),
-        dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
-        subagentExecutions,
-        bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
-          acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
-        clearPromptTurn: (threadId, turnId) => acquisition.prompts.clearTurn(threadId, turnId),
-        onUserMessageEcho: (clientMessageId, providerIdentity) => {
-          // Only a send THIS session admitted; an echo from history restore or
-          // another client names no submission of ours to settle.
-          if (dispatchEchoes.settle(clientMessageId)) {
-            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
-          }
-        }
-      })
-    : null
+  const translator = createCodexSessionJournalTranslator({
+    sink: acquireInput.events,
+    account: () => account,
+    sessionId,
+    acquisitionId: acquisitionGeneration,
+    deps,
+    primaryThreadId: () => primaryThreadId,
+    dispatchEchoes,
+    subagentExecutions,
+    prompts: acquisition.prompts
+  })
   const open = deps.openConnection ?? openCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
@@ -135,6 +120,7 @@ export async function acquireCodexStructuredSession(input: {
         throw new AgentSessionPreSpawnError(error)
       })
     acquisitions.assertCurrent(sessionId, attempt)
+    account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
     const connection = await open(
       {
         command: launch.command,
@@ -166,6 +152,7 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
+        ...(acquireInput.onOutput ? { onOutput: acquireInput.onOutput } : {}),
         onExit: (error, exit) => {
           try {
             handleCodexSessionExit({
@@ -229,17 +216,13 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
     const catalogAccess = codexAcquireCatalogAccess(deps, launch)
-    const fastModeCatalog = codexAcquireFastModeCatalog({
-      catalogAccess,
-      opened,
-      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier')
-    })
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     // Where this session's child work goes: the host's records, after each frame is journaled.
     const sink = codexChildWorkSink(sessionId, deps)
     const session: CodexSession = {
+      account,
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
       threadId: opened.threadId,
@@ -261,17 +244,6 @@ export async function acquireCodexStructuredSession(input: {
           reason
         ),
       ...(unbindReadingControl ? { unbindReadingControl } : {})
-    }
-    if (fastModeCatalog) {
-      // The model the next turn sends, as turn/start and the background refresh resolve it.
-      const model = options.get('model') ?? opened.model ?? fastModeCatalog.result.current.model
-      reconcileCodexFastModeOption(session, {
-        fastModeTierByModel: fastModeCatalog.fastModeTierByModel,
-        currentFastMode: true,
-        model,
-        modelFastModeSupport: fastModeCatalog.result.models.find((entry) => entry.id === model)
-          ?.supportsFastMode
-      })
     }
     sessions.set(sessionId, session)
     for (const event of acquisition.drain()) {

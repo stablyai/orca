@@ -23,6 +23,7 @@ import { findRepoForHost } from '../../repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'
+import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {
   const host = repo && parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -42,6 +43,7 @@ export function createObserveTerminalGitHubPullRequestLink(
   get: WorktreeSliceGet
 ): WorktreeSlice['observeTerminalGitHubPullRequestLink'] {
   const pending = new Set<string>()
+  const confirmations = new PrioritySemaphore(3)
   return (worktreeId, link, context) => {
     const state = get()
     const owner = context ? resolveTerminalNotificationOwner(state, worktreeId, context) : null
@@ -66,7 +68,11 @@ export function createObserveTerminalGitHubPullRequestLink(
       return
     }
     const sourceKey = terminalReviewSourceKey(repo)
-    const branch = branchName(worktree.branch)
+    const originalBranch = worktree.branch
+    const branch = branchName(originalBranch)
+    const head = worktree.head
+    const identityKey = worktree.identity?.key
+    const pushBranch = worktree.pushTarget?.branchName
     let confirmedPushBranch: string | undefined
     const origin = context
       ? getWorkspaceAttachmentTerminalOrigin(state, worktreeId, context, hostId)
@@ -97,7 +103,17 @@ export function createObserveTerminalGitHubPullRequestLink(
         item.number === link.number &&
         (!item.url || item.url === link.url)
     )
-    const requestKey = JSON.stringify([hostId, worktreeId, link.url, origin])
+    const wasLinked = Boolean(linked)
+    const requestKey = JSON.stringify([
+      hostId,
+      worktreeId,
+      link.url,
+      sourceKey,
+      identityKey,
+      head,
+      originalBranch,
+      origin && getWorkspaceAttachmentOriginKey(origin)
+    ])
     if (pending.has(requestKey)) {
       return
     }
@@ -107,18 +123,20 @@ export function createObserveTerminalGitHubPullRequestLink(
         contextIsCurrent() &&
         !current.isArchived &&
         !current.isBare &&
-        current.identity?.key === worktree.identity?.key &&
-        current.head === worktree.head &&
+        current.identity?.key === identityKey &&
+        current.head === head &&
         terminalReviewSourceKey(
           findRepoForHost(get().repos, current.repoId, {
             hostId: hostId ?? current.hostId,
             settings: get().settings
           })
         ) === sourceKey &&
-        current.branch === worktree.branch &&
+        current.branch === originalBranch &&
         (!confirmedPushBranch || current.pushTarget?.branchName === confirmedPushBranch) &&
         !isGitHubPRSuppressed(current, link.number)
       )
+    const observationIsCurrent = (): boolean =>
+      stillEligible(findKnownWorktreeById(get(), worktreeId, hostId))
     const persist = async (): Promise<void> => {
       const current = findKnownWorktreeById(get(), worktreeId, hostId)
       if (!stillEligible(current)) {
@@ -132,7 +150,7 @@ export function createObserveTerminalGitHubPullRequestLink(
           item.number === link.number &&
           (!item.url || item.url === link.url)
       )
-      if (linked && !prior) {
+      if (wasLinked && !prior) {
         return
       }
       if (!origin && prior) {
@@ -167,7 +185,7 @@ export function createObserveTerminalGitHubPullRequestLink(
     }
     pending.add(requestKey)
     const confirm = async (): Promise<boolean> => {
-      if (!linked) {
+      if (!wasLinked) {
         const exact = await lookupGitHubWorkItemByOwnerRepoForSource({
           repoPath: repo.path,
           repoId: repo.id,
@@ -182,45 +200,61 @@ export function createObserveTerminalGitHubPullRequestLink(
           number: link.number,
           type: 'pr'
         }).catch(() => null)
+        if (!observationIsCurrent()) {
+          return false
+        }
         if (exact) {
           const headBranch = exact.branchName?.trim()
-          const headMatches =
-            headBranch === branch || headBranch === worktree.pushTarget?.branchName
+          const headMatches = headBranch === branch || headBranch === pushBranch
           if (
             exact.type !== 'pr' ||
             exact.number !== link.number ||
             exact.url !== link.url ||
             (headBranch && !headMatches) ||
-            (exact.headSha && exact.headSha !== worktree.head)
+            (exact.headSha && exact.headSha !== head)
           ) {
             return false
           }
-          if (headBranch && exact.headSha && worktree.head) {
+          if (headBranch && exact.headSha && head) {
             confirmedPushBranch = headBranch === branch ? undefined : headBranch
             return true
           }
         }
       }
       // Older hosts may omit exact head evidence; retain their branch-confirmation path.
-      const pr = await readHostedReviewForRepo(repo, state.settings, {
+      const pr = await readHostedReviewForRepo(repo, get().settings, {
         branch,
         force: true,
         active: true,
-        currentHeadOid: worktree.head,
-        linkedGitHubPR: linked ? link.number : null,
+        currentHeadOid: head,
+        linkedGitHubPR: wasLinked ? link.number : null,
         linkedGitLabMR: null,
         linkedBitbucketPR: null,
         linkedAzureDevOpsPR: null,
         linkedGiteaPR: null
       })
-      return pr?.provider === 'github' && pr.number === link.number && pr.url === link.url
+      return (
+        observationIsCurrent() &&
+        pr?.provider === 'github' &&
+        pr.number === link.number &&
+        pr.url === link.url
+      )
     }
-    void confirm()
-      .then(async (confirmed) => {
-        if (confirmed) {
+    const confirmWhenAdmitted = async (): Promise<void> => {
+      if (!observationIsCurrent()) {
+        return
+      }
+      const release = await confirmations.acquire(0)
+      try {
+        if (observationIsCurrent() && (await confirm())) {
           await persist()
         }
-      })
+      } finally {
+        // Native reads keep their permit until settlement, even if their pane disappears.
+        release()
+      }
+    }
+    void confirmWhenAdmitted()
       .catch((error) => console.warn('Could not confirm terminal reference', error))
       .finally(() => pending.delete(requestKey))
   }

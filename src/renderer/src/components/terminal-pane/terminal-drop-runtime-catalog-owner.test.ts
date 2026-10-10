@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_DRAG_SOURCE_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/workspace-file-drag'
 import { handleInternalTerminalFileDrop, handleTerminalFileDrop } from './terminal-drop-handler'
 
 const mocks = vi.hoisted(() => {
@@ -116,9 +120,17 @@ async function drop(lane: string, workspaceId: string, executionHostId: Executio
       paneLeafId: 'leaf-1',
       dataTransfer: {
         getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME
-            ? encodeWorkspaceFilePaths(['/owner/workspace/file with spaces.txt'])
-            : ''
+          type === WORKSPACE_FILE_DRAG_SOURCE_MIME
+            ? JSON.stringify({
+                version: 1,
+                workspaceId: 'wt-1',
+                runtimeEnvironmentId: 'owner-runtime',
+                executionHostId:
+                  executionHostId === 'local' ? 'runtime:owner-runtime' : executionHostId
+              })
+            : type === WORKSPACE_FILE_PATHS_MIME
+              ? encodeWorkspaceFilePaths(['/owner/workspace/file with spaces.txt'])
+              : ''
       }
     })
   }

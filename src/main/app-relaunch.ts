@@ -16,3 +16,17 @@ export function relaunchApp(reason: AppRelaunchReason, data?: CrashReportBreadcr
   recordDurableCrashBreadcrumb('app_relaunch_requested', { ...data, reason })
   runWithLaunchPath(() => app.relaunch())
 }
+
+export async function runBeforeRelaunchCleanup(
+  onBeforeRelaunch?: () => void | Promise<void>
+): Promise<void> {
+  try {
+    await onBeforeRelaunch?.()
+  } catch (error) {
+    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
+    console.warn(
+      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
+      error instanceof Error ? error.name : typeof error
+    )
+  }
+}

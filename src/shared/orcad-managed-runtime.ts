@@ -66,6 +66,20 @@ export type OrcadManagedStopResult =
     }
   | OrcadManagedRefusal
 
+/**
+ * Unlinks the server from this desktop without reaching its host, for a host that is gone or
+ * unreachable. Never a claim of exit: the server may still run there, so the verdict stays
+ * `unverifiable`.
+ */
+export type OrcadManagedForgetResult =
+  | {
+      outcome: 'forgotten'
+      verdict: 'unverifiable'
+      environmentId: string
+      sshTargetId: string
+    }
+  | OrcadManagedRefusal
+
 export type OrcadManagedCancelStopResult =
   | { outcome: 'none' }
   /** The stop was withdrawn before orcad acted on it; the server keeps serving. */

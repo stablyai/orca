@@ -30,6 +30,7 @@ import {
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
+import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
 /** Who a failed acquisition's sentence names, and whether it was the session's first start. */
 export type FailedAcquisitionWording = {
@@ -49,6 +50,7 @@ function failedAcquisitionWireRefusal(
   const { reason } = structuredAgentSessionStartFailure(
     {
       refusal,
+      diagnostic: providerDiagnosticOf(error),
       argumentProblem: argumentProblemOf(error),
       ...(wording.newSession ? { newSession: true as const } : {})
     },

@@ -132,6 +132,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       currentFence: () => 1,
+      currentContextClearOperationId: () => undefined,
       send: async (input) => {
         for (const block of input.body.blocks) {
           texts.push(block.type === 'text' ? block.text : '')

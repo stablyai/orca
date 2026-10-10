@@ -2,12 +2,17 @@ import type { AgentSessionSendResult } from '../../../src/shared/agent-session-w
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-rejection-words'
 import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../src/shared/agent-session-failure'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
 export type MobileStructuredSendDelivery = {
   outcome: MobileNativeChatSendOutcome
   error: string | null
+  failure?: AgentSessionFailureFact
 }
 
 export function mobileStructuredSendDelivery(
@@ -44,9 +49,11 @@ export function mobileStructuredSendDelivery(
       // The host transcript already owns this send's stopped row.
       return { outcome: 'accepted', error: null }
     }
+    const failure = readWholeAgentSessionFailureFact(submission.rejection)
     return {
       outcome: 'rejected',
-      error: structuredAgentSessionRejectionNotice(submission.reason, 'composer-send')
+      error: structuredAgentSessionRejectionNotice(submission.reason, 'composer-send'),
+      ...(failure?.kind === 'notSignedIn' ? { failure } : {})
     }
   }
   return { outcome: 'accepted', error: null }

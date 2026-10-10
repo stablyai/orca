@@ -23,7 +23,7 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("frame-src 'none'"))
     assertTrue(directives.contains("child-src 'none'"))
     assertTrue(directives.contains("object-src 'none'"))
-    assertTrue(directives.contains("base-uri 'none'"))
+    assertTrue(directives.contains("base-uri about:"))
     assertTrue(directives.contains("form-action 'none'"))
     assertTrue(directives.contains("frame-ancestors 'none'"))
   }

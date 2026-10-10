@@ -32,8 +32,7 @@ describe('the legacy relay route runtime', () => {
     previousRelayCensus.mockReset().mockResolvedValue({
       endpoints: [OLD_SOCK],
       nodePath: CURRENT_NODE,
-      complete: true,
-      unverifiable: false,
+      status: 'complete',
       bridgeable: true
     })
     readRelayDaemonRuntimes.mockReset()
@@ -63,8 +62,7 @@ describe('the legacy relay route runtime', () => {
     previousRelayCensus.mockResolvedValue({
       endpoints: ['C:\\Users\\dev\\.orca-remote\\relay-0.1.0+aaa'],
       nodePath: CURRENT_NODE,
-      complete: true,
-      unverifiable: false,
+      status: 'complete',
       bridgeable: false
     })
 

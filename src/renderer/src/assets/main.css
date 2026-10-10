@@ -1556,12 +1556,20 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
 }
 
-/* Why: one-shot status-bar callout is portaled fixed above the meters.
-   Opaque popover surface (not glass) so titlebar/terminal chrome cannot
-   bleed through; use design tokens + the documented floating elevation. */
+/* Opaque token-based gradient lifts the callout above surrounding chrome. */
 .status-bar-change-notice-card {
-  border: 1px solid var(--border);
-  background: var(--popover);
+  --status-bar-notice-border: color-mix(in srgb, var(--popover-foreground) 12%, var(--border));
+  --status-bar-notice-surface-bottom: color-mix(
+    in srgb,
+    var(--popover-foreground) 4%,
+    var(--popover)
+  );
+  border: 1px solid var(--status-bar-notice-border);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--popover-foreground) 10%, var(--popover)),
+    var(--status-bar-notice-surface-bottom)
+  );
   color: var(--popover-foreground);
   /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
   box-shadow: var(--shadow-floating);
@@ -1576,9 +1584,9 @@ html.native-shell .app-layout {
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background: var(--popover);
+  border-right: 1px solid var(--status-bar-notice-border);
+  border-bottom: 1px solid var(--status-bar-notice-border);
+  background: var(--status-bar-notice-surface-bottom);
 }
 
 /* Why: the first-run Mobile Emulator intro sits directly under that menu row;

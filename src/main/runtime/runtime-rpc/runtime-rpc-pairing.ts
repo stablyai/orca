@@ -1,3 +1,4 @@
+import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceEntry, DeviceRegistry, DeviceScope } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
@@ -85,6 +86,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.mobileRelayPairingProvider = provider
   }
 
+  setMobileRelayPairingProviderInstaller(install: (() => Promise<unknown>) | null): void {
+    this.mobileRelayPairingProviderInstaller = install
+  }
+
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
     if (device?.scope !== 'mobile') {
@@ -130,6 +135,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
     // next launch bind every interface. Defaults to network reach, which is what every other caller means.
     reach?: RuntimePairingReach
+    // Why: administrative permissions exist only when granted here, never added to a paired device later.
+    grants?: readonly RuntimeDeviceGrant[]
   }):
     | PairingOfferUnavailable
     | {
@@ -167,9 +174,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     let device: DeviceEntry
     try {
       const reach = args.reach ?? 'network'
+      const grants = args.grants ?? []
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

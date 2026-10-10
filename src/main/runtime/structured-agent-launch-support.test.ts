@@ -97,7 +97,8 @@ describe('structuredAgentSupportsLaunch', () => {
             provider: 'opencode',
             providerHandleChain: [],
             accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
-          })
+          }),
+          pinLaunchDirectory: vi.fn()
         },
         readJournal: () => null,
         resolveWorkspacePath: async () => '/repo/worktree',

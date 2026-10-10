@@ -228,4 +228,36 @@ describe('source-scoped workspace reference status reads', () => {
     expect(await readWorkspaceReferenceDetails(wrongProvider)).toBeNull()
     expect(mocks.review).not.toHaveBeenCalled()
   })
+  it('retains native admission after hover cancellation until the timed-out read settles', async () => {
+    const rejecters: ((error: Error) => void)[] = []
+    mocks.linear.mockImplementation(() => new Promise((_resolve, reject) => rejecters.push(reject)))
+    mocks.review.mockResolvedValue(referenceReview(99))
+    const controller = new AbortController()
+    const tasks = Array.from({ length: 3 }, (_, index) =>
+      readWorkspaceReferenceDetails(
+        getWorkspaceReferenceRequest(
+          { provider: 'linear', type: 'issue', number: 0, identifier: `ENG-${index + 1}` },
+          referenceWorkspace,
+          referenceRepo
+        ),
+        controller.signal
+      ).catch(() => null)
+    )
+    try {
+      await vi.waitFor(() => expect(mocks.linear).toHaveBeenCalledTimes(3))
+      controller.abort()
+      const review = readWorkspaceReferenceDetails(
+        getWorkspaceReferenceRequest(referenceAttachment(99), referenceWorkspace, referenceRepo)
+      )
+      await Promise.resolve()
+      expect(mocks.review).not.toHaveBeenCalled()
+      rejecters[0](new Error('Linear issue detail lookup timed out'))
+      await expect(review).resolves.toMatchObject({ title: 'Review 99' })
+    } finally {
+      for (const reject of rejecters) {
+        reject(new Error('Read settled'))
+      }
+      await Promise.all(tasks)
+    }
+  })
 })
