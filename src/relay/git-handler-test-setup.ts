@@ -8,6 +8,7 @@
 import { vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import type { RelayDispatcher } from './dispatcher'
+import { configureRealGitTestRepo, REAL_GIT_TEST_CONFIG_ARGS } from '../main/git/real-git-test-repo'
 
 const TEST_GIT_USER_EMAIL = 'test@test.com'
 const TEST_GIT_USER_NAME = 'Test'
@@ -81,17 +82,17 @@ export function createMockDispatcher(): MockDispatcher {
 
 export function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', TEST_GIT_USER_EMAIL], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', TEST_GIT_USER_NAME], { cwd: dir, stdio: 'pipe' })
+  configureRealGitTestRepo(dir, { name: TEST_GIT_USER_NAME, email: TEST_GIT_USER_EMAIL })
 }
 
 export function gitCommit(dir: string, message: string): void {
   execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe' })
   // Why: `git submodule add` creates a checkout that does not inherit the
-  // source repo's local identity config, and CI may have no global identity.
+  // source repo's local identity or signing config, and CI may have no global identity.
   execFileSync(
     'git',
     [
+      ...REAL_GIT_TEST_CONFIG_ARGS,
       '-c',
       `user.email=${TEST_GIT_USER_EMAIL}`,
       '-c',

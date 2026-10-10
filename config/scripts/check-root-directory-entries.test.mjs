@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const guardScript = join(projectDir, '.github/scripts/check-root-directory-entries.mjs')
@@ -17,8 +18,10 @@ function makeFixture() {
   const root = mkdtempSync(join(tmpdir(), 'orca-root-directory-guard-'))
   tempDirs.push(root)
   git(root, ['init', '--quiet'])
-  git(root, ['config', 'user.email', 'root-directory-guard-test@example.com'])
-  git(root, ['config', 'user.name', 'Root Directory Guard Test'])
+  configureRealGitTestRepo(root, {
+    name: 'Root Directory Guard Test',
+    email: 'root-directory-guard-test@example.com'
+  })
   mkdirSync(join(root, 'config'), { recursive: true })
   writeFileSync(join(root, 'config', 'base.txt'), 'base\n')
   git(root, ['add', '-A'])

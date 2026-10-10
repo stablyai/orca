@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { listWorktrees, removeWorktree } from './worktree'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const tempRoots: string[] = []
 
@@ -22,8 +23,7 @@ async function createRepoWithNewlineWorktree(): Promise<{
 
   execFileSync('git', ['init', '--quiet', repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(repoPath, ['config', 'user.email', 'test@example.com'])
-  git(repoPath, ['config', 'user.name', 'Test User'])
+  configureRealGitTestRepo(repoPath, { name: 'Test User', email: 'test@example.com' })
   git(repoPath, ['commit', '--allow-empty', '--quiet', '-m', 'initial'])
   git(repoPath, ['worktree', 'add', '--quiet', '-b', 'feature/newline', requestedWorktreePath])
 
@@ -44,8 +44,7 @@ async function createRepoWithLockedDeletedWorktree(): Promise<{
 
   execFileSync('git', ['init', '--quiet', repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(repoPath, ['config', 'user.email', 'test@example.com'])
-  git(repoPath, ['config', 'user.name', 'Test User'])
+  configureRealGitTestRepo(repoPath, { name: 'Test User', email: 'test@example.com' })
   git(repoPath, ['commit', '--allow-empty', '--quiet', '-m', 'initial'])
   git(repoPath, [
     'worktree',
@@ -77,8 +76,7 @@ async function createRepoWithPrunableWorktree(): Promise<{
 
   execFileSync('git', ['init', '--quiet', repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(repoPath, ['config', 'user.email', 'test@example.com'])
-  git(repoPath, ['config', 'user.name', 'Test User'])
+  configureRealGitTestRepo(repoPath, { name: 'Test User', email: 'test@example.com' })
   git(repoPath, ['commit', '--allow-empty', '--quiet', '-m', 'initial'])
   git(repoPath, ['worktree', 'add', '--quiet', '-b', 'feature/stale', requestedWorktreePath])
 

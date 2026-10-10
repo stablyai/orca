@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
 const tempDirs = []
@@ -25,8 +26,10 @@ function makeFixture(files, { untracked = {} } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-readme-links-'))
   tempDirs.push(root)
   git(root, ['init', '--quiet'])
-  git(root, ['config', 'user.email', 'readme-links-test@example.com'])
-  git(root, ['config', 'user.name', 'README Links Test'])
+  configureRealGitTestRepo(root, {
+    name: 'README Links Test',
+    email: 'readme-links-test@example.com'
+  })
   writeFiles(root, files)
   git(root, ['add', '-A'])
   git(root, ['commit', '--quiet', '-m', 'fixture'])

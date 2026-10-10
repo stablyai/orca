@@ -10,6 +10,7 @@ import {
   inspectGitRepoForRegistration,
   isGitRepo
 } from './repo-detection'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
@@ -24,6 +25,7 @@ describe('repository registration probe batching', () => {
     repo = join(directory, 'repo')
     mkdirSync(repo)
     git(repo, ['init', '-q'])
+    configureRealGitTestRepo(repo)
   })
 
   afterEach(() => {
@@ -205,6 +207,7 @@ describe.skipIf(process.platform === 'win32')('repository paths with newlines', 
     const repo = join(directory, 'main\n\nrepo')
     mkdirSync(repo)
     git(repo, ['init', '-q'])
+    configureRealGitTestRepo(repo)
     git(repo, [
       '-c',
       'user.name=Test',

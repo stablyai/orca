@@ -11,6 +11,7 @@ import {
   type MockDispatcher,
   type RelayDispatcher
 } from './git-handler-test-setup'
+import { configureRealGitTestRepo } from '../main/git/real-git-test-repo'
 
 describe('GitHandler pull reconciliation', () => {
   let dispatcher: MockDispatcher
@@ -53,8 +54,7 @@ describe('GitHandler pull reconciliation', () => {
   }
 
   function configureIdentity(cwd: string): void {
-    execGit(cwd, ['config', 'user.email', 'test@test.com'])
-    execGit(cwd, ['config', 'user.name', 'Test'])
+    configureRealGitTestRepo(cwd, { name: 'Test', email: 'test@test.com' })
   }
 
   function commitAll(cwd: string, message: string): void {

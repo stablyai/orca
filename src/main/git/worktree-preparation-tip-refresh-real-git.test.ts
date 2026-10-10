@@ -17,6 +17,7 @@ import {
   startPreparation,
   takePreparation
 } from '../worktree-create-preparation-pool'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -37,8 +38,7 @@ async function fixture() {
   const final = join(root, 'final')
   await git(root, ['init', '--quiet', repo])
   await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  await git(repo, ['config', 'user.name', 'Test'])
-  await git(repo, ['config', 'user.email', 'test@example.com'])
+  configureRealGitTestRepo(repo, { name: 'Test', email: 'test@example.com' })
   await writeFile(join(repo, 'version.txt'), 'original\n')
   await git(repo, ['add', 'version.txt'])
   await git(repo, ['commit', '--quiet', '-m', 'initial'])

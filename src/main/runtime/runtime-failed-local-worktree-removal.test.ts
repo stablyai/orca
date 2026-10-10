@@ -39,6 +39,7 @@ import {
   type WorktreeRemovalRecord
 } from '../worktree-removal-records'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
+import { configureRealGitTestRepo } from '../git/real-git-test-repo'
 
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
@@ -168,8 +169,10 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await mkdir(recordsDir, { recursive: true })
     await mkdir(repoPath, { recursive: true })
     await git(['init', '-q'])
-    await git(['config', 'user.email', 'removal@example.invalid'])
-    await git(['config', 'user.name', 'Worktree Removal'])
+    configureRealGitTestRepo(repoPath, {
+      name: 'Worktree Removal',
+      email: 'removal@example.invalid'
+    })
     await writeFile(join(repoPath, 'seed.txt'), 'seed\n')
     await git(['add', '-A'])
     await git(['commit', '-qm', 'seed'])
@@ -267,6 +270,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await rm(worktreePath, { recursive: true })
     await mkdir(worktreePath)
     await git(['init', '-q'], worktreePath)
+    configureRealGitTestRepo(worktreePath)
     await writeFile(join(worktreePath, 'unsaved.txt'), 'work\n')
     const purged: string[] = []
 
@@ -354,6 +358,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await rm(worktreePath, { recursive: true })
     await mkdir(worktreePath)
     await git(['init', '-q'], worktreePath)
+    configureRealGitTestRepo(worktreePath)
     await writeFile(join(worktreePath, 'unsaved.txt'), 'work\n')
     releaseSlots()
     await Promise.all(holders)

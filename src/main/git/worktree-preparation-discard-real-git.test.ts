@@ -6,6 +6,7 @@ import { createWorktreePreparationLockReason } from '../../shared/worktree/creat
 import * as runner from './runner'
 import { performDiscardPreparedWorktree } from './worktree-preparation-discard'
 import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from './worktree-operation-options'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -27,6 +28,7 @@ async function fixture(): Promise<{
   const git = async (cwd: string, args: string[]): Promise<string> =>
     (await runner.gitExecFileAsync(args, { cwd })).stdout.trim()
   await git(root, ['init', '--quiet', repo])
+  configureRealGitTestRepo(repo)
   await git(repo, [
     '-c',
     'user.name=Test',

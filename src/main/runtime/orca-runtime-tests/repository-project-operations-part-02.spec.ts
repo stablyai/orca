@@ -26,6 +26,7 @@ import {
   createRuntime,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { configureRealGitTestRepo } from '../../git/real-git-test-repo'
 
 describe('OrcaRuntimeService', () => {
   it('adopts public clone repos into host-qualified project setup', async () => {
@@ -591,6 +592,7 @@ describe('OrcaRuntimeService', () => {
       // The queued request must find a finished clone of the URL where the first one landed.
       const clonePath = join(destination, 'repo-badge-color')
       execFileSync('git', ['init', '-q', clonePath])
+      configureRealGitTestRepo(clonePath)
       execFileSync('git', ['-C', clonePath, 'remote', 'add', 'origin', url])
       execFileSync('git', [
         '-C',

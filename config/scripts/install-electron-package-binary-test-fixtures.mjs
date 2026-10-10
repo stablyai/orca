@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 
 const sourceScriptPath = fileURLToPath(
   new URL('./install-electron-package-binary.mjs', import.meta.url)
@@ -163,8 +164,7 @@ syncBuiltinESMExports()
 
 export function initGitRepo(projectDir) {
   runGit(projectDir, ['init', '--quiet', '--initial-branch=main'])
-  runGit(projectDir, ['config', 'user.email', 'orca-test@example.com'])
-  runGit(projectDir, ['config', 'user.name', 'Orca Test'])
+  configureRealGitTestRepo(projectDir, { name: 'Orca Test', email: 'orca-test@example.com' })
   runGit(projectDir, ['commit', '--quiet', '--allow-empty', '-m', 'init'])
 }
 

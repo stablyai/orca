@@ -8,6 +8,7 @@ import {
   cleanupTestRepositoryPathFiles,
   linkedWorktreePaths
 } from './global-teardown'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo'
 
 const roots: string[] = []
 
@@ -62,8 +63,7 @@ describe('E2E global teardown ownership', () => {
     mkdirSync(unrelatedTestPath)
     writeFileSync(path.join(repoPath, 'README.md'), 'fixture\n')
     git(repoPath, ['init'])
-    git(repoPath, ['config', 'user.email', 'e2e@test.local'])
-    git(repoPath, ['config', 'user.name', 'E2E Test'])
+    configureRealGitTestRepo(repoPath, { name: 'E2E Test', email: 'e2e@test.local' })
     git(repoPath, ['add', 'README.md'])
     git(repoPath, ['commit', '-m', 'seed'])
     git(repoPath, ['worktree', 'add', '-b', 'first-owned', firstWorktreePath])

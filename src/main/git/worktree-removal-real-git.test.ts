@@ -14,6 +14,7 @@ import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
 import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
 import { sweepStaleWorktreeTrash, WORKTREE_TRASH_DIR_NAME } from '../worktree-trash'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const execFileAsync = promisify(execFile)
 
@@ -44,8 +45,7 @@ beforeEach(async () => {
   await mkdir(repoPath, { recursive: true })
   await mkdir(join(workspaceRoot, 'repo'), { recursive: true })
   await git(['init', '-q'], repoPath)
-  await git(['config', 'user.email', 'removal@example.invalid'], repoPath)
-  await git(['config', 'user.name', 'Worktree Removal'], repoPath)
+  configureRealGitTestRepo(repoPath, { name: 'Worktree Removal', email: 'removal@example.invalid' })
   // Why: a commit's detached auto-maintenance can still be writing packs when teardown deletes the repo.
   await git(['config', 'maintenance.auto', 'false'], repoPath)
   await git(['config', 'gc.auto', '0'], repoPath)

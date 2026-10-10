@@ -6,12 +6,22 @@ import { join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { reuseSavedCloneTarget } from './saved-clone-target'
+import { REAL_GIT_TEST_CONFIG_ARGS } from './real-git-test-repo'
 
 const url = 'https://github.com/stablyai/orca.git'
 const roots: string[] = []
 
 function git(cwd: string, ...args: string[]): void {
-  execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t.invalid', ...args])
+  execFileSync('git', [
+    '-C',
+    cwd,
+    ...REAL_GIT_TEST_CONFIG_ARGS,
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@t.invalid',
+    ...args
+  ])
 }
 
 // What `git clone url` leaves at <root>/orca. `finished: false` is a clone killed before checkout;

@@ -26,6 +26,7 @@ import { readPluginCurrentPointer } from './plugin-current-pointer'
 import { writePluginLockfile } from './plugin-install-lockfile-store'
 import { installStagedPluginTree } from './plugin-install-staging'
 import * as manifestFile from './plugin-manifest-file'
+import { configureRealGitTestRepo } from '../git/real-git-test-repo'
 
 const roots: string[] = []
 const execFileAsync = promisify(execFile)
@@ -436,10 +437,7 @@ describe('installPluginFromGit', () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(sourcePath)
     await execFileAsync('git', ['init', '--quiet'], { cwd: sourcePath })
-    await execFileAsync('git', ['config', 'user.email', 'plugins@example.invalid'], {
-      cwd: sourcePath
-    })
-    await execFileAsync('git', ['config', 'user.name', 'Plugin Test'], { cwd: sourcePath })
+    configureRealGitTestRepo(sourcePath, { name: 'Plugin Test', email: 'plugins@example.invalid' })
     await execFileAsync('git', ['add', '.'], { cwd: sourcePath })
     await execFileAsync('git', ['commit', '--quiet', '-m', 'fixture'], { cwd: sourcePath })
     await execFileAsync('git', ['tag', 'v1.0.0'], { cwd: sourcePath })

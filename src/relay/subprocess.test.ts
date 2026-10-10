@@ -18,6 +18,7 @@ import { JSONC_PARSER_ESM_ALIAS } from '../../config/build-plugins/jsonc-parser-
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
+import { configureRealGitTestRepo } from '../main/git/real-git-test-repo'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
 const WATCHER_TS_ENTRY = path.resolve(__dirname, '../main/ipc/parcel-watcher-process-entry.ts')
@@ -248,8 +249,7 @@ describe('Subprocess: Relay entry point', () => {
   it('responds to git.status on a real repo', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'pipe' })
-    execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: tmpDir, stdio: 'pipe' })
-    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: tmpDir, stdio: 'pipe' })
+    configureRealGitTestRepo(tmpDir, { name: 'Test', email: 'test@test.com' })
     writeFileSync(path.join(tmpDir, 'file.txt'), 'content')
     execFileSync('git', ['add', '.'], { cwd: tmpDir, stdio: 'pipe' })
     execFileSync('git', ['commit', '-m', 'init'], { cwd: tmpDir, stdio: 'pipe' })

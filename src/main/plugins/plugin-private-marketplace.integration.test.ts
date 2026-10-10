@@ -9,6 +9,7 @@ import { getUserPluginsDir } from './plugin-discovery'
 import { readPluginLockfile } from './plugin-install'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
+import { configureRealGitTestRepo } from '../git/real-git-test-repo'
 
 const execFileAsync = promisify(execFile)
 const temporaryRoots: string[] = []
@@ -35,6 +36,7 @@ async function createGitRepository(
     await writeFile(path, contents, 'utf8')
   }
   await runGit(repository, ['init', '--quiet'])
+  configureRealGitTestRepo(repository)
   await runGit(repository, ['checkout', '--quiet', '-b', 'main'])
   await runGit(repository, ['add', '--all'])
   await runGit(repository, [

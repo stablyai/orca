@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from './runner'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 // Why: spy on the git runner so we can count rev-parse invocations while still
 // running real git, proving the main-entry-equals-repoPath early return skips
@@ -38,8 +39,7 @@ async function createCommittedRepo(root: string, name: string): Promise<string> 
   const repoPath = path.join(root, name)
   execFileSync('git', ['init', '--quiet', repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(repoPath, ['config', 'user.email', 'test@example.com'])
-  git(repoPath, ['config', 'user.name', 'Test User'])
+  configureRealGitTestRepo(repoPath, { name: 'Test User', email: 'test@example.com' })
   await writeFile(path.join(repoPath, 'README.md'), `${name}\n`)
   git(repoPath, ['add', 'README.md'])
   git(repoPath, ['commit', '--quiet', '-m', 'initial'])

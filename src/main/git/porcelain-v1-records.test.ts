@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parsePorcelainV1Records } from './porcelain-v1-records'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const tempRoots: string[] = []
 
@@ -14,8 +15,7 @@ function createRepo(): string {
   const repo = mkdtempSync(join(tmpdir(), 'orca-porcelain-v1-'))
   tempRoots.push(repo)
   git(['init', '-q', '-b', 'main'], repo)
-  git(['config', 'user.email', 'test@example.com'], repo)
-  git(['config', 'user.name', 'Test'], repo)
+  configureRealGitTestRepo(repo, { name: 'Test', email: 'test@example.com' })
   return repo
 }
 

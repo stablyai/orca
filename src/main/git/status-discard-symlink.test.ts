@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile, access, readFile } from 'node:f
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { bulkDiscardChanges, discardChanges } from './status'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const tempRoots: string[] = []
 
@@ -21,8 +22,7 @@ async function createRepoWithOutsideDirectory(): Promise<{
   await mkdir(repo)
   await mkdir(outsideDir)
   execFileSync('git', ['init', '-q'], { cwd: repo })
-  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
-  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
+  configureRealGitTestRepo(repo, { name: 'Test User', email: 'test@example.com' })
   await writeFile(path.join(repo, '.gitkeep'), '')
   execFileSync('git', ['add', '.gitkeep'], { cwd: repo })
   execFileSync('git', ['commit', '-q', '-m', 'initial'], { cwd: repo })

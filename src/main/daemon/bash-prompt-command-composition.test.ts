@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
+import { withoutHostTerminalEnv } from '../real-shell-test-env'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
@@ -29,7 +30,12 @@ function runInteractiveBash(
     {
       input,
       encoding: 'utf8',
-      env: { ...process.env, HOME: tempHome, ORCA_SHELL_FEATURES: 'ready', TERM: 'xterm' },
+      env: {
+        ...withoutHostTerminalEnv(process.env),
+        HOME: tempHome,
+        ORCA_SHELL_FEATURES: 'ready',
+        TERM: 'xterm'
+      },
       timeout: 5000
     }
   )

@@ -17,6 +17,7 @@ import {
   startPreparation,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from '../worktree-create-preparation-pool'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -36,6 +37,7 @@ async function fixture(
   roots.push(root)
   const repo = join(root, repoName)
   await git(root, ['init', '--quiet', repo])
+  configureRealGitTestRepo(repo)
   await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   await writeFile(join(repo, 'tracked.txt'), 'original\n')
   await git(repo, ['add', 'tracked.txt'])

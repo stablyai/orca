@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 import { checkDaemonProtocolCrossing } from './check-daemon-protocol-crossing.mjs'
 import { DAEMON_PROTOCOL_SOURCE_PATH } from './daemon-protocol-facts.mjs'
 import { selectLatestStableReleaseTag } from './stable-release-tags.mjs'
@@ -27,20 +28,11 @@ function repoWithTags(tagged) {
   const repo = mkdtempSync(join(tmpdir(), 'daemon-protocol-crossing-'))
   repos.push(repo)
   git(repo, ['init', '-q'])
+  configureRealGitTestRepo(repo, { name: 'test', email: 'test@example.com' })
   for (const [tag, protocol] of tagged) {
     writeProtocol(repo, protocol)
     git(repo, ['add', '.'])
-    git(repo, [
-      '-c',
-      'user.name=test',
-      '-c',
-      'user.email=test@example.com',
-      'commit',
-      '-q',
-      '--no-gpg-sign',
-      '-m',
-      tag
-    ])
+    git(repo, ['commit', '-q', '-m', tag])
     git(repo, ['tag', tag])
   }
   return repo

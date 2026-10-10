@@ -8,6 +8,7 @@ import { clearGitCapabilityStateForTests, getLocalGitCapabilityCache } from './g
 import * as runner from './runner'
 import { prepareWorktreeCreateCheckout } from './worktree-create-preparation'
 import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from './worktree-operation-options'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const roots: string[] = []
 const unsupported = Object.assign(new Error("error: unknown option 'reason'"), { code: 129 })
@@ -32,6 +33,7 @@ async function fixture() {
   const repo = join(root, 'repo')
   const prepared = join(root, 'prepared')
   await git(root, ['init', '--quiet', repo])
+  configureRealGitTestRepo(repo)
   await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   await writeFile(join(repo, 'tracked.txt'), 'original\n')
   await git(repo, ['add', 'tracked.txt'])

@@ -14,6 +14,7 @@ import {
 } from './local-repo-ref-maintenance'
 import { forceDeleteLocalBranch } from './worktree-branch-removal'
 import { maintainRepoPackIndex, PACK_INDEX_THRESHOLD } from './repo-pack-index-maintenance'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const roots: string[] = []
 // Large enough that the deferral ladder (1x, 2x, 4x ... capped at 8x) outlasts
@@ -73,8 +74,7 @@ async function createRepo(looseRefs: number): Promise<{ repoPath: string; refsDi
   const repoPath = join(root, 'repo')
   execFileSync('git', ['init', '--quiet', repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(repoPath, ['config', 'user.email', 'test@example.com'])
-  git(repoPath, ['config', 'user.name', 'Test User'])
+  configureRealGitTestRepo(repoPath, { name: 'Test User', email: 'test@example.com' })
   await writeFile(join(repoPath, 'file.txt'), 'one\n')
   git(repoPath, ['add', 'file.txt'])
   git(repoPath, ['commit', '--quiet', '-m', 'initial'])

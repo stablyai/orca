@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getStatus } from './status'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 // Why: `node_modules/` is a directory-only ignore rule. It matches the primary
 // checkout's real directory but never the worktree's symlink, so Git reports the
@@ -23,8 +24,7 @@ describe('getStatus shared symlink exclusion', () => {
     worktree = join(root, 'worktree')
     mkdirSync(primary)
     git(['init', '-q', '-b', 'main'], primary)
-    git(['config', 'user.email', 'test@example.com'], primary)
-    git(['config', 'user.name', 'Test'], primary)
+    configureRealGitTestRepo(primary, { name: 'Test', email: 'test@example.com' })
     writeFileSync(join(primary, '.gitignore'), 'node_modules/\n')
     writeFileSync(join(primary, 'README.md'), '# tracked\n')
     writeFileSync(join(primary, 'OTHER.md'), '# other\n')

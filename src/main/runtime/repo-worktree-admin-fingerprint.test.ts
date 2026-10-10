@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
+import { configureRealGitTestRepo } from '../git/real-git-test-repo'
 
 const execFileAsync = promisify(execFile)
 
@@ -35,8 +36,7 @@ beforeEach(async () => {
   await mkdir(repoPath, { recursive: true })
   await mkdir(join(scratchDir, 'trees'), { recursive: true })
   await git(['init', '-q'], repoPath)
-  await git(['config', 'user.email', 'fingerprint@example.invalid'], repoPath)
-  await git(['config', 'user.name', 'Fingerprint'], repoPath)
+  configureRealGitTestRepo(repoPath, { name: 'Fingerprint', email: 'fingerprint@example.invalid' })
   await writeFile(join(repoPath, 'seed.txt'), 'seed\n')
   await git(['add', '-A'], repoPath)
   await git(['commit', '-qm', 'seed'], repoPath)

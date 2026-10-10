@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(
@@ -24,15 +25,14 @@ it('fetches both merge parents and deleted content without unrelated branches or
   const git = (args, cwd = source) => run('git', args, cwd)
   const commit = (message) => {
     git(['add', '-A'])
-    git(['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', message])
+    git(['commit', '--quiet', '-m', message])
     return git(['rev-parse', 'HEAD'])
   }
 
   try {
     run('git', ['init', '--quiet', source], directory)
     git(['checkout', '-b', 'main'])
-    git(['config', 'user.name', 'CI test'])
-    git(['config', 'user.email', 'ci@example.invalid'])
+    configureRealGitTestRepo(source, { name: 'CI test', email: 'ci@example.invalid' })
     mkdirSync(join(source, 'cloud'))
     writeFileSync(join(source, 'cloud', 'removed.txt'), 'historical-scan-marker\n')
     const original = commit('historical content')
@@ -45,7 +45,7 @@ it('fetches both merge parents and deleted content without unrelated branches or
     git(['checkout', 'main'])
     writeFileSync(join(source, 'cloud', 'base.txt'), 'base-parent-marker\n')
     commit('base parent')
-    git(['-c', 'commit.gpgsign=false', 'merge', '--no-ff', 'feature', '-m', 'PR merge'])
+    git(['merge', '--no-ff', 'feature', '-m', 'PR merge'])
     const sha = git(['rev-parse', 'HEAD'])
     const expectedHistory = git(['rev-list', 'HEAD']).split('\n').sort()
     const expectedPatch = git(['log', '--format=%H', '-p', 'HEAD', '--', 'cloud'])

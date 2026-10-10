@@ -26,6 +26,10 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
+  // Real zsh on node-pty: under Bun, node-pty loses PTY input on macOS (oven-sh/bun#25822).
+  'src/main/daemon/shell-ready.test.ts',
+  'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
+  'src/main/shell-startup-feature-channel.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',

@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 import { runProcessSync } from '@orca/process-host'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -68,13 +69,12 @@ describe('ref-mirroring vet steps', () => {
     const git = (args, cwd = directory) => run('git', args, cwd)
     try {
       git(['init', source])
-      git(['config', 'user.name', 'CI test'], source)
-      git(['config', 'user.email', 'ci@example.invalid'], source)
+      configureRealGitTestRepo(source, { name: 'CI test', email: 'ci@example.invalid' })
       writeFileSync(join(source, 'package.json'), JSON.stringify({ version: '1.4.165-rc.0' }))
       git(['add', 'package.json'], source)
-      git(['-c', 'commit.gpgsign=false', 'commit', '-m', 'initial'], source)
+      git(['commit', '-m', 'initial'], source)
       git(['tag', 'v1.4.167'], source)
-      git(['-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'head'], source)
+      git(['commit', '--allow-empty', '-m', 'head'], source)
       git(['clone', '--depth=1', '--no-tags', pathToFileURL(source).href, shallow])
       expect(git(['rev-list', '--count', 'HEAD'], shallow)).toBe('1')
       expect(git(['tag', '--list'], shallow)).toBe('')

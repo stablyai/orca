@@ -10,6 +10,7 @@ import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { removeWorktree } from './worktree'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const execFileAsync = promisify(execFile)
 const describeBench = process.env.ORCA_WORKTREE_REMOVAL_BENCH ? describe : describe.skip
@@ -34,8 +35,7 @@ describeBench('worktree removal on a large checkout', () => {
     worktreePath = join(scratchDir, 'workspaces', 'repo', 'bench')
     await mkdir(repoPath, { recursive: true })
     await git(['init', '-q', '-b', 'main'], repoPath)
-    await git(['config', 'user.email', 'bench@example.invalid'], repoPath)
-    await git(['config', 'user.name', 'Bench'], repoPath)
+    configureRealGitTestRepo(repoPath, { name: 'Bench', email: 'bench@example.invalid' })
     await writeFile(join(repoPath, 'seed.txt'), 'seed\n')
     await git(['add', 'seed.txt'], repoPath)
     await git(['commit', '-qm', 'seed'], repoPath)

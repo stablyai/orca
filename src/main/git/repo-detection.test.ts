@@ -17,6 +17,7 @@ import {
   isGitRepo,
   normalizeGitRepoRootForInputPath
 } from './repo'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -144,6 +145,7 @@ describe('isGitRepo', () => {
     const linkedWorktree = path.join(tmpDir, 'linked-worktree')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
+    configureRealGitTestRepo(realRepo)
     git(realRepo, [
       '-c',
       'user.name=Orca Test',
@@ -348,8 +350,7 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
   function initRepoWithCommit(repoRoot: string): void {
     mkdirSync(repoRoot, { recursive: true })
     git(repoRoot, ['init', '--quiet'])
-    git(repoRoot, ['config', 'user.email', 'test@orca.test'])
-    git(repoRoot, ['config', 'user.name', 'Orca Test'])
+    configureRealGitTestRepo(repoRoot, { name: 'Orca Test', email: 'test@orca.test' })
     writeFileSync(path.join(repoRoot, 'README.md'), 'seed\n')
     git(repoRoot, ['add', 'README.md'])
     git(repoRoot, ['commit', '--quiet', '-m', 'seed'])

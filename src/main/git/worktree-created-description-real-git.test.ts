@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { clearGitCapabilityStateForTests, getLocalGitCapabilityCache } from './git-capability-state'
 import { describeCreatedWorktree, listWorktreesStrict } from './worktree'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const execFileAsync = promisify(execFile)
 
@@ -23,8 +24,7 @@ async function git(args: string[], cwd: string): Promise<string> {
 async function seedRepo(path: string, email: string): Promise<void> {
   await mkdir(path, { recursive: true })
   await git(['init', '-q'], path)
-  await git(['config', 'user.email', email], path)
-  await git(['config', 'user.name', 'Created Description'], path)
+  configureRealGitTestRepo(path, { name: 'Created Description', email })
   await writeFile(join(path, 'seed.txt'), 'seed\n')
   await git(['add', '-A'], path)
   await git(['commit', '-qm', 'seed'], path)

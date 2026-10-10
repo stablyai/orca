@@ -18,6 +18,7 @@ import {
   _resetGitAdmissionForTests,
   type GitAdmissionEvent
 } from './command-runner/git-subprocess-admission'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -31,6 +32,7 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
   roots.push(root)
   const repo = join(root, 'repo')
   await gitExecFileAsync(['init', '--quiet', repo], { cwd: root })
+  configureRealGitTestRepo(repo)
   await gitExecFileAsync(['symbolic-ref', 'HEAD', 'refs/heads/main'], { cwd: repo })
   await writeFile(join(repo, 'file.txt'), 'workspace content\n')
   await gitExecFileAsync(['add', '.'], { cwd: repo })

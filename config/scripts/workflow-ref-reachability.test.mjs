@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 import { runProcess } from '@orca/process-host'
 
 const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
@@ -32,6 +33,7 @@ async function git(args, env = identity) {
 
 beforeAll(async () => {
   await git(['init', '--bare', '--ref-format=reftable', repository])
+  configureRealGitTestRepo(repository)
   const tree = await git(['-C', repository, 'mktree'])
   ancestor = await git(['-C', repository, 'commit-tree', tree, '-m', 'ancestor'])
   upper = await git(['-C', repository, 'commit-tree', tree, '-p', ancestor, '-m', 'upper'])

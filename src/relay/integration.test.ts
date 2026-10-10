@@ -23,11 +23,11 @@ import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { configureRealGitTestRepo } from '../main/git/real-git-test-repo'
 
 function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir, stdio: 'pipe' })
-  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir, stdio: 'pipe' })
+  configureRealGitTestRepo(dir, { name: 'Test', email: 'test@test.com' })
 }
 
 function gitCommit(dir: string, message: string): void {

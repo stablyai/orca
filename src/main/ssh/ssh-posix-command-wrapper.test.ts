@@ -1,7 +1,15 @@
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it } from 'vitest'
+import { withoutHostTerminalEnv } from '../real-shell-test-env'
 import { shellEscape, wrapRemoteCommandForPosixShell } from './ssh-connection-utils'
+
+// Why an empty home: csh/tcsh read ~/.cshrc or ~/.tcshrc even for `-c`, and zsh reads .zshenv;
+// the parser is under test, not the developer's rc files.
+const shellHome = mkdtempSync(join(tmpdir(), 'orca-posix-wrapper-home-'))
+afterAll(() => rmSync(shellHome, { recursive: true, force: true }))
 
 describe('wrapRemoteCommandForPosixShell', () => {
   it('emits one physical line without requiring a remote decoder binary', () => {
@@ -89,6 +97,7 @@ describe('wrapRemoteCommandForPosixShell', () => {
 function runThroughShell(shell: string, command: string, input?: string) {
   return spawnSync(shell, ['-c', wrapRemoteCommandForPosixShell(command)], {
     encoding: 'utf8',
-    input
+    input,
+    env: { ...withoutHostTerminalEnv(process.env), HOME: shellHome, ZDOTDIR: shellHome }
   })
 }

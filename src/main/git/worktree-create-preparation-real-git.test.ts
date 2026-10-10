@@ -24,6 +24,7 @@ import {
   takePreparation
 } from '../worktree-create-preparation-pool'
 import { hasPendingStalePreparationCleanup } from '../worktree-create-preparation-stale-cleanup'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const tempRoots: string[] = []
 
@@ -41,8 +42,7 @@ async function createRepo(): Promise<{ repoPath: string; root: string }> {
   const repoPath = join(root, 'repo')
   execFileSync('git', ['init', '--quiet', repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(repoPath, ['config', 'user.email', 'test@example.com'])
-  git(repoPath, ['config', 'user.name', 'Test User'])
+  configureRealGitTestRepo(repoPath, { name: 'Test User', email: 'test@example.com' })
   git(repoPath, ['config', 'core.autocrlf', 'false'])
   await writeFile(join(repoPath, 'version.txt'), 'one\n')
   git(repoPath, ['add', 'version.txt'])

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 import { runProcess } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
@@ -49,6 +50,7 @@ async function resolve(ref) {
 
 beforeAll(async () => {
   await git(['init', '--bare', repository])
+  configureRealGitTestRepo(repository)
   const tree = await git(['-C', repository, 'mktree'])
   tagged = await git(['-C', repository, 'commit-tree', tree, '-m', 'tagged'])
   branchTip = await git(['-C', repository, 'commit-tree', tree, '-p', tagged, '-m', 'tip'])

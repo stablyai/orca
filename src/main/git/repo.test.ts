@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 import {
   buildSearchBaseRefsArgv,
@@ -30,8 +31,7 @@ function initRepo(dir: string): void {
   git(dir, ['init', '--quiet'])
   // Why: `--initial-branch=main` needs git >= 2.28; symbolic-ref before the first commit forces `main` on any git version.
   git(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-  git(dir, ['config', 'user.email', 'test@test.com'])
-  git(dir, ['config', 'user.name', 'Test'])
+  configureRealGitTestRepo(dir, { name: 'Test', email: 'test@test.com' })
   git(dir, ['commit', '--allow-empty', '-m', 'initial', '--quiet'])
 }
 

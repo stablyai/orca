@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prependOrcaCliDirToChildPath } from './cli/orca-cli-child-path'
+import { withoutHostTerminalEnv } from './real-shell-test-env'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './pty/posix-shell-startup-command'
 import { getZshShellReadyWrapperFile } from './providers/local-pty-shell-ready-wrapper-generation'
 import { encodeShellStartupFeatures, selectShellStartupFeatures } from './shell-startup-features'
@@ -131,7 +132,7 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
       writeFileSync(join(wrapperDir, '.zshenv'), getZshShellReadyWrapperFile())
       writeFileSync(join(wrapperDir, ZSH_WRAPPER_DIR_MARKER_FILE), '')
       const env: Record<string, string> = {
-        ...process.env,
+        ...withoutHostTerminalEnv(process.env),
         HOME: home,
         USERPROFILE: home,
         PATH: `${ambientBin}:/usr/bin:/bin`,

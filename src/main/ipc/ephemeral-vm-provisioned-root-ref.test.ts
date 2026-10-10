@@ -26,6 +26,7 @@ vi.mock('../ephemeral-vm-runtime-ssh', () => ({
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
+import { configureRealGitTestRepo } from '../git/real-git-test-repo'
 
 let userDataPath: string
 let repoPath: string
@@ -142,8 +143,7 @@ function makeStore(path: string) {
 
 function createGitFixtureCommit(path: string): string {
   execFileSync('git', ['init'], { cwd: path })
-  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: path })
-  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: path })
+  configureRealGitTestRepo(path, { name: 'Test', email: 'test@example.com' })
   execFileSync('git', ['branch', '-M', 'main'], { cwd: path })
   writeFileSync(join(path, 'fixture.txt'), 'fixture')
   execFileSync('git', ['add', 'fixture.txt'], { cwd: path })

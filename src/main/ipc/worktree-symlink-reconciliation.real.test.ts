@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { findCreatedWorktree } from './created-worktree-reconciliation'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
+import { configureRealGitTestRepo } from '../git/real-git-test-repo'
 
 type ListedWorktree = { path: string; branch?: string }
 
@@ -29,8 +30,7 @@ describe('native worktree symlink reconciliation (real Git)', () => {
     await symlink(canonicalRoot, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir')
 
     git(repoPath, ['init', '--quiet'])
-    git(repoPath, ['config', 'user.email', 'review@example.invalid'])
-    git(repoPath, ['config', 'user.name', 'PR review'])
+    configureRealGitTestRepo(repoPath, { name: 'PR review', email: 'review@example.invalid' })
     await writeFile(join(repoPath, 'README.md'), 'fixture\n')
     git(repoPath, ['add', 'README.md'])
     git(repoPath, ['commit', '--quiet', '-m', 'fixture'])

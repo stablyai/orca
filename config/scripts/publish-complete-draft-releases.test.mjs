@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { configureRealGitTestRepo } from '../../src/main/git/real-git-test-repo.ts'
 import {
   isTagBuiltFromCurrentRef,
   isReleaseCutDraft,
@@ -22,8 +23,7 @@ function withGitRepo(run) {
   const dir = mkdtempSync(join(tmpdir(), 'orca-draft-release-'))
   try {
     git(dir, ['init', '--initial-branch=main'])
-    git(dir, ['config', 'user.name', 'Test Bot'])
-    git(dir, ['config', 'user.email', 'test@example.com'])
+    configureRealGitTestRepo(dir, { name: 'Test Bot', email: 'test@example.com' })
     run(dir)
   } finally {
     rmSync(dir, { recursive: true, force: true })

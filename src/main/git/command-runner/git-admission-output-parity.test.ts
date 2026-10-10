@@ -7,6 +7,7 @@ import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
 import { _resetGitAdmissionForTests } from './git-subprocess-admission'
+import { configureRealGitTestRepo } from '../real-git-test-repo'
 
 const tempRoots: string[] = []
 const originalAdmissionDisabled = process.env.ORCA_GIT_ADMISSION_DISABLED
@@ -33,8 +34,7 @@ it('keeps real git output byte-identical with admission on and bypassed', async 
   const root = await mkdtemp(path.join(tmpdir(), 'orca-git-output-parity-'))
   tempRoots.push(root)
   execFileSync('git', ['init', '-q'], { cwd: root })
-  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root })
-  execFileSync('git', ['config', 'user.name', 'Orca Test'], { cwd: root })
+  configureRealGitTestRepo(root, { name: 'Orca Test', email: 'test@example.com' })
   await writeFile(path.join(root, 'tracked.txt'), 'line one\nline two\n')
   await writeFile(path.join(root, 'blob.bin'), Buffer.from([0, 1, 2, 3, 255]))
   execFileSync('git', ['add', '.'], { cwd: root })

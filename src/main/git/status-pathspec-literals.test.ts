@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './status'
+import { configureRealGitTestRepo } from './real-git-test-repo'
 
 const tempRoots: string[] = []
 const globNamedFile = '[k]eep.log'
@@ -17,8 +18,7 @@ async function createRepoWithGlobNamedFiles(): Promise<string> {
   const repo = await mkdtemp(path.join(tmpdir(), 'orca-status-pathspec-'))
   tempRoots.push(repo)
   execFileSync('git', ['init', '-q'], { cwd: repo })
-  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
-  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
+  configureRealGitTestRepo(repo, { name: 'Test User', email: 'test@example.com' })
   await writeFile(path.join(repo, globNamedFile), 'selected')
   await writeFile(path.join(repo, globMatchedFile), 'keep')
   execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
