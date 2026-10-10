@@ -38,7 +38,9 @@ async function rig(routes: Record<string, CodexTestRoute>) {
   const methods = () =>
     connection.calls
       .map(({ method }) => method)
-      .filter((method) => method !== 'model/list' && method !== 'config/read')
+      .filter(
+        (method) => method !== 'initialize' && method !== 'model/list' && method !== 'config/read'
+      )
   const endTurn = (turnId: string, status: 'completed' | 'interrupted') =>
     connection.handlers.onNotification?.('turn/completed', {
       threadId: CODEX_TEST_THREAD_ID,
@@ -215,7 +217,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     expect(await settledWithin(sending)).toBe('held')
     const methods = () =>
       rig.codex.connections[0]!.calls.map(({ method }) => method).filter(
-        (method) => method !== 'model/list' && method !== 'config/read'
+        (method) => method !== 'initialize' && method !== 'model/list' && method !== 'config/read'
       )
     expect(methods()).toEqual(['thread/start', 'turn/start'])
     return { ...rig, sending, methods }

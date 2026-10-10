@@ -28,6 +28,10 @@ import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog
 import { createPiModelCatalogProbe, piModelCatalogFromListing } from './rpc-model-catalog-probe'
 import type { PiRpcConnection } from './rpc-session'
 import { PiRpcSessionAdapter } from './rpc-session-adapter'
+import type {
+  StructuredAgentSessionLifecycleEvent,
+  StructuredAgentSessionStartedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 const PI_HOME = { variable: 'PI_CODING_AGENT_DIR', path: '/homes/pi' }
 // What `pi --list-models` prints: the first row is not the model Pi starts on.
@@ -176,6 +180,7 @@ async function piHost() {
       }
     } as AgentSessionRecord)
     const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
+    const onLifecycle = vi.fn<(event: StructuredAgentSessionLifecycleEvent) => void>()
     const adapter = new PiRpcSessionAdapter({
       resolveLaunch: async () => ({
         command: '/opt/pi/bin/pi',
@@ -191,13 +196,13 @@ async function piHost() {
         child = piChild(opts.available ?? AVAILABLE, opts.thinking ?? 'high', opts.startsOn ?? '')
         return child.connection
       },
-      onLifecycle: vi.fn(),
+      onLifecycle,
       onSettled: vi.fn(),
       onIdle: vi.fn(),
       logger: { warn: vi.fn(), error: vi.fn() }
     })
     adapters.push(adapter)
-    const acquired = await adapter.acquire({
+    await adapter.acquire({
       identity: {
         sessionId,
         workspaceId: 'ws-1',
@@ -210,10 +215,20 @@ async function piHost() {
       options: opts.saved ?? {},
       events: rig.eventSink
     })
-    if (!acquired.catalogListing) {
+    // The acquire answers at spawn; the start hands the host its listing once it is proven.
+    const started = await vi.waitFor(() => {
+      const event = onLifecycle.mock.calls
+        .map(([call]) => call)
+        .find((call): call is StructuredAgentSessionStartedEvent => call.type === 'started')
+      if (!event) {
+        throw new Error('Pi has not started')
+      }
+      return event
+    })
+    if (!started.catalogListing) {
       throw new Error('a Pi start hands the host its listing')
     }
-    catalog.recordLiveListing(sessionId, acquired.catalogListing)
+    catalog.recordLiveListing(sessionId, started.catalogListing)
     if (opts.afterStart && child) {
       await opts.afterStart({ child, adapter, sessionId })
     }
@@ -224,7 +239,7 @@ async function piHost() {
       }
     }
     await read()
-    return { listing: acquired.catalogListing, read }
+    return { listing: started.catalogListing, read }
   }
   return { catalog, chat, store, clock }
 }

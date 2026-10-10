@@ -166,7 +166,7 @@ describe('a send while a Grok prompt runs', () => {
     await new Promise((resolve) => setTimeout(resolve, 120))
     await rig.settle()
     expect(rig.sent('session/cancel')).toHaveLength(1)
-    expect(rig.lifecycle).toEqual([])
+    expect(rig.ended).toEqual([])
     expect(rig.child().closes).toBe(0)
     expect(rig.settled.map((settled) => settled.clientMessageId)).toEqual(['first'])
     // A Stop sends its own cancel; the host's grace, not the cancel, ends Grok.
@@ -223,7 +223,7 @@ describe('a send while a turn Grok began itself runs', () => {
     // `a` runs a whole turn: a steer's cancel never ends Grok.
     await new Promise((resolve) => setTimeout(resolve, 120))
     await rig.settle()
-    expect(rig.lifecycle).toEqual([])
+    expect(rig.ended).toEqual([])
     expect(rig.child().closes).toBe(0)
     agent.reply(a, { stopReason: 'end_turn' })
     const b = await rig.frame('session/prompt', 1)

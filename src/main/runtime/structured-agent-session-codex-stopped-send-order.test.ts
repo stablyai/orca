@@ -90,9 +90,14 @@ async function send(text: string): Promise<string> {
 }
 
 /** The chat's Stop; `turnId` names the turn it stops, as the phone does. */
-function stop(turnId?: string): Promise<unknown> {
+async function stop(turnId?: string): Promise<unknown> {
   const fields = turnId === undefined ? {} : { turnId }
-  return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
+  const result = await host.cancel(CALLER, {
+    envelope: envelope('agentSession.cancel', fields),
+    ...fields
+  })
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
+  return result
 }
 
 function verdictOf(submissions: readonly AgentJournalSubmission[], clientMessageId: string) {

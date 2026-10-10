@@ -43,6 +43,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
   'Codex stopped while this response was in progress. You can continue in this conversation.'
@@ -63,15 +64,18 @@ let hostErrors: unknown[]
 let statusSink: StructuredAgentSessionStatusSink
 let clock: number
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    acquire,
-    closeSession,
-    releaseAcquisition: vi.fn(async () => true),
-    dispatch,
-    cancelTurn: vi.fn(async () => ({ cancelled: false })),
-    answerPrompt: vi.fn(async () => undefined),
-    setOption: vi.fn(async () => undefined)
-  }
+  return startsWhenPublished(
+    {
+      acquire,
+      closeSession,
+      releaseAcquisition: vi.fn(async () => true),
+      dispatch,
+      cancelTurn: vi.fn(async () => ({ cancelled: false })),
+      answerPrompt: vi.fn(async () => undefined),
+      setOption: vi.fn(async () => undefined)
+    },
+    () => host
+  )
 }
 
 function openHost(

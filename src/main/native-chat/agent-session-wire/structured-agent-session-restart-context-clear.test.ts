@@ -58,7 +58,7 @@ describe('restart offers after context clear', () => {
         sessionId: SESSION,
         session: {
           journal: journal([turnItem('old', 'running'), clear], [unknown]),
-          child: { fence: 2 }
+          child: { fence: 2, phase: 'ready' }
         },
         getRecord: value,
         childWork: () => undefined,
@@ -78,7 +78,7 @@ describe('restart offers after context clear', () => {
     const turn = { ...turnItem('new-turn', 'running'), sequence: 6 }
     const offer = structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
-      session: { journal: journal([clear, turn]), child: { fence: 2 } },
+      session: { journal: journal([clear, turn]), child: { fence: 2, phase: 'ready' } },
       getRecord: () => currentRecord,
       childWork: () => undefined,
       trigger: 'quit',

@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
@@ -161,8 +162,8 @@ describe('Codex structured session close lifecycle', () => {
     const { adapter } = adapterFixture()
     const input = { identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' }
 
-    const first = await adapter.acquire(input)
-    const second = await adapter.acquire(input)
+    const first = await acquireReadyCodexForTest(adapter, input)
+    const second = await acquireReadyCodexForTest(adapter, input)
 
     expect(first.acquisitionGeneration).toBe('generation-1')
     expect(second.acquisitionGeneration).toBe('generation-2')
@@ -170,9 +171,17 @@ describe('Codex structured session close lifecycle', () => {
 
   it('distinguishes an observed provider death from a requested close', async () => {
     const { adapter, connections, events } = adapterFixture()
-    await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
     connections[0]?.handlers.onExit?.(new Error('provider exited'))
-    await adapter.acquire({ identity: identity('session-2'), fence: 9, spawnToken: 'spawn-2' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-2'),
+      fence: 9,
+      spawnToken: 'spawn-2'
+    })
 
     await adapter.closeSession('session-2')
 
@@ -192,7 +201,11 @@ describe('Codex structured session close lifecycle', () => {
 
   it('force-close preserves unexpected-exit evidence when the adapter reports exit during close', async () => {
     const { adapter, connections, events } = adapterFixture()
-    await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
     const current = connections[0]
     if (!current) {
       throw new Error('missing connection')

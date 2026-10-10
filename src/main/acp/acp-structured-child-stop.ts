@@ -1,4 +1,5 @@
 import type { AcpStructuredSession } from './acp-structured-session'
+import type { AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError } from './acp-errors'
@@ -12,12 +13,13 @@ type BackgroundTaskStop = NonNullable<AcpDialect['backgroundTaskStop']>
 export const NO_ACP_CHILD_STOPS: AcpChildStops = { subagents: false, backgroundTasks: false }
 
 export function acpChildStopCapabilities(
-  session?: AcpStructuredSession
+  session?: AcpStructuredChild
 ): AgentSessionBackgroundTaskStops | undefined {
   return session?.journalClosed === null
     ? {
         supportsTaskStop:
-          session.childStops?.subagents === true || session.childStops?.backgroundTasks === true,
+          session.phase === 'ready' &&
+          (session.childStops?.subagents === true || session.childStops?.backgroundTasks === true),
         supportsStopAll: false
       }
     : undefined

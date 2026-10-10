@@ -5,7 +5,6 @@ import type {
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import type {
   StructuredAgentRegistration,
   StructuredAgentRegistry
@@ -131,9 +130,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   startUnavailable: NonNullable<StructuredAgentSessionAdapter['startUnavailable']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.startUnavailable?.(sessionId)
 
-  stopEndsSession = (sessionId: string): boolean =>
-    this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
-
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)
 
@@ -163,11 +159,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
 
-  awaitOptionWritable = (sessionId: string): Promise<void> =>
-    this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
-  startAnswered = (sessionId: string): boolean | undefined =>
-    this.liveOwnerOrNull(sessionId)?.startAnswered?.(sessionId)
-
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)
 
@@ -178,20 +169,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     }
     return reader(input)
   }
-
-  readAcquisitionOptions = (input: {
-    sessionId: string
-    fence: number
-    priorOptions?: Readonly<Record<string, string>>
-  }) => {
-    const adapter = this.owner(input.sessionId)
-    return adapter.readAcquisitionOptions
-      ? adapter.readAcquisitionOptions(input)
-      : readNativeSessionOptions({ adapter, ...input })
-  }
-
-  readOptionRestoreFailures = (sessionId: string): readonly string[] =>
-    this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
 
   providerHistoryWindow = (input: {
     identity: AgentSessionJournalIdentity

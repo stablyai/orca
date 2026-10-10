@@ -158,6 +158,7 @@ async function stop(turnId?: string): Promise<void> {
   if (!stopped.ok) {
     throw new Error(JSON.stringify(stopped.refusal))
   }
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
 }
 
 /** `/compact` as the chat surface runs it; refused while the chat still owes work. */
@@ -605,6 +606,7 @@ describe('a Stop sent after Codex answered a cold send, before it opened the tur
     expect(await held).toBe('held')
     expect(interrupts).toBe(1)
     turns.start()
+    await vi.advanceTimersByTimeAsync(1)
     await stopping
 
     expect(interrupts).toBe(2)
@@ -632,15 +634,19 @@ describe('a Stop in that window that the turn never opens for', () => {
     return { stopping, sent }
   }
 
-  it('says Codex had no turn running when that turn ends first', async () => {
-    const { stopping } = await waitingStop()
+  it('ends the session even when that turn ends before the interrupt can take it', async () => {
+    const { stopping, sent } = await waitingStop()
 
     turns.end('interrupted')
     await stopping
 
     expect(interrupts).toBe(1)
-    expect(childCloses).toBe(0)
-    expect(await statusRows()).toContain('Codex had no turn running to stop.')
+    expect(childCloses).toBe(1)
+    // The end took the send back, so its own row says it never started and no Stop note repeats it.
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+    )
+    expect(await statusRows()).not.toContain('Cancellation requested.')
   })
 
   it('lets a chat closed behind it close within its bound and one eviction', async () => {
@@ -651,10 +657,7 @@ describe('a Stop in that window that the turn never opens for', () => {
       closing,
       CODEX_TURN_OPEN_WAIT_MS + CHILD_EVICTION_TIMEOUT_MS
     )
-    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 201)
-    expect(openWaits.ended).toEqual([])
-    expect(childCloses).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS)
     expect(openWaits.ended).toEqual(['turn-1'])
 
     expect(await closedWithinBound).not.toBe('held')
@@ -673,10 +676,7 @@ describe('a Stop in that window that the turn never opens for', () => {
       stopStructuredAgentSessionRuntime(),
       CHILD_EVICTION_TIMEOUT_MS
     )
-    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 201)
-    expect(openWaits.ended).toEqual([])
-    expect(childCloses).toBe(0)
-    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS)
     expect(openWaits.ended).toEqual(['turn-1'])
     expect(await quitWithinBound).not.toBe('held')
     expect(childCloses).toBe(1)
@@ -878,7 +878,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
 
     await stopWhenItsTurnNeverOpens()
 
-    expect(childCloses).toBe(1)
+    expect(childCloses).toBe(2)
     expect(verdictOf((await settled()).submissions, next)).toBe('withdrawn')
   })
 

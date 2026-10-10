@@ -28,7 +28,7 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 const providerStarted = vi.fn()
 
-function startHost(phase: 'ready' | 'starting'): void {
+function startHost(): void {
   const acquire: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spawnToken }) => ({
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
@@ -38,8 +38,7 @@ function startHost(phase: 'ready' | 'starting'): void {
       mintedAtFence: fence,
       observedAt: NOW
     },
-    acquisitionGeneration: 'generation-1',
-    providerChildPhase: phase
+    acquisitionGeneration: 'generation-1'
   })
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
@@ -80,29 +79,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it('a child that proves its start at acquire tells the catalog, with its record', async () => {
-  startHost('ready')
-  await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({ ok: true })
-  expect(providerStarted).toHaveBeenCalledTimes(1)
-  expect(providerStarted.mock.calls[0]?.[0]).toMatchObject({ sessionId: SESSION })
-})
-
-it('a re-attach to the live child proves nothing new and tells the catalog nothing', async () => {
-  startHost('ready')
-  const params = hostTestAttachParams(null)
-  await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
-  const fence = store.getRecord(SESSION)?.lease.runtimeFence
-  // A reconnecting client replays its attach; the same operation re-attaches the live child.
-  await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
-  expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(fence)
-  expect(providerStarted).toHaveBeenCalledTimes(1)
-})
-
-it('a published child tells the catalog only once its start is proven', async () => {
-  startHost('starting')
-  await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({ ok: true })
-  expect(providerStarted).not.toHaveBeenCalled()
-  await host.handleAdapterEvent({
+/** The adapter's report that the child's protocol session exists. */
+function proveStart(): Promise<void> {
+  return host.handleAdapterEvent({
     type: 'started',
     sessionId: SESSION,
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
@@ -111,5 +90,25 @@ it('a published child tells the catalog only once its start is proven', async ()
     restoreSkippedOptions: [],
     optionRevision: 0
   })
+}
+
+it('a published child tells the catalog only once its start is proven, with its record', async () => {
+  startHost()
+  await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({ ok: true })
+  expect(providerStarted).not.toHaveBeenCalled()
+  await proveStart()
+  expect(providerStarted).toHaveBeenCalledTimes(1)
+  expect(providerStarted.mock.calls[0]?.[0]).toMatchObject({ sessionId: SESSION })
+})
+
+it('a re-attach to the live child proves nothing new and tells the catalog nothing', async () => {
+  startHost()
+  const params = hostTestAttachParams(null)
+  await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
+  await proveStart()
+  const fence = store.getRecord(SESSION)?.lease.runtimeFence
+  // A reconnecting client replays its attach; the same operation re-attaches the live child.
+  await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
+  expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(fence)
   expect(providerStarted).toHaveBeenCalledTimes(1)
 })

@@ -42,14 +42,11 @@ export class StructuredAgentSessionHostRuntimeState {
       ...(deps.startupLimits ? { limits: deps.startupLimits } : {}),
       settled: recordAgentSessionStartup,
       expire: (expired) => {
-        if (expired.child === null) {
-          this.acquireAborts.abort(
-            expired.sessionId,
-            new StructuredAgentSessionStartupExpiredError()
-          )
-          return
+        // Still acquiring, or applying the picks made meanwhile: either wait ends now.
+        this.acquireAborts.abort(expired.sessionId, new StructuredAgentSessionStartupExpiredError())
+        if (expired.child !== null) {
+          onStartupExpired?.(expired)
         }
-        onStartupExpired?.(expired)
       }
     })
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({

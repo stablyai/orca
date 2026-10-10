@@ -26,6 +26,7 @@ import {
   structuredAgentSessionFailureWordsContext,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
+import { runAfterProviderStart } from './structured-agent-session-provider-start-hold'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
 import {
   conversationCommandFailure,
@@ -146,6 +147,18 @@ function acceptStructuredConversationCommand(
     ...(params.delivery ? { delivery: params.delivery } : {}),
     priorRecord
   })
+  return runAfterProviderStart(context, params.envelope.sessionId, () =>
+    acceptUnderSerialize(context, caller, params, plan, arrival)
+  )
+}
+
+function acceptUnderSerialize(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: ConversationCommandParams,
+  plan: ReturnType<typeof conversationCommandPlan>,
+  arrival: { clearInFlight?: boolean }
+): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
   return mutateStructuredAgentSession(
     context,
     caller,

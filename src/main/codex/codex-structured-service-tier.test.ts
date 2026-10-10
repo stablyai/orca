@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import {
+  acquireReadyCodexForTest,
+  codexStartReport,
   THREAD_ID,
   USER_MESSAGE,
   adapterFor,
@@ -31,7 +33,7 @@ function listing(tier = 'priority') {
 }
 
 async function acquire(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
-  return adapter.acquire({
+  return acquireReadyCodexForTest(adapter, {
     identity: identityFor(sessionId),
     fence: 7,
     spawnToken: `spawn-${sessionId}`,
@@ -61,7 +63,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     const adapter = adapterFor(codex)
 
     await acquire(adapter)
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
+    expect(codexStartReport(adapter).reportedOptions).toMatchObject({
       serviceTier: 'priority'
     })
     await send(adapter, 'first')
@@ -190,7 +192,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     const codex = fakeCodex()
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-tier')
     const adapter = adapterFor(codex, { codexHome: '/codex/home', resumeThreadId: THREAD_ID })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-resume',
@@ -198,7 +200,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     })
 
     expect(codex.connections[0].calls.some((call) => call.method === 'thread/resume')).toBe(true)
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-next',
       serviceTier: 'ultrafast'
     })
@@ -237,7 +239,11 @@ describe('Codex service tier across clients and rest', () => {
       'discovery'
     )
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], { modelCatalog })
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
 
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'fastMode', value: 'true', fence: 7 })

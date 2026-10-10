@@ -143,7 +143,7 @@ describe('restart resume around /compact (B14)', () => {
   function markerFor(items: AgentJournalRenderItem[], tasks: boolean) {
     return structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
-      session: { journal: journal(items), child: { fence: 1 } },
+      session: { journal: journal(items), child: { fence: 1, phase: 'ready' as const } },
       getRecord: () => record(),
       childWork: () =>
         tasks ? [childRecord({ id: 'task-a', kind: 'agent', description: 'Review' })] : [],

@@ -151,8 +151,7 @@ beforeEach(async () => {
       mintedAtFence: fence,
       observedAt: NOW
     },
-    acquisitionGeneration: `generation-${++generation}`,
-    providerChildPhase: 'starting' as const
+    acquisitionGeneration: `generation-${++generation}`
   }))
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)

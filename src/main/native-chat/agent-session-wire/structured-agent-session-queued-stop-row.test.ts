@@ -62,6 +62,11 @@ async function mailTurn(): Promise<string> {
   return mail.id
 }
 
+/** The Stop's next step on the session's lane, which ends the child, has run. */
+function laneDrained(): Promise<void> {
+  return rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
+}
+
 function withdraw(clientMessageId: string) {
   return rig.host.settleLateDispatch({
     sessionId: HOST_TEST_SESSION,
@@ -107,11 +112,19 @@ describe("Stop's event", () => {
   })
 
   it('a card queued after the Stop waits behind the cards it holds, then all send in order', async () => {
-    const working = await rig.workingSend()
+    await rig.workingSend()
     const held = await queuedDraft('queued before the stop')
     await rig.stop()
-    const later = await queuedDraft('typed while the stopped turn winds down')
-    await rig.settleAccepted(working, 'stopped')
+    await laneDrained()
+    // A send after the Stop reaches the next agent; a card typed while it waits queues behind it.
+    const refused = rig.send('sent after the stop')
+    await refused.result
+    await eventually(async () =>
+      expect((await rig.submission(refused.id))?.handedOverAt).toBeDefined()
+    )
+    const later = await queuedDraft('typed while that send waits')
+    // No turn sent after the Stop started, so the pause holds both cards.
+    await rig.settleRejected(refused.id, 'turn/start refused')
     // The queue never reorders: the newer card waits behind the held one, with no caption of its own.
     await expectHeld('stopped', held, later)
     expect(await rig.drafts()).toEqual([
@@ -175,8 +188,10 @@ describe("Stop's event", () => {
     const waiting = await queuedDraft('waiting behind it')
     await rig.sendNow(sentId)
     await eventually(async () => expect((await rig.handoff(sentId))?.handedOverAt).toBeDefined())
+    // The process dies after the Stop answered, before its next step ended the child.
+    rig.closeSession.mockImplementationOnce(() => new Promise<boolean>(() => {}))
     await rig.stop()
-    // The process dies with no close; a new host opens the same state directory.
+    await eventually(() => expect(rig.closeSession).toHaveBeenCalled())
     rig.crashRestartHostProcess()
     expect((await rig.handoff(sentId))?.dispatchState).toBe('unknown')
     // After a restart no row shows, the Stop's included, and nothing sends.
@@ -211,10 +226,17 @@ describe("a restart's hold over a card queued after a Stop", () => {
   })
 
   it("a card queued during the queue's own send after a Stop, before a restart, waits unshown", async () => {
-    const working = await rig.workingSend()
+    await rig.workingSend()
     await rig.stop()
-    const correction = await queuedDraft('typed while the interrupt lands')
-    await rig.settleAccepted(working, 'stopped')
+    await laneDrained()
+    // Sent after the Stop, so its turn starting ends the pause, and the card behind it drains.
+    const next = rig.send('sent after the stop')
+    await next.result
+    await eventually(async () =>
+      expect((await rig.submission(next.id))?.handedOverAt).toBeDefined()
+    )
+    const correction = await queuedDraft('typed while that send waits')
+    await rig.settleAccepted(next.id, 'next')
     await eventually(async () =>
       expect((await rig.handoff(correction))?.handedOverAt).toBeDefined()
     )

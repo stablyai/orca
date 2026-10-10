@@ -45,9 +45,13 @@ describe('a live Grok listing', () => {
       stop: vi.fn(),
       providerStarted: vi.fn()
     }
-    // The rig's attach must succeed: bookkeeping never fails a proven start.
+    // The rig waits for the child to turn ready: bookkeeping never fails a proven start.
     const { store } = await openAttachedHostRig({}, undefined, modelCatalog)
     expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.lease.ownerProcess).not.toBeNull()
+    // The rest of the start still lands: what it reported is saved.
+    await vi.waitFor(() =>
+      expect(store.getRecord(SESSION)?.options).toEqual({ model: 'grok-4.7', effort: 'high' })
+    )
   })
 })

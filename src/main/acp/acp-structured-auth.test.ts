@@ -4,7 +4,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import {
   GROK_CONFIG_OPTIONS,
@@ -60,9 +59,9 @@ async function signInWith(options: {
     initialize: { authMethods: options.authMethods },
     script: requiresSignIn
   })
-  const acquired = await rig.acquire().catch((error: unknown) => error)
+  await rig.acquire()
   const methods = rig.sent('authenticate').map((frame) => METHOD.parse(frame.params).methodId)
-  return { rig, acquired, methods }
+  return { rig, acquired: rig.ended.length ? rig.ended[0] : rig.started(), methods }
 }
 
 describe('Grok sign-in on its own machine', () => {
@@ -92,8 +91,7 @@ describe('Grok sign-in on its own machine', () => {
       authMethods: [{ id: 'browser', name: 'Browser' }]
     })
     expect(methods).toEqual([])
-    expect(acquired).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(acquired).toMatchObject({ reason: 'notSignedIn' })
+    expect(acquired).toMatchObject({ type: 'ended', failure: { kind: 'notSignedIn' } })
   })
 
   it('signs in the same way when it reopens a saved session', async () => {

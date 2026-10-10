@@ -3,8 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionPromptAnswerRejectedError
+  AgentSessionAcquisitionRootExitObservedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { CLAUDE_SPAWN_TOKEN_ENV } from './claude-structured-owner-identity'
@@ -26,7 +25,6 @@ import {
   USER_MESSAGE,
   type FakeConnection
 } from './claude-structured-session-test-support'
-import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
@@ -129,7 +127,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
     ).toEqual([])
     // Left out, not refused: the record takes the provider's own Fast, as before.
-    expect(adapter.readOptionRestoreFailures('session-1')).toEqual([])
     expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
       reportedOptions: { fastMode: false }
     })
@@ -207,7 +204,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       expect(skipped).toEqual(
         kept ? [] : [expect.objectContaining({ fence: 7, options: { fastMode: 'true' } })]
       )
-      expect(adapter.readOptionRestoreFailures('session-1')).toEqual(kept ? [] : ['fastMode'])
       const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
       expect(options.current.fastMode === true).toBe(kept)
       expect(options.current.confirmed ?? []).not.toContain('fastMode')
@@ -219,7 +215,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       settings: { applied: {}, effective: {}, sources: {} },
       initModels: [{ value: 'opus', displayName: 'Opus', supportsFastMode: false }]
     })
-    const adapter = adapterFor(claude)
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterFor(claude, {}, events)
 
     await adapter.acquire({
       identity: identityFor(),
@@ -231,7 +228,12 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect(
       claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
     ).toEqual([])
-    expect(adapter.readOptionRestoreFailures('session-1')).toEqual(['fastMode'])
+    // Fast is decided once settings are read, after `started`.
+    await vi.waitFor(() =>
+      expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
+        restoreSkippedOptions: ['fastMode']
+      })
+    )
   })
 
   it.each([
@@ -239,12 +241,17 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     ['permissionMode', { permissionMode: 'retired-mode' }]
   ] as const)('self-heals a persisted %s the CLI would refuse at launch', async (key, options) => {
     const claude = fakeClaude()
-    const adapter = adapterFor(claude)
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterFor(claude, {}, events)
 
     await expect(
       adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9', options })
     ).resolves.toBeDefined()
-    expect(adapter.readOptionRestoreFailures('session-1')).toEqual([key])
+    await vi.waitFor(() =>
+      expect(events.find((event) => event.type === 'started')).toMatchObject({
+        restoreSkippedOptions: [key]
+      })
+    )
     expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
     expect(claude.connections[0].launch.options).not.toHaveProperty('permissionMode')
   })
@@ -442,7 +449,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
 
-    expect(acquisition.link.handle).toEqual(claudeProviderHandle(PROVIDER_SESSION_ID, null))
+    expect(acquisition.link?.handle).toEqual(claudeProviderHandle(PROVIDER_SESSION_ID, null))
     expect(events[0]).toMatchObject({
       type: 'message',
       message: { subtype: 'hook_started', hook_name: 'SessionStart:startup' }
@@ -489,8 +496,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       fence: 9,
       spawnToken: 'spawn-9'
     })
-    expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual(
+    expect(acquisition.link?.origin).toBe('resumed')
+    expect(acquisition.link?.handle).toEqual(
       claudeProviderHandle(PROVIDER_SESSION_ID, 'leaf-before')
     )
 
@@ -763,159 +770,5 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     )
     expect(events.filter((event) => event.type === 'ended')).toEqual([])
     expect(connection.close).toHaveBeenCalledTimes(4)
-  })
-})
-
-describe('ClaudeStructuredSessionAdapter prompts', () => {
-  it('turns can_use_tool into an addressable durable approval that settles the SDK callback', async () => {
-    const claude = fakeClaude()
-    const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = await acquired(claude, {}, events)
-    const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' },
-      suggestions: [{ type: 'addRules' }]
-    })
-    expect(events.at(-1)).toMatchObject({
-      type: 'prompt',
-      prompt: { kind: 'approval', toolName: 'Bash', promptKey: 'permission-1' }
-    })
-
-    adapter.bindPromptItemId('session-1', 'journal-approval', 'permission-1')
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-approval',
-      kind: 'approval',
-      response: { kind: 'option', optionId: 'allowForSession' },
-      fence: 7,
-      commit: async () => undefined
-    })
-    // The answer resolves the SDK's own callback promise; the SDK writes the wire response.
-    await expect(answered.promise).resolves.toEqual({
-      behavior: 'allow',
-      updatedInput: { command: 'git status' },
-      updatedPermissions: [{ type: 'addRules' }],
-      toolUseID: 'tool-1'
-    })
-  })
-
-  it('settles the one AskUserQuestion callback from structured answers, including a long typed answer', async () => {
-    const claude = fakeClaude()
-    const adapter = await acquired(claude)
-    const answered = invokeCanUseTool(
-      claude.connections[0],
-      'AskUserQuestion',
-      'question-1',
-      'tool-question',
-      {
-        input: {
-          questions: [
-            { question: 'Library?', options: [{ label: 'Luxon' }] },
-            { question: 'Ship now?', options: [{ label: 'Yes' }] }
-          ]
-        }
-      }
-    )
-    adapter.bindPromptItemId('session-1', 'journal-question', 'question-1')
-    const typed = 'Wait for the capture to finish first. '.repeat(60)
-
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-question',
-      kind: 'question',
-      response: {
-        kind: 'answers',
-        answers: [
-          { questionId: 'q1', optionIds: ['q1:choice-1'] },
-          { questionId: 'q2', optionIds: [], other: typed }
-        ]
-      },
-      fence: 7,
-      commit: async () => undefined
-    })
-    await expect(answered.promise).resolves.toMatchObject({
-      behavior: 'allow',
-      updatedInput: { answers: { 'Library?': 'Luxon', 'Ship now?': typed.trim() } },
-      toolUseID: 'tool-question'
-    })
-  })
-
-  it('refuses answers Claude cannot take before the journal commits them', async () => {
-    const claude = fakeClaude()
-    const adapter = await acquired(claude)
-    const answered = invokeCanUseTool(
-      claude.connections[0],
-      'AskUserQuestion',
-      'question-1',
-      'tool-question',
-      { input: { questions: [{ question: 'Library?', options: [{ label: 'Luxon' }] }] } }
-    )
-    adapter.bindPromptItemId('session-1', 'journal-question', 'question-1')
-    const commit = vi.fn(async () => undefined)
-
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'journal-question',
-        kind: 'question',
-        response: { kind: 'option', optionId: 'allow' },
-        fence: 7,
-        commit
-      })
-    ).rejects.toBeInstanceOf(AgentSessionPromptAnswerRejectedError)
-    expect(commit).not.toHaveBeenCalled()
-
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-question',
-      kind: 'question',
-      response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] },
-      fence: 7,
-      commit
-    })
-    await expect(answered.promise).resolves.toMatchObject({
-      updatedInput: { answers: { 'Library?': 'Luxon' } }
-    })
-  })
-
-  it('leaves a prompt cancelled and unanswerable once the SDK abort signal fires', async () => {
-    const claude = fakeClaude()
-    const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = await acquired(claude, {}, events)
-    const controller = new AbortController()
-    const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-9', 'tool-9', {
-      input: { command: 'rm -rf /' },
-      signal: controller.signal
-    })
-    adapter.bindPromptItemId('session-1', 'journal-9', 'permission-9')
-
-    controller.abort()
-    // A cancelled request is forgotten and settled with null — never an authorization.
-    await expect(answered.promise).resolves.toBeNull()
-    expect(events.at(-1)).toMatchObject({ type: 'prompt-cancelled', promptKey: 'permission-9' })
-    // A late answer after the abort must not authorize the wrong tool.
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'journal-9',
-        kind: 'approval',
-        response: { kind: 'option', optionId: 'allow' },
-        fence: 7,
-        commit: async () => undefined
-      })
-    ).rejects.toThrow(/no longer waiting/)
-  })
-
-  it('settles an in-flight permission callback when the session closes, leaving no dangling promise', async () => {
-    const claude = fakeClaude()
-    const adapter = await acquired(claude)
-    const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-close', 'tool-c', {
-      input: { command: 'ls' }
-    })
-    await tick()
-    expect(answered.settled()).toBe(false)
-
-    await adapter.closeSession('session-1')
-
-    await expect(answered.promise).resolves.toBeNull()
   })
 })

@@ -55,12 +55,18 @@ function journal() {
   return open
 }
 
+function fence(): number {
+  return rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+}
+
+/** A Stop's second step, which ends the child, runs next on the session's lane. */
+function laneDrained(): Promise<void> {
+  return rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
+}
+
 /** A send the provider is working on, with its turn running since half a minute ago. */
-async function runningTurn(
-  identity: AgentJournalItemIdentity,
-  options: { stopEndsSession?: true } = {}
-): Promise<void> {
-  rig = await createQueuedMessageTestRig(options)
+async function runningTurn(identity: AgentJournalItemIdentity): Promise<void> {
+  rig = await createQueuedMessageTestRig()
   await rig.workingSend()
   await journal().appendItem(
     identity,
@@ -69,11 +75,20 @@ async function runningTurn(
   )
 }
 
+/** Orca dies inside the Stop's end of the child: the provider's close never answers, so nothing
+ *  that end settles is written. */
+async function stopDiesEndingTheChild(stop: () => Promise<unknown>): Promise<void> {
+  rig.closeSession.mockImplementationOnce(() => new Promise<never>(() => undefined))
+  expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+  await expect.poll(() => rig.closeSession.mock.calls.length).toBe(1)
+}
+
 /** Orca dies with the turn's end unwritten; the relaunch reopens the chat from disk and proves
  *  the old child gone (its last renewal came before the Stop), then settles what it left. */
 async function restartAndSettle(
   proof: 'pid-absent' | 'exit-observed' | 'unproven' = 'pid-absent'
 ): Promise<void> {
+  const owner = fence()
   rig.crashRestartHostProcess()
   await rig.host.journalSnapshot(HOST_TEST_SESSION)
   const now = Date.now()
@@ -84,13 +99,13 @@ async function restartAndSettle(
           kind: proof,
           detail: 'the relaunch proved the old child gone',
           observedAt: now + 60_000,
-          ownerFence: 1,
+          ownerFence: owner,
           lastProvenAliveAt: now - 20_000
         }
   await settleStaleStructuredAgentSessionState({
     journal: journal(),
     sessionId: HOST_TEST_SESSION,
-    fence: 2,
+    fence: owner + 1,
     acquisitionGeneration: 'generation-2',
     deathEvidence
   })
@@ -126,7 +141,7 @@ describe('a restart between a Stop and its turn end', () => {
   ])('reads Interrupted after N, marked interrupted: %s', async (_label, identity) => {
     await runningTurn(identity)
     // The provider took the interrupt; its end never arrived.
-    expect(await rig.stop()).toMatchObject({ ok: true })
+    await stopDiesEndingTheChild(() => rig.stop())
 
     await restartAndSettle()
 
@@ -197,7 +212,7 @@ describe('a restart between a Stop and its turn end', () => {
   it("reads Couldn't confirm when the relaunch cannot prove the child gone, Stop or not", async () => {
     // The Stop says whose end it was, never that the turn ended.
     await runningTurn(CODEX_TURN)
-    expect(await rig.stop()).toMatchObject({ ok: true })
+    await stopDiesEndingTheChild(() => rig.stop())
 
     await restartAndSettle('unproven')
 
@@ -207,8 +222,9 @@ describe('a restart between a Stop and its turn end', () => {
   })
 
   // Codex refuses a Stop naming a turn that is no longer its active one ("expected active turn id
-  // X but found Y"), as a turn not running, so the child stays. The Stop names X, so Y's end is
-  // never the person's, by its turn id alone.
+  // X but found Y"), as a turn not running. The journal still showed X, so the Stop goes on to end
+  // the child, and Orca dies inside that end. The Stop names X, so Y's end is never the person's,
+  // by its turn id alone.
   it('reads Failed for the turn running when the provider refused a Stop naming the one before it', async () => {
     await runningTurn(CODEX_TURN)
     rig.cancelTurn.mockResolvedValueOnce({
@@ -222,12 +238,12 @@ describe('a restart between a Stop and its turn end', () => {
       }
     })
     const fields = { turnId: TURN }
-    expect(
-      await rig.host.cancel(QUEUED_RIG_CALLER, {
+    await stopDiesEndingTheChild(() =>
+      rig.host.cancel(QUEUED_RIG_CALLER, {
         envelope: rig.envelope(fields, 'agentSession.cancel', hostTestOperationId()),
         ...fields
       })
-    ).toMatchObject({ ok: true, value: { cancelled: false } })
+    )
     expect(journal().stopMarks.latest()?.event).toMatchObject({ reason: 'user-stop', turnId: TURN })
     // The journal catches up: X had finished, and Y runs on until the crash.
     await journal().appendItem(
@@ -256,13 +272,13 @@ describe('a restart between a Stop and its turn end', () => {
     expect(mark).toBe('failed')
   })
 
-  // Claude's Stop ends its child whatever the interrupt answered.
+  // A Stop ends the child whatever the interrupt answered.
   it('reads Interrupted after N when the provider refused a Stop that ends its child', async () => {
-    await runningTurn(CLAUDE_TURN, { stopEndsSession: true })
+    await runningTurn(CLAUDE_TURN)
     rig.cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: {} })
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
     // The Stop's next step on the session's lane ends the child.
-    await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
+    await laneDrained()
     expect(rig.closeSession).toHaveBeenCalled()
 
     await restartAndSettle()
@@ -271,19 +287,20 @@ describe('a restart between a Stop and its turn end', () => {
   })
 
   it('reads a turn a send made after a Stop pressed before any turn showed as no Stop of its', async () => {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig({ restartable: true })
     const stopped = await rig.workingSend()
     // Pressed before the turn showed: the Stop names no turn.
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
-    await rig.settleAccepted(stopped, 'stopped')
-    const next = rig.send('sent after the Stop')
-    await next.result
-    await rig.settleAccepted(next.id, 'next')
+    // The child's end took back the send whose turn never opened; the next send starts a new one.
+    await laneDrained()
+    expect(await rig.submission(stopped)).toMatchObject({ dispatchState: 'rejected' })
+    const next = await rig.workingSend()
+    await rig.settleAccepted(next, 'next')
     await journal().appendItem(
       CODEX_TURN,
       { kind: 'turn', turnId: TURN, state: 'running', startedAt: Date.now() - 30_000 },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     // Its exit is proven after the Stop, so only whose turn it is decides.
@@ -293,9 +310,10 @@ describe('a restart between a Stop and its turn end', () => {
     expect(settled().turn).not.toHaveProperty('outcome')
   })
 
-  // A Stop pressed before any turn showed stopped the turn its interrupt took, and no other.
+  // A Stop pressed before any turn showed stopped the turn its interrupt took, and no other. That
+  // turn opens and ends as the child winds down, before the Stop ends it.
   it('reads a turn a host send opened after the turnless Stop ended its own turn as no Stop of its', async () => {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
     const stopped = await rig.workingSend()
     rig.cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: TURN })
     expect(await rig.stop()).toMatchObject({ ok: true })
@@ -320,11 +338,12 @@ describe('a restart between a Stop and its turn end', () => {
       },
       scope
     )
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
     expect(settled(TURN).turn).toMatchObject({ outcome: 'cancellation' })
-    // A host send after the Stop opens its own turn.
-    const drained = rig.send('drained after the Stop')
-    await drained.result
-    await rig.settleAccepted(drained.id, 'drained')
+    // A host send after the Stop opens its own turn, on the next child.
+    const drained = await rig.workingSend()
+    await rig.settleAccepted(drained, 'drained')
     await journal().appendItem(
       CODEX_NEXT_TURN,
       {
@@ -332,9 +351,9 @@ describe('a restart between a Stop and its turn end', () => {
         turnId: NEXT_TURN,
         state: 'running',
         startedAt: Date.now(),
-        userItemId: agentJournalSubmissionKey(drained.id)
+        userItemId: agentJournalSubmissionKey(drained)
       },
-      scope
+      { ...scope, fence: fence() }
     )
 
     // Its exit is proven after the Stop, so only which turn the Stop stopped decides.

@@ -155,6 +155,7 @@ describe('a Codex chat acquisition with visuals', () => {
       const connection = codex.connections[0]!
       const methods = connection.calls.map((call) => call.method)
       const open = resumeThreadId ? 'thread/resume' : 'thread/start'
+      expect(methods[0]).toBe('initialize')
       expect(methods.indexOf('skills/extraRoots/set')).toBeLessThan(methods.indexOf(open))
       expect(methods.indexOf('config/read')).toBeLessThan(methods.indexOf(open))
       expect(connection.calls.find((call) => call.method === open)?.params).toMatchObject({
@@ -173,9 +174,10 @@ describe('a Codex chat acquisition with visuals', () => {
     })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
-    expect(methods[0]).toBe('thread/start')
+    // The adapter sends `initialize` itself now; nothing comes between it and the thread.
+    expect(methods.slice(0, 2)).toEqual(['initialize', 'thread/start'])
     expect(methods).not.toContain('skills/extraRoots/set')
-    expect(connection.calls[0]?.params).not.toHaveProperty('config')
+    expect(connection.calls[1]?.params).not.toHaveProperty('config')
     expect(connection.launch.env).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
   })
 })

@@ -14,6 +14,7 @@ import {
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { cloneNativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
 import {
   createCoalescedPollRunner,
   type CoalescedPollRunner
@@ -32,7 +33,7 @@ function firstFrameOptionState(
   return snapshot ? applyStructuredAgentSessionModelCatalog(seeded, seed, snapshot, launch) : seeded
 }
 
-/** The picker's option state for one session: seeded, reset at each fence, re-read each turn. */
+/** The picker's option state for one session: seeded, kept across its fences, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
   agent: AgentType
   optionCatalog: AgentSessionOptionCatalog | null
@@ -114,10 +115,15 @@ export function useStructuredAgentSessionOptionState(args: {
       seedsModel: launch.seedsModel,
       ...(launch.worktree ? { worktree: launch.worktree } : {})
     })
-    // A host answer is the account's, not the fence's: keep it rather than blank the default.
+    // The chat's next runtime starts with the picks the host saved, which this view last showed,
+    // and a starting agent is not read: keep them, and the account's list, until a read replaces them.
     const next =
-      sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
-        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
+      sameSession && previous.catalogSource !== 'seed' && previous.catalogSource !== null
+        ? {
+            ...previous,
+            record: cloneNativeChatSessionOptionRecord(previous.record),
+            pendingId: null
+          }
         : seeded
     optionMutationGeneration.current += 1
     pendingOptionRef.current = null

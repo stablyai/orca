@@ -1,5 +1,6 @@
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
@@ -81,10 +82,14 @@ export class JsonlRpcAgentConnection {
     managed.child.stderr.on('error', this.onError)
     managed.onExit((exit) => {
       clearTimeout(this.streamExitTimer)
-      const error = new Error(
-        exit.processless
-          ? 'Agent process could not start'
-          : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+      // The agent's last stderr lines are what a person can act on when it dies.
+      const error = withProviderDiagnostic(
+        new Error(
+          exit.processless
+            ? 'Agent process could not start'
+            : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+        ),
+        providerDiagnostic(managed.stderrTail(), 'person')
       )
       this.peer.finishOnInputEnd(error)
       const stdout = managed.child.stdout

@@ -53,7 +53,7 @@ export function useStructuredAgentSession(args: {
   transportEnabled?: boolean
   /** The host has published the session but its provider has not answered startup yet. */
   providerStarting?: boolean
-  /** The host runs the session's provider, started or not. */
+  /** The host runs the session's provider and its start is proven. */
   providerRunning?: boolean
   /** This view started the session; only then does the stored selection name what it runs. */
   launch?: StructuredAgentSessionLaunchView

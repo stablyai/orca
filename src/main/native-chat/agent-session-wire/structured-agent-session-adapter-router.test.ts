@@ -63,30 +63,6 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
   })
 })
 
-describe('StructuredAgentSessionAdapterRouter.readAcquisitionOptions', () => {
-  it('keeps the existing live read for providers without acquisition options', async () => {
-    const claude = adapterOf(vi.fn(async () => true))
-    claude.readOptions = vi.fn(async () => ({
-      current: { model: 'reported-model', effort: 'high' },
-      models: []
-    }))
-    const router = claudeAndCodexRouter(
-      { claude, codex: adapterOf(vi.fn(async () => false)) },
-      async () => {}
-    )
-    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
-
-    await expect(
-      router.readAcquisitionOptions({
-        sessionId: 'session-1',
-        fence: 1,
-        priorOptions: { model: 'saved-model', personality: 'concise' }
-      })
-    ).resolves.toEqual({ model: 'reported-model', effort: 'high', personality: 'concise' })
-    expect(claude.readOptions).toHaveBeenCalledOnce()
-  })
-})
-
 describe('StructuredAgentSessionAdapterRouter.closeSession', () => {
   it('retains the owner after an unproven close so a later retry reaches the same adapter', async () => {
     const claude = adapterOf(vi.fn(async () => true))
@@ -202,18 +178,7 @@ const QUESTION: AgentJournalQuestionItem = {
   resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
 }
 
-describe('StructuredAgentSessionAdapterRouter.stopEndsSession', () => {
-  it("answers for the session's live owner, and keeps the child with none", async () => {
-    const claude = adapterOf(vi.fn(async () => true))
-    claude.stopEndsSession = () => true
-    const codex = adapterOf(vi.fn(async () => false))
-    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
-
-    expect(router.stopEndsSession('session-1')).toBe(false)
-    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
-    expect(router.stopEndsSession('session-1')).toBe(true)
-  })
-
+describe('StructuredAgentSessionAdapterRouter Stop wind-down', () => {
   it("waits on the session's live owner to wind the Stop down, and on nothing with none", async () => {
     const claude = adapterOf(vi.fn(async () => true))
     claude.awaitStoppedRequestEnd = vi.fn(async () => undefined)

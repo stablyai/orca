@@ -7,7 +7,6 @@ import {
   messageText,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
@@ -296,8 +295,8 @@ describe('reattaching a Grok chat the journal holds', () => {
       script: (agent) =>
         agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Resource not found'))
     })
-    const acquired = await rig.acquire()
-    expect(acquired.link).toMatchObject({
+    await rig.acquire()
+    expect(rig.started().link).toMatchObject({
       origin: 'created',
       handle: { nativeId: PROVIDER_SESSION },
       supersedesKey: 'acp:grok:never-saved'
@@ -328,13 +327,13 @@ describe('reattaching a Grok chat the journal holds', () => {
         initialize: RESUMES,
         script: (agent) => agent.on('session/load', (frame) => agent.fail(frame, code, message))
       })
-      const acquired = await rig.acquire()
-      expect(acquired.link).toMatchObject({
+      await rig.acquire()
+      expect(rig.started().link).toMatchObject({
         origin: 'created',
         handle: { nativeId: PROVIDER_SESSION },
         replaces: { key: 'acp-key-saved-1', reason: 'restore-failed', replacedAt: 5_000 }
       })
-      expect(acquired.link.supersedesKey).toBeUndefined()
+      expect(rig.started().link?.supersedesKey).toBeUndefined()
       expect(rig.sent('session/new')).toHaveLength(1)
       const rows = await notRestoredRows(rig)
       expect(rows).toHaveLength(1)
@@ -359,9 +358,8 @@ describe('reattaching a Grok chat the journal holds', () => {
       script: (agent) =>
         agent.on('session/load', (frame) => agent.fail(frame, -32000, 'Authentication required'))
     })
-    const failure = await rig.acquire().catch((error: unknown) => error)
-    expect(failure).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(failure).toMatchObject({ reason: 'notSignedIn' })
+    await rig.acquire()
+    expect(rig.ended).toMatchObject([{ failure: { kind: 'notSignedIn' }, startupUnproven: true }])
     expect(rig.sent('session/new')).toEqual([])
   })
 
@@ -381,13 +379,12 @@ describe('reattaching a Grok chat the journal holds', () => {
       deps: { logger },
       script: (agent) =>
         agent.on('session/load', (frame) => {
-          start.abort()
+          void rig.adapter.closeSession(SESSION)
           agent.fail(frame, -32603, 'session file is corrupt')
         })
     })
-    expect(
-      await rig.acquire({ signal: start.signal }).catch((error: unknown) => error)
-    ).toBeInstanceOf(Error)
+    await rig.acquire({ signal: start.signal })
+    expect(rig.ended).toMatchObject([{ cause: 'requested-close' }])
     expect(rig.sent('session/new')).toEqual([])
     expect(await notRestoredRows(rig)).toEqual([])
     // Nothing was replaced, so nothing says it was.

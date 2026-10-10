@@ -1,3 +1,9 @@
+import {
+  acquireReadyCodexForTest,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
 // Codex's default multi-agent mode announces a helper only by the `collabAgentToolCall` items that
 // spawn, message, wait on or close it. These frames, through the real adapter, must register that
 // helper the same way a `subAgentActivity` does: one child in the strip, the host's records and
@@ -11,7 +17,6 @@ import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child
 import { createAgentStatusStore } from '../../shared/agent-status-store'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
@@ -161,7 +166,7 @@ async function session() {
     appendTombstone: () => {},
     publish: () => {}
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',

@@ -11,7 +11,7 @@
 // structured request with the refusal that says why.
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type { PiRpcSessionDeps } from '../pi/rpc-session'
+import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -25,8 +25,6 @@ import {
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
 import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
-import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
-import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
 import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps
@@ -90,7 +88,7 @@ export function hasPersistedStructuredAgentSessionStore(
   }
 }
 
-export type StructuredAgentSessionRuntimeDeps = {
+export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
@@ -101,7 +99,6 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveClaudeCommand?: () => string
-  openPiConnection?: PiRpcSessionDeps['openConnection']
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   /** Gives each chat a visuals folder and the skill that teaches it, and sweeps folders whose chat
@@ -111,11 +108,6 @@ export type StructuredAgentSessionRuntimeDeps = {
     isEnabled: () => boolean
     workspaceVerdicts: NonNullable<NativeChatVisualsSweepDeps['workspaceVerdicts']>
   }
-  /** Provider transports are overridden only to drive the runtime against scripted children. */
-  openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
-  openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
-  /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
-  readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
   resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   resolveLaunchEnv?: () => Promise<NodeJS.ProcessEnv>
@@ -322,6 +314,7 @@ async function installOnJournal(
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
+    ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
     ...(await modelCatalogHostDeps({
       store,

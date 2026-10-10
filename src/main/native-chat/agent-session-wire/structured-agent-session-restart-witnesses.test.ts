@@ -20,7 +20,6 @@ function witnessed() {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: clear reads only the record's provider.
       AGENTS[sessionId] ? ({ provider: AGENTS[sessionId] } as AgentSessionRecord) : null,
     childWork: () => undefined,
-    startAnswered: () => undefined,
     capsule: { record: async (markers) => void recorded.push([...markers]) },
     teardownId: 'teardown',
     now: () => 1,

@@ -67,12 +67,15 @@ export type StructuredAgentSessionChildClose = {
 /** The provider process behind a conversation. Written only in
  *  `structured-agent-session-provider-child`. */
 export type StructuredAgentSessionProviderChild = StructuredAgentSessionProviderChildIdentity & {
-  /** A publish-first acquire is `starting` until the adapter's `started` event; only then are its
-   *  reported options fact. */
+  /** Every acquired child is `starting` until the host settles its `started` event; only then is
+   *  it handed input and are its reported options fact. */
   phase: StructuredAgentSessionProviderChildPhase
   /** The queued message whose delivery started this child, fixed when the start is made; absent
    *  for any other start. In memory only: it tells a restart offer its own start from another. */
   readonly startedFor?: string
+  /** The saved options its start launched with: a pick made while it started that differs is
+   *  applied before it is accepted as ready. */
+  readonly launchedOptions?: Readonly<Record<string, string>>
   close?: StructuredAgentSessionChildClose
 }
 

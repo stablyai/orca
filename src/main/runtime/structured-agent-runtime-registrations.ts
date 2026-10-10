@@ -162,8 +162,11 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     onPrimaryThreadStoppedRunning: followUps.releaseUnansweredDispatches,
     logger: deps.logger,
     onEvent: (event) => {
-      // Every exit, expected or not: the host ends that child's record.
-      if (event.type === 'ended' && 'cause' in event) {
+      if (
+        event.type === 'started' ||
+        event.type === 'options-reported' ||
+        (event.type === 'ended' && 'cause' in event)
+      ) {
         context.deliverLifecycle(event)
       }
     }
@@ -233,6 +236,7 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
         resolveLaunch: createAcpStructuredLaunchResolver(spec, {
           store,
           readJournal,
+          ...deps.acpLaunchCommand,
           resolveWorkspacePath: deps.resolveWorkspacePath,
           resolveEnvironment: context.environment.resolveBaseEnvironment,
           ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
@@ -245,18 +249,13 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
           ...nativeChatVisualsFor(deps),
           logger: deps.logger
         }),
-        connect: (launch, options) => createAcpAgentConnection(launch, options),
+        connect: deps.openAcpConnection ?? createAcpAgentConnection,
         onChildWorkEvidence: (sessionId, evidence) =>
           context.host()?.publishChildWorkEvidence(sessionId, evidence),
         ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
         onDispatchSettledLate: followUps.onDispatchSettledLate,
         logger: deps.logger,
-        // Every exit, expected or not: the host ends that child's record.
-        onEvent: (event) => {
-          if (event.type === 'ended') {
-            context.deliverLifecycle(event)
-          }
-        }
+        onEvent: context.deliverLifecycle
       })
     }
   }

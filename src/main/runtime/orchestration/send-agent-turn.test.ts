@@ -135,6 +135,17 @@ describe('sendAgentTurn to a structured session', () => {
     })
   })
 
+  it("bounds the wait, the agent's start included, by the caller's own budget", async () => {
+    const fake = structuredHost(
+      accepted({ clientMessageId: 'op-1', submission: submissionOf('pending') })
+    )
+    // The start outlasts a --timeout of 5 s: the answer stays pending, and the host still holds it.
+    await expect(
+      sendAgentTurn({ ...structured(fake.host), budgetMs: 5_000 })
+    ).resolves.toMatchObject({ kind: 'sent', submission: { dispatchState: 'pending' } })
+    expect(fake.waitForSendSettlement.mock.calls).toEqual([['s1', 'op-1', { budgetMs: 5_000 }]])
+  })
+
   it('keeps the first answer when the wait runs out or fails', async () => {
     for (const settled of [undefined, 'throws'] as const) {
       const fake = structuredHost(

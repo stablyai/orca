@@ -88,7 +88,7 @@ describe('Claude resume point is the last completed turn on every exit path', ()
       spawnToken: 'spawn-7',
       events: recordingJournalSink()
     })
-    expect(acquisition.link.handle).toMatchObject({ resumeCursor: 'a3' })
+    expect(acquisition.link?.handle).toMatchObject({ resumeCursor: 'a3' })
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persisted).toEqual([expect.objectContaining({ leafUuid: 'a3' })])
   })

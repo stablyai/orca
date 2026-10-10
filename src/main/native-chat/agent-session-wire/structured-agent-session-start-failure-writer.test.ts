@@ -133,8 +133,7 @@ beforeEach(async () => {
             mintedAtFence: fence,
             observedAt: NOW
           },
-          acquisitionGeneration: `generation-${++generation}`,
-          providerChildPhase: 'starting' as const
+          acquisitionGeneration: `generation-${++generation}`
         }
         if (exitOnStart) {
           // Asked for on the lane while the start step runs, so it lands before the handover.

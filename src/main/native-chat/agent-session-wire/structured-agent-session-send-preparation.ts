@@ -25,6 +25,7 @@ import {
 import { agentSessionOperationOutcomeUnknown } from './structured-agent-session-replay-outcome'
 import { rewindRefusal } from './structured-rewind-refusal'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
+import { refuseWhileProviderStarting } from './structured-agent-session-provider-start-hold'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
@@ -96,11 +97,16 @@ export function openForProviderWrite(
   }
 }
 
-/** For an operation only the provider can perform: the conversation, then its agent. */
+/** For an operation only the provider can perform: the conversation, then its agent, proven
+ *  started; the caller waits out a start under way (`runAfterProviderStart`). `beforeAgent`
+ *  answers what needs no agent before one is started for it. */
 export function openWithAgent(
-  context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'ensureAgent' | 'deps'>,
+  context: Pick<
+    StructuredAgentSessionMutationContext,
+    'openConversation' | 'ensureAgent' | 'deps' | 'sessions'
+  >,
   envelope: AgentSessionMutationEnvelope,
-  beforeAgent?: () => AgentSessionMutationSessionPreparation
+  beforeAgent?: (record: AgentSessionRecord | null) => AgentSessionMutationSessionPreparation | null
 ): (ledger: 'admit' | 'replay') => Promise<AgentSessionMutationSessionPreparation> {
   return async (ledger) => {
     const opened = await openConversationForWrite(
@@ -111,13 +117,19 @@ export function openWithAgent(
     if (!opened.ok || ledger === 'replay') {
       return opened
     }
-    const checked = beforeAgent?.()
-    return checked && !checked.ok ? checked : context.ensureAgent(envelope.sessionId)
+    const checked = beforeAgent?.(context.deps.store.getRecord(envelope.sessionId))
+    if (checked && !checked.ok) {
+      return checked
+    }
+    const ensured = await context.ensureAgent(envelope.sessionId)
+    return ensured.ok
+      ? (refuseWhileProviderStarting(context.sessions.get(envelope.sessionId)) ?? ensured)
+      : ensured
   }
 }
 
-/** The recovery an attach runs, for a child already running: no attach comes for it. A recovery
- *  that stays unknown leaves the record as it was. */
+/** The recovery a proven start runs, for a child already running: no start comes for it. A
+ *  recovery that stays unknown leaves the record as it was. */
 async function recoverRewindOnLiveChild(
   context: Pick<StructuredAgentSessionMutationContext, 'deps' | 'sessions' | 'publish' | 'now'>,
   sessionId: string
@@ -148,8 +160,9 @@ async function recoverRewindOnLiveChild(
 
 /** A rewind still in doubt once the conversation is open is one only its provider can settle —
  *  the open settles every other — so a send settles it first: an agent at rest is started, whose
- *  attach recovers it, and a running one is asked as that attach would. One still in doubt refuses
- *  the send here, before the ledger records it, so a Retry of the same id is decided afresh. A
+ *  proven start recovers it while the send waits that start out (`runAfterProviderStart`), and a
+ *  running one is asked as that start would. One still in doubt refuses the send here, before the
+ *  ledger records it, so a Retry of the same id is decided afresh. A
  *  resend of a recorded id needs only the conversation, its answer's source: it starts nothing,
  *  and an open that fails leaves that answer unknown, never refused. `clearInFlight`: a /clear was
  *  running when this send arrived, which refuses only its first run. `refusesInRun`: the caller's
@@ -181,14 +194,15 @@ export function sendPreparation(
     if (!opened.ok || !rewindInDoubt(context.deps.store.getRecord(sessionId))) {
       return opened
     }
-    const running = Boolean(context.sessions.get(sessionId)?.child)
     const ensured = await context.ensureAgent(sessionId)
     if (!ensured.ok) {
       return ensured
     }
-    if (running) {
-      await recoverRewindOnLiveChild(context, sessionId)
+    const starting = refuseWhileProviderStarting(context.sessions.get(sessionId))
+    if (starting) {
+      return starting
     }
+    await recoverRewindOnLiveChild(context, sessionId)
     return !arrival.refusesInRun && rewindInDoubt(context.deps.store.getRecord(sessionId))
       ? rewindRefusal('outcome-unknown')
       : ensured

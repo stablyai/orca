@@ -1,7 +1,7 @@
 // The host's "Stopping…": published on the session's status while a person's Stop is still
 // settling, and then while the turn it stopped, or failed to stop, still runs, until that turn ends.
-// A Stop that settles having stopped nothing ends it. Driven through the real host and its status
-// feed, with turn rows named as Codex writes them.
+// Every chat Stop ends the child in its next step on the session's lane. Driven through the real
+// host and its status feed, with turn rows named as Codex writes them.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -22,6 +22,7 @@ import {
   structuredAgentSessionStopNoteIdentity
 } from './structured-agent-session-command-turn'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
+import type { QueuedRigProviderOptions } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -97,8 +98,13 @@ function stopAnswers(): (string | undefined)[] {
     .map((item) => (item.body.kind === 'status' ? (item.body.failure?.kind ?? 'took') : undefined))
 }
 
+/** The Stop's next step on the session's lane, where it ends the child, has run. */
+async function laneDrained(): Promise<void> {
+  await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
+}
+
 /** A send whose turn `turn-1` is running, and the session's status. */
-async function runningTurn(options: { stopEndsSession?: true } = {}) {
+async function runningTurn(options: QueuedRigProviderOptions = {}) {
   rig = await createQueuedMessageTestRig(options)
   const sent = await rig.workingSend()
   await rig.settleAccepted(sent, 'sent')
@@ -145,21 +151,19 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
     ['left unconfirmed', 'names no turn', unconfirmed],
     ['left unconfirmed', 'names the turn', unconfirmed]
   ])(
-    'keeps Stopping until the turn ends after the agent %s a Stop that %s',
+    'keeps Stopping until the turn ends after the agent %s a Stop that %s, whose child end failed',
     async (_, naming, cancel) => {
       const { sent, status } = await runningTurn()
       rig.cancelTurn.mockImplementationOnce(cancel)
-      if (cancel === unconfirmed) {
-        // A failed interrupt ends the agent's process; this one cannot be ended either.
-        rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
-      }
+      // The Stop ends the agent's process next; this one cannot be ended.
+      rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
 
       const stopped = naming === 'names the turn' ? namedStop('turn-1') : rig.stop()
       expect(await stopped).toMatchObject({ ok: true })
+      await laneDrained()
 
-      // The answer says it stopped nothing, yet the Stop is still the person's: a repeat escalates.
-      await eventually(() => expect(stopAnswers()).toHaveLength(1))
-      expect(stopAnswers()[0]).not.toBe('took')
+      // The note says the Stop is unconfirmed, yet it is still the person's: a repeat escalates.
+      expect(stopAnswers()).toEqual(['cancelUnconfirmed'])
       expect(status()).toMatchObject({ status: 'working', stopping: true })
 
       await turn('turn-1', sent, 'interrupted')
@@ -191,21 +195,28 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
   it('keeps Stopping through a repeat press of a refused Stop, which writes no second event', async () => {
     const { status } = await runningTurn()
     rig.cancelTurn.mockImplementationOnce(async () => ({ cancelled: false }))
+    // Neither the Stop's end of the child nor the repeat's joined close proves the exit.
+    rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
+    rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out again'))
     expect(await rig.stop()).toMatchObject({ ok: true })
-    await eventually(() => expect(journal().stopMarks.latest()).not.toBeNull())
+    await laneDrained()
+    expect(journal().stopMarks.latest()).not.toBeNull()
     const refusedStop = journal().stopMarks.latest()
 
     expect(await rig.stop()).toMatchObject({ ok: true })
+    await laneDrained()
 
+    expect(rig.closeSession).toHaveBeenCalledTimes(2)
     expect(journal().stopMarks.latest()).toEqual(refusedStop)
-    await eventually(() => expect(status()).toMatchObject({ stopping: true }))
+    expect(status()).toMatchObject({ status: 'working', stopping: true })
   })
 
   // The newest turn record is the stopped one until the next send's turn opens; it no longer runs.
+  // That send runs on the child that resumes the chat once the Stop's wind-down ended the old one.
   it.each(['names its turn', 'names no turn'])(
     'reads a send made after a Stop that %s as Working before its turn opens',
     async (naming) => {
-      rig = await createQueuedMessageTestRig()
+      rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
       const stopped = await rig.workingSend()
       const status = watchStatus()
       if (naming === 'names its turn') {
@@ -215,14 +226,18 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
         expect(await namedStop('turn-1')).toMatchObject({ ok: true })
       } else {
         // The provider's answer names the turn the send opened, which the Stop waited for.
-        rig.cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-1' })
+        rig.cancelTurn.mockImplementationOnce(async () => {
+          await rig.settleAccepted(stopped, 'stopped')
+          await turn('turn-1', stopped, 'running')
+          return { cancelled: true, turnId: 'turn-1' }
+        })
         expect(await rig.stop()).toMatchObject({ ok: true })
-        await rig.settleAccepted(stopped, 'stopped')
-        await turn('turn-1', stopped, 'running')
       }
       await eventually(() => expect(status()).toMatchObject({ status: 'working', stopping: true }))
       await turn('turn-1', stopped, 'interrupted')
       await eventually(() => expect(status()?.status).toBe('idle'))
+      await laneDrained()
+      expect(rig.closeSession).toHaveBeenCalledOnce()
 
       await rig.workingSend()
 
@@ -232,10 +247,12 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
   )
 
   it('never marks a turn that opened after the stopped one ended', async () => {
-    const { sent, status } = await runningTurn()
+    const { sent, status } = await runningTurn({ restartable: true, windsDown: true })
     expect(await rig.stop()).toMatchObject({ ok: true })
     await turn('turn-1', sent, 'interrupted')
     await eventually(() => expect(status()?.status).toBe('idle'))
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledOnce()
 
     const next = await rig.workingSend()
     await rig.settleAccepted(next, 'next')
@@ -255,26 +272,25 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
       .find((body) => body.kind === 'turn' && body.turnId === turnId)
   }
 
-  async function failedBeforeTheTurn(options: { stopEndsSession?: true; restartable?: true } = {}) {
-    rig = await createQueuedMessageTestRig(options)
+  async function failedBeforeTheTurn(options: { tookInterrupt?: true; restartable?: true } = {}) {
+    rig = await createQueuedMessageTestRig(options.restartable ? { restartable: true } : {})
     const sent = await rig.workingSend()
     const status = watchStatus()
-    if (!options.stopEndsSession) {
+    if (!options.tookInterrupt) {
       // Codex could not reach a turn still able to open.
       rig.cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: { turnMayOpen: true } })
     }
     // The process could not be ended either.
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
     expect(await rig.stop()).toMatchObject({ ok: true })
-    // A Stop that ends its session ends the child on the session's next step.
-    await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
+    await laneDrained()
     expect(journal().activeTurnId()).toBeNull()
     return { sent, status }
   }
 
   it.each([
-    ['Codex, refused, then its kill failed', {}],
-    ['Claude-like, whose kill failed before the echo', { stopEndsSession: true as const }]
+    ['refused, then its kill failed', {}],
+    ['taken, whose kill failed before the echo', { tookInterrupt: true as const }]
   ])(
     'reads Stopping through the turn that then opens, whose own end stays its own: %s',
     async (_, options) => {
@@ -345,13 +361,23 @@ describe('a Stop pressed before its send opened a turn', () => {
     })
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
+    await laneDrained()
     return { sent, status }
   }
 
-  it('ends the turn its interrupt took at the settle, and Stopping with it', async () => {
+  function turnOne() {
+    return journal()
+      .snapshot()
+      .items.map((item) => item.body)
+      .find((body) => body.kind === 'turn' && body.turnId === 'turn-1')
+  }
+
+  it('ends the turn its interrupt took with the child, and Stopping with it', async () => {
     const { status } = await stopAsTheTurnOpens({ cancelled: true, turnId: 'turn-1' })
 
+    expect(rig.closeSession).toHaveBeenCalledOnce()
     expect(journal().activeTurnId()).toBeNull()
+    expect(turnOne()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
     await eventually(() => expect(status()?.status).toBe('idle'))
     expect(status()).not.toHaveProperty('stopping')
   })
@@ -365,15 +391,13 @@ describe('a Stop pressed before its send opened a turn', () => {
     await eventually(() => expect(status()?.status).toBe('idle'))
     expect(status()).not.toHaveProperty('stopping')
     // The Stop never stopped it: its own end, with no verdict, reads as a failure, not theirs.
-    const ended = journal()
-      .snapshot()
-      .items.map((item) => item.body)
-      .find((body) => body.kind === 'turn' && body.turnId === 'turn-1')
-    expect(ended).toMatchObject({ state: 'interrupted' })
-    expect(ended).not.toHaveProperty('outcome')
+    expect(turnOne()).toMatchObject({ state: 'interrupted' })
+    expect(turnOne()).not.toHaveProperty('outcome')
   })
 
-  it('reads Stopping while the Stop settles, and Working once it settles having stopped nothing', async () => {
+  // Declined, the Stop still ends the child, whose end takes the send back: the send's own row says
+  // it never started, so the Stop writes none.
+  it('reads Stopping while the Stop settles, and at rest once a declined Stop ended the child', async () => {
     rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
     const status = watchStatus()
@@ -384,24 +408,26 @@ describe('a Stop pressed before its send opened a turn', () => {
     await eventually(() => expect(status()).toMatchObject({ status: 'working', stopping: true }))
     answer.resolve({ cancelled: false })
     expect(await stopped).toMatchObject({ ok: true })
+    await laneDrained()
 
-    // The settle's close writes no row of its own; it still reaches the status.
-    await eventually(() => expect(status()).toMatchObject({ status: 'working' }))
-    expect(status()).not.toHaveProperty('stopping')
-    await rig.settleAccepted(sent, 'sent')
-    await turn('turn-1', sent, 'running')
-    await eventually(() => expect(journal().activeTurnId()).toBe('turn-1'))
+    expect(rig.closeSession).toHaveBeenCalledOnce()
+    expect(await rig.submission(sent)).toMatchObject({ dispatchState: 'rejected' })
+    expect(stopAnswers()).toEqual([])
+    await eventually(() => expect(status()?.status).not.toBe('working'))
     expect(status()).not.toHaveProperty('stopping')
   })
 
   it('reads a send made after the Stop as Working', async () => {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
     const stopped = await rig.workingSend()
     const status = watchStatus()
     expect(await rig.stop()).toMatchObject({ ok: true })
+    // The interrupted send's turn shows, ended, while the Stop's wind-down waits on it.
     await rig.settleAccepted(stopped, 'stopped')
     await turn('turn-1', stopped, 'interrupted')
     await eventually(() => expect(status()?.status).toBe('idle'))
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledOnce()
 
     const later = await rig.workingSend()
     await rig.settleAccepted(later, 'later')
@@ -412,9 +438,9 @@ describe('a Stop pressed before its send opened a turn', () => {
   })
 })
 
-describe('a Stop whose provider ends its session', () => {
+describe('a Stop whose end of the child fails', () => {
   it("revises the note a Stop pressed before its turn showed wrote, once that turn opened and the child's end failed", async () => {
-    rig = await createQueuedMessageTestRig({ stopEndsSession: true })
+    rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
     const status = watchStatus()
     const kill = Promise.withResolvers<boolean>()
@@ -431,7 +457,7 @@ describe('a Stop whose provider ends its session', () => {
   })
 
   it("says the Stop went unconfirmed once the child's end fails, and that it took once the next Stop's joined close proves the exit", async () => {
-    const { status } = await runningTurn({ stopEndsSession: true })
+    const { status } = await runningTurn()
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
 
     expect(await rig.stop()).toMatchObject({ ok: true })
@@ -453,7 +479,7 @@ describe('a Stop whose provider ends its session', () => {
   })
 
   it('keeps the note unconfirmed when the next Stop joins a close that fails again', async () => {
-    const { status } = await runningTurn({ stopEndsSession: true })
+    const { status } = await runningTurn()
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
     expect(await rig.stop()).toMatchObject({ ok: true })
     await eventually(() => expect(stopAnswers()).toEqual(['cancelUnconfirmed']))
@@ -469,7 +495,7 @@ describe('a Stop whose provider ends its session', () => {
   // The close lives on the child, in memory, and dies with the host. The new host's settlement,
   // which ends the turn on a proof of the old owner's death, is what says the Stop took.
   async function crashAfterUnconfirmedStop(): Promise<void> {
-    await runningTurn({ stopEndsSession: true })
+    await runningTurn()
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
     expect(await rig.stop()).toMatchObject({ ok: true })
     await eventually(() => expect(stopAnswers()).toEqual(['cancelUnconfirmed']))
@@ -527,7 +553,7 @@ describe('a Stop whose provider ends its session', () => {
   // A Stop pressed before its turn showed keys its note by itself, with no turn to sit on; once it is
   // unconfirmed while that turn runs, the note moves onto the turn, so the turn's proven end finds it.
   it('moves a note a Stop wrote before its turn showed onto that turn, which then says the Stop took', async () => {
-    rig = await createQueuedMessageTestRig({ stopEndsSession: true })
+    rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
     const kill = Promise.withResolvers<boolean>()
     rig.closeSession.mockImplementationOnce(() => kill.promise)
@@ -566,7 +592,7 @@ describe('a Stop whose provider ends its session', () => {
   // The kill timed out, then the agent's process exits on its own: the adapter reports the end of
   // the close Orca began, and nothing else asks to stop.
   it("says the Stop took once the agent's process exits on its own after the kill timed out", async () => {
-    await runningTurn({ stopEndsSession: true })
+    await runningTurn()
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
     expect(await rig.stop()).toMatchObject({ ok: true })
     await eventually(() => expect(stopAnswers()).toEqual(['cancelUnconfirmed']))

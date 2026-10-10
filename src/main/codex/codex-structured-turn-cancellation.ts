@@ -17,9 +17,9 @@ function isCodexTurnNotRunningRefusal(error: unknown): boolean {
 
 /**
  * Codex answers a turn's interrupt only as that turn ends, so the answer is what confirms the
- * Stop. An answered interrupt is the whole Stop: Codex kills the turn's one-shot commands itself
- * and keeps its background terminals running until the thread ends. One Codex could not carry out,
- * or never answered, leaves the host to end the child (`performCancel`).
+ * Stop. It does not end the turn's commands: one still running becomes a background terminal, kept
+ * until the app-server exits, which is why the chat's Stop then ends the session. One Codex could
+ * not carry out, or never answered, leaves the host to end the child (`performCancel`).
  */
 export async function interruptCodexTurn(input: {
   session: CodexSession

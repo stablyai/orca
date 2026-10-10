@@ -88,22 +88,11 @@ describe('the startup clock', () => {
     expect(settled).toEqual([{ agent: 'codex', outcome: 'silent', durationMs: SILENCE_MS }])
   })
 
-  it('records a start that turned ready as the limit fired as ready', () => {
-    const attempt = mint()
-    attempts.track(SESSION, attempt).spawned()
-    vi.advanceTimersByTime(SILENCE_MS)
-    expect(expired).toHaveLength(1)
-
-    attempts.published(SESSION, attempt.attemptId, { ...CHILD, phase: 'ready' })
-
-    expect(settled).toEqual([{ agent: 'codex', outcome: 'ready', durationMs: SILENCE_MS }])
-  })
-
   it('keeps a slow start that is still talking past the silence limit', () => {
     const attempt = mint()
     const progress = attempts.track(SESSION, attempt)
     progress.spawned()
-    attempts.published(SESSION, attempt.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published(SESSION, attempt.attemptId, CHILD)
 
     chatter(progress.output, SILENCE_MS * 3)
     attempts.ready(SESSION, CHILD)
@@ -130,7 +119,7 @@ describe('the startup clock', () => {
     const attempt = mint()
     const progress = attempts.track(SESSION, attempt)
     progress.spawned()
-    attempts.published(SESSION, attempt.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published(SESSION, attempt.attemptId, CHILD)
 
     chatter(progress.output, CEILING_MS - 10_000)
     expect(expired).toEqual([])
@@ -145,7 +134,7 @@ describe('the startup clock', () => {
     attempts.track(SESSION, byOutput).output()
     const byPublish = mint()
     attempts.track('session-beta', byPublish)
-    attempts.published('session-beta', byPublish.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published('session-beta', byPublish.attemptId, CHILD)
 
     vi.advanceTimersByTime(SILENCE_MS)
 
@@ -159,7 +148,7 @@ describe('an attempt ends', () => {
   it('with the start its child proved, and ignores a stale child’s proof', () => {
     const attempt = mint()
     attempts.track(SESSION, attempt).spawned()
-    attempts.published(SESSION, attempt.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published(SESSION, attempt.attemptId, CHILD)
 
     attempts.ready(SESSION, { ...CHILD, generation: 'generation-0' })
     expect(attempts.isOpen(SESSION)).toBe(true)
@@ -173,7 +162,7 @@ describe('an attempt ends', () => {
   it('with its child, however the child ended, leaving no entry or timer', () => {
     const attempt = mint()
     attempts.track(SESSION, attempt).spawned()
-    attempts.published(SESSION, attempt.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published(SESSION, attempt.attemptId, CHILD)
 
     attempts.childEnded(SESSION, { ...CHILD, generation: 'generation-0' })
     expect(attempts.isOpen(SESSION)).toBe(true)
@@ -187,7 +176,7 @@ describe('an attempt ends', () => {
   it('once an expiry has stopped its published child', () => {
     const attempt = mint()
     attempts.track(SESSION, attempt).spawned()
-    attempts.published(SESSION, attempt.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published(SESSION, attempt.attemptId, CHILD)
 
     vi.advanceTimersByTime(SILENCE_MS)
 
@@ -207,7 +196,7 @@ describe('an attempt ends', () => {
     const late = mint()
     attempts.track(SESSION, late).spawned()
     vi.advanceTimersByTime(SILENCE_MS)
-    attempts.published(SESSION, late.attemptId, { ...CHILD, phase: 'starting' })
+    attempts.published(SESSION, late.attemptId, CHILD)
 
     expect(expired.map((startup) => startup.child)).toEqual([null, null, CHILD])
     expect(attempts.isOpen(SESSION)).toBe(false)
@@ -216,10 +205,11 @@ describe('an attempt ends', () => {
     expect(settled.map((startup) => startup.outcome)).toEqual(['silent', 'silent'])
   })
 
-  it('with an acquire that answered ready, or an attach that failed', () => {
+  it('with a child that proved its start, or an attach that failed', () => {
     const ready = mint()
     attempts.track(SESSION, ready).spawned()
-    attempts.published(SESSION, ready.attemptId, { ...CHILD, phase: 'ready' })
+    attempts.published(SESSION, ready.attemptId, CHILD)
+    attempts.ready(SESSION, CHILD)
     const failed = mint()
     attempts.track('session-beta', failed).spawned()
     attempts.abandon('session-beta', failed.attemptId)

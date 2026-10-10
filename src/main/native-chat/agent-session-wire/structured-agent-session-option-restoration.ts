@@ -1,24 +1,5 @@
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { encodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
-
-export async function readNativeSessionOptions(input: {
-  adapter: Pick<StructuredAgentSessionAdapter, 'readOptions' | 'readOptionRestoreFailures'>
-  sessionId: string
-  fence: number
-  priorOptions?: Readonly<Record<string, string>>
-}): Promise<Readonly<Record<string, string>> | undefined> {
-  const { adapter, sessionId, fence, priorOptions } = input
-  const reported = await adapter.readOptions?.({ sessionId, fence })
-  if (!reported) {
-    return undefined
-  }
-  return nativeSessionOptionsFromReport({
-    reported: reported.current,
-    restoreSkipped: adapter.readOptionRestoreFailures?.(sessionId) ?? [],
-    ...(priorOptions ? { priorOptions } : {})
-  })
-}
 
 /** The record's options once the provider has reported: its model, effort, Fast and service tier
  *  replace the saved ones, other saved options stay, and any the child could not take are dropped. */
@@ -31,6 +12,7 @@ export function nativeSessionOptionsFromReport(input: {
 }): Readonly<Record<string, string>> {
   const { reported, priorOptions } = input
   const restored = priorOptions ? { ...priorOptions } : {}
+  // A report naming no model drops the saved one: the next start runs the provider's own.
   delete restored.model
   delete restored.effort
   delete restored.fastMode

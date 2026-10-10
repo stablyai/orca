@@ -32,14 +32,16 @@ function piEnvironment({
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
-    resolveLaunch: createPiRpcLaunchResolver({
-      store: context.store,
-      resolveWorkspacePath: deps.resolveWorkspacePath,
-      resolveEnvironment: piEnvironment(context),
-      ...(deps.resolveAgentCommandSettings
-        ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
-        : {})
-    }),
+    resolveLaunch:
+      deps.resolvePiLaunch ??
+      createPiRpcLaunchResolver({
+        store: context.store,
+        resolveWorkspacePath: deps.resolveWorkspacePath,
+        resolveEnvironment: piEnvironment(context),
+        ...(deps.resolveAgentCommandSettings
+          ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
+          : {})
+      }),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     onLifecycle: context.deliverLifecycle,

@@ -519,10 +519,12 @@ describe('a structured codex session over agentSession.*', () => {
       createIntentParams()
     )
     expect(created.page.items).toEqual([])
-    expect(codex.live().calls[0]).toMatchObject({
-      method: 'thread/start',
-      params: { cwd: `/repos/${WORKSPACE}` }
-    })
+    // Create answers at spawn; the thread opens once Codex has initialized.
+    await vi.waitFor(() =>
+      expect(codex.live().calls.find((call) => call.method === 'thread/start')).toMatchObject({
+        params: { cwd: `/repos/${WORKSPACE}` }
+      })
+    )
     const fence = created.fence
 
     const stream = await subscribe('sub-1')
@@ -681,16 +683,18 @@ describe('a structured codex session over agentSession.*', () => {
     ).toBe(true)
     expect(itemsOf(missed).map(textOf).filter(Boolean)).toEqual(['Stopped.'])
 
-    // A runtime taking the session over is the other half of reconnect: the
-    // fence advances, the old child is reaped, and its replacement resumes the
-    // thread this session proved rather than forking a new one.
+    // Stop ended the session once its turn did. A runtime taking it over is the other half of
+    // reconnect: the fence advances, and the new child resumes the thread this session proved
+    // rather than forking a new one.
     const reaped = codex.live()
+    await vi.waitFor(() => expect(reaped.closed).toBe(true))
+    const stoppedFence =
+      getStructuredAgentSessionHost()?.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? fence
     const resumed = await ok<{ fence: number; page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.ensure',
-      attachParams(fence)
+      attachParams(stoppedFence)
     )
-    expect(resumed.fence).toBe(fence + 1)
-    expect(reaped.closed).toBe(true)
+    expect(resumed.fence).toBe(stoppedFence + 1)
     expect(codex.live().resumedThreadId).toBe(THREAD)
     expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
       ok: true,

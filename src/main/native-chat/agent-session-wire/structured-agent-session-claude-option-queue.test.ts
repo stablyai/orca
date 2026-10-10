@@ -12,13 +12,14 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-claude' }
 const CLAUDE_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
@@ -30,7 +31,8 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let activeModel: string
-let optionWritable: Promise<void>
+let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+let order: string[]
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
@@ -47,14 +49,22 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 }
 
 function adapter(): StructuredAgentSessionAdapter {
-  setOption = vi.fn(async ({ value }) => {
-    activeModel = value
-    return { model: value }
+  setOption = vi.fn(async ({ key, value }) => {
+    order.push(`${key}=${value}`)
+    if (key === 'model') {
+      activeModel = value
+    }
+    return { [key]: value }
+  })
+  dispatch = vi.fn(async () => {
+    order.push('dispatch')
+    return { state: 'admitted' as const }
   })
   acquire = vi.fn(async ({ fence, spawnToken, options }) => {
     activeModel = options?.model ?? DEFAULT_MODEL
     return {
       process: { hostId: 'local', pid: 4200, processStartTimeMs: NOW, spawnToken },
+      acquisitionGeneration: 'generation-1',
       link: {
         linkId: `claude-native-${fence}`,
         handle: claudeProviderHandle(CLAUDE_SESSION, 'native-leaf'),
@@ -66,11 +76,10 @@ function adapter(): StructuredAgentSessionAdapter {
   })
   return {
     acquire,
-    dispatch: vi.fn(),
+    dispatch,
     cancelTurn: vi.fn(async () => ({ cancelled: true })),
     answerPrompt: vi.fn(async () => undefined),
     setOption,
-    awaitOptionWritable: () => optionWritable,
     readOptions: vi.fn(async () => ({ current: { model: activeModel }, models: [] })),
     closeSession: vi.fn(async () => {
       activeModel = DEFAULT_MODEL
@@ -83,10 +92,10 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-options-'))
   resetHostTestOperationIds()
   activeModel = DEFAULT_MODEL
-  optionWritable = Promise.resolve()
+  order = []
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
-    agents: NO_STRUCTURED_AGENTS,
+    agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
@@ -115,21 +124,39 @@ afterEach(async () => {
 })
 
 describe('Claude structured session options', () => {
-  it('queues a pick made while the provider starts only once it can take it', async () => {
-    let land = (): void => {}
-    optionWritable = new Promise((resolve) => {
-      land = resolve
-    })
-    const fields = { key: 'model', value: PICKED_MODEL }
-    const picked = host.setOption(CALLER, {
-      envelope: envelope('agentSession.setOption', fields),
-      ...fields
-    })
-    await new Promise((resolve) => setTimeout(resolve, 20))
+  it('takes a pick made while the agent starts as intent and applies it, model first, before the first send', async () => {
+    const pick = (key: string, value: string) =>
+      host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', { key, value }),
+        key,
+        value
+      })
+    // Answered at once: nothing waits on a provider still starting.
+    expect(await pick('effort', 'high')).toMatchObject({ ok: true })
+    expect(await pick('model', PICKED_MODEL)).toMatchObject({ ok: true })
     expect(setOption).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.options).toEqual({ effort: 'high', model: PICKED_MODEL })
 
-    land()
-    expect(await picked).toMatchObject({ ok: true, value: { options: { model: PICKED_MODEL } } })
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: PICKED_MODEL })
+    const body = hostTestMessage('hello')
+    expect(
+      await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+    ).toMatchObject({ ok: true })
+    expect(dispatch).not.toHaveBeenCalled()
+
+    // The start's own report was read before the picks, so it is out of date.
+    await host.handleAdapterEvent({
+      type: 'started',
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      acquisitionGeneration: 'generation-1',
+      reportedOptions: { model: DEFAULT_MODEL },
+      restoreSkippedOptions: [],
+      optionRevision: 0
+    })
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+    expect(order).toEqual([`model=${PICKED_MODEL}`, 'effort=high', 'dispatch'])
+    expect(activeModel).toBe(PICKED_MODEL)
+    await host.flushAllStreamedEvents()
+    expect(store.getRecord(SESSION)?.options).toEqual({ effort: 'high', model: PICKED_MODEL })
   })
 })

@@ -4,7 +4,6 @@ import {
   isAgentSessionProviderHandleInNamespace
 } from '../../shared/agent-session-provider-handle-encoding'
 import {
-  AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
@@ -13,29 +12,20 @@ import {
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
-import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexSessionJournalTranslator } from './codex-structured-session-journal'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
-import {
-  codexProviderHandleLink,
-  codexSpawnedProcessIdentity
-} from './codex-structured-owner-identity'
+import { spawnCodexAppServerConnection } from './codex-app-server-connection'
+import { codexSpawnedProcessIdentity } from './codex-structured-owner-identity'
 import { codexStructuredChildEnvironment } from './codex-structured-child-environment'
-import { openCodexThread } from './codex-structured-thread-open'
-import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
 import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from './codex-structured-session-close'
-import { restoredCodexSessionOptions } from './codex-structured-session-options'
-import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
-import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
-import { reportedCodexThreadOptions } from './codex-structured-service-tier'
+import { startCodexStructuredSession } from './codex-structured-session-start'
+import { CodexStartingChild } from './codex-structured-starting-child'
 import {
   assertCodexConnectionOpen,
-  codexSessionLifecycle,
   mintCodexAcquisitionGeneration,
   type CodexAcquisitionRegistry,
   type CodexAcquisitionAttempt,
@@ -93,7 +83,7 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
-  const open = deps.openConnection ?? openCodexAppServerConnection
+  const open = deps.openConnection ?? spawnCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
     await stopSupersededCodexAcquisition({
@@ -155,6 +145,14 @@ export async function acquireCodexStructuredSession(input: {
         ...(acquireInput.onOutput ? { onOutput: acquireInput.onOutput } : {}),
         onExit: (error, exit) => {
           try {
+            if (attempt.startingChild && !sessions.has(sessionId)) {
+              attempt.exitProven = true
+              attempt.startingChild.end(
+                error,
+                attempt.cancelled && attempt.requestedClose !== false
+              )
+              acquisitions.deleteIfCurrent(sessionId, attempt)
+            }
             handleCodexSessionExit({
               sessions,
               sessionId,
@@ -183,80 +181,39 @@ export async function acquireCodexStructuredSession(input: {
       })
     }
     acquisitions.assertCurrent(sessionId, attempt)
-    const threadLaunch = await withCodexVisualsThreadConfig(connection, launch, {
-      sessionId,
-      ...(deps.logger ? { logger: deps.logger } : {})
-    })
-    acquisitions.assertCurrent(sessionId, attempt)
-    const opened = await openCodexThread(connection, threadLaunch, deps.requestTimeoutMs)
-    acquisitions.assertCurrent(sessionId, attempt)
-    primaryThreadId = opened.threadId
-    const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
-    if (restoreAdmission && !restoreAdmission.accepted) {
-      throw AgentSessionAcquisitionRefusal.historyTooLarge(
-        'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
-      )
-    }
     const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)
-    const acquired: AgentSessionAcquisition = {
-      process,
-      link: codexProviderHandleLink({
-        threadId: opened.threadId,
-        ...(opened.supersededThreadId
-          ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
-          : { resumed: launch.resumeThreadId !== null }),
-        fence: acquireInput.fence,
-        linkId: deps.mintLinkId?.(),
-        observedAt: deps.now?.() ?? Date.now()
-      }),
-      acquisitionGeneration
-    }
     assertCodexConnectionOpen(connection, sessionId)
-    acquisitions.assertCurrent(sessionId, attempt)
-    const options = restoredCodexSessionOptions(acquireInput.options)
-    const catalogAccess = codexAcquireCatalogAccess(deps, launch)
-    acquisitions.assertCurrent(sessionId, attempt)
-    assertCodexConnectionOpen(connection, sessionId)
-    acquisitions.deleteIfCurrent(sessionId, attempt)
-    // Where this session's child work goes: the host's records, after each frame is journaled.
-    const sink = codexChildWorkSink(sessionId, deps)
-    const session: CodexSession = {
-      account,
-      connection,
-      ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
-      threadId: opened.threadId,
-      historyMode: opened.historyMode,
-      activeTurnIds: new Set(),
-      abortedTurnIds: new Set(),
-      prompts: acquisition.prompts,
-      options,
-      reportedOptions: reportedCodexThreadOptions(opened),
-      ...(catalogAccess ? { catalogAccess } : {}),
-      dispatchEchoes,
-      translator,
-      backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions, sink),
-      forceCloseUnexpected: (reason) =>
-        input.forceCloseUnexpected(
-          sessionId,
-          acquireInput.fence,
-          acquired.acquisitionGeneration as string,
-          reason
-        ),
-      ...(unbindReadingControl ? { unbindReadingControl } : {})
-    }
-    sessions.set(sessionId, session)
-    for (const event of acquisition.drain()) {
-      event()
-    }
-    startBackgroundCodexCatalogRefresh({
-      session,
+    attempt.startingChild = new CodexStartingChild(acquisitionGeneration, {
       sessionId,
-      sessions,
-      timeoutMs: deps.requestTimeoutMs,
-      logger: deps.logger
+      fence: acquireInput.fence,
+      onEvent: deps.onEvent,
+      dispose: () => {
+        unbindReadingControl?.()
+        acquisition.prompts.clear()
+        acquisition.drain()
+        translator?.dispose()
+      }
     })
-    return acquired
+    void startCodexStructuredSession({
+      input: acquireInput,
+      deps,
+      launch,
+      account,
+      sessions,
+      acquisitions,
+      attempt,
+      connection,
+      translator,
+      dispatchEchoes,
+      subagentExecutions,
+      setPrimaryThreadId: (threadId) => {
+        primaryThreadId = threadId
+      },
+      forceCloseUnexpected: input.forceCloseUnexpected,
+      ...(unbindReadingControl ? { unbindReadingControl } : {})
+    })
+    return { process, acquisitionGeneration }
   } catch (error) {
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
       return closeFailedCodexAcquisition({

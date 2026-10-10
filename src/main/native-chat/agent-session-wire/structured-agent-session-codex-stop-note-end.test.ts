@@ -70,7 +70,11 @@ beforeEach(async () => {
   adapter = adapterFor(codex, launch, [], {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     onEvent: (event) => {
-      if (event.type === 'ended' && 'cause' in event) {
+      if (
+        event.type === 'started' ||
+        event.type === 'options-reported' ||
+        (event.type === 'ended' && 'cause' in event)
+      ) {
         void host.handleAdapterEvent(event)
       }
     }
@@ -168,6 +172,8 @@ async function unconfirmedStop() {
     return false
   }
   await expect(stop()).resolves.toMatchObject({ ok: true })
+  // The Stop's next step ends the child; its close is what fails to prove the exit.
+  await host['tasks'].serialize(SESSION, async () => {})
   const { notes, turn } = await notesAndTurn()
   expect(notes).toHaveLength(1)
   expect(notes[0]?.body).toMatchObject({ failure: { kind: 'cancelUnconfirmed' } })

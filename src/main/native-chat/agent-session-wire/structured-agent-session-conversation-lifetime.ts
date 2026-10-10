@@ -21,7 +21,10 @@ import {
   type StructuredAgentSessionLifetimeContext,
   type StructuredAgentSessionStopEnding
 } from './structured-agent-session-host-lifetime'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChildIdentity
+} from './structured-agent-session-host-types'
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -103,33 +106,35 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     ...deps().idleSweep
   })
 
+  const stopStartingChild = (
+    sessionId: string,
+    expired: StructuredAgentSessionProviderChildIdentity | null
+  ): void => {
+    void serialize(sessionId, async () => {
+      const child = sessions.get(sessionId)?.child
+      if (!expired || !child || child.phase !== 'starting' || !sameProviderChild(child, expired)) {
+        return
+      }
+      await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
+        cause: 'host-stop'
+      })
+    }).catch((error: unknown) =>
+      deps().logger.warn('stopping an agent that could not finish starting failed', {
+        scope: 'startup-limit',
+        sessionId,
+        error
+      })
+    )
+  }
   return {
     idleSweep,
     stopAgent,
     /** A host stop of the child the expired attempt published, if it is still that one and still
      *  starting: its end fails what is queued, as the idle sweep's stop of a start does. */
-    expireStartup: ({ sessionId, child: expired }: StructuredAgentSessionExpiredStartup): void => {
-      void serialize(sessionId, async () => {
-        const child = sessions.get(sessionId)?.child
-        if (
-          !expired ||
-          !child ||
-          child.phase !== 'starting' ||
-          !sameProviderChild(child, expired)
-        ) {
-          return
-        }
-        await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
-          cause: 'host-stop'
-        })
-      }).catch((error: unknown) =>
-        deps().logger.warn('stopping an agent past its startup limit failed', {
-          scope: 'startup-limit',
-          sessionId,
-          error
-        })
-      )
-    },
+    expireStartup: ({ sessionId, child }: StructuredAgentSessionExpiredStartup): void =>
+      stopStartingChild(sessionId, child),
+    /** A start that cannot finish ends as one past its limit does, outside the caller's step. */
+    stopStartingChild,
     /** Quit has begun: nothing opens a conversation or sweeps one after this. */
     dispose: (): void => {
       disposed = true

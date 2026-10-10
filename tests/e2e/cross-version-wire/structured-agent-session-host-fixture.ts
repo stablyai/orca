@@ -1,4 +1,8 @@
 import { vi } from 'vitest'
+import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured-agent-definition'
@@ -164,4 +168,41 @@ export const turnItemSkew = {
       [[...current.capabilities], { ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
     ] as const
   }
+}
+
+/** A Codex provider that is ready as soon as it is published, as one with an instant handshake is,
+ *  for a real host that only needs a running agent behind a chat. */
+export function readyCodexProviderAdapter(input: {
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
+  sessionId: string
+  thread: string
+  now: number
+  spawnToken: string
+  host: () => StructuredAgentSessionHost
+}): StructuredAgentSessionAdapter {
+  const { store, now } = input
+  return startsWhenPublished(
+    {
+      acquire: async ({ fence }) => ({
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: now,
+          spawnToken: store.getRecord(input.sessionId)?.lease.reservedSpawnToken ?? input.spawnToken
+        },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(input.thread),
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: now
+        }
+      }),
+      dispatch: async () => ({ state: 'accepted' }),
+      cancelTurn: async () => ({ cancelled: true }),
+      answerPrompt: async () => undefined,
+      setOption: async () => undefined
+    },
+    input.host
+  )
 }

@@ -146,7 +146,7 @@ export function sendPlan(params: {
         .submissions()
         .find((entry) => entry.clientMessageId === clientMessageId)
       if (submission) {
-        return { clientMessageId, submission }
+        return { clientMessageId, submission: { ...submission } }
       }
       // A pending row wrote nothing, so the send runs for the first time. Succeeded: accepted,
       // then a new epoch dropped its row. Unknown: only builds before this one wrote that.

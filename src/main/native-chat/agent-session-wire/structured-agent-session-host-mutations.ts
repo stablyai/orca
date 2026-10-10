@@ -19,7 +19,7 @@ import type {
   AgentSessionThreadGoalResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
-import { threadGoalPlan } from './structured-agent-session-thread-goal'
+import { refuseThreadGoalUnsupported, threadGoalPlan } from './structured-agent-session-thread-goal'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -41,6 +41,7 @@ import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutati
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
+import { runAfterProviderStart } from './structured-agent-session-provider-start-hold'
 import { performSetOption } from './structured-agent-session-turns-options'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
@@ -71,23 +72,25 @@ export function sendStructuredAgentSessionTurn(
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
-  return mutateStructuredAgentSession(
-    context,
-    caller,
-    params.envelope,
-    {
-      ...plan,
-      run: (ctx) =>
-        runQueueableStructuredAgentSessionSend(
-          context,
-          ctx,
-          params,
-          async () =>
-            structuredAgentSessionSendBlock(context.deps.store.getRecord(ctx.sessionId)) ??
-            (await plan.run(ctx))
-        )
-    },
-    sendPreparation(context, params.envelope, arrival)
+  return runAfterProviderStart(context, params.envelope.sessionId, () =>
+    mutateStructuredAgentSession(
+      context,
+      caller,
+      params.envelope,
+      {
+        ...plan,
+        run: (ctx) =>
+          runQueueableStructuredAgentSessionSend(
+            context,
+            ctx,
+            params,
+            async () =>
+              structuredAgentSessionSendBlock(context.deps.store.getRecord(ctx.sessionId)) ??
+              (await plan.run(ctx))
+          )
+      },
+      sendPreparation(context, params.envelope, arrival)
+    )
   )
 }
 
@@ -174,23 +177,27 @@ export async function setStructuredAgentSessionOption(
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
-  // Outside the queue: a pick made while the provider starts then queues behind what its start persists.
-  await context.deps.adapter.awaitOptionWritable?.(params.envelope.sessionId)
   const plan = setOptionPlan(params)
-  const atRest = () => !context.sessions.get(params.envelope.sessionId)?.child
+  // With no child, or one still starting, the pick is intent: the next start replays it, and a
+  // starting child takes it before it is handed anything. Never a write the pick waits on.
+  const recordsIntent = () => {
+    const child = context.sessions.get(params.envelope.sessionId)?.child
+    return !child || child.phase === 'starting'
+  }
   return mutateStructuredAgentSession(
     context,
     caller,
     params.envelope,
     {
       ...plan,
-      // Read as the call is admitted: with no child running, the pick is a conversation write —
-      // intent the next start replays. A running child's pick is still its owner's to make.
+      // Read as the call is admitted; a ready child's pick is still its owner's to make.
       get conversationWrite() {
-        return atRest() ? (true as const) : undefined
+        return recordsIntent() ? (true as const) : undefined
       },
       run: async (ctx) => {
-        if (atRest()) {
+        if (recordsIntent()) {
+          // A report the starting child read before this pick is out of date.
+          context.optionRevisions.advance(params.envelope.sessionId)
           return recordStructuredAgentSessionOptionIntent(context.deps, ctx, params)
         }
         // Held where a start is, so a close, a Stop admitted now or quit ends the wait from outside.
@@ -213,12 +220,17 @@ export function changeStructuredAgentSessionThreadGoal(
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; change: AgentSessionThreadGoalChange }
 ): Promise<AgentSessionMutationResult<AgentSessionThreadGoalResult>> {
-  return mutateStructuredAgentSession(
-    context,
-    caller,
-    params.envelope,
-    threadGoalPlan(params),
-    openWithAgent(context, params.envelope)
+  return runAfterProviderStart(context, params.envelope.sessionId, () =>
+    mutateStructuredAgentSession(
+      context,
+      caller,
+      params.envelope,
+      threadGoalPlan(params),
+      // An agent without goals answers so at once, with no start to wait out.
+      openWithAgent(context, params.envelope, (record) =>
+        refuseThreadGoalUnsupported(context.deps.adapter, context.deps.agents, record?.provider)
+      )
+    )
   )
 }
 

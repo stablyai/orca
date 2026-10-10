@@ -1,14 +1,13 @@
 import {
   agentSessionFailureFact,
   providerDiagnostic,
-  withProviderDiagnostic
+  type SubmissionRejectionFact
 } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { BoundedMap } from '../../shared/bounded-map'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError, AcpAuthRequiredError } from './acp-errors'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 /** Ends the provider failed, rather than ones it chose (a refusal, a token limit). */
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
@@ -41,18 +40,13 @@ export function acpAuthenticationRequired(dialect: AcpDialect, error: unknown): 
   )
 }
 
-export function acpSignInRequiredRefusal(
-  agent: string,
+/** A sign-in refusal in the agent's own words. */
+export function acpSignInRequiredFailure(
   dialect: AcpDialect,
   error: AcpAgentError
-): AgentSessionAcquisitionRefusal {
-  return withProviderDiagnostic(
-    new AgentSessionAcquisitionRefusal(
-      `${agent} reported that it is not signed in: ${error.message}`,
-      'notSignedIn'
-    ),
-    providerDiagnostic(acpPromptErrorDetail(dialect, error), 'person')
-  )
+): SubmissionRejectionFact {
+  const detail = providerDiagnostic(acpPromptErrorDetail(dialect, error), 'person')
+  return agentSessionFailureFact('notSignedIn', detail ? { detail } : {})
 }
 
 /** One error row per failed turn, in the provider's own words, as a Codex turn-ending error reads:

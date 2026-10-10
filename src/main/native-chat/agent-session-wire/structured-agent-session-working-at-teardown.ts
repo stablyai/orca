@@ -52,6 +52,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isUnansweredHandedOverSubmission } from '../agent-session-journal/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from './structured-agent-session-shown-work'
+import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 
 /** A send Orca journaled that the provider has neither opened a turn for nor refused. Mirrors the
  *  projection's own unanswered-dispatch rule, which is what makes that window read as `working`. */
@@ -164,7 +165,7 @@ function liveTasks(
 type WorkingCandidateSession = {
   journal: AgentSessionJournal
   /** Only this host generation's own child counts. A restored-for-reading journal has none. */
-  child: { fence: number } | null
+  child: Pick<StructuredAgentSessionProviderChild, 'fence' | 'phase'> | null
 }
 
 /** The offer one session is owed, taken right before teardown stops its provider child; null when
@@ -175,8 +176,6 @@ export function structuredAgentSessionWorkingAtStop(input: {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   /** The session's child records, the same read the status feed publishes. */
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
-  /** False when the session's live child never answered its start; the exit reads the same fact. */
-  startAnswered?: (sessionId: string) => boolean | undefined
   trigger: AgentSessionResumeTrigger
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
@@ -190,7 +189,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
   const current = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   // A queued message reached no agent, and one handed to a start that never answered ran nowhere:
   // neither is work to resume. The next open or the exit keeps it as unsent.
-  const unanswered = input.startAnswered?.(sessionId) === false
+  const unanswered = session.child.phase === 'starting'
   const handedOver = current.submissions.filter(
     (submission) =>
       !isQueuedAgentJournalSubmission(submission) &&

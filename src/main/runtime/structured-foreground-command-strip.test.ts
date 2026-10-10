@@ -111,6 +111,7 @@ describe('foreground commands in the background-task channel', () => {
       })
     return {
       host,
+      codex,
       rosters,
       notify,
       turn,
@@ -299,6 +300,72 @@ describe('foreground commands in the background-task channel', () => {
       turn: { id: 'helper-turn', status: 'interrupted' }
     })
     expect(rosters.at(-1)).toBeNull()
+  })
+
+  it("keeps the chat's agent running on a sub-agent's Stop; the chat's Stop then ends it", async () => {
+    const helper = 'thread-helper'
+    const interrupts: unknown[] = []
+    const { host, codex, notify, fence } = await rig({
+      'turn/interrupt': (params) => {
+        interrupts.push(params)
+        return {}
+      }
+    })
+    await notify('turn/started', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-1', status: 'inProgress' }
+    })
+    await notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-helper',
+        kind: 'started',
+        agentThreadId: helper,
+        agentPath: '/root/helper'
+      }
+    })
+    await notify('turn/started', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'inProgress' }
+    })
+
+    // A row's Stop stops only that task: the app-server and the chat's own turn run on.
+    await expect(stopFromStrip(host, fence, '7', helper)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(interrupts).toEqual([{ threadId: helper, turnId: 'helper-turn' }])
+    expect(codex.connections).toHaveLength(1)
+    expect(codex.connections[0]?.closed).toBe(false)
+
+    // The chat's Stop interrupts its turn and then ends the session, sub-agents included.
+    const fields = {}
+    const stopped = host.cancel(
+      { callerKey: 'strip-test' },
+      {
+        envelope: {
+          sessionId: SESSION,
+          clientOperationId: `${Date.now()}-${'8'.padStart(32, '0')}`,
+          expectedRuntimeFence: fence,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.cancel',
+            sessionId: SESSION,
+            fields
+          })
+        }
+      }
+    )
+    await vi.waitFor(() =>
+      expect(interrupts).toContainEqual(expect.objectContaining({ threadId: THREAD_ID }))
+    )
+    await notify('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-1', status: 'interrupted' }
+    })
+    await expect(stopped).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+    await vi.waitFor(() => expect(codex.connections[0]?.closed).toBe(true))
   })
 
   it("stops a sub-agent's running command with it, and the row leaves", async () => {

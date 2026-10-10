@@ -90,7 +90,8 @@ export function NativeChatStructuredSession(
     queueFollowUps,
     hostStopping: hostExecution.stopping,
     providerStarting: hostExecution.phase === 'starting',
-    providerRunning: hostExecution.phase !== null,
+    // A start's own verdict (a signed-out agent) exists only once that start is proven.
+    providerRunning: hostExecution.phase === 'ready',
     rewind: rewindHost,
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})

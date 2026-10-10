@@ -43,23 +43,6 @@ export function claudeStartupFailureFact(session: ClaudeSession): SubmissionReje
     : null
 }
 
-/** Resolves when startup lands or `timeoutMs` passes; a stuck start then refuses the write as before. */
-export function claudeStartupSettledWithin(
-  session: ClaudeSession | undefined,
-  timeoutMs: number
-): Promise<void> {
-  if (session?.startup.state !== 'pending') {
-    return Promise.resolve()
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined
-  return Promise.race([
-    session.startup.settled,
-    new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, timeoutMs)
-    })
-  ]).finally(() => clearTimeout(timer))
-}
-
 /** Startup cannot land any more: the child exited, was closed, or its start faulted. */
 export function failClaudeStartup(session: ClaudeSession, error: Error): void {
   const startup = session.startup

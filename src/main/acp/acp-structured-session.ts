@@ -17,6 +17,7 @@ import type { AcpStructuredPrompts } from './acp-structured-prompts'
 import type { AcpStructuredTurns } from './acp-structured-turns'
 
 export type AcpStructuredSession = {
+  phase: 'ready'
   sessionId: string
   fence: number
   acquisitionGeneration: string
@@ -28,8 +29,6 @@ export type AcpStructuredSession = {
   prompts: AcpStructuredPrompts
   options: AcpStructuredOptions
   turns: AcpStructuredTurns
-  /** Saved picks the agent refused when this child started. */
-  restoreSkipped: readonly string[]
   /** Orca asked this child to stop; its exit is then a requested close. */
   closeRequested: boolean
   /** Why nothing this child says reaches the journal any more; null while it does. */

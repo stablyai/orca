@@ -30,6 +30,7 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -64,14 +65,17 @@ function accepted(): AgentSessionDispatchOutcome {
 }
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    acquire,
-    releaseAcquisition,
-    dispatch,
-    cancelTurn: vi.fn(async () => ({ cancelled: true })),
-    answerPrompt: vi.fn(async () => undefined),
-    setOption: vi.fn(async () => undefined)
-  }
+  return startsWhenPublished(
+    {
+      acquire,
+      releaseAcquisition,
+      dispatch,
+      cancelTurn: vi.fn(async () => ({ cancelled: true })),
+      answerPrompt: vi.fn(async () => undefined),
+      setOption: vi.fn(async () => undefined)
+    },
+    () => host
+  )
 }
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
