@@ -12,6 +12,8 @@ packages:
   - src/packages/*
 
 minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - emoji-picker-react@5.0.0
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
