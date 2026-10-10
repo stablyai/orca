@@ -60,22 +60,23 @@ export function createRichMarkdownImageResolverContext({
 }: {
   filePath: string
   externalSshTargetId?: string
-  /** The document owner's transport. */
-  runtimeTarget: RuntimeClientTarget
+  /** The document owner's transport; `null` while unresolved, so images do not load. */
+  runtimeTarget: RuntimeClientTarget | null
   worktreeId: string
   worktreeRoot: string | null
 }): RichMarkdownImageResolverContext {
   return {
     filePath,
-    runtimeContext: worktreeRoot
-      ? {
-          target: runtimeTarget,
-          worktreeId,
-          worktreePath: worktreeRoot,
-          connectionId: getConnectionId(worktreeId),
-          expectedExternalSshTargetId: externalSshTargetId
-        }
-      : undefined
+    runtimeContext:
+      worktreeRoot && runtimeTarget
+        ? {
+            target: runtimeTarget,
+            worktreeId,
+            worktreePath: worktreeRoot,
+            connectionId: getConnectionId(worktreeId),
+            expectedExternalSshTargetId: externalSshTargetId
+          }
+        : undefined
   }
 }
 

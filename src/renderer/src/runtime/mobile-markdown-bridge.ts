@@ -11,7 +11,7 @@ import { editorTabFileAccess } from '@/lib/local-file-access'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent } from './runtime-file-client'
-import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import {
   hashMarkdownContent,
   isMarkdownContentByteLengthOverLimit,
@@ -245,7 +245,7 @@ async function readFileContent(file: OpenFile): Promise<string> {
   const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
   const state = useAppStore.getState()
   const result: FileContent = await readRuntimeFileContent({
-    target: getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
+    target: requireRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,

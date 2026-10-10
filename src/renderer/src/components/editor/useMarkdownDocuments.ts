@@ -5,7 +5,10 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
-import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
+import {
+  getRuntimeTargetForFileOwner,
+  requireRuntimeTargetForFileOwner
+} from '@/lib/file-owner-runtime-target'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import {
   createMarkdownDocumentIndex,
@@ -88,6 +91,7 @@ export function useMarkdownDocuments(
       )
       // The content loader reowns retained tabs before metadata may use their new host.
       if (
+        !target ||
         findRestoredEditorWorkspaceRuntimeOwner(
           state,
           {
@@ -165,7 +169,7 @@ export function useMarkdownDocuments(
       try {
         const stats = await statRuntimePath(
           {
-            target: getRuntimeTargetForFileOwner(
+            target: requireRuntimeTargetForFileOwner(
               useAppStore.getState(),
               worktreeId,
               activeFile.runtimeEnvironmentId

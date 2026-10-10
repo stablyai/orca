@@ -6,7 +6,6 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const useLocalImageSrcSpy = vi.hoisted(() => vi.fn((src?: string, ..._context: unknown[]) => src))
 
@@ -40,17 +39,20 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 vi.mock('@/store/slices/worktree-helpers', () => ({ findWorktreeById: () => null }))
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
-  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
-  getRuntimeTargetForFileOwner: (
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
     _state: unknown,
-    _worktreeId: unknown,
-    runtimeEnvironmentId?: string | null
-  ) =>
-    runtimeEnvironmentId
-      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
-      : { kind: 'local' }
-}))
+    _worktreeId: string | null | undefined,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 vi.mock('@/runtime/use-worktree-runtime-target', () => ({
   useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
     runtimeEnvironmentId

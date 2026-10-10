@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeTargetForFileOwner
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import {
   runtimeTargetForExecutionHostId,
   runtimeTargetForOwnerEnvironment,
@@ -22,15 +20,21 @@ export function useWorktreeRuntimeTarget(
   return useMemo(() => runtimeTargetForExecutionHostId(executionHostId), [executionHostId])
 }
 
-/** Transport to an open file's owner (see {@link getRuntimeTargetForFileOwner}), stable across renders. */
+/**
+ * Transport to an open file's owner (see {@link getRuntimeTargetForFileOwner}), stable across
+ * renders; `null` while rows disagree.
+ */
 export function useFileOwnerRuntimeTarget(
   worktreeId: string | null | undefined,
   runtimeEnvironmentId: string | null | undefined
-): RuntimeClientTarget {
+): RuntimeClientTarget | null {
   // Why a string: a fresh target object per store write would re-render on every change.
-  const ownerEnvironmentId = useAppStore((state) => {
+  const ownerKey = useAppStore((state) => {
     const target = getRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId)
-    return target.kind === 'environment' ? target.environmentId : null
+    return target ? (target.kind === 'environment' ? target.environmentId : '') : null
   })
-  return useMemo(() => runtimeTargetForOwnerEnvironment(ownerEnvironmentId), [ownerEnvironmentId])
+  return useMemo(
+    () => (ownerKey === null ? null : runtimeTargetForOwnerEnvironment(ownerKey || null)),
+    [ownerKey]
+  )
 }

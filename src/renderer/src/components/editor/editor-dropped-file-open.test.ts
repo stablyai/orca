@@ -3,7 +3,7 @@ import {
   getEditorFileDropOperationContext,
   shouldUploadRemoteEditorFileDrop
 } from './editor-dropped-file-open'
-import { getRuntimeTargetForWorktreeOwner } from '@/lib/worktree-runtime-owner'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 
 describe('shouldUploadRemoteEditorFileDrop', () => {
   it('does not upload editor drops for local workspaces', () => {

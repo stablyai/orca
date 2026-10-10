@@ -4,10 +4,7 @@ import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-lin
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
-import {
-  getRuntimeTargetForWorktreeOwner,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import { type WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import {
   importExternalPathsToRuntime,
   type RuntimeFileOperationArgs
@@ -21,6 +18,7 @@ import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expect
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,
@@ -37,7 +35,7 @@ export function getEditorFileDropOperationContext(
 ): RuntimeFileOperationArgs {
   return {
     // Why: OS drops target the selected worktree's owner, never the focused server.
-    target: getRuntimeTargetForWorktreeOwner(store, worktreeId),
+    target: requireRuntimeTargetForFileOwner(store, worktreeId, undefined),
     worktreeId,
     worktreePath,
     connectionId

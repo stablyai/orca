@@ -130,7 +130,7 @@ export function useMarkdownPreviewSourceFoundation({
   )
   const imageRuntimeContext = useMemo(
     () =>
-      sourceRoutingWorktreeId && worktreeRoot
+      sourceRoutingWorktreeId && worktreeRoot && sourceRuntimeTarget
         ? {
             target: sourceRuntimeTarget,
             worktreeId: sourceRoutingWorktreeId,

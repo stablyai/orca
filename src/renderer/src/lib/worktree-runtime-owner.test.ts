@@ -6,8 +6,6 @@ import {
   getKnownExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds,
-  getRuntimeTargetForFileOwner,
-  getRuntimeTargetForWorktreeOwner,
   getSettingsForWorktreeRuntimeOwner,
   type WorktreeRuntimeOwnerState
 } from './worktree-runtime-owner'
@@ -37,34 +35,6 @@ const state: WorktreeRuntimeOwnerState = {
     { id: 'runtime-folder', projectGroupId: 'runtime-group' }
   ]
 }
-
-describe('getRuntimeTargetForFileOwner', () => {
-  it('reads an unstamped tab from its worktree owner, not the focused server', () => {
-    // Before: an unstamped tab read whichever server was focused at read time (`focused-env`).
-    expect(getRuntimeTargetForFileOwner(state, 'runtime-repo::wt-b', undefined)).toEqual({
-      kind: 'environment',
-      environmentId: 'owner-env'
-    })
-    expect(getRuntimeTargetForFileOwner(state, 'local-repo::wt-a', undefined)).toEqual({
-      kind: 'local'
-    })
-  })
-
-  it('keeps the owner stamped on the tab', () => {
-    expect(getRuntimeTargetForFileOwner(state, 'local-repo::wt-a', 'stamped-env')).toEqual({
-      kind: 'environment',
-      environmentId: 'stamped-env'
-    })
-    expect(getRuntimeTargetForFileOwner(state, 'runtime-repo::wt-b', null)).toEqual({
-      kind: 'local'
-    })
-  })
-
-  it('stays on this computer for a worktree-less tab whatever the focused server', () => {
-    expect(getRuntimeTargetForFileOwner(state, '', undefined)).toEqual({ kind: 'local' })
-    expect(getRuntimeTargetForWorktreeOwner(state, null)).toEqual({ kind: 'local' })
-  })
-})
 
 describe('getSettingsForWorktreeRuntimeOwner', () => {
   it('routes to the runtime owner of the worktree', () => {

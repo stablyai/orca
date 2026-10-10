@@ -48,9 +48,8 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
 }))
 
 // Fixture owners: `repo-runtime::` workspaces live on runtime-1, everything else here is local.
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
-  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
-  getRuntimeTargetForFileOwner: (
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
     _state: unknown,
     worktreeId: string | null | undefined,
     runtimeEnvironmentId: string | null | undefined
@@ -61,9 +60,18 @@ vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
           ? 'runtime-1'
           : null
         : runtimeEnvironmentId
-    return owner ? { kind: 'environment', environmentId: owner } : { kind: 'local' }
+    return owner
+      ? { kind: 'environment' as const, environmentId: owner }
+      : { kind: 'local' as const }
   }
-}))
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -74,7 +82,6 @@ vi.mock('@/store', () => ({
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 type Deferred<T> = {
   promise: Promise<T>

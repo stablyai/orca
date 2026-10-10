@@ -6,7 +6,6 @@ import type { FsChangeEvent, MarkdownDocument } from '../../../../shared/filesys
 import type { OpenFile } from '@/store/slices/editor'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const runtime = vi.hoisted(() => ({ list: vi.fn(), stat: vi.fn() }))
 const state = {
@@ -25,14 +24,20 @@ vi.mock('@/runtime/runtime-file-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
-  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
-  getRuntimeTargetForFileOwner: (
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
     _state: unknown,
-    _worktreeId: unknown,
+    _worktreeId: string | null | undefined,
     owner: string | null | undefined
-  ) => (owner ? { kind: 'environment', environmentId: owner } : { kind: 'local' })
-}))
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

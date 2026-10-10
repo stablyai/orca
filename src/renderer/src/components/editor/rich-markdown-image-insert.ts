@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
-import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -46,7 +46,7 @@ export async function insertRichMarkdownImageFromPath({
       worktreeId && parsedWorkspace?.type !== 'folder'
         ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
         : {
-            target: getRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId),
+            target: requireRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId),
             worktreeId,
             worktreePath,
             connectionId,

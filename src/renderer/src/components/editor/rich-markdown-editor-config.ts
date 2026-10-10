@@ -50,7 +50,7 @@ export type EditorConfigParams = {
   isMac: boolean
   richMarkdownSpellcheckEnabled: boolean
   /** The document owner's transport, for image reads. */
-  runtimeTarget: RuntimeClientTarget
+  runtimeTarget: RuntimeClientTarget | null
   activateMarkdownLink: ActivateMarkdownLink
   rootRef: MutableRefObject<HTMLDivElement | null>
   editorRef: MutableRefObject<Editor | null>

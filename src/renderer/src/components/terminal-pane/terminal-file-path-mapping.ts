@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { buildWorkspaceFileContext } from '@/lib/workspace-file-host-routing'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
@@ -18,8 +19,21 @@ export function getTerminalFileContext(
   worktreePath: string,
   runtimeEnvironmentId?: string | null
 ): TerminalFileContext {
-  const context = buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
   const state = useAppStore.getState()
+  if (
+    runtimeEnvironmentId === undefined &&
+    worktreeId &&
+    !getRuntimeTargetForWorktreeOwner(state, worktreeId)
+  ) {
+    // Why: rows disagree on the owner; the local target is a placeholder every caller refuses.
+    return {
+      target: { kind: 'local' },
+      worktreeId,
+      worktreePath,
+      sourceHostResolved: false
+    }
+  }
+  const context = buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
   const sourceHost = terminalFileSourceHost(state, context)
   if (!sourceHost) {
     // Why: the connection lookup ignores detected rows, so its local `null` must not override an

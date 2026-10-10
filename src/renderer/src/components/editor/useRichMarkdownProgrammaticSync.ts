@@ -27,7 +27,7 @@ type RichMarkdownProgrammaticSyncOptions = {
   baseCanonicalRef: MutableRefObject<string>
   markdownDocuments?: MarkdownDocument[]
   rootRef: MutableRefObject<HTMLDivElement | null>
-  runtimeTarget: RuntimeClientTarget
+  runtimeTarget: RuntimeClientTarget | null
   slashMenuSetter: Dispatch<SetStateAction<SlashMenuState | null>>
   worktreeId: string
   worktreeRoot: string | null

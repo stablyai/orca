@@ -2,10 +2,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile } from './connection-context'
-import {
-  getRuntimeTargetForFileOwner,
-  type WorktreeRuntimeOwnerState
-} from './worktree-runtime-owner'
+import { getRuntimeTargetForFileOwner } from './file-owner-runtime-target'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
 
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
@@ -68,7 +66,8 @@ export function editorTabFileAccess(
     return USER_FILE_ACCESS
   }
   const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
-  if (file.externalSshTargetId?.trim() || owner.kind === 'environment') {
+  // Why `!owner`: rows that disagree may put the path on another host.
+  if (file.externalSshTargetId?.trim() || owner?.kind !== 'local') {
     return undefined
   }
   const outsideOwnerRoot =

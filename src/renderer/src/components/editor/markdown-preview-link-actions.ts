@@ -6,7 +6,7 @@ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/loc
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { translate } from '@/i18n/i18n'
-import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
@@ -171,7 +171,7 @@ export async function handleMarkdownPreviewLinkClick({
   try {
     const stats = await statRuntimePath(
       {
-        target: getRuntimeTargetForFileOwner(
+        target: requireRuntimeTargetForFileOwner(
           useAppStore.getState(),
           targetWorktree.id,
           resolvedSourceRuntimeEnvironmentId
