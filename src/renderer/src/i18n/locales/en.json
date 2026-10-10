@@ -7003,6 +7003,7 @@
           "agentPermissionsInfo": "Agent permissions info",
           "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsMixedHint": "Some agents have custom launch arguments, so permissions are mixed. Picking a mode applies it to the remaining agents.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",

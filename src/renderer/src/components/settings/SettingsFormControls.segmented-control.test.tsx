@@ -6,12 +6,16 @@ import { SettingsSegmentedControl } from './SettingsFormControls'
 
 afterEach(cleanup)
 
-function renderControl(onChange = vi.fn()): { onChange: ReturnType<typeof vi.fn> } {
+function renderControl(
+  onChange = vi.fn(),
+  ariaDescribedBy?: string
+): { onChange: ReturnType<typeof vi.fn> } {
   render(
     <TooltipProvider>
       <SettingsSegmentedControl<string>
         value="stable"
         onChange={onChange}
+        ariaDescribedBy={ariaDescribedBy}
         options={[
           { value: 'stable', label: 'Stable' },
           {
@@ -29,6 +33,12 @@ function renderControl(onChange = vi.fn()): { onChange: ReturnType<typeof vi.fn>
 }
 
 describe('SettingsSegmentedControl unavailable options', () => {
+  it('associates the group with its supplemental description', () => {
+    renderControl(vi.fn(), 'permission-help')
+
+    expect(screen.getByRole('radiogroup').getAttribute('aria-describedby')).toBe('permission-help')
+  })
+
   // Why: a native disabled button leaves the tab order, so keyboard users can never
   // focus it to open the tooltip explaining why the option is unavailable.
   it('marks unavailable options aria-disabled so their tooltip stays reachable', async () => {
