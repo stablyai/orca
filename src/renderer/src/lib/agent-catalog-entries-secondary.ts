@@ -184,6 +184,15 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       cmd: 'jcode',
       faviconDomain: 'jcode.sh',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'openinterpreter',
+      label: translate('auto.lib.agent.catalog.entries.secondary.3c61d6cef6', 'OpenInterpreter'),
+      cmd: 'interpreter',
+      faviconDomain: 'openinterpreter.com',
+      // Why: the undetected-agent Settings row uses this URL as its Install
+      // action; link to the cross-platform quickstart instead of a source repo.
+      homepageUrl: 'https://www.openinterpreter.com/docs/terminal/quickstart'
     }
   ]
 }

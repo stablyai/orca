@@ -350,7 +350,16 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start'
   },
   // prettier-ignore
-  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' },
+  openinterpreter: {
+    // Why: OpenInterpreter's documented terminal entry point is the generic
+    // `interpreter` binary. Keep it last in auto-pick order; unrelated executables
+    // may still appear as a false-positive install in the agent picker.
+    detectCmd: 'interpreter',
+    launchCmd: 'interpreter',
+    expectedProcess: 'interpreter',
+    promptInjectionMode: 'stdin-after-start'
+  }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

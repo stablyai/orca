@@ -741,7 +741,12 @@
           "opencode2_label": "OpenCode 2",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
-          "jcode_label": "Jcode"
+          "jcode_label": "Jcode",
+          "entries": {
+            "secondary": {
+              "3c61d6cef6": "OpenInterpreter"
+            }
+          }
         },
         "skill": {
           "cli": {

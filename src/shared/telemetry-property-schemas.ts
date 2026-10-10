@@ -53,6 +53,7 @@ export const AGENT_KIND_VALUES = [
   'muse',
   'dsh',
   'zcode',
+  'openinterpreter',
   'other'
 ] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)

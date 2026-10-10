@@ -807,4 +807,13 @@ describe('tui agent startup plans', () => {
       '--permission-mode bypass --respect-workspace-trust false'
     )
   })
+
+  it('uses the documented OpenInterpreter terminal entry point', () => {
+    expect(TUI_AGENT_CONFIG.openinterpreter).toMatchObject({
+      detectCmd: 'interpreter',
+      launchCmd: 'interpreter',
+      expectedProcess: 'interpreter',
+      promptInjectionMode: 'stdin-after-start'
+    })
+  })
 })
