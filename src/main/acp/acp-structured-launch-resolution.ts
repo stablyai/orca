@@ -30,6 +30,7 @@ import {
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 import {
   NATIVE_CHAT_VISUALS_DIR_ENV,
   withNativeChatVisualsEnv
@@ -62,7 +63,7 @@ export type AcpStructuredLaunch = {
 }
 
 export type AcpStructuredLaunchResolverDeps = {
-  store: Pick<AgentSessionRecordStore, 'getRecord'>
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
   /** The chat's journal as it stands, read without opening it; null when it has none. */
   readJournal: (sessionId: string) => JournalLoad | null
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
@@ -193,7 +194,7 @@ export function createAcpStructuredLaunchResolver(
       )
     }
     const { env, envToDelete, command } = await resolveAcpLaunchInvocation(spec, accountHome, deps)
-    const cwd = await deps.resolveWorkspacePath(location.workspaceId)
+    const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
     const visuals = spec.visualsSkill
       ? ((await deps.prepareVisuals?.(identity.sessionId)) ?? null)
       : null

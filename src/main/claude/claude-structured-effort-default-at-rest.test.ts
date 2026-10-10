@@ -1,5 +1,6 @@
 // A Claude chat at rest shows the effort its next start will run: a live child with nothing picked
-// teaches the host catalog the configured model and effort, and the resting read answers it.
+// teaches the host catalog the configured model and effort at its start, and the resting read
+// answers it.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -121,13 +122,20 @@ async function startChild(
     ...(options ? { options } : {})
   })
   await claudeStartupSettled(adapter, SESSION)
-  // As the host does with every live options read: what the child listed becomes the account's.
+  // As the host does: the start's settings readback says once what the config resolved, and every
+  // live options read's listing becomes the account's too.
+  const reported = events.find((event) => event.type === 'options-reported')
   const { catalogListing } = await adapter.readOptions({ sessionId: SESSION, fence: 7 })
-  if (catalogListing) {
-    catalogService(store, restingRecord({})).recordLiveListing(SESSION, catalogListing)
-    // The configured default lands after the workspace check.
-    await new Promise((resolve) => setTimeout(resolve, 0))
+  for (const listing of [
+    reported && 'catalogListing' in reported ? reported.catalogListing : undefined,
+    catalogListing
+  ]) {
+    if (listing) {
+      catalogService(store, restingRecord({})).recordLiveListing(SESSION, listing)
+    }
   }
+  // The configured default lands after the workspace check.
+  await new Promise((resolve) => setTimeout(resolve, 0))
   return adapter
 }
 

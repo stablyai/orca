@@ -3,9 +3,9 @@ import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
 import { enforceBrowserRouteWebRtcPolicy } from './browser-route-webrtc-policy'
 import {
-  trackBrowserRouteGuestPopupGesture,
-  type BrowserRouteGuestPopupGesture
-} from './browser-route-guest-popup-gesture'
+  trackBrowserGuestInputGesture,
+  type BrowserGuestInputGesture
+} from './browser-guest-input-gesture'
 import {
   registerBrowserRouteGuestPopup,
   releaseBrowserRouteGuestPopup
@@ -46,9 +46,9 @@ export function createBrowserRouteGuestPopupController(input: {
 }): BrowserRouteGuestPopupController {
   const openPopupWindow = input.dependencies.openPopupWindow ?? openPopupWithOriginBar
   const popups = new Set<BrowserRouteGuestPopupWindow>()
-  const gestures = new Set<BrowserRouteGuestPopupGesture>()
+  const gestures = new Set<BrowserGuestInputGesture>()
   const popupWebContentsIds = new Set<number>()
-  const openerGesture = trackBrowserRouteGuestPopupGesture(input.opener)
+  const openerGesture = trackBrowserGuestInputGesture(input.opener)
   gestures.add(openerGesture)
   // Why only dispose latches: fencing must be reversible, because a reconnected page regains
   // navigation authority and its OAuth popups have to work again. `isNavigationAllowed` is what
@@ -78,7 +78,7 @@ export function createBrowserRouteGuestPopupController(input: {
     if (!enforceBrowserRouteWebRtcPolicy(contents, () => {})) {
       return false
     }
-    const gesture = trackBrowserRouteGuestPopupGesture(contents)
+    const gesture = trackBrowserGuestInputGesture(contents)
     gestures.add(gesture)
     try {
       // Descendants inherit the same envelope; nothing about being a popup relaxes it.
@@ -141,7 +141,7 @@ export function createBrowserRouteGuestPopupController(input: {
   }
 
   function buildWindowOpenHandler(
-    gesture: BrowserRouteGuestPopupGesture
+    gesture: BrowserGuestInputGesture
   ): (details?: { url?: string }) => Electron.WindowOpenHandlerResponse {
     return (details) => {
       const normalized = normalizeRoutePopupUrl(details?.url)
