@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   encodePairingCode,
   installBrowserGlobals,
@@ -39,6 +40,52 @@ describe('web re-pairing the same server', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('never lets a reply from the replaced pairing overwrite the new one', async () => {
+    const tokens: string[] = []
+    const pending: { answer?: () => void } = {}
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        constructor(offer: { deviceToken: string }) {
+          tokens.push(offer.deviceToken)
+        }
+
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          const reply = { id: method, ok: true as const, result: {}, _meta: { runtimeId: 'r-1' } }
+          return new Promise((resolve) => {
+            pending.answer = () => resolve(reply)
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = await installWithStoredServer()
+    const staleCall = globals.window.api.runtimeEnvironments.call({
+      selector: 'web-server-a',
+      method: 'repos.list'
+    })
+    await vi.waitFor(() => expect(pending.answer).toBeDefined())
+    const answerStale = pending.answer
+
+    await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Server A',
+      pairingCode: encodePairingCode({ publicKeyB64: 'public-key', deviceToken: 'fresh-token' })
+    })
+    answerStale?.()
+    await staleCall
+
+    expect(readStored(globals.storage)).toMatchObject({
+      id: 'web-server-a',
+      endpoints: [{ deviceToken: 'fresh-token' }]
+    })
+    void globals.window.api.runtimeEnvironments.call({
+      selector: 'web-server-a',
+      method: 'repos.list'
+    })
+    await vi.waitFor(() => expect(tokens).toEqual(['token', 'fresh-token']))
   })
 
   it('keeps the execution-host id and refreshes the credentials (#11574)', async () => {
