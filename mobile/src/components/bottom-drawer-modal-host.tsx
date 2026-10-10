@@ -1,5 +1,10 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import { Modal } from 'react-native'
+import {
+  BottomDrawerHostAfterCloseContext,
+  BottomDrawerHostCloseStartedContext,
+  BottomDrawerHostCloseCancelledContext
+} from './bottom-drawer-host-after-close'
 
 const BottomDrawerModalHostContext = createContext(false)
 
@@ -12,6 +17,9 @@ export function useInsideBottomDrawerModalHost(): boolean {
 type Props = {
   visible: boolean
   onRequestClose: () => void
+  onChildAfterClose?: () => void
+  onChildCloseStarted?: () => void
+  onChildCloseCancelled?: () => void
   children: ReactNode
 }
 
@@ -20,7 +28,14 @@ type Props = {
 // → its repository/agent pickers) dropped the incoming modal, leaving the sheet dead
 // to taps. Hosting every drawer in ONE persistent native Modal makes those swaps
 // in-window view changes instead, so no present/dismiss race can eat the transition.
-export function BottomDrawerModalHost({ visible, onRequestClose, children }: Props) {
+export function BottomDrawerModalHost({
+  visible,
+  onRequestClose,
+  onChildAfterClose,
+  onChildCloseStarted,
+  onChildCloseCancelled,
+  children
+}: Props) {
   if (!visible) {
     return null
   }
@@ -33,7 +48,13 @@ export function BottomDrawerModalHost({ visible, onRequestClose, children }: Pro
       onRequestClose={onRequestClose}
     >
       <BottomDrawerModalHostContext.Provider value={true}>
-        {children}
+        <BottomDrawerHostCloseCancelledContext.Provider value={onChildCloseCancelled ?? null}>
+          <BottomDrawerHostCloseStartedContext.Provider value={onChildCloseStarted ?? null}>
+            <BottomDrawerHostAfterCloseContext.Provider value={onChildAfterClose ?? null}>
+              {children}
+            </BottomDrawerHostAfterCloseContext.Provider>
+          </BottomDrawerHostCloseStartedContext.Provider>
+        </BottomDrawerHostCloseCancelledContext.Provider>
       </BottomDrawerModalHostContext.Provider>
     </Modal>
   )
