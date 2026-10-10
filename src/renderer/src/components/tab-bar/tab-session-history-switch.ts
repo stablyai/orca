@@ -28,6 +28,7 @@ import {
 } from '../right-sidebar/ai-vault-session-list-request'
 import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault-panel-session-list-request'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
+import { agentCliForksConversations } from '../right-sidebar/ai-vault-session-cli-fork'
 
 /** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
  *  the provider conversation its agent reported. */
@@ -80,16 +81,14 @@ export function resolveTabSessionHistorySubject(
       : null
   }
   if (args.structuredSessionId !== undefined) {
-    // Only an agent whose chats own history rows has one either move can act on.
+    // A chat tab's one move is a CLI fork of its owned row: no lookup for an agent without either.
+    const agent = args.tab.launchAgent
+    if (!agent || !agentCliForksConversations(agent)) {
+      return null
+    }
     const target = workspace(args.tab.worktreeId, 'chat')
     return target &&
-      args.tab.launchAgent &&
-      hostStructuredAgentClaims(
-        state,
-        target.request.executionHostScope,
-        args.tab.launchAgent,
-        'sessionHistory'
-      )
+      hostStructuredAgentClaims(state, target.request.executionHostScope, agent, 'sessionHistory')
       ? { ...target, kind: 'chat', sessionId: args.structuredSessionId }
       : null
   }

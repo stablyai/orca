@@ -17,6 +17,7 @@ import {
 } from './rpc-launch-resolution'
 import { PiRpcSessionAdapter } from './rpc-session-adapter'
 import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
+import { PI_SESSION_HISTORY } from './pi-session-history'
 
 /** The environment every Pi child starts from: a chat's launch and a catalog listing alike. */
 function piEnvironment({
@@ -73,7 +74,7 @@ export const PI_RPC_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = {
     })
   }),
   transcriptImport: null,
-  sessionHistory: null,
+  sessionHistory: PI_SESSION_HISTORY,
   supportsLocation: supportsSupervisedProviderChildLocation,
   supportsLaunch: async ({ cwd, env, commandSettings }) => {
     let command: string

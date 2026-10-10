@@ -10,14 +10,24 @@ import type { StructuredProviderSessionOwnership } from '../native-chat/agent-se
 import { listStructuredSessionHistoryOwnership } from '../runtime/structured-agent-session-history-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import {
-  isSessionHistoryBinary,
-  type StructuredAgentResumeInvocation
+  sessionHistoryBinaryNames,
+  type StructuredAgentResumeInvocation,
+  type StructuredAgentSessionHistory
 } from '../native-chat/structured-agent-cli-conversations'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
+import {
+  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+  type StructuredAgentRuntimeRegistration
+} from '../runtime/structured-agent-runtime-registrations'
+
+/** Whether the client a projection answers opens a chat of this agent from its history row. A row
+ *  owned by a chat it cannot open is hidden from it: resuming that row in a terminal is refused. */
+export type StructuredChatOpener = (agent: StructuredAgentId) => boolean
+
+export const OPENS_EVERY_STRUCTURED_CHAT: StructuredChatOpener = () => true
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
-  structuredSupported: boolean
+  opensChat: StructuredChatOpener
 ): AiVaultListResult {
   const owner = ownershipLookup()
   if (!owner) {
@@ -28,7 +38,7 @@ export function projectStructuredAiVaultSessions(
     if (!ownership) {
       return [session]
     }
-    if (!structuredSupported) {
+    if (!opensChat(ownership.provider)) {
       return []
     }
     return [{ ...session, ...ownedTitle(ownership) }]
@@ -39,9 +49,11 @@ export function projectStructuredAiVaultSessions(
     : { ...result, sessions }
 }
 
-/** Indexed hits name and own a native chat exactly as list rows do; only this host's index can. */
+/** Indexed hits name and own a native chat exactly as list rows do; only this host's index can.
+ *  An owned hit opens its chat, so it carries no terminal resume command. */
 export function projectStructuredAiVaultSearchResponse(
-  response: AiVaultSearchResponse
+  response: AiVaultSearchResponse,
+  opensChat: StructuredChatOpener
 ): AiVaultSearchResponse {
   const owner = response.kind === 'results' ? ownershipLookup() : null
   if (!owner || response.kind !== 'results') {
@@ -49,9 +61,16 @@ export function projectStructuredAiVaultSearchResponse(
   }
   return {
     ...response,
-    hits: response.hits.map((hit) => {
+    hits: response.hits.flatMap((hit) => {
       const ownership = owner(hit)
-      return ownership ? { ...hit, ...ownedTitle(ownership) } : hit
+      if (!ownership) {
+        return [hit]
+      }
+      if (!opensChat(ownership.provider)) {
+        return []
+      }
+      const { resumeCommand: _resumeCommand, ...owned } = hit
+      return [{ ...owned, ...ownedTitle(ownership) }]
     })
   }
 }
@@ -60,8 +79,9 @@ export function projectStructuredAiVaultSearchResponse(
  *  naming them must never cost the user the search. */
 export async function searchWithStructuredOwners(
   search: Promise<AiVaultSearchResponse>,
-  ensureHost?: () => Promise<unknown>
+  options: { ensureHost?: (() => Promise<unknown>) | undefined; opensChat: StructuredChatOpener }
 ): Promise<AiVaultSearchResponse> {
+  const { ensureHost } = options
   const hostReady = ensureHost
     ? ensureStructuredAgentSessionHostUnlessRefused(ensureHost).then(
         () => true,
@@ -72,7 +92,9 @@ export async function searchWithStructuredOwners(
       )
     : true
   const response = await search
-  return (await hostReady) ? projectStructuredAiVaultSearchResponse(response) : response
+  return (await hostReady)
+    ? projectStructuredAiVaultSearchResponse(response, options.opensChat)
+    : response
 }
 
 function ownedTitle(ownership: StructuredProviderSessionOwnership) {
@@ -123,7 +145,8 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
   command: string,
   ensureHost: () => Promise<void>
 ): Promise<void> {
-  if (!isPotentialStructuredResumeCommand(command)) {
+  const invocations = parseResumeInvocations(command)
+  if (invocations.length === 0) {
     return
   }
   // A terminal command is not a chat: with chats refused here there is no ownership to check.
@@ -133,14 +156,10 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
     return
   }
   for (const ownership of listOwnership()) {
-    if (isResumeCommandFor(command, ownership)) {
+    if (invocations.some((invocation) => resumesOwnedSession(invocation, ownership))) {
       refuseLegacyWriter(ownership)
     }
   }
-}
-
-function isPotentialStructuredResumeCommand(command: string): boolean {
-  return parseResumeInvocation(command) !== null
 }
 
 function findResumeOwnership(
@@ -183,39 +202,83 @@ function listOwnership(): StructuredProviderSessionOwnership[] {
   return host ? listStructuredSessionHistoryOwnership(host.deps.store.listRecords()) : []
 }
 
-function isResumeCommandFor(
-  command: string,
+function resumesOwnedSession(
+  invocation: ResumeInvocation,
   ownership: StructuredProviderSessionOwnership
 ): boolean {
-  const invocation = parseResumeInvocation(command)
-  if (!invocation || invocation.provider !== ownership.provider) {
+  if (invocation.provider !== ownership.provider) {
     return false
   }
   // A target-less resume (--last, --continue, or a bare --resume/-r) may pick
   // any provider session, so it cannot be admitted while one is structured.
-  // Only an explicit target that differs from this owned session is safe.
-  return invocation.target === null || invocation.target === ownership.providerSessionId
+  // Only an explicit target that names a different session is safe.
+  if (invocation.target === null) {
+    return true
+  }
+  const matches = invocation.history.resumeTargetMatches
+  return matches
+    ? matches(invocation.target, ownership.providerSessionId)
+    : invocation.target === ownership.providerSessionId
 }
 
-type ResumeInvocation = StructuredAgentResumeInvocation & { provider: StructuredAgentId }
+type ResumeInvocation = StructuredAgentResumeInvocation & {
+  provider: StructuredAgentId
+  history: StructuredAgentSessionHistory
+}
 
-function parseResumeInvocation(command: string): ResumeInvocation | null {
+// A line break ends a shell command as `;` does, so the tokenizer keeps it as a token. A PTY's
+// Enter sends a bare `\r`.
+const LINE_BREAKS = new Set(['\r\n', '\r', '\n'])
+const SHELL_COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&', ...LINE_BREAKS])
+
+function parseResumeInvocations(command: string): ResumeInvocation[] {
   // Keep this deliberately conservative: shell quoting is normalized only
   // enough to identify executable/flag tokens; an unrecognized shape is not
   // treated as proof that a different session is being resumed.
-  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|[^\s]+/g) ?? []
+  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\r\n|\r|\n|[^\s]+/g) ?? []
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
-  // The first token naming any owning agent's binary decides which agent the command runs.
-  for (const [index, token] of normalized.entries()) {
-    const registration = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
-      ({ sessionHistory }) => sessionHistory && isSessionHistoryBinary(sessionHistory, token)
-    )
-    if (registration?.sessionHistory) {
-      const invocation = registration.sessionHistory.parseResumeArgs(normalized.slice(index + 1))
-      return invocation && { ...invocation, provider: registration.definition.agent }
+  const binaries = new Map<string, StructuredAgentRuntimeRegistration>()
+  for (const registration of STRUCTURED_AGENT_RUNTIME_REGISTRATIONS) {
+    for (const name of registration.sessionHistory
+      ? sessionHistoryBinaryNames(registration.sessionHistory)
+      : []) {
+      binaries.set(name, registration)
     }
   }
-  return null
+  // Each shell command is read alone: in it, each agent reads its arguments from its own first
+  // binary token, so another agent's name earlier (`claude --model pi -r x`) never hides it.
+  const invocations: ResumeInvocation[] = []
+  let firstMentions = new Map<StructuredAgentRuntimeRegistration, number>()
+  const readCommand = (end: number) => {
+    for (const [registration, mention] of firstMentions) {
+      const history = registration.sessionHistory
+      const invocation = history?.parseResumeArgs(normalized.slice(mention + 1, end))
+      if (history && invocation) {
+        invocations.push({ ...invocation, provider: registration.definition.agent, history })
+      }
+    }
+    firstMentions = new Map()
+  }
+  for (const [index, token] of normalized.entries()) {
+    // A quoted operator is an argument, so separators are read before quotes are stripped.
+    if (SHELL_COMMAND_SEPARATORS.has(tokens[index]!) && !continuesLine(tokens, index)) {
+      readCommand(index)
+      continue
+    }
+    const name = token.slice(Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\')) + 1)
+    const registration = binaries.get(name.toLowerCase())
+    if (registration && !firstMentions.has(registration)) {
+      firstMentions.set(registration, index)
+    }
+  }
+  readCommand(tokens.length)
+  return invocations
+}
+
+/** A line break after a line-continuation mark (POSIX `\`, PowerShell `` ` ``, cmd `^`) is inside
+ *  one command. */
+function continuesLine(tokens: readonly string[], index: number): boolean {
+  return LINE_BREAKS.has(tokens[index]!) && /[\\`^]$/.test(tokens[index - 1] ?? '')
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

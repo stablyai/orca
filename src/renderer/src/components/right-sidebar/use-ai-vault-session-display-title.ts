@@ -16,8 +16,8 @@ export function useAiVaultSessionDisplayTitle(session: AiVaultSession): string {
           owner.sessionId
         )
       : undefined
-    return tab?.agentSessionAgent === session.agent &&
-      (tab.executionHostId ?? 'local') === session.executionHostId
+    // Not by agent: an OpenCode chat's conversation lists as an `opencode2` row on OpenCode 2.x.
+    return tab && (tab.executionHostId ?? 'local') === session.executionHostId
       ? tab.customLabel
       : undefined
   })

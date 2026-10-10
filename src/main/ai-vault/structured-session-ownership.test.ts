@@ -1,24 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
+  OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSearchResponse,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
-import type { AiVaultSearchHit } from '../../shared/ai-vault-search-types'
+import type { AiVaultSearchHit, AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import {
-  claudeProviderHandle,
-  codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+  installOwnership,
+  listResult,
+  PROVIDER_SESSION
+} from './structured-session-ownership.test-support'
 
-const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+const OTHER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
 
 describe('structured AI Vault ownership', () => {
   afterEach(() => setStructuredAgentSessionHost(null))
@@ -27,8 +24,10 @@ describe('structured AI Vault ownership', () => {
     installOwnership()
     const result = listResult()
 
-    expect(projectStructuredAiVaultSessions(result, false).sessions).toEqual([])
-    expect(projectStructuredAiVaultSessions(result, true).sessions[0]).toMatchObject({
+    expect(projectStructuredAiVaultSessions(result, () => false).sessions).toEqual([])
+    expect(
+      projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+    ).toMatchObject({
       structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
     })
   })
@@ -39,43 +38,39 @@ describe('structured AI Vault ownership', () => {
     const unowned = { ...result.sessions[0]!, sessionId: 'different-session', title: 'Original' }
     const projected = projectStructuredAiVaultSessions(
       { ...result, sessions: [...result.sessions, unowned] },
-      true
+      OPENS_EVERY_STRUCTURED_CHAT
     )
     expect(projected.sessions[0]?.title).toBe('auth/login')
     expect(projected.sessions[1]).toBe(unowned)
   })
 
+  // An owned hit opens its chat, so it carries no terminal resume command for any agent.
   it('names and owns an indexed search hit as its list row is, leaving other hits alone', () => {
     installOwnership({ conversationName: 'auth/login' })
-    const hit: AiVaultSearchHit = {
-      agent: 'codex',
-      sessionId: PROVIDER_SESSION,
-      title: 'First prompt',
-      cwd: '/repo',
-      branch: null,
-      updatedAt: null,
-      messageCount: 1,
-      score: 1,
-      source: { presence: 'present' },
-      evidence: null
-    }
-    const other = { ...hit, sessionId: 'different-session', title: 'Original' }
-    const response = projectStructuredAiVaultSearchResponse({
-      kind: 'results',
-      hits: [hit, other],
-      page: { cursor: null, hasMore: false },
-      generation: 1,
-      truncated: { candidates: false, snippets: 0, query: false, freshness: false },
-      durationMs: 1
-    })
+    const { resumeCommand: _resumeCommand, ...plain } = searchHit()
+    const other = { ...searchHit(), sessionId: 'different-session', title: 'Original' }
+    const response = projectStructuredAiVaultSearchResponse(
+      searchResults([searchHit(), other]),
+      OPENS_EVERY_STRUCTURED_CHAT
+    )
     expect(response.kind === 'results' && response.hits).toEqual([
       {
-        ...hit,
+        ...plain,
         title: 'auth/login',
         structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
       },
       other
     ])
+  })
+
+  it('drops an owned hit for a client that cannot open its chat', () => {
+    installOwnership()
+    const other = { ...searchHit(), sessionId: 'different-session' }
+    const response = projectStructuredAiVaultSearchResponse(
+      searchResults([searchHit(), other]),
+      () => false
+    )
+    expect(response.kind === 'results' && response.hits).toEqual([other])
   })
 
   it.each(['claude', 'codex'] as const)(
@@ -88,9 +83,9 @@ describe('structured AI Vault ownership', () => {
         agent: provider,
         title: 'First prompt'
       }))
-      expect(projectStructuredAiVaultSessions(result, true).sessions[0]?.title).toBe(
-        provider === 'claude' ? 'Claude Chat' : 'Codex Chat'
-      )
+      expect(
+        projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]?.title
+      ).toBe(provider === 'claude' ? 'Claude Chat' : 'Codex Chat')
     }
   )
 
@@ -106,8 +101,10 @@ describe('structured AI Vault ownership', () => {
         title: 'Remote name'
       }
       const merged = { ...local, sessions: [...local.sessions, remote] }
-      expect(projectStructuredAiVaultSessions(merged, true).sessions[1]).toBe(remote)
-      expect(projectStructuredAiVaultSessions(merged, false).sessions).toEqual([remote])
+      expect(
+        projectStructuredAiVaultSessions(merged, OPENS_EVERY_STRUCTURED_CHAT).sessions[1]
+      ).toBe(remote)
+      expect(projectStructuredAiVaultSessions(merged, () => false).sessions).toEqual([remote])
     }
   )
 
@@ -214,15 +211,15 @@ describe('structured AI Vault ownership', () => {
 describe('Session History ownership read from the agent registration', () => {
   afterEach(() => setStructuredAgentSessionHost(null))
 
-  it('leaves the rows and resumes of an agent registered with no history ownership alone', async () => {
-    installOwnership({ provider: 'opencode' })
+  it('leaves a row and resume of an agent no chat lists under alone', async () => {
+    installOwnership({ provider: 'claude' })
     const result = listResult()
-    result.sessions = result.sessions.map((session) => ({ ...session, agent: 'opencode' }))
+    result.sessions = result.sessions.map((session) => ({ ...session, agent: 'gemini' }))
 
-    expect(projectStructuredAiVaultSessions(result, false)).toBe(result)
+    expect(projectStructuredAiVaultSessions(result, () => false)).toBe(result)
     expect(() =>
       assertLegacyAiVaultResumeAllowed({
-        agent: 'opencode',
+        agent: 'gemini',
         sessionId: PROVIDER_SESSION,
         filePath: `/sessions/${PROVIDER_SESSION}.json`,
         codexHome: null,
@@ -231,9 +228,109 @@ describe('Session History ownership read from the agent registration', () => {
     ).not.toThrow()
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(
-        `opencode --session ${PROVIDER_SESSION}`,
+        `gemini --resume ${PROVIDER_SESSION}`,
         async () => undefined
       )
+    ).resolves.toBeUndefined()
+  })
+
+  // Each agent reads its own binary's tokens: a folder or argument named after another agent no
+  // longer hides a Claude or Codex resume (on main the first claude/codex token decided).
+  it.each([
+    {
+      provider: 'claude' as const,
+      command: `cd /Users/me/src/codex && claude --resume ${PROVIDER_SESSION}`
+    },
+    {
+      provider: 'claude' as const,
+      command: `codex resume ${OTHER_SESSION} && claude -r ${PROVIDER_SESSION}`
+    },
+    {
+      provider: 'codex' as const,
+      command: `cd /Users/me/claude && codex resume ${PROVIDER_SESSION}`
+    },
+    { provider: 'claude' as const, command: `claude --model pi --resume ${PROVIDER_SESSION}` },
+    { provider: 'claude' as const, command: `echo pi && claude --resume ${PROVIDER_SESSION}` },
+    { provider: 'claude' as const, command: `cd /Users/me/grok && claude -c` },
+    { provider: 'codex' as const, command: `cd /Users/me/omp && codex resume --last` }
+  ])(
+    'refuses an owned resume after another agent is named: $command',
+    async ({ provider, command }) => {
+      installOwnership({ provider })
+
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+      ).rejects.toThrow('agent_session_conflict')
+    }
+  )
+
+  // A later `claude` path inside the command is an argument, so `--session-id` still cancels the fork.
+  it.each([
+    `claude --session-id ${PROVIDER_SESSION} --add-dir ~/src/claude --fork-session --resume ${PROVIDER_SESSION}`,
+    `claude --fork-session --resume=${PROVIDER_SESSION} --add-dir ~/x/claude --session-id ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} && claude --fork-session -p hi`
+  ])('refuses a writer whose own command names claude again: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it.each(
+    ['\\', '`', '^'].flatMap((mark) =>
+      ['\n', '\r', '\r\n'].map((lineBreak) => ({ mark, lineBreak }))
+    )
+  )(
+    'reads a command continued with $mark and a $lineBreak line break as one',
+    async ({ mark, lineBreak }) => {
+      installOwnership({ provider: 'claude' })
+
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(
+          `claude ${mark}${lineBreak}  --resume ${PROVIDER_SESSION}`,
+          async () => undefined
+        )
+      ).rejects.toThrow('agent_session_conflict')
+    }
+  )
+
+  it.each(['\r', '\r\n'])('reads each %j line as its own Claude command', async (lineBreak) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${OTHER_SESSION}${lineBreak}claude --resume ${PROVIDER_SESSION}${lineBreak}`,
+        async () => undefined
+      )
+    ).rejects.toThrow('agent_session_conflict')
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${OTHER_SESSION}${lineBreak}echo -c${lineBreak}`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it('allows a fork whose own command names claude again', async () => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${PROVIDER_SESSION} --add-dir ~/src/claude --fork-session`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it.each([
+    `claude --model pi --resume ${OTHER_SESSION}`,
+    `cd /Users/me/opencode && claude --resume ${OTHER_SESSION}`
+  ])('allows a different Claude target with another agent named: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
     ).resolves.toBeUndefined()
   })
 
@@ -249,66 +346,29 @@ describe('Session History ownership read from the agent registration', () => {
   })
 })
 
-function installOwnership(overrides: Partial<StructuredProviderSessionOwnership> = {}): void {
-  const ownership: StructuredProviderSessionOwnership = {
-    sessionId: 'session-alpha',
-    workspaceId: 'workspace-1',
-    provider: 'codex',
-    providerSessionId: PROVIDER_SESSION,
-    lease: agentSessionLeaseFixture(),
-    ...overrides
-  }
-  const record = agentSessionRecordFixture(ownership.lease)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listRecords`; the rest of the host is never reached.
-  setStructuredAgentSessionHost({
-    deps: {
-      store: {
-        listRecords: () => [
-          {
-            ...record,
-            sessionId: ownership.sessionId,
-            location: { ...record.location, workspaceId: ownership.workspaceId },
-            provider: ownership.provider,
-            providerHandleChain: [
-              {
-                ...record.providerHandleChain[0]!,
-                handle:
-                  ownership.provider === 'claude'
-                    ? claudeProviderHandle(ownership.providerSessionId, null)
-                    : codexProviderHandle(ownership.providerSessionId)
-              }
-            ],
-            lease: { ...ownership.lease, sessionId: ownership.sessionId },
-            ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {})
-          }
-        ]
-      }
-    }
-  } as never)
-}
-
-function listResult(): AiVaultListResult {
-  const session: AiVaultSession = {
-    id: `local:codex:${PROVIDER_SESSION}`,
-    executionHostId: 'local',
+function searchHit(): AiVaultSearchHit {
+  return {
     agent: 'codex',
     sessionId: PROVIDER_SESSION,
-    title: 'Owned',
+    title: 'First prompt',
     cwd: '/repo',
     branch: null,
-    model: null,
-    filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
-    codexHome: null,
-    createdAt: null,
     updatedAt: null,
-    modifiedAt: '2026-08-11T00:00:00.000Z',
     messageCount: 1,
-    totalTokens: 0,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: `codex resume '${PROVIDER_SESSION}'`,
-    subagent: null
+    score: 1,
+    source: { presence: 'present' },
+    evidence: null,
+    resumeCommand: `codex resume '${PROVIDER_SESSION}'`
   }
-  return { sessions: [session], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
+}
+
+function searchResults(hits: AiVaultSearchHit[]): AiVaultSearchResponse {
+  return {
+    kind: 'results',
+    hits,
+    page: { cursor: null, hasMore: false },
+    generation: 1,
+    truncated: { candidates: false, snippets: 0, query: false, freshness: false },
+    durationMs: 1
+  }
 }

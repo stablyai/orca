@@ -32,6 +32,10 @@ import {
   loadOpenCodeVisualsSkill,
   type AcpVisualsSkillLoader
 } from './acp-visuals-skill'
+import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
+import { GROK_SESSION_HISTORY } from '../grok/grok-session-history'
+import { OPENCODE_SESSION_HISTORY } from '../opencode/opencode-session-history'
+import { OMP_SESSION_HISTORY } from '../omp/omp-session-history'
 
 /** How an agent lists its models without a session: from its `initialize` answer (plus extension
  *  requests), from a listing command, or not at all. Never `authenticate` or `session/new`. */
@@ -92,6 +96,8 @@ export type AcpLaunchSpec = {
   modelDiscovery: AcpModelDiscovery
   /** How a launch loads the inline-visuals skill; absent, the agent's chats have no visuals. */
   visualsSkill?: AcpVisualsSkillLoader
+  /** How the agent's chats own the Session History rows their conversations list as. */
+  sessionHistory: StructuredAgentSessionHistory
 }
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
@@ -124,7 +130,8 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
     listingNamesConfiguredModel: false
   },
   visualsSkill: loadGrokVisualsSkill,
-  compaction: true
+  compaction: true,
+  sessionHistory: GROK_SESSION_HISTORY
 }
 
 // `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
@@ -162,7 +169,8 @@ const OPENCODE_LAUNCH_SPEC: AcpLaunchSpec = {
     listingNamesConfiguredModel: false
   },
   visualsSkill: loadOpenCodeVisualsSkill,
-  compaction: true
+  compaction: true,
+  sessionHistory: OPENCODE_SESSION_HISTORY
 }
 
 // OMP serves ACP through `omp acp`; its environment reaches it as the user set it.
@@ -189,7 +197,8 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
     reason: 'omp has no session-free listing that matches what its chats offer'
   },
   visualsSkill: loadOmpVisualsSkill,
-  compaction: true
+  compaction: true,
+  sessionHistory: OMP_SESSION_HISTORY
 }
 
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [

@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 
@@ -54,6 +55,21 @@ export function clientRendersStructuredAgent(
     agent === 'claude'
       ? CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       : STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether this client opens an agent's chat from its Session History row. Claude and Codex keep
+ *  their shipped rule, any client that reads structured sessions; every other agent needs a client
+ *  that renders its chats. */
+export function clientOpensStructuredChatFromHistory(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    supportsStructuredAgentSessions(context) &&
+    (context.clientKind === undefined ||
+      isAgentSessionHandleProvider(agent) ||
+      clientRendersStructuredAgent(context.clientCapabilities, agent))
   )
 }
 
