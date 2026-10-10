@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { CELL_ADMIT_EFFECTIVE_FRESH_MS, RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
@@ -28,7 +28,7 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
       await database.query(`DELETE FROM ${table} WHERE user_id = ?`, [USER])
     }
     for (const cell of [cellA, cellB]) {
-      for (const table of ['relay_cell_admit_modes', 'relay_cell_admission', 'relay_cell_regions', 'relay_cell_runtime', 'relay_cells']) {
+      for (const table of ['relay_cell_admit_effective', 'relay_cell_admit_modes', 'relay_cell_admission', 'relay_cell_regions', 'relay_cell_runtime', 'relay_cells']) {
         await database.query(`DELETE FROM ${table} WHERE cell_id = ?`, [cell.id])
       }
     }
@@ -137,20 +137,40 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
     await store.setCellAdmitMode(cellA.id, 'db')
   })
 
-  // A fleet-wide dead-man trip leaves every cell reserve in PG. The director only reads, never
-  // writes db back, so the database path must take the cells whose own feed says db.
-  it('places a fresh host on a reserve cell whose current feed says it admits through the database', async () => {
-    const store = new RelayAssignmentStore(database, () => 200_000)
-    await store.reconcileCells([cellA, cellB], false)
-    await store.setCellAdmitMode(cellA.id, 'reserve')
-    await store.setCellAdmitMode(cellB.id, 'reserve')
-    await expect(store.assign({ userId: USER, relayHostId: 'host000000000002' })).rejects.toThrow('relay_capacity_exhausted')
-    store.setReserveCellAdmitsDatabase((cellId) => cellId === cellA.id)
+  // A fleet-wide dead-man trip leaves every cell reserve in PG, and no director writes db back.
+  // The database path places on a reserve cell only by that cell's own fresh row saying db.
+  it('places a fresh host on a reserve cell only while its own current-process row says db', async () => {
+    let now = 200_000
+    const fresh = () => new RelayAssignmentStore(database, () => now)
+    const setup = fresh()
+    await setup.reconcileCells([cellA, cellB], false)
+    await heartbeat(setup, cellA)
+    await heartbeat(setup, cellB)
+    await setup.setCellAdmitMode(cellA.id, 'reserve')
+    await setup.setCellAdmitMode(cellB.id, 'reserve')
+    // An older cell image writes no row: never admitted.
+    await expect(fresh().assign({ userId: USER, relayHostId: 'host000000000002' })).rejects.toThrow(
+      'relay_capacity_exhausted'
+    )
+    // A row from another process (a restarted cell's predecessor) does not count either.
+    await setup.recordCellAdmitEffective({ cellId: cellB.id, cellIncarnation: '22222222-2222-4222-8222-222222222222', mode: 'db' })
+    await setup.recordCellAdmitEffective({ cellId: cellA.id, cellIncarnation: '11111111-1111-4111-8111-111111111111', mode: 'reserve' })
+    await expect(fresh().assign({ userId: USER, relayHostId: 'host000000000002' })).rejects.toThrow(
+      'relay_capacity_exhausted'
+    )
+    await setup.recordCellAdmitEffective({ cellId: cellA.id, cellIncarnation: '11111111-1111-4111-8111-111111111111', mode: 'db' })
+    const store = fresh()
     expect((await store.assign({ userId: USER, relayHostId: 'host000000000003' })).cellId).toBe(cellA.id)
     // Census sweeps still treat it as reserve.
     expect([...((await store.reserveModeCells()) ?? [])]).toEqual(expect.arrayContaining([cellA.id, cellB.id]))
-    await store.setCellAdmitMode(cellA.id, 'db')
-    await store.setCellAdmitMode(cellB.id, 'db')
+    // Three missed 15 s refreshes and the row counts for nothing.
+    now += CELL_ADMIT_EFFECTIVE_FRESH_MS + 1
+    await heartbeat(setup, cellA)
+    await expect(fresh().assign({ userId: USER, relayHostId: 'host000000000006' })).rejects.toThrow(
+      'relay_capacity_exhausted'
+    )
+    await setup.setCellAdmitMode(cellA.id, 'db')
+    await setup.setCellAdmitMode(cellB.id, 'db')
   })
 
   // A timed-out read inside BEGIN aborts the transaction (25P02 on the next statement), so the
@@ -171,6 +191,8 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
       await holding
       const store = new RelayAssignmentStore(timed, () => 300_000)
       await store.reconcileCells([cellA, cellB], false)
+      await heartbeat(store, cellA)
+      await heartbeat(store, cellB)
       expect(await store.reserveModeCells()).toBeNull()
       const placed = await store.assign({ userId: USER, relayHostId: 'host000000000004' })
       expect([cellA.id, cellB.id]).toContain(placed.cellId)

@@ -34,7 +34,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     vi.restoreAllMocks()
   })
 
-  async function cell(now?: () => number) {
+  async function cell(now?: () => number, options: { flagsUnread?: boolean } = {}) {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -42,7 +42,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }))
     const database = await openRelayDatabase({ dataDir })
     cleanup.push(() => database.close())
-    return await startReserveModeCell({ database, dataDir, cleanup, ...(now ? { now } : {}) })
+    return await startReserveModeCell({ database, dataDir, cleanup, ...options, ...(now ? { now } : {}) })
   }
 
   it('registers every memory-admitted control without disconnecting any, matching the seat report', async () => {
@@ -228,11 +228,21 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(reply.socket.readyState).toBe(WebSocket.OPEN)
   }, 30_000)
 
+  // Its boot default is not a mode: a db row then could let today's path onto a reserve cell.
+  it('writes no admit-effective row until it has read its flag object', async () => {
+    const booting = await cell(undefined, { flagsUnread: true })
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+    expect(await booting.admitEffectiveRow()).toBeUndefined()
+    booting.setAdmitMode('db')
+    await until(async () => (await booting.admitEffectiveRow())?.mode === 'db')
+  }, 30_000)
+
   it('flips itself back to db when no placing director has been in touch for the dead-man window', async () => {
     let now = Date.now()
     const reserve = await cell(() => now)
     const seated = await reserve.bookedHost(3)
     expect(reserve.relay.sessions.inReserveMode()).toBe(true)
+    await until(async () => (await reserve.admitEffectiveRow())?.mode === 'reserve')
     const windowMs = reserveDeadManWindowMs(reserve.config.cellId)
     expect(windowMs).toBeGreaterThanOrEqual(RESERVE_DEAD_MAN_MS)
     expect(windowMs).toBeLessThanOrEqual(2 * RESERVE_DEAD_MAN_MS)
@@ -252,6 +262,10 @@ describe('flipping a reserve-mode cell back to the database', () => {
       .mock.calls.map(([line]) => String(line))
       .filter((line) => line.includes('orca_relay_cell_reserve_dead_man_tripped'))
     expect(tripped.map((line) => JSON.parse(line).cellId)).toEqual([reserve.config.cellId])
+    // The cell's own row says db at once, while Postgres still records reserve: the database
+    // path places on it by this row, whether or not any director's feed poll gets through.
+    await until(async () => (await reserve.admitEffectiveRow())?.mode === 'db')
+    expect((await reserve.admitEffectiveRow())?.cell_incarnation).toBe(reserve.relay.cellIncarnation)
     await until(async () => (await reserve.controlLeases()).length === 2)
     expect(seated.socket.readyState).toBe(WebSocket.OPEN)
     // Latched for this switch generation: contact again does not bring reserve back.

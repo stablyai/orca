@@ -19,6 +19,7 @@ import { createRemoteJWKSet } from 'jose'
 import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
+import { CellAdmitEffectiveWriter } from './cell-admit-effective-writer.js'
 import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { classifyAssignmentLease } from './assignment-lease.js'
@@ -184,12 +185,6 @@ export function createRelayServer(
     listCells: () => assignments.seatFeedCells(),
     reserver: () => placing.on
   })
-  if (shadowSeatPoller) {
-    const { directory } = shadowSeatPoller
-    assignments.setReserveCellAdmitsDatabase((cellId) =>
-      directory.admitsDatabaseNow(cellId, (options.now ?? Date.now)())
-    )
-  }
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined
@@ -388,6 +383,15 @@ export function createRelayServer(
   // Expired bookings give their units back even while no director is reserving. A flip out of
   // reserve mode voids the bookings and registers every control admitted from memory.
   let appliedAdmitMode = effectiveAdmitMode()
+  const admitEffective =
+    config.role === 'cell' && reserveBook
+      ? new CellAdmitEffectiveWriter({
+          write: async (mode) =>
+            await assignments.recordCellAdmitEffective({ cellId: config.cellId, cellIncarnation, mode }),
+          databaseBusy: () => readRelayDatabasePoolPressure(database).databasePoolWaiting > 0,
+          now: performance.now.bind(performance)
+        })
+      : undefined
   const reserveSweepTimer = reserveBook
     ? setInterval(() => {
         reserveBook.sweep()
@@ -397,6 +401,9 @@ export function createRelayServer(
           sessions.reregisterMemoryControls()
         }
         appliedAdmitMode = admitMode
+        // Booted cells run a default until the first flag read: a db written then could let
+        // today's path onto a reserve cell for its first seconds.
+        if ((options.cellFlags?.().generation ?? 0) > 0) admitEffective?.tick(admitMode)
       }, RESERVE_MODE_WATCH_MS)
     : null
   reserveSweepTimer?.unref()
@@ -428,6 +435,7 @@ export function createRelayServer(
           cellReserverPoll: () => reserveDeadMan?.contact(),
           // Reserve until every control it admitted from memory holds a lease again: the flag
           // workflow records db in Postgres (and sweeps resume) only after this says db.
+          cellAdmitModeRaw: effectiveAdmitMode,
           cellAdmitModeEffective: (): 'db' | 'reserve' =>
             effectiveAdmitMode() === 'reserve' || sessions.reregistrationPending() > 0
               ? 'reserve'

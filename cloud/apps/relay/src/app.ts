@@ -136,6 +136,7 @@ export function createRelayApp(
     cellDemote?: (request: DemoteRequest) => string
     cellReserverPoll?: () => void
     cellAdmitModeEffective?: () => 'db' | 'reserve'
+    cellAdmitModeRaw?: () => 'db' | 'reserve'
     cellReserveCounts?: () => {
       bookings: number
       intake: { perSec: number; burst: number; tokens: number }
@@ -353,6 +354,7 @@ export function createRelayApp(
     cellFlags: operations.cellFlags,
     onReserverPoll: operations.cellReserverPoll,
     admitModeEffective: operations.cellAdmitModeEffective,
+    admitModeRaw: operations.cellAdmitModeRaw,
     reserveCounts: operations.cellReserveCounts,
     placementCeiling: operations.cellPlacementCeiling
   })

@@ -48,6 +48,8 @@ export async function startReserveModeCell(input: {
   cleanup: Array<() => Promise<void> | void>
   databasePoolMax?: number
   now?: () => number
+  // Booted, no flag object read yet (generation 0, defaults).
+  flagsUnread?: boolean
 }) {
   const keys = await generateKeyPair('ES256')
   const publicJwk = await exportJWK(keys.publicKey)
@@ -90,10 +92,9 @@ export async function startReserveModeCell(input: {
     publicAssignmentRetryAfterSeconds: 5,
     dataDir: input.dataDir
   } satisfies RelayConfig
-  let applied: AppliedControlFlags<CellFlags> = {
-    generation: 1,
-    flags: { ...CELL_FLAG_DEFAULTS, admitMode: 'reserve' }
-  }
+  let applied: AppliedControlFlags<CellFlags> = input.flagsUnread
+    ? { generation: 0, flags: CELL_FLAG_DEFAULTS }
+    : { generation: 1, flags: { ...CELL_FLAG_DEFAULTS, admitMode: 'reserve' } }
   const relay = createRelayServer(config, input.database, {
     cellFlags: () => applied,
     ...(input.now ? { now: input.now } : {})
@@ -204,6 +205,14 @@ export async function startReserveModeCell(input: {
        WHERE activity_kind = 'control' ORDER BY relay_host_id`
     )
 
+  const admitEffectiveRow = async () =>
+    (
+      await input.database.query(
+        `SELECT cell_incarnation, mode FROM relay_cell_admit_effective WHERE cell_id = ?`,
+        [config.cellId]
+      )
+    )[0]
+
   return {
     relay,
     config,
@@ -212,6 +221,7 @@ export async function startReserveModeCell(input: {
     insertRow,
     bookedHost,
     controlLeases,
+    admitEffectiveRow,
     setAdmitMode: (admitMode: 'db' | 'reserve', flags: Partial<CellFlags> = {}) => {
       applied = { generation: applied.generation + 1, flags: { ...CELL_FLAG_DEFAULTS, ...flags, admitMode } }
     }

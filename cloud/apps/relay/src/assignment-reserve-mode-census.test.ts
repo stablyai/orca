@@ -66,7 +66,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   applyRegionalRehomeControl: 'cell-level',
   cellAdmitMode: 'cell-level',
   cellHeartbeatFresh: 'cell-level',
-  setReserveCellAdmitsDatabase: 'cell-level',
+  recordCellAdmitEffective: 'cell-level',
   commitCellReservationDelta: 'cell-level',
   attestCellFence: 'cell-level',
   attestCellFenceAttempt: 'cell-level',

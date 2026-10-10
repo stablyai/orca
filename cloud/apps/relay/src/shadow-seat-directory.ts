@@ -78,6 +78,8 @@ const SeatFeedSchema = z.object({
   // What the cell acts on: reserve also while a flip back is still leasing its controls, or
   // db once its dead-man has flipped it back. Absent from older images.
   admitModeEffective: z.enum(['db', 'reserve']).optional(),
+  // Switch file and dead-man only, without the flip back: db the moment the cell trips.
+  admitModeRaw: z.enum(['db', 'reserve']).optional(),
   changes: z.array(SeatChangeSchema).optional(),
   // The cell cut the page (2,000 changes); poll again at once.
   more: z.boolean().optional(),
@@ -142,6 +144,7 @@ export type SeatFeedCellState = {
   // The incarnation whose feed reported `flagsApplied`.
   flagsIncarnation?: string
   admitModeEffective?: 'db' | 'reserve'
+  admitModeRaw?: 'db' | 'reserve'
   // Step 5: when the answered poll was sent, and the cell's own reserve numbers.
   polledAt?: number
   bookings?: number
@@ -168,9 +171,6 @@ export type HeartbeatSnapshot = { readAt: number; expiresAt: ReadonlyMap<string,
 function hostKey(userId: string, relayHostId: string): string {
   return `${userId}\u0000${relayHostId}`
 }
-
-// Five missed polls: an older db answer may predate a re-arm to reserve.
-export const SEAT_FEED_DB_ADMIT_FRESH_MS = 5_000
 
 export class ShadowSeatDirectory {
   private readonly cells = new Map<string, CellCursor>()
@@ -264,6 +264,7 @@ export class ShadowSeatDirectory {
     cursor.flagsApplied = response.flagsApplied
     cursor.flagsIncarnation = response.incarnation
     cursor.admitModeEffective = response.admitModeEffective
+    cursor.admitModeRaw = response.admitModeRaw
     cursor.polledAt = polledAt
     cursor.bookings = response.counts?.bookings
     cursor.units = response.counts?.units
@@ -283,20 +284,15 @@ export class ShadowSeatDirectory {
     return cursor?.flagsApplied?.flags.admitMode === 'reserve' ? 'reserve' : 'db'
   }
 
-  cellIds(): string[] {
-    return [...this.cells.keys()]
+  // What placement treats the cell as: a tripped cell is a database cell at once, so nothing
+  // books into it or paces for it while it re-registers. Older images report no raw mode.
+  placementModeOf(cellId: string): 'db' | 'reserve' {
+    const raw = this.cells.get(cellId)?.admitModeRaw
+    return raw ?? this.admitModeOf(cellId)
   }
 
-  // A fresh answer from the cell's current process saying it admits through the database: a
-  // tripped dead-man reports db with no re-registration pending. A stale or missing answer is no.
-  admitsDatabaseNow(cellId: string, now: number): boolean {
-    const cursor = this.cells.get(cellId)
-    return (
-      cursor?.status === 'live' &&
-      cursor.lastAnsweredAt !== undefined &&
-      now - cursor.lastAnsweredAt <= SEAT_FEED_DB_ADMIT_FRESH_MS &&
-      cursor.admitModeEffective === 'db'
-    )
+  cellIds(): string[] {
+    return [...this.cells.keys()]
   }
 
   // One cell's seats as the map holds them.
@@ -332,6 +328,7 @@ export class ShadowSeatDirectory {
       cursor.flagsApplied = undefined
       cursor.flagsIncarnation = undefined
       cursor.admitModeEffective = undefined
+      cursor.admitModeRaw = undefined
     }
   }
 

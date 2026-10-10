@@ -62,6 +62,7 @@ describe('relay database', () => {
       'relay_assignments',
       'relay_audit_events',
       'relay_cell_admission',
+      'relay_cell_admit_effective',
       'relay_cell_admit_modes',
       'relay_cell_capabilities',
       'relay_cell_committed_fences',
