@@ -1,3 +1,4 @@
+import { sharedControlDiagnosticsInputs } from './remote-runtime-shared-control-diagnostics-inputs'
 import type WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
@@ -10,7 +11,7 @@ import { SharedControlReconnectScheduler } from './remote-runtime-shared-control
 import { requestSharedControl } from './remote-runtime-shared-control-requests'
 import { SharedControlRetiredRequestIds } from './remote-runtime-shared-control-retired-request-ids'
 import { SharedControlReadyStableResetTimer } from './remote-runtime-shared-control-stability'
-import * as sharedControlState from './remote-runtime-shared-control-state'
+import { rejectSharedControlReadyWaiters } from './remote-runtime-shared-control-state'
 import { closeSharedControlSocket } from './remote-runtime-shared-control-socket-close'
 import { startSharedControlSubscription } from './remote-runtime-shared-control-subscription-start'
 import { SharedControlSocketGeneration } from './remote-runtime-shared-control-socket-generation'
@@ -118,24 +119,16 @@ export class RemoteRuntimeSharedControlConnection {
     }
   }
 
-  private publishDiagnostics(): void {
-    this.diagnostics.publish({
-      state: this.state,
-      reconnecting: this.reconnect.isScheduled,
-      pendingRequestCount: this.pendingRequests.size,
-      subscriptionCount: this.subscriptions.size,
-      reconnectAttempt: this.reconnect.attemptCount
-    })
-  }
-  getDiagnostics(): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics {
-    return this.diagnostics.get({
-      state: this.state,
-      reconnecting: this.reconnect.isScheduled,
-      pendingRequestCount: this.pendingRequests.size,
-      subscriptionCount: this.subscriptions.size,
-      reconnectAttempt: this.reconnect.attemptCount
-    })
-  }
+  private diagnosticsInputs = () =>
+    sharedControlDiagnosticsInputs(
+      this.state,
+      this.reconnect,
+      this.pendingRequests,
+      this.subscriptions
+    )
+  private publishDiagnostics = (): void => this.diagnostics.publish(this.diagnosticsInputs())
+  getDiagnostics = (): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics =>
+    this.diagnostics.get(this.diagnosticsInputs())
   reconnectNow(): void {
     refreshRemoteRuntimeSharedControl({
       intentionallyClosed: this.intentionallyClosed,
@@ -165,12 +158,23 @@ export class RemoteRuntimeSharedControlConnection {
     })
   }
 
+  private retireRemovedEnvironment(): void {
+    if (!this.intentionallyClosed) {
+      this.close(remoteRuntimeUnavailableError())
+      this.options.onEnvironmentRemoved?.()
+    }
+  }
+
   private open(): void {
-    if (this.intentionallyClosed) {
-      sharedControlState.rejectSharedControlReadyWaiters(
-        this.readyWaiters,
-        remoteRuntimeUnavailableError()
-      )
+    // Why removal is re-asked here, not only in the scheduler: a request reaching a closed socket
+    // opens one directly through `ensureReadyWithTimeout`, bypassing the backoff gate entirely.
+    if (this.intentionallyClosed || this.options.isEnvironmentRemoved?.()) {
+      rejectSharedControlReadyWaiters(this.readyWaiters, remoteRuntimeUnavailableError())
+      // Why retire from here: declining the dial leaves no liveness monitor, the only other caller
+      // of this callback, so the cached transport would outlive the environment it describes.
+      if (!this.intentionallyClosed) {
+        this.retireRemovedEnvironment()
+      }
       return
     }
     this.reconnect.clear()
@@ -187,7 +191,9 @@ export class RemoteRuntimeSharedControlConnection {
       onTextFrame: (frame) => this.handleTextFrame(frame, socketGeneration),
       liveness: {
         options: this.options.liveness,
-        onDead: (error) => this.handleSocketClosed(error, socketGeneration)
+        onDead: (error) => this.handleSocketClosed(error, socketGeneration),
+        isRetired: () => this.options.isEnvironmentRemoved?.() ?? false,
+        onRetired: () => this.retireRemovedEnvironment()
       }
     })
     if (!opened.ok) {
@@ -280,6 +286,7 @@ export class RemoteRuntimeSharedControlConnection {
     this.reconnect.scheduleAfterSocketClose({
       intentionallyClosed: this.intentionallyClosed,
       manuallyDisconnected: this.options.isManuallyDisconnected?.() ?? false,
+      environmentRemoved: () => this.options.isEnvironmentRemoved?.() ?? false,
       capabilityPaused: this.options.isCapabilityPaused?.() ?? false,
       subscriptionCount: this.subscriptions.size,
       open: () => this.open()
