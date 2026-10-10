@@ -12,7 +12,7 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 import { statUserOpenedPath } from './user-opened-local-path'
 
 const project: RuntimeFileOperationArgs = {
-  settings: null,
+  target: { kind: 'local' as const },
   worktreeId: 'repo::/repo',
   worktreePath: '/repo'
 }

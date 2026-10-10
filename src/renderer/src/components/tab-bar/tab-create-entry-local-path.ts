@@ -5,6 +5,7 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-e
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 type TabEntryAbsolutePathOwnerState = Pick<
   ReturnType<typeof useAppStore.getState>,
@@ -23,12 +24,11 @@ type TabEntryAbsolutePathOwnerState = Pick<
 >
 
 export function isTabEntryAbsolutePathAllowed(
-  context: Pick<RuntimeFileOperationArgs, 'connectionId' | 'settings'>
+  context: Pick<RuntimeFileOperationArgs, 'connectionId' | 'target'>
 ): boolean {
-  // Why: file-operation contexts pin `settings` to the route owner, never to the focused server.
   return !isLocalPathOpenBlocked(
     getLocalPathOpenOwnerForRoute({
-      runtimeEnvironmentId: context.settings?.activeRuntimeEnvironmentId,
+      runtimeEnvironmentId: runtimeTargetEnvironmentId(context.target),
       connectionId: context.connectionId
     })
   )
@@ -69,9 +69,7 @@ export function getTabEntryFileOperationContext(
       getFolderWorkspaceConnectionId(state, workspaceKey.folderWorkspaceId) === null
     ) {
       return {
-        settings: state.settings
-          ? { ...state.settings, activeRuntimeEnvironmentId: null }
-          : { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' },
         worktreeId,
         worktreePath,
         expectedExecutionHostId: 'local'

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
@@ -88,7 +88,7 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
   // Best-effort: a failed read leaves the old signature, which can only
   // re-surface the banner — never lose data.
   void readRuntimeFileContent({
-    settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
+    target: getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,

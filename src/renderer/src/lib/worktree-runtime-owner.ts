@@ -31,6 +31,10 @@ import {
   resolveWorktreeOperationRouteResult
 } from './worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import {
+  runtimeTargetForOwnerEnvironment,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
 
@@ -248,6 +252,28 @@ export function getExecutionHostIdForWorktree(
     getKnownExecutionHostIdForWorktree(state, worktreeId) ??
     getFocusedRuntimeOrLocalExecutionHostId(state)
   )
+}
+
+/** Transport to the worktree's owner; a worktree no row places on a server is this app's. */
+export function getRuntimeTargetForWorktreeOwner(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined
+): RuntimeClientTarget {
+  return runtimeTargetForOwnerEnvironment(getRuntimeEnvironmentIdForWorktree(state, worktreeId))
+}
+
+/**
+ * Transport to an open file's owner: the owner stamped on its tab (`null` is this app), else its
+ * worktree's owner. Never the focused server, which can change after the tab opened.
+ */
+export function getRuntimeTargetForFileOwner(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined,
+  runtimeEnvironmentId: string | null | undefined
+): RuntimeClientTarget {
+  return runtimeEnvironmentId === undefined
+    ? getRuntimeTargetForWorktreeOwner(state, worktreeId)
+    : runtimeTargetForOwnerEnvironment(runtimeEnvironmentId)
 }
 
 export function getSettingsForWorktreeRuntimeOwner(

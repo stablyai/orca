@@ -24,7 +24,7 @@ vi.mock('@/components/terminal-pane/terminal-file-link-target', async (importOri
     absolutePath: /^[\\/]{2}/.test(link.pathText) ? link.pathText : `/repo/${link.pathText}`,
     line: null,
     column: null,
-    fileContext: { sourceHostResolved: connection.sourceHostResolved },
+    fileContext: { target: { kind: 'local' }, sourceHostResolved: connection.sourceHostResolved },
     isRemoteRuntimePath: false,
     cacheKey: link.pathText,
     isKnownWorktreeRoot: link.pathText === 'ROOT'
@@ -33,7 +33,10 @@ vi.mock('@/components/terminal-pane/terminal-file-link-target', async (importOri
 
 vi.mock('@/components/terminal-pane/terminal-file-path-mapping', async (importOriginal) => ({
   ...(await importOriginal<typeof FilePathMappingModule>()),
-  getTerminalFileContext: () => ({ sourceHostResolved: connection.currentOwnerResolved })
+  getTerminalFileContext: () => ({
+    target: { kind: 'local' },
+    sourceHostResolved: connection.currentOwnerResolved
+  })
 }))
 
 const host = { cwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', connectionId: null }

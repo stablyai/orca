@@ -50,7 +50,7 @@ export function createMarkdownPreviewActions(
           worktree.path,
           worktreeId,
           operationContext.connectionId,
-          operationContext.settings,
+          operationContext.target,
           operationProvenance,
           operationContext.expectedSshConnectionGeneration,
           operationContext.expectedSshTargetId,

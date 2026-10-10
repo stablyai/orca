@@ -6,6 +6,7 @@ import type { FsChangeEvent, MarkdownDocument } from '../../../../shared/filesys
 import type { OpenFile } from '@/store/slices/editor'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const runtime = vi.hoisted(() => ({ list: vi.fn(), stat: vi.fn() }))
 const state = {
@@ -24,10 +25,13 @@ vi.mock('@/runtime/runtime-file-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({
-    activeRuntimeEnvironmentId: owner
-  })
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
+  getRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment', environmentId: owner } : { kind: 'local' })
 }))
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
@@ -147,7 +151,7 @@ describe('Markdown metadata from the existing worktree watcher', () => {
     await settle()
     expect(controllers[0].markdownDocuments).toEqual([target])
     expect(runtime.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
+      expect.objectContaining({ target: { kind: 'local' } }),
       '/repo'
     )
   })

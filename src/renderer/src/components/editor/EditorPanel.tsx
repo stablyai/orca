@@ -4,7 +4,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
@@ -142,6 +142,15 @@ function EditorPanelInner({
     closeRenameDialog,
     handleRenameConfirm
   } = useUntitledFileRename({ openFiles, clearUntitled })
+  const renameDialogFileOnServer = useAppStore(
+    (s) =>
+      !!renameDialogFile &&
+      getRuntimeTargetForFileOwner(
+        s,
+        renameDialogFile.worktreeId,
+        renameDialogFile.runtimeEnvironmentId
+      ).kind === 'environment'
+  )
 
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
 
@@ -279,10 +288,7 @@ function EditorPanelInner({
     )
   }
   const disableRenameBrowse = Boolean(
-    settingsForRuntimeOwner(
-      settings,
-      renameDialogFile?.runtimeEnvironmentId
-    )?.activeRuntimeEnvironmentId?.trim() ||
+    renameDialogFileOnServer ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
   const markdownDocumentStateFileId =

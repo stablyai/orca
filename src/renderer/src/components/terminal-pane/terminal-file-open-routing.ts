@@ -23,7 +23,7 @@ import {
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import {
-  CLIENT_LOCAL_FILE_SETTINGS,
+  CLIENT_LOCAL_FILE_TARGET,
   resolveHostWorkspaceFile,
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
@@ -36,6 +36,7 @@ export {
   terminalPathWslDistro,
   type TerminalFileContext
 } from './terminal-file-path-mapping'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export type FileOpenFailure = {
   /** `missing` is a verified absence; `unverifiable` means the host could not answer (dropped SSH, timeout, denied path). */
@@ -164,7 +165,7 @@ export function openDetectedFilePath(
         clientLocal = true
         fileContext = {
           ...fileContext,
-          settings: CLIENT_LOCAL_FILE_SETTINGS,
+          target: CLIENT_LOCAL_FILE_TARGET,
           connectionId: undefined
         }
         statResult = { isDirectory: linkOwner.isDirectory, escapesWorktree: false }
@@ -254,7 +255,7 @@ export function openDetectedFilePath(
       )
     ) {
       // Why: early resolution is only needed to avoid an existing sibling-tab collision.
-      const runtimeOwnerId = fileContext.settings?.activeRuntimeEnvironmentId?.trim()
+      const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
       const executionHostId = runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
         : getConnectionExecutionHostId(fileContext.connectionId)
@@ -289,7 +290,7 @@ export function openDetectedFilePath(
         // Why: absolute SSH paths outside the worktree otherwise look identical
         // to client-local external files when the editor reloads or restores.
         ...(relativePath === filePath &&
-        !fileContext.settings?.activeRuntimeEnvironmentId?.trim() &&
+        fileContext.target.kind === 'local' &&
         fileContext.connectionId
           ? { externalSshTargetId: fileContext.connectionId }
           : {})

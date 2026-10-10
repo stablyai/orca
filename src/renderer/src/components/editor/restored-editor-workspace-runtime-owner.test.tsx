@@ -125,7 +125,7 @@ describe('a restored tab whose workspace moved to its managed server', () => {
     await act(async () => load!(FILE_PATH, file.id, WORKTREE, 'README.md'))
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1)
     expect(mocks.readRuntimeFileContent.mock.calls[0]?.[0]).toMatchObject({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment', environmentId: 'env-1' },
       worktreeId: WORKTREE
     })
     expect(fileContents[file.id]).toMatchObject({ content: '# repo' })

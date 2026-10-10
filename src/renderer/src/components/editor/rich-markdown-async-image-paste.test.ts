@@ -18,7 +18,7 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: vi.fn(() => ({
-      settings: null,
+      target: { kind: 'local' as const },
       folderWorkspaces: [],
       worktreesByRepo: {},
       openFiles: []
@@ -460,7 +460,7 @@ describe('rich Markdown asynchronous image paste', () => {
       for (const phase of ['saving', 'importing']) {
         const editor = richEditor()
         const runtimeContext: RichMarkdownImageRuntimeContext = {
-          settings: null,
+          target: { kind: 'local' as const },
           worktreeId: 'wt-1',
           worktreePath: '/repo',
           connectionId: null
@@ -491,7 +491,10 @@ describe('rich Markdown asynchronous image paste', () => {
         } else if (field === 'root') {
           nextContext.runtimeContext.worktreePath = '/other-repo'
         } else if (field === 'runtime') {
-          nextContext.runtimeContext.settings = { activeRuntimeEnvironmentId: 'other-runtime' }
+          nextContext.runtimeContext.target = {
+            kind: 'environment',
+            environmentId: 'other-runtime'
+          }
         } else if (field === 'connection') {
           nextContext.runtimeContext.connectionId = 'other-connection'
         } else {

@@ -12,6 +12,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
 import type * as MarkdownTableOfContentsModule from './markdown-table-of-contents'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const buildMarkdownTableOfContentsSpy = vi.hoisted(() => vi.fn())
 
@@ -45,8 +46,22 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 vi.mock('@/store/slices/worktree-helpers', () => ({ findWorktreeById: () => null }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (settings: unknown) => settings
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
+  getRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    runtimeEnvironmentId?: string | null
+  ) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
+}))
+vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+  useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: vi.fn(async () => ({ isDirectory: false }))

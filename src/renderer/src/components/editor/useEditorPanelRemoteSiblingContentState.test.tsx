@@ -49,7 +49,14 @@ vi.mock('./migrate-restored-editor-file-owner', () => ({
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: vi.fn(() => 'local'),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(() => null)
+  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(() => null),
+  // These fixtures' workspaces live on runtime-1, so an unstamped tab resolves there.
+  getRuntimeTargetForFileOwner: vi.fn(
+    (_state: unknown, _worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
+      runtimeEnvironmentId === null
+        ? { kind: 'local' }
+        : { kind: 'environment', environmentId: runtimeEnvironmentId ?? 'runtime-1' }
+  )
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))

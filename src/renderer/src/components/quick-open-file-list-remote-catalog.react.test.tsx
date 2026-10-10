@@ -57,7 +57,10 @@ describe.each(['paired-detected', 'legacy-ssh'] as const)('%s file catalog', (ow
       expect.objectContaining({
         worktreeId: WORKTREE_ID,
         worktreePath: '/srv/worktree',
-        settings: { activeRuntimeEnvironmentId: owner === 'paired-detected' ? 'hub' : null },
+        target:
+          owner === 'paired-detected'
+            ? { kind: 'environment', environmentId: 'hub' }
+            : { kind: 'local' },
         connectionId: owner === 'legacy-ssh' ? 'box' : undefined
       }),
       expect.objectContaining({ rootPath: '/srv/worktree' })

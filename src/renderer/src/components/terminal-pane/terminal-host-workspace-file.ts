@@ -1,5 +1,9 @@
 import { callHostRoute } from '@/runtime/host-route-call'
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
+import {
+  hostRouteForAuthority,
+  runtimeTargetEnvironmentId,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
@@ -26,7 +30,7 @@ export type HostWorkspaceFile = {
 /** A path the host disowned that this computer has; the user's click here is the only authority to read it. */
 export type ClientLocalFile = { kind: 'client'; isDirectory: boolean }
 
-export const CLIENT_LOCAL_FILE_SETTINGS = { activeRuntimeEnvironmentId: null }
+export const CLIENT_LOCAL_FILE_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 /** Strips the host's relative suffix; separators are swapped 1:1, so the slice stays byte-exact. */
 function workspaceRootOf(absolutePath: string, relativePath: string): string | null {
@@ -56,7 +60,7 @@ async function statClientLocalFile(
   }
   try {
     const stat = await statRuntimePath(
-      { settings: CLIENT_LOCAL_FILE_SETTINGS, worktreeId: null, worktreePath: null },
+      { target: CLIENT_LOCAL_FILE_TARGET, worktreeId: null, worktreePath: null },
       absolutePath,
       userNamedFileAccess()
     )
@@ -77,7 +81,7 @@ export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string
 ): Promise<HostWorkspaceFile | ClientLocalFile | null> {
-  const environmentId = context.settings?.activeRuntimeEnvironmentId?.trim()
+  const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
     !environmentId ||
     !context.worktreeId ||

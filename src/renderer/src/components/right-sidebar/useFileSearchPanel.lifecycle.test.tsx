@@ -121,7 +121,7 @@ it('invalidates completed results and errors when the execution owner changes at
   )
   await act(async () => vi.advanceTimersByTimeAsync(300))
   expect(search).toHaveBeenCalledTimes(2)
-  expect(search.mock.calls[1][0].settings.activeRuntimeEnvironmentId).toBe('remote-a')
+  expect(search.mock.calls[1][0].target).toEqual({ kind: 'environment', environmentId: 'remote-a' })
   expect(
     useAppStore.getState().fileSearchStateByWorktree['folder:a'].resultOwner?.executionHostId
   ).toBe('runtime:remote-a')

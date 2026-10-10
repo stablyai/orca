@@ -3,7 +3,7 @@ import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolu
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
@@ -124,12 +124,15 @@ export function useMarkdownPreviewSourceFoundation({
       ),
     [allDiffComments, sourceRelativePath]
   )
-  const settings = useAppStore((s) => s.settings)
+  const sourceRuntimeTarget = useFileOwnerRuntimeTarget(
+    sourceRoutingWorktreeId,
+    resolvedSourceRuntimeEnvironmentId
+  )
   const imageRuntimeContext = useMemo(
     () =>
       sourceRoutingWorktreeId && worktreeRoot
         ? {
-            settings: settingsForRuntimeOwner(settings, resolvedSourceRuntimeEnvironmentId),
+            target: sourceRuntimeTarget,
             worktreeId: sourceRoutingWorktreeId,
             worktreePath: worktreeRoot,
             connectionId: sourceConnectionId,
@@ -137,10 +140,9 @@ export function useMarkdownPreviewSourceFoundation({
           }
         : undefined,
     [
-      settings,
+      sourceRuntimeTarget,
       sourceConnectionId,
       sourceOpenFile?.externalSshTargetId,
-      resolvedSourceRuntimeEnvironmentId,
       sourceRoutingWorktreeId,
       worktreeRoot
     ]

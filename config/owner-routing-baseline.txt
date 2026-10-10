@@ -2,22 +2,10 @@
 # getActiveRuntimeTarget( + legacyRouteFromSettings( + settingsForRuntimeOwner(, per file.
 # This is a RATCHET: counts may only go DOWN. Route new work by the resource owner instead.
 # Prune after removing sites: pnpm check:owner-routing-ratchet --prune
-1 src/renderer/src/components/editor/EditorPanel.tsx
-1 src/renderer/src/components/editor/ExternalFileChangeBanner.tsx
-1 src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx
 1 src/renderer/src/components/editor/combined-diff/load-sections/fetch-combined-diff-section.ts
-2 src/renderer/src/components/editor/editor-restored-tab-conflict-scan.ts
-1 src/renderer/src/components/editor/markdown-preview-link-actions.ts
-1 src/renderer/src/components/editor/rich-markdown-image-context.ts
-1 src/renderer/src/components/editor/rich-markdown-image-insert.ts
-1 src/renderer/src/components/editor/rich-markdown-paste-image.ts
-1 src/renderer/src/components/editor/use-markdown-preview-source-foundation.ts
 1 src/renderer/src/components/editor/useEditorPanelDiffContentLoader.ts
-1 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
-2 src/renderer/src/components/editor/useMarkdownDocuments.ts
 1 src/renderer/src/components/linear-api-key-dialog.tsx
 1 src/renderer/src/components/ports/WorkspacePortScanner.tsx
-1 src/renderer/src/components/quick-open-file-navigation.ts
 1 src/renderer/src/components/settings/GeneralPane.tsx
 1 src/renderer/src/components/settings/RepositoryGitHubAccountSection.tsx
 1 src/renderer/src/components/settings/RepositoryIconPicker.tsx
@@ -27,9 +15,6 @@
 1 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
 1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
 1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
-1 src/renderer/src/components/terminal-pane/terminal-file-path-mapping.ts
-1 src/renderer/src/components/terminal-pane/terminal-path-existence-batch.ts
-1 src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts
 1 src/renderer/src/hooks/composer-state/provider-runtime-sync.ts
 1 src/renderer/src/hooks/composer-state/quick-creation-execution.ts
 1 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
@@ -43,19 +28,8 @@
 1 src/renderer/src/lib/github-pr-start-point.ts
 1 src/renderer/src/lib/launch-agent-background-session.ts
 1 src/renderer/src/lib/launch-worktree-background-terminals.ts
-1 src/renderer/src/lib/local-file-access.ts
 1 src/renderer/src/lib/structured-agent-session-tab-activation.ts
-1 src/renderer/src/lib/workspace-file-host-routing.ts
 1 src/renderer/src/lib/worktree-creation-flow-startup.ts
-1 src/renderer/src/runtime/mobile-markdown-bridge.ts
-1 src/renderer/src/runtime/runtime-file-import-client.ts
-1 src/renderer/src/runtime/runtime-file-metadata-client.ts
-1 src/renderer/src/runtime/runtime-file-mutation-client.ts
-1 src/renderer/src/runtime/runtime-file-range-client.ts
-2 src/renderer/src/runtime/runtime-file-read-client.ts
-4 src/renderer/src/runtime/runtime-file-routing.ts
-4 src/renderer/src/runtime/runtime-file-search-client.ts
-1 src/renderer/src/runtime/runtime-file-watch-client.ts
 1 src/renderer/src/runtime/runtime-git-client-context.ts
 5 src/renderer/src/runtime/runtime-git-diff-client.ts
 5 src/renderer/src/runtime/runtime-git-generation-client.ts
@@ -85,7 +59,6 @@
 1 src/renderer/src/store/repos/repo-update.ts
 1 src/renderer/src/store/repos/runtime-repo-catalog-actions.ts
 1 src/renderer/src/store/slices/diff-comment-persistence.ts
-1 src/renderer/src/store/slices/editor/actions/markdown-link-action.ts
 1 src/renderer/src/store/slices/hosted-review.ts
 1 src/renderer/src/store/slices/preflight.ts
 1 src/renderer/src/store/slices/worktree-visibility-owner-settings.ts

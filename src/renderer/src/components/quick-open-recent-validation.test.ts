@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 const context = {
-  settings: { activeRuntimeEnvironmentId: null },
+  target: { kind: 'local' as const },
   worktreeId: 'wt',
   worktreePath: '/repo'
 }

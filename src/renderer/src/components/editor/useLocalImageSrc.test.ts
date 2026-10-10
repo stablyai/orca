@@ -105,17 +105,17 @@ afterEach(() => {
 describe('getLocalImageCacheKey', () => {
   it('scopes local markdown image cache entries by runtime owner', () => {
     const localKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
     const remoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
     const otherRemoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
-      settings: { activeRuntimeEnvironmentId: 'env-2' },
+      target: { kind: 'environment' as const, environmentId: 'env-2' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
@@ -365,7 +365,7 @@ describe('loadLocalImageSrc', () => {
 
     await expect(
       loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1'
@@ -373,7 +373,7 @@ describe('loadLocalImageSrc', () => {
     ).resolves.toBe('blob:runtime-one')
     await expect(
       loadLocalImageSrc('diagram.png', '/repo/docs/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-2',
         worktreePath: '/repo',
         connectionId: 'ssh-2'
@@ -388,7 +388,7 @@ describe('loadLocalImageSrc', () => {
 
     await expect(
       loadLocalImageSrc('diagram.png', '/tmp/readme.md', null, {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-2',
@@ -454,7 +454,7 @@ describe('useLocalImageSrc runtime owner', () => {
 
   function sshOwner(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
     return {
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       connectionId: 'ssh-1',

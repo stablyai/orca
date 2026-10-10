@@ -11,7 +11,6 @@ import {
 } from '@/lib/workspace-browser-tab-open'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
-import type { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
@@ -39,8 +38,6 @@ export type ActivateMarkdownLink = (
     sourceOwner?: HttpLinkSourceOwner
   }
 ) => void | Promise<unknown>
-
-export type RichMarkdownRuntimeSettings = Parameters<typeof settingsForRuntimeOwner>[0]
 
 type RichMarkdownEditorClickRoutingOptions = {
   activateMarkdownLink: ActivateMarkdownLink

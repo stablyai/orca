@@ -14,6 +14,7 @@ import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
 } from './file-explorer-operation-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
@@ -138,7 +139,7 @@ export function useFileExplorerInlineInput({
             )
             const operationRoute = operationGuard.route
             const fileContext = {
-              settings: operationRoute.settings,
+              target: operationRoute.target,
               worktreeId: activeWorktreeId,
               worktreePath,
               connectionId: operationRoute.connectionId,
@@ -160,7 +161,7 @@ export function useFileExplorerInlineInput({
                   await deleteRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath,
@@ -173,7 +174,7 @@ export function useFileExplorerInlineInput({
                   await createRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath,
@@ -189,7 +190,7 @@ export function useFileExplorerInlineInput({
                   await deleteRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath
@@ -201,7 +202,7 @@ export function useFileExplorerInlineInput({
                   await createRuntimePath(
                     {
                       ...fileContext,
-                      settings: currentRoute.settings,
+                      target: currentRoute.target,
                       connectionId: currentRoute.connectionId
                     },
                     fullPath,
@@ -213,8 +214,7 @@ export function useFileExplorerInlineInput({
             }
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
-              const runtimeEnvironmentId =
-                fileContext.settings.activeRuntimeEnvironmentId?.trim() || null
+              const runtimeEnvironmentId = runtimeTargetEnvironmentId(fileContext.target)
               openFile(
                 {
                   filePath: fullPath,

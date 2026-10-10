@@ -8,7 +8,7 @@ import {
 
 function context(overrides: Partial<RuntimeFileOperationArgs> = {}): RuntimeFileOperationArgs {
   return {
-    settings: { activeRuntimeEnvironmentId: null },
+    target: { kind: 'local' as const },
     worktreeId: 'worktree-1',
     worktreePath: '/repo',
     ...overrides
@@ -171,7 +171,9 @@ describe('shared Markdown document list requests', () => {
   it('keeps runtime routes isolated and encodes unusual paths losslessly', () => {
     const local = context()
     const ssh = context({ connectionId: 'ssh-1' })
-    const runtime = context({ settings: { activeRuntimeEnvironmentId: ' runtime-1 ' } })
+    const runtime = context({
+      target: { kind: 'environment' as const, environmentId: ' runtime-1 ' }
+    })
     const unusualRoot = '/repo\nwith-newline'
     const windowsRoot = 'C:\\repo\\docs'
     const uncRoot = '\\\\server\\share\\repo'

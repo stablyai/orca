@@ -41,7 +41,7 @@ describe('runtime file client', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/remote/repo',
       expectedSshTargetId: 'ssh-1',
@@ -130,7 +130,7 @@ describe('runtime file client', () => {
     await expect(
       writeRuntimeFile(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
           worktreeId: 'wt-hub-local',
           worktreePath: '/hub/repo',
           expectedExecutionHostId: 'local'
@@ -169,7 +169,7 @@ describe('runtime file client', () => {
     await expect(
       renameRuntimePath(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
           worktreeId: 'wt-nested-ssh',
           worktreePath: '/ssh/repo',
           connectionId: 'hub-ssh-1',
@@ -217,7 +217,7 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeDirectory(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
           worktreeId: 'wt-nested-ssh',
           worktreePath: '/ssh/repo',
           connectionId: 'hub-ssh-1'
@@ -255,7 +255,7 @@ describe('runtime file client', () => {
     await expect(
       importExternalPathsToRuntime(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
+          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
           worktreeId: 'wt-nested-ssh',
           worktreePath: '/ssh/repo',
           expectedExecutionHostId: 'ssh:hub-ssh-1',
@@ -297,7 +297,7 @@ describe('runtime file client', () => {
       _meta: { runtimeId: 'new-hub-runtime' }
     })
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-downgraded' },
+      target: { kind: 'environment' as const, environmentId: 'env-downgraded' },
       worktreeId: 'wt-hub-local',
       worktreePath: '/hub/repo',
       expectedExecutionHostId: 'local' as const
@@ -356,7 +356,7 @@ describe('runtime file client', () => {
     await expect(
       deleteRuntimePath(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-repaired' },
+          target: { kind: 'environment' as const, environmentId: 'env-repaired' },
           worktreeId: 'wt-nested-ssh',
           worktreePath: '/ssh/repo',
           expectedExecutionHostId: 'ssh:hub-ssh-1',
@@ -394,7 +394,7 @@ describe('runtime file client', () => {
 
   it('does not fall back to client-local mutations for remote-owned paths outside the worktree', async () => {
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/remote/repo'
     }
@@ -421,7 +421,7 @@ describe('runtime file client', () => {
 
   it('does not fall back to client-local mutations when a remote Windows path escapes the worktree', async () => {
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: 'C:\\repo'
     }
@@ -440,7 +440,7 @@ describe('runtime file client', () => {
   it('keeps copy operations on local filesystem IPC when no runtime is active', async () => {
     await copyRuntimePath(
       {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo'
       },
@@ -460,7 +460,7 @@ describe('runtime file client', () => {
   it('preserves the SSH connection for copy operations when no runtime is active', async () => {
     await copyRuntimePath(
       {
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1',

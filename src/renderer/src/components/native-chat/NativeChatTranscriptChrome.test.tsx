@@ -17,7 +17,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 function runtimeContext(worktreeId: string): RuntimeFileOperationArgs {
   return {
-    settings: { activeRuntimeEnvironmentId: null },
+    target: { kind: 'local' as const },
     worktreeId,
     worktreePath: `/repo/${worktreeId}`,
     expectedExecutionHostId: 'local'

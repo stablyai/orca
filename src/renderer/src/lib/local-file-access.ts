@@ -1,9 +1,11 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
 import type { OpenFile } from '@/store/slices/editor'
-import type { AppState } from '@/store/types'
 import { getConnectionIdForFile } from './connection-context'
+import {
+  getRuntimeTargetForFileOwner,
+  type WorktreeRuntimeOwnerState
+} from './worktree-runtime-owner'
 
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
@@ -58,15 +60,15 @@ export function isClientLocalReadOnlyTab(
  * the same before and after a restart; every other tab stays inside its project root.
  */
 export function editorTabFileAccess(
-  state: Pick<AppState, 'settings'>,
+  state: WorktreeRuntimeOwnerState,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
   // Why: these are client-local files the user opened, whatever the worktree's host.
   if (isClientLocalReadOnlyTab(file)) {
     return USER_FILE_ACCESS
   }
-  const runtimeOwner = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
-  if (file.externalSshTargetId?.trim() || runtimeOwner?.activeRuntimeEnvironmentId?.trim()) {
+  const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+  if (file.externalSshTargetId?.trim() || owner.kind === 'environment') {
     return undefined
   }
   const outsideOwnerRoot =
@@ -83,7 +85,7 @@ export function editorTabFileAccess(
  * user-named, else none, so project tabs keep their project checks.
  */
 export function editorTabDocumentFolderAccess(
-  state: Pick<AppState, 'settings'>,
+  state: WorktreeRuntimeOwnerState,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
   // Why: a read-only tab (an AI Vault log, possibly in an SSH workspace) is never written.

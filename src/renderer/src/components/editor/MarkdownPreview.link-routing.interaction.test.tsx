@@ -11,6 +11,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const createBrowserTabMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
@@ -59,8 +60,22 @@ vi.mock('@/store/slices/worktree-helpers', () => ({
   findWorktreeById: (_worktrees: unknown, id: string) =>
     worktreeLookup.value.find((worktree) => worktree.id === id) ?? null
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (settings: unknown) => settings
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
+  getRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    runtimeEnvironmentId?: string | null
+  ) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
+}))
+vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+  useFileOwnerRuntimeTarget: (_worktreeId: unknown, runtimeEnvironmentId?: string | null) =>
+    runtimeEnvironmentId
+      ? { kind: 'environment', environmentId: runtimeEnvironmentId }
+      : { kind: 'local' }
 }))
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: statRuntimePathMock

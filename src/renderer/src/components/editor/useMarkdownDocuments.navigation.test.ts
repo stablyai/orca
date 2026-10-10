@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 const runtime = vi.hoisted(() => ({
   stat: vi.fn(),
@@ -33,8 +34,13 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
 vi.mock('@/runtime/runtime-file-client', () => ({ statRuntimePath: runtime.stat }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({ owner })
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
+  getRuntimeTargetForFileOwner: (
+    _state: unknown,
+    _worktreeId: unknown,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment', environmentId: owner } : { kind: 'local' })
 }))
 vi.mock('./markdown-document-list-request', () => ({
   requestSharedMarkdownDocumentList: runtime.list
@@ -225,7 +231,7 @@ describe('Markdown document navigation', () => {
 
     expect(runtime.stat).toHaveBeenCalledWith(
       {
-        settings: { owner: 'runtime-owner' },
+        target: { kind: 'environment', environmentId: 'runtime-owner' },
         worktreeId: 'wt',
         worktreePath: '/repo',
         connectionId: 'ssh-owner'

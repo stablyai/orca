@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import { getConnectionId } from '@/lib/connection-context'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 export type RichMarkdownImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
@@ -12,8 +12,6 @@ export type RichMarkdownImageResolverContext = {
   imageUrls?: Record<string, string>
   runtimeContext?: RichMarkdownImageRuntimeContext
 }
-
-export type RichMarkdownImageResolverSettings = Parameters<typeof settingsForRuntimeOwner>[0]
 
 type RichMarkdownImageUrls = Record<string, string>
 
@@ -56,15 +54,14 @@ export function getRichMarkdownImageResolverContextVersion(editor: Editor): numb
 export function createRichMarkdownImageResolverContext({
   filePath,
   externalSshTargetId,
-  runtimeEnvironmentId,
-  settings,
+  runtimeTarget,
   worktreeId,
   worktreeRoot
 }: {
   filePath: string
   externalSshTargetId?: string
-  runtimeEnvironmentId?: string | null
-  settings: RichMarkdownImageResolverSettings
+  /** The document owner's transport. */
+  runtimeTarget: RuntimeClientTarget
   worktreeId: string
   worktreeRoot: string | null
 }): RichMarkdownImageResolverContext {
@@ -72,7 +69,7 @@ export function createRichMarkdownImageResolverContext({
     filePath,
     runtimeContext: worktreeRoot
       ? {
-          settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
+          target: runtimeTarget,
           worktreeId,
           worktreePath: worktreeRoot,
           connectionId: getConnectionId(worktreeId),
@@ -117,7 +114,9 @@ function getRichMarkdownImageContextSignature(context: RichMarkdownImageResolver
   return [
     context.filePath,
     JSON.stringify(context.imageUrls ?? {}),
-    context.runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client',
+    context.runtimeContext?.target.kind === 'environment'
+      ? context.runtimeContext.target.environmentId
+      : 'client',
     context.runtimeContext?.connectionId ?? 'local',
     context.runtimeContext?.expectedExternalSshTargetId ?? '',
     context.runtimeContext?.worktreeId ?? 'unknown-worktree',

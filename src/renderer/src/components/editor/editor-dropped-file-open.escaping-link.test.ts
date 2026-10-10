@@ -12,7 +12,7 @@ vi.mock('@/lib/ssh-mutation-expectation', () => ({
   captureWorktreeSshMutationExpectation: () => ({})
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null
+  getRuntimeTargetForWorktreeOwner: () => ({ kind: 'local' })
 }))
 vi.mock('@/lib/user-opened-local-path', () => ({ statUserOpenedPath: mocks.statUserOpenedPath }))
 vi.mock('@/store', () => ({

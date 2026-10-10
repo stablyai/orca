@@ -49,7 +49,7 @@ export function useFileDuplicate({
           return
         }
         const context = {
-          settings: operationGuard.route.settings,
+          target: operationGuard.route.target,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId: operationGuard.route.connectionId,

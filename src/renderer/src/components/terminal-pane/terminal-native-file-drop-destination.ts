@@ -48,7 +48,6 @@ function captureNativeTerminalFileDropDestination(
   }
   const dropTarget = captureTerminalDropTarget(pane, transport)
   const state = useAppStore.getState()
-  const settings = state.settings
   const owner = captureTerminalDropTransportOwner(transport)
   const worktreePath = resolveTerminalDropWorktreePath(
     worktreeId,
@@ -80,7 +79,6 @@ function captureNativeTerminalFileDropDestination(
         pane,
         dataPaths: paths,
         dropTarget,
-        settings,
         owner,
         worktreePath,
         localWslDrop

@@ -19,8 +19,7 @@ import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuat
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   handleRichMarkdownEditorClick,
-  type ActivateMarkdownLink,
-  type RichMarkdownRuntimeSettings
+  type ActivateMarkdownLink
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
@@ -28,6 +27,7 @@ import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
 } from './rich-markdown-image-context'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
@@ -49,7 +49,8 @@ export type EditorConfigParams = {
   runtimeEnvironmentId?: string | null
   isMac: boolean
   richMarkdownSpellcheckEnabled: boolean
-  settings: RichMarkdownRuntimeSettings
+  /** The document owner's transport, for image reads. */
+  runtimeTarget: RuntimeClientTarget
   activateMarkdownLink: ActivateMarkdownLink
   rootRef: MutableRefObject<HTMLDivElement | null>
   editorRef: MutableRefObject<Editor | null>
@@ -103,7 +104,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     runtimeEnvironmentId,
     isMac,
     richMarkdownSpellcheckEnabled,
-    settings,
+    runtimeTarget,
     activateMarkdownLink,
     rootRef,
     editorRef,
@@ -247,8 +248,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         createRichMarkdownImageResolverContext({
           filePath,
           externalSshTargetId,
-          runtimeEnvironmentId,
-          settings,
+          runtimeTarget,
           worktreeId,
           worktreeRoot
         })

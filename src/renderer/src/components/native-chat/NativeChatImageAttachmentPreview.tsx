@@ -13,6 +13,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 type Props = {
   attachment: NativeChatComposerImageAttachment
@@ -151,7 +152,7 @@ function NativeChatImageThumbnail({
     () =>
       readEnvironmentId
         ? {
-            settings: { activeRuntimeEnvironmentId: readEnvironmentId },
+            target: runtimeTargetForOwnerEnvironment(readEnvironmentId),
             worktreeId: null,
             worktreePath: null
           }

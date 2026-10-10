@@ -1,5 +1,5 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   readRuntimeDirectory,
@@ -211,14 +211,14 @@ export async function listMarkdownDocumentTemplates(
 
 export async function readMarkdownDocumentTemplateContent(
   context: {
-    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+    target: RuntimeClientTarget
     worktreeId: string
     connectionId?: string
   },
   template: MarkdownDocumentTemplate
 ): Promise<string> {
   const result = await readRuntimeFileContent({
-    settings: context.settings,
+    target: context.target,
     filePath: template.filePath,
     relativePath: template.relativePath,
     worktreeId: context.worktreeId,

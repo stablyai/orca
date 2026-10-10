@@ -5,7 +5,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getRuntimeTargetForFileOwner } from '@/lib/worktree-runtime-owner'
 import { canAutoSaveOpenFile } from './editor-autosave'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
@@ -40,8 +40,12 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
 
   // Only local/SSH paths can be probed: for runtime-owned files window.api.fs would stat the client path and misreport it as gone.
   const probeFileMissing = async (file: OpenFile): Promise<boolean> => {
-    const settings = settingsForRuntimeOwner(store.getState().settings, file.runtimeEnvironmentId)
-    if (settings?.activeRuntimeEnvironmentId?.trim()) {
+    const owner = getRuntimeTargetForFileOwner(
+      store.getState(),
+      file.worktreeId,
+      file.runtimeEnvironmentId
+    )
+    if (owner.kind === 'environment') {
       return false
     }
     try {
@@ -65,7 +69,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     try {
       const state = store.getState()
       const result = await readRuntimeFileContent({
-        settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
+        target: getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId),
         filePath: file.filePath,
         relativePath: file.relativePath,
         worktreeId: file.worktreeId,

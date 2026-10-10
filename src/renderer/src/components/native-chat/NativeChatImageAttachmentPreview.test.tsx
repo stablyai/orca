@@ -82,7 +82,7 @@ describe('NativeChatImageAttachmentPreview', () => {
 
     for (const call of mocks.useLocalImageSrc.mock.calls) {
       expect(call[3]).toEqual({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment', environmentId: 'env-1' },
         worktreeId: null,
         worktreePath: null
       })

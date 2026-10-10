@@ -185,7 +185,7 @@ describe('large Markdown paste selection during yields', () => {
               ...context,
               runtimeContext: {
                 connectionId: 'another-target',
-                settings: null,
+                target: { kind: 'local' as const },
                 worktreeId: 'workspace',
                 worktreePath: '/repo'
               }

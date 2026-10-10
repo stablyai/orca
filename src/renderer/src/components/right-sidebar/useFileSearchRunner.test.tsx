@@ -84,7 +84,7 @@ describe('useFileSearchRunner result ownership', () => {
 
     expect(mocks.searchRuntimeFiles).toHaveBeenCalledWith(
       expect.objectContaining({
-        settings: { activeRuntimeEnvironmentId: 'search-runtime-a' },
+        target: { kind: 'environment', environmentId: 'search-runtime-a' },
         worktreeId
       }),
       expect.any(Object),
@@ -116,7 +116,7 @@ describe('useFileSearchRunner result ownership', () => {
     await finishSearch(hook.result.current.executeSearch)
 
     expect(mocks.searchRuntimeFiles).toHaveBeenCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null }, worktreeId }),
+      expect.objectContaining({ target: { kind: 'local' }, worktreeId }),
       expect.any(Object),
       expect.any(AbortSignal)
     )
@@ -148,7 +148,7 @@ describe('useFileSearchRunner result ownership', () => {
 
     expect(mocks.searchRuntimeFiles).toHaveBeenCalledWith(
       expect.objectContaining({
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' },
         worktreeId,
         connectionId: 'ssh-target'
       }),

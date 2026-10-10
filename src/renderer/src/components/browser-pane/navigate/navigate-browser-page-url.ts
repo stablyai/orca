@@ -22,6 +22,7 @@ import type {
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/worktree-runtime-owner'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -100,7 +101,7 @@ export function navigateBrowserPageToUrl({
         // Why getKnownWorktreeById: folder and floating workspaces are absent from allWorktrees().
         const activeWorktree = store.getKnownWorktreeById(worktreeId)
         const fileContext: RuntimeFileOperationArgs = {
-          settings: store.settings,
+          target: getRuntimeTargetForWorktreeOwner(store, worktreeId),
           worktreeId,
           worktreePath: activeWorktree?.path,
           connectionId: undefined

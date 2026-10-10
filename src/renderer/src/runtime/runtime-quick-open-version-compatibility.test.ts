@@ -21,7 +21,7 @@ it('accepts a future compatible search version rather than falling back on exact
   await expect(
     searchRuntimeFilePaths(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'future-host',
         worktreePath: '/host/repo'
       },
@@ -52,7 +52,7 @@ it('validates default-policy recent paths on a version-two host through complete
   await expect(
     listRuntimeFiles(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'recent-legacy',
         worktreePath: '/host/repo'
       },
@@ -81,7 +81,7 @@ it('sends bounded candidates only after a compatible host advertises their seman
   await expect(
     listRuntimeFiles(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'recent-new',
         worktreePath: '/host/repo'
       },
@@ -115,7 +115,7 @@ it('refuses to infer recent eligibility from a truncated old-host inventory', as
   await expect(
     listRuntimeFiles(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'recent-truncated',
         worktreePath: '/host/repo'
       },
@@ -129,7 +129,7 @@ it.each(['missing-search', 'old-search'] as const)(
   'translates only unavailable inventory errors after %s',
   async (route) => {
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: 'fallback-errors',
       worktreePath: '/host/repo'
     }
@@ -161,7 +161,7 @@ it.each(['missing-search', 'old-search'] as const)(
 
 it('preserves raw errors when joining a cached pending legacy inventory', async () => {
   const context = {
-    settings: { activeRuntimeEnvironmentId: 'env-1' },
+    target: { kind: 'environment' as const, environmentId: 'env-1' },
     worktreeId: 'cached-errors',
     worktreePath: '/host/repo'
   }
@@ -221,7 +221,7 @@ it.each(['method_not_found', 'file_inventory_capacity', 'remote_runtime_unavaila
     await expect(
       searchRuntimeFilePaths(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: `punctuation-${code}`,
           worktreePath: '/host/repo'
         },
@@ -249,7 +249,7 @@ it.each([{ includeIgnored: false }, { followSymlinks: true }])(
     await expect(
       searchRuntimeFilePaths(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'v2-options',
           worktreePath: '/repo'
         },
@@ -277,7 +277,7 @@ it('keeps inherited ignored-file visibility from disabling an older paired host'
     })
   )
   const context = {
-    settings: { activeRuntimeEnvironmentId: 'env-1' },
+    target: { kind: 'environment' as const, environmentId: 'env-1' },
     worktreeId: 'legacy-ignored',
     worktreePath: '/repo'
   }
@@ -317,7 +317,7 @@ it('does not reuse unfiltered recent inventory after enabling supported ignore f
     })
   )
   const context = {
-    settings: { activeRuntimeEnvironmentId: 'env-1' },
+    target: { kind: 'environment' as const, environmentId: 'env-1' },
     worktreeId: 'cached-v2-options',
     worktreePath: '/repo'
   }

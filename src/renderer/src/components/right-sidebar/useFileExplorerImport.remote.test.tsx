@@ -89,7 +89,7 @@ describe('file explorer OS file drops on remote workspaces', () => {
       worktreeId: 'wt-ssh',
       worktreePath: SSH_ROOT,
       connectionId: 'ssh-1',
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' },
       expectedExecutionHostId: 'ssh:ssh-1',
       expectedSshTargetId: 'ssh-1',
       expectedSshConnectionGeneration: 3
@@ -104,7 +104,7 @@ describe('file explorer OS file drops on remote workspaces', () => {
     await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
     expect(mocks.importPaths.mock.calls[0][0]).toMatchObject({
       worktreeId: 'wt-runtime',
-      settings: { activeRuntimeEnvironmentId: 'owner-runtime' }
+      target: { kind: 'environment', environmentId: 'owner-runtime' }
     })
     expect(mocks.importPaths.mock.calls[0][2]).toBe(joinPath(RUNTIME_ROOT, 'src'))
   })

@@ -64,7 +64,7 @@ describe('resolveNativeChatImageRuntimeContext', () => {
     const second = resolveNativeChatImageRuntimeContext(storeState, 'tab-1')
 
     expect(first).not.toBeNull()
-    expect(second?.settings).toBe(first?.settings)
+    expect(second?.target).toBe(first?.target)
     expect(shallow(second, first)).toBe(true)
   })
 
@@ -91,7 +91,7 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo/worktree',
       expectedExecutionHostId: 'local',
-      settings: { activeRuntimeEnvironmentId: 'owner-a' }
+      target: { kind: 'environment' as const, environmentId: 'owner-a' }
     })
   })
 
@@ -136,7 +136,7 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       worktreePath: '/home/me/pinned',
       expectedExecutionHostId: 'local',
-      settings: { activeRuntimeEnvironmentId: null }
+      target: { kind: 'local' as const }
     })
   })
 })

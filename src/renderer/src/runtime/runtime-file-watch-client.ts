@@ -1,11 +1,7 @@
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
-import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  unwrapRuntimeRpcResult
-} from './runtime-rpc-client'
+import { callRuntimeRpc, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 type RuntimeFileWatchEvent =
@@ -46,7 +42,7 @@ export async function subscribeRuntimeFileChanges(
   onPayload: (payload: FsChangedPayload) => void,
   onError?: (error: Error) => void
 ): Promise<() => void> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
     return window.api.fs.onFsChanged(onPayload)
   }

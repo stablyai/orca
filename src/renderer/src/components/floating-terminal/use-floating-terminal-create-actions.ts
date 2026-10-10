@@ -13,8 +13,9 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
-const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 type FloatingTerminalCreateActionsInput = Pick<
   FloatingTerminalPanelStoreState,
@@ -97,7 +98,7 @@ export function useFloatingTerminalCreateActions({
           markdownCwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
-          LOCAL_RUNTIME_SETTINGS
+          LOCAL_TARGET
         )
         if (!fileInfo) {
           return
