@@ -1,6 +1,7 @@
 import { extname } from 'node:path'
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
+import { readAuthorizedDocPreviewBytes } from '../../shared/doc-preview-file-access'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { FileReadCapExceededError } from '../ssh/ssh-filesystem-stream-reader'
 import { getCanonicalUserDataPath } from '../persistence'
@@ -55,6 +56,7 @@ const DOC_PREVIEW_CONTENT_TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/plain; charset=utf-8',
   '.csv': 'text/plain; charset=utf-8',
+  '.py': 'text/plain; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -170,6 +172,22 @@ export async function readDocPreviewFile(
   }
   const contentType = docPreviewContentType(relativePath)
   try {
+    if (grant.owner.kind === 'local') {
+      const authority = resolveDocPreviewAuthorityPaths(grant)
+      if (!authority.entryPath) {
+        return notFoundOutcome()
+      }
+      const { buffer } = await readAuthorizedDocPreviewBytes({
+        boundaryPath: grant.requestBase,
+        entryPath: authority.entryPath,
+        implicitRootPath: authority.implicitRootPath,
+        authorizedRootPaths: authority.authorizedRootPaths,
+        targetPath: absolutePath,
+        maxTextBytes: DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES,
+        maxBinaryBytes: DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES
+      })
+      return { ok: true, bytes: buffer, contentType }
+    }
     if (grant.owner.kind === 'ssh') {
       const provider = requireSshFilesystemProvider(grant.owner.connectionId)
       const authority = resolveDocPreviewAuthorityPaths(grant)

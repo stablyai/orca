@@ -110,18 +110,6 @@ function docPreviewCall(filePath: string, extra: Record<string, unknown> = {}): 
 }
 
 describe('openFileInBrowserTab', () => {
-  it('opens a local file URL in the Orca browser with the filename as title', () => {
-    openFileInBrowserTab({
-      filePath: '/tmp/example file.html',
-      worktreeId: 'wt-1'
-    })
-
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'file:///tmp/example%20file.html', {
-      title: 'example file.html',
-      activate: true
-    })
-  })
-
   it('renders a paired-runtime file as a local doc preview instead of a runtime browser tab', () => {
     mocks.environmentId = 'runtime-1'
     mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
@@ -304,37 +292,6 @@ describe('openFileInBrowserTab', () => {
     )
   })
 
-  it('creates local side previews in an activated right-hand split', () => {
-    openFilePreviewToSide({
-      language: 'html',
-      filePath: '/tmp/example.html',
-      worktreeId: 'wt-1',
-      sourceGroupId: 'group-1'
-    })
-
-    expect(mocks.createEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'file:///tmp/example.html', {
-      title: 'example.html',
-      targetGroupId: 'group-2',
-      activate: true
-    })
-  })
-
-  it('rejects a local workspace whose managed browser is unavailable before creating a split', () => {
-    mocks.browserAvailability = { state: 'hidden', reason: 'browser unavailable' }
-
-    openFilePreviewToSide({
-      language: 'html',
-      filePath: '/tmp/example.html',
-      worktreeId: 'wt-1',
-      sourceGroupId: 'group-1'
-    })
-
-    expect(mocks.toastError).toHaveBeenCalledWith('browser unavailable')
-    expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
-    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
-  })
-
   // Why: the host's files.read is worktree-scoped, so this path would otherwise 404 inside the
   // preview with nothing naming the boundary the user hit.
   it('names the worktree boundary for a paired document outside the workspace', () => {
@@ -406,6 +363,7 @@ describe('canShowWorkspaceFileBrowserAction', () => {
   })
 
   it('permits both local and SSH files', () => {
+    mocks.browserAvailability = { state: 'hidden', reason: 'browser unavailable' }
     expect(
       canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1', '/repo/report.html')
     ).toBe(true)

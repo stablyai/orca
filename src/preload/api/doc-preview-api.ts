@@ -1,6 +1,7 @@
 import type { DocPreviewFailure } from '../../shared/doc-preview-scheme'
 
 export type DocPreviewGrantOwner =
+  | { kind: 'local' }
   | { kind: 'ssh'; connectionId: string }
   | {
       kind: 'runtime'
