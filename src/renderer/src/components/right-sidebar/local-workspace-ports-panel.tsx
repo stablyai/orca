@@ -14,6 +14,7 @@ import {
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
+import { resolveClientReachableUrlForPort } from '@/lib/workspace-port-client-reachable-url'
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -154,7 +155,12 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
           event,
           isMac: navigator.userAgent.includes('Mac')
         }),
-        localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port)
+        localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port),
+        clientReachableUrl: resolveClientReachableUrlForPort(
+          useAppStore.getState(),
+          port,
+          runtimeTarget
+        )
       })
       if (!result.ok) {
         toast.error(
