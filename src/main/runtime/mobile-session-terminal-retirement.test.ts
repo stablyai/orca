@@ -152,6 +152,163 @@ describe('mobile session terminal retirement', () => {
     expect(result?.snapshot.tabs.map((tab) => tab.id)).toEqual(['notes', 'other'])
   })
 
+  // Why: the closed tab's group disappears entirely here. The successor must come
+  // from the global visit history (a-new viewed after c-old), not from the first
+  // remaining group in layout order.
+  it('follows the global visit history across groups when a retirement empties its group', () => {
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      worktree: WORKTREE_ID,
+      publicationEpoch: 'host',
+      snapshotVersion: 4,
+      activeGroupId: 'b-group',
+      activeTabId: 'b-closing::left',
+      activeTabType: 'terminal',
+      // Visit order: c-old first, then a-new (a cross-group visit), then b-closing.
+      recentTabIds: ['c-old', 'a-new', 'b-closing'],
+      tabGroups: [
+        { id: 'c-group', activeTabId: 'c-old', tabOrder: ['c-old'], recentTabIds: ['c-old'] },
+        { id: 'a-group', activeTabId: 'a-new', tabOrder: ['a-new'], recentTabIds: ['a-new'] },
+        {
+          id: 'b-group',
+          activeTabId: 'b-closing',
+          tabOrder: ['b-closing'],
+          recentTabIds: ['b-closing']
+        }
+      ],
+      tabs: [
+        {
+          type: 'file',
+          id: 'c-old',
+          title: 'C Old',
+          filePath: '/worktree/old.ts',
+          relativePath: 'old.ts',
+          language: 'typescript',
+          isDirty: false,
+          isActive: false
+        },
+        {
+          type: 'markdown',
+          id: 'a-new',
+          title: 'A New',
+          filePath: '/worktree/new.md',
+          relativePath: 'new.md',
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: false,
+          sourceFileId: 'new.md',
+          sourceFilePath: '/worktree/new.md',
+          sourceRelativePath: 'new.md',
+          documentVersion: '1',
+          isActive: false
+        },
+        {
+          type: 'terminal',
+          id: 'b-closing::left',
+          parentTabId: 'b-closing',
+          leafId: 'left',
+          ptyId: 'pty-b-closing',
+          title: 'B Closing',
+          parentLayout: {
+            root: { type: 'leaf' as const, leafId: 'left' },
+            activeLeafId: 'left',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { left: 'pty-b-closing' },
+            buffersByLeafId: { left: 'b buffer' },
+            titlesByLeafId: { left: 'B Closing' }
+          },
+          isActive: true
+        }
+      ]
+    }
+
+    const result = retireTerminalSurfacesFromSnapshot({ snapshot, ptyId: 'pty-b-closing' })
+
+    expect(result?.snapshot.activeTabId).toBe('a-new')
+    expect(result?.snapshot.activeTabType).toBe('markdown')
+    expect(result?.snapshot.recentTabIds).toEqual(['c-old', 'a-new'])
+  })
+
+  // Why: the closed tab's group survives with an older sibling here. The repaired
+  // group selection must not resurrect b-old over the newer cross-group visit a-new.
+  it('prefers the newer cross-group visit over the repaired group selection', () => {
+    const snapshot: RuntimeMobileSessionTabsSnapshot = {
+      worktree: WORKTREE_ID,
+      publicationEpoch: 'host',
+      snapshotVersion: 4,
+      activeGroupId: 'b-group',
+      activeTabId: 'b-closing::left',
+      activeTabType: 'terminal',
+      // Visit order: b-old first, then a-new (a cross-group visit), then b-closing.
+      recentTabIds: ['b-old', 'a-new', 'b-closing'],
+      tabGroups: [
+        { id: 'a-group', activeTabId: 'a-new', tabOrder: ['a-new'], recentTabIds: ['a-new'] },
+        {
+          id: 'b-group',
+          activeTabId: 'b-closing',
+          tabOrder: ['b-old', 'b-closing'],
+          recentTabIds: ['b-old', 'b-closing']
+        }
+      ],
+      tabs: [
+        {
+          type: 'file',
+          id: 'b-old',
+          title: 'B Old',
+          filePath: '/worktree/old.ts',
+          relativePath: 'old.ts',
+          language: 'typescript',
+          isDirty: false,
+          isActive: false
+        },
+        {
+          type: 'markdown',
+          id: 'a-new',
+          title: 'A New',
+          filePath: '/worktree/new.md',
+          relativePath: 'new.md',
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: false,
+          sourceFileId: 'new.md',
+          sourceFilePath: '/worktree/new.md',
+          sourceRelativePath: 'new.md',
+          documentVersion: '1',
+          isActive: false
+        },
+        {
+          type: 'terminal',
+          id: 'b-closing::left',
+          parentTabId: 'b-closing',
+          leafId: 'left',
+          ptyId: 'pty-b-closing',
+          title: 'B Closing',
+          parentLayout: {
+            root: { type: 'leaf' as const, leafId: 'left' },
+            activeLeafId: 'left',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { left: 'pty-b-closing' },
+            buffersByLeafId: { left: 'b buffer' },
+            titlesByLeafId: { left: 'B Closing' }
+          },
+          isActive: true
+        }
+      ]
+    }
+
+    const result = retireTerminalSurfacesFromSnapshot({ snapshot, ptyId: 'pty-b-closing' })
+
+    expect(result?.snapshot.activeTabId).toBe('a-new')
+    expect(result?.snapshot.activeTabType).toBe('markdown')
+    expect(result?.snapshot.activeGroupId).toBe('a-group')
+    expect(result?.snapshot.recentTabIds).toEqual(['b-old', 'a-new'])
+    // The repaired group keeps its pruned history as the older-snapshot fallback.
+    expect(result?.snapshot.tabGroups?.find((group) => group.id === 'b-group')).toMatchObject({
+      activeTabId: 'b-old',
+      tabOrder: ['b-old'],
+      recentTabIds: ['b-old']
+    })
+  })
+
   it('does not retire an exact surface rebound to a replacement PTY', () => {
     const snapshot = splitSnapshot()
     const rebound = {

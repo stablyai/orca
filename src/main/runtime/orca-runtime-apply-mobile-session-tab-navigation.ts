@@ -19,6 +19,7 @@ import {
   cloneTerminalLayoutSnapshot
 } from './mobile-session-layout-projection'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
+import { rememberRecentTabId } from '../../shared/session-tab-close-successor'
 
 export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
   protected applyMobileSessionTabNavigation(
@@ -27,6 +28,33 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     navigation: RuntimeNavigationTarget,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
+    const internalSnapshot = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+    const activatedTab = internalSnapshot?.tabs.find((tab) => tab.id === activeTabId)
+    const activatedTopLevelId = activatedTab
+      ? activatedTab.type === 'terminal'
+        ? activatedTab.parentTabId
+        : activatedTab.id
+      : null
+    if (internalSnapshot && activatedTopLevelId) {
+      const previousRecentTabIds = internalSnapshot.recentTabIds ?? []
+      const recentTabIds = rememberRecentTabId(previousRecentTabIds, activatedTopLevelId)
+      const changed =
+        recentTabIds.length !== previousRecentTabIds.length ||
+        recentTabIds.some((tabId, index) => tabId !== previousRecentTabIds[index])
+      const updated = changed
+        ? this.storeMobileSessionSnapshot(snapshot.worktree, {
+            ...internalSnapshot,
+            recentTabIds
+          })
+        : internalSnapshot
+      // Keep the response marker aligned with the authoritative snapshot when
+      // caller-only activation records history without changing shared focus.
+      snapshot = {
+        ...snapshot,
+        snapshotVersion: updated.snapshotVersion,
+        recentTabIds
+      }
+    }
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
       // Why: follow is live intent; disconnected devices must not inherit stale navigation on reconnect.

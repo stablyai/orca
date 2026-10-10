@@ -152,6 +152,36 @@ describe('resolveActiveSessionTab', () => {
     expect(result.selectionSource).toBe('snapshot')
   })
 
+  // Why: a snapshot with no active tab must pick the most recently added remaining
+  // tab (the strip's last), never default to the leftmost one.
+  it('falls back to the most recently added tab when the snapshot has no active tab', () => {
+    const result = resolveActiveSessionTab(
+      [terminalTab('a', false), terminalTab('b', false), terminalTab('c', false)],
+      {
+        pendingActiveSessionTabId: null,
+        selectedSessionTabId: null
+      }
+    )
+
+    expect(result.activeTab?.id).toBe('c')
+    expect(result.selectionSource).toBe('snapshot')
+  })
+
+  it('resolves a missing previous tab through the recent-visit history', () => {
+    const result = resolveActiveSessionTab(
+      [terminalTab('a', false), terminalTab('b', false), terminalTab('c', false)],
+      {
+        pendingActiveSessionTabId: null,
+        selectedSessionTabId: null,
+        previousActiveTabId: 'gone',
+        recentTabIds: ['c', 'a', 'gone']
+      }
+    )
+
+    expect(result.activeTab?.id).toBe('a')
+    expect(result.selectionSource).toBe('snapshot')
+  })
+
   it('returns null for an empty snapshot', () => {
     expect(
       resolveActiveSessionTab([], { pendingActiveSessionTabId: null, selectedSessionTabId: 'x' })
