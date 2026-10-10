@@ -172,14 +172,16 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: 'origin/master'
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     runtimeStub.resolveRemoteTrackingBase.mockImplementation(async (_repoPath, baseBranch) =>
       baseBranch === 'origin/main' ? remoteBase : null
     )
@@ -230,14 +232,16 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('keeps a usable persisted local branch base when a detected default exists', async () => {
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: 'develop'
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
     runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
       ok: false,
@@ -287,14 +291,16 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/team/feature',
       base: 'team/feature'
     }
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: 'team/feature'
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     runtimeStub.resolveRemoteTrackingBase.mockImplementation(async (_repoPath, baseBranch) =>
       baseBranch === 'team/feature' ? remoteBase : null
     )

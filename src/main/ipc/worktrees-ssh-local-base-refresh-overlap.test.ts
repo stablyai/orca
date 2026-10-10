@@ -274,10 +274,11 @@ describe('SSH local base refresh overlap', () => {
     const refresh = vi.fn(
       () => new Promise((resolve) => settlers.push(() => resolve(REFRESH_UPDATED)))
     )
+    const otherRepo = { ...REPO, id: 'repo-ssh-other', path: '/remote/other' }
     const repos = [
       { repo: REPO, name: 'improve-dashboard' },
       { repo: REPO, name: 'fix-login' },
-      { repo: { ...REPO, id: 'repo-ssh-other', path: '/remote/other' }, name: 'add-search' }
+      { repo: otherRepo, name: 'add-search' }
     ]
     const provider = createProvider({ refreshLocalBaseRefForWorktreeCreate: refresh })
     provider.listWorktrees.mockResolvedValue(
@@ -293,7 +294,7 @@ describe('SSH local base refresh overlap', () => {
       refreshLocalBaseRefOnWorktreeCreate: true,
       workspaceDir: '/workspace'
     })
-    store.getRepos.mockReturnValue(repos.map(({ repo }) => repo))
+    store.getRepos.mockReturnValue([REPO, otherRepo])
     store.getRepo.mockImplementation((id: string) => repos.find((r) => r.repo.id === id)?.repo)
     getSshGitProviderMock.mockReturnValue(provider)
     getActiveMultiplexerMock.mockReturnValue({

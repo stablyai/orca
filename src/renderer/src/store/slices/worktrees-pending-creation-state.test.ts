@@ -213,7 +213,10 @@ describe('pending worktree creation state', () => {
 
     store.getState().removePendingWorktreeCreation('c1')
 
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'setup-1' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'setup-1',
+      ownerHostId: 'ssh:runtime-ssh-1'
+    })
     await vi.waitFor(() =>
       expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-1' })
     )
