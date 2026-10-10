@@ -31,7 +31,7 @@ export const PAIRED_AUTOMATION_WORKSPACE: LaunchWorkspace = {
 }
 const PAIRED_TITLE = 'Nightly audit run 3'
 
-// main today: a legacy host runs a command quoted for the Windows client on a POSIX path.
+// The window plan is quoted for the OS the paired host reports (Linux), not the Windows client's.
 export const PAIRED_AUTOMATION_FROM_WINDOWS: PairedAutomationCase = {
   name: 'claude from a Windows client',
   client: 'win32',
@@ -64,10 +64,7 @@ export function pairedAgentSessionParams(c: PairedAutomationCase): Record<string
 
 /** terminal.create params for a host without it: the window plan, verbatim. */
 export function pairedLegacyCreateParams(c: PairedAutomationCase): Record<string, unknown> {
-  const quoted =
-    c.agent !== 'claude'
-      ? AUTOMATION_COMMANDS[c.agent]
-      : AUTOMATION_COMMANDS[c.client === 'win32' ? 'powershell' : 'posix']
+  const quoted = c.agent === 'claude' ? AUTOMATION_COMMANDS.posix : AUTOMATION_COMMANDS[c.agent]
   const { command, env, launchConfig, launchToken, launchAgent, tabId, leafId } =
     automationSpawnRequest({
       name: c.name,

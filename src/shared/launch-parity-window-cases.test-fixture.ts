@@ -178,8 +178,8 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     { localWindowsRuntimeDefault: WSL_UBUNTU }
   ),
   typed('Windows C: folder', 'win32', folder(WIN_PATH), { ...ps, ...IN_PWSH }, PWSH),
-  // main today: quoted for PowerShell (folder planner) while createTab picks wsl.exe from the path.
-  typed('Windows wsl$ folder', 'win32', folder(WSL_PATH), { ...ps, ...IN_WSL }, WSL_EXE),
+  // The folder's \\wsl$ path makes its host Linux, matching the wsl.exe createTab picks from the path.
+  typed('Windows wsl$ folder', 'win32', folder(WSL_PATH), { ...posix, ...IN_WSL }, WSL_EXE),
   // A folder borrows the runtime of a repo it contains (or equals), not of a repo it sits inside.
   typed(
     'Windows folder containing a WSL-project repo',
@@ -188,7 +188,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
       repoPath: WIN_PATH,
       projectRuntime: WSL_UBUNTU
     }),
-    { ...ps, ...IN_WSL, ...WSL_SENT },
+    { ...posix, ...IN_WSL, ...WSL_SENT },
     WSL_EXE
   ),
   typed(
@@ -205,8 +205,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
   typed('Windows client, SSH repo', 'win32', repo(POSIX_PATH, ssh), posix, NO_SHELL),
   typed('macOS client, SSH Windows-path repo', 'darwin', repo(WIN_PATH, ssh), ps, ZSH),
   typed('macOS client, SSH folder', 'darwin', folder(POSIX_PATH, ssh), posix, ZSH),
-  // main today: a folder quotes for the client, so a Windows client sends PowerShell quoting to a POSIX host.
-  typed('Windows client, SSH folder', 'win32', folder(POSIX_PATH, ssh), ps, NO_SHELL),
+  typed('Windows client, SSH folder', 'win32', folder(POSIX_PATH, ssh), posix, NO_SHELL),
   resume(MAC_T, `${POSIX_PATH}/pkg`)(
     'continue, macOS repo, transcript cwd',
     'darwin',

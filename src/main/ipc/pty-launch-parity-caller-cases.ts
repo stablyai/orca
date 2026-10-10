@@ -94,7 +94,7 @@ export const CALLER_LAUNCH_CASES: HostLaunchCase[] = [
     os: 'linux',
     workspace: repo(POSIX_PATH),
     call: rpc('terminal.create', pairedLegacyCreateParams(PAIRED_AUTOMATION_FROM_WINDOWS)),
-    provider: { command: `${POSIX_CLAUDE} 'don''t stop'`, ...ZSH },
+    provider: { command: `${POSIX_CLAUDE} 'don'"'"'t stop'`, ...ZSH },
     telemetry: null,
     phone: { title: 'Nightly audit run 3', launchAgent: 'claude', isActive: false }
   },

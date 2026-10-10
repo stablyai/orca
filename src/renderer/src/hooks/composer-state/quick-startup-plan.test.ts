@@ -51,7 +51,7 @@ type QuickCase = {
   startup: { command: string; agentCommand: string } | null
 }
 
-/** runtime-target-selection.ts's platform and shell, handed to the startup builder as quick-creation-execution.ts does. */
+/** runtime-target-selection.ts's host fact and shell, handed to the startup builder as quick-creation-execution.ts does. */
 async function quickStartup(c: QuickCase) {
   const { quick, selection, composerRepo, react, createStore } = await load(c.client)
   const store = createStore()
@@ -84,20 +84,23 @@ async function quickStartup(c: QuickCase) {
       worktreesByRepo: state.worktreesByRepo
     })
   )
-  const { selectedRepoAgentLaunchPlatform, selectedRepoStartupShell, selectedRepoIsRemote } =
+  const { selectedRepoAgentLaunchFact, selectedRepoStartupShell, selectedRepoIsRemote } =
     result.current
   const built = quick.buildQuickComposerStartup({
     agent: c.agent,
     prompt: c.prompt ?? '',
     draftPrompt: c.draftPrompt,
     settings: state.settings,
-    platform: selectedRepoAgentLaunchPlatform,
+    launchHost: selectedRepoAgentLaunchFact,
     shell: selectedRepoStartupShell,
     isRemote: selectedRepoIsRemote,
     telemetrySource: c.telemetrySource
   })
   return {
-    launchPlatform: selectedRepoAgentLaunchPlatform,
+    launchPlatform:
+      selectedRepoAgentLaunchFact.kind === 'known'
+        ? selectedRepoAgentLaunchFact.platform
+        : selectedRepoAgentLaunchFact.reason,
     startupShell: selectedRepoStartupShell,
     result: built
   }
@@ -174,7 +177,7 @@ const CASES: QuickCase[] = [
     ['linux', undefined],
     posix
   ),
-  // The local shell setting never reaches an SSH target; its path decides the quoting.
+  // The local shell setting never reaches an SSH target; the OS its relay reports decides the quoting.
   quickCase(
     'Windows client, SSH repo, cmd.exe',
     'win32',

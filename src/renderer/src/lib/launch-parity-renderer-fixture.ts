@@ -66,6 +66,11 @@ export function perClientLoader<T>(
   }
 }
 
+/** The OS a remote host holding this path reports: the SSH relay's handshake or the server's status.get. */
+function reportedHostPlatform(path: string): 'win32' | 'linux' {
+  return /^[A-Za-z]:[\\/]/.test(path) ? 'win32' : 'linux'
+}
+
 /** The store state one workspace needs, with the settings a case overrides. */
 export function launchWorkspaceState(
   workspace: LaunchWorkspace,
@@ -155,8 +160,34 @@ export function launchWorkspaceState(
     activeWorktreeId: launchWorkspaceId(workspace),
     ...(connectionId
       ? {
-          sshConnectionStates: new Map([[connectionId, { status: 'connected' }]]),
+          sshConnectionStates: new Map([
+            [
+              connectionId,
+              { status: 'connected', remotePlatform: reportedHostPlatform(workspace.path) }
+            ]
+          ]),
           sshTargetLabels: new Map([[connectionId, 'build-box']])
+        }
+      : {}),
+    ...(workspace.pairedRuntime
+      ? {
+          runtimeStatusByEnvironmentId: new Map([
+            [
+              workspace.pairedRuntime,
+              {
+                checkedAt: 1,
+                status: {
+                  runtimeId: 'rt-paired',
+                  rendererGraphEpoch: 0,
+                  graphStatus: 'ready',
+                  authoritativeWindowId: null,
+                  liveTabCount: 0,
+                  liveLeafCount: 0,
+                  hostPlatform: reportedHostPlatform(workspace.path)
+                }
+              }
+            ]
+          ])
         }
       : {})
   }
