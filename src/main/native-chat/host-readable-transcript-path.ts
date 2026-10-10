@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
+import { wslHomeSessionDirs } from '../ai-vault/session-scanner-roots'
 import { getWslHomeAsync, listRunningWslDistrosAsync, listRunningWslHomeDirsAsync } from '../wsl'
 import {
   filterPathsToRunningWslDistrosAsync,
@@ -280,10 +280,7 @@ export async function wslCodexSessionsDirs(
       ? filterPathsToWslDistros(additionalHomes, deps.wslSnapshot.runningDistros)
       : filterPathsToRunningWslDistrosAsync(additionalHomes)
   ])
-  const dirs = homeDirs.flatMap((home) => [
-    joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
-    joinUnderWslHome(home, '.codex', 'sessions')
-  ])
+  const dirs = wslHomeSessionDirs('codex', homeDirs, joinUnderWslHome)
   for (const home of runningAdditionalHomes) {
     if (parseWslUncPath(home)) {
       dirs.push(joinUnderWslHome(home, 'sessions'))

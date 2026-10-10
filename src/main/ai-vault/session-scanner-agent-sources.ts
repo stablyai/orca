@@ -22,18 +22,16 @@ import {
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
+  codexHomeSessionsDir,
   ompSessionsRootDirs,
-  sessionRootDirs
+  sessionRootDirs,
+  wslHomeSessionDirs
 } from './session-scanner-roots'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
-const CODEX_SESSIONS_DIR = join(
-  resolveAbsoluteDirOverride(process.env.CODEX_HOME, DEFAULT_CODEX_HOME_DIR),
-  'sessions'
-)
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
@@ -145,13 +143,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   codex: {
     rootDirs: (options, wslHomeDirs) =>
       uniqueCodexSessionsDirs([
-        options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
-        ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
-        // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
-        // not the user's default ~/.codex history root.
-        ...wslHomeDirs.map((homeDir) =>
-          join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
-        ),
+        options.codexSessionsDir ?? codexHomeSessionsDir(),
+        ...wslHomeSessionDirs('codex', wslHomeDirs),
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
     extensions: ['.jsonl']
@@ -183,11 +176,10 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     contentDependencyPath: cursorChatMetaPath
   },
   grok: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.grokSessionsDir ?? resolveGrokSessionsDir(), wslHomeDirs, [
-        '.grok',
-        'sessions'
-      ]),
+    rootDirs: (options, wslHomeDirs) => [
+      options.grokSessionsDir ?? resolveGrokSessionsDir(),
+      ...wslHomeSessionDirs('grok', wslHomeDirs)
+    ],
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath) === 'summary.json'
   },

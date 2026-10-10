@@ -10,6 +10,11 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import {
+  claudeProjectsHostDirs,
+  codexHomeSessionsDir,
+  uniqueDirs
+} from '../ai-vault/session-scanner-roots'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -24,43 +29,20 @@ import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
-// Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
-// run in the main process against the runtime's own home directory; over SSH
-// the remote main resolves its local home, so we never hardcode an absolute
-// user path — homedir()/CODEX_HOME resolution stays runtime-relative and is
-// computed per call (not at module load) so it tracks the live home.
-// Why CLAUDE_CONFIG_DIR and not just homedir(): a structured Claude session pins its
-// account home to `CLAUDE_CONFIG_DIR || ~/.claude` (claude-accounts/runtime-paths.ts),
-// and the CLI writes its transcript under whatever home it was given. Mobile native chat
-// resolves with no root override, so a default that ignored the variable read a different
-// tree than the CLI wrote — a silent blackout, not an error.
-// Why both roots and not just that one: adopting the variable would otherwise hide every
-// transcript written before it was set. Same managed-then-default shape as
-// codexSessionsDirs below, de-duped so the usual case still scans once.
+// Why: roots come from the shared table AI Vault discovery reads, computed per
+// call so they track the live home. An earlier root wins: that is what keeps one
+// account's transcript from resolving to another's.
 function claudeProjectsDirs(): string[] {
-  const candidates = [
-    join(process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude'), 'projects'),
-    join(homedir(), '.claude', 'projects'),
-    ...claudeProfileHistoryDirs('projects')
-  ]
-  return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
+  return uniqueDirs([...claudeProjectsHostDirs(), ...claudeProfileHistoryDirs('projects')])
 }
 
-// Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
-// runtime home, so Orca-started Codex rollout files land under
-// `<managed home>/sessions`, NOT `~/.codex/sessions`. Search the managed home
-// first (that's where this main process's Codex sessions actually live), then
-// fall back to CODEX_HOME/~/.codex so a non-Orca Codex transcript still resolves.
-// Duplicates are filtered so a managed-home symlink to ~/.codex isn't scanned twice.
+// Why: Orca launches Codex with its own managed CODEX_HOME, so Orca-started rollouts
+// land there; search it first, then CODEX_HOME/~/.codex for non-Orca sessions.
 // WSL roots are a separate lazy tier — see resolveCodexSessionFile.
-// Why: resolveOrcaManagedCodexHomePath avoids the mkdirSync performed by the
-// getter; creating the runtime home belongs to launch, not this resolve poll.
+// resolveOrcaManagedCodexHomePath avoids the getter's mkdirSync; creating the
+// runtime home belongs to launch, not this resolve poll.
 function codexSessionsDirs(): string[] {
-  const candidates = [
-    join(resolveOrcaManagedCodexHomePath(), 'sessions'),
-    join(process.env.CODEX_HOME?.trim() || join(homedir(), '.codex'), 'sessions')
-  ]
-  return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
+  return uniqueDirs([join(resolveOrcaManagedCodexHomePath(), 'sessions'), codexHomeSessionsDir()])
 }
 
 function grokSessionsDir(): string {
