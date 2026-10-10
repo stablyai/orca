@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
+import { createNativeChatMessageReuse } from '../../../src/shared/native-chat-row-reuse'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
@@ -27,6 +28,7 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatRowRenderers } from './use-mobile-native-chat-row-renderers'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import {
@@ -43,7 +45,6 @@ import { NO_COMPOSER_TRAY, type ComposerTrayProps } from './use-mobile-native-ch
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** Why the composer input is locked: the transport is disconnected, or the
@@ -218,18 +219,21 @@ export function MobileNativeChatView({
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
   // `data` is the list source: folded transcript + synthetic streaming bubble +
-  // route-owned accepted echoes. Memoize on the same deps so the
-  // downstream autoscroll effects/`renderItem` keep referential stability.
-  const { data } = useMemo(
+  // route-owned accepted echoes. Rows unchanged since the last batch keep their
+  // identity, so a streamed batch re-renders only the rows it changed.
+  const [reuseRows] = useState(createNativeChatMessageReuse)
+  const data = useMemo(
     () =>
-      buildMobileNativeChatTransientData({
-        messages,
-        folded,
-        streaming,
-        pending,
-        imagePreviewsByMessageId
-      }),
-    [messages, folded, streaming, pending, imagePreviewsByMessageId]
+      reuseRows(
+        buildMobileNativeChatTransientData({
+          messages,
+          folded,
+          streaming,
+          pending,
+          imagePreviewsByMessageId
+        }).data
+      ),
+    [reuseRows, messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const {
     listRef,
@@ -297,19 +301,10 @@ export function MobileNativeChatView({
     scopeKey: sendSurfaceId
   })
 
-  const renderItem = useCallback(
-    ({ item, index }: { item: NativeChatMessage; index: number }) => (
-      <MobileNativeChatMessage
-        message={item}
-        toolsExpanded={toolsExpanded}
-        fontScale={fontScale}
-        onOpenFile={onOpenFile}
-        structuredActivityUi={structuredActivityUi}
-        onToggleTurn={turns.onToggleTurn}
-        {...turns.resolveRow(index, item)}
-      />
-    ),
-    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns]
+  const { renderItem, renderWaitingRow } = useMobileNativeChatRowRenderers(
+    turns.listMessages,
+    turns.resolveRow,
+    { toolsExpanded, fontScale, onOpenFile, structuredActivityUi, onToggleTurn: turns.onToggleTurn }
   )
 
   const liveStatus = turns.liveLine ? (
@@ -356,6 +351,8 @@ export function MobileNativeChatView({
               data={turns.listMessages}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
+              // Why: without it FlatList re-renders every mounted cell, stable `renderItem` or not.
+              strictMode
               contentContainerStyle={styles.listContent}
               // Let link/file taps land while the composer keyboard is up
               // instead of being swallowed by the dismiss gesture.
@@ -386,7 +383,7 @@ export function MobileNativeChatView({
               ListFooterComponent={mobileNativeChatListFooter(
                 liveStatus,
                 turns.waitingRows,
-                renderItem
+                renderWaitingRow
               )}
               ListEmptyComponent={emptyStateView}
             />
