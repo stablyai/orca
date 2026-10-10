@@ -92,7 +92,7 @@ describe('buildDispatchPreamble', () => {
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
 
-    expect(commandLines).toHaveLength(5)
+    expect(commandLines).toHaveLength(6)
     expect(result).not.toContain('\\\n')
     expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
@@ -184,6 +184,23 @@ describe('buildDispatchPreamble', () => {
     // workers that never read a single follow-up.
     expect(cadence).toContain('before you\n  # start a new file and after a test run')
     expect(cadence).toContain('immediately before\n  # you send worker_done')
+  })
+
+  it.each([
+    { workerHandle: 'term_worker', cliCommand: 'orca' as const },
+    { workerHandle: 'orca_session_id:worker', cliCommand: 'orca-ide' as const },
+    { workerHandle: 'term_worker', devMode: true }
+  ])('teaches acknowledgement before newer worker mail can be read: %j', (options) => {
+    const result = cliFence(buildDispatchPreamble(baseParams(options)))
+    const cli = 'devMode' in options ? 'orca-dev' : options.cliCommand
+    const initial = `${cli} orchestration check --terminal ${options.workerHandle} --json`
+    const acknowledge = `${cli} orchestration check --terminal ${options.workerHandle} --ack <delivery_id> --json`
+
+    expect(result).toContain(initial)
+    expect(result.indexOf(acknowledge)).toBeGreaterThan(result.indexOf(initial))
+    expect(result).toContain('Process every message before acknowledging the returned deliveryId')
+    expect(result).toContain('never pass a bare --ack')
+    expect(result).toContain('until count is 0')
   })
 
   it('renders worker_done and heartbeat recipes bound to the exact Dispatch', () => {

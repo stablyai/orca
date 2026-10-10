@@ -41,6 +41,18 @@ look:
 ORCA orchestration check --terminal <worker_handle> --json
 ```
 
+Process every message in the returned batch, then acknowledge its `deliveryId`
+while reading the next batch:
+
+```text
+ORCA orchestration check --terminal <worker_handle> --ack <delivery_id> --json
+```
+
+Replace `<delivery_id>` with the ID actually returned; never pass a bare `--ack`.
+Without acknowledgement, `check` replays the same batch and hides newer mail.
+Process and acknowledge each returned batch until `count` is 0, then resume the
+task. Keep any capability flag from the injected preamble on both commands.
+
 Run it at each natural checkpoint — before starting a new file, after a test
 run — and once more immediately before `worker_done`, so a redirect or a
 cancellation lands before the Task settles. `check` names its caller with

@@ -43,8 +43,8 @@ const CHAT_ADDRESS = `orca_session_id:${CHAT_SESSION}`
 const TERMINAL_HANDLE = 'term_worker'
 // A structured worker's mailbox key: the handle it was minted, which its preamble never shows.
 const CHAT_WORKER_HANDLE = 'structworker_1'
-// `skill-guides/orchestration.md` on main, plus the one Orca session ID line.
-const MAIN_KERNEL_LINES = 198 + 1
+// Original guide, the Orca session ID line, and the worker acknowledgement sequence.
+const MAIN_KERNEL_LINES = 198 + 1 + 5
 
 const db = new OrchestrationDb(':memory:')
 const SELF_LINE = `\nYour Orca session ID is: ${CHAT_ADDRESS}`
@@ -198,7 +198,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
 describe('the orchestration guide an agent loads', () => {
   const kernel = readFileSync(join(process.cwd(), 'skill-guides', 'orchestration.md'), 'utf8')
 
-  it('has no chat-only section and grows only by the Orca session ID line', () => {
+  it('keeps the common guide compact without a chat-only section', () => {
     expect(kernel.split('\n').length - 1).toBeLessThanOrEqual(MAIN_KERNEL_LINES)
     expect(kernel).not.toMatch(/chat|session:<id>|ORCA_CLI_COMMAND|\/clear|end your turn/i)
     expect(kernel).toContain(
