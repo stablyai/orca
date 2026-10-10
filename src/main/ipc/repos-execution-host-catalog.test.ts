@@ -187,6 +187,51 @@ describe('projectGroups IPC validation', () => {
     await expect(pending).resolves.toMatchObject({ authoritative: false, reason: 'stale' })
   })
 
+  it('forwards a project group folder instead of stripping it before persistence', () => {
+    // Why: the schema drops unknown keys, so an unlisted field fails silently rather than erroring.
+    handlers.get('projectGroups:update')!(null, {
+      groupId: 'group-1',
+      updates: { parentPath: '/Users/me/platform' }
+    })
+
+    expect(mockStore.updateProjectGroup).toHaveBeenCalledWith('group-1', {
+      parentPath: '/Users/me/platform'
+    })
+  })
+
+  it('forwards a cleared project group folder', () => {
+    handlers.get('projectGroups:update')!(null, {
+      groupId: 'group-1',
+      updates: { parentPath: null }
+    })
+
+    expect(mockStore.updateProjectGroup).toHaveBeenCalledWith('group-1', { parentPath: null })
+  })
+
+  it('sanitizes a project group icon and forwards the colour', () => {
+    handlers.get('projectGroups:update')!(null, {
+      groupId: 'group-1',
+      updates: { color: '#aabbcc', icon: { type: 'emoji', emoji: '🎧' } }
+    })
+
+    expect(mockStore.updateProjectGroup).toHaveBeenCalledWith('group-1', {
+      color: '#aabbcc',
+      icon: { type: 'emoji', emoji: '🎧' }
+    })
+  })
+
+  it('rejects a relative project group folder before persistence', () => {
+    // Why: the runtime may run with a different cwd than the client, so a relative path lands elsewhere.
+    expect(() =>
+      handlers.get('projectGroups:update')!(null, {
+        groupId: 'group-1',
+        updates: { parentPath: './platform' }
+      })
+    ).toThrow('invalid_project_group_update_args')
+
+    expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
+  })
+
   it('rejects malformed local project group update arguments before persistence', () => {
     expect(() =>
       handlers.get('projectGroups:update')!(null, {

@@ -14,6 +14,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
+import { buildProjectGroupWorkspaceEnv } from './project-group-workspace-env'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
@@ -148,12 +149,8 @@ function buildPaneIdentityEnv(
       : null
   return {
     ORCA_WORKSPACE_ID: worktreeId,
-    ...(folderWorkspace
-      ? {
-          ORCA_PROJECT_GROUP_ID: folderWorkspace.projectGroupId,
-          ORCA_WORKSPACE_ROOT: folderWorkspace.folderPath
-        }
-      : {}),
+    ...(folderWorkspace ? { ORCA_WORKSPACE_ROOT: folderWorkspace.folderPath } : {}),
+    ...buildProjectGroupWorkspaceEnv(state, worktreeId, folderWorkspace),
     ORCA_PANE_KEY: makePaneKey(tabId, leafId),
     ORCA_TAB_ID: tabId,
     ORCA_WORKTREE_ID: worktreeId

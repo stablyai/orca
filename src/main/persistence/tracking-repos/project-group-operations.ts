@@ -1,10 +1,12 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup, ProjectGroupUpdate } from '../../../shared/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
+import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
+import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
@@ -61,16 +63,18 @@ export class ProjectGroupPersistenceOperations {
     return group
   }
 
-  updateProjectGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): ProjectGroup | null {
+  updateProjectGroup(groupId: string, updates: ProjectGroupUpdate): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
       return null
     }
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
+    }
+    if (updates.parentPath !== undefined) {
+      // Why: blank clears the folder rather than pointing a workspace at the filesystem root.
+      const trimmed = typeof updates.parentPath === 'string' ? updates.parentPath.trim() : ''
+      group.parentPath = trimmed.length > 0 ? trimmed : null
     }
     if (updates.isCollapsed !== undefined) {
       group.isCollapsed = updates.isCollapsed
@@ -79,7 +83,11 @@ export class ProjectGroupPersistenceOperations {
       group.tabOrder = updates.tabOrder
     }
     if (updates.color !== undefined) {
-      group.color = typeof updates.color === 'string' ? updates.color : null
+      // Why: matches the repo badge pipeline, which stores a normalized hex or nothing.
+      group.color = normalizeRepoBadgeColor(updates.color)
+    }
+    if (updates.icon !== undefined) {
+      group.icon = sanitizeRepoIcon(updates.icon) ?? null
     }
     group.updatedAt = Date.now()
     this.scheduleSave()

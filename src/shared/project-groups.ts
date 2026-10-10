@@ -1,4 +1,6 @@
 import { normalizeExecutionHostId } from './execution-host'
+import { normalizeRepoBadgeColor } from './repo-badge-color'
+import { sanitizeRepoIcon } from './repo-icon'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from './repo-types'
 import { createNonSecureContextUuid } from './non-secure-context-uuid'
@@ -30,6 +32,7 @@ export function createProjectGroup(input: {
     tabOrder: input.tabOrder,
     isCollapsed: false,
     color: null,
+    icon: null,
     createdAt: now,
     updatedAt: now
   }
@@ -72,7 +75,8 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       tabOrder:
         typeof raw.tabOrder === 'number' && Number.isFinite(raw.tabOrder) ? raw.tabOrder : 0,
       isCollapsed: raw.isCollapsed === true,
-      color: typeof raw.color === 'string' ? raw.color : null,
+      color: normalizeRepoBadgeColor(raw.color),
+      icon: sanitizeRepoIcon(raw.icon) ?? null,
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
