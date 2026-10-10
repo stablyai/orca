@@ -152,14 +152,12 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
 }
 
 // Why: Muse titles its OSC with the bare cwd and never updates it, so only the body can
-// prove the TUI is up. The voice-input composer is present even without loaded skills.
+// prove the TUI is up. The `❯` composer is present even without loaded skills; the
+// "Voice input" ruler above it is not, because Linux builds never paint it (#25005).
 function findMuseReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('muse code')
   if (headerIndex === -1) {
     return null
   }
-  const segment = normalized.slice(headerIndex)
-  return segment.includes('voice') && segment.includes('input') && segment.includes('❯')
-    ? headerIndex
-    : null
+  return normalized.includes('❯', headerIndex) ? headerIndex : null
 }
