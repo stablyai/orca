@@ -47,6 +47,9 @@ export const CELL_FLAG_SPECS = {
 }
 
 export const RESERVE_CONFIRMATION = 'RESERVE'
+export const BREAK_GLASS_CONFIRMATION = 'BREAK GLASS'
+// Longer than a director's cached read of the admit-mode table (5 s).
+export const RESERVE_MODE_CACHE_WAIT_MS = 10_000
 // How long a flip back may take to lease every control the cell admitted from memory.
 export const REREGISTER_WAIT_MS = 8 * 60_000
 
@@ -141,6 +144,17 @@ export function parseCellFlagsRequest(values) {
   ) {
     throw new Error(`admitMode=reserve requires --confirm-reserve "${RESERVE_CONFIRMATION} ${cellId}"`)
   }
+  // Break glass: a dead or unreachable reserve cell cannot report db, so nothing would ever
+  // let the sweeps re-place its hosts. Only admitMode=db, typed for this cell.
+  const breakGlass = values['break-glass'] ?? ''
+  if (breakGlass !== '') {
+    if (breakGlass !== `${BREAK_GLASS_CONFIRMATION} ${cellId}`) {
+      throw new Error(`break glass requires --break-glass "${BREAK_GLASS_CONFIRMATION} ${cellId}"`)
+    }
+    if (mode !== 'write' || changes.admitMode !== null || Object.keys(changes).length !== 1) {
+      throw new Error('break glass only writes admitMode=default (db), on its own')
+    }
+  }
   const directorOrigin = values['director-origin'] ?? ''
   if (changes.admitMode !== undefined && !/^https:\/\/relay(-staging)?\.onorca\.dev$/.test(directorOrigin)) {
     throw new Error('an admitMode change needs --director-origin, where Postgres records it')
@@ -159,6 +173,7 @@ export function parseCellFlagsRequest(values) {
     cellId,
     cellOrigin,
     directorOrigin,
+    breakGlass: breakGlass !== '',
     projectId,
     expectedGeneration,
     changes
@@ -253,11 +268,18 @@ async function writeObject(fetchImpl, request, object, accessToken, audit) {
       body
     }
   )
+  // A 4xx means nothing was written; a 5xx or a lost reply may have been.
   if (response.status === 412) {
     await response.body?.cancel().catch(() => undefined)
-    throw new Error('the object changed since expected-generation; re-read and retry')
+    throw Object.assign(new Error('the object changed since expected-generation; re-read and retry'), {
+      notWritten: true
+    })
   }
-  if (!response.ok) throw new Error(`object write returned ${response.status}`)
+  if (!response.ok) {
+    throw Object.assign(new Error(`object write returned ${response.status}`), {
+      notWritten: response.status < 500
+    })
+  }
   return String((await response.json()).generation)
 }
 
@@ -310,10 +332,27 @@ async function waitForLeasedControls(fetchImpl, request, idToken, { now, sleep, 
   )
 }
 
+// No cell read-back and no wait for its controls: the cell is not answering. The file says db
+// so a cell that comes back boots in db, and Postgres says db so the sweeps re-place its hosts.
+async function breakGlassToDatabase(request, dependencies, { fetchImpl, log, sleep }) {
+  const { accessToken, idToken, audit } = dependencies
+  const current = await readCurrentObject(fetchImpl, request, accessToken)
+  if (current.generation !== request.expectedGeneration) {
+    throw new Error(`current generation is ${current.generation}, not expected ${request.expectedGeneration}`)
+  }
+  const object = desiredObject(request, current.object)
+  const generation = await writeObject(fetchImpl, request, object, accessToken, audit)
+  await directorAdmitMode(fetchImpl, request, idToken, sleep, 'db')
+  const result = { event: 'orca_relay_cell_admit_mode_break_glass', cellId: request.cellId, generation, audit }
+  log(JSON.stringify(result))
+  return { ...result, written: true }
+}
+
 export async function operateCellFlags(request, dependencies) {
   const { fetchImpl = fetch, accessToken, idToken, audit, log = console.log } = dependencies
   const now = dependencies.now ?? Date.now
   const sleep = dependencies.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+  if (request.breakGlass) return await breakGlassToDatabase(request, dependencies, { fetchImpl, log, sleep })
   const runtime = await readRuntime(fetchImpl, request, idToken, sleep)
   // Proves the origin is this cell, and that its image reads switch files at all.
   if (runtime.role !== 'cell' || runtime.cellId !== request.cellId) {
@@ -340,11 +379,16 @@ export async function operateCellFlags(request, dependencies) {
       `current generation is ${current.generation}, not expected ${request.expectedGeneration}`
     )
   }
-  // The cell applies every readable write; a generation it did not apply was voided there.
+  // The cell applies every readable write; a generation it did not apply was voided there. A
+  // write of an object this image accepts whole (checked above) repairs it.
   if (current.generation !== '0' && String(runtime.flagsApplied.generation) !== current.generation) {
-    throw new Error(
-      `the cell applied generation ${runtime.flagsApplied.generation}, not the current ${current.generation}: ` +
-        'the object is voided or not yet read; fix it by hand'
+    log(
+      JSON.stringify({
+        event: 'orca_relay_cell_flags_repairing_unapplied_object',
+        cellId: request.cellId,
+        appliedGeneration: runtime.flagsApplied.generation,
+        currentGeneration: current.generation
+      })
     )
   }
   const admitModeChange =
@@ -355,10 +399,27 @@ export async function operateCellFlags(request, dependencies) {
   }
   if (request.mode === 'dry-run') return { ...plan, written: false }
   // Sweeps skip the cell before it starts admitting from memory, never after.
+  let generation
   if (admitModeChange === 'reserve') {
+    const before = await directorAdmitMode(fetchImpl, request, idToken, sleep)
     await directorAdmitMode(fetchImpl, request, idToken, sleep, 'reserve')
+    // Every director's cached set expires (5 s) before the cell starts admitting from memory;
+    // the second write re-runs the open-flow check over anything started meanwhile.
+    await sleep(RESERVE_MODE_CACHE_WAIT_MS)
+    await directorAdmitMode(fetchImpl, request, idToken, sleep, 'reserve')
+    try {
+      generation = await writeObject(fetchImpl, request, object, accessToken, audit)
+    } catch (error) {
+      // The file was refused outright (412, 4xx): put Postgres back as it was. After a 5xx the
+      // object may be written, so Postgres keeps reserve (sweeps stay off: the safe side).
+      if (error?.notWritten && before?.admitMode === 'db') {
+        await directorAdmitMode(fetchImpl, request, idToken, sleep, 'db')
+      }
+      throw error
+    }
+  } else {
+    generation = await writeObject(fetchImpl, request, object, accessToken, audit)
   }
-  const generation = await writeObject(fetchImpl, request, object, accessToken, audit)
   log(JSON.stringify({ event: 'orca_relay_cell_flags_written', cellId: request.cellId, generation }))
   const deadline = now() + READ_BACK_TIMEOUT_MS
   let last = runtime.flagsApplied
@@ -407,6 +468,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
         'expected-generation',
         'confirmation',
         'confirm-reserve',
+        'break-glass',
         'director-origin'
       ].map((name) => [name, { type: 'string' }])
     )

@@ -15,6 +15,13 @@ on:
         description: Exact cell id, e.g. production-gce-c26
         required: true
         type: string
+      break-glass:
+        description: >-
+          Only for a dead or unreachable reserve cell, with set admitMode=default. Typed as
+          BREAK GLASS <cell-id>; records db without the cell's read-back
+        required: false
+        default: ''
+        type: string
       confirm-reserve:
         description: Required for admitMode=reserve, typed as RESERVE <cell-id>
         required: false
@@ -66,6 +73,7 @@ jobs:
       EXPECTED_GENERATION: ${{ inputs.expected-generation }}
       CONFIRMATION: ${{ inputs.confirmation }}
       CONFIRM_RESERVE: ${{ inputs.confirm-reserve }}
+      BREAK_GLASS: ${{ inputs.break-glass }}
       GCP_PROJECT_ID: onorca-cloud
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +107,7 @@ jobs:
             --project-id "${GCP_PROJECT_ID}" \
             --set "${FLAG_CHANGES}" \
             --director-origin "https://relay.onorca.dev" --confirm-reserve "${CONFIRM_RESERVE}" \
+            --break-glass "${BREAK_GLASS}" \
             --expected-generation "${EXPECTED_GENERATION}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-cell-flags.jsonl"
 

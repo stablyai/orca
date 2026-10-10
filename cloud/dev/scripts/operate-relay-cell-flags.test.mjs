@@ -336,7 +336,7 @@ test('refuses a switch the cell image does not support, before writing anything'
   assertSupportedObject({ ticketCheck: 'enforce' }, { supportedFlags: SUPPORTED })
 })
 
-test('refuses to carry a bad value already in the file, and a file the cell voided', async () => {
+test('refuses to carry a bad value already in the file', async () => {
   const bad = fakeGoogleAndCell({
     supportedFlags: null,
     stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { ticketCheck: 'enforce' } } }
@@ -347,15 +347,7 @@ test('refuses to carry a bad value already in the file, and a file the cell void
     run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), bad).result,
     /does not support ticketCheck="enforce"/
   )
-  const voided = fakeGoogleAndCell({
-    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { readinessLocal: true } } }
-  })
-  voided.state.applied = { generation: 3, flags: { readinessLocal: false } }
-  await assert.rejects(
-    run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), voided).result,
-    /applied generation 3, not the current 7/
-  )
-  assert.equal(bad.state.writes.length + voided.state.writes.length, 0)
+  assert.equal(bad.state.writes.length, 0)
 })
 
 const DIRECTOR = { 'director-origin': RESERVE['director-origin'] }
@@ -371,7 +363,30 @@ test('admitMode=reserve needs a typed confirmation, and Postgres records reserve
     values({ ...DIRECTOR, set: 'admitMode=reserve', 'confirm-reserve': `RESERVE ${CELL}` })
   )
   assert.equal((await run(request, fake).result).written, true)
-  assert.deepEqual(fake.state.order, ['director:reserve', 'file:reserve'])
+  // Recorded, re-checked after every director's cache has expired, then the file.
+  assert.deepEqual(fake.state.order, ['director:reserve', 'director:reserve', 'file:reserve'])
+})
+
+test('a refused file write after Postgres says reserve puts Postgres back to db', async () => {
+  const fake = fakeGoogleAndCell()
+  const inner = fake.fetchImpl
+  fake.fetchImpl = async (url, init) => {
+    if (new URL(url).pathname.startsWith('/upload/')) return new Response(null, { status: 403 })
+    return await inner(url, init)
+  }
+  const request = parseCellFlagsRequest(values({ set: 'admitMode=reserve', ...RESERVE }))
+  await assert.rejects(run(request, fake).result, /returned 403/)
+  assert.deepEqual(fake.state.order, ['director:reserve', 'director:reserve', 'director:db'])
+})
+
+test('repairs an object the cell did not apply when the whole new object is valid', async () => {
+  const voided = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { readinessLocal: true } } }
+  })
+  voided.state.applied = { generation: 3, flags: { readinessLocal: false } }
+  const { result, lines } = run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), voided)
+  assert.equal((await result).written, true)
+  assert.ok(lines.some((line) => line.event === 'orca_relay_cell_flags_repairing_unapplied_object'))
 })
 
 test('a flip back records db in Postgres only after the cell has leased every control', async () => {
@@ -386,4 +401,26 @@ test('a flip back records db in Postgres only after the cell has leased every co
   assert.equal(fake.state.reregisteringPolls, -1)
 })
 
+test('break glass records db for a cell that cannot answer, typed for that cell only', async () => {
+  const glass = { ...RESERVE, set: 'admitMode=default', 'expected-generation': '7' }
+  assert.throws(() => parseCellFlagsRequest(values({ ...glass, 'break-glass': 'BREAK GLASS production-gce-c27' })), /break glass requires/)
+  assert.throws(
+    () => parseCellFlagsRequest(values({ ...glass, set: 'admitMode=default,readinessLocal=true', 'break-glass': `BREAK GLASS ${CELL}` })),
+    /on its own/
+  )
+  const fake = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { admitMode: 'reserve', readinessLocal: true } } }
+  })
+  fake.state.directorAdmitMode = 'reserve'
+  const inner = fake.fetchImpl
+  fake.fetchImpl = async (url, init) => {
+    if (new URL(url).pathname === '/v1/admin/runtime-status') throw new Error('connect refused')
+    return await inner(url, init)
+  }
+  const { result, lines } = run(parseCellFlagsRequest(values({ ...glass, 'break-glass': `BREAK GLASS ${CELL}` })), fake)
+  assert.equal((await result).written, true)
+  assert.deepEqual(fake.state.writes[0].object.flags, { readinessLocal: true })
+  assert.deepEqual(fake.state.order, ['file:db', 'director:db'])
+  assert.equal(lines.at(-1).event, 'orca_relay_cell_admit_mode_break_glass')
+})
 
