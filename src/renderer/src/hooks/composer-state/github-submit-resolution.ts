@@ -32,7 +32,6 @@ type GitHubSubmitResolutionInput = Pick<
 
 import { useCallback } from 'react'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
-import { getLinkedWorkItemProvider } from '@/lib/new-workspace'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import {
@@ -49,7 +48,7 @@ import {
 } from '@/lib/github-work-item-source-lookup'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
+import { prepareSelectedPrSubmitResolution } from './selected-pr-submit-resolution'
 
 export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
   const {
@@ -84,69 +83,26 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
   const resolvePendingSmartGitHubSubmit =
     useCallback(async (): Promise<PendingSmartGitHubSubmitResolution> => {
       if (linkedWorkItem) {
-        const startPointSelection = smartGitHubPrStartPointSelectionRef.current
-        const linkedWorkItemIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
-        const startPointIdentity = startPointSelection
-          ? resolveGitHubWorkItemIdentity(startPointSelection.item)
-          : null
-        if (
-          !isProjectGroupTarget &&
-          linkedWorkItemIdentity?.type === 'pr' &&
-          startPointIdentity?.type === 'pr' &&
-          getLinkedWorkItemProvider(linkedWorkItem) === 'github' &&
-          selectedRepo &&
-          selectedRepoIsGit &&
-          startPointSelection?.repoId === selectedRepo.id &&
-          startPointIdentity.number === linkedWorkItemIdentity.number
-        ) {
+        const selectedPrSubmission = prepareSelectedPrSubmitResolution({
+          isProjectGroupTarget,
+          linkedWorkItem,
+          selectedRepo,
+          selectedRepoIsGit,
+          settings,
+          smartGitHubPrStartPointSelectionRef,
+          setBaseBranch,
+          setBaseBranchNamesWorkspace,
+          setCompareBaseRef,
+          setPushTarget,
+          setBranchNameOverride,
+          setBranchNameOverridePreservesNameEdits,
+          setForkPushWarning
+        })
+        if (selectedPrSubmission) {
           const selectedPrStartPoint =
-            startPointSelection.resolved ??
-            (await resolveGitHubPrStartPointForRepo({
-              repoId: selectedRepo.id,
-              prNumber: startPointIdentity.number,
-              settings: getSettingsForRepoRuntimeOwner(
-                { repos: [selectedRepo], settings },
-                selectedRepo.id
-              ),
-              ...(startPointSelection.item.branchName
-                ? { headRefName: startPointSelection.item.branchName }
-                : {}),
-              ...(startPointSelection.item.baseRefName
-                ? { baseRefName: startPointSelection.item.baseRefName }
-                : {}),
-              ...(startPointSelection.item.isCrossRepository !== undefined
-                ? { isCrossRepository: startPointSelection.item.isCrossRepository }
-                : {})
-            }))
-          startPointSelection.resolved = selectedPrStartPoint
-          const smartGitHubMetadata = getSmartGitHubSubmitResolution(startPointSelection.item)
-          const resolution: Exclude<PendingSmartGitHubSubmitResolution, { kind: 'none' }> = {
-            ...smartGitHubMetadata,
-            kind: 'pr-start-point',
-            baseBranch: selectedPrStartPoint.baseBranch,
-            ...(selectedPrStartPoint.compareBaseRef
-              ? { compareBaseRef: selectedPrStartPoint.compareBaseRef }
-              : {}),
-            ...(selectedPrStartPoint.pushTarget
-              ? { pushTarget: selectedPrStartPoint.pushTarget }
-              : {}),
-            ...(selectedPrStartPoint.branchNameOverride
-              ? { branchNameOverride: selectedPrStartPoint.branchNameOverride }
-              : {})
-          }
-          setBaseBranch(selectedPrStartPoint.baseBranch)
-          setBaseBranchNamesWorkspace(true)
-          setCompareBaseRef(selectedPrStartPoint.compareBaseRef)
-          setPushTarget(selectedPrStartPoint.pushTarget)
-          if (selectedPrStartPoint.branchNameOverride) {
-            setBranchNameOverride(selectedPrStartPoint.branchNameOverride)
-            setBranchNameOverridePreservesNameEdits(true)
-          } else {
-            setBranchNameOverride(undefined)
-            setBranchNameOverridePreservesNameEdits(false)
-          }
-          setForkPushWarning(getForkPushWarning(selectedPrStartPoint))
-          return resolution
+            selectedPrSubmission.selection.resolved ??
+            (await selectedPrSubmission.resolveStartPoint())
+          return selectedPrSubmission.applyStartPoint(selectedPrStartPoint)
         }
         return { kind: 'none' }
       }
