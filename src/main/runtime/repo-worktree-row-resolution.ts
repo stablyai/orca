@@ -24,6 +24,8 @@ import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { isWorktreePathAdmissibleForHost } from '../../shared/worktree/worktree-host-path-admissibility'
+import { warnIfHostsShareGitCommonDir } from '../ipc/worktrees/listing/worktree-shared-git-warning'
 
 /**
  * Per-repo budget for one resolution pass. Why: mobile startup shares this path, so one slow repo
@@ -76,7 +78,10 @@ export function listStoredWorktreeRowsForRepo(
       continue
     }
     // Why: one repo id can be registered on several execution hosts, so a degraded host must not republish another host's rows (same gate as worktrees.ts).
-    if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
+    if (
+      (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) ||
+      !isWorktreePathAdmissibleForHost(parsed.worktreePath, repo)
+    ) {
       continue
     }
     byWorktreeId.set(worktreeId, {
@@ -133,12 +138,17 @@ export async function resolveRepoWorktreeRows(
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
   )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+  warnIfHostsShareGitCommonDir(store, repo, scan.worktrees)
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
   }
   const expectedHostId = getRepoExecutionHostId(repo)
-  return gitWorktrees.map((gitWorktree) => {
+  // Why after lineage pruning: a foreign host's registration is hidden here, never pruned from inputs.
+  const ownHostWorktrees = gitWorktrees.filter((gitWorktree) =>
+    isWorktreePathAdmissibleForHost(gitWorktree.path, repo)
+  )
+  return ownHostWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     // Why: lineage validation needs a durable instance ID even when the runtime sees a workspace before renderer discovery-stamp.
     const existingMeta = metaById[worktreeId]
@@ -203,6 +213,9 @@ export async function resolveScopedWorktreeIdRow(
     return null
   }
   const repo = owners[0]
+  if (!isWorktreePathAdmissibleForHost(parsed.worktreePath, repo)) {
+    return null
+  }
   const rows = await resolveRepoWorktreeRows(
     deps,
     repo,

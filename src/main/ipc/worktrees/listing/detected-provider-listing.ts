@@ -48,6 +48,7 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
+import { warnIfHostsShareGitCommonDir } from './worktree-shared-git-warning'
 
 // Why here: an SSH listing bypasses the scan cache, so nothing else witnesses a mutation overtaking
 // it. The generation is the one the cache compares, bumped by every worktree change invalidator.
@@ -160,6 +161,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (!isCurrent()) {
       return null
     }
+    warnIfHostsShareGitCommonDir(store, repo, gitWorktrees)
     const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
     if (hasConflictingStoredWorktreeOwner(store, repo, listedWorktreeIds)) {
       return {

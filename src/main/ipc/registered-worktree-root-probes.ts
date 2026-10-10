@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import type { Repo } from '../../shared/repo-types'
+import { isWorktreePathAdmissibleForHost } from '../../shared/worktree/worktree-host-path-admissibility'
 import { getErrorCode } from '../git/worktree-operation-options'
 import { resolveLocalProjectRuntimesForRepos } from '../local-project-runtime-resolution'
 import type { Store } from '../persistence'
@@ -41,7 +42,10 @@ export async function listWorktreeRootsWithConcurrency(
               repo,
               wslDistro ? { wslDistro } : {}
             )) {
-              roots.add(resolve(worktree.path))
+              // Why: a path another host wrote into a shared .git must not become an allowed root here.
+              if (isWorktreePathAdmissibleForHost(worktree.path, repo)) {
+                roots.add(resolve(worktree.path))
+              }
             }
           } catch (error) {
             console.warn(

@@ -25,6 +25,7 @@ import {
   requireLocalWorktreeMetadataPrune
 } from '../../../local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
+import { isWorktreePathAdmissibleForHost } from '../../../../shared/worktree/worktree-host-path-admissibility'
 
 // Why: absorb renderer polling bursts while bounding external worktree-change lag to one short refresh window.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
@@ -306,7 +307,13 @@ export function rememberLocalWorktreeRoots(
   registerWorktreeRootsForRepo(
     store,
     repo,
-    [repo.path, ...gitWorktrees.map((worktree) => worktree.path)],
+    [
+      repo.path,
+      // Why: a path another execution host wrote into a shared .git must not become an allowed root here.
+      ...gitWorktrees
+        .filter((worktree) => isWorktreePathAdmissibleForHost(worktree.path, repo))
+        .map((worktree) => worktree.path)
+    ],
     listing
   )
 }

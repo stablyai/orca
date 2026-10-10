@@ -126,3 +126,13 @@ it('records catalog work for one warm linked-file authorization', async () => {
   expect(mocks.graph).not.toHaveBeenCalled()
   expect(getRepos.mock.calls.length).toBeLessThanOrEqual(3)
 })
+it('does not authorize a registration another host wrote into a shared .git', async () => {
+  // Why: resolving the other OS's spelling would authorize an unrelated local path (#21764).
+  const foreign = process.platform === 'win32' ? '/workspaces/wt' : 'C:/Users/alice/wt'
+  mocks.graph.mockResolvedValue([{ path: linked }, { path: foreign }])
+  const store = fixture([{ ...local }])
+  await expect(resolveAuthorizedPath(join(linked, 'file'), store)).resolves.toBe(
+    join(linked, 'file')
+  )
+  await expect(resolveAuthorizedPath(resolve(foreign, 'file'), store)).rejects.toThrow()
+})
