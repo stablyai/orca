@@ -158,6 +158,7 @@ const WorktreeList = React.memo(function WorktreeList({
   })
   const rowModel = useSidebarSectionRows({
     groupBy,
+    sortBy,
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
