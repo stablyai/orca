@@ -99,3 +99,106 @@ describe('local OpenCode model launch authority', () => {
     expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'pty_existing' }))
   })
 })
+
+const HOST_RUNTIME = {
+  status: 'resolved',
+  runtime: {
+    kind: 'windows-host',
+    hostPlatform: 'win32',
+    projectId: 'repo-1',
+    reason: 'global-default',
+    cacheKey: 'repo-1:windows-host'
+  }
+} as const
+const PANE_ENV = { ORCA_PANE_KEY: 'tab-1:leaf-1', ORCA_AGENT_LAUNCH_TOKEN: 'tok-1' }
+const TELEMETRY = {
+  agent_kind: 'opencode',
+  launch_source: 'new_workspace_composer',
+  request_kind: 'new'
+} as const
+// A macOS pane advertises kitty; a local Windows ConPTY pane withholds it and sends its shell.
+const PANES = [
+  { name: 'macOS', cwd: '/home/alice/repo', kitty: true, shell: {} },
+  {
+    name: 'Windows C:',
+    cwd: String.raw`C:\Users\alice\repo`,
+    kitty: false,
+    shell: { shellOverride: 'powershell.exe', projectRuntime: HOST_RUNTIME }
+  }
+] as const
+
+/** A pane seeded with an OpenCode model pick (worktree-initial-terminal-seeding.ts): its startup
+ *  queues sessionOptions, never an args override, and the composer sent no prompt. */
+const modelPane = (pane: (typeof PANES)[number]): IpcPtyTransportOptions => ({
+  worktreeId: `repo-1::${pane.cwd}`,
+  tabId: 'tab-1',
+  leafId: 'leaf-1',
+  cwd: pane.cwd,
+  cwdFallback: 'worktree',
+  env: PANE_ENV,
+  command: 'opencode',
+  launchConfig: { agentCommand: 'opencode', agentArgs: '', agentEnv: {} },
+  launchToken: 'tok-1',
+  launchAgent: 'opencode',
+  agentLaunchPreferences: { model: 'private-proof/model-b' },
+  ...pane.shell,
+  terminalKittyKeyboardProtocol: pane.kitty,
+  telemetry: TELEMETRY
+})
+
+// Pins main's current launch behaviour as the convergence parity baseline (row 4, window half):
+// the exact host request (the main suite's OpenCode cases run it) and reattach a model-pick pane sends.
+describe('row 4: OpenCode model pane requests on main', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.stubGlobal('window', { api: { pty: { spawn } } })
+    spawn.mockResolvedValue({ id: 'pty_host', isReattach: true })
+    vi.mocked(callRuntimeRpc).mockResolvedValue({ terminal: { ptyId: 'pty_host' } })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each(PANES)('$name pane: one exact createAgentSession, then a reattach', async (pane) => {
+    await spawnIpcPty(modelPane(pane), { ...connect, initiallyHidden: true })
+
+    // The host gets the pick and cwd but none of the pane's command, env, shell or telemetry.
+    expect(vi.mocked(callRuntimeRpc).mock.calls).toEqual([
+      [
+        { kind: 'local' },
+        'terminal.createAgentSession',
+        {
+          clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+          worktree: `id:repo-1::${pane.cwd}`,
+          agent: 'opencode',
+          launchPreferences: { model: 'private-proof/model-b' },
+          startupCwd: pane.cwd,
+          placement: { tabId: 'tab-1', leafId: 'leaf-1' },
+          presentation: 'background',
+          ...(pane.kitty ? { terminalKittyKeyboardProtocol: true } : {})
+        }
+      ]
+    ])
+    // main today: the reattach keeps telemetry, shell, runtime and the hidden flag, and drops
+    // command, launchConfig and cwdFallback.
+    expect(spawn.mock.calls).toEqual([
+      [
+        {
+          cols: 80,
+          rows: 24,
+          cwd: pane.cwd,
+          env: PANE_ENV,
+          command: undefined,
+          launchToken: 'tok-1',
+          launchAgent: 'opencode',
+          sessionId: 'pty_host',
+          worktreeId: `repo-1::${pane.cwd}`,
+          tabId: 'tab-1',
+          leafId: 'leaf-1',
+          initiallyHidden: true,
+          ...pane.shell,
+          ...(pane.kitty ? { terminalKittyKeyboardProtocol: true } : {}),
+          telemetry: TELEMETRY
+        }
+      ]
+    ])
+  })
+})

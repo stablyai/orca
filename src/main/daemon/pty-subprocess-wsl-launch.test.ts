@@ -183,33 +183,36 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('launches WSL for WSL worktree cwd even when a stale Windows shell override is present', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  // Also the convergence parity baseline: the host lane (a \\wsl$ repo with no saved runtime) and a
+  // window \\wsl$ repo saved as "Windows host" send a Windows shell with a \\wsl$ cwd; the cwd wins.
+  it.each([
+    { cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo', shellOverride: 'powershell.exe' },
+    { cwd: '\\\\wsl$\\Ubuntu\\home\\jin\\repo', shellOverride: 'powershell.exe' },
+    { cwd: '\\\\wsl$\\Ubuntu\\home\\jin\\repo', shellOverride: 'cmd.exe' }
+  ])(
+    'launches WSL for WSL worktree cwd $cwd even when a stale $shellOverride override is present',
+    async ({ cwd, shellOverride }) => {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-    Object.defineProperty(process, 'platform', { value: 'win32' })
+      Object.defineProperty(process, 'platform', { value: 'win32' })
 
-    try {
-      await createPtySubprocess({
-        sessionId: 'test',
-        cols: 80,
-        rows: 24,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-        shellOverride: 'powershell.exe'
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
+      try {
+        await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, cwd, shellOverride })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
       }
-    }
 
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-  })
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--exec', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo'")],
+        expect.objectContaining({ cwd: expect.any(String) })
+      )
+    }
+  )
 
   it('does not pass a Windows Codex home into daemon WSL terminals', async () => {
     const proc = mockPtyProcess()
