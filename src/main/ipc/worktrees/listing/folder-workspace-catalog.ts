@@ -11,6 +11,7 @@ import {
   applyMetadataFallbackVisibility
 } from '../../../../shared/worktree/ownership'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { isFolderWorkspaceInstanceIdentityConsistent } from '../../../../shared/worktree/id'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
 import {
   getFolderWorkspaceInstanceIdentity,
@@ -22,8 +23,14 @@ import {
 export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
   const rootId = getFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
-  const ids = Object.keys(allMeta).filter((worktreeId) =>
-    isFolderWorkspaceIdForRepo(repo, worktreeId)
+  const ids = Object.keys(allMeta).filter(
+    (worktreeId) =>
+      isFolderWorkspaceIdForRepo(repo, worktreeId) &&
+      isFolderWorkspaceInstanceIdentityConsistent(
+        rootId,
+        worktreeId,
+        allMeta[worktreeId]?.instanceId
+      )
   )
   if (!ids.includes(rootId)) {
     ids.unshift(rootId)

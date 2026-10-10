@@ -22,6 +22,18 @@ export function getRepoMainWorktreeId(repo: Pick<Repo, 'id' | 'path'>): string {
   return `${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`
 }
 
+export function isFolderWorkspaceInstanceIdentityConsistent(
+  rootId: string,
+  worktreeId: string,
+  instanceId: string | undefined
+): boolean {
+  return (
+    worktreeId === rootId ||
+    instanceId === undefined ||
+    worktreeId === `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
+  )
+}
+
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
   return separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)

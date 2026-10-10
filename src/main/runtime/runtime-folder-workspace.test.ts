@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
+import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import {
   getRuntimeFolderWorkspaceInstanceId,
   getRuntimeFolderWorkspaceRootId,
@@ -37,6 +38,33 @@ function meta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
     ...overrides
   }
 }
+
+describe('listRuntimeFolderWorkspaces', () => {
+  it('omits workspace metadata whose id names a different instance', () => {
+    const inputRepo = repo()
+    const rootId = getRuntimeFolderWorkspaceRootId(inputRepo)
+    const validId = getRuntimeFolderWorkspaceInstanceId(inputRepo, 'attached-instance')
+    const staleId = getRuntimeFolderWorkspaceInstanceId(inputRepo, 'orphan-instance')
+    let allMeta: Record<string, WorktreeMeta> = {
+      [rootId]: meta(),
+      [validId]: meta({ instanceId: 'attached-instance' }),
+      [staleId]: meta({ instanceId: 'different-instance' })
+    }
+    const store: Parameters<typeof listRuntimeFolderWorkspaces>[0] = {
+      getAllWorktreeMeta: () => allMeta,
+      getRepos: () => [inputRepo],
+      setWorktreeMeta: (worktreeId, updates) => {
+        const updated = meta({ ...allMeta[worktreeId], ...updates })
+        allMeta = { ...allMeta, [worktreeId]: updated }
+        return updated
+      }
+    }
+
+    const worktrees = listRuntimeFolderWorkspaces(store, inputRepo)
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual([rootId, validId])
+  })
+})
 
 describe('getRuntimeFolderWorkspaceRootId', () => {
   it.each([
