@@ -204,7 +204,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
           })
         }
       )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+      const bytesWritten =
+        (delivery.pasted ? Buffer.byteLength(payload, 'utf8') : 0) + delivery.submits
       return {
         handle,
         accepted: true,
@@ -233,7 +234,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         promptForSchedule: prompt
       })
     })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+    const bytesWritten =
+      (delivery.pasted ? Buffer.byteLength(payload, 'utf8') : 0) + delivery.submits
     return {
       handle,
       accepted: true,
