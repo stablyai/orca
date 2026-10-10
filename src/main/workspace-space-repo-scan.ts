@@ -16,7 +16,7 @@ import {
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost
 } from './providers/execution-host-provider-dispatch'
-import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
+import { listRepoWorktrees } from './repo-worktrees'
 import { mergeWorktree } from './ipc/worktree-logic'
 import { getLocalProjectWorktreeGitOptions } from './project-runtime-git-options'
 import {
@@ -89,7 +89,7 @@ async function listWorktreesForSpaceScan(
   try {
     throwIfWorkspaceSpaceScanAborted(signal)
     if (isFolderRepo(repo)) {
-      return { ok: true, worktrees: [createFolderWorktree(repo)] }
+      return { ok: true, worktrees: [] }
     }
     // Why: the raw `connectionId` field answers "local" for a row that spells its owner only as
     // `executionHostId: 'ssh:<target>'`, which sizes a same-named path on this machine instead.
