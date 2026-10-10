@@ -36,7 +36,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
       '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
-      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
+      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.',
+      'For a provider-backed git folder, --project must be the derived identity (for example, github:owner/repo for github.com or github:<host>/owner/repo for GitHub Enterprise), not a free-form name.'
     ],
     examples: [
       'orca project setup-existing-folder --project github:stablyai/orca --host local --path ~/orca',

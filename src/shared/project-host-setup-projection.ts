@@ -132,6 +132,17 @@ export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentit
   return `github:${githubRepoIdentityKey(identity)}`
 }
 
+/** Actionable error when setup's --project does not match the repository. */
+export function importedFolderProjectIdentityMismatchMessage(
+  folderProjectId: string,
+  selectedProjectId: string
+): string {
+  return (
+    `Repository resolves to project "${folderProjectId}" which does not match ` +
+    `"${selectedProjectId}"; pass --project ${folderProjectId}`
+  )
+}
+
 function getProjectId(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {

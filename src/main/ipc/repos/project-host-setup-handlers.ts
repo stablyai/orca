@@ -12,7 +12,10 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
 } from '../../../shared/project-types'
-import { getProjectIdForProviderIdentity } from '../../../shared/project-host-setup-projection'
+import {
+  getProjectIdForProviderIdentity,
+  importedFolderProjectIdentityMismatchMessage
+} from '../../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
@@ -51,7 +54,7 @@ function alignRepoWithRequestedProject(
     // Why: the selected project can exist only on the source host, so its structured identity travels with the request.
     const identity = project?.providerIdentity ?? requestedProviderIdentity
     if (!identity || getProjectIdForProviderIdentity(identity) !== projectId) {
-      throw new Error('Imported folder does not match the selected project identity.')
+      throw new Error(importedFolderProjectIdentityMismatchMessage(setup.projectId, projectId))
     }
     // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
     const updated = store.updateRepo(repo.id, {
