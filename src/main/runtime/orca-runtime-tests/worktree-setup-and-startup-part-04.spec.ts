@@ -88,6 +88,87 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('carries a Devin startup prompt on argv instead of writing it into the PTY', async () => {
+    // Why: the foreground process is `devin` at ~0.03 s (the wrapper execs), so a
+    // stdin-after-start follow-up wrote while the REPL was still printing its banner and the
+    // text was dropped (#26302). The prompt must ride the launch command instead.
+    vi.useFakeTimers()
+    try {
+      const metaById: Record<string, WorktreeMeta> = {}
+      const runtimeStore = {
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          agentCmdOverrides: {}
+        }),
+        getAllWorktreeMeta: () => metaById,
+        getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+        setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+          return metaById[worktreeId]
+        }
+      }
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-devin-startup' })
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setPtyController({
+        spawn,
+        write,
+        kill: () => true,
+        getForegroundProcess: async () => 'devin'
+      })
+      runtime.setNotifier({
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-cli-devin-startup' }),
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        focusTerminal: vi.fn(),
+        closeTerminal: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      runtime.attachWindow(1)
+
+      computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-devin-startup')
+      ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-devin-startup')
+      vi.mocked(listWorktrees).mockResolvedValue([
+        {
+          path: '/tmp/workspaces/runtime-cli-devin-startup',
+          head: 'def',
+          branch: 'runtime-cli-devin-startup',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+      const result = await runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'runtime-cli-devin-startup',
+        startupAgent: 'devin',
+        startupPrompt: 'fix it'
+      })
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/tmp/workspaces/runtime-cli-devin-startup',
+          command:
+            "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false' -- 'fix it'",
+          worktreeId: result.worktree.id
+        })
+      )
+      // Outlast the whole 30 x 150 ms readiness poll: nothing may type the prompt into the PTY.
+      await vi.advanceTimersByTimeAsync(6000)
+
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not send stdin-after-start prompts into a shell when the agent never starts', async () => {
     vi.useFakeTimers()
     try {

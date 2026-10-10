@@ -279,7 +279,7 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('launches Devin first and injects the prompt after startup', () => {
+  it('launches Devin with the prompt on argv behind a -- separator', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'devin',
@@ -290,9 +290,10 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
+      launchCommand:
+        "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false' -- 'Trace the failing test'",
       expectedProcess: 'devin',
-      followupPrompt: 'Trace the failing test',
+      followupPrompt: null,
       launchConfig: {
         agentCommand: "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false'",
         agentArgs: '--permission-mode bypass --respect-workspace-trust false',
