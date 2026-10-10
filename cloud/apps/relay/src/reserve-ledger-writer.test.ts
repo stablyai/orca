@@ -105,4 +105,23 @@ describe('reserve ledger writer', () => {
     const written = await db.query(`SELECT cell_id FROM relay_assignments WHERE user_id = 'user-2'`)
     expect(written).toEqual([{ cell_id: 'c1' }])
   })
+
+  it('demotes a seat level with its row on another cell, which the mirror would never replace', async () => {
+    const { database: db, writer } = await setup()
+    writer.enqueue({ ...HOST, cellId: 'c7', epoch: 9 })
+    await writer.flush()
+    const demoted: unknown[] = []
+    const result = await reconcileReserveLedger({
+      writer,
+      seats: () => [
+        { ...HOST, cellId: 'c1', epoch: 9, joinedAt: 0 },
+        // Level with its own row: nothing to do.
+        { ...HOST, relayHostId: 'eeeeeeeeeeeeeeee', cellId: 'c7', epoch: 9, joinedAt: 0 }
+      ],
+      demote: (seat, found) => demoted.push({ seat: seat.cellId, row: found }),
+      now: 1_000_000
+    })
+    expect(result).toEqual({ upserted: 1, demoted: 1 })
+    expect(demoted).toEqual([{ seat: 'c1', row: { cellId: 'c7', epoch: 9 } }])
+  })
 })

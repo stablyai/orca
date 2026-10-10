@@ -49,9 +49,15 @@ export type ReservePlan =
       placeFresh?: () => Promise<RelayAssignment | null>
     }
 
+// A host whose seat the ledger reconcile demoted mints above its row for this long, so the
+// re-assign does not collide with the row again (the mirror refuses an equal epoch).
+export const RESERVE_ROW_FLOOR_TTL_MS = 2 * 60 * 60_000
+const RESERVE_ROW_FLOOR_MAX = 100_000
+
 export class ReserveAssignment {
   private summary: PlacementSummary = emptySummary()
   private summaryAt: number
+  private readonly rowFloors = new Map<string, { epoch: number; expiresAt: number }>()
 
   constructor(
     private readonly input: {
@@ -125,10 +131,12 @@ export class ReserveAssignment {
       .filter((entry) => now - entry.at <= RESERVE_STICKY_RECENT_MS)
       .at(-1)
     const booking = directory.bookingOf(identity.userId, identity.relayHostId)
+    const rowFloor = this.rowFloor(identity, now)
     const known = [
       ...seats.map((seat) => seat.epoch),
       ...(left ? [left.epoch] : []),
-      ...(booking ? [booking.epoch] : [])
+      ...(booking ? [booking.epoch] : []),
+      ...(rowFloor === undefined ? [] : [rowFloor])
     ]
     let row: { cellId: string; assignmentEpoch: number } | null = null
     if (known.length === 0) {
@@ -153,7 +161,7 @@ export class ReserveAssignment {
     }
 
     if (request.reconnect) {
-      const sticky = await this.stickyFromMemory(identity, seats, left, now)
+      const sticky = await this.stickyFromMemory(identity, seats, left, now, rowFloor ?? 0)
       if (sticky) {
         this.summary.sticky += 1
         return { kind: 'answer', assignment: sticky, lane: 'sticky' }
@@ -178,11 +186,14 @@ export class ReserveAssignment {
     identity: Identity,
     seats: ShadowSeat[],
     left: { cellId: string; epoch: number; incarnation?: string; closeCode?: number } | undefined,
-    now: number
+    now: number,
+    rowFloor: number
   ): Promise<RelayAssignment | null> {
     // Highest epoch first, then the newest join: only the newest grant may be answered from
     // memory, so a stale seat (or a leaver at a lower epoch) is never sent back.
     const newest = Math.max(0, ...seats.map((seat) => seat.epoch), left?.epoch ?? 0)
+    // A seat at or behind a row the reconcile demoted it for is never answered again.
+    if (newest <= rowFloor) return null
     const candidates: Array<{
       cellId: string
       epoch: number
@@ -303,6 +314,29 @@ export class ReserveAssignment {
       })
       .catch(() => undefined)
     return null
+  }
+
+  // The ledger reconcile demoted this host's seat behind (or level with) a row at `epoch`.
+  raiseEpochFloor(identity: Identity, epoch: number): void {
+    const key = `${identity.userId}\u0000${identity.relayHostId}`
+    const current = this.rowFloors.get(key)
+    this.rowFloors.delete(key)
+    this.rowFloors.set(key, {
+      epoch: Math.max(epoch, current?.epoch ?? 0),
+      expiresAt: this.now() + RESERVE_ROW_FLOOR_TTL_MS
+    })
+    if (this.rowFloors.size > RESERVE_ROW_FLOOR_MAX) {
+      this.rowFloors.delete(this.rowFloors.keys().next().value!)
+    }
+  }
+
+  private rowFloor(identity: Identity, now: number): number | undefined {
+    const key = `${identity.userId}\u0000${identity.relayHostId}`
+    const floor = this.rowFloors.get(key)
+    if (!floor) return undefined
+    if (floor.expiresAt > now) return floor.epoch
+    this.rowFloors.delete(key)
+    return undefined
   }
 
   // Fire-and-forget; the cell checks the seat's epoch and join itself.

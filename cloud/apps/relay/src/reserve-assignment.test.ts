@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CellReserveClient } from './cell-reserve-client.js'
-import { ReserveAssignment, ReservePaceError, RESERVE_STARTUP_GATE_MS } from './reserve-assignment.js'
+import {
+  ReserveAssignment,
+  ReservePaceError,
+  RESERVE_ROW_FLOOR_TTL_MS,
+  RESERVE_STARTUP_GATE_MS
+} from './reserve-assignment.js'
 import { ReservePlacer, type ReserveAttempt } from './reserve-placement.js'
 import { ShadowSeatDirectory, type SeatFeedCell, type SeatFeedResponse } from './shadow-seat-directory.js'
 
@@ -87,7 +92,7 @@ function setup(
   for (const response of options.feeds ?? cells.map((cell) => feed(cell.cellId))) {
     directory.apply(response.cellId, { ...response, full: response.full ?? [] }, now.value - 1, now.value - 1)
   }
-  return { assignment, directory, reserved, demoted, now }
+  return { assignment, directory, reserved, demoted, now, placer }
 }
 
 function seated(epoch: number, joinedAt = 0) {
@@ -159,6 +164,22 @@ describe('reserve assignment on a director', () => {
     const plan = await assignment.plan(HOST, { reconnect: true, region: US })
     expect(reserved[0]).toEqual({ cellId: 'c1', epoch: 7, sticky: true, dryRun: false })
     expect(plan).toMatchObject({ kind: 'answer', lane: 'sticky', assignment: { cellId: 'c1', assignmentEpoch: 7 } })
+  })
+
+  it('after the reconcile demotes a seat behind its row, mints above the row and never answers that seat', async () => {
+    const { assignment, directory, reserved, now, placer } = setup({ feeds: [feed('c1', { full: [seated(7)] }), feed('c2')] })
+    // The row names another cell at epoch 8; the mirror would refuse a re-assign at 8.
+    assignment.raiseEpochFloor(HOST, 8)
+    const plan = await assignment.plan(HOST, { reconnect: true, region: US })
+    expect(plan).toMatchObject({ kind: 'answer', lane: 'placement', assignment: { assignmentEpoch: 9 } })
+    expect(reserved.every((call) => !call.sticky && call.epoch === 9)).toBe(true)
+    // The floor lapses, so a host it no longer protects answers from memory again.
+    now.value += RESERVE_ROW_FLOOR_TTL_MS + 1
+    for (const response of [feed('c1', { seq: 2, full: [seated(7)] }), feed('c2', { seq: 2 })]) {
+      directory.apply(response.cellId, response, now.value, now.value)
+    }
+    for (const cell of assignment.placementCells()) placer.observePoll(cell)
+    expect(await assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({ lane: 'sticky' })
   })
 
   it('never sends a drained or demoted host back, and books it elsewhere above every known epoch', async () => {

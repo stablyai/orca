@@ -197,10 +197,11 @@ type ReconcileSeat = { userId: string; relayHostId: string; cellId: string; epoc
 // concurrent runs are harmless. A row ahead of the seat (today's path answered a newer epoch,
 // and the desktop was then answered the old seat from memory) is never rewritten: that seat is
 // demoted (epoch-checked, closes with 4409), so the desktop re-assigns to what the row names.
+// The demoting director then mints above the row's epoch for that host (see raiseEpochFloor).
 export async function reconcileReserveLedger(input: {
   writer: ReserveLedgerWriter
   seats: () => ReconcileSeat[]
-  demote?: (seat: ReconcileSeat) => void
+  demote?: (seat: ReconcileSeat, row: { cellId: string; epoch: number }) => void
   now: number
 }): Promise<{ upserted: number; demoted: number }> {
   const seats = input.seats().filter((seat) => input.now - seat.joinedAt >= RECONCILE_SETTLE_MS)
@@ -209,8 +210,10 @@ export async function reconcileReserveLedger(input: {
   let demoted = 0
   for (const seat of seats) {
     const row = rows.get(`${seat.userId}\u0000${seat.relayHostId}`)
-    if (row && row.epoch > seat.epoch && input.demote) {
-      input.demote(seat)
+    // Level with the row on another cell is the same divergence: the mirror never replaces it.
+    const behindRow = row && (row.epoch > seat.epoch || (row.epoch === seat.epoch && row.cellId !== seat.cellId))
+    if (row && behindRow && input.demote) {
+      input.demote(seat, row)
       demoted += 1
       continue
     }

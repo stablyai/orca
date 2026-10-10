@@ -249,13 +249,16 @@ export function createRelayServer(
                 joinedAt: seat.joinedAt
               }))
             ),
-        demote: (seat) => {
+        demote: (seat, row) => {
           reservePlacement?.demoteSeat(seat)
+          // The re-assign mints above the row, so the mirror can take it.
+          reservePlacement?.raiseEpochFloor(seat, row.epoch)
           console.warn(
             JSON.stringify({
               event: 'orca_relay_reserve_ledger_seat_behind_row',
               cellId: seat.cellId,
-              epoch: seat.epoch
+              epoch: seat.epoch,
+              rowEpoch: row.epoch
             })
           )
         },
