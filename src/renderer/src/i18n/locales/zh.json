@@ -11104,9 +11104,9 @@
         },
         "providerAccountScope": {
           "remoteServer": "远程服务器：{{value0}}",
-          "remoteServerCredentials": "此提供商的凭据和账户检查由这台远程服务器管理。要查看其他主机的凭据，请在“设置”顶部的主机菜单中选择。",
+          "remoteServerCredentials": "此提供商的凭据和账户检查由这台远程服务器管理。要使用其他主机，请更改“设置 > 远程 Orca 服务器 > 高级 > 新项目的默认主机”。",
           "localMac": "本地 Mac",
-          "localCredentials": "此提供商的凭据和账户检查由这台桌面客户端管理。要查看服务器的凭据，请在“设置”顶部的主机菜单中选择。",
+          "localCredentials": "此提供商的凭据和账户检查由这台桌面客户端管理。要使用服务器，请更改“设置 > 远程 Orca 服务器 > 高级 > 新项目的默认主机”。",
           "remoteServerRateLimit": "{{value0}} API 额度从这台远程服务器上的 CLI 获取。要查看其他主机的额度，请在“设置”顶部的主机菜单中选择。",
           "localRateLimit": "{{value0}} API 额度从这台桌面客户端上的 CLI 获取。要查看服务器的额度，请在“设置”顶部的主机菜单中选择。"
         },

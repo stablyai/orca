@@ -50,7 +50,7 @@ export function getProviderAccountScope(
       ),
       description: translate(
         'auto.components.settings.providerAccountScope.remoteServerCredentials',
-        'Credentials and account checks for this provider are owned by this remote server. Choose another host in the Host menu at the top of Settings to see its credentials.'
+        'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
       )
     }
   }
@@ -58,7 +58,7 @@ export function getProviderAccountScope(
     label: getLocalExecutionHostLabel(),
     description: translate(
       'auto.components.settings.providerAccountScope.localCredentials',
-      'Credentials and account checks for this provider are owned by this desktop client. Choose a server in the Host menu at the top of Settings to see its credentials.'
+      'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
     )
   }
 }

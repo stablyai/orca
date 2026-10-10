@@ -11188,9 +11188,9 @@
         },
         "providerAccountScope": {
           "remoteServer": "Serveur distant : {{value0}}",
-          "remoteServerCredentials": "Les identifiants et vérifications de compte de ce fournisseur appartiennent à ce serveur distant. Choisissez un autre hôte dans le menu Hôte en haut des Paramètres pour voir ses identifiants.",
+          "remoteServerCredentials": "Les identifiants et vérifications de compte de ce fournisseur appartiennent à ce serveur distant. Pour utiliser un autre hôte, modifiez Paramètres > Serveurs Orca distants > Avancé > Hôte par défaut des nouveaux projets.",
           "localMac": "Mac local",
-          "localCredentials": "Les identifiants et vérifications de compte de ce fournisseur appartiennent à ce client de bureau. Choisissez un serveur dans le menu Hôte en haut des Paramètres pour voir ses identifiants.",
+          "localCredentials": "Les identifiants et vérifications de compte de ce fournisseur appartiennent à ce client de bureau. Pour utiliser un serveur, modifiez Paramètres > Serveurs Orca distants > Avancé > Hôte par défaut des nouveaux projets.",
           "remoteServerRateLimit": "Le budget d'API de {{value0}} provient de la CLI sur ce serveur distant. Choisissez un autre hôte dans le menu Hôte en haut des Paramètres pour voir son budget.",
           "localRateLimit": "Le budget d'API de {{value0}} provient de la CLI sur ce client de bureau. Choisissez un serveur dans le menu Hôte en haut des Paramètres pour voir son budget."
         },

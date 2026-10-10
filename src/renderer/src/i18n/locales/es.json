@@ -11104,9 +11104,9 @@
         },
         "providerAccountScope": {
           "remoteServer": "Servidor remoto: {{value0}}",
-          "remoteServerCredentials": "Las credenciales y comprobaciones de cuenta de este proveedor pertenecen a este servidor remoto. Elige otro host en el menú Host de la parte superior de Ajustes para ver sus credenciales.",
+          "remoteServerCredentials": "Las credenciales y comprobaciones de cuenta de este proveedor pertenecen a este servidor remoto. Para usar otro host, cambia Ajustes > Servidores remotos de Orca > Avanzado > Host predeterminado para proyectos nuevos.",
           "localMac": "Local Mac",
-          "localCredentials": "Las credenciales y comprobaciones de cuenta de este proveedor pertenecen a este cliente de escritorio. Elige un servidor en el menú Host de la parte superior de Ajustes para ver sus credenciales.",
+          "localCredentials": "Las credenciales y comprobaciones de cuenta de este proveedor pertenecen a este cliente de escritorio. Para usar un servidor, cambia Ajustes > Servidores remotos de Orca > Avanzado > Host predeterminado para proyectos nuevos.",
           "remoteServerRateLimit": "El presupuesto de API de {{value0}} se obtiene de la CLI en este servidor remoto. Elige otro host en el menú Host de la parte superior de Ajustes para ver su presupuesto.",
           "localRateLimit": "El presupuesto de API de {{value0}} se obtiene de la CLI en este cliente de escritorio. Elige un servidor en el menú Host de la parte superior de Ajustes para ver su presupuesto."
         },
