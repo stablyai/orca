@@ -53,6 +53,8 @@ export type AgentModelCatalogService = {
     sessionId?: string
     /** Where a new chat would run; null when one was named but is not a local directory. */
     workspacePath?: string | null
+    /** Answer for the folder the named session runs in, as its new-chat read did. */
+    inSessionWorkspace?: true
     /** With no entry yet, answer from the listing this read starts or joins instead of `unknown`;
      *  with a held reason past its TTL, from the probe re-checking it. */
     waitForListing?: boolean
@@ -132,6 +134,17 @@ async function newChatCatalogKey(
   }
 }
 
+/** The local folder a session's agent runs in; null where this host cannot look into it. */
+async function sessionWorkspacePath(
+  deps: AgentModelCatalogServiceDeps,
+  record: AgentSessionRecord
+): Promise<string | null> {
+  if (record.location.wslDistro !== null || !deps.recordWorkspacePath) {
+    return null
+  }
+  return deps.recordWorkspacePath(record).catch(() => null)
+}
+
 /** A session launched with no model pick resolved its config scope's default model and effort;
  *  when that scope is the account's (a native workspace with no config of its own), they are the
  *  account's default, and a resolution naming no listed model retires the saved one. */
@@ -142,14 +155,10 @@ async function recordConfiguredDefault(
   choice: AgentModelCatalogConfiguredChoice | null
 ): Promise<void> {
   const accountHome = record.accountHome
-  if (
-    record.location.wslDistro !== null ||
-    !deps.recordWorkspacePath ||
-    !deps.workspaceMayOverrideDefaultModel
-  ) {
+  if (!deps.workspaceMayOverrideDefaultModel) {
     return
   }
-  const workspacePath = await deps.recordWorkspacePath(record)
+  const workspacePath = await sessionWorkspacePath(deps, record)
   if (
     !workspacePath ||
     (await deps.workspaceMayOverrideDefaultModel({
@@ -231,6 +240,11 @@ export function createAgentModelCatalogService(
       }
       const accountHomePath =
         probeHome && isLegacyAgentSessionAccountHome(probeHome) ? probeHome.path : null
+      const workspacePath = params.inSessionWorkspace
+        ? record
+          ? await sessionWorkspacePath(deps, record)
+          : null
+        : params.workspacePath
       await recordingDefaults.get(fingerprint)
       let entry = deps.store.get(fingerprint)
       const probe = deps.probes?.[params.agent]
@@ -244,12 +258,7 @@ export function createAgentModelCatalogService(
         const result = listed
           ? resultFromEntry(
               listed,
-              await workspaceKeepsListedDefault(
-                deps,
-                params.agent,
-                params.workspacePath,
-                accountHomePath
-              ),
+              await workspaceKeepsListedDefault(deps, params.agent, workspacePath, accountHomePath),
               deps.listingNamesConfiguredModel?.has(params.agent) === true
             )
           : null

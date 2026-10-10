@@ -59,7 +59,7 @@ async function readStructuredAgentSessionOptionsAtRest(
   }
   const rules = restingOptionRules(deps.agents, record)
   const catalog = (await deps.modelCatalog
-    ?.read({ agent: record.provider, sessionId })
+    ?.read({ agent: record.provider, sessionId, inSessionWorkspace: true })
     .catch(() => null)) ?? { origin: 'unknown' as const }
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models
@@ -74,8 +74,8 @@ async function readStructuredAgentSessionOptionsAtRest(
   const model =
     saved.model ??
     (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
-  // As a live child answers: the pick, else the model's default where the agent reports that. With
-  // no model pick, the catalog's default model runs at its default effort, as the first frame shows.
+  // The pick, else the model's default where a live child reports that. With no model pick, the
+  // chat runs the catalog's default at its listed default effort, as its first frame showed.
   const effort =
     saved.effort ??
     (rules?.effortDefaultsToModel || saved.model === undefined

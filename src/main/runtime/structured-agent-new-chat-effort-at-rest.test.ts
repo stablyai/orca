@@ -1,7 +1,10 @@
-// A new chat reads its options at rest before its agent starts. That answer must name the effort
-// the catalog's first frame showed, or the effort pill blanks and later jumps when the agent starts.
+// A new chat reads its options at rest before its agent starts. That answer must name the model and
+// effort the catalog's first frame showed for its workspace, or the picker changes before any start.
 
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionAccountHome, AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
@@ -19,6 +22,10 @@ import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definiti
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import {
+  agentReadsProjectModelConfig,
+  workspaceMayOverrideDefaultModel
+} from '../native-chat/agent-model-catalog/agent-project-model-override'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
@@ -87,7 +94,8 @@ const GROK_LISTING = grokModelCatalogFromState({
         reasoningEfforts: [
           { value: 'low', id: 'low' },
           { value: 'medium', id: 'medium', default: true },
-          { value: 'high', id: 'high' }
+          { value: 'high', id: 'high' },
+          { value: 'max', id: 'max' }
         ]
       }
     },
@@ -111,16 +119,42 @@ type Account = {
 
 const ACCOUNTS: Record<string, Account> = {
   codex: { models: CODEX_LISTING },
-  grok: { models: GROK_LISTING, configured: { modelId: 'grok-4', effort: 'medium' } },
+  // The account's config runs Grok 4 at max, not the listing's own default of medium.
+  grok: { models: GROK_LISTING, configured: { modelId: 'grok-4', effort: 'max' } },
   pi: { models: PI_LISTING, configured: { modelId: 'openai/gpt-6', effort: 'high' } }
 }
 
-function newChatRecord(agent: string, options: Record<string, string> = {}): AgentSessionRecord {
+let root: string
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'orca-new-chat-effort-'))
+})
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true })
+})
+
+/** A repo checkout holding `files`, as the project's own agent config. */
+function workspace(files: Record<string, string> = {}): string {
+  const dir = join(root, 'repo')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, '.git'), 'gitdir: /elsewhere')
+  for (const [file, text] of Object.entries(files)) {
+    mkdirSync(join(dir, file, '..'), { recursive: true })
+    writeFileSync(join(dir, file), text)
+  }
+  return dir
+}
+
+function newChatRecord(
+  agent: string,
+  workspacePath: string,
+  options: Record<string, string>
+): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog service and the at-rest read touch only these fields.
   return {
     sessionId: `${agent}-new`,
     provider: agent,
     accountHome: HOMES[agent]!,
+    launchDirectory: workspacePath,
     location: {
       executionHostId: 'local',
       wslDistro: null,
@@ -150,7 +184,10 @@ function host(agent: string, record: AgentSessionRecord) {
     getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
     drivesRecord: () => true,
     resolveAccountHome: async (name) => HOMES[name]!,
-    listingNamesConfiguredModel: new Set(['codex'])
+    listingNamesConfiguredModel: new Set(['codex']),
+    recordWorkspacePath: async (row) => row.launchDirectory ?? null,
+    agentReadsProjectModelConfig,
+    workspaceMayOverrideDefaultModel
   })
   const resting = {
     child: null,
@@ -178,15 +215,21 @@ function pills(state: StructuredAgentSessionOptionState) {
   return { model: pill('model'), effort: pill('effort') }
 }
 
-/** The pane's frames: the host catalog first, then the chat's own options read at rest. */
-async function newChatFrames(agent: string, options: Record<string, string> = {}) {
-  const record = newChatRecord(agent, options)
+/** The pane's frames: the host catalog for the chat's workspace first, as the new chat's read
+ *  names it, then the chat's own options read at rest. */
+async function newChatFrames(
+  agent: string,
+  options: Record<string, string> = {},
+  projectFiles: Record<string, string> = {}
+) {
+  const workspacePath = workspace(projectFiles)
+  const record = newChatRecord(agent, workspacePath, options)
   const { modelCatalog, context } = host(agent, record)
   const seed = structuredAgentSessionSeedCatalog(agent)
   const first = applyStructuredAgentSessionModelCatalog(
     createStructuredAgentSessionOptionState(agent, seed),
     seed,
-    await modelCatalog.read({ agent, waitForListing: true }),
+    await modelCatalog.read({ agent, waitForListing: true, workspacePath }),
     { newLaunch: true }
   )
   // Read before applying the answer: applying updates the state's option record in place.
@@ -199,7 +242,7 @@ async function newChatFrames(agent: string, options: Record<string, string> = {}
 describe("a new chat's effort pill before its agent starts", () => {
   it.each([
     ['codex', 'gpt-5.5', 'medium'],
-    ['grok', 'grok-4', 'medium'],
+    ['grok', 'grok-4', 'max'],
     ['pi', 'openai/gpt-6', 'high']
   ])(
     '%s keeps the first frame’s model and effort through the at-rest read',
@@ -210,6 +253,21 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.effort?.value).toBe(effort)
       expect(settled).toEqual(first)
       expect(atRest.current).toEqual({ model, effort })
+    }
+  )
+
+  it.each([
+    ['codex', '.codex/config.toml', 'model_reasoning_effort = "high"\n'],
+    ['pi', '.pi/settings.json', '{ "defaultThinkingLevel": "low" }']
+  ])(
+    '%s names no default model or effort at rest where the project’s config may pick one',
+    async (agent, file, text) => {
+      const { atRest, first, settled } = await newChatFrames(agent, {}, { [file]: text })
+
+      expect(first.model?.value).toBeUndefined()
+      expect(first.effort).toBeNull()
+      expect(settled).toEqual(first)
+      expect(atRest.current).toEqual({})
     }
   )
 
