@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: () => false
@@ -65,7 +65,8 @@ async function probe(script: string, listening = false) {
     rmSync(dir, { recursive: true, force: true })
   }
 }
-describe.skipIf(process.platform === 'win32')('real generated incumbent probe', () => {
+// Each probe owns its socket, shim and process group; overlap the real lsof deadlines.
+describe.skipIf(process.platform === 'win32').concurrent('real generated incumbent probe', () => {
   it('bounds hung lsof and preserves live connect evidence', async () => {
     const p = await probe('echo $$ > "$FIXTURE_PID"\nexec sleep 60\n', true)
     expect(p.result.timedOut).toBe(false)

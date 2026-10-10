@@ -1,10 +1,18 @@
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import {
+  RuntimeHostDescriptorSchema,
+  type RuntimeHostDescriptor
+} from '../../../shared/runtime-host-descriptor'
+import { classifyRuntimeHostRePair } from '../../../shared/runtime-host-pairing-identity'
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {
+  /** Ids minted by re-pairs before re-pairing kept the id; read-only, never extended. */
   compatibleEnvironmentIds?: string[]
+  /** The server's descriptor pinned at pairing; see classifyRuntimeHostRePair. */
+  hostDescriptor?: RuntimeHostDescriptor
   endpoints: {
     id: string
     kind: 'websocket'
@@ -41,15 +49,18 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
       typeof parsed.pairedDeviceId === 'string' && parsed.pairedDeviceId.trim().length > 0
         ? parsed.pairedDeviceId.trim()
         : null
+    const hostDescriptor = RuntimeHostDescriptorSchema.safeParse(parsed.hostDescriptor).data
     const {
       compatibleEnvironmentIds: _unvalidatedIds,
       pairedDeviceId: _unvalidatedDeviceId,
+      hostDescriptor: _unvalidatedDescriptor,
       ...environment
     } = parsed
     return {
       ...environment,
       ...(pairedDeviceId ? { pairedDeviceId } : {}),
-      ...(compatibleEnvironmentIds.length > 0 ? { compatibleEnvironmentIds } : {})
+      ...(compatibleEnvironmentIds.length > 0 ? { compatibleEnvironmentIds } : {}),
+      ...(hostDescriptor ? { hostDescriptor } : {})
     }
   } catch {
     return null
@@ -70,19 +81,37 @@ export function createStoredWebRuntimeEnvironment(args: {
   previousEnvironment?: StoredWebRuntimeEnvironment | null
   connectionDependency?: 'ssh-tunnel'
 }): StoredWebRuntimeEnvironment {
-  const id = `web-${createBrowserUuid()}`
+  const previous = args.previousEnvironment
+  const match = previous
+    ? classifyRuntimeHostRePair(
+        {
+          publicKeys: previous.endpoints.map((endpoint) => endpoint.publicKeyB64),
+          pin: previous.hostDescriptor
+        },
+        args.offer
+      )
+    : { kind: 'different-host' as const }
+  // Why keep the id: it is this server's execution-host identity; a new one strands its sessions (#11574).
+  const sameHost = match.kind === 'same-host' ? previous : null
+  const id = sameHost?.id ?? `web-${createBrowserUuid()}`
   const now = Date.now()
-  const compatibleEnvironmentIds = getCompatibleEnvironmentIds(args.previousEnvironment, args.offer)
+  const pin = match.kind === 'same-host' ? match.pin : args.offer.hostDescriptor
+  const compatibleEnvironmentIds = sameHost?.compatibleEnvironmentIds ?? []
   return {
     id,
     name: args.name.trim() || 'Orca Server',
-    createdAt: now,
+    createdAt: sameHost?.createdAt ?? now,
     updatedAt: now,
+    // Why bump: request fences compare revisions, and the device token they captured is gone.
+    ...(sameHost
+      ? { pairingRevision: Math.max(now, (sameHost.pairingRevision ?? sameHost.createdAt) + 1) }
+      : {}),
     lastUsedAt: null,
     runtimeId: null,
     ...(args.offer.pairedDeviceId ? { pairedDeviceId: args.offer.pairedDeviceId } : {}),
     ...(args.connectionDependency ? { connectionDependency: args.connectionDependency } : {}),
     ...(compatibleEnvironmentIds.length > 0 ? { compatibleEnvironmentIds } : {}),
+    ...(pin ? { hostDescriptor: pin } : {}),
     preferredEndpointId: `ws-${id}`,
     endpoints: [
       {
@@ -97,20 +126,14 @@ export function createStoredWebRuntimeEnvironment(args: {
   }
 }
 
-function getCompatibleEnvironmentIds(
-  previous: StoredWebRuntimeEnvironment | null | undefined,
-  offer: WebPairingOffer
-): string[] {
-  if (!previous?.endpoints.some((endpoint) => endpoint.publicKeyB64 === offer.publicKeyB64)) {
-    return []
-  }
-  return [...new Set([...(previous.compatibleEnvironmentIds ?? []), previous.id])]
-}
-
 export function redactStoredWebRuntimeEnvironment(
   environment: StoredWebRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {
-  const { compatibleEnvironmentIds: _compatibleEnvironmentIds, ...publicEnvironment } = environment
+  const {
+    compatibleEnvironmentIds: _compatibleEnvironmentIds,
+    hostDescriptor: _hostDescriptor,
+    ...publicEnvironment
+  } = environment
   return {
     ...publicEnvironment,
     endpoints: environment.endpoints.map(

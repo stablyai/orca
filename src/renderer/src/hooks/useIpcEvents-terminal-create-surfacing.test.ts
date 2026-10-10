@@ -42,7 +42,7 @@ describe('useIpcEvents updater integration', () => {
       activate: true
     })
     expect(createTab).toHaveBeenCalledWith('wt-1')
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
 
     // Exact regression sequence: Local default -> connect/navigate Windows 2 ->
     // reveal a local terminal -> restart. Connection and navigation are transient.
@@ -139,7 +139,7 @@ describe('useIpcEvents updater integration', () => {
     expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
     expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-2')
     expect(setActiveTab).toHaveBeenCalledWith('tab-new')
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-new', undefined, 'wt-2')
@@ -210,8 +210,7 @@ describe('useIpcEvents updater integration', () => {
     focusTerminalTabSurface.mockClear()
     storeState.settings = {
       ...storeState.settings,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
+      experimentalNativeChat: true
     }
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
@@ -232,7 +231,6 @@ describe('useIpcEvents updater integration', () => {
       activate: false,
       recordInteraction: false,
       launchAgent: 'codex',
-      viewMode: 'chat',
       startupCwd: '/repo/packages/app'
     })
     expect(setActiveView).not.toHaveBeenCalled()
@@ -481,8 +479,7 @@ describe('useIpcEvents updater integration', () => {
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg',
       activate: false,
-      launchAgent: 'codex',
-      viewMode: 'chat'
+      launchAgent: 'codex'
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -517,7 +514,7 @@ describe('useIpcEvents updater integration', () => {
     })
 
     createTab.mockClear()
-    storeState.settings.openAgentTabsInChatByDefault = false
+    storeState.settings.experimentalNativeChat = false
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
       ptyId: 'pty-explicit-chat',
@@ -530,7 +527,7 @@ describe('useIpcEvents updater integration', () => {
       launchAgent: 'codex',
       viewMode: 'chat'
     })
-    storeState.settings.openAgentTabsInChatByDefault = true
+    storeState.settings.experimentalNativeChat = true
 
     createTab.mockClear()
     setActiveView.mockClear()

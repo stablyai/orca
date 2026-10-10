@@ -19,6 +19,7 @@ locals {
     "deploy-relay-production-multi-target.yml",
     "deploy-relay-production.yml",
     "operate-relay-asia-admission.yml",
+    "operate-relay-production-cell-flags.yml",
     "publish-relay-production.yml"
 
   ]

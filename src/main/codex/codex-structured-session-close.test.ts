@@ -1,4 +1,5 @@
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type {
@@ -15,7 +16,8 @@ import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { claudeAndCodexRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
 
@@ -25,7 +27,7 @@ function identity(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'workspace-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD }
+    providerHandle: codexProviderHandle(THREAD)
   }
 }
 
@@ -76,7 +78,7 @@ function claudeAdapterStub(): StructuredAgentSessionAdapter {
 }
 
 describe('Codex structured session close lifecycle', () => {
-  it('forwards a one-shot exit when lifecycle admission is rejected', () => {
+  function backpressuredSession(requestedClose: boolean) {
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: true,
@@ -87,7 +89,6 @@ describe('Codex structured session close lifecycle', () => {
       close: async () => true
     }
     const prompts = new CodexPromptRegistry()
-    const clearPrompts = vi.spyOn(prompts, 'clear')
     const translator = {
       handle: vi.fn().mockReturnValueOnce({ accepted: false, reason: 'backpressure' as const }),
       dispose: vi.fn()
@@ -96,19 +97,23 @@ describe('Codex structured session close lifecycle', () => {
       connection,
       backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
-      requestedClose: false,
+      ...(requestedClose ? { orcaClose: { requested: true, reason: new Error('closed') } } : {}),
       fence: 7,
       acquisitionGeneration: 'generation-1',
       threadId: THREAD,
-      historyPath: null,
       prompts,
       options: new Map(),
       reportedOptions: {},
-      fastModeTierByModel: new Map(),
       dispatchEchoes: createCodexDispatchEchoes(),
+      turnOpenWaits: createCodexTurnOpenWaits(),
       translator
     }
-    const sessions = new Map([['session-1', session]])
+    return { connection, prompts, translator, session, sessions: new Map([['session-1', session]]) }
+  }
+
+  it('forwards a one-shot exit when lifecycle admission is rejected', () => {
+    const { connection, prompts, translator, session, sessions } = backpressuredSession(false)
+    const clearPrompts = vi.spyOn(prompts, 'clear')
     const onEvent = vi.fn()
 
     expect(
@@ -125,11 +130,31 @@ describe('Codex structured session close lifecycle', () => {
     expect(clearPrompts).toHaveBeenCalledOnce()
     expect(onEvent).toHaveBeenCalledOnce()
     expect(translator.dispose).toHaveBeenCalledOnce()
-    expect(onEvent.mock.calls[0]?.[0]).toMatchObject({
-      cause: 'unexpected-exit',
-      settlementRetryRequired: true
-    })
+    expect(onEvent.mock.calls[0]?.[0]).toMatchObject({ cause: 'unexpected-exit' })
     expect(translator.handle).toHaveBeenCalledOnce()
+  })
+
+  it("ends the session and a Stop's wait for its turn to open when a requested close cannot publish its end", async () => {
+    const { connection, prompts, session, sessions } = backpressuredSession(true)
+    let released = false
+    void session.turnOpenWaits.wait('turn-1', 60_000).then(() => {
+      released = true
+    })
+
+    expect(
+      handleCodexSessionExit({
+        sessions,
+        sessionId: 'session-1',
+        connection,
+        error: new Error('codex session closed'),
+        closedByOrca: true,
+        prompts
+      })
+    ).toBe(true)
+    await Promise.resolve()
+    // The exit is observed: the refused row is the host's to settle, and nothing waits on a turn.
+    expect(session.ended).toBe(true)
+    expect(released).toBe(true)
   })
 
   it('mints a distinct child generation even when acquisitions share one fence', async () => {
@@ -185,7 +210,7 @@ describe('Codex structured session close lifecycle', () => {
 
   it('routes Codex sink-failure recovery through force-close and preserves unexpected-exit settlement', async () => {
     const { adapter, connections, events } = adapterFixture()
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude: claudeAdapterStub(), codex: adapter },
       async () => {}
     )

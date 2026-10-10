@@ -2,7 +2,7 @@
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './orca-runtime-publish-pty-backed-mobile-session-terminal'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { hasHostAuthoritativeTerminalMembership } from './workspace-session-terminal-membership-authority'
+import { hasHostAuthoritativeTerminalMembership } from '../persistence/terminal-topology/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
@@ -27,8 +27,8 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
       snapshotVersion: snapshot.snapshotVersion + 1
     })
     if (options.immediate) {
-      // Why: readiness/lifecycle changes are structural and must not wait
-      // behind the title/status coalescing window.
+      // Why: an exit is structural and must not wait behind the title/status window. A
+      // registration's ready flip coalesces so it merges with the spawn's graph update.
       this.notifyMobileSessionTabsChanged(worktreeId)
       return
     }
@@ -126,7 +126,11 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
           tab.parentTabId,
           tab.leafId,
           tab.ptyId
-        )
+        ) ||
+        // Why: after a cold restore the saved session is the only membership record until the PTY
+        // registers. Frame-only; once listed, the surface's graph leaves pass the shared predicate
+        // like any listed surface's. Host-side single-writer membership absorbs this.
+        this.hasPersistedTerminalSurfaceMembership(snapshot.worktree, tab.parentTabId, tab.leafId)
       ) {
         continue
       }

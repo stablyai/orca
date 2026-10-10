@@ -135,7 +135,7 @@ export function appendDeferredSplitPaneInput(
   ) {
     return
   }
-  owned.record.preconnectInput.push({ data: input.data, kind: input.kind })
+  owned.record.preconnectInput.push({ ...input })
   owned.record.inputCodeUnits += input.data.length
 }
 

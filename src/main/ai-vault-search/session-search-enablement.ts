@@ -3,6 +3,10 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { updateSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
 import { createChildSessionSearchService } from './session-search-child-service'
 import { installSessionSearchPolicySource } from './session-search-policy'
+import {
+  installSessionSearchScopeCatalogSource,
+  type SessionSearchScopeCatalogSource
+} from './session-search-scope-catalog'
 import { setSessionSearchService } from './session-search-service-registry'
 import {
   installSessionSearchDataRoot,
@@ -22,6 +26,8 @@ let installed = false
 export function installChildSessionSearchService(args: {
   dataRoot: string
   getSettings: () => Pick<GlobalSettings, 'aiVaultSearch'>
+  /** How a Workspace or Project scope becomes this host's own paths. */
+  getScopeCatalog?: SessionSearchScopeCatalogSource
 }): { dispose(): void } | null {
   if (!sessionSearchSqliteAvailable()) {
     return null
@@ -29,11 +35,13 @@ export function installChildSessionSearchService(args: {
   installed = true
   installSessionSearchDataRoot(args.dataRoot)
   installSessionSearchPolicySource(args.getSettings)
+  installSessionSearchScopeCatalogSource(args.getScopeCatalog ?? null)
   setSessionSearchService(createChildSessionSearchService())
   pushSessionSearchPolicy()
   return {
     dispose: () => {
       installed = false
+      installSessionSearchScopeCatalogSource(null)
     }
   }
 }

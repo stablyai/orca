@@ -25,6 +25,34 @@ export type GitRemoteIdentityProbe =
   | { status: 'no-remote' }
   | { status: 'unavailable' }
 
+/** Runs a read-only git command in `repoPath` on the host that owns it, bounded by the probe
+ *  timeouts. Resolves null when this process has no route to that host's git; throws on git errors. */
+export async function runGitProbeOnHost(
+  args: string[],
+  repoPath: string,
+  executionHostId: ExecutionHostId,
+  options: GitRemoteIdentityProbeOptions = {}
+): Promise<{ stdout: string } | null> {
+  const route = resolveGitRouteForHost(executionHostId)
+  if (route.kind === 'runtime') {
+    // That environment's server runs its own git, and the SSH target on its repo row is nested in
+    // that server's namespace — dialing it here answers for a same-named box of ours.
+    return null
+  }
+  if (route.kind === 'ssh') {
+    const result = await route.provider?.exec(args, repoPath, {
+      signal: options.signal,
+      timeoutMs: options.timeoutMs ?? SSH_PROBE_TIMEOUT_MS
+    })
+    return result ?? null
+  }
+  return gitExecFileAsync(args, {
+    cwd: repoPath,
+    timeout: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS,
+    signal: options.signal
+  })
+}
+
 export async function probeGitRemoteIdentity(
   repoPath: string,
   executionHostId: ExecutionHostId,
@@ -33,23 +61,7 @@ export async function probeGitRemoteIdentity(
   try {
     // Inside the try on purpose: an id naming no host must land on `unavailable` like every other
     // probe that never reached git. It must never become the local answer for a remote path.
-    const route = resolveGitRouteForHost(executionHostId)
-    if (route.kind === 'runtime') {
-      // That environment's server runs its own git, and the SSH target on its repo row is nested in
-      // that server's namespace — dialing it here answers for a same-named box of ours.
-      return { status: 'unavailable' }
-    }
-    const result =
-      route.kind === 'ssh'
-        ? await route.provider?.exec(['remote', '-v'], repoPath, {
-            signal: options.signal,
-            timeoutMs: options.timeoutMs ?? SSH_PROBE_TIMEOUT_MS
-          })
-        : await gitExecFileAsync(['remote', '-v'], {
-            cwd: repoPath,
-            timeout: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS,
-            signal: options.signal
-          })
+    const result = await runGitProbeOnHost(['remote', '-v'], repoPath, executionHostId, options)
     if (!result) {
       return { status: 'unavailable' }
     }

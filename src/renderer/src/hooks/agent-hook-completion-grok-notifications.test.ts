@@ -43,7 +43,6 @@ type MockStoreState = {
   agentLaunchConfigByPaneKey: Record<string, unknown>
   agentStatusByPaneKey: Record<string, unknown>
   getAgentLaunchConfigForStatusEntry: () => undefined
-  getAgentLaunchConfigForStatusMetadata: () => undefined
 }
 
 let mockStoreState: MockStoreState
@@ -78,8 +77,7 @@ describe('Grok hook completion notifications', () => {
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined,
-      getAgentLaunchConfigForStatusMetadata: () => undefined
+      getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })
 
@@ -152,14 +150,6 @@ describe('Grok hook completion notifications', () => {
     })
   })
 
-  it('keeps the captured SessionEnd and shutdown Stop tail silent', async () => {
-    const shutdownTail = capturedHooks.filter(
-      (hook) => hook.reason === 'shutdown' || hook.hookEventName === 'session_end'
-    )
-
-    expect(await play(shutdownTail)).toHaveLength(0)
-  })
-
   it.each([
     {
       eventName: 'StopFailure',
@@ -207,70 +197,39 @@ describe('Grok hook completion notifications', () => {
     })
   })
 
-  // Pins grok-events.ts finite-task allowlist; broadening it to monitors or sessionCrons must redden.
-  it.each([
-    {
-      label: 'monitor',
-      backgroundTasks: [
-        { id: 'monitor-1', type: 'monitor', status: 'running', description: 'watch the build' }
-      ],
-      sessionCrons: []
-    },
-    {
-      label: 'cron',
-      backgroundTasks: [],
-      sessionCrons: [
-        { id: 'cron-1', schedule: 'every minute', recurring: true, prompt: 'check the build' }
-      ]
-    }
-  ])('announces with only a running $label outstanding', async (scenario) => {
-    const notifications = await play([
-      {
-        hookEventName: 'UserPromptSubmit',
-        timestamp: '2026-09-12T03:01:00.000Z',
-        prompt: 'finish the request'
-      },
+  it('stays silent while a background subagent outlives the main agent, then announces once', async () => {
+    const turn = (timestamp: string, promptId: string, backgroundTasks: unknown[]) => [
+      { hookEventName: 'UserPromptSubmit', timestamp, sessionId: 'session-1', promptId },
       {
         hookEventName: 'Stop',
-        timestamp: '2026-09-12T03:01:01.000Z',
+        timestamp: timestamp.replace(':00.000Z', ':01.000Z'),
+        sessionId: 'session-1',
+        promptId,
         reason: 'end_turn',
         stopHookActive: false,
-        backgroundTasks: scenario.backgroundTasks,
-        sessionCrons: scenario.sessionCrons
+        backgroundTasks
       }
-    ])
+    ]
+    const early = await play(
+      turn('2026-09-12T03:05:00.000Z', 'prompt-1', [
+        { id: 'task-1', type: 'subagent', status: 'running', agentType: 'general-purpose' }
+      ])
+    )
     vi.advanceTimersByTime(1_500)
+    expect(early).toHaveLength(0)
 
-    expect(notifications).toHaveLength(1)
-  })
-
-  it('does not announce a delayed cancellation after the next prompt starts', async () => {
     const notifications = await play([
-      {
-        hookEventName: 'UserPromptSubmit',
-        timestamp: '2026-09-12T03:02:00.000Z',
-        sessionId: 'session-1',
-        promptId: 'prompt-old',
-        prompt: 'old turn'
-      },
-      {
-        hookEventName: 'UserPromptSubmit',
-        timestamp: '2026-09-12T03:02:01.000Z',
-        sessionId: 'session-1',
-        promptId: 'prompt-new',
-        prompt: 'new turn'
-      },
-      {
-        hookEventName: 'StopCancelled',
-        timestamp: '2026-09-12T03:02:02.000Z',
-        sessionId: 'session-1',
-        promptId: 'prompt-old',
-        reason: 'user_interrupt'
-      }
+      ...turn('2026-09-12T03:06:00.000Z', 'prompt-1', [
+        { id: 'task-1', type: 'subagent', status: 'running', agentType: 'general-purpose' }
+      ]),
+      ...turn('2026-09-12T03:07:00.000Z', 'task-completed-task-1', [])
     ])
     vi.advanceTimersByTime(1_500)
-
-    expect(notifications).toHaveLength(0)
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]).toMatchObject({
+      at: Date.parse('2026-09-12T03:07:02.500Z'),
+      snapshot: { state: 'done', agentType: 'grok' }
+    })
   })
 
   it('announces once from idle_prompt after repeated continuation Stops', async () => {

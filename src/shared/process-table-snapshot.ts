@@ -272,11 +272,3 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
   }
   return rows
 }
-
-/**
- * Rank a descendant row as a foreground candidate: a `+` (foreground process
- * group) row always outranks a background one, then the deepest wins.
- */
-export function scoreForegroundCandidateRow(row: ProcessTableRow & { depth: number }): number {
-  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
-}

@@ -12,7 +12,12 @@ import {
   enrichSshForwardEntries,
   getWorktreeIdsForConnection
 } from '../ports/ssh-advertised-url-enrichment'
+import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
+import { getSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
+import { isSshRelayOnHostNodeRuntime } from '../ssh/ssh-host-node-runtime-mode'
+import { clearSshHostServerStatus, getSshHostServerStatus } from '../ssh/ssh-host-server-status'
+import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   connectionManager,
@@ -29,8 +34,9 @@ export function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
-  // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
-  if (isRuntimeOwnedSshTargetId(targetId)) {
+  const target = getSshTargetRegistryStore()?.getTarget(targetId)
+  // Why: owned targets are hidden from clients; broadcasting them leaks internal transport state into persisted reconnect hints.
+  if (isRuntimeOwnedSshTargetId(targetId) || (target && isRuntimeOwnedSshTarget(target))) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
   }
@@ -46,12 +52,23 @@ export function broadcastSshState(
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
   const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
   const authority = getSshProviderAuthority(targetId)
+  const plainSsh = state.status === 'connected' ? getSshPlainSshMode(targetId) : undefined
+  const managedServer = state.managedServer ?? getSshHostServerStatus(targetId)
+  // Why the managed check: a host that moved to its managed server no longer runs that relay.
+  const hostNodeRuntime =
+    state.status === 'connected' &&
+    !plainSsh &&
+    managedServer?.kind !== 'managed' &&
+    isSshRelayOnHostNodeRuntime(targetId)
   return {
     ...state,
     targetId,
     providerEpoch: authority.providerEpoch,
     connectionGeneration: authority.connectionGeneration,
-    ...(remotePlatform ? { remotePlatform } : {})
+    ...(remotePlatform ? { remotePlatform } : {}),
+    ...(plainSsh ? { plainSsh } : {}),
+    ...(hostNodeRuntime ? { hostNodeRuntime } : {}),
+    ...(managedServer ? { managedServer } : {})
   }
 }
 
@@ -74,6 +91,24 @@ export function clearRelayStateOverride(targetId: string): void {
 export function connectionSupportsFolderDownload(targetId: string): boolean {
   // Why: connections without an explicit transport are ssh2-shaped; only a confirmed system-SSH transport lacks the SFTP-only capability.
   return connectionManager?.getConnection(targetId)?.usesSystemSshTransport?.() !== true
+}
+
+/**
+ * Forgets a host's managed-server decision once its server is unlinked, and republishes the
+ * connection without it. The republish is also what drops the host's cached worktree scans, so
+ * listings stop naming the removed server without waiting for a reconnect.
+ */
+export function clearPublishedManagedServer(targetId: string): void {
+  clearSshHostServerStatus(targetId)
+  const override = relayStateOverrides.get(targetId)
+  if (override?.managedServer) {
+    const { managedServer: _removed, ...rest } = override
+    relayStateOverrides.set(targetId, rest)
+  }
+  const state = relayStateOverrides.get(targetId) ?? connectionManager?.getState(targetId)
+  if (state) {
+    broadcastSshState(getCurrentMainWindow, targetId, state)
+  }
 }
 
 export function getPublicSshState(targetId: string): SshConnectionState | undefined {

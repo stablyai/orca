@@ -6,6 +6,12 @@
  * was ever set — so the row below is what lets a reader tell the two apart.
  */
 
+import type {
+  AgentJournalThreadGoal,
+  AgentJournalThreadGoalState
+} from '../../shared/agent-session-journal-types'
+import { isAgentJournalThreadGoalStatus } from '../../shared/agent-session-thread-goal'
+
 const GOAL_UPDATED_METHOD = 'thread/goal/updated'
 const GOAL_CLEARED_METHOD = 'thread/goal/cleared'
 
@@ -71,4 +77,57 @@ export function codexGoalRowSignature(method: string, payload: unknown): string 
 export function codexGoalGeneration(payload: unknown): string | null {
   const createdAt = goalRecord(payload)?.createdAt
   return typeof createdAt === 'number' && Number.isFinite(createdAt) ? String(createdAt) : null
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** Codex's goal object in journal form; null when any field is missing or unknown. */
+function codexThreadGoal(record: Record<string, unknown> | null): AgentJournalThreadGoal | null {
+  if (record === null) {
+    return null
+  }
+  const tokensUsed = finiteNumber(record.tokensUsed)
+  const timeUsedSeconds = finiteNumber(record.timeUsedSeconds)
+  const createdAt = finiteNumber(record.createdAt)
+  const updatedAt = finiteNumber(record.updatedAt)
+  const tokenBudget = record.tokenBudget === null ? null : finiteNumber(record.tokenBudget)
+  if (
+    typeof record.objective !== 'string' ||
+    typeof record.status !== 'string' ||
+    !isAgentJournalThreadGoalStatus(record.status) ||
+    tokensUsed === null ||
+    timeUsedSeconds === null ||
+    createdAt === null ||
+    updatedAt === null ||
+    (tokenBudget === null && record.tokenBudget !== null && record.tokenBudget !== undefined)
+  ) {
+    return null
+  }
+  return {
+    objective: record.objective,
+    status: record.status,
+    tokenBudget,
+    tokensUsed,
+    timeUsedSeconds,
+    // Codex reports epoch seconds; the journal keeps epoch ms.
+    createdAt: createdAt * 1000,
+    updatedAt: updatedAt * 1000
+  }
+}
+
+/** The typed transition a goal frame records, or null for any other frame. */
+export function codexThreadGoalState(
+  method: string,
+  payload: unknown
+): AgentJournalThreadGoalState | null {
+  if (method === GOAL_CLEARED_METHOD) {
+    return { state: 'cleared' }
+  }
+  if (method !== GOAL_UPDATED_METHOD) {
+    return null
+  }
+  const goal = codexThreadGoal(goalRecord(payload))
+  return goal ? { state: 'set', goal } : null
 }

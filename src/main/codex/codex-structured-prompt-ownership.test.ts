@@ -159,7 +159,7 @@ describe('Codex live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'accept',
+      response: { kind: 'option', optionId: 'accept' },
       fence: 7,
       commit: async () => {
         expect(codex.connections[0]?.replies).toEqual([])
@@ -210,7 +210,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -224,7 +224,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -237,7 +237,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 8,
         commit
       })
@@ -261,12 +261,12 @@ describe('Codex live prompt ownership', () => {
         fence: 7,
         prompt: { itemId: 'journal-prompt' }
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
     await adapter.answerPrompt({
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'decline',
+      response: { kind: 'option', optionId: 'decline' },
       fence: 7,
       commit: async () => undefined
     })
@@ -277,8 +277,7 @@ describe('Codex live prompt ownership', () => {
     const codex = fakeCodex({
       'turn/interrupt': () => completeTurn(codex, 'thread-child', 'child-turn')
     })
-    const terminateTurnProcesses = vi.fn(async () => true)
-    const adapter = adapterFor(codex, {}, [], { terminateTurnProcesses })
+    const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
       fence: 7,
@@ -298,7 +297,6 @@ describe('Codex live prompt ownership', () => {
       method: 'turn/interrupt',
       params: { threadId: 'thread-child', turnId: 'child-turn' }
     })
-    expect(terminateTurnProcesses).not.toHaveBeenCalled()
     expect(codex.connections[0]?.closed).toBe(false)
   })
 
@@ -382,7 +380,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: siblingItemId,
         kind: 'question',
-        optionId: 'no',
+        response: { kind: 'answers', answers: [{ questionId: 'q2', optionIds: [], other: 'no' }] },
         fence: 7,
         commit: async () => undefined
       })
@@ -497,7 +495,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -511,7 +509,7 @@ describe('Codex live prompt ownership', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
+    ).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(completionThreads(events)).toEqual([])
   })
 
@@ -545,7 +543,7 @@ describe('Codex live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -553,7 +551,7 @@ describe('Codex live prompt ownership', () => {
     expect(commit).not.toHaveBeenCalled()
   })
 
-  it('does not report success when a deferred provider completion is backpressured', async () => {
+  it("confirms on Codex's answer and keeps the prompt's claim when the turn's end is backpressured", async () => {
     const recorded = lifecycleRecorder(true, false)
     const codex = fakeCodex({
       'turn/interrupt': () => {
@@ -580,14 +578,14 @@ describe('Codex live prompt ownership', () => {
         fence: 7,
         prompt: { itemId: promptItemId }
       })
-    ).rejects.toThrow(/deferred turn completion lifecycle was not admitted/)
+    ).resolves.toEqual({ cancelled: true })
     const commit = vi.fn(async () => undefined)
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'accept',
+        response: { kind: 'option', optionId: 'accept' },
         fence: 7,
         commit
       })
@@ -597,7 +595,7 @@ describe('Codex live prompt ownership', () => {
     await adapter.closeSession('session-1')
   })
 
-  it('defers only the matching thread and emits its terminal event before cancel resolves', async () => {
+  it("publishes every thread's turn end as Codex sends it, ahead of the Stop's answer", async () => {
     const interruptGate = deferred()
     const events: CodexStructuredSessionEvent[] = []
     const codex = fakeCodex({
@@ -610,18 +608,13 @@ describe('Codex live prompt ownership', () => {
     const adapter = await acquired(codex, {}, events)
     registerPrompt(adapter, codex, 'child-prompt', 'thread-child')
 
-    const cancellation = adapter
-      .cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'child-prompt' }
-      })
-      .then((result) => {
-        expect(completionThreads(events)).toEqual([THREAD_ID, 'thread-child'])
-        return result
-      })
-    await vi.waitFor(() => expect(completionThreads(events)).toEqual([THREAD_ID]))
+    const cancellation = adapter.cancelTurn({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      fence: 7,
+      prompt: { itemId: 'child-prompt' }
+    })
+    await vi.waitFor(() => expect(completionThreads(events)).toEqual([THREAD_ID, 'thread-child']))
 
     interruptGate.resolve()
     await expect(cancellation).resolves.toEqual({ cancelled: true })

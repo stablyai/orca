@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Inventory after the terminal host dies: worktree removal must not hard-fail. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'

@@ -222,19 +222,17 @@ describe('MobilePane pairing connection mode', () => {
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
   })
 
-  it('keeps Anywhere selected but blocks generation when signed out', async () => {
+  it('preselects LAN on a signed-out desktop and gates Generate once Relay is chosen', async () => {
     mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
     const user = userEvent.setup()
     render(<MobilePane />)
-    expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
-    // Why: the signed-out desktop cannot serve Relay, so Generate is gated off
-    // and no misleading local-only QR is minted under the Relay label.
+    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
+    await user.click(screen.getByRole('button', { name: 'choose-anywhere' }))
+    // Why: signed-out Relay is gated off; no local-only QR is minted under its label.
     expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled()
-
     await user.click(screen.getByRole('button', { name: 'Generate' }))
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(getPairingQR).not.toHaveBeenCalled()
+    await waitFor(() => expect(getPairingQR).not.toHaveBeenCalled())
   })
 
   it('surfaces Relay mint failure without a QR and offers Use LAN', async () => {

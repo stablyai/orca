@@ -22,6 +22,7 @@ const BASE_DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
   agentId: 'codex',
+  extraAgentArgs: '',
   projectId: '',
   workspaceMode: 'existing',
   workspaceId: '',
@@ -125,6 +126,17 @@ describe('AutomationSchedulePicker', () => {
       expect(label).toContain(expected)
       expect(label).not.toMatch(/Friday/)
       expect(label).not.toMatch(/s at /)
+    }
+  )
+
+  it.each(['en', 'zh', 'ja', 'ko', 'es'])(
+    'shows a valid multi-day weekly rule without an invalid label in %s (#24985)',
+    async (locale) => {
+      await i18n.changeLanguage(locale)
+      const rrule = 'FREQ=WEEKLY;BYDAY=TU,TH,SA;BYHOUR=8;BYMINUTE=0'
+
+      expect(formatUiAutomationSchedule(rrule)).toBe(rrule)
+      expect(formatUiAutomationSchedule('*/30 9-17 * * MON-FRI')).not.toBe('Invalid schedule')
     }
   )
 

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetWorktreeTestSshHostHome } from '../../worktree-removal-test-ssh-host-home'
+
 import {
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
@@ -24,11 +26,16 @@ import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
+  isLocalBranchCatalogQuery,
   isOriginMainBaseRefProbe,
   makeWorktreeMeta,
   store,
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
+
+// Why: these fixtures register an SSH provider, which models a connected relay session — and a
+// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+beforeEach(resetWorktreeTestSshHostHome)
 
 describe('OrcaRuntimeService', () => {
   it('launches SSH setup terminals for runtime task-created worktrees', async () => {
@@ -72,11 +79,11 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
-        if (args[0] === 'branch') {
+        if (args[0] === 'branch' || isLocalBranchCatalogQuery(args)) {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
         }
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
@@ -242,11 +249,11 @@ describe('OrcaRuntimeService', () => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
-        if (args[0] === 'branch') {
+        if (args[0] === 'branch' || isLocalBranchCatalogQuery(args)) {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
+        if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+          return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
         }
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }

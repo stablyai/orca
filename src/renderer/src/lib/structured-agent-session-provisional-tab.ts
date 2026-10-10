@@ -1,5 +1,4 @@
 import type { Tab } from '../../../shared/tab-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import type {
@@ -11,13 +10,34 @@ import type {
   StructuredAgentLaunchHooks
 } from '@/lib/structured-agent-launch-settlement'
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import {
+  beginHostAdmittedStructuredLaunch,
+  openDeclinedStructuredLaunchTerminal,
+  type DeclinedStructuredLaunchTerminalOptions,
+  type HostAdmittedStructuredLaunch,
+  type StructuredLaunchTerminal
+} from '@/lib/structured-agent-session-launch-admission'
+import {
+  resolveStructuredAgentSessionOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
-export type StructuredAgentSessionProvisionalLaunch = StructuredAgentLaunchHandle & { tab: Tab }
+type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: Tab }
+
+/** A chat's tab opens once its host admits it; a launch with no host to ask takes the direct path. */
+export type StructuredAgentSessionProvisionalLaunch =
+  | LocalProvisionalLaunch
+  | HostAdmittedStructuredLaunch
 
 export function openStructuredAgentSessionProvisionalTab(args: {
   worktreeId: string
+  /** The host the chat is created on; every later operation on the tab reads it. */
+  executionHostId: ExecutionHostId
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: TuiAgent
   targetGroupId?: string
   activate?: boolean
 }): Tab {
@@ -40,7 +60,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
     id: tabId,
     entityId: args.sessionId,
-    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    executionHostId: args.executionHostId,
     agentSessionAgent: args.agent,
     label: defaultAgentChatLabel(args.agent),
     ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
@@ -52,39 +72,105 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   return tab
 }
 
-/** Binds the synchronous launch identity to a chat tab before the caller yields. */
-export function beginStructuredAgentSessionProvisionalLaunch(args: {
+/** The host a structured launch would run on, which admits the chat before it exists. */
+export function structuredLaunchOwner(
+  plan: Pick<AgentSessionLaunchPlan, 'route' | 'executionHostId'>,
+  worktreeId: string,
+  target?: AgentSessionLaunchTarget
+): { executionHostId: ExecutionHostId; target: RuntimeClientTarget } | null {
+  if (plan.route !== 'structured-native-chat') {
+    return null
+  }
+  const executionHostId =
+    target?.executionHostId ??
+    plan.executionHostId ??
+    resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
+  const hostTarget = structuredAgentSessionTargetForHost(executionHostId)
+  return executionHostId && hostTarget ? { executionHostId, target: hostTarget } : null
+}
+
+type ProvisionalLaunchArgs = {
   plan: AgentSessionLaunchPlan
   hooks: StructuredAgentLaunchHooks
   target?: AgentSessionLaunchTarget
   targetGroupId?: string
   activate?: boolean
-  /** Lets workspace flows reveal between final identity allocation and tab ownership. */
-  beforeOpen?: (sessionId: string) => boolean | void
-}): StructuredAgentSessionProvisionalLaunch | null {
+  /** Lets workspace flows reveal before the chat's tab is owned: before its host is asked, when no
+   *  session id exists yet. */
+  beforeOpen?: (sessionId?: string) => boolean | void
+  /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
+  onHostDeclined?: (
+    target: RuntimeClientTarget
+  ) => Promise<StructuredLaunchTerminal> | StructuredLaunchTerminal
+  /** What that default terminal carries from the caller, e.g. a recipe's saved CLI arguments. */
+  declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
+}
+
+/** Binds the launch to a chat tab once its host, this machine included, admits the chat. */
+export function beginStructuredAgentSessionProvisionalLaunch(
+  args: ProvisionalLaunchArgs
+): StructuredAgentSessionProvisionalLaunch | null {
+  const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
+  const owner = worktreeId ? structuredLaunchOwner(args.plan, worktreeId, args.target) : null
+  if (!owner || !worktreeId) {
+    // No host to ask: the launch path refuses it with its own message.
+    return beginLocalProvisionalLaunch(args)
+  }
+  if (args.beforeOpen?.() === false) {
+    return null
+  }
+  return beginHostAdmittedStructuredLaunch({
+    plan: args.plan,
+    hooks: args.hooks,
+    worktreeId,
+    executionHostId: owner.executionHostId,
+    target: owner.target,
+    openAdmitted: (seedOptions) =>
+      beginLocalProvisionalLaunch({
+        ...args,
+        target: {
+          ...args.target,
+          worktreeId,
+          executionHostId: owner.executionHostId,
+          ...(seedOptions ? { seedOptions } : {})
+        },
+        beforeOpen: undefined
+      }),
+    onHostDeclined:
+      args.onHostDeclined ??
+      (() =>
+        openDeclinedStructuredLaunchTerminal({
+          plan: args.plan,
+          worktreeId,
+          ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+          ...(args.declinedTerminal ? { terminal: args.declinedTerminal } : {})
+        }))
+  })
+}
+
+function beginLocalProvisionalLaunch(args: ProvisionalLaunchArgs): LocalProvisionalLaunch | null {
   const handle = args.plan.begin(args.hooks, args.target)
   if (!handle) {
     return null
   }
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  if (!worktreeId || (args.plan.agent !== 'claude' && args.plan.agent !== 'codex')) {
-    throw new Error('A provisional structured launch needs its workspace and provider.')
+  if (!worktreeId) {
+    throw new Error('A provisional structured launch needs its workspace.')
   }
   try {
     if (args.beforeOpen?.(handle.sessionId) === false) {
       handle.cancel()
       return null
     }
-    return {
-      ...handle,
-      tab: openStructuredAgentSessionProvisionalTab({
-        worktreeId,
-        sessionId: handle.sessionId,
-        agent: args.plan.agent,
-        ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
-        ...(args.activate !== undefined ? { activate: args.activate } : {})
-      })
-    }
+    const tab = openStructuredAgentSessionProvisionalTab({
+      worktreeId,
+      executionHostId: handle.executionHostId,
+      sessionId: handle.sessionId,
+      agent: args.plan.agent,
+      ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+      ...(args.activate !== undefined ? { activate: args.activate } : {})
+    })
+    return { ...handle, tab }
   } catch (error) {
     // Why: a launch without its owning surface would strand a late publication.
     handle.cancel()

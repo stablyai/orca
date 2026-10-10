@@ -122,7 +122,7 @@ async function activateHubRepoTerminal(page: Page, repoId: string): Promise<stri
     if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
       store.getState().createTab(worktree.id)
     }
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', worktree.id)
     return worktree.id
   }, repoId)
 }

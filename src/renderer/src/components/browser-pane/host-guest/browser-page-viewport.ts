@@ -28,6 +28,7 @@ const browserPageViewports = new Map<string, BrowserPageViewport>()
 // the inset keeps geometry a property of attaching a guest, not of the first mount.
 const browserPageChromeInsetHeights = new Map<string, number>()
 const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
+const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
 
 const slotRootListeners = new Map<string, Set<() => void>>()
 
@@ -264,6 +265,13 @@ export function applyBrowserPageViewportLayout(
 export function syncBrowserPageChromeInset(browserPageId: string, heightPx: number): void {
   const insetHeight = Math.max(0, heightPx)
   browserPageChromeInsetHeights.set(browserPageId, insetHeight)
+  while (browserPageChromeInsetHeights.size > MAX_REMEMBERED_BROWSER_PAGE_INSETS) {
+    const oldest = browserPageChromeInsetHeights.keys().next()
+    if (oldest.done) {
+      break
+    }
+    browserPageChromeInsetHeights.delete(oldest.value)
+  }
   const viewport = browserPageViewports.get(browserPageId)
   if (!viewport) {
     return
@@ -280,4 +288,8 @@ export function parkBrowserPageViewport(browserPageId: string): void {
     viewport.shell.style.pointerEvents = 'none'
     viewport.shell.style.opacity = '0'
   }
+}
+
+export function _getRememberedBrowserPageInsetCountForTests(): number {
+  return browserPageChromeInsetHeights.size
 }

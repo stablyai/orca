@@ -1,3 +1,7 @@
+import {
+  OPENCODE_CAPTURE_RECORD_LIMIT,
+  OPENCODE_CAPTURE_TEXT_LIMIT
+} from './opencode-transcript-capture-limits'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { timestampIso } from './session-scanner-accumulator'
 import { asRecord } from './session-scanner-record-value'
@@ -6,6 +10,8 @@ import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
 import { canReadOpenCodeMessageParts } from './session-scanner-opencode-sqlite-schema'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
 import { boundedText, toolCallText } from './session-transcript-message-content'
+import { zcodeVisibleMessageFilter } from './session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from './session-scanner-zcode-order'
 import type SyncDatabase from '../sqlite/sync-database'
 
 // Why: the session list needs the newest few messages, and the search index
@@ -15,31 +21,6 @@ import type SyncDatabase from '../sqlite/sync-database'
 
 /** The part types that carry something a person would search for. */
 const OPENCODE_CAPTURE_PART_TYPES = "('text','reasoning','tool')"
-
-/**
- * How many parts one session may hold before this read gives up.
- *
- * A safety valve on memory, not a policy: the rows are materialized and then
- * posted across the worker boundary, so an unbounded session would be held
- * twice. Exceeding it throws rather than returning a prefix, because a prefix
- * committed under a complete-read cursor would leave the tail unsearchable with
- * nothing on the row to say so. A failed read is retried and surfaces; a silent
- * truncation does neither. Measured against a real 21 GB database: the busiest
- * session there holds 1,427 of these parts.
- */
-const OPENCODE_CAPTURE_PART_LIMIT = 20_000
-
-/**
- * How much decoded text one session may carry, for the same reason.
- *
- * Not a truncation policy and not a second cap on tool rows -- the index writer
- * owns that, at 3 KB a row. This is the bound a non-streaming source needs and
- * a streaming one does not: a JSONL provider publishes each message as it reads
- * it, while this one holds the whole session before posting it. Measured on the
- * same database, the largest session's parts total 9.5 MB, so this is ~7x the
- * worst real one.
- */
-const OPENCODE_CAPTURE_TEXT_LIMIT = 64 * 1024 * 1024
 
 type CaptureRow = {
   messageId: string
@@ -140,7 +121,7 @@ function captureRole(role: string | null): TranscriptMessageRole | null {
   return role === 'user' || role === 'assistant' ? role : null
 }
 
-function buildCaptureQuery(): string {
+function buildCaptureQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): string {
   // Message order, then part order within a message: the same key the preview
   // read uses, run forwards and without the newest-N window.
   return `SELECT m.id AS message_id,
@@ -151,9 +132,11 @@ function buildCaptureQuery(): string {
           FROM message m
           JOIN part p ON p.message_id = m.id
           WHERE m.session_id = ?
+            ${zcodeVisibleMessageFilter(agent)}
             AND json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') IN ${OPENCODE_CAPTURE_PART_TYPES}
-          ORDER BY m.time_created ASC, m.id ASC, p.time_created ASC, p.rowid ASC
+          ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'ASC')},
+                   ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC')}
           LIMIT ?`
 }
 
@@ -170,20 +153,24 @@ function buildCaptureQuery(): string {
  */
 export function readOpenCodeSessionMessages(
   db: SyncDatabase,
-  sessionId: string
+  sessionId: string,
+  agent: 'opencode' | 'zcode' = 'opencode'
 ): TranscriptMessage[] {
+  const agentName = agent === 'zcode' ? 'ZCode' : 'OpenCode'
   if (!canReadOpenCodeMessageParts(db)) {
     // Thrown for the same reason the part limit below throws: an empty capture
     // returned here is committed under a complete-read cursor, so the session
     // stays out of search with nothing on its row to say why and no retry.
     throw new Error(
-      `OpenCode session ${sessionId} uses an unreadable message-part schema; its transcript was not read.`
+      `${agentName} session ${sessionId} uses an unreadable message-part schema; its transcript was not read.`
     )
   }
-  const rows = db.prepare(buildCaptureQuery()).all(sessionId, OPENCODE_CAPTURE_PART_LIMIT + 1)
-  if (rows.length > OPENCODE_CAPTURE_PART_LIMIT) {
+  const rows = db
+    .prepare(buildCaptureQuery(db, agent))
+    .all(sessionId, OPENCODE_CAPTURE_RECORD_LIMIT + 1)
+  if (rows.length > OPENCODE_CAPTURE_RECORD_LIMIT) {
     throw new Error(
-      `OpenCode session ${sessionId} holds more than ${OPENCODE_CAPTURE_PART_LIMIT} text parts; its transcript was not read.`
+      `${agentName} session ${sessionId} holds more than ${OPENCODE_CAPTURE_RECORD_LIMIT} text parts; its transcript was not read.`
     )
   }
 
@@ -199,7 +186,7 @@ export function readOpenCodeSessionMessages(
     captured += message.text.length
     if (captured > OPENCODE_CAPTURE_TEXT_LIMIT) {
       throw new Error(
-        `OpenCode session ${sessionId} decodes to more than ${OPENCODE_CAPTURE_TEXT_LIMIT} characters; its transcript was not read.`
+        `${agentName} session ${sessionId} decodes to more than ${OPENCODE_CAPTURE_TEXT_LIMIT} characters; its transcript was not read.`
       )
     }
     messages.push(message)
@@ -258,13 +245,17 @@ export async function captureOpenCodeSqliteSession(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  agent?: 'opencode' | 'zcode'
 }): Promise<OpenCodeSqliteCapture> {
   return readOpenCodeDatabase({
     dbPath: args.dbPath,
     read: (db) => {
       const session = readOpenCodeSqliteSession({ db, ...args })
       // No session row is no transcript: the id names nothing in this database.
-      return { session, messages: session ? readOpenCodeSessionMessages(db, args.sessionId) : [] }
+      return {
+        session,
+        messages: session ? readOpenCodeSessionMessages(db, args.sessionId, args.agent) : []
+      }
     }
   })
 }

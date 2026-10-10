@@ -5,6 +5,7 @@ import { unified } from 'unified'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import { getLocalImageCacheKey, loadLocalImageAbsolutePath } from './useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { documentResourceAccess } from '@/lib/local-file-access'
 
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT = 64
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_CONCURRENCY = 4
@@ -69,7 +70,7 @@ export function extractMarkdownPreviewLocalImageCandidates(
   options: ExtractLocalImageCandidatesOptions = {}
 ): MarkdownPreviewLocalImageCandidate[] {
   const limit = Math.max(0, options.limit ?? MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT)
-  if (limit === 0) {
+  if (limit === 0 || !markdown.includes('!')) {
     return []
   }
 
@@ -97,7 +98,8 @@ export function extractMarkdownPreviewLocalImageCandidates(
     const cacheKey = getLocalImageCacheKey(
       absolutePath,
       options.connectionId,
-      options.runtimeContext
+      options.runtimeContext,
+      documentResourceAccess(filePath)
     )
     if (seenCacheKeys.has(cacheKey)) {
       return
@@ -143,7 +145,8 @@ export function prewarmMarkdownPreviewLocalImages(
       loadLocalImageAbsolutePath(
         candidate.absolutePath,
         options.connectionId,
-        options.runtimeContext
+        options.runtimeContext,
+        documentResourceAccess(filePath)
       ))
   let cancelled = false
   let nextIndex = 0

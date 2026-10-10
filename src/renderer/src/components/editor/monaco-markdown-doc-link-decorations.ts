@@ -1,5 +1,6 @@
 import type { editor, IDisposable, IRange } from 'monaco-editor'
 import { getMarkdownDocLinkTarget } from './markdown-doc-links'
+import { createMarkdownFenceRangeCursor, getMarkdownFenceRanges } from './markdown-fence-scanner'
 import { forEachLine } from './text-line-offsets'
 
 const BACKTICK = 96
@@ -32,27 +33,10 @@ function collectInlineCodeSpans(
   }
 }
 
-function isInsideSpan(index: number, spans: number[]): boolean {
-  for (let cursor = 0; cursor < spans.length; cursor += 2) {
-    if (index >= spans[cursor] && index < spans[cursor + 1]) {
-      return true
-    }
-  }
-  return false
-}
-
-const FENCE_PREFIX_RE = /[^\S\n]*(?:```|~~~)/y
-
-function startsCodeFence(content: string, lineStart: number, lineEnd: number): boolean {
-  FENCE_PREFIX_RE.lastIndex = lineStart
-  // Bound whitespace to this line so blank runs cannot trigger repeated suffix scans.
-  return FENCE_PREFIX_RE.test(content) && FENCE_PREFIX_RE.lastIndex <= lineEnd
-}
-
 export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   const ranges: IRange[] = []
   const inlineCodeSpans: number[] = []
-  let insideFence = false
+  const isInsideFence = createMarkdownFenceRangeCursor(getMarkdownFenceRanges(content))
   // Why: `indexOf` on the whole document would rescan the tail once per line.
   // Both cursors only ever move forward, and every probe position is
   // monotonic, so the delimiter search stays linear in document length.
@@ -60,15 +44,12 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   let nextClose = content.indexOf(']]')
 
   forEachLine(content, (lineStart, lineEnd, lineNumber) => {
-    if (startsCodeFence(content, lineStart, lineEnd)) {
-      insideFence = !insideFence
-      return
-    }
-    if (insideFence) {
+    if (isInsideFence(lineStart)) {
       return
     }
 
     let spansCollected = false
+    let spanCursor = 0
     let searchFrom = lineStart
     while (searchFrom < lineEnd) {
       if (nextOpen !== -1 && nextOpen < searchFrom) {
@@ -91,7 +72,11 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
         collectInlineCodeSpans(content, lineStart, lineEnd, inlineCodeSpans)
         spansCollected = true
       }
-      if (!isInsideSpan(start, inlineCodeSpans)) {
+      // Why: spans and link offsets are ordered, so each span needs only one forward visit.
+      while (spanCursor < inlineCodeSpans.length && inlineCodeSpans[spanCursor + 1] <= start) {
+        spanCursor += 2
+      }
+      if (spanCursor >= inlineCodeSpans.length || start < inlineCodeSpans[spanCursor]) {
         const target = getMarkdownDocLinkTarget(content.slice(start + 2, end))
         if (target) {
           ranges.push({

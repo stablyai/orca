@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.fn()
-vi.mock('../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: (spec: unknown) => runProcessMock(spec)
 }))
 
@@ -197,13 +197,13 @@ describe('scanWindowsListeningPorts', () => {
     expect(powershell.timeoutMs).toBe(5000)
   })
 
-  it('tries pwsh when Windows PowerShell cannot answer, then gives up empty', async () => {
+  it('tries pwsh when Windows PowerShell cannot answer, then fails instead of answering empty', async () => {
     runProcessMock
       .mockResolvedValueOnce(ok(''))
       .mockRejectedValueOnce(new Error('powershell unavailable'))
       .mockRejectedValueOnce(new Error('pwsh unavailable'))
 
-    await expect(scanWindowsListeningPorts()).resolves.toEqual([])
+    await expect(scanWindowsListeningPorts()).rejects.toThrow(/Could not list listening ports/)
 
     expect(specs().map((spec) => spec.program)).toEqual([
       expect.stringMatching(/netstat\.exe$/),

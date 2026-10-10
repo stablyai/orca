@@ -20,6 +20,7 @@ export function findWorktreeById(state: AppState, worktreeId: string): Worktree 
 }
 
 type WorktreeLookupEntry = {
+  owners: Worktree[]
   first: Worktree
   unique: Worktree | null
 }
@@ -39,9 +40,10 @@ export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
       if (existing) {
+        existing.owners.push(worktree)
         existing.unique = null
       } else {
-        byId.set(worktreeId, { first: worktree, unique: worktree })
+        byId.set(worktreeId, { owners: [worktree], first: worktree, unique: worktree })
       }
     }
   }
@@ -257,6 +259,8 @@ export function buildPRRefreshCandidate(
     cacheKey,
     worktreeId: worktree.id,
     currentHeadOid: worktree.head ?? null,
+    cachedHeadOid: state.prCache[cacheKey]?.fetchedHeadOid ?? cachedPR?.headSha ?? null,
+    isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
     fallbackPRNumber,

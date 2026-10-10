@@ -58,16 +58,15 @@ describe('daemon Bash shell-ready rcfile', () => {
     }
   })
 
-  itWithBash('collapses an array PROMPT_COMMAND and preserves member execution order', () => {
+  itWithBash('preserves array PROMPT_COMMAND member execution order', () => {
     const output = runInteractiveBashRcfile(
       `PROMPT_COMMAND=('printf "ARRAY_FIRST\\n"' 'printf "ARRAY_SECOND\\n"')`,
-      `[[ "$(declare -p PROMPT_COMMAND)" == "declare --"* ]] && printf "PROMPT_COMMAND_SCALAR\\n"`,
+      '',
       'exit 0\n'
     )
 
     expect(output.match(/ARRAY_FIRST/g)).toHaveLength(1)
     expect(output.match(/ARRAY_SECOND/g)).toHaveLength(1)
     expect(output.indexOf('ARRAY_FIRST')).toBeLessThan(output.indexOf('ARRAY_SECOND'))
-    expect(output).toContain('PROMPT_COMMAND_SCALAR')
   })
 })

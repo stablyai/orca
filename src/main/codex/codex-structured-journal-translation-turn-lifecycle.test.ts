@@ -7,7 +7,11 @@ import type {
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../../shared/agent-session-turn-record'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
@@ -22,6 +26,8 @@ import {
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSession } from './codex-structured-session-state'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -214,12 +220,12 @@ describe('codex turn lifecycle rows', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: THREAD_ID }
+        providerHandle: codexProviderHandle(THREAD_ID)
       },
       now: () => 9_000,
-      journalDir: join(root, SESSION_ID)
+      stateDirectory: join(root, SESSION_ID)
     })
-    const deferred = createDeferredStructuredAgentSessionEventSink()
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       sessionId: SESSION_ID,
@@ -310,6 +316,44 @@ describe('codex turn lifecycle rows', () => {
     })
   })
 
+  it('keeps the verdict when a send echoed after completion revises the settled row', () => {
+    const tap = recorder()
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      sessionId: SESSION_ID,
+      primaryThreadId: () => THREAD_ID,
+      dispatchRequestOrigin: () => ({ requestedAt: 900, sequence: 0 })
+    })
+
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }, 2_000)
+    )
+    // The echo lands after the turn settled, so the revision is rebuilt from the
+    // remembered terminal row. A rebuild that named only the state would drop the
+    // verdict and leave the failure looking like an ordinary finished turn.
+    translator.handle(
+      notification(
+        'item/started',
+        {
+          turn: { id: TURN_ID },
+          item: { type: 'userMessage', id: 'user-1', clientId: 'client-1' }
+        },
+        2_100
+      )
+    )
+
+    // `requestedAt` proves this is the post-echo revision: the terminal row
+    // written at turn/completed had no request origin to carry yet.
+    const lifecycle = reduced(tap.rows).find((row) => row.key === LIFECYCLE_KEY)
+    expect(lifecycle?.body).toMatchObject({
+      kind: 'turn',
+      state: 'completed',
+      outcome: 'failure',
+      requestedAt: 900
+    })
+  })
+
   it('carries the provider duration and the same user item onto the terminal row', () => {
     const tap = recorder()
     const translator = translatorFor(tap)
@@ -329,6 +373,7 @@ describe('codex turn lifecycle rows', () => {
         kind: 'turn',
         turnId: TURN_ID,
         state: 'completed',
+        outcome: 'success',
         userItemId: USER_ITEM_ID,
         startedAt: 1_000,
         completedAt: 4_500,
@@ -337,9 +382,18 @@ describe('codex turn lifecycle rows', () => {
     })
   })
 
-  it.each(['interrupted', 'failed', 'cancelled'])(
-    'maps a %s turn status to an interrupted lifecycle',
-    (status) => {
+  // `TurnStatus` in the app-server protocol is `completed | interrupted | failed |
+  // inProgress`. Only `interrupted` is a stop; every other end completed the
+  // turn, and `outcome` says how. A status this build cannot place stays unknown
+  // rather than borrowing a verdict.
+  it.each([
+    ['interrupted', 'interrupted', 'cancellation'],
+    ['failed', 'completed', 'failure'],
+    ['someFutureStatus', 'completed', undefined],
+    ['inProgress', 'completed', undefined]
+  ] as const)(
+    'maps a %s turn status to a %s lifecycle with outcome %s',
+    (status, state, outcome) => {
       const tap = recorder()
       const translator = translatorFor(tap)
 
@@ -353,7 +407,8 @@ describe('codex turn lifecycle rows', () => {
           body: {
             kind: 'turn',
             turnId: TURN_ID,
-            state: 'interrupted',
+            state,
+            ...(outcome ? { outcome } : {}),
             userItemId: USER_ITEM_ID,
             startedAt: 1_000,
             completedAt: 2_000
@@ -362,6 +417,21 @@ describe('codex turn lifecycle rows', () => {
       ])
     }
   )
+
+  it('records no outcome for a turn end that named no status', () => {
+    const tap = recorder()
+    const translator = translatorFor(tap)
+
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
+    // `status` is required on Codex's `Turn`, so its absence is a payload this
+    // host did not get. The lifecycle still has to name an arm; the verdict does
+    // not, and inventing `success` here is what a notification would fire on.
+    translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }, 2_000))
+
+    const body = reduced(tap.rows).at(-1)?.body
+    expect(body).toMatchObject({ kind: 'turn', state: 'completed' })
+    expect(readAgentJournalTurnOutcome(readAgentJournalTurn(body))).toBeNull()
+  })
 
   it('stamps the host clock when a boundary arrives without a receipt time', () => {
     const tap = recorder()
@@ -444,35 +514,79 @@ describe('codex turn lifecycle rows', () => {
             completedAt: 1_700_000_101,
             items: []
           },
+          {
+            id: 'turn-failed',
+            status: 'failed',
+            startedAt: 1_700_000_150,
+            completedAt: 1_700_000_152,
+            durationMs: 2_400,
+            items: []
+          },
+          {
+            id: 'turn-unplaced',
+            status: 'someFutureStatus',
+            startedAt: 1_700_000_170,
+            completedAt: 1_700_000_171,
+            items: []
+          },
           { id: 'turn-open', status: 'inProgress', startedAt: 1_700_000_200, items: [] },
           { id: 'turn-untimed', status: 'completed', items: [] }
         ]
       })
     ).toEqual({ accepted: true })
 
+    // Each record precedes its turn's items, the order the live path writes.
     expect(tap.rows).toEqual([
-      expect.objectContaining({ body: expect.objectContaining({ kind: 'message' }) }),
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-done',
         body: {
           kind: 'turn',
           turnId: 'turn-done',
           state: 'completed',
+          outcome: 'success',
           userItemId: 'codex:thread-abc:turn-done:0',
           startedAt: 1_700_000_000_000,
           completedAt: 1_700_000_042_000,
           durationMs: 41_900
         }
       },
+      expect.objectContaining({ body: expect.objectContaining({ kind: 'message' }) }),
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-cut',
         body: {
           kind: 'turn',
           turnId: 'turn-cut',
           state: 'interrupted',
+          outcome: 'cancellation',
           userItemId: 'codex:thread-abc:turn-cut:0',
           startedAt: 1_700_000_100_000,
           completedAt: 1_700_000_101_000
+        }
+      },
+      {
+        // The same shape a live failed completion writes.
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-failed',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-failed',
+          state: 'completed',
+          outcome: 'failure',
+          userItemId: 'codex:thread-abc:turn-failed:0',
+          startedAt: 1_700_000_150_000,
+          completedAt: 1_700_000_152_000,
+          durationMs: 2_400
+        }
+      },
+      {
+        // Ended, but not a status this build can place: no verdict, never a clean finish.
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-unplaced',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-unplaced',
+          state: 'completed',
+          userItemId: 'codex:thread-abc:turn-unplaced:0',
+          startedAt: 1_700_000_170_000,
+          completedAt: 1_700_000_171_000
         }
       }
     ])

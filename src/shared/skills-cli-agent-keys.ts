@@ -14,15 +14,19 @@ import type { TuiAgent } from './tui-agent'
 export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   claude: 'claude-code',
   'claude-agent-teams': 'claude-code',
+  codebuddy: 'codebuddy',
   // Why: Orca states OpenClaude reads Claude-owned roots (native-chat-agent-profiles).
   openclaude: 'claude-code',
   codex: 'codex',
   autohand: 'autohand-code',
   opencode: 'opencode',
+  opencode2: 'opencode',
   'mimo-code': null,
   pi: 'pi',
   omp: null,
   'prime-agent': null,
+  qoder: 'qoder',
+  'qoder-cn': 'qoder-cn',
   gemini: 'gemini-cli',
   antigravity: 'antigravity',
   aider: null,
@@ -34,6 +38,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   aug: 'augment',
   cline: 'cline',
   codebuff: null,
+  freebuff: null,
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',
@@ -49,7 +54,12 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   devin: 'devin',
   ante: null,
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
-  trae: 'trae-cn'
+  trae: 'trae-cn',
+  muse: null,
+  zcode: 'zcode',
+  // Why: DSH ships skills as Cordis plugins, not a `skills --agent` target.
+  dsh: null,
+  jcode: null
 } satisfies Record<TuiAgent, string | null>
 
 /**

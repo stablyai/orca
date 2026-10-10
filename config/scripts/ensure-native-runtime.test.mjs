@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import {
-  chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,10 +9,20 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+import { isAbsolute, join, parse } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
+import { DEFAULT_MAX_OUTPUT_BYTES } from '@orca/process-host/process-spec'
+import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
+import {
+  nodeGypRebuildInvocation,
+  nodeGypRebuildTimeoutMs
+} from './windows-process-tree-gyp-rebuild.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
 // The import walk sees `from './x.mjs'` only, so the createRequire'd CJS
@@ -30,23 +40,30 @@ describe('ensure-native-runtime', () => {
       const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
       const logPath = join(projectDir, 'native-runtime.log')
       const markerPath = join(projectDir, 'rebuilt.marker')
-      const binDir = join(projectDir, 'bin')
       writeFakeNativeModules(projectDir)
       writeNodePtyPatchFile(projectDir)
-      writeFakePnpm(binDir)
+      writeFakeNodeGyp(projectDir)
+      const verboseOutputBytes = DEFAULT_MAX_OUTPUT_BYTES + 1024 * 1024
 
       const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
         cwd: projectDir,
         encoding: 'utf8',
-        env: envWithPrependedPath(binDir, {
+        maxBuffer: DEFAULT_MAX_OUTPUT_BYTES * 4,
+        env: envForNativeFixture(projectDir, {
           ORCA_NATIVE_TEST_LOG: logPath,
-          ORCA_NATIVE_TEST_MARKER: markerPath
+          ORCA_NATIVE_TEST_MARKER: markerPath,
+          ORCA_NATIVE_TEST_VERBOSE_OUTPUT_BYTES: String(verboseOutputBytes)
         })
       })
 
       expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout.indexOf('node-gyp stdout complete\n')).toBe(verboseOutputBytes)
+      expect(/^x+$/.test(result.stdout.slice(0, verboseOutputBytes))).toBe(true)
+      expect(result.stderr).toContain('node-gyp stderr complete\n')
       const log = readFileSync(logPath, 'utf8')
-      expect(log).toContain('pnpm exec node-gyp rebuild\n')
+      expect(log).toContain(`node-gyp rebuild --arch=${process.arch}\n`)
+      expect(log).toContain(`node-gyp timeout=${nodeGypRebuildTimeoutMs('node-pty')}\n`)
+      expect(log).toContain(`trackFileAccess=${process.platform === 'win32' ? 'false' : ''}\n`)
       expect(log).toContain(join('node_modules', 'node-pty'))
       if (process.platform === 'linux') {
         expect(log).toMatch(/^cxxflags=(?:.*\s)?-std=gnu\+\+2a$/m)
@@ -60,24 +77,29 @@ describe('ensure-native-runtime', () => {
     }
   })
 
-  it.skipIf(process.platform !== 'win32')(
-    'rebuilds other failed Windows addons with patched node-pty',
-    () => {
+  it.skipIf(process.platform !== 'win32').each([
+    { trackingEnv: {}, tracking: 'false' },
+    { trackingEnv: { TrackFileAccess: 'true' }, tracking: 'true' },
+    { trackingEnv: { trackfileaccess: 'true' }, tracking: 'true' },
+    { trackingEnv: { tRaCkFiLeAcCeSs: 'false' }, tracking: 'false' }
+  ])(
+    'rebuilds other failed Windows addons with patched node-pty and tracking=$tracking',
+    ({ trackingEnv, tracking }) => {
       const projectDir = mkTempProject()
 
       try {
         const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
-        const binDir = join(projectDir, 'bin')
         writeFakeNativeModules(projectDir, { windowsRegistryRequiresMarker: true })
         writeNodePtyPatchFile(projectDir)
-        writeFakePnpm(binDir)
+        writeFakeNodeGyp(projectDir)
 
         const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
           cwd: projectDir,
           encoding: 'utf8',
-          env: envWithPrependedPath(binDir, {
+          env: envForNativeFixture(projectDir, {
+            ...trackingEnv,
             ORCA_NATIVE_TEST_LOG: logPath,
             ORCA_NATIVE_TEST_MARKER: markerPath
           })
@@ -85,7 +107,12 @@ describe('ensure-native-runtime', () => {
 
         expect(result.status, result.stderr).toBe(0)
         const log = readFileSync(logPath, 'utf8')
-        expect(log.match(/pnpm exec node-gyp rebuild\n/g)).toHaveLength(2)
+        expect(
+          log.split('\n').filter((line) => line === `node-gyp rebuild --arch=${process.arch}`)
+        ).toHaveLength(2)
+        expect(
+          log.split('\n').filter((line) => line === `trackFileAccess=${tracking}`)
+        ).toHaveLength(2)
         expect(log).toContain(join('node_modules', 'node-pty'))
         expect(log).toContain(join('node_modules', '@orca', 'windows-registry'))
       } finally {
@@ -103,15 +130,14 @@ describe('ensure-native-runtime', () => {
         const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
-        const binDir = join(projectDir, 'bin')
         writeLoadableNativeModules(projectDir)
         writeNodePtyPatchFile(projectDir)
-        writeFakePnpm(binDir)
+        writeFakeNodeGyp(projectDir)
 
         const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
           cwd: projectDir,
           encoding: 'utf8',
-          env: envWithPrependedPath(binDir, {
+          env: envForNativeFixture(projectDir, {
             ORCA_NATIVE_TEST_LOG: logPath,
             ORCA_NATIVE_TEST_MARKER: markerPath
           })
@@ -121,7 +147,7 @@ describe('ensure-native-runtime', () => {
         expect(result.stderr).toContain(
           'Patched node-pty build artifacts are missing; rebuilding native deps.'
         )
-        expect(readFileSync(logPath, 'utf8')).toContain('pnpm exec node-gyp rebuild\n')
+        expect(readFileSync(logPath, 'utf8')).toContain(`node-gyp rebuild --arch=${process.arch}\n`)
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -137,16 +163,15 @@ describe('ensure-native-runtime', () => {
         const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
-        const binDir = join(projectDir, 'bin')
         writeLoadableNativeModules(projectDir)
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
-        writeFakePnpm(binDir)
+        writeFakeNodeGyp(projectDir)
 
         const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
           cwd: projectDir,
           encoding: 'utf8',
-          env: envWithPrependedPath(binDir, {
+          env: envForNativeFixture(projectDir, {
             ORCA_NATIVE_TEST_LOG: logPath,
             ORCA_NATIVE_TEST_MARKER: markerPath
           })
@@ -154,7 +179,7 @@ describe('ensure-native-runtime', () => {
 
         expect(result.status, result.stderr).toBe(0)
         expect(result.stderr).toContain("expected build/Release so Orca's node-pty patch is active")
-        expect(readFileSync(logPath, 'utf8')).toContain('pnpm exec node-gyp rebuild\n')
+        expect(readFileSync(logPath, 'utf8')).toContain(`node-gyp rebuild --arch=${process.arch}\n`)
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -170,16 +195,15 @@ describe('ensure-native-runtime', () => {
         const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
-        const binDir = join(projectDir, 'bin')
         writeLoadableNativeModules(projectDir, { nativeDir: '../build/Release/' })
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
-        writeFakePnpm(binDir)
+        writeFakeNodeGyp(projectDir)
 
         const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
           cwd: projectDir,
           encoding: 'utf8',
-          env: envWithPrependedPath(binDir, {
+          env: envForNativeFixture(projectDir, {
             ORCA_NATIVE_TEST_LOG: logPath,
             ORCA_NATIVE_TEST_MARKER: markerPath
           })
@@ -187,12 +211,64 @@ describe('ensure-native-runtime', () => {
 
         expect(result.status, result.stderr).toBe(0)
         expect(result.stderr).not.toContain('Patched node-pty build artifacts are missing')
-        expect(readFileSync(logPath, 'utf8')).not.toContain('pnpm exec node-gyp rebuild')
+        expect(readFileSync(logPath, 'utf8')).not.toContain('node-gyp rebuild')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
     }
   )
+  it('finds the installed node-gyp entry from an addon without build tools on PATH', () => {
+    const { command, prefixArgs } = resolvePnpmCliInvocation()
+    const program = isAbsolute(command) ? command : resolveCliCommand(parse(command).name)
+    expect(isAbsolute(program), 'pnpm must be installed for the native rebuild contract').toBe(true)
+    const projectDir = mkTempProject()
+    try {
+      writeFakeNativeModules(projectDir)
+      const addonDir = join(projectDir, 'node_modules', 'node-pty')
+      const env = { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+      for (const key of Object.keys(env)) {
+        if (key.toLowerCase() === 'path') {
+          env[key] = ''
+        }
+      }
+      const oldInvocation = runProcessSync({
+        program,
+        args: [
+          ...prefixArgs,
+          '--config.verify-deps-before-run=false',
+          'exec',
+          'node-gyp',
+          '--version'
+        ],
+        cwd: addonDir,
+        env,
+        timeoutMs: 20_000
+      })
+      expect(oldInvocation.code).not.toBe(0)
+      expect(`${oldInvocation.stdout}\n${oldInvocation.stderr}`).toContain(
+        'Command "node-gyp" not found'
+      )
+      const { args, cwd } = nodeGypRebuildInvocation(process.arch, addonDir)
+      const installedInvocation = runProcessSync({
+        program: process.execPath,
+        args: [args[0], '--version'],
+        cwd,
+        env,
+        timeoutMs: 20_000
+      })
+      expect(
+        installedInvocation.code,
+        `${installedInvocation.stdout}\n${installedInvocation.stderr}`
+      ).toBe(0)
+      const manifest = JSON.parse(
+        readFileSync(new URL('../../node_modules/node-gyp/package.json', import.meta.url), 'utf8')
+      )
+      expect(installedInvocation.stdout.trim()).toBe(`v${manifest.version}`)
+      expect(existsSync(join(addonDir, 'pnpm-lock.yaml'))).toBe(false)
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
 })
 
 function mkTempProject() {
@@ -200,6 +276,22 @@ function mkTempProject() {
   // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
   // missing it fails every case with a module-resolution error instead of the defect under test.
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
+  const processPackage = join(projectDir, 'node_modules', '@orca', 'process-host')
+  mkdirSync(processPackage, { recursive: true })
+  writeFileSync(
+    join(processPackage, 'package.json'),
+    JSON.stringify({ name: '@orca/process-host', type: 'module', exports: './index.mjs' })
+  )
+  writeFileSync(
+    join(processPackage, 'index.mjs'),
+    `import { appendFileSync } from 'node:fs'
+import { runProcessSync as run } from ${JSON.stringify(pathToFileURL(createRequire(import.meta.url).resolve('@orca/process-host')).href)}
+export function runProcessSync(options) {
+  appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-gyp timeout=\${options.timeoutMs}\\n\`)
+  return run(options)
+}
+`
+  )
   for (const name of REQUIRED_CJS_SIBLINGS) {
     copyFileSync(
       fileURLToPath(new URL(`./${name}`, import.meta.url)),
@@ -209,15 +301,15 @@ function mkTempProject() {
   return projectDir
 }
 
-function envWithPrependedPath(binDir, extraEnv) {
-  const pathKey =
-    process.platform === 'win32'
-      ? (Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'Path')
-      : 'PATH'
+function envForNativeFixture(projectDir, extraEnv) {
+  // An inherited tracking preference would mask the Windows default under test.
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'trackfileaccess')
+  )
   return {
-    ...process.env,
+    ...inherited,
     ...extraEnv,
-    [pathKey]: `${binDir}${delimiter}${process.env[pathKey] ?? ''}`
+    npm_config_node_gyp: join(projectDir, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js')
   }
 }
 
@@ -258,6 +350,11 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
 `
   )
   writeFakeWindowsRegistry(projectDir, { requiresMarker: windowsRegistryRequiresMarker })
+  if (process.platform === 'win32') {
+    const buildDir = join(nodePtyDir, 'build', 'Release')
+    writePatchedNodePtyBuildArtifacts(projectDir)
+    writeFileSync(join(buildDir, 'conpty.node'), Buffer.from('msys-2.0.dll', 'utf16le'))
+  }
 }
 
 function writeLoadableNativeModules(projectDir, { nativeDir = null } = {}) {
@@ -314,7 +411,10 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   )
   const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
   mkdirSync(processTreeDir, { recursive: true })
-  writeFileSync(join(processTreeDir, 'index.js'), 'module.exports = {}\n')
+  writeFileSync(
+    join(processTreeDir, 'index.js'),
+    'exports.supportedProcessDataFlags = 4; exports.getProcessCreationTime = () => 1\n'
+  )
 }
 
 function writeNodePtyPatchFile(projectDir) {
@@ -338,33 +438,26 @@ function writePatchedNodePtyBuildArtifacts(projectDir) {
   }
 }
 
-function writeFakePnpm(binDir) {
-  mkdirSync(binDir, { recursive: true })
-  const shimPath = join(binDir, 'pnpm-shim.cjs')
+function writeFakeNodeGyp(projectDir) {
+  const toolDir = join(projectDir, 'node_modules', 'node-gyp', 'bin')
+  mkdirSync(toolDir, { recursive: true })
   writeFileSync(
-    shimPath,
+    join(toolDir, 'node-gyp.js'),
     `
-const { appendFileSync, writeFileSync } = require('node:fs')
-
-appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`pnpm \${process.argv.slice(2).join(' ')}\\n\`)
+const { appendFileSync, writeFileSync, writeSync } = require('node:fs')
+appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-gyp \${process.argv.slice(2).join(' ')}\\n\`)
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cwd=\${process.cwd()}\\n\`)
-appendFileSync(
-  process.env.ORCA_NATIVE_TEST_LOG,
-  \`npm_config_build_from_source=\${process.env.npm_config_build_from_source || ''}\\n\`
-)
-appendFileSync(
-  process.env.ORCA_NATIVE_TEST_LOG,
-  \`cxxflags=\${process.env.CXXFLAGS || ''}\\n\`
-)
+appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cxxflags=\${process.env.CXXFLAGS || ''}\\n\`)
+appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`trackFileAccess=\${process.env.TrackFileAccess ?? ''}\\n\`)
+if (process.env.ORCA_NATIVE_TEST_VERBOSE_OUTPUT_BYTES) {
+  const output = Buffer.alloc(Number(process.env.ORCA_NATIVE_TEST_VERBOSE_OUTPUT_BYTES), 'x')
+  for (let offset = 0; offset < output.length;) {
+    offset += writeSync(1, output.subarray(offset))
+  }
+  writeSync(1, 'node-gyp stdout complete\\n')
+  writeSync(2, 'node-gyp stderr complete\\n')
+}
 writeFileSync(process.env.ORCA_NATIVE_TEST_MARKER, 'rebuilt')
 `
-  )
-
-  const posixPnpmPath = join(binDir, 'pnpm')
-  writeFileSync(posixPnpmPath, `#!/usr/bin/env node\nrequire(${JSON.stringify(shimPath)})\n`)
-  chmodSync(posixPnpmPath, 0o755)
-  writeFileSync(
-    join(binDir, 'pnpm.cmd'),
-    `@echo off\r\n"${process.execPath}" "%~dp0\\pnpm-shim.cjs" %*\r\n`
   )
 }

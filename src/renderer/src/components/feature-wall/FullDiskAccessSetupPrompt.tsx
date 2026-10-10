@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, HardDrive, Loader2 } from 'lucide-react'
+import { ExternalLink, HardDrive, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   DeveloperPermissionId,
@@ -18,7 +18,6 @@ type FullDiskAccessStatusState = {
 }
 
 type FullDiskAccessButtonState = {
-  ready: boolean
   requesting: boolean
 }
 
@@ -27,7 +26,8 @@ const FULL_DISK_ACCESS_PERMISSION_ID: DeveloperPermissionId = 'full-disk-access'
 export function isFullDiskAccessSetupVisible(
   status: DeveloperPermissionStatus | undefined
 ): boolean {
-  return status !== undefined && status !== 'unsupported'
+  // Why: once granted there is nothing left to do, so the card would only take space.
+  return status !== undefined && status !== 'unsupported' && !isFullDiskAccessReady(status)
 }
 
 export function isFullDiskAccessReady(status: DeveloperPermissionStatus | undefined): boolean {
@@ -47,9 +47,6 @@ function getFullDiskAccessStatusLabel(args: FullDiskAccessStatusState): string {
       'Checking'
     )
   }
-  if (isFullDiskAccessReady(args.status)) {
-    return translate('auto.components.feature.wall.FullDiskAccessSetupPrompt.48d87edcd2', 'Granted')
-  }
   return translate(
     'auto.components.feature.wall.FullDiskAccessSetupPrompt.6db9a69f4e',
     'Recommended'
@@ -63,9 +60,6 @@ function getFullDiskAccessButtonLabel(args: FullDiskAccessButtonState): string {
       'Opening...'
     )
   }
-  if (args.ready) {
-    return translate('auto.components.feature.wall.FullDiskAccessSetupPrompt.48d87edcd2', 'Granted')
-  }
   return translate(
     'auto.components.feature.wall.FullDiskAccessSetupPrompt.6e3d62b816',
     'Open Full Disk Access'
@@ -75,9 +69,6 @@ function getFullDiskAccessButtonLabel(args: FullDiskAccessButtonState): string {
 function FullDiskAccessButtonIcon(props: FullDiskAccessButtonState): React.JSX.Element {
   if (props.requesting) {
     return <Loader2 className="size-3.5 animate-spin" />
-  }
-  if (props.ready) {
-    return <Check className="size-3.5" />
   }
   return <ExternalLink className="size-3.5" />
 }
@@ -151,8 +142,7 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
   const { checking, refresh, status } = useFullDiskAccessStatus()
   const mountedRef = useMountedRef()
   const [requesting, setRequesting] = useState(false)
-  const ready = isFullDiskAccessReady(status)
-  const visible = checking || isFullDiskAccessSetupVisible(status)
+  const visible = isFullDiskAccessSetupVisible(status)
 
   const handleOpenFullDiskAccess = useCallback(async (): Promise<void> => {
     setRequesting(true)
@@ -195,7 +185,7 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
   }
 
   return (
-    <div className="mt-5 flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
       <div className="flex min-w-0 items-start gap-3">
         <div className="mt-0.5 text-muted-foreground">
           <HardDrive className="size-4" />
@@ -208,9 +198,7 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
                 'Full Disk Access'
               )}
             </span>
-            <Badge variant={ready ? 'secondary' : 'outline'} className="uppercase tracking-wider">
-              {getFullDiskAccessStatusLabel({ checking, status })}
-            </Badge>
+            <Badge variant="outline">{getFullDiskAccessStatusLabel({ checking, status })}</Badge>
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
             {translate(
@@ -225,11 +213,11 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
         variant="outline"
         size="sm"
         className="shrink-0 gap-1.5"
-        disabled={ready || requesting || checking}
+        disabled={requesting || checking}
         onClick={() => void handleOpenFullDiskAccess()}
       >
-        <FullDiskAccessButtonIcon ready={ready} requesting={requesting} />
-        {getFullDiskAccessButtonLabel({ ready, requesting })}
+        <FullDiskAccessButtonIcon requesting={requesting} />
+        {getFullDiskAccessButtonLabel({ requesting })}
       </Button>
     </div>
   )

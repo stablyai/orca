@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
+import { OptionalTuiAgent } from './worktree-params'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -183,6 +184,7 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
+  defaultTuiAgent: OptionalTuiAgent.nullable(),
   commitMessageDiscoveryHostKey: z.string().optional()
 })
 
@@ -204,6 +206,11 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
 
 export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
+})
+
+// Why: optional so older hosts strip it and stage the listed `filePaths` instead.
+export const GitBulkStage = GitBulkPaths.extend({
+  scope: z.enum(['all', 'tracked']).optional()
 })
 
 export const GitPushTargetParam = z.object({

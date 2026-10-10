@@ -2,6 +2,7 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPullRequestStateUpdate } from '../../shared/issue-mutation-types'
 import type { GitHubReactionContent } from '../../shared/github/comment-types'
 import type { Repo } from '../../shared/repo-types'
+import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
 import {
   mergePR,
   markPRReadyForReview,
@@ -17,7 +18,7 @@ import {
   updatePRTitle
 } from '../github/client'
 
-type LocalGitArgs = [] | [{ wslDistro?: string }]
+type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
 type RuntimeGitHubReviewMutationCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>

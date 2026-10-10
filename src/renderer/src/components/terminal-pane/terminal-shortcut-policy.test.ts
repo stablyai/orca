@@ -759,34 +759,33 @@ describe('kitty keyboard protocol panes', () => {
       active
     )
 
-  it('encodes Option+letter as kitty CSI-u with the physical base key in compose mode', () => {
-    // macOS composition reports key='π' for Option+P on ABC/compose layouts;
-    // OMP binds alt+p (temporary model) and alt+m (model selector).
+  it('types Option-composed letters on a compose side instead of chords (#20171)', () => {
+    // Compose layouts need their letters; TUI hotkeys remain available on configured Alt sides.
     expect(resolveKitty(event({ key: 'π', code: 'KeyP', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[112;3u'
+      data: 'π'
     })
     expect(resolveKitty(event({ key: 'µ', code: 'KeyM', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[109;3u'
+      data: 'µ'
     })
   })
 
-  it('includes shift in the kitty modifier field', () => {
+  it('types shifted compositions on a compose side instead of chords', () => {
     expect(resolveKitty(event({ key: '∏', code: 'KeyP', altKey: true, shiftKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[112;4u'
+      data: '∏'
     })
   })
 
-  it('encodes Option+digit, punctuation, and configured Alt', () => {
+  it('types composed digits and punctuation; configured Alt keeps chords', () => {
     expect(resolveKitty(event({ key: '¡', code: 'Digit1', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[49;3u'
+      data: '¡'
     })
     expect(resolveKitty(event({ key: '≥', code: 'Period', altKey: true }))).toEqual({
       type: 'sendInput',
-      data: '\x1b[46;3u'
+      data: '≥'
     })
     expect(resolveKitty(event({ key: 'p', code: 'KeyP', altKey: true }), 'true')).toEqual({
       type: 'sendInput',
@@ -828,12 +827,11 @@ describe('kitty keyboard protocol panes', () => {
     ).toEqual({ type: 'sendInput', data: '\x1bb' })
   })
 
-  it('encodes the compose-side Option key as kitty CSI-u in left/right modes', () => {
-    // In 'left' mode the right Option normally composes; a kitty pane asked
-    // for modifier-accurate keys, so it gets alt-encoded too.
+  it('types on the compose-side Option; the Alt side keeps CSI-u in left/right modes', () => {
+    // In 'left' mode the right Option composes and now types its text (#20171).
     expect(resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'left', 2)).toEqual({
       type: 'sendInput',
-      data: '\x1b[108;3u'
+      data: '¬'
     })
     // The designated meta side upgrades from legacy Esc+letter to CSI-u.
     expect(resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'left', 1)).toEqual({
@@ -886,23 +884,23 @@ describe('kitty keyboard protocol panes', () => {
         layoutCharacterForCode
       )
 
-    // AZERTY types M at the physical Semicolon position; the layout map must
-    // win over the US punctuation table so the chord reports alt+m, not alt+;.
+    // AZERTY types M at the physical Semicolon position; the layout map must win over the US
+    // punctuation table so an uncomposed press still reports alt+m, not alt+;.
     const azerty = (code: string): string | undefined => (code === 'Semicolon' ? 'm' : undefined)
-    expect(resolveWithLayout(event({ key: 'µ', code: 'Semicolon', altKey: true }), azerty)).toEqual(
+    expect(resolveWithLayout(event({ key: 'm', code: 'Semicolon', altKey: true }), azerty)).toEqual(
       { type: 'sendInput', data: '\x1b[109;3u' }
     )
 
     // Colemak types P at the physical KeyR position.
     const colemak = (code: string): string | undefined => (code === 'KeyR' ? 'p' : undefined)
-    expect(resolveWithLayout(event({ key: 'π', code: 'KeyR', altKey: true }), colemak)).toEqual({
+    expect(resolveWithLayout(event({ key: 'p', code: 'KeyR', altKey: true }), colemak)).toEqual({
       type: 'sendInput',
       data: '\x1b[112;3u'
     })
 
     // Falls back to the US table when the layout map has no entry.
     const empty = (): string | undefined => undefined
-    expect(resolveWithLayout(event({ key: 'π', code: 'KeyP', altKey: true }), empty)).toEqual({
+    expect(resolveWithLayout(event({ key: 'p', code: 'KeyP', altKey: true }), empty)).toEqual({
       type: 'sendInput',
       data: '\x1b[112;3u'
     })

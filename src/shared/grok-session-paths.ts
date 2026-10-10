@@ -1,7 +1,7 @@
 import { lstatSync } from 'node:fs'
 import { lstat, opendir } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { resolveAbsoluteDirOverride } from './absolute-dir-override'
 import {
   GrokSessionPathLookupQueue,
@@ -18,7 +18,7 @@ export {
 export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
 // Why: Grok URL-encodes the cwd for the sessions group directory. When that
 // encoded name exceeds 255 bytes it switches to a slug+hash layout.
-export const GROK_ENCODED_CWD_DIR_MAX_BYTES = 255
+const GROK_ENCODED_CWD_DIR_MAX_BYTES = 255
 export const GROK_SESSION_ID_MAX_LENGTH = 128
 // Why: session discovery runs in hook/main hot paths; one corrupt or enormous
 // sessions root must not cause unbounded candidate probes.
@@ -281,14 +281,4 @@ async function isSafeChatHistoryFile(sessionsDir: string, candidate: string): Pr
   } catch {
     return false
   }
-}
-
-/** True when path looks like a Grok chat history under a safe session id. */
-export function isGrokChatHistoryPath(path: string, sessionId: string): boolean {
-  const trimmedId = sessionId.trim()
-  return (
-    isSafeGrokSessionId(trimmedId) &&
-    basename(path) === GROK_CHAT_HISTORY_FILE &&
-    basename(dirname(path)) === trimmedId
-  )
 }

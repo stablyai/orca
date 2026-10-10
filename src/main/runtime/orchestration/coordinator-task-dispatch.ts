@@ -2,6 +2,7 @@
 import type { OrchestrationDb } from './db'
 import type { TaskRow } from './types'
 import { buildDispatchPreamble } from './preamble'
+import { sendAgentTurn } from './send-agent-turn'
 import type { CoordinatorRuntime, WorktreeDrift } from './coordinator-runtime-contract'
 import {
   DISPATCH_STALE_THRESHOLD,
@@ -32,7 +33,7 @@ export async function listAvailableWorkerTerminals(
   runtime: CoordinatorRuntime,
   coordinatorHandle: string,
   worktree: string | undefined
-): Promise<string[]> {
+): Promise<string[] | null> {
   try {
     const result = await runtime.listTerminals(worktree, undefined, {
       includeVisualLayouts: false
@@ -55,7 +56,8 @@ export async function listAvailableWorkerTerminals(
       )
       .map((t) => t.handle)
   } catch {
-    return []
+    // A failed census cannot authorize creating another worker.
+    return null
   }
 }
 
@@ -136,10 +138,11 @@ export async function dispatchTaskToWorker(params: {
   }
 
   try {
-    await runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext, {
-      acceptQueued: true,
-      observationTimeoutMs: 0,
-      requestId: dispatch.id
+    await sendAgentTurn({
+      kind: 'terminal',
+      runtime,
+      handle: targetHandle,
+      turn: { purpose: 'dispatch-preamble', body: preamble + gateContext, operationId: dispatch.id }
     })
   } catch (err) {
     // Why (#16095): Enter is written before submission is verified, so a stall is only ever an

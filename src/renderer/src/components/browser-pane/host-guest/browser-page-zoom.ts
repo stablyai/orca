@@ -2,6 +2,7 @@ import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   nextBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomCommand,
   type BrowserPageZoomDirection
 } from '../../../../../shared/browser-page-zoom'
 
@@ -11,15 +12,11 @@ export {
   browserPageZoomLevelToPercent,
   nextBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomCommand,
   type BrowserPageZoomDirection
 } from '../../../../../shared/browser-page-zoom'
 
 export const ORCA_BROWSER_PAGE_ZOOM_EVENT = 'orca:browser-page-zoom'
-
-export type BrowserPageZoomEventDetail = {
-  browserPageId: string
-  direction: BrowserPageZoomDirection
-}
 
 export type BrowserPageZoomIndicatorState = {
   ariaHidden: boolean
@@ -108,10 +105,12 @@ export function getBrowserPageZoomIndicatorState({
 }
 
 export function addBrowserPageZoomEventListener(
-  callback: (detail: BrowserPageZoomEventDetail) => void
+  callback: (command: BrowserPageZoomCommand) => void
 ): () => void {
   const listener = (event: Event): void => {
-    callback((event as CustomEvent<BrowserPageZoomEventDetail>).detail)
+    if (event instanceof CustomEvent) {
+      callback(event.detail)
+    }
   }
   window.addEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
   return () => window.removeEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)

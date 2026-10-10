@@ -356,8 +356,8 @@ describe('shared agent-hook-listener', () => {
         payload: {
           hook_event_name: 'tool_approval_requested',
           tool_name: 'bash',
-          reason: 'tools.approval.bash: prompt',
-          approval_mode: 'prompt'
+          reason: 'Critical pattern detected',
+          approval_mode: 'always-ask'
         }
       },
       'production'
@@ -367,7 +367,7 @@ describe('shared agent-hook-listener', () => {
       state: 'blocked',
       agentType: 'omp',
       toolName: 'bash',
-      toolInput: 'tools.approval.bash: prompt'
+      toolInput: 'Critical pattern detected'
     })
 
     const resolved = normalizeHookPayload(

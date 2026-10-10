@@ -1,4 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { resolveAbsoluteDirOverride } from '../shared/absolute-dir-override'
+import { joinRemotePath } from '../main/ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
@@ -19,7 +21,7 @@ if (!process.send) {
 const controllers = new Map<number, AbortController>()
 const cancelled = new Set<number>()
 const pending = new Set<number>()
-const provider = createRelayAiVaultFilesystemProvider()
+let provider: ReturnType<typeof createRelayAiVaultFilesystemProvider> | null = null
 let init: RelayAiVaultServiceInit | null = null
 let cacheLane = Promise.resolve()
 let interactiveLane = Promise.resolve()
@@ -36,7 +38,7 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
     controller.abort()
   }
   try {
-    if (!init) {
+    if (!init || !provider) {
       throw new Error('Relay AI Vault service is not initialized.')
     }
     if (request.operation === 'titles') {
@@ -50,9 +52,14 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       provider,
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       remoteHome: init.remoteHome,
+      kiroHomeDir: resolveAbsoluteDirOverride(
+        process.env.KIRO_HOME,
+        joinRemotePath(init.hostPlatform, init.remoteHome, '.kiro')
+      ),
       hostPlatform: init.hostPlatform,
       limit: request.params.limit,
       unlimited: request.params.unlimited,
+      includeAntigravityIdeSessions: request.params.includeAntigravityIdeSessions,
       scopePaths: request.params.scopePaths,
       signal: controller.signal
     })
@@ -79,6 +86,7 @@ async function shutdown(): Promise<void> {
     controller.abort()
   }
   await Promise.allSettled([cacheLane, interactiveLane])
+  provider?.dispose()
   process.disconnect?.()
 }
 
@@ -89,6 +97,7 @@ process.on('message', (raw: RelayAiVaultServiceParentMessage) => {
       return
     }
     init = raw
+    provider = createRelayAiVaultFilesystemProvider({ homeDirectory: raw.remoteHome })
     send({ type: 'ready', protocol: RELAY_AI_VAULT_SERVICE_PROTOCOL, pid: process.pid })
     return
   }
@@ -96,6 +105,9 @@ process.on('message', (raw: RelayAiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'cancel') {
+    if (!pending.has(raw.id)) {
+      return
+    }
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
     return

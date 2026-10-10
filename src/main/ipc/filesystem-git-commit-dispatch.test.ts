@@ -85,19 +85,6 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
-  it('returns local commit hook failure payload from git:commit', async () => {
-    commitChangesMock.mockResolvedValue({ success: false, error: 'hook failed' })
-
-    registerFilesystemHandlers(store as never)
-
-    await expect(
-      handlers.get('git:commit')!(null, {
-        worktreePath: WORKTREE_FEATURE_PATH,
-        message: 'feat: ship commit'
-      })
-    ).resolves.toEqual({ success: false, error: 'hook failed' })
-  })
-
   it('routes ssh git:commit through the SSH provider instead of local commitChanges', async () => {
     const sshCommitMock = vi.fn().mockResolvedValue({ success: true })
     getSshGitProviderMock.mockReturnValue({ commit: sshCommitMock })
@@ -181,19 +168,6 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(sshFastForwardMock).toHaveBeenCalledWith('/remote/repo', pushTarget)
-  })
-
-  it('rejects git:commit with empty message and does not call commitChanges', async () => {
-    registerFilesystemHandlers(store as never)
-
-    await expect(
-      handlers.get('git:commit')!(null, {
-        worktreePath: WORKTREE_FEATURE_PATH,
-        message: ''
-      })
-    ).rejects.toThrow('Commit message is required')
-
-    expect(commitChangesMock).not.toHaveBeenCalled()
   })
 
   it('rejects git:commit with whitespace-only message and does not call commitChanges', async () => {

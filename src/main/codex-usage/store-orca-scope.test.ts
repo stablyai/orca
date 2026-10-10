@@ -12,7 +12,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanCodexUsageFilesViaWorker: vi.fn()
+  scanCodexUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 describe('CodexUsageStore', () => {
@@ -38,6 +39,9 @@ describe('CodexUsageStore', () => {
           totalReasoningOutputTokens: 100,
           totalTokens: 1250,
           hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'cwd:/outside/repo',
@@ -50,7 +54,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 250,
               reasoningOutputTokens: 100,
               totalTokens: 1250,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ],
           modelBreakdown: [
@@ -63,7 +70,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 250,
               reasoningOutputTokens: 100,
               totalTokens: 1250,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ],
           locationModelBreakdown: [
@@ -79,7 +89,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 250,
               reasoningOutputTokens: 100,
               totalTokens: 1250,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ]
         }
@@ -98,7 +111,10 @@ describe('CodexUsageStore', () => {
           outputTokens: 250,
           reasoningOutputTokens: 100,
           totalTokens: 1250,
-          hasInferredPricing: false
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
         }
       ]
     })
@@ -130,6 +146,9 @@ describe('CodexUsageStore', () => {
           totalReasoningOutputTokens: 10,
           totalTokens: 390,
           hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'worktree:repo-1::/workspace/repo',
@@ -142,7 +161,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 90,
               reasoningOutputTokens: 10,
               totalTokens: 390,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ],
           modelBreakdown: [
@@ -155,7 +177,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 30,
               reasoningOutputTokens: 5,
               totalTokens: 130,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             },
             {
               modelKey: 'gpt-5.2-codex',
@@ -166,7 +191,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 60,
               reasoningOutputTokens: 5,
               totalTokens: 260,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ],
           locationModelBreakdown: [
@@ -182,7 +210,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 30,
               reasoningOutputTokens: 5,
               totalTokens: 130,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             },
             {
               locationKey: 'worktree:repo-1::/workspace/repo',
@@ -196,7 +227,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 60,
               reasoningOutputTokens: 5,
               totalTokens: 260,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ]
         }
@@ -215,7 +249,10 @@ describe('CodexUsageStore', () => {
           outputTokens: 30,
           reasoningOutputTokens: 5,
           totalTokens: 130,
-          hasInferredPricing: false
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
         },
         {
           day: '2026-04-09',
@@ -230,7 +267,10 @@ describe('CodexUsageStore', () => {
           outputTokens: 60,
           reasoningOutputTokens: 5,
           totalTokens: 260,
-          hasInferredPricing: false
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
         }
       ]
     })
@@ -261,6 +301,9 @@ describe('CodexUsageStore', () => {
           totalReasoningOutputTokens: 10,
           totalTokens: 390,
           hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'worktree:repo-1::/workspace/repo',
@@ -273,7 +316,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 30,
               reasoningOutputTokens: 5,
               totalTokens: 130,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             },
             {
               locationKey: 'cwd:/outside/repo',
@@ -286,7 +332,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 60,
               reasoningOutputTokens: 5,
               totalTokens: 260,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ],
           modelBreakdown: [
@@ -299,7 +348,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 30,
               reasoningOutputTokens: 5,
               totalTokens: 130,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             },
             {
               modelKey: 'gpt-5.2-codex',
@@ -310,7 +362,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 60,
               reasoningOutputTokens: 5,
               totalTokens: 260,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ],
           locationModelBreakdown: [
@@ -326,7 +381,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 30,
               reasoningOutputTokens: 5,
               totalTokens: 130,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             },
             {
               locationKey: 'cwd:/outside/repo',
@@ -340,7 +398,10 @@ describe('CodexUsageStore', () => {
               outputTokens: 60,
               reasoningOutputTokens: 5,
               totalTokens: 260,
-              hasInferredPricing: false
+              hasInferredPricing: false,
+              longContextInputTokens: 0,
+              longContextCachedInputTokens: 0,
+              longContextOutputTokens: 0
             }
           ]
         }
@@ -359,7 +420,10 @@ describe('CodexUsageStore', () => {
           outputTokens: 30,
           reasoningOutputTokens: 5,
           totalTokens: 130,
-          hasInferredPricing: false
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
         },
         {
           day: '2026-04-09',
@@ -374,7 +438,10 @@ describe('CodexUsageStore', () => {
           outputTokens: 60,
           reasoningOutputTokens: 5,
           totalTokens: 260,
-          hasInferredPricing: false
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
         }
       ]
     })

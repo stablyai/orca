@@ -1,6 +1,4 @@
 import React from 'react'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentStateDot'
@@ -35,27 +33,12 @@ function renderDotClassNames(state: AgentDotState): string[] {
 }
 
 describe('AgentStateDot', () => {
-  it('keeps the question glyph above the light-theme non-text contrast floor', () => {
-    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
-    const lightTheme = css.match(/:root\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
-    const darkTheme = css.match(/\.dark\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
-
-    expect(lightTheme).toContain('--agent-question: var(--color-orange-600)')
-    expect(darkTheme).toContain('--agent-question: var(--color-orange-500)')
-  })
-
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 
-    expect(markup).toContain('border-yellow-500')
-    expect(markup).toContain('border-t-transparent')
-    // Why: rotation must come from the compositor-driven CSS animation, not a
-    // JS clock writing per-element styles on the input thread (STA-3328).
-    expect(markup).toContain('agent-working-spinner')
+    // The spinner's own classes and animation contract belong to AgentWorkingSpinner.test.tsx;
+    // this pins only that 'working' reaches for it.
     expect(markup).toContain('data-agent-spinner')
-    // Why: under reduced motion the top border is filled so the static ring
-    // reads as a complete marker, not a broken partial spinner (#9515).
-    expect(markup).toContain('motion-reduce:border-t-yellow-500')
   })
 
   it('renders monitoring as a static yellow heartbeat glyph', () => {
@@ -102,7 +85,7 @@ describe('AgentStateDot', () => {
     expect(markup).not.toContain('data-agent-spinner')
   })
 
-  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
+  it.each(['blocked', 'failed'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
       const classNames = renderDotClassNames(state)
@@ -111,6 +94,14 @@ describe('AgentStateDot', () => {
       expect(classNames).not.toContain('bg-amber-500')
     }
   )
+
+  it("renders a user's Stop as a muted dot, neither the fault red nor the idle grey", () => {
+    const classNames = renderDotClassNames('interrupted')
+
+    expect(classNames).toContain('bg-muted-foreground')
+    expect(classNames).not.toContain('bg-red-500')
+    expect(classNames).not.toContain('bg-neutral-500/40')
+  })
 
   const ALL_STATES = [
     'working',
@@ -122,6 +113,7 @@ describe('AgentStateDot', () => {
     'done',
     'idle',
     'unverifiable',
+    'unconfirmed',
     'permission'
   ] satisfies AgentDotState[]
 

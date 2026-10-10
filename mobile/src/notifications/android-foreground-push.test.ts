@@ -1,5 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { Notification } from 'expo-notifications'
+import type {
+  FirebaseRemoteMessageNotification,
+  Notification,
+  NotificationTrigger
+} from 'expo-notifications'
 import { startAndroidForegroundPushPresentation } from './android-foreground-push'
 
 const mocks = vi.hoisted(() => ({
@@ -19,26 +23,84 @@ vi.mock('expo-notifications', () => ({
   scheduleNotificationAsync: mocks.schedule
 }))
 
-function notification(trigger: unknown = { type: 'push', remoteMessage: { notification: null } }) {
+// Expo's remote-message types are wide and fully required; the two builders below fill them once
+// so the fixtures below can be plain `Notification` values rather than assertions.
+const REMOTE_NOTIFICATION: FirebaseRemoteMessageNotification = {
+  body: null,
+  bodyLocalizationArgs: null,
+  bodyLocalizationKey: null,
+  channelId: null,
+  clickAction: null,
+  color: null,
+  eventTime: null,
+  icon: null,
+  imageUrl: null,
+  lightSettings: null,
+  link: null,
+  localOnly: false,
+  notificationCount: null,
+  notificationPriority: null,
+  sound: null,
+  sticky: false,
+  tag: null,
+  ticker: null,
+  title: null,
+  titleLocalizationArgs: null,
+  titleLocalizationKey: null,
+  usesDefaultLightSettings: false,
+  usesDefaultSound: false,
+  usesDefaultVibrateSettings: false,
+  vibrateTimings: null,
+  visibility: null
+}
+
+function pushTrigger(remote: FirebaseRemoteMessageNotification | null): NotificationTrigger {
   return {
+    type: 'push',
+    remoteMessage: {
+      collapseKey: null,
+      data: {},
+      from: null,
+      messageId: 'message-1',
+      messageType: null,
+      notification: remote,
+      originalPriority: 1,
+      priority: 1,
+      sentTime: 0,
+      to: null,
+      ttl: 0
+    }
+  }
+}
+
+const ORCA_PUSH_DATA: Record<string, unknown> = {
+  hostFingerprint: 'host',
+  notificationId: 'event',
+  notificationEpoch: 'epoch',
+  notificationSeq: '3',
+  paneKey: 'pane',
+  channelId: 'orca-desktop'
+}
+
+function notification(
+  trigger: NotificationTrigger = pushTrigger(null),
+  data: Record<string, unknown> = ORCA_PUSH_DATA
+): Notification {
+  return {
+    date: 0,
     request: {
       identifier: 'message-1',
       trigger,
       content: {
         title: 'Test notification',
+        subtitle: null,
         body: '',
+        categoryIdentifier: null,
         sound: 'default',
-        data: {
-          hostFingerprint: 'host',
-          notificationId: 'event',
-          notificationEpoch: 'epoch',
-          notificationSeq: '3',
-          paneKey: 'pane',
-          channelId: 'orca-desktop'
-        }
+        data
       }
     }
-  } as unknown as Notification
+  }
 }
 
 beforeEach(() => {
@@ -52,9 +114,16 @@ it('presents a title-only data push with its original identity, routing and chan
   const incoming = notification()
   mocks.receive(incoming)
   await vi.waitFor(() => expect(mocks.schedule).toHaveBeenCalledOnce())
+  // The four members the presenter forwards, named: it rebuilds content rather than passing the
+  // arriving object through, so comparing against the whole fixture would only hold by accident.
   expect(mocks.schedule).toHaveBeenCalledWith({
     identifier: incoming.request.identifier,
-    content: incoming.request.content,
+    content: {
+      title: incoming.request.content.title,
+      body: incoming.request.content.body,
+      data: incoming.request.content.data,
+      sound: 'default'
+    },
     trigger: { channelId: 'orca-desktop' }
   })
   stop()
@@ -64,18 +133,15 @@ it('presents a title-only data push with its original identity, routing and chan
 it('does not reschedule its own local notification or normal provider notifications', () => {
   startAndroidForegroundPushPresentation()
   mocks.receive(notification(null))
-  mocks.receive(notification({ type: 'channel', channelId: 'orca-desktop' }))
-  mocks.receive(notification({ type: 'push', remoteMessage: { notification: { title: 'Test' } } }))
+  mocks.receive(notification({ channelId: 'orca-desktop' }))
+  mocks.receive(notification(pushTrigger({ ...REMOTE_NOTIFICATION, title: 'Test' })))
   expect(mocks.schedule).not.toHaveBeenCalled()
 })
 
 it('leaves silent dismissals and unrelated messages alone', () => {
   startAndroidForegroundPushPresentation()
-  const incoming = notification()
-  incoming.request.content.data.kind = 'dismiss'
-  mocks.receive(incoming)
-  incoming.request.content.data = {}
-  mocks.receive(incoming)
+  mocks.receive(notification(undefined, { ...ORCA_PUSH_DATA, kind: 'dismiss' }))
+  mocks.receive(notification(undefined, {}))
   expect(mocks.schedule).not.toHaveBeenCalled()
 })
 

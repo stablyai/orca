@@ -7,7 +7,10 @@ import type {
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
@@ -25,6 +28,7 @@ export type FolderWorkspaceRowContext = {
   newCardStyle: boolean
   settings: AppState['settings']
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId']
   currentWorktreeId: string | null
   selectedWorktreeIds: ReadonlySet<string>
   repoMap: Map<string, Repo>
@@ -60,6 +64,11 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
+  const isActiveWorktree =
+    ctx.activeWorktreeId === folderWorktree.id &&
+    (!ctx.activeWorkspaceExecutionHostId ||
+      folderWorktreeIdentity ===
+        composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, folderWorktree.id))
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id
@@ -88,13 +97,13 @@ export function renderFolderWorkspaceVirtualRow(args: {
   return (
     <div
       key={vItem.key}
-      id={getWorktreeOptionId(folderWorktree.id)}
+      id={getWorktreeOptionId(folderWorktreeIdentity)}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
-      aria-current={ctx.activeWorktreeId === folderWorktree.id ? 'page' : undefined}
+      aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
-      data-worktree-row-key={folderWorktree.id}
+      data-worktree-row-key={folderWorktreeIdentity}
       data-worktree-virtual-row
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-virtual-row-start={vItem.start}
@@ -103,7 +112,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
       className="absolute left-0 right-0 top-0"
       style={{ transform: getVirtualRowTransform(vItem.start) }}
       onClickCapture={ctx.onRowClickCapture}
-      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktree.id)}
+      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
     >
       <div
         className="relative"
@@ -112,13 +121,13 @@ export function renderFolderWorkspaceVirtualRow(args: {
         <WorktreeCard
           worktree={folderWorktree}
           repo={undefined}
-          isActive={ctx.activeWorktreeId === folderWorktree.id}
+          isActive={isActiveWorktree}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}
           flushSurface
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          activationRowKey={folderWorktree.id}
+          activationRowKey={folderWorktreeIdentity}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -28,13 +29,14 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { CodexHookService } from './hook-service'
-import { buildWindowsHookPowerShellCommand } from '../agent-hooks/installer-utils'
+import { getManagedCommand } from './codex-hook-definition'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 function localManagedCodexEvents(): string[] {
   return [
+    'Interrupt',
     'PermissionRequest',
     'PostToolUse',
     'PreToolUse',
@@ -127,6 +129,21 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
+  it('reports, instead of writing, approvals a mirrored inline hooks.state cannot take', async () => {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'hooks = { state = {} }\n', 'utf-8')
+
+    const status = await new CodexHookService().install()
+
+    expect(status).toMatchObject({
+      state: 'error',
+      detail: expect.stringContaining('defines hook approvals in a form Orca cannot add to')
+    })
+    const managedToml = join(homes.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+    expect(readFileSync(managedToml, 'utf-8')).not.toContain('[hooks.state.')
+  })
+
   it('installs managed hooks + trust into a per-account self-contained home, not the shared mirror', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -182,7 +199,7 @@ describe('CodexHookService', () => {
     expect(Object.keys(hooksConfig)).toEqual(['hooks'])
   })
 
-  // #6078: the existing PowerShell host must still quote spaced profile paths.
+  // #6078: a spaced profile path must still reach the script through Windows' own cmd.exe.
   it.skipIf(process.platform !== 'win32')(
     'wraps the managed hook command when the profile path contains a space (#6078)',
     async () => {
@@ -204,13 +221,11 @@ describe('CodexHookService', () => {
         for (const eventName of localManagedCodexEvents()) {
           const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
           expect(command).toBe(
-            buildWindowsHookPowerShellCommand(
-              join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd')
-            )
+            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
           )
         }
       } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
+        removeTreeSync(spaceHome)
       }
     }
   )
@@ -237,13 +252,11 @@ describe('CodexHookService', () => {
         for (const eventName of localManagedCodexEvents()) {
           const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
           expect(command).toBe(
-            buildWindowsHookPowerShellCommand(
-              join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd')
-            )
+            getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
           )
         }
       } finally {
-        rmSync(metacharHome, { recursive: true, force: true })
+        removeTreeSync(metacharHome)
       }
     }
   )
@@ -268,12 +281,10 @@ describe('CodexHookService', () => {
       const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(homes.tmpHome, '.orca', 'agent-hooks'))
       if (cmdSafe) {
         expect(command).not.toMatch(/powershell/i)
-        expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
+        expect(command).toMatch(/\/agent-hooks\/codex-hook\.cmd$/)
       } else {
         expect(command).toBe(
-          buildWindowsHookPowerShellCommand(
-            join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd')
-          )
+          getManagedCommand(join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd'))
         )
       }
     }
@@ -416,8 +427,8 @@ describe('CodexHookService', () => {
       expect(readFileSync(systemHooksPath, 'utf-8')).toBe(existingSystemHooks)
     } finally {
       process.env.ORCA_USER_DATA_PATH = homes.userDataDir
-      rmSync(devUserDataDir, { recursive: true, force: true })
-      rmSync(prodUserDataDir, { recursive: true, force: true })
+      removeTreeSync(devUserDataDir)
+      removeTreeSync(prodUserDataDir)
     }
   })
 })

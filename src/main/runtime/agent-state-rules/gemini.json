@@ -1,0 +1,21 @@
+{
+  "id": "gemini",
+  "engineVersion": 1,
+  "anchors": [
+    {
+      "id": "idle_title",
+      "why": "Gemini CLI marks rest with `◇` in its title (`✦` while working, `✋` on a permission).",
+      "when": { "region": "title", "match": { "contains": "◇" } },
+      "answer": { "state": "idle" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "name_title",
+      "why": "Its `◇` rest title would justify asking a name-only title for quiet, but Gemini is not yet held to it: a name-only title settles once held, with no quiet asked.",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": false }
+    }
+  ]
+}

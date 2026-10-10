@@ -5,20 +5,55 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
 
 export type RepoUpdateMutationOperations = {
-  state: PersistedState
+  state: Pick<PersistedState, 'repos' | 'projectGroups'>
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
   hydrateRepo: (repo: Repo) => Repo
 }
 
+/**
+ * Resolve the row a host-scoped write may touch, and report the one failure the `Repo | null` return
+ * cannot express: the row exists, but under a different host stamp.
+ *
+ * `hostId` is the row's own `executionHostId`, never the host a caller probed or a user selected. A
+ * caller that passes anything else gets the same `null` as a deleted row, so its write is discarded
+ * with no error and no failing test — how #22421 shipped an enrichment pass that never persisted.
+ */
+export function findRepoRowForHostScopedWrite(
+  repos: readonly Repo[],
+  id: string,
+  hostId: ExecutionHostId | undefined
+): Repo | undefined {
+  if (!hostId) {
+    return repos.find((candidate) => candidate.id === id)
+  }
+  const matched = repos.find(
+    (candidate) => candidate.id === id && getRepoExecutionHostId(candidate) === hostId
+  )
+  if (matched) {
+    return matched
+  }
+  const storedHostIds = repos
+    .filter((candidate) => candidate.id === id)
+    .map((candidate) => getRepoExecutionHostId(candidate))
+  if (storedHostIds.length > 0) {
+    console.error(
+      `[persistence] Discarded a repo update for ${id}: requested host ${hostId}, but the row is stored on ${storedHostIds.join(', ')}. Address updateRepo by the row's own executionHostId stamp.`
+    )
+  }
+  return undefined
+}
+
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
-  private get state(): PersistedState {
+  private get state(): Pick<PersistedState, 'repos' | 'projectGroups'> {
     return this.operations.state
   }
 
@@ -71,16 +106,15 @@ export class RepoUpdatePersistenceOperations {
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      ghAccount?: GhAccountBinding | null
     },
     hostId?: ExecutionHostId
   ): Repo | null {
-    const repo = this.state.repos.find(
-      (candidate) =>
-        candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
-    )
+    const repo = findRepoRowForHostScopedWrite(this.state.repos, id, hostId)
     if (!repo) {
       return null
     }
+    const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
     if (
       'executionHostId' in updates &&
@@ -138,6 +172,10 @@ export class RepoUpdatePersistenceOperations {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
     }
+    if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
+      delete repo.ghAccount
+      delete sanitizedUpdates.ghAccount
+    }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath
       delete sanitizedUpdates.worktreeBasePath
@@ -187,6 +225,13 @@ export class RepoUpdatePersistenceOperations {
         delete sanitizedUpdates.sourceControlAi
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+      }
+    }
+    if ('ghAccount' in updates) {
+      // Why: a rebind or unbind must not reuse a token cached for the previous login.
+      invalidateGhAccountTokenCache(previousGhAccount)
+      if (sanitizedUpdates.ghAccount) {
+        invalidateGhAccountTokenCache(sanitizedUpdates.ghAccount)
       }
     }
     Object.assign(repo, sanitizedUpdates)

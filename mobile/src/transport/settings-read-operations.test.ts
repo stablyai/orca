@@ -9,7 +9,8 @@ import {
   optionalSettingsRead,
   botOverridesRead,
   newTabSettingsRead,
-  terminalCopyTrimsGutterRead
+  terminalCopyTrimsGutterRead,
+  showPinnedWorktreesInGroupsRead
 } from './settings-read-operations'
 import type { RpcResponse } from './types'
 
@@ -108,6 +109,30 @@ describe('settings historical acceptance', () => {
     expect(terminalCopyTrimsGutterRead.interpret(empty)).toEqual({ accepted: true, value: true })
     const refused = await terminalCopyTrimsGutterRead.request(replyWith(refusal()))
     expect(terminalCopyTrimsGutterRead.interpret(refused)).toEqual({ accepted: false })
+  })
+
+  it('reads pinned placement, treating an absent or malformed key as the desktop default', async () => {
+    const showFor = async (settings: unknown) =>
+      showPinnedWorktreesInGroupsRead.interpret(
+        await showPinnedWorktreesInGroupsRead.request(replyWith(success(settings)))
+      )
+    expect(await showFor({ settings: { showPinnedWorktreesInGroups: true } })).toEqual({
+      accepted: true,
+      value: true
+    })
+    expect(await showFor({ settings: { showPinnedWorktreesInGroups: false } })).toEqual({
+      accepted: true,
+      value: false
+    })
+    // A host predating the setting sends no key; the desktop default is off.
+    expect(await showFor({ settings: {} })).toEqual({ accepted: true, value: false })
+    expect(await showFor({ settings: { showPinnedWorktreesInGroups: 'true' } })).toEqual({
+      accepted: true,
+      value: false
+    })
+    expect(await showFor(null)).toEqual({ accepted: true, value: false })
+    const refused = await showPinnedWorktreesInGroupsRead.request(replyWith(refusal()))
+    expect(showPinnedWorktreesInGroupsRead.interpret(refused)).toEqual({ accepted: false })
   })
 
   it('does not read a stale payload until its caller permits interpretation', async () => {
@@ -215,5 +240,29 @@ describe('new-tab settlement barriers', () => {
     const reply = await newTabSettingsRead.request(replyWith(success(null)))
     const readSettings = newTabSettingsRead.interpret(reply)
     expect(() => readSettings()).toThrow(TypeError)
+  })
+})
+
+describe('the bound descriptor', () => {
+  // Eleven call sites pass `interpret` detached from its descriptor, five of them
+  // settlePreviewSend's second argument in files/mobile-file-preview-request.ts:
+  // filePreviewTextRead, filePreviewImageRead, terminalArtifactTextRead,
+  // terminalArtifactImageRead and terminalArtifactWrite.
+  it('interprets the same reply when taken as an unbound reference', async () => {
+    const settings = { futureField: 'kept' }
+    const accepted = await settingsRead.request(replyWith(success({ settings })))
+    const readSettings = settingsRead.interpret
+    expect(readSettings(accepted)).toEqual(settingsRead.interpret(accepted))
+    expect(readSettings(accepted)).toEqual({ accepted: true, value: settings })
+
+    const refused = await botOverridesRead.request(replyWith(refusal()))
+    const readOverrides = botOverridesRead.interpret
+    expect(readOverrides(refused)).toEqual(botOverridesRead.interpret(refused))
+    expect(readOverrides(refused)).toEqual({ accepted: false })
+
+    // The throwing acceptance family keeps its throw unbound rather than losing it.
+    const missing = await newTabSettingsRead.request(replyWith(success(null)))
+    const readNewTab = newTabSettingsRead.interpret
+    expect(() => readNewTab(missing)()).toThrow(TypeError)
   })
 })

@@ -14,9 +14,28 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 // Why: await import() is required so vi.mock() above registers before the
 // module under test is evaluated. Static import would bypass the mock.
-const { resolveRemoteNodePath } = await import('./ssh-remote-node-resolution')
+const { RemoteNodeNotFoundError, resolveRemoteNodePath } =
+  await import('./ssh-remote-node-resolution')
 
 const conn = {} as SshConnection
+
+/** The login shell's answer, inside the fence the probe printed. */
+function loginShellAnswer(output: string) {
+  return async (_conn: SshConnection, command: string): Promise<string> => {
+    const begin = (/__ORCA_SSH_LOGIN_CAPTURE_BEGIN_ \w+?__/.exec(command)?.[0] ?? '').replace(
+      ' ',
+      ''
+    )
+    const end = (/__ORCA_SSH_LOGIN_CAPTURE_END_ \w+?__/.exec(command)?.[0] ?? '').replace(' ', '')
+    return `RC-BANNER\n${begin}${output}${end}`
+  }
+}
+
+function loginShellProbe(shell: string, mode: string) {
+  return expect.stringMatching(
+    new RegExp(`^'${shell}' ${mode} 'printf %s \\w+ \\w+; command -v node; printf %s \\w+ \\w+'$`)
+  )
+}
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
@@ -424,14 +443,14 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock
       .mockResolvedValueOnce('\n') // path probe: empty
       .mockResolvedValueOnce('/bin/zsh') // $SHELL
-      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n') // command -v node
+      .mockImplementationOnce(loginShellAnswer('/home/u/.nvm/versions/node/v20.11.0/bin/node\n'))
       .mockResolvedValueOnce('v20.11.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe(
       '/home/u/.nvm/versions/node/v20.11.0/bin/node'
     )
 
-    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/zsh' -lc 'command -v node'`, {
+    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, loginShellProbe('/bin/zsh', '-lc'), {
       wrapCommand: false,
       timeoutMs: 8_000
     })
@@ -442,7 +461,7 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('/old/node\n') // path probe
       .mockResolvedValueOnce('v10.24.1\n') // too old
       .mockResolvedValueOnce('/bin/bash') // $SHELL
-      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
+      .mockImplementationOnce(loginShellAnswer('/home/u/.nvm/versions/node/v20.11.0/bin/node\n'))
       .mockResolvedValueOnce('v20.11.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe(
@@ -456,7 +475,7 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock
       .mockResolvedValueOnce('\n') // path probe: empty
       .mockResolvedValueOnce('/usr/bin/fish') // $SHELL
-      .mockResolvedValueOnce('/opt/homebrew/bin/node\n')
+      .mockImplementationOnce(loginShellAnswer('/opt/homebrew/bin/node\n'))
       .mockResolvedValueOnce('v22.0.0\n')
 
     await resolveRemoteNodePath(conn)
@@ -464,7 +483,7 @@ describe('resolveRemoteNodePath', () => {
     expect(execCommandMock).toHaveBeenNthCalledWith(
       3,
       conn,
-      `'/usr/bin/fish' -lc 'command -v node'`,
+      loginShellProbe('/usr/bin/fish', '-lc'),
       { wrapCommand: false, timeoutMs: 8_000 }
     )
   })
@@ -473,11 +492,11 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock
       .mockResolvedValueOnce('\n') // path probe: empty
       .mockResolvedValueOnce('/bin/sh\n') // ${SHELL:-/bin/sh}
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
+      .mockImplementationOnce(loginShellAnswer('/usr/local/bin/node\n'))
       .mockResolvedValueOnce('v20.0.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/sh' -c 'command -v node'`, {
+    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, loginShellProbe('/bin/sh', '-c'), {
       wrapCommand: false,
       timeoutMs: 8_000
     })
@@ -489,11 +508,11 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock
       .mockResolvedValueOnce('\n') // path probe: empty
       .mockResolvedValueOnce('/bin/csh\n') // $SHELL
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
+      .mockImplementationOnce(loginShellAnswer('/usr/local/bin/node\n'))
       .mockResolvedValueOnce('v20.0.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
-    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/csh' -c 'command -v node'`, {
+    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, loginShellProbe('/bin/csh', '-c'), {
       wrapCommand: false,
       timeoutMs: 8_000
     })
@@ -503,14 +522,14 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock
       .mockResolvedValueOnce('\n') // path probe: empty
       .mockResolvedValueOnce('/usr/bin/tcsh\n') // $SHELL
-      .mockResolvedValueOnce('/usr/local/bin/node\n')
+      .mockImplementationOnce(loginShellAnswer('/usr/local/bin/node\n'))
       .mockResolvedValueOnce('v20.0.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
     expect(execCommandMock).toHaveBeenNthCalledWith(
       3,
       conn,
-      `'/usr/bin/tcsh' -c 'command -v node'`,
+      loginShellProbe('/usr/bin/tcsh', '-c'),
       {
         wrapCommand: false,
         timeoutMs: 8_000
@@ -654,7 +673,7 @@ describe('resolveRemoteNodePath', () => {
       .mockResolvedValueOnce('/old/node\n') // path probe
       .mockResolvedValueOnce('v8.17.0\n') // too old
       .mockResolvedValueOnce('/bin/bash') // $SHELL
-      .mockResolvedValueOnce('/old/node2\n') // login shell
+      .mockImplementationOnce(loginShellAnswer('/old/node2\n'))
       .mockResolvedValueOnce('v6.17.0\n') // too old
       .mockResolvedValueOnce('dnf\n') // package manager hint probe
 
@@ -683,5 +702,76 @@ describe('resolveRemoteNodePath', () => {
 
     const discoveryScript = decodePowerShellCommand(execCommandMock.mock.calls[0]![1] as string)
     expect(discoveryScript).not.toMatch(/Write-Output \$path\s+exit 0/)
+  })
+
+  describe('strict resolution, which settles rung D only on an answered "no Node"', () => {
+    const lostChannel = (): Error =>
+      Object.assign(new Error('channel closed'), { sshChannelCloseConfirmed: false })
+
+    it('proves a Windows host has no Node when the discovery script answers none', async () => {
+      execCommandMock.mockRejectedValueOnce(
+        Object.assign(new Error('Node.js not found (exit 1)'), { exitCode: 1, stdout: '' })
+      )
+
+      await expect(
+        resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), { strict: true })
+      ).rejects.toBeInstanceOf(RemoteNodeNotFoundError)
+    })
+
+    it('rethrows a refused channel (MaxSessions) instead of calling it "no Node"', async () => {
+      const refused = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+        reason: 2
+      })
+      execCommandMock.mockRejectedValueOnce(refused)
+
+      await expect(
+        resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), { strict: true })
+      ).rejects.toBe(refused)
+    })
+
+    it('rethrows a Windows probe the host never answered', async () => {
+      const lost = lostChannel()
+      execCommandMock.mockRejectedValueOnce(lost)
+
+      await expect(
+        resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), { strict: true })
+      ).rejects.toBe(lost)
+    })
+
+    it('rethrows a lost POSIX version check rather than calling the candidate unusable', async () => {
+      const lost = lostChannel()
+      execCommandMock.mockResolvedValueOnce('/usr/local/bin/node\n').mockRejectedValueOnce(lost)
+
+      await expect(resolveRemoteNodePath(conn, undefined, { strict: true })).rejects.toBe(lost)
+    })
+
+    it('probes a Node the login shell names again only once', async () => {
+      execCommandMock
+        .mockResolvedValueOnce('/usr/local/bin/node\n') // path probe
+        .mockResolvedValueOnce('__node__\nv20.0.0\n') // toolchain probe: npm missing
+        .mockResolvedValueOnce('/bin/bash') // $SHELL
+        .mockImplementationOnce(loginShellAnswer('/usr/local/bin/node\n')) // the same Node
+        .mockResolvedValueOnce('') // package manager hint probe
+
+      await expect(resolveRemoteNodePath(conn, undefined, { strict: true })).rejects.toBeInstanceOf(
+        RemoteNodeNotFoundError
+      )
+      const npmProbes = execCommandMock.mock.calls.filter(([, command]) =>
+        String(command).includes('npm --version')
+      )
+      expect(npmProbes).toHaveLength(1)
+    })
+
+    it('proves a POSIX host has no Node when every probe answered', async () => {
+      execCommandMock
+        .mockResolvedValueOnce('') // path probe: nothing
+        .mockResolvedValueOnce('/bin/bash') // $SHELL
+        .mockResolvedValueOnce('') // login shell: nothing
+        .mockResolvedValueOnce('') // package manager hint probe
+
+      await expect(resolveRemoteNodePath(conn, undefined, { strict: true })).rejects.toBeInstanceOf(
+        RemoteNodeNotFoundError
+      )
+    })
   })
 })

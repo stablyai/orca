@@ -92,13 +92,8 @@ export function createTerminalRestartActions(
           // describing two different accounts.
           const launch = existing ?? notice
           const target = { id: notice.nextAccountId, label: notice.nextAccountLabel }
-          const homeRouteChanged =
-            notice.homeRouteChanged === undefined
-              ? existing?.homeRouteChanged === true
-              : notice.homeRouteChanged
           // Why: a live Codex pane keeps its original launch account until it actually restarts, so A -> B -> A must not leave a stale restart notice.
           if (
-            !homeRouteChanged &&
             isSameCodexRestartNoticeAccount(
               { id: launch.previousAccountId, label: launch.previousAccountLabel },
               target
@@ -115,7 +110,6 @@ export function createTerminalRestartActions(
               ? {}
               : { previousAccountId: launch.previousAccountId }),
             ...(notice.nextAccountId === undefined ? {} : { nextAccountId: notice.nextAccountId }),
-            ...(homeRouteChanged ? { homeRouteChanged: true as const } : {}),
             // Why: a queued restart relaunches under whatever account is selected
             // when it runs, so a later switch does not reopen an answered prompt.
             ...(existing?.restartRequested ? { restartRequested: true as const } : {}),

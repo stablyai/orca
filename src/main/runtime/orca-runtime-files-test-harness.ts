@@ -3,9 +3,8 @@ import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca
 import { resetSshConnectionGenerations } from '../ssh/ssh-connection-generation'
 import { resetRuntimeFileMocks } from './orca-runtime-files-mock-registry'
 import {
-  LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   normalizeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 
@@ -48,6 +47,7 @@ export function createRuntimeFileCommands(options?: {
   hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
+    getSettings: vi.fn(() => ({ followSymlinkedDirectories: false })),
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const path = options?.path ?? '/repo'
@@ -60,10 +60,7 @@ export function createRuntimeFileCommands(options?: {
   // Mirrors the real resolver: the worktree's own host outranks the repo row.
   const runtimeFileTargetExecutionHostId = (): ExecutionHostId => {
     const connectionId = store.getRepo(worktree.repoId)?.connectionId
-    return (
-      normalizeExecutionHostId(options?.hostId) ??
-      (connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID)
-    )
+    return normalizeExecutionHostId(options?.hostId) ?? getConnectionExecutionHostId(connectionId)
   }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',

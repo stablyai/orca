@@ -52,10 +52,8 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
                   projectRef: item.source.projectRef
                 })
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = updated as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         setActionItem(null)
         await loadTasks({ silent: true })
@@ -95,8 +93,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubIssueUpdate.interpret(reply) as { ok?: boolean; error?: string }
+        const result = githubIssueUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub issue')
         }

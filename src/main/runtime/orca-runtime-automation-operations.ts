@@ -1,7 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPtyForegroundProcessReads } from './orca-runtime-pty-foreground-process-reads'
 import type {
-  AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
   AutomationDestination
 } from '../../shared/automation-owner-precondition'
@@ -17,6 +16,7 @@ import {
 } from '../../shared/automation-list-scope'
 import { OrchestrationDb } from './orchestration/db'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
@@ -24,33 +24,29 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
 export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
-  protected fenceAutomationOwner(
-    id: string,
+  private readAutomationRuns<T>(
+    automationId: string | undefined,
     expectedOwner: AutomationOwnerPrecondition | undefined,
-    operation: AutomationOwnerFenceOperation
-  ): void {
-    if (!this.store?.assertAutomationOwnerFence) {
-      if (expectedOwner) {
-        throw new Error('runtime_unavailable')
-      }
-      return
+    read: () => T
+  ): T {
+    if (expectedOwner && !automationId) {
+      throw new Error('An expected owner requires an automation id.')
     }
-    this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
+    return this.automation.withExternalProbePriority(() => {
+      if (automationId) {
+        this.automation.assertOwner(automationId, expectedOwner, 'read')
+      }
+      return read()
+    })
   }
 
   listAutomationRuns(
     automationId?: string,
     expectedOwner?: AutomationOwnerPrecondition
   ): AutomationRun[] {
-    if (expectedOwner && !automationId) {
-      throw new Error('An expected owner requires an automation id.')
-    }
-    return this.automation.withExternalProbePriority(() => {
-      if (automationId) {
-        this.fenceAutomationOwner(automationId, expectedOwner, 'read')
-      }
-      return this.automation.listRuns(automationId)
-    })
+    return this.readAutomationRuns(automationId, expectedOwner, () =>
+      this.automation.listRuns(automationId)
+    )
   }
 
   listAutomationRunsPage(
@@ -59,20 +55,14 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     limit?: number,
     cursor?: string
   ) {
-    if (expectedOwner && !automationId) {
-      throw new Error('An expected owner requires an automation id.')
-    }
-    return this.automation.withExternalProbePriority(() => {
-      if (automationId) {
-        this.fenceAutomationOwner(automationId, expectedOwner, 'read')
-      }
-      return this.automation.listRunsPage(automationId, limit, cursor)
-    })
+    return this.readAutomationRuns(automationId, expectedOwner, () =>
+      this.automation.listRunsPage(automationId, limit, cursor)
+    )
   }
 
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
     const automation = this.automation.show(id)
-    this.fenceAutomationOwner(id, expectedOwner, 'read')
+    this.automation.assertOwner(id, expectedOwner, 'read')
     return automation
   }
 
@@ -106,11 +96,11 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   updateAutomation(
     id: string,
     updates: RuntimeAutomationUpdateInput,
-    options?: unknown
+    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() => {
       const source = this.automationChangeSelector(id)
-      return this.automation.update(id, updates, options as never).then((automation) => {
+      return this.automation.update(id, updates, options).then((automation) => {
         this.publishAutomationDefinitionChange(source, this.automationChangeSelector(automation.id))
         return automation
       })
@@ -120,12 +110,13 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   deleteAutomation(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
-  ): { removed: boolean; id: string } {
+  ): Promise<{ removed: boolean; id: string }> {
     return this.automation.withExternalProbePriority(() => {
       const selector = this.automationChangeSelector(id)
-      const result = this.automation.delete(id, expectedOwner as never)
-      this.publishAutomationDefinitionChange(selector, selector)
-      return result
+      return this.automation.delete(id, expectedOwner).then((result) => {
+        this.publishAutomationDefinitionChange(selector, selector)
+        return result
+      })
     })
   }
 
@@ -134,7 +125,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     expectedOwner?: AutomationOwnerPrecondition
   ): Promise<AutomationRun> {
     return this.automation.withExternalProbePriority(() =>
-      this.automation.runNow(id, expectedOwner as never)
+      this.automation.runNow(id, expectedOwner)
     )
   }
 
@@ -151,12 +142,22 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   // to inject an in-memory DB without touching the filesystem.
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
-      const dbPath = join(getAppEnvironment().getPath('userData'), 'orchestration.db')
-      this._orchestrationDb = new OrchestrationDb(dbPath)
+      this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
     return this._orchestrationDb
+  }
+
+  /** The database, opened only if it already exists: a profile without one has no mail to redrive. */
+  getExistingOrchestrationDb(): OrchestrationDb | null {
+    return this._orchestrationDb || existsSync(this.orchestrationDbPath())
+      ? this.getOrchestrationDb()
+      : null
+  }
+
+  private orchestrationDbPath(): string {
+    return join(getAppEnvironment().getPath('userData'), 'orchestration.db')
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
@@ -184,6 +185,10 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     options: { connectionId?: string; materializeRenderer?: boolean } = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {
     return this.legacyWorkerRecovery.reconcile(options)
+  }
+
+  stopLegacyWorkerTerminalRecovery(): Promise<void> {
+    return this.legacyWorkerRecovery.stop()
   }
 
   protected updateLegacyWorkerTerminalRecoveryRetry(

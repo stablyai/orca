@@ -1,3 +1,5 @@
+import { closeRemoteRuntimeSocket } from './remote-runtime-socket-close'
+import { throwIfSignalAborted, abortSignalReason } from './abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import type { PairingOffer } from './pairing'
@@ -8,12 +10,15 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './e2ee-crypto'
-import type { RuntimeCapability } from './protocol-version'
 import {
   formatRemoteRuntimeCloseMessage,
   ignoreSettledRemoteRuntimeSocketError
 } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import {
+  remoteRuntimeConnectFailureMessage,
+  remoteRuntimeConnectOptions
+} from './remote-runtime-connect-bound'
 import {
   isRemoteRuntimeBinaryFrameWithinLimit,
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
@@ -21,49 +26,29 @@ import {
   serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
-import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import { RemoteRuntimeSubscriptionFrameRouter } from './remote-runtime-subscription-frame-router'
-import {
-  RemoteRuntimeSubscriptionOutbound,
-  type RemoteRuntimeOutboundMemoryBudget,
-  type RemoteRuntimeOutboundQueueOptions
-} from './remote-runtime-subscription-outbound'
+import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime-subscription-outbound'
 import { RemoteRuntimeSubscriptionRequestChannel } from './remote-runtime-subscription-request-channel'
 import {
   startRemoteRuntimeSocketLiveness,
-  type RemoteRuntimeSocketLivenessMonitor,
-  type RemoteRuntimeSocketLivenessOptions
+  type RemoteRuntimeSocketLivenessMonitor
 } from './remote-runtime-socket-liveness'
+import type {
+  RemoteRuntimeSubscriptionOptions,
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from './remote-runtime-subscription-contract'
 
 export type {
   RemoteRuntimeOutboundMemoryBudget,
   RemoteRuntimeOutboundSocketMemory
 } from './remote-runtime-subscription-outbound'
 
-export type RemoteRuntimeTransportSubscription = {
-  requestId: string
-  close: () => void
-  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
-  sendRequest?: (
-    method: string,
-    params: unknown,
-    timeoutMs: number
-  ) => Promise<RuntimeRpcResponse<unknown>>
-}
-
-export type RemoteRuntimeTransportSubscriptionCallbacks<TResult = unknown> = {
-  onResponse: (response: RuntimeRpcResponse<TResult>) => void
-  onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
-  onError: (error: RemoteRuntimeClientError) => void
-  onClose?: () => void
-}
-
-export type RemoteRuntimeSubscriptionOptions = RemoteRuntimeSocketLivenessOptions & {
-  clientCapabilities?: readonly RuntimeCapability[]
-  perMessageDeflate?: boolean
-  outboundQueue?: RemoteRuntimeOutboundQueueOptions
-  outboundMemoryBudget?: RemoteRuntimeOutboundMemoryBudget
-}
+export type {
+  RemoteRuntimeSubscriptionOptions,
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from './remote-runtime-subscription-contract'
 
 export async function subscribeRemoteRuntimeTransport<TResult>(
   pairing: PairingOffer,
@@ -73,6 +58,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   callbacks: RemoteRuntimeTransportSubscriptionCallbacks<TResult>,
   options?: RemoteRuntimeSubscriptionOptions
 ): Promise<RemoteRuntimeTransportSubscription> {
+  throwIfSignalAborted(options?.signal)
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
@@ -120,6 +106,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     })
 
     const cleanupSocketListeners = (): WebSocket | null => {
+      options?.signal?.removeEventListener('abort', onAbort)
       liveness?.stop()
       liveness = null
       outbound.releaseQueues()
@@ -145,12 +132,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     }
 
     const closeSocketAfterCleanup = (): void => {
-      const socket = cleanupSocketListeners()
-      try {
-        socket?.close()
-      } catch {
-        // ignore best-effort close
-      }
+      closeRemoteRuntimeSocket(cleanupSocketListeners())
     }
 
     const timeout = setTimeout(() => {
@@ -166,6 +148,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       if (closing) {
         return
       }
+      options?.signal?.removeEventListener('abort', onAbort)
       closing = true
       requestChannel.rejectAll(
         new RemoteRuntimeClientError(
@@ -179,11 +162,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       } else if (!outbound.hasRetainedCloseSource) {
         outbound.releaseSocketMemory()
       }
-      try {
-        ws?.close()
-      } catch {
-        // ignore best-effort close
-      }
+      closeRemoteRuntimeSocket(ws)
     }
 
     const sendBinary = (bytes: Uint8Array<ArrayBufferLike>): boolean => {
@@ -225,11 +204,30 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       callbacks.onClose?.()
     }
 
-    try {
-      ws = new WebSocket(pairing.endpoint, {
+    const onAbort = (): void => {
+      if (settled) {
+        close()
+      } else {
+        settled = true
+        clearTimeout(timeout)
+        closeSocketAfterCleanup()
+        reject(abortSignalReason(options!.signal!))
+      }
+    }
+    options?.signal?.addEventListener('abort', onAbort, { once: true })
+    if (options?.signal?.aborted) {
+      onAbort()
+      return
+    }
+    const connectOptions = remoteRuntimeConnectOptions(
+      {
         maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
         ...(options?.perMessageDeflate === false ? { perMessageDeflate: false } : {})
-      })
+      },
+      options?.connectTimeoutMs
+    )
+    try {
+      ws = new WebSocket(pairing.endpoint, connectOptions)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
@@ -242,11 +240,11 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       )
     }
 
-    function onError(): void {
+    function onError(error: Error): void {
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.'
+          remoteRuntimeConnectFailureMessage(error, pairing.endpoint)
         )
       )
     }

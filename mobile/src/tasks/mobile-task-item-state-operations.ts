@@ -1,10 +1,35 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  githubPullRequestChecksSchema,
+  githubPullRequestFileContentsSchema,
+  hostedIssueCreatedSchema,
+  linearIssueCreatedSchema,
+  linearIssueUpdatedSchema,
+  taskItemMutationSchema,
+  taskMutationConfirmationSchema
+} from './task-item-state-reply-schema'
 
 // The rest of a task item's writes and the PR reads that go with them: creating an item, editing
 // its metadata or state, reviewers, checks, file contents and viewed state, and merge. A mutation
 // whose reply is lost stays a transport rejection on the promise, so the screen reports the drop
 // rather than a failure the host never sent.
+//
+// Every reader here is checked, and each schema lives in task-item-state-reply-schema.ts with the
+// consumer line behind every requirement. Nine of the writes share one reader because they share
+// one reply convention; the acceptance and the name stay per operation, which is what a call site
+// picks.
+
+/**
+ * One reader for the nine writes whose reply is a `{ ok, error }` envelope, not nine readers.
+ *
+ * The `ok === false` test and the `error` read are a single convention across both issue edits,
+ * both pull/merge-request edits, both state toggles, the reviewer request, the checks rerun and
+ * both merges — there is no input on which two of them would want different answers. Which
+ * sentence a caller shows on a refusal stays the caller's, because each keeps its own fallback
+ * copy.
+ */
+const taskItemMutationReader = rpcResultVariant('task-item-mutation', taskItemMutationSchema)
 
 export const githubIssueCreate = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -12,7 +37,7 @@ export const githubIssueCreate = bindDeferredRpcOperation(
     method: 'github.createIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-created-issue')
+    read: rpcResultVariant('github-created-issue', hostedIssueCreatedSchema)
   })
 )
 
@@ -22,7 +47,7 @@ export const gitlabIssueCreate = bindDeferredRpcOperation(
     method: 'gitlab.createIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-created-issue')
+    read: rpcResultVariant('gitlab-created-issue', hostedIssueCreatedSchema)
   })
 )
 
@@ -33,7 +58,7 @@ export const linearIssueCreate = bindDeferredRpcOperation(
     method: 'linear.createIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-created-issue')
+    read: rpcResultVariant('linear-created-issue', linearIssueCreatedSchema)
   })
 )
 
@@ -43,7 +68,7 @@ export const githubIssueUpdate = bindDeferredRpcOperation(
     method: 'github.updateIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-updated-issue')
+    read: taskItemMutationReader
   })
 )
 
@@ -53,7 +78,7 @@ export const githubPullRequestUpdate = bindDeferredRpcOperation(
     method: 'github.updatePR',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-updated-pull-request')
+    read: taskItemMutationReader
   })
 )
 
@@ -63,7 +88,7 @@ export const githubPullRequestStateUpdate = bindDeferredRpcOperation(
     method: 'github.updatePRState',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-updated-pull-request-state')
+    read: taskItemMutationReader
   })
 )
 
@@ -73,7 +98,7 @@ export const gitlabIssueUpdate = bindDeferredRpcOperation(
     method: 'gitlab.updateIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-updated-issue')
+    read: taskItemMutationReader
   })
 )
 
@@ -83,7 +108,7 @@ export const gitlabMergeRequestUpdate = bindDeferredRpcOperation(
     method: 'gitlab.updateMR',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-updated-merge-request')
+    read: taskItemMutationReader
   })
 )
 
@@ -93,7 +118,7 @@ export const gitlabMergeRequestStateUpdate = bindDeferredRpcOperation(
     method: 'gitlab.updateMRState',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-updated-merge-request-state')
+    read: taskItemMutationReader
   })
 )
 
@@ -103,7 +128,7 @@ export const linearIssueUpdate = bindDeferredRpcOperation(
     method: 'linear.updateIssue',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-updated-issue')
+    read: rpcResultVariant('linear-updated-issue', linearIssueUpdatedSchema)
   })
 )
 
@@ -113,7 +138,7 @@ export const githubReviewerRequest = bindDeferredRpcOperation(
     method: 'github.requestPRReviewers',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-requested-reviewers')
+    read: taskItemMutationReader
   })
 )
 
@@ -124,7 +149,7 @@ export const githubPullRequestChecksRead = bindDeferredRpcOperation(
     method: 'github.prChecks',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-pr-checks')
+    read: rpcResultVariant('github-pr-checks', githubPullRequestChecksSchema)
   })
 )
 
@@ -134,7 +159,7 @@ export const githubPullRequestChecksRerun = bindDeferredRpcOperation(
     method: 'github.rerunPRChecks',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-rerun-pr-checks')
+    read: taskItemMutationReader
   })
 )
 
@@ -144,7 +169,7 @@ export const githubPullRequestFileContentsRead = bindDeferredRpcOperation(
     method: 'github.prFileContents',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-pr-file-contents')
+    read: rpcResultVariant('github-pr-file-contents', githubPullRequestFileContentsSchema)
   })
 )
 
@@ -155,7 +180,7 @@ export const githubPullRequestFileViewedWrite = bindDeferredRpcOperation(
     method: 'github.setPRFileViewed',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-pr-file-viewed')
+    read: rpcResultVariant('github-pr-file-viewed', taskMutationConfirmationSchema)
   })
 )
 
@@ -165,7 +190,7 @@ export const githubPullRequestMerge = bindDeferredRpcOperation(
     method: 'github.mergePR',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-merged-pull-request')
+    read: taskItemMutationReader
   })
 )
 
@@ -175,6 +200,6 @@ export const gitlabMergeRequestMerge = bindDeferredRpcOperation(
     method: 'gitlab.mergeMR',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-merged-merge-request')
+    read: taskItemMutationReader
   })
 )

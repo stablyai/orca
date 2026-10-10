@@ -1,3 +1,5 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 // Why: a restored pane's stale-account prompt can only be raised once a PTY is
@@ -11,7 +13,6 @@ import {
   isAgentTaskCompleteNotificationEnabled,
   isAgentTaskCompleteTrackingEnabled
 } from './agent-task-complete-settings'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -263,7 +264,12 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         return
       }
       session.pendingTerminalBellNotification = false
-      session.deps.dispatchNotification({ source: 'terminal-bell', paneKey: session.cacheKey })
+      session.deps.dispatchNotification({
+        source: 'terminal-bell',
+        paneKey: session.cacheKey,
+        ptyId: session.transport.getPtyId(),
+        workspaceOwner: captureNotificationTransportOwner(session.transport)
+      })
     }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
   }
 

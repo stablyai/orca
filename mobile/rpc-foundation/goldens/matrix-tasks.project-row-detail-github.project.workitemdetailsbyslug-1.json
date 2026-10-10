@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.project-row-detail",
   "family": "tasks.project-row-detail",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
-  "scenarioSha256": "52b2cc222d9819121ba99f8f603bc76abe420d731e5853116e802a4db59e2d3e",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0216abb9c43b": {
       "name": "projectTitleDraft",
@@ -41,6 +32,13 @@
       "name": "github.project.workItemDetailsBySlug#1",
       "ordinal": 16,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
+    },
+    "183c3c26aba7": {
+      "detail": {
+        "$rpc": "null"
+      },
+      "error": "The host sent a reply this app could not read (github.project.workItemDetailsBySlug)",
+      "loading": false
     },
     "1e161db29c89": {
       "name": "projectRowDetail",
@@ -278,11 +276,6 @@
         }
       }
     },
-    "6fa1c828a0ac": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Cannot read properties of null (reading 'ok')"
-    },
     "742985d99709": {
       "name": "projectEditingCommentDraft",
       "ordinal": 5,
@@ -326,6 +319,11 @@
           "ok": false
         }
       }
+    },
+    "9239767275ff": {
+      "name": "projectRowDetailError",
+      "ordinal": 17,
+      "value": "The host sent a reply this app could not read (github.project.workItemDetailsBySlug)"
     },
     "96d6a5752f05": {
       "name": "github.project.workItemDetailsBySlug#1",
@@ -531,13 +529,6 @@
       "ordinal": 13,
       "value": ""
     },
-    "ba38fcc880dc": {
-      "detail": {
-        "$rpc": "null"
-      },
-      "error": "Cannot read properties of undefined (reading 'ok')",
-      "loading": false
-    },
     "bff535848bcf": {
       "name": "projectRowDetailError",
       "ordinal": 17,
@@ -605,13 +596,6 @@
       "ordinal": 3,
       "value": ""
     },
-    "f3a26e0bbdca": {
-      "detail": {
-        "$rpc": "null"
-      },
-      "error": "Cannot read properties of null (reading 'ok')",
-      "loading": false
-    },
     "f6a5085dd8e9": {
       "name": "projectRowDetailLoading",
       "ordinal": 14,
@@ -657,11 +641,6 @@
           }
         }
       }
-    },
-    "fc81dfe2109f": {
-      "name": "projectRowDetailError",
-      "ordinal": 17,
-      "value": "Cannot read properties of undefined (reading 'ok')"
     },
     "fdcd0ea3f000": {
       "name": "prFileCommentDrafts",
@@ -709,7 +688,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "ba38fcc880dc",
+          "state": "183c3c26aba7",
           "effects": [
             "0216abb9c43b",
             "da1a7926872e",
@@ -725,7 +704,7 @@
             "2ee1c7329449",
             "b63d5911050c",
             "f6a5085dd8e9",
-            "fc81dfe2109f",
+            "9239767275ff",
             "561861a537bb"
           ]
         }
@@ -738,7 +717,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f3a26e0bbdca",
+          "state": "183c3c26aba7",
           "effects": [
             "0216abb9c43b",
             "da1a7926872e",
@@ -754,7 +733,7 @@
             "2ee1c7329449",
             "b63d5911050c",
             "f6a5085dd8e9",
-            "6fa1c828a0ac",
+            "9239767275ff",
             "561861a537bb"
           ]
         }
@@ -767,7 +746,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "45b703d1ba29",
+          "state": "183c3c26aba7",
           "effects": [
             "0216abb9c43b",
             "da1a7926872e",
@@ -783,7 +762,7 @@
             "2ee1c7329449",
             "b63d5911050c",
             "f6a5085dd8e9",
-            "bff535848bcf",
+            "9239767275ff",
             "561861a537bb"
           ]
         }
@@ -796,7 +775,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "45b703d1ba29",
+          "state": "183c3c26aba7",
           "effects": [
             "0216abb9c43b",
             "da1a7926872e",
@@ -812,7 +791,7 @@
             "2ee1c7329449",
             "b63d5911050c",
             "f6a5085dd8e9",
-            "bff535848bcf",
+            "9239767275ff",
             "561861a537bb"
           ]
         }

@@ -17,6 +17,7 @@ import {
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { parseRoutableExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -46,15 +47,18 @@ async function validateLocalPathTarget(
   return { ok: true, path: normalizedPath }
 }
 
-function hasActiveRuntime(store: Store): boolean {
-  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
+// Why: the path's owner decides, never the focused server; an absent owner is refused.
+function isLocallyOwned(ownerHostId: unknown): boolean {
+  return (
+    typeof ownerHostId === 'string' && parseRoutableExecutionHostId(ownerHostId)?.kind === 'local'
+  )
 }
 
 async function openInFileManager(
-  store: Store,
-  pathValue: string
+  pathValue: string,
+  ownerHostId: unknown
 ): Promise<ShellOpenLocalPathResult> {
-  if (hasActiveRuntime(store)) {
+  if (!isLocallyOwned(ownerHostId)) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
   const target = await validateLocalPathTarget(pathValue)
@@ -75,12 +79,11 @@ async function openInExternalEditor(
   store: Store,
   request: ShellOpenExternalEditorRequest
 ): Promise<ShellOpenExternalEditorResult> {
-  if (hasActiveRuntime(store)) {
-    return { ok: false, reason: 'remote-runtime-unsupported' }
-  }
-
   const connectionId = request.connectionId?.trim()
   if (connectionId) {
+    if (request.ownerHostId !== toSshExecutionHostId(connectionId)) {
+      return { ok: false, reason: 'remote-runtime-unsupported' }
+    }
     const sshTarget = store.getSshTarget(connectionId)
     if (!sshTarget) {
       return { ok: false, reason: 'ssh-target-not-found' }
@@ -111,6 +114,9 @@ async function openInExternalEditor(
     }
   }
 
+  if (!isLocallyOwned(request.ownerHostId)) {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
   const target = await validateLocalPathTarget(request.path)
   if (!target.ok) {
     return target
@@ -123,7 +129,10 @@ async function openInExternalEditor(
   }
 }
 
-async function openWithSystemDefault(pathValue: string): Promise<boolean> {
+async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): Promise<boolean> {
+  if (!isLocallyOwned(ownerHostId)) {
+    return false
+  }
   const target = await validateLocalPathTarget(pathValue)
   if (!target.ok) {
     return false
@@ -137,15 +146,19 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
 }
 
 export function registerShellHandlers(store: Store): void {
-  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
-    // Why: keep the legacy fire-and-forget renderer contract while reusing the
-    // same absolute/existing path validation as the explicit file-manager API.
-    void (await openInFileManager(store, path))
-  })
+  ipcMain.handle(
+    'shell:openPath',
+    async (_event, path: string, ownerHostId: unknown): Promise<void> => {
+      // Why: keep the legacy fire-and-forget renderer contract while reusing the
+      // same absolute/existing path validation as the explicit file-manager API.
+      void (await openInFileManager(path, ownerHostId))
+    }
+  )
 
   ipcMain.handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
+    (_event, path: string, ownerHostId: unknown): Promise<ShellOpenLocalPathResult> =>
+      openInFileManager(path, ownerHostId)
   )
 
   ipcMain.handle(
@@ -169,11 +182,16 @@ export function registerShellHandlers(store: Store): void {
     return shell.openExternal(parsed.toString())
   })
 
-  ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
-    return openWithSystemDefault(filePath)
-  })
+  ipcMain.handle(
+    'shell:openFilePath',
+    async (_event, filePath: string, ownerHostId: unknown): Promise<boolean> =>
+      openWithSystemDefault(filePath, ownerHostId)
+  )
 
-  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
+  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string, ownerHostId: unknown) => {
+    if (!isLocallyOwned(ownerHostId)) {
+      return
+    }
     let parsed: URL
     try {
       parsed = new URL(rawUri)
@@ -202,7 +220,7 @@ export function registerShellHandlers(store: Store): void {
       return
     }
 
-    await openWithSystemDefault(target.path)
+    await openWithSystemDefault(target.path, ownerHostId)
   })
 
   ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
@@ -240,6 +258,15 @@ export function registerShellHandlers(store: Store): void {
       return null
     }
     return result.filePaths[0]
+  })
+
+  // Why: a separate plural handler, like repos:pickFolder/pickFolders — callers that
+  // must take exactly one file (the notebook interpreter picker) keep pickAttachment.
+  ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections']
+    })
+    return result.canceled ? [] : result.filePaths
   })
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,

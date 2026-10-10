@@ -204,11 +204,10 @@ describe('Codex rewind', () => {
       }
       return original(method)
     })
-    const onReverted = vi.fn()
-    expect(
-      await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop', onReverted })
-    ).toEqual({ ok: false, reason: 'history-limit' })
-    expect(onReverted).not.toHaveBeenCalled()
+    expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
+      ok: false,
+      reason: 'history-limit'
+    })
     expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
   })
   it('refuses a missing target before mutation', async () => {

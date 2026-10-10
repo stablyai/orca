@@ -1,7 +1,4 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
@@ -51,22 +48,12 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         const shouldActivate = terminalPresentation === 'focused'
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
-        if (shouldActivate) {
-          activateTerminalInitiatedWorktree(store, worktreeId)
-        }
         // Why: the paired launch client already resolved the mode, so its choice wins over the host renderer's local default.
         const tabOptions = data.launchAgent
           ? {
               ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
               launchAgent: data.launchAgent,
-              ...(data.viewMode
-                ? { viewMode: data.viewMode }
-                : initialAgentTabViewModeProps(store.settings, {
-                    agent: data.launchAgent,
-                    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                      getConnectionIdFromState(store, worktreeId)
-                    )
-                  })),
+              ...(data.viewMode ? { viewMode: data.viewMode } : {}),
               ...(data.cwd ? { startupCwd: data.cwd } : {})
             }
           : shouldActivate
@@ -92,7 +79,9 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           }
         }
         if (shouldActivate) {
-          store.setActiveTabType('terminal')
+          // After the tab lands: activating prunes the workspace's empty groups, the requested one too.
+          activateTerminalInitiatedWorktree(store, worktreeId, [tab.id])
+          store.setActiveTabType('terminal', worktreeId)
           store.setActiveTab(tab.id)
         }
         if (shouldSurfaceOwner) {

@@ -1,3 +1,4 @@
+import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
 
@@ -49,6 +50,9 @@ const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined
 ): PiAgentKind | null {
+  if (isFreshOmpLaunchCommand(command)) {
+    return 'omp'
+  }
   const binary = getLaunchBinary(command ?? '')
   if (binary === OMP_LAUNCH_BINARY) {
     return 'omp'

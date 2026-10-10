@@ -1,9 +1,9 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { resolveSshPaneConnectGate } from '../ssh-pane-connect-gate'
 
 import { waitForUserInitiatedSshConnect, waitForSshConnection } from './ssh-session-connect'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isSshSessionGoneError } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
 

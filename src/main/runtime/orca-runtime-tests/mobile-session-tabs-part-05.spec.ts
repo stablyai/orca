@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
@@ -181,7 +182,7 @@ describe('OrcaRuntimeService', () => {
     })
     events.length = 0
 
-    runtime.onPtyExit('laptop-created-pty', 0)
+    await runtime.onPtyExit('laptop-created-pty', 0)
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -351,7 +352,8 @@ describe('OrcaRuntimeService', () => {
       isDestroyed: () => false,
       webContents: {
         isDestroyed: () => false,
-        setBackgroundThrottling
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
       }
     })
 
@@ -374,7 +376,9 @@ describe('OrcaRuntimeService', () => {
     const acknowledged = makeDeferred()
     const closeTerminalTab = vi.fn(() => acknowledged.promise)
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
     runtime.setPtyController({
       write: () => true,
@@ -431,7 +435,8 @@ describe('OrcaRuntimeService', () => {
       isDestroyed: () => false,
       webContents: {
         isDestroyed: () => false,
-        setBackgroundThrottling: vi.fn()
+        setBackgroundThrottling: vi.fn(),
+        capturePage: vi.fn(async () => null)
       }
     })
 
@@ -510,7 +515,9 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'headless-left' })
       .mockResolvedValueOnce({ id: 'headless-right' })
     const kill = vi.fn(() => true)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow })
+    )
     runtime.setPtyController({
       spawn,
       write: () => true,

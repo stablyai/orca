@@ -11,7 +11,12 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSearchSort,
+  AiVaultSession
+} from '../../../../shared/ai-vault-types'
+import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-search-scope'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
@@ -128,6 +133,9 @@ export function useAiVaultSearch(
   }
 }
 
+// Answers that a retry from this client cannot change; `not-ready` can, so it keeps searching.
+const TITLE_ONLY_UNAVAILABLE_REASONS = new Set<string>(['disabled', 'no-service'])
+
 /** Under `all` every hit names its own host; a single-host answer belongs to the host we addressed. */
 function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null): ExecutionHostId {
   return host ?? parseExecutionHostId(hit.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
@@ -136,27 +144,51 @@ function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null)
 export function useAiVaultPanelSearch(
   query: string,
   agents: readonly AiVaultAgent[],
-  paths: readonly string[] | undefined,
-  executionHostScope: ExecutionHostScope
+  /** Which scope the host resolves; undefined searches everything it has. */
+  within: AiVaultSearchScopeIdentity | undefined,
+  executionHostScope: ExecutionHostScope,
+  sort: AiVaultSearchSort
 ) {
   const settings = useAppStore((state) => state.settings?.aiVaultSearch)
   const policy = resolveAiVaultSearchSettings({ aiVaultSearch: settings })
   const host = parseExecutionHostId(executionHostScope)?.id ?? null
   const scope: ExecutionHostScope | null =
     executionHostScope === ALL_EXECUTION_HOSTS_SCOPE ? ALL_EXECUTION_HOSTS_SCOPE : host
-  const searching = query.trim().length > 0
-  const localConsent = executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
+  const trimmed = query.trim()
+  const hasQuery = trimmed.length > 0
+  const needsLocalConsent =
+    executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
+  // Why: another computer's index is not this client's to turn on (a relay keeps its
+  // own off by design), so once a single host says its search is off, the box goes
+  // back to the title filter for that host instead of walling the list (#22453).
+  const [titleOnlyScope, setTitleOnlyScope] = useState<ExecutionHostScope | null>(null)
+  const titleOnly =
+    scope !== null && scope !== ALL_EXECUTION_HOSTS_SCOPE && titleOnlyScope === scope
+  // Until indexing is on the box is still the legacy title filter, not index search.
+  const searching = hasQuery && !needsLocalConsent && !titleOnly
+  // `within` is memoized by the caller; a fresh object per render would restart
+  // the search on every render and never let one settle.
   const request = useMemo(
     () =>
-      searching && scope && !localConsent && agents.length > 0
+      searching && scope && agents.length > 0
         ? {
-            query: query.trim(),
-            filters: { agents: [...agents], ...(paths ? { scopePaths: [...paths] } : {}) }
+            query: trimmed,
+            // Relevance is the host's own default, so only the other order travels.
+            filters: { agents: [...agents], ...(sort === 'relevance' ? {} : { sort }) },
+            ...(within ? { within } : {})
           }
         : null,
-    [searching, scope, localConsent, agents, query, paths]
+    [searching, scope, agents, trimmed, within, sort]
   )
   const search = useAiVaultSearch(request, scope, JSON.stringify(policy))
+  const hostSearchOff =
+    search.response?.kind === 'unavailable' &&
+    TITLE_ONLY_UNAVAILABLE_REASONS.has(search.response.reason)
+  useEffect(() => {
+    if (hostSearchOff && scope !== ALL_EXECUTION_HOSTS_SCOPE) {
+      setTitleOnlyScope(scope)
+    }
+  }, [hostSearchOff, scope])
   const sessions = useMemo(
     () => search.hits.map((hit) => aiVaultSearchHitToSession(hit, hitExecutionHostId(hit, host))),
     [search.hits, host]
@@ -176,7 +208,9 @@ export function useAiVaultPanelSearch(
     sessions,
     searchHits,
     searching,
-    localConsent,
+    hasQuery,
+    needsLocalConsent,
+    titleOnly: hasQuery && titleOnly,
     host,
     resetKey: JSON.stringify([scope, request])
   }

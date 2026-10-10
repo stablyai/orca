@@ -9,4 +9,4 @@
 # in a PR so the Fastfile smoke check runs against the new version first.
 source "https://rubygems.org"
 
-gem "fastlane", "2.238.0"
+gem "fastlane", "2.240.1"

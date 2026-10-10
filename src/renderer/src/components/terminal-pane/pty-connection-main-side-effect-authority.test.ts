@@ -145,14 +145,14 @@ function notifyStoreSubscribers(): void {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -413,7 +413,11 @@ describe('connectPanePty', () => {
         facts: [{ kind: 'pr-link', link }]
       })
 
-      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith('wt-1', link)
+      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
+        'wt-1',
+        link,
+        expect.objectContaining({ tabId: 'tab-1', ptyId: 'tab-pty' })
+      )
     })
 
     it('does not byte-scan PR links or OSC 133 — facts are the only consumer', async () => {
