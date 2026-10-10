@@ -1692,7 +1692,6 @@
       ],
       "demotionRule": "Keep experimental until soak and platform evidence support promotion; do not relax value or identity assertions to hide failures."
     },
-
     {
       "id": "workspace-session.ssh-host-partition-round-trip",
       "title": "An SSH workspace round-trips through its own partition without losing tabs, editor files or browser state",
@@ -2562,99 +2561,6 @@
       "demotionRule": "Keep experimental until CI soak is stable; investigate any budget failure without weakening transcript preservation."
     },
     {
-      "id": "ssh.localhost-terminal-agent-hooks",
-      "title": "Localhost SSH terminal and agent hooks reach the owning pane",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "terminal-runtime",
-      "layer": "electron-ssh-e2e",
-      "surfaces": ["SSH terminal", "remote agent status", "remote plugin installation"],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["ssh"],
-      "coveredPlatforms": ["linux"],
-      "coveredProviders": ["ssh"],
-      "coverageNotes": "Ubuntu CI loopback sshd shares the runner filesystem. Fresh per-test repositories isolate retained relay workspace snapshots; existing Pi home supplies the documented bare-shell plugin prerequisite.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19097"],
-      "invariant": "A localhost SSH terminal executes on the SSH host and routes authenticated hook status to its owning pane without treating idle keyboard input as agent interruption.",
-      "oracle": "Require terminal output markers, exported hook identity, actual OpenCode/Pi plugin files, and matching pane/worktree/connection hook events; Ctrl-C and Escape in an idle shell must not interrupt a hook-owned agent.",
-      "commands": [
-        "gh run view 34045578306 --log",
-        "gh run view 34045975180 --log",
-        "gh run view 34046230389 --log",
-        "ORCA_E2E_SSH_LOCALHOST=1 ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1",
-        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/ssh-localhost-e2e-routing.test.mjs"
-      ],
-      "testFiles": [
-        "tests/e2e/ssh-localhost.spec.ts",
-        "config/scripts/ssh-localhost-e2e-routing.test.mjs"
-      ],
-      "assertionRefs": [
-        {
-          "file": "tests/e2e/ssh-localhost.spec.ts",
-          "assertions": ["routes a terminal and agent-hook status over localhost SSH"]
-        },
-        {
-          "file": "config/scripts/ssh-localhost-e2e-routing.test.mjs",
-          "assertions": ["selects the localhost journey for its remote hook authorities"]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-06",
-          "runner": "ci",
-          "platform": "linux",
-          "command": "gh run view 34045578306 --log",
-          "result": "failed",
-          "summary": "Shared repository:2passed1failed, active pane PTY binding timed out amid old SSH target ownership conflicts.",
-          "durationSeconds": 150
-        },
-        {
-          "date": "2026-09-06",
-          "runner": "ci",
-          "platform": "linux",
-          "command": "gh run view 34045975180 --log",
-          "result": "passed",
-          "durationSeconds": 114,
-          "summary": "Fresh per-test repository:3passed,0skips0retries; original assertions retained."
-        },
-        {
-          "date": "2026-09-06",
-          "runner": "ci",
-          "platform": "linux",
-          "command": "gh run view 34046230389 --log",
-          "result": "passed",
-          "summary": "Normal selective workflow with isolated repository executed the localhost journey successfully; generic lane filtered it out.",
-          "durationSeconds": 36.4
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 1200,
-        "scope": "CI job timeout; measured p95 not established"
-      },
-      "flakeHistory": {
-        "status": "soaking",
-        "evidence": "Single baseline passed, shared-path repetitions exposed state leakage; isolated-path3/3 and normal workflow passed. Long-term history missing."
-      },
-      "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Same original scenario failed across shared-path repetitions and passed with unique paths; no application fault-mutation proof."
-      },
-      "performanceBudget": {
-        "required": false,
-        "evidence": "Functional terminal and hook routing coverage, not a performance oracle."
-      },
-      "promotionCriteria": [
-        "Collect repeated scheduled Linux runs without unexplained failures.",
-        "Preserve all original terminal, environment, plugin-file, and hook-status assertions."
-      ],
-      "knownGaps": [
-        "Different client profiles reopening one existing remote workspace can encounter old target-qualified PTY IDs; the fixture isolation does not fix that application behavior.",
-        "No macOS/Windows, remote network failure, folder-only, packaged, or mixed-version claim.",
-        "PR E2E is not part of required verify while broader reliability remains unresolved."
-      ],
-      "demotionRule": "Keep experimental on unexplained failures; do not mask them with retries, skips, or longer timeouts."
-    },
-    {
       "id": "terminal-output.prestarted-shell-snapshot-adoption",
       "title": "Prestarted shell adoption paints covered output once",
       "maturity": "experimental",
@@ -3178,8 +3084,6 @@
       "commands": [
         "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm-runtime-service.test.ts src/main/ephemeral-vm-resume-integrity.test.ts src/main/ephemeral-vm-recipe-runner.test.ts src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
-        "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ephemeral-vm-provisioned-root.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ephemeral-vm-provisioned-root.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -3204,8 +3108,7 @@
         "src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts",
         "src/renderer/src/lib/provisioned-root-create-options.test.ts",
         "src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
-        "tests/e2e/ephemeral-vm-cleanup-retry.spec.ts",
-        "tests/e2e/ephemeral-vm-provisioned-root.spec.ts"
+        "tests/e2e/ephemeral-vm-cleanup-retry.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -3301,13 +3204,6 @@
           "assertions": [
             "the rendered runtime row stops a live cleanup process without an automatic deadline and a retry succeeds"
           ]
-        },
-        {
-          "file": "tests/e2e/ephemeral-vm-provisioned-root.spec.ts",
-          "assertions": [
-            "default-base create adopts the recipe checkout at the captured source commit",
-            "workspace removal invokes recipe destroy and removes the provider container"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -3328,15 +3224,6 @@
           "result": "passed",
           "durationSeconds": 3,
           "summary": "One hundred twenty-two focused store, recipe-process, lifecycle, cleanup-handler, rendered stop-action, retry-context, source-ref, adoption-integrity, resume-integrity, and provisioning-recovery tests passed."
-        },
-        {
-          "date": "2026-08-14",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ephemeral-vm-provisioned-root.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 22,
-          "summary": "The final-tree full-build run completed the Docker Linux SSH journey: default-base create at the captured source commit, provisioned-root adoption, terminal, workspace removal, destroy, and provider-container cleanup."
         }
       ],
       "runtimeBudget": {
@@ -3399,7 +3286,6 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headless --project electron-headful --workers=1"
       ],
       "testFiles": [
@@ -3419,7 +3305,6 @@
         "src/main/providers/local-pty-provider-shell-readiness.test.ts",
         "src/relay/pty-shell-launch.test.ts",
         "src/relay/pty-handler-startup-command-delivery.test.ts",
-        "tests/e2e/ssh-startup-exec-readiness.spec.ts",
         "tests/e2e/paired-startup-exec-readiness.spec.ts"
       ],
       "assertionRefs": [
@@ -3472,14 +3357,6 @@
           ]
         },
         {
-          "file": "tests/e2e/ssh-startup-exec-readiness.spec.ts",
-          "assertions": [
-            "a Docker Linux OpenSSH/Bash replacement shell retains one compatibility-fallback input across reconnect without executing it before the blocked replacement can accept it",
-            "the owning terminal handle and raw PTY identity remain singular and stable",
-            "painted output, authoritative terminal output, and the first interactive input each appear exactly once"
-          ]
-        },
-        {
           "file": "tests/e2e/paired-startup-exec-readiness.spec.ts",
           "assertions": [
             "a headed desktop owner and paired client recover startup exec on one stable owning PTY",
@@ -3514,15 +3391,6 @@
           "result": "passed",
           "durationSeconds": 6,
           "summary": "233 tests passed with one local Fish skip, including exact Bash PROMPT_COMMAND byte/status/lifecycle composition across daemon, local, and relay owners."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "linux",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-          "result": "passed",
-          "durationSeconds": 17,
-          "summary": "The live OpenSSH/Bash relay journey crossed the bounded compatibility fallback while rc-file exec was blocked, proved one queued command echo with no command execution, then passed a disconnect/reconnect with exact-once startup output/input and stable pane plus owner PTY identities."
         },
         {
           "date": "2026-08-12",
@@ -4503,7 +4371,6 @@
       ],
       "demotionRule": "Keep experimental or demote if optimization closes an established client, a gate reopens on ambiguous authority, a mutation is replayed, cleanup is lost, or eligible idle hosts starve."
     },
-
     {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
@@ -4536,8 +4403,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
         "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ssh/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/direct-ssh-reconnect-telemetry-schema.test.ts src/renderer/src/lib/direct-ssh-reconnect-product-telemetry.test.ts src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts --reporter=dot",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/direct-ssh-reconnect-telemetry-schema.test.ts src/renderer/src/lib/direct-ssh-reconnect-product-telemetry.test.ts src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/ipc/worktree-base-directory-event-filter.test.ts",
@@ -4558,8 +4424,7 @@
         "src/shared/direct-ssh-reconnect-telemetry-schema.test.ts",
         "src/renderer/src/lib/direct-ssh-reconnect-product-telemetry.test.ts",
         "src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts",
-        "src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts",
-        "tests/e2e/ssh-docker-relay-perf.spec.ts"
+        "src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts"
       ],
       "assertionRefs": [
         {
@@ -4707,13 +4572,6 @@
             "one coordinator aggregate maps to one typed product event with queue and provider percentiles",
             "adapter failure is swallowed before it can reach recovery"
           ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
-          "assertions": [
-            "repo and worktree hydration use the exact direct SSH host and complete provider authority",
-            "terminal input remains live after disconnect/reconnect and writes a proof file visible inside the Linux target"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -4743,15 +4601,6 @@
           "result": "passed",
           "durationSeconds": 3.45,
           "summary": "Five focused direct SSH scheduler, coordinator, telemetry, and hook-wiring files passed with 130 tests."
-        },
-        {
-          "date": "2026-07-27",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 66,
-          "summary": "Four Electron Docker SSH tests passed: two typing/performance paths, one concurrent file/Git load path, and exact-authority disconnect/reconnect with a container-visible remote proof file."
         },
         {
           "date": "2026-08-26",
@@ -7318,9 +7167,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/local-ssh-browser-routing.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts"
       ],
       "testFiles": [
         "src/main/browser/browser-route-identity.test.ts",
@@ -7334,9 +7181,7 @@
         "src/main/browser/browser-route-webcontents-registry.test.ts",
         "src/main/browser/browser-session-registry.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
-        "src/main/window/createMainWindow.test.ts",
-        "tests/e2e/local-ssh-browser-routing.spec.ts",
-        "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts"
+        "src/main/window/createMainWindow.test.ts"
       ],
       "assertionRefs": [
         {
@@ -7424,20 +7269,6 @@
             "a live route partition may attach only the normalized blank document",
             "an arbitrary URL cannot be the initial route-partition document"
           ]
-        },
-        {
-          "file": "tests/e2e/local-ssh-browser-routing.spec.ts",
-          "assertions": [
-            "a remote-only origin renders through direct SSH routing; cookies survive transport recovery",
-            "unavailable SSH hosts prevent premature webview attachment and offer a working explicit local escape hatch",
-            "real AllowTcpForwarding refusal is classified and Try anyway preserves the SSH route"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts",
-          "assertions": [
-            "paired client-hosted browser pages render an SSH-only origin, preserve cookies and retire superseded route pages across a real transport drop"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -7476,24 +7307,6 @@
           "result": "passed",
           "durationSeconds": 0.5,
           "summary": "Six files passed 150 opaque identity, durable collision binding, bounded partition/page, proxy-before-allowlist, policy reuse, profile startup, and blank-only attach tests."
-        },
-        {
-          "date": "2026-09-06",
-          "runner": "ci",
-          "platform": "linux",
-          "result": "passed",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/local-ssh-browser-routing.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3",
-          "durationSeconds": 252,
-          "summary": "Nine direct SSH cases passed: three repetitions each of routing/reconnect, unavailable-host local escape, and real TCP-forwarding refusal. Run 34040309638, head 259a5f6; unchanged tests and timeouts, zero skips or retries."
-        },
-        {
-          "date": "2026-09-06",
-          "runner": "ci",
-          "platform": "linux",
-          "result": "passed",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3",
-          "durationSeconds": 138,
-          "summary": "Three paired client-hosted reconnect cases passed with remote-only origin and cookie-preservation assertions. Run 34040309638, head 259a5f6; unchanged tests and timeouts, zero skips or retries."
         }
       ],
       "runtimeBudget": {
@@ -12742,12 +12555,8 @@
         "pnpm exec vitest run src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/ssh-pty-consumer-session-adapter.test.ts src/main/persistence-ssh-targets-and-pane-keys.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts --reporter=dot",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts --reporter=dot"
         // Historical evidence commands; the override is ignored after the always-on transition.
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_PTY_SOURCE_CREDIT_V1=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_PTY_SOURCE_CREDIT_V1=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/ipc/pty-renderer-inflight-credit.test.ts",
@@ -12791,8 +12600,7 @@
         "src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts",
         "src/main/persistence-ssh-targets-and-pane-keys.test.ts",
         "src/wsl-guest/dispatcher-client-writer.test.ts",
-        "src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts",
-        "tests/e2e/ssh-docker-relay-perf.spec.ts"
+        "src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts"
       ],
       "assertionRefs": [
         {
@@ -13074,14 +12882,6 @@
           "assertions": [
             "WSL stdin forwards write(false), callback settlement, and drain without claiming a live WSL topology"
           ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
-          "assertions": [
-            "a stalled renderer ACK produces an exact 256 KiB negotiated source-credit plateau while a second SSH PTY remains responsive",
-            "fixed-size filesystem frames and Git churn complete without stream corruption while active typing remains within budget",
-            "the negotiated owner lease reconnects and the existing SSH workspace terminal remains usable"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -13165,33 +12965,6 @@
           "result": "passed",
           "durationSeconds": 1.63,
           "summary": "Five deterministic provider, relay, deploy, and session files passed 70 tests after red seams proved that source frames mutated legacy incarnation state and generic restore-required reattach returned an outputless live PTY. The candidate keeps exact source identity side-effect free, fails generic restore-required reattach as expired, offers V1 through reconnect, and proves a failed recovery activation stays private and exact-retryable until successful response settlement; no live topology was exercised."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_PTY_SOURCE_CREDIT_V1=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 60,
-          "summary": "All four deployed Linux relay/direct-SSH cases passed after an exact-current E2E rebuild at code commit 5611bb45b51a/tree 8e85c3afedec: main bundle SHA-256 cbaf4e997d74bbe0ae1179bc20e52b122c60f0b56ee49ca607e12ae4125a4342 and Linux-x64 relay SHA-256 a7438fc47c4da0223ceaafab621086e14b6cdee427f53a3bf2e710fa99bcf2e6. Direct typing was 3.7/109.1 ms median/worst, ACK-stalled typing was 5.1/109.7 ms at exactly 262,144 held source units, fixed-size filesystem/Git churn was 144.9/153.2 ms with 104 bulk reads, and owner-lease reconnect completed in 15.8 seconds."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_PTY_SOURCE_CREDIT_V1=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 60,
-          "summary": "Four post-rebase Docker OpenSSH/deployed-relay tests passed: direct typing median/worst 107.7/113.6 ms, stalled-ACK typing 3.6/107.3 ms at an exact 262,144-source-unit plateau, fixed-size filesystem/Git churn 148.1/161.1 ms with 93 bulk reads, and terminal owner-lease reconnect in 15.7 seconds."
-        },
-        {
-          "date": "2026-07-29",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 56.7,
-          "summary": "All four always-on deployed Linux relay/direct-SSH cases passed after rebuilding at current-main merge commit adba3410fe4427ceb7525f3fdce2ec58973263a7/tree e43d87340666ca3a733bdb38007c24f95be3f219: main bundle SHA-256 3c304ffc0618520e42bede9a52f72d4b7bb68cbfe543974f89e82a3c477c44b3 and Linux-x64 relay SHA-256 366cb7ccf2e4b388cc6f81a8f6055ab9fde57d2d91381767005c15908832e776. Direct typing was 5.3/108.9 ms median/worst, ACK-stalled typing was 4.8/107.6 ms at exactly 262,144 held source units, fixed-size filesystem/Git churn was 152.0/173.3 ms with 84 bulk reads, and owner-lease reconnect completed in 14.3 seconds; no paired-runtime topology was exercised."
         }
       ],
       "runtimeBudget": {
@@ -13465,8 +13238,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/preload/pty-snapshot-capability-ipc.test.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/main/providers/ssh-pty-provider.test.ts src/renderer/src/components/terminal/terminal-provider-snapshot-capability.test.ts src/renderer/src/components/terminal/use-terminal-provider-snapshot-capability.test.tsx src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/pty-snapshot-capability-main-stall.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
-        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/preload/pty-snapshot-capability-ipc.test.ts",
@@ -13477,8 +13249,7 @@
         "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts",
         "tests/e2e/pty-snapshot-capability-main-stall.spec.ts",
-        "tests/e2e/terminal-cold-activation-deferral.spec.ts",
-        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+        "tests/e2e/terminal-cold-activation-deferral.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -13595,9 +13366,7 @@
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts",
@@ -13661,9 +13430,7 @@
         "src/renderer/src/runtime/runtime-client-events.test.ts",
         "src/renderer/src/runtime/runtime-environment-ssh-state.test.ts",
         "src/shared/ssh-retained-payload-admission.test.ts",
-        "tests/e2e/terminal-cold-activation-deferral.spec.ts",
-        "tests/e2e/ssh-cold-activation-restore.spec.ts",
-        "tests/e2e/ssh-docker-relay-perf.spec.ts"
+        "tests/e2e/terminal-cold-activation-deferral.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -14035,21 +13802,6 @@
           "assertions": [
             "abandoning an obsolete reattach drops its data, replay, write-unavailable, and exit handlers without killing the durable PTY"
           ]
-        },
-        {
-          "file": "tests/e2e/ssh-cold-activation-restore.spec.ts",
-          "assertions": [
-            "six relay-backed tabs retain the same six PTY ids across renderer reload",
-            "all six SSH managers mount eagerly and none is parked",
-            "restored terminal input reaches a proof file on the Linux SSH host"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-relay-perf.spec.ts",
-          "assertions": [
-            "repo and worktree setup fails closed unless the exact direct SSH host and complete authority are returned",
-            "a reconnected terminal accepts input and writes a proof file visible inside the Linux SSH target"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -14108,15 +13860,6 @@
           "summary": "Seven deterministic STA-3107 contracts passed across six-pane multiplex rematerialization and client-owned sidebar-row retention after sleep/wake."
         },
         {
-          "date": "2026-07-14",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 128,
-          "summary": "Six focused files and 475 tests passed; the local cold-activation journey passed; the Docker/Linux SSH journey restored six of six original relay PTYs, mounted six of six managers without parking, and executed remote input through the restored terminal."
-        },
-        {
           "date": "2026-07-17",
           "runner": "local",
           "platform": "macos",
@@ -14151,24 +13894,6 @@
           "result": "passed",
           "durationSeconds": 1.48,
           "summary": "All 90 transport tests passed, including pre-publication admission rejection, handler-complete non-destructive detach for obsolete SSH reattach transports, settled retirement of rejected or destroyed fresh fallbacks, and reported shutdown refusal."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 51.4,
-          "summary": "Four Electron Docker SSH tests passed on the final implementation, including exact-authority repo/worktree hydration, two concurrent immutable file streams under Git churn, live terminal input before and after disconnect/reconnect, and an independent container-visible remote proof file."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 12.5,
-          "summary": "One Electron journey passed on the final implementation after exact-authority hydration; six restored SSH terminal managers remounted after renderer reload and remote input reached the Linux target."
         }
       ],
       "runtimeBudget": {
@@ -17420,8 +17145,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts",
@@ -17433,8 +17157,7 @@
         "src/shared/pty-startup-ingress-live-query-reply.test.ts",
         "src/shared/pty-startup-reply-echo-shapes.test.ts",
         "tests/e2e/terminal-osc-color-queries.spec.ts",
-        "tests/e2e/terminal-typing-latency.spec.ts",
-        "tests/e2e/pty-input-write-queue-ssh.spec.ts"
+        "tests/e2e/terminal-typing-latency.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -17505,13 +17228,6 @@
           "assertions": [
             "real keyboard input reaches and echoes from the active local PTY within the interactive latency ceilings"
           ]
-        },
-        {
-          "file": "tests/e2e/pty-input-write-queue-ssh.spec.ts",
-          "assertions": [
-            "a real Linux SSH process emits an OSC query and receives xterm's synthetic reply through the live PTY queue",
-            "an upstream-node-pty Linux relay has no echoState export and keeps OSC/DA1 reply bytes out of the next fish child stdin"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -17541,24 +17257,6 @@
           "result": "passed",
           "durationSeconds": 10.6,
           "summary": "Real keyboard events traversed xterm and the input queue to a local interactive PTY with every sampled key echoed inside the latency ceiling."
-        },
-        {
-          "date": "2026-08-09",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 36.8,
-          "summary": "A real Linux process behind Docker OpenSSH emitted an OSC 10 query and observed xterm's synthetic RGB reply after it traversed the live renderer queue, Electron IPC, SSH provider, and relay PTY."
-        },
-        {
-          "date": "2026-08-14",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 36.9,
-          "summary": "Run with SKIP_BUILD=1 against the existing e2e bundle. Both Docker OpenSSH Electron tests passed: the live OSC query returned its RGB reply, and an upstream-node-pty Linux ARM64 relay without echoState kept OSC/DA1 bytes out of the next fish 4.8.1 child's stdin."
         }
       ],
       "runtimeBudget": {
@@ -19624,17 +19322,14 @@
       "oracle": "Hold empty initial Forwarded and Detected snapshot promises, publish live events, release the snapshots, and require each target and stream to preserve only its own newer push while applying unaffected snapshots. Reject one target's Detected snapshot and require its Forwarded snapshot plus later targets to hydrate independently. Begin another target with partial connected authority and require its snapshots to hydrate after same-watermark authority reconciliation. In headed Electron, hold an authoritative empty Forwarded snapshot across renderer reload, add a forward through the Ports panel, release and confirm the wrapped main handler resumed, then complete a later renderer-to-main listPortForwards round trip as the ordered hydration-continuation barrier. Before checking the Forwarded row, require main inventory, persisted intent, HTTP, remote process identity, and close warnings to prove the tunnel remained authoritative. Then forward two real Docker listeners, refresh detection, force an in-place relay-channel reconnect, perform a full transport reconnect, reject a bound local-port collision, remove one row, and require all signals to agree.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts src/main/ssh/ssh-port-forward.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ipc/ssh.test.ts tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts --reporter=dot",
-        "pnpm exec electron-vite build --mode e2e",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
+        "pnpm exec electron-vite build --mode e2e"
       ],
       "testFiles": [
         "src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts",
         "src/main/ssh/ssh-port-forward.test.ts",
         "src/main/ssh/system-ssh-forward-process.test.ts",
         "src/main/ipc/ssh.test.ts",
-        "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
-        "tests/e2e/ssh-port-forward-lifecycle.spec.ts"
+        "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts"
       ],
       "assertionRefs": [
         {
@@ -19663,10 +19358,6 @@
         {
           "file": "tests/e2e/helpers/ssh-port-forward-snapshot-barrier.unit.test.ts",
           "assertions": ["holds only the first matching request while its snapshot is unresolved"]
-        },
-        {
-          "file": "tests/e2e/ssh-port-forward-lifecycle.spec.ts",
-          "assertions": ["keeps a user-forwarded listener live across scan refresh @headful"]
         }
       ],
       "evidenceRuns": [
@@ -19678,24 +19369,6 @@
           "result": "passed",
           "durationSeconds": 6.77,
           "summary": "Six renderer, main-process, and barrier lifecycle files passed with 215 tests, including deterministic stale-snapshot, rejected-stream, partial-authority, and single-capture isolation plus existing collision, delayed-exit, reconnect, persistence, re-registration, and unrelated-forward contracts."
-        },
-        {
-          "date": "2026-07-30",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-          "result": "passed",
-          "durationSeconds": 53.7,
-          "summary": "Headed Electron passed against a real Docker sshd over ssh2 after forcing the stale startup-snapshot race and exact renderer-continuation barrier, with two remote listeners, scan refresh, in-place relay and full transport reconnect restoration, collision rejection, explicit removal, independent state inventories, HTTP responses, process identity, and no live forward-close warning."
-        },
-        {
-          "date": "2026-07-30",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 ORCA_E2E_FORWARD_APP_LOGS=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-port-forward-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-          "result": "passed",
-          "durationSeconds": 66,
-          "summary": "The identical stale-snapshot and headed lifecycle passed through forced system OpenSSH, with a wrapper marker proving the -L forward process executed; in-place relay and full transport reconnects restored both intents, no unexpected forward close was captured before assertions, and intentional removal completed."
         }
       ],
       "runtimeBudget": {
@@ -21048,87 +20721,19 @@
       "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
       "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
       "commands": [
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-codex-display-artifacts-repro.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
       ],
       "testFiles": [
-        "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
-        "tests/e2e/ssh-docker-half-open-link.spec.ts",
-        "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts",
-        "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts",
-        "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
-        "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
         "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
-        "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
-        "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
-        "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts",
-        "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts"
+        "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
-          "assertions": [
-            "preserves transport-drop PTY and scrollback, replaces relay-loss binding, and keeps one reattachable lease per pane"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-half-open-link.spec.ts",
-          "assertions": [
-            "leaves connected after host freeze and renders process-produced output after recovery"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts",
-          "assertions": [
-            "returns both a bounded client page and a complete legacy-client remote listing"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts",
-          "assertions": [
-            "restores shell scrollback and full-screen output and opens a usable fresh tab"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
-          "assertions": [
-            "keeps remote pts devices, relay fds, process counts and inherited master fds bounded"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
-          "assertions": [
-            "keeps rendered explorer changes and terminal output live after watcher crash and repairs a deleted watcher artifact"
-          ]
-        },
         {
           "file": "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
           "assertions": [
             "releases inherited pipes after confirmed exit, including prior exit",
             "retains live-process pipes on shutdown timeout"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
-          "assertions": [
-            "five flooding SSH panes remain below unchanged 2500ms soft and 5000ms hard freeze budgets during bulk reopen and two double-animation-frame view changes"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
-          "assertions": [
-            "five distinct SSH PTYs acknowledge actual keyboard input after two rendered hide/reopen cycles while all five producers flood"
-          ]
-        },
-        {
-          "file": "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
-          "assertions": [
-            "normal restore and forced SSH reconnect leave no stale or duplicate status rows; forced reconnect preserves the original PTY and requires nonempty replay from that PTY through an event or reattach reply"
           ]
         },
         {
@@ -21147,24 +20752,6 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
           "durationSeconds": 0.168,
           "summary": "All three shutdown regression tests passed; disabling pipe release fails the first two by timeout. Two half-open Electron repetitions separately passed in 1.7m without worker teardown timeout."
-        },
-        {
-          "date": "2026-09-05",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "durationSeconds": 312,
-          "summary": "Six specs: ten passed, two existing fixme skipped, clean worker shutdown. Baseline same enabled suite: ten passed but worker teardown timed out (7.3m)."
-        },
-        {
-          "date": "2026-09-06",
-          "runner": "ci",
-          "platform": "linux",
-          "result": "passed",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
-          "durationSeconds": 396,
-          "summary": "Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075."
         }
       ],
       "runtimeBudget": {
@@ -21770,7 +21357,6 @@
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts tests/e2e/cross-version-wire/orchestration-delivery-downgrade.unit.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-settlement.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-retry.test.ts src/main/runtime/runtime-legacy-worker-missing-workspace-recovery.test.ts src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 -g 'repairs a settled worker'",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts"
       ],
       "testFiles": [
@@ -21780,8 +21366,7 @@
         "src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
-        "src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts",
-        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+        "src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts"
       ],
       "assertionRefs": [
         {
@@ -21829,25 +21414,9 @@
             "an older SQL writer can reintroduce stale bookkeeping after repair and the next open still settles it",
             "second open and repair perform zero worker mutations with 100,000 historical assignments"
           ]
-        },
-        {
-          "file": "tests/e2e/ssh-cold-activation-restore.spec.ts",
-          "assertions": [
-            "historical assignment repair preserves a real SSH shell and its live background child through app restart and reconnect",
-            "rendered terminal output and host-side process proof retain the same identity, environment and working directory"
-          ]
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-10-05",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 -g 'repairs a settled worker'",
-          "result": "passed",
-          "durationSeconds": 42.4,
-          "summary": "Rebuilt hidden Electron with the active-worker partial index and read-only repair preflight. The real Debian ARM64 SSH journey preserves the same live shell and background child, terminal ownership, input and rendered output through app restart and reconnect."
-        },
         {
           "date": "2026-10-05",
           "runner": "local",
@@ -21901,15 +21470,6 @@
           "result": "passed",
           "durationSeconds": 2.29,
           "summary": "Three safety and scale tests pass. One local run with 100,000 assignments and 1,000 stale workers: repair 38.83ms, no-op repair 25.07ms, complete subsequent database open 38.52ms. These are observations, not a CI latency bound."
-        },
-        {
-          "date": "2026-10-05",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 -g 'repairs a settled worker'",
-          "result": "passed",
-          "durationSeconds": 32.1,
-          "summary": "A rebuilt hidden macOS Electron client against Debian ARM64 Docker SSH repairs historical settled worker bookkeeping while retaining terminal ownership, the same live shell and background child, environment, working directory, input and rendered output through app restart and SSH reconnect. Removing startup repair fails the worker-state assertion; restoring it passes."
         }
       ],
       "runtimeBudget": {

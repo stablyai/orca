@@ -62,9 +62,9 @@ function seedStore(ptyId: string | null = null) {
 }
 
 describe('direct SSH terminal retry ledger', () => {
-  // The relay-restart shape from tests/e2e/ssh-docker-transport-drop-recovery.spec.ts. The client's
-  // own maps are identical to a transport drop's — a hydrated tab whose leaf map still names the
-  // PTY of a relay generation that no longer exists — so only the host's answer can separate them.
+  // Relay restart: the client's own maps are identical to a transport drop's — a hydrated tab
+  // whose leaf map still names the PTY of a relay generation that no longer exists — so only the
+  // host's answer can separate them.
   describe('relay restart', () => {
     const DEAD_PTY_ID = 'ssh:target@@pty2:dead-epoch:1'
 
