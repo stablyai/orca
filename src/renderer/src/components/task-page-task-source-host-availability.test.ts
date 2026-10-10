@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
+import {
+  getGitHubProjectSourceSummary,
+  getTaskSourceHostAvailabilityForHost
+} from './task-page-source-context'
 
 // Why: a complete typed entry keeps these cases honest when the registry shape changes.
 function hostEntry(
@@ -78,5 +81,34 @@ describe('getTaskSourceHostAvailabilityForHost', () => {
       health: 'disconnected',
       status: 'disconnected'
     })
+  })
+})
+
+describe('getGitHubProjectSourceSummary', () => {
+  const runtimeHost = (overrides: Partial<ExecutionHostRegistryEntry>) =>
+    hostEntry({ id: 'runtime:env-1', kind: 'runtime', label: 'Build server', ...overrides })
+
+  it('names the board host, which a capability check alone never marks unavailable', () => {
+    const summary = getGitHubProjectSourceSummary({
+      providerLabel: 'GitHub',
+      hostId: 'runtime:env-1',
+      host: runtimeHost({ health: 'available' }),
+      hostLabelById: new Map([['runtime:env-1', 'Build server']])
+    })
+    expect(summary.label).toBe('GitHub · Build server · Current account')
+  })
+
+  it('says when the board host is unreachable', () => {
+    const summary = getGitHubProjectSourceSummary({
+      providerLabel: 'GitHub',
+      hostId: 'runtime:env-1',
+      host: runtimeHost({
+        health: 'disconnected',
+        capabilities: [TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY]
+      }),
+      hostLabelById: new Map([['runtime:env-1', 'Build server']])
+    })
+    expect(summary.label).toContain('Build server · ')
+    expect(summary.label).not.toBe('GitHub · Build server · Current account')
   })
 })

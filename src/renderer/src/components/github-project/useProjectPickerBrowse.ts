@@ -9,11 +9,12 @@ import {
 } from './project-picker-browse-cache'
 import {
   getProjectPickerRuntimeScope,
-  listAccessibleProjectsForRuntime
+  listAccessibleProjectsForRuntime,
+  type ProjectSourceSettings
 } from './project-picker-runtime'
 
 export function useProjectPickerBrowse(
-  settings: Parameters<typeof getProjectPickerRuntimeScope>[0],
+  settings: ProjectSourceSettings,
   browseHost: string
 ): {
   browseProjects: GitHubProjectSummary[]

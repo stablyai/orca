@@ -25,9 +25,9 @@ export const createProjectActions = (
   GitHubSlice,
   'fetchProjectViewTable' | 'updateProjectFieldValue' | 'clearProjectFieldValue'
 > => ({
-  fetchProjectViewTable: async (args, options) => {
-    const target = getActiveRuntimeTarget(get().settings)
-    const sourceScope = projectViewSourceScope(get().settings)
+  fetchProjectViewTable: async (sourceSettings, args, options) => {
+    const target = getActiveRuntimeTarget(sourceSettings)
+    const sourceScope = projectViewSourceScope(sourceSettings)
     const requestKey = projectViewRequestKey(args, sourceScope)
 
     // Fast path: a caller-supplied `viewId` gives the resolved cache key up front, so serve a fresh entry directly.

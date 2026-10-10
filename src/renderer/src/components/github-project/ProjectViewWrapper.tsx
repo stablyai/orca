@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
@@ -20,11 +20,24 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getTaskSourceRuntimeSettings } from '../../../../shared/task-source-context'
 
-type Props = { selectedRepoIds: ReadonlySet<string> }
+type Props = {
+  selectedRepoIds: ReadonlySet<string>
+  /** Row-less source host (shared with Linear and Jira): the board, picker and unmatched rows read from it. */
+  sourceHostId: ExecutionHostId
+}
 
-export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {
-  const tableState = useProjectViewTable(selectedRepoIds)
+export default function ProjectViewWrapper({
+  selectedRepoIds,
+  sourceHostId
+}: Props): React.JSX.Element {
+  const sourceSettings = useMemo(
+    () => getTaskSourceRuntimeSettings({ hostId: sourceHostId }),
+    [sourceHostId]
+  )
+  const tableState = useProjectViewTable(selectedRepoIds, sourceSettings)
   const rowActions = useProjectRowActions({
     table: tableState.table,
     currentCacheKey: tableState.currentCacheKey,
@@ -45,7 +58,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       <ProjectViewBody tableState={tableState} rowActions={rowActions} />
       <ProjectItemSlugDialog
         projectOrigin={rowActions.missingDialogs.slugDialog?.origin ?? null}
-        sourceSettings={tableState.settings}
+        sourceSettings={tableState.sourceSettings}
         onClose={() => rowActions.setSlugDialog(null)}
       />
       <ProjectMissingRepoDialog
@@ -150,7 +163,7 @@ function ProjectViewBody({
         }
       }}
       onStartWork={rowActions.startWork}
-      sourceSettings={tableState.settings}
+      sourceSettings={tableState.sourceSettings}
     />
   )
   if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {

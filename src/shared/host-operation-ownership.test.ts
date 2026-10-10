@@ -20,6 +20,15 @@ describe('getHostOperationOwnership', () => {
     expect(getHostOperationOwnership('jira.getIssueStream')).toBe('scope-picked')
   })
 
+  it('reads row-less GitHub Projects board methods as scope-picked', () => {
+    expect(getHostOperationOwnership('github.project.viewTable')).toBe('scope-picked')
+    expect(getHostOperationOwnership('github.project.listAccessible')).toBe('scope-picked')
+    expect(getHostOperationOwnership('github.project.listViews')).toBe('scope-picked')
+    expect(getHostOperationOwnership('github.project.resolveRef')).toBe('scope-picked')
+    // Row edits route to the matched repo's owner first, so they stay credential-sourced.
+    expect(getHostOperationOwnership('github.project.updateItemField')).toBe('credential')
+  })
+
   it('keeps client effects client and returns null for unknown names', () => {
     expect(getHostOperationOwnership('shell.openPath')).toBe('client')
     expect(getHostOperationOwnership('nope.call')).toBeNull()

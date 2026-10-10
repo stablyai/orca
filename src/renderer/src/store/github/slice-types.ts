@@ -26,6 +26,7 @@ import type {
 } from '../../../../shared/github/project-result-types'
 import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   CacheEntry,
   FetchOptions,
@@ -253,7 +254,9 @@ export type GitHubSlice = {
   evictGitHubRepoCaches: (repoId: string, repoPath?: string) => void
   // ── ProjectV2 view cache ─────────────────────────────────────────────
   projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
+  /** `sourceSettings` names the board's row-less source host; the focused server is never read. */
   fetchProjectViewTable: (
+    sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
     args: GetProjectViewTableArgs,
     options?: FetchOptions
   ) => Promise<GetProjectViewTableResult>

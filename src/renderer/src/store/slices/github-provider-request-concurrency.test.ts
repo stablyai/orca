@@ -30,7 +30,7 @@ describe('GitHub provider request concurrency', () => {
         .fetchWorkItems(`repo-${index}`, `/repo/${index}`, 20, '')
         .catch(() => [])
     )
-    const queuedProject = store.getState().fetchProjectViewTable({
+    const queuedProject = store.getState().fetchProjectViewTable(null, {
       owner: 'acme',
       ownerType: 'organization',
       projectNumber: 1,

@@ -22,7 +22,6 @@
 4 src/renderer/src/components/github-project/project-picker-runtime.ts
 1 src/renderer/src/components/github-project/slug-dialog/Comments.tsx
 1 src/renderer/src/components/github-project/slug-dialog/SlugDialogBody.tsx
-2 src/renderer/src/components/github-project/useProjectViewTable.ts
 1 src/renderer/src/components/github/github-rate-limit-display.tsx
 4 src/renderer/src/components/github/github-work-item-edit-mutations.ts
 1 src/renderer/src/components/gitlab/gitlab-rate-limit-display.tsx

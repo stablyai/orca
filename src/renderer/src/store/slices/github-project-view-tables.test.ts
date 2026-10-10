@@ -23,7 +23,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
   })
 
-  it('routes project table fetches through the active runtime environment', async () => {
+  it('routes project table fetches through the board source, not the focused server', async () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' }
@@ -60,17 +60,20 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    const result = await store.getState().fetchProjectViewTable({
-      owner: 'acme',
-      ownerType: 'organization',
-      projectNumber: 1,
-      viewId: 'view-1'
-    })
+    const result = await store.getState().fetchProjectViewTable(
+      { activeRuntimeEnvironmentId: 'env-board' },
+      {
+        owner: 'acme',
+        ownerType: 'organization',
+        projectNumber: 1,
+        viewId: 'view-1'
+      }
+    )
 
     expect(result.ok).toBe(true)
     expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
+      selector: 'env-board',
       method: 'github.project.viewTable',
       params: {
         owner: 'acme',
@@ -119,16 +122,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    await store.getState().fetchProjectViewTable({
-      owner: 'acme',
-      ownerType: 'organization',
-      projectNumber: 1,
-      viewId: 'view-1'
-    })
+    await store.getState().fetchProjectViewTable(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      {
+        owner: 'acme',
+        ownerType: 'organization',
+        projectNumber: 1,
+        viewId: 'view-1'
+      }
+    )
 
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: null }
-    } as Partial<AppState>)
     mockApi.gh.getProjectViewTable.mockResolvedValueOnce({
       ok: true,
       data: {
@@ -156,7 +159,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       }
     })
 
-    const localResult = await store.getState().fetchProjectViewTable({
+    const localResult = await store.getState().fetchProjectViewTable(null, {
       owner: 'acme',
       ownerType: 'organization',
       projectNumber: 1,
@@ -207,7 +210,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .mockResolvedValueOnce({ ok: true, data: makeTable('ghe.example', 'enterprise-project') })
 
     for (const host of ['github.com', 'ghe.example']) {
-      await store.getState().fetchProjectViewTable({
+      await store.getState().fetchProjectViewTable(null, {
         owner: 'acme',
         ownerType: 'organization',
         projectNumber: 1,
@@ -483,7 +486,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     try {
       const store = createTestStore()
       mockApi.gh.getProjectViewTable.mockImplementation(
-        async (args: Parameters<AppState['fetchProjectViewTable']>[0]) => ({
+        async (args: Parameters<AppState['fetchProjectViewTable']>[1]) => ({
           ok: true,
           data: {
             project: {
@@ -514,6 +517,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       for (let i = 0; i <= 500; i++) {
         vi.setSystemTime(1_000 + i)
         await store.getState().fetchProjectViewTable(
+          null,
           {
             owner: 'acme',
             ownerType: 'organization',

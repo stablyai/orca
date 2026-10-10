@@ -1,4 +1,5 @@
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { GitHubProjectOwnerType } from '../../../../shared/github/project-types'
 import type {
@@ -7,9 +8,13 @@ import type {
   ResolveProjectRefResult
 } from '../../../../shared/github/project-result-types'
 
-type RuntimeSettings = Parameters<typeof getActiveRuntimeTarget>[0]
+/** The board's row-less source host, from `getTaskSourceRuntimeSettings`; never the focused server. */
+export type ProjectSourceSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
 
-export function getProjectPickerRuntimeScope(settings: RuntimeSettings, host: string): string {
+export function getProjectPickerRuntimeScope(
+  settings: ProjectSourceSettings,
+  host: string
+): string {
   const target = getActiveRuntimeTarget(settings)
   const runtimeScope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
   return `${runtimeScope}\0${host.toLowerCase()}`
@@ -20,7 +25,7 @@ export function getProjectPickerBrowseHost(activeProject: { host?: string } | nu
 }
 
 export async function listAccessibleProjectsForRuntime(
-  settings: RuntimeSettings,
+  settings: ProjectSourceSettings,
   host: string
 ): Promise<ListAccessibleProjectsResult> {
   const target = getActiveRuntimeTarget(settings)
@@ -33,7 +38,7 @@ export async function listAccessibleProjectsForRuntime(
 }
 
 export async function listProjectViewsForRuntime(
-  settings: RuntimeSettings,
+  settings: ProjectSourceSettings,
   args: {
     owner: string
     ownerType: GitHubProjectOwnerType
@@ -50,7 +55,7 @@ export async function listProjectViewsForRuntime(
 }
 
 export async function resolveProjectRefForRuntime(
-  settings: RuntimeSettings,
+  settings: ProjectSourceSettings,
   input: string,
   host?: string
 ): Promise<ResolveProjectRefResult> {
