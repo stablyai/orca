@@ -84,6 +84,9 @@ export function dispatchTerminalShortcutAction(
     if (!pane || !pane.terminal.getSelection()) {
       return
     }
+    // Why: under kitty release reporting xterm would encode this key's keyup
+    // as user input and scroll to the bottom mid-copy (#17606).
+    armNativeOnlyShortcut(event)
     event.preventDefault()
     event.stopImmediatePropagation()
     if (!event.repeat) {
@@ -118,6 +121,7 @@ export function dispatchTerminalShortcutAction(
     return
   }
   if (action.type === 'scrollViewport') {
+    armNativeOnlyShortcut(event)
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
