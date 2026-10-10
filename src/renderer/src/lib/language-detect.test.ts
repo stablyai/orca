@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { detectLanguage } from './language-detect'
+import associations from './monaco-language-associations.json'
 
 describe('detectLanguage', () => {
   it('maps .vue files to the custom vue language id', () => {
@@ -12,6 +13,70 @@ describe('detectLanguage', () => {
 
   it('maps .astro files to the custom astro language id', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
+  })
+
+  it.each([
+    'src/Build.groovy',
+    'scripts/deploy.gvy',
+    'scripts/deploy.gy',
+    'scripts/shell.gsh',
+    'build.gradle',
+    'C:\\repo\\settings.GRADLE',
+    'Jenkinsfile',
+    'ci/Jenkinsfile',
+    'C:\\repo\\Jenkinsfile',
+    'Jenkinsfile.release',
+    'ci/deploy.Jenkinsfile'
+  ])('maps Groovy source %s to the groovy language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('groovy')
+  })
+
+  it('keeps known extensions on Jenkinsfile variants and leaves .gradle.kts on kotlin', () => {
+    expect(detectLanguage('Jenkinsfile.md')).toBe('markdown')
+    expect(detectLanguage('build.gradle.kts')).toBe('kotlin')
+    expect(detectLanguage('MyJenkinsfileNotes')).toBe('plaintext')
+  })
+
+  it('preserves existing associations on Jenkinsfile variants', () => {
+    for (const association of associations) {
+      for (const extension of association.extensions) {
+        expect(detectLanguage(`Jenkinsfile${extension}`)).toBe(detectLanguage(`file${extension}`))
+      }
+    }
+  })
+
+  it.each([
+    '#!/usr/bin/env groovy\nprintln "hello"',
+    '#!/usr/bin/env groovy\r\nprintln "hello"',
+    '#! /usr/bin/env -S groovy -Dname=value\nprintln "hello"',
+    '#!/opt/groovy/bin/groovy\nprintln "hello"'
+  ])('detects Groovy scripts from the first-line interpreter: %s', (content) => {
+    expect(detectLanguage('scripts/deploy', content)).toBe('groovy')
+    expect(detectLanguage('C:\\repo\\deploy', content)).toBe('groovy')
+    expect(detectLanguage('/home/remote/folder workspace/deploy', content)).toBe('groovy')
+  })
+
+  it.each([
+    '#!/usr/bin/env groovysh',
+    '#!/usr/bin/env GROOVY',
+    '#!/usr/bin/env -u groovy python',
+    '#!/usr/bin/env python --groovy',
+    '#!/usr/bin/env groovy.sh',
+    'println "hello"\n#!/usr/bin/env groovy',
+    ' #!/usr/bin/env groovy',
+    '#!/usr/bin/env',
+    `#!${' '.repeat(1024)}/usr/bin/env groovy`,
+    'plain text'.repeat(100_000)
+  ])('leaves unrelated content on plaintext', (content) => {
+    expect(detectLanguage('scripts/deploy', content)).toBe('plaintext')
+  })
+
+  it('keeps filename associations ahead of content detection', () => {
+    const content = '#!/usr/bin/env groovy\nprintln "hello"'
+    expect(detectLanguage('Jenkinsfile.md', content)).toBe('markdown')
+    expect(detectLanguage('Jenkinsfile.rake', content)).toBe('ruby')
+    expect(detectLanguage('build.gradle.kts', content)).toBe('kotlin')
+    expect(detectLanguage('.env.local', content)).toBe('ini')
   })
 
   it('maps Nim files to the nim language id', () => {

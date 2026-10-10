@@ -4,6 +4,7 @@ import Editor from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
+import { detectLanguage } from '@/lib/language-detect'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 
@@ -56,7 +57,7 @@ export default function MonacoEditor({
   viewStateId,
   relativePath,
   content,
-  language,
+  language: filenameLanguage,
   onContentChange,
   onSave,
   revealLine,
@@ -70,6 +71,8 @@ export default function MonacoEditor({
   liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
+  const language =
+    filenameLanguage === 'plaintext' ? detectLanguage(relativePath, content) : filenameLanguage
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)

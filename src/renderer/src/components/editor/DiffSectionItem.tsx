@@ -63,7 +63,7 @@ export function DiffSectionItem({
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
   )
-  const language = detectLanguage(section.path)
+  const language = detectLanguage(section.path, section.modifiedContent || section.originalContent)
   const isEditable = section.area === 'unstaged'
   const modelPathBase = useMemo(
     () =>
