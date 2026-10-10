@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
+  aiVaultSessionOwnerWorkspaces,
+  aiVaultSessionWorkspaceHeading,
   aiVaultWorktreeCompactPath,
+  aiVaultWorktreeStatusLabel,
   aiVaultWorktreeJumpTooltip,
   canJumpToAiVaultSessionWorktree,
   isAiVaultSessionInCurrentWorktree,
@@ -202,6 +207,125 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
       label: 'ssh',
       worktreeId: worktree.id
     })
+  })
+})
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'Notes',
+    folderPath: '/work/notes',
+    executionHostId: 'local',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
+describe('folder workspaces as session owners', () => {
+  const resolveOwner = (
+    cwd: string,
+    folderWorkspaces: FolderWorkspace[],
+    session: Partial<AiVaultSession> = {},
+    activeWorktreeId: string | null = null
+  ) =>
+    resolveAiVaultSessionWorktreeInfo({
+      session: { ...baseSession, cwd, ...session },
+      repos: [makeRepo()],
+      worktrees: aiVaultSessionOwnerWorkspaces([makeWorktree()], folderWorkspaces),
+      activeWorktreeId
+    })
+
+  it('keeps the git worktree list as-is when there are no folder workspaces', () => {
+    const worktrees = [makeWorktree()]
+    expect(aiVaultSessionOwnerWorkspaces(worktrees, [])).toBe(worktrees)
+  })
+
+  it('resolves a session recorded in a folder workspace to that folder', () => {
+    expect(resolveOwner('/work/notes/drafts', [makeFolderWorkspace()])).toEqual({
+      status: 'active',
+      label: 'Notes',
+      path: '/work/notes',
+      worktreeId: 'folder:folder-1'
+    })
+    expect(
+      resolveOwner('/work/notes', [makeFolderWorkspace()], {}, 'folder:folder-1')
+    ).toMatchObject({ status: 'current', worktreeId: 'folder:folder-1' })
+  })
+
+  it('lets a git worktree nested in the folder, or at the same path, keep its sessions', () => {
+    const nested = makeFolderWorkspace({ folderPath: '/repo' })
+    expect(resolveOwner('/repo/orca/src', [nested])?.worktreeId).toBe('repo-1::/repo/orca')
+    const samePath = makeFolderWorkspace({ folderPath: '/repo/orca' })
+    expect(resolveOwner('/repo/orca', [samePath])?.worktreeId).toBe('repo-1::/repo/orca')
+  })
+
+  it('matches a folder only on the host that recorded the session', () => {
+    const sshFolder = makeFolderWorkspace({ executionHostId: 'ssh:target-1' })
+    expect(resolveOwner('/work/notes', [sshFolder])?.status).toBe('unavailable')
+    expect(
+      resolveOwner('/work/notes', [sshFolder], { executionHostId: 'ssh:target-1' })?.worktreeId
+    ).toBe('folder:folder-1')
+  })
+
+  it('matches a WSL folder to a session recorded under its Linux path', () => {
+    const wslFolder = makeFolderWorkspace({
+      folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\notes'
+    })
+    expect(resolveOwner('/home/ada/notes/src', [wslFolder])?.worktreeId).toBe('folder:folder-1')
+  })
+
+  it('reports an archived folder as archived, which is not a jump target', () => {
+    const info = resolveOwner('/work/notes', [makeFolderWorkspace({ isArchived: true })])
+    expect(info?.status).toBe('archived')
+    expect(canJumpToAiVaultSessionWorktree(info)).toBe(false)
+  })
+})
+
+describe('folder rows are labelled as folders, worktree rows as worktrees', () => {
+  const folderId = 'folder:folder-1'
+  const worktreeId = 'repo-1::/repo/orca'
+
+  it('names the resume action, heading and status by workspace kind', () => {
+    expect(aiVaultResumeInSessionWorkspaceLabel(folderId)).toBe('Resume in Folder')
+    expect(aiVaultResumeInSessionWorkspaceLabel(worktreeId)).toBe('Resume in Worktree')
+    expect(aiVaultSessionWorkspaceHeading(folderId)).toBe('Folder')
+    expect(aiVaultSessionWorkspaceHeading(worktreeId)).toBe('Worktree')
+    expect(
+      (['current', 'active', 'archived'] as const).map((s) =>
+        aiVaultWorktreeStatusLabel(s, folderId)
+      )
+    ).toEqual(['Current folder', 'Folder', 'Archived folder'])
+    expect(
+      (['current', 'active', 'archived'] as const).map((s) =>
+        aiVaultWorktreeStatusLabel(s, worktreeId)
+      )
+    ).toEqual(['Current worktree', 'Active worktree', 'Archived worktree'])
+  })
+
+  it('names the jump tooltip by workspace kind', () => {
+    const info = (status: AiVaultSessionWorktreeInfo['status'], id: string) => ({
+      status,
+      label: 'x',
+      path: '/x',
+      worktreeId: id
+    })
+    expect(aiVaultWorktreeJumpTooltip(info('active', folderId))).toBe('Jump to Folder')
+    expect(aiVaultWorktreeJumpTooltip(info('active', worktreeId))).toBe('Jump to Worktree')
+    expect(aiVaultWorktreeJumpTooltip(info('archived', folderId))).toBe(
+      'This session is in an archived folder.'
+    )
+    expect(aiVaultWorktreeJumpTooltip(info('archived', worktreeId))).toBe(
+      'This session is in an archived worktree.'
+    )
   })
 })
 

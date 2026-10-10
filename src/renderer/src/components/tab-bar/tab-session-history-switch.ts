@@ -23,7 +23,10 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'
 import { resolveAiVaultHistoryRowResume } from '../right-sidebar/ai-vault-session-resume-in-chat-workspace'
 import { resolveAiVaultTargetWorkspacePath } from '../right-sidebar/ai-vault-session-launch-target'
-import { resolveAiVaultSessionWorktreeDisplay } from '../right-sidebar/ai-vault-session-worktree'
+import {
+  aiVaultSessionOwnerWorkspaces,
+  resolveAiVaultSessionWorktreeDisplay
+} from '../right-sidebar/ai-vault-session-worktree'
 import {
   aiVaultSessionListArgs,
   type AiVaultSessionListRequest
@@ -131,7 +134,10 @@ export function resolveTabSessionSwitch(
   session: AiVaultSession,
   subject: TabSessionHistorySubject
 ): TabSessionSwitch | null {
-  const worktrees = getIndexedAllWorktrees(state.worktreesByRepo)
+  const worktrees = aiVaultSessionOwnerWorkspaces(
+    getIndexedAllWorktrees(state.worktreesByRepo),
+    state.folderWorkspaces
+  )
   const { resumeState, resumeInChat } = resolveAiVaultHistoryRowResume({
     session,
     worktreeInfo: resolveAiVaultSessionWorktreeDisplay({

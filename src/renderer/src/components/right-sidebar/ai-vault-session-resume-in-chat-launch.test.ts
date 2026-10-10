@@ -12,8 +12,7 @@ type Launch = {
 const mocks = vi.hoisted(() => ({
   beginStructuredAgentSessionProvisionalLaunch: vi.fn<(args: BeginArgs) => Launch | null>(),
   prepareAiVaultSessionForResume: vi.fn<() => Promise<{ sessionId: string }>>(),
-  activateAndRevealWorktree: vi.fn<(worktreeId: string) => unknown>(),
-  activateAndRevealFolderWorkspace: vi.fn<(workspaceId: string) => unknown>(),
+  activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
   toastError: vi.fn<(message: string) => void>(),
   activeWorktreeId: 'other-worktree'
 }))
@@ -25,8 +24,7 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume
 }))
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree,
-  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/store', () => ({
@@ -62,7 +60,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.prepareAiVaultSessionForResume.mockResolvedValue({ sessionId: 'provider-1' })
-    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
       args.beforeOpen?.('session-1')
       return {
@@ -91,7 +89,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
         hooks: {}
       })
     )
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1')
     expect(mocks.toastError).not.toHaveBeenCalled()
     settle({ kind: 'structured', sessionId: 'session-1' })
   })

@@ -13659,7 +13659,8 @@
             "resumeInChatTranscriptMissing": "이 대화 기록을 로드할 수 없어 채팅에서 재개할 수 없습니다.",
             "resumeInChatFailed": "새 채팅에서 이 세션을 재개할 수 없습니다.",
             "resumeInNewCliUnavailable": "이 세션은 CLI에서 열 수 없습니다.",
-            "resumeInNewCliHostTooOld": "이 채팅을 새 CLI에서 재개하려면 채팅을 실행하는 호스트의 Orca를 업데이트하세요."
+            "resumeInNewCliHostTooOld": "이 채팅을 새 CLI에서 재개하려면 채팅을 실행하는 호스트의 Orca를 업데이트하세요.",
+            "folderWorkspaceUnavailable": "폴더 워크스페이스는 더 이상 사용할 수 없습니다."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -13761,7 +13762,9 @@
             "copied": "복사됨",
             "copy": "복사",
             "noFirstPromptAvailable": "첫 프롬프트를 사용할 수 없습니다",
-            "loadingFirstPrompt": "첫 프롬프트를 불러오는 중…"
+            "loadingFirstPrompt": "첫 프롬프트를 불러오는 중…",
+            "folder": "폴더",
+            "resumeInFolder": "폴더에서 재개"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -13857,7 +13860,12 @@
             "noRecordedWorktree": "이 세션에 기록된 작업 트리가 없습니다.",
             "archivedJumpUnavailable": "이 세션은 보관된 작업 트리에 있습니다.",
             "noActiveWorktreeMatch": "이 세션과 일치하는 활성 작업 트리가 없습니다.",
-            "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다."
+            "noActiveWorktreeTarget": "사용 가능한 활성 작업 트리가 없습니다.",
+            "activeFolder": "폴더",
+            "archivedFolder": "보관된 폴더",
+            "archivedFolderJumpUnavailable": "이 세션은 보관된 폴더에 있습니다.",
+            "currentFolder": "현재 폴더",
+            "jumpToFolder": "폴더로 이동"
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "서브에이전트 ({{value0}})",
