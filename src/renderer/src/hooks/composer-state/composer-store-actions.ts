@@ -23,7 +23,7 @@ export type ComposerStoreActions = {
       createdWithAgent?: FolderWorkspace['createdWithAgent']
       pendingFirstAgentMessageRename?: boolean
     },
-    options?: { runtimeEnvironmentId?: string | null }
+    options: { runtimeEnvironmentId: string | null }
   ) => Promise<FolderWorkspace | null>
   closeModal: () => void
   openSettingsPage: () => void

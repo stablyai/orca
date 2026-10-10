@@ -1,5 +1,4 @@
 import type { AppState } from '../types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
 import { findRepoForHost } from '../slices/repo-host-identity'
@@ -11,7 +10,6 @@ import type { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AddRepoPathOptions } from './repo-state'
 
 export function settingsForRepoOwner(
   state: Pick<AppState, 'repos' | 'settings'>,
@@ -38,15 +36,6 @@ export function settingsForRepoOwner(
     return { ...state.settings, activeRuntimeEnvironmentId: null }
   }
   return state.settings
-}
-
-export function getAddRepoPathRouteSettings(
-  options: AddRepoPathOptions | undefined,
-  fallbackSettings: GlobalSettings | null
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
-  return options && 'runtimeEnvironmentId' in options
-    ? { activeRuntimeEnvironmentId: options.runtimeEnvironmentId ?? null }
-    : fallbackSettings
 }
 
 export function getRuntimeEnvironmentDisplayName(state: AppState, environmentId: string): string {

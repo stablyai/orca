@@ -23,11 +23,11 @@ export function useRemoteRepo(
   onGitRepoReady?: (repoId: string, executionHostId?: ExecutionHostId) => void | Promise<void>,
   scanNestedRepos?: (
     path: string,
-    connectionId?: string,
-    controls?: {
+    connectionId: string | undefined,
+    controls: {
       scanId?: string
       onProgress?: (scan: NestedRepoScanResult) => void
-      runtimeEnvironmentId?: string | null
+      runtimeEnvironmentId: string | null
     }
   ) => Promise<NestedRepoScanResult | null>,
   showNestedRepoReview?: (

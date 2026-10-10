@@ -100,10 +100,7 @@ export function useCreateRepo(
     setIsCreating(true)
     setCreateError(null)
     try {
-      const target = resolveAddRepoRuntimeTarget(
-        options.runtimeEnvironmentId,
-        useAppStore.getState().settings
-      )
+      const target = resolveAddRepoRuntimeTarget(options.runtimeEnvironmentId)
       // Why: Create Project is intentionally Git-only; non-Git folders use the
       // existing add-folder flows instead of this path.
       const createKind = 'git' as const

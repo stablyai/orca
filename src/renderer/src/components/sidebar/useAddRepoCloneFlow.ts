@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/repo-types'
@@ -132,10 +131,7 @@ export function useAddRepoCloneFlow({
     setCloneError(null)
     setCloneProgress(null)
     try {
-      const target = resolveAddRepoRuntimeTarget(
-        activeRuntimeEnvironmentId,
-        useAppStore.getState().settings
-      )
+      const target = resolveAddRepoRuntimeTarget(activeRuntimeEnvironmentId)
       const repo = sshTargetId?.trim()
         ? await window.api.repos.cloneRemote({
             connectionId: sshTargetId.trim(),

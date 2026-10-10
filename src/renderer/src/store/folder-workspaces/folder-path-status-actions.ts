@@ -1,7 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   getFolderWorkspacePathStatusRequestSnapshotForRead,
@@ -9,9 +10,8 @@ import {
   getFreshFolderWorkspacePathStatusFromCache
 } from './folder-path-status'
 import {
-  getFolderWorkspacePathStatusRouteSettings,
   getFolderWorkspacePathStatusScopeKey,
-  getRuntimeTargetCachePrefix
+  getPathStatusOwnerCachePrefix
 } from './folder-workspace-routing'
 
 export function createFolderPathStatusActions(
@@ -25,9 +25,7 @@ export function createFolderPathStatusActions(
 > {
   return {
     getFolderWorkspacePathStatusCacheKey: (request, options) =>
-      `${getRuntimeTargetCachePrefix(
-        getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-      )}:${getFolderWorkspacePathStatusScopeKey(request)}`,
+      `${getPathStatusOwnerCachePrefix(options)}:${getFolderWorkspacePathStatusScopeKey(request)}`,
 
     getFreshFolderWorkspacePathStatus: (request, options) => {
       const state = get()
@@ -45,13 +43,11 @@ export function createFolderPathStatusActions(
         entry: cached,
         requestSnapshot
       })
-      if (!options?.force && freshCachedStatus) {
+      if (!options.force && freshCachedStatus) {
         return freshCachedStatus
       }
       try {
-        const target = getActiveRuntimeTarget(
-          getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-        )
+        const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
         const status =
           target.kind === 'local'
             ? await window.api.folderWorkspaces.getPathStatus(request)

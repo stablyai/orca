@@ -23,9 +23,11 @@ export function registerProjectCatalogIpcBridge(
         })()
         return
       }
-      void state.fetchProjectGroups()
-      void state.fetchFolderWorkspaces()
-      void state.fetchRepos().then(remountTerminalTabsAwaitingHostHydration)
+      // Why: this event is this app's own catalog changing, whichever host is the default.
+      const localOwner = { runtimeEnvironmentId: null }
+      void state.fetchProjectGroups(localOwner)
+      void state.fetchFolderWorkspaces(localOwner)
+      void state.fetchRepos(localOwner).then(remountTerminalTabsAwaitingHostHydration)
     })
   )
 

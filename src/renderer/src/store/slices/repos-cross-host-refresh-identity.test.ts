@@ -142,7 +142,7 @@ describe('cross-host project refresh identity', () => {
     const afterAllHosts = sharedProject(store)?.sourceRepoIds
     expect(afterAllHosts).toHaveLength(2)
 
-    await store.getState().fetchRepos()
+    await store.getState().fetchRepos(catalogOwner(store))
     const afterLocal = sharedProject(store)?.sourceRepoIds
 
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
@@ -158,13 +158,13 @@ describe('cross-host project refresh identity', () => {
     await store.getState().fetchReposForAllHosts()
     // Why: the first local pass lands before the runtime catalog exists, so settle onto the
     // two-host fixed point before measuring identity.
-    await store.getState().fetchRepos()
+    await store.getState().fetchRepos(catalogOwner(store))
     const settled = sharedProject(store)
 
     await store.getState().fetchRuntimeEnvironmentRepos('env-1')
     expect(sharedProject(store)).toBe(settled)
 
-    await store.getState().fetchRepos()
+    await store.getState().fetchRepos(catalogOwner(store))
     expect(sharedProject(store)).toBe(settled)
   })
 
@@ -180,3 +180,10 @@ describe('cross-host project refresh identity', () => {
     expect(sharedProject(store)).toBe(settled)
   })
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

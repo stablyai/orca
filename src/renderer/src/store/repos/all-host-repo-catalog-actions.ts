@@ -5,7 +5,6 @@ import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/worktree-visibility-owner-settings'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
@@ -176,8 +175,8 @@ export function createAllHostRepoCatalogActions(
                       ...state.worktreeVisibilityDefaultsByHost,
                       [hostId]: visibilityDefaults
                     },
-                    ...(getActiveRuntimeTarget(state.settings).kind === 'environment' &&
-                    state.settings?.activeRuntimeEnvironmentId === environment.id
+                    // Why: the settings page mirrors only the default host's source-defaults support.
+                    ...(state.settings?.activeRuntimeEnvironmentId === environment.id
                       ? {
                           worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
                             visibilitySnapshot.sourceDefaultsSupported ? environment.id : null

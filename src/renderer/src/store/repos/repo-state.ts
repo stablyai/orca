@@ -89,11 +89,12 @@ export type FolderWorkspaceUpdates = Partial<
 export type NestedRepoScanControls = {
   scanId?: string
   onProgress?: (scan: NestedRepoScanResult) => void
-  runtimeEnvironmentId?: string | null
+  /** The host chosen in Add Project: a server's environment id, or `null` for this app. */
+  runtimeEnvironmentId: string | null
 }
 
 export type NestedRepoScanCancelOptions = {
-  runtimeEnvironmentId?: string | null
+  runtimeEnvironmentId: string | null
 }
 
 export type FolderWorkspacePathStatusCacheEntry = {
@@ -133,7 +134,8 @@ export type DeleteProjectGroupWithContainedProjectsResult =
       failedProjectRemovals: []
     }
 
-export type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
+/** The owner of the folder being probed: its server's environment id, or `null` for this app. */
+export type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId: string | null }
 
 export type AddRepoPathOptions = {
   runtimeEnvironmentId?: string | null
@@ -142,7 +144,8 @@ export type AddRepoPathOptions = {
 }
 
 export type RuntimeCatalogFetchOptions = {
-  runtimeEnvironmentId?: string | null
+  /** Whose catalog to fetch: a server's environment id, or `null` for this app's own. */
+  runtimeEnvironmentId: string | null
   /** Conversion must retain its source rows until every destination catalog loads. */
   throwOnError?: boolean
 }
@@ -162,13 +165,13 @@ export type RepoSlice = {
   reposFetchGeneration: number
   pendingSshRepoReadoptions: readonly SshRepoReadoption[]
   recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
-  fetchRepos: (options?: RuntimeCatalogFetchOptions) => Promise<void>
+  fetchRepos: (options: RuntimeCatalogFetchOptions) => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   awaitLocalRepoCatalogSettlement: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
-  fetchProjectGroups: (options?: RuntimeCatalogFetchOptions) => Promise<void>
+  fetchProjectGroups: (options: RuntimeCatalogFetchOptions) => Promise<void>
   fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
-  fetchFolderWorkspaces: (options?: RuntimeCatalogFetchOptions) => Promise<void>
+  fetchFolderWorkspaces: (options: RuntimeCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspacesForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (
@@ -192,20 +195,21 @@ export type RepoSlice = {
   addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
   scanNestedRepos: (
     path: string,
-    connectionId?: string,
-    controls?: NestedRepoScanControls
+    connectionId: string | undefined,
+    controls: NestedRepoScanControls
   ) => Promise<NestedRepoScanResult | null>
-  cancelNestedRepoScan: (scanId: string, options?: NestedRepoScanCancelOptions) => Promise<boolean>
+  cancelNestedRepoScan: (scanId: string, options: NestedRepoScanCancelOptions) => Promise<boolean>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
     projectPaths: string[]
     connectionId?: string
     scanId?: string
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  /** `hostId` is the host of the project that seeds the group. */
+  createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -218,19 +222,19 @@ export type RepoSlice = {
       createdWithAgent?: FolderWorkspace['createdWithAgent']
       pendingFirstAgentMessageRename?: boolean
     },
-    options?: FolderWorkspacePathStatusRouteOptions
+    options: FolderWorkspacePathStatusRouteOptions
   ) => Promise<FolderWorkspace | null>
   getFolderWorkspacePathStatusCacheKey: (
     request: FolderWorkspacePathStatusRequest,
-    options?: FolderWorkspacePathStatusRouteOptions
+    options: FolderWorkspacePathStatusRouteOptions
   ) => string
   getFreshFolderWorkspacePathStatus: (
     request: FolderWorkspacePathStatusRequest,
-    options?: FolderWorkspacePathStatusRouteOptions
+    options: FolderWorkspacePathStatusRouteOptions
   ) => FolderWorkspacePathStatus | null
   fetchFolderWorkspacePathStatus: (
     request: FolderWorkspacePathStatusRequest,
-    options?: { force?: boolean } & FolderWorkspacePathStatusRouteOptions
+    options: { force?: boolean } & FolderWorkspacePathStatusRouteOptions
   ) => Promise<FolderWorkspacePathStatus | null>
   updateFolderWorkspace: (
     folderWorkspaceId: string,
@@ -255,7 +259,8 @@ export type RepoSlice = {
   moveProjectToGroup: (
     projectId: string,
     groupId: string | null,
-    order?: number
+    order?: number,
+    hostId?: ExecutionHostId
   ) => Promise<boolean>
   // options.hostId is required: a bare id can resolve to another host's row (#13071). Removes nothing when that host has no row.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
@@ -263,7 +268,11 @@ export type RepoSlice = {
     projectId: string,
     options: { hostId: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
   ) => Promise<void>
-  updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
+  updateProject: (
+    projectId: string,
+    updates: ProjectUpdate,
+    hostId: ExecutionHostId
+  ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
   updateRepo: (
     projectId: string,

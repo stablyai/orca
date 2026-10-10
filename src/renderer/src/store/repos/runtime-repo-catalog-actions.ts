@@ -6,7 +6,6 @@ import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/worktree-visibility-owner-settings'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
@@ -88,8 +87,7 @@ export function createRuntimeRepoCatalogActions(
                   }
                 }),
             ...(visibilityDefaults !== undefined && s.settings
-              ? getActiveRuntimeTarget(s.settings).kind === 'environment' &&
-                s.settings.activeRuntimeEnvironmentId === environmentId
+              ? s.settings.activeRuntimeEnvironmentId === environmentId
                 ? visibilityDefaults
                   ? {
                       settings: {

@@ -43,7 +43,7 @@ const cases: CatalogCase[] = [
   {
     label: 'selected groups',
     catalog: 'projectGroups',
-    refresh: (s) => s.getState().fetchProjectGroups()
+    refresh: (s) => s.getState().fetchProjectGroups(catalogOwner(s))
   },
   {
     label: 'all-host local groups',
@@ -53,7 +53,7 @@ const cases: CatalogCase[] = [
   {
     label: 'selected folders',
     catalog: 'folderWorkspaces',
-    refresh: (s) => s.getState().fetchFolderWorkspaces()
+    refresh: (s) => s.getState().fetchFolderWorkspaces(catalogOwner(s))
   },
   {
     label: 'all-host local folders',
@@ -188,7 +188,7 @@ it('accepts a newer update after an equal catalog response', async () => {
   const pending = Promise.withResolvers<FolderWorkspace>()
   folderUpdate.mockReturnValueOnce(pending.promise)
   const update = store.getState().updateFolderWorkspace(folder.id, { isUnread: true })
-  await store.getState().fetchFolderWorkspaces()
+  await store.getState().fetchFolderWorkspaces(catalogOwner(store))
   pending.resolve({ ...folder, isUnread: true, updatedAt: 4 })
   await update
   expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(true)
@@ -227,3 +227,10 @@ it('does not publish an all-host refresh whose restored owners need no cleanup',
     initial.restoredRuntimeHostIdByWorkspaceSessionKey
   )
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

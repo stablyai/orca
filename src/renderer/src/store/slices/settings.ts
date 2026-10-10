@@ -288,7 +288,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       }
       // Why: hydration is host-merged by downstream slices. Switching focus
       // should add/update the selected host without discarding other hosts.
-      await get().fetchRepos()
+      // Why: hydrate the newly chosen default host's catalog; other hosts keep theirs.
+      await get().fetchRepos({ runtimeEnvironmentId: nextId })
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()
