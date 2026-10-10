@@ -64,7 +64,7 @@ export class StructuredAgentSessionHost {
     },
     deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
-    onOpened: (sessionId) => this.queued.drain.schedule(sessionId),
+    onOpened: (sessionId) => this.queued.onOpened(sessionId),
     now: () => this.now()
   })
   private readonly queued = wireStructuredAgentSessionQueuedMessages(this.sessions, () =>
@@ -296,6 +296,8 @@ export class StructuredAgentSessionHost {
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
   queuedMessagesResume = this.queued.queuedMessagesResume
+  queuedMessageUpdate = this.queued.queuedMessageUpdate
+  queuedMessageEditHold = this.queued.queuedMessageEditHold
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 

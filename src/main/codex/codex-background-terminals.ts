@@ -225,13 +225,17 @@ export async function stopCodexBackgroundCommands(
     return { cancelled: false }
   }
   const { acquisitionGeneration } = session
-  const { stopped, survived } = await terminateCodexBackgroundTerminals(session.connection, terminals, {
-    timeoutMs,
-    isCurrent: () =>
-      sessions.get(input.sessionId) === session &&
-      !session.ended &&
-      session.fence === input.fence &&
-      session.acquisitionGeneration === acquisitionGeneration
-  })
+  const { stopped, survived } = await terminateCodexBackgroundTerminals(
+    session.connection,
+    terminals,
+    {
+      timeoutMs,
+      isCurrent: () =>
+        sessions.get(input.sessionId) === session &&
+        !session.ended &&
+        session.fence === input.fence &&
+        session.acquisitionGeneration === acquisitionGeneration
+    }
+  )
   return { cancelled: stopped > 0, ...(survived ? { stillRunning: true as const } : {}) }
 }

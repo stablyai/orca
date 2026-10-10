@@ -18225,6 +18225,7 @@
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
+        "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation."
       },
       "composer": {
@@ -18667,7 +18668,6 @@
         "turnOffQueueing": "Turn off queueing",
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
-        "editAlreadySent": "Already sent — your text is still in the composer.",
         "withdrawnHold": "Stopped before it was sent",
         "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
@@ -18681,7 +18681,15 @@
         "sendConfirmClear": "Clear queue",
         "sendConfirmSend": "Send message",
         "fromSender": "From",
-        "pausedSendFailedWaiting": "Couldn't send — press Send to retry once the agent finishes."
+        "pausedSendFailedWaiting": "Couldn't send — press Send to retry once the agent finishes.",
+        "save": "Save",
+        "editingMessage": "Editing message",
+        "cancelEditing": "Cancel editing",
+        "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
+        "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
+        "editFailed": "This message can't be edited.",
+        "editGone": "This message was already sent or removed. Your edit is in the chat box.",
+        "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent."
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",

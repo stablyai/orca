@@ -10,10 +10,22 @@ import {
   sessionId,
   setup
 } from './rpc-session-adapter.test-fixture'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
 
 afterEach(closePiRpcAdapterFixtures)
 
 describe('Pi RPC session ownership and delivery', () => {
+  it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
+    const h = await setup()
+    await h.adapter.closeSession(sessionId)
+    h.resolveLaunch.mockRejectedValueOnce(agentSessionLaunchFolderMissing('/gone/floating'))
+    await expect(h.adapter.acquire({ ...h.input, fence: 8 })).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchFolderMissing'
+    })
+    expect(h.connections).toHaveLength(1)
+  })
+
   it('does not spawn a start cancelled while resolving its workspace', async () => {
     const h = await setup()
     await h.adapter.closeSession(sessionId)

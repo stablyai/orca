@@ -5,8 +5,15 @@ import {
   WORKSPACE_FILE_PATHS_MIME
 } from '@/lib/workspace-file-drag'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 
-const mocks = vi.hoisted(() => ({ write: vi.fn(), error: vi.fn(), activity: vi.fn() }))
+const mocks = vi.hoisted(() => {
+  const state: WorktreeRuntimeOwnerState = {}
+  return { write: vi.fn(), error: vi.fn(), activity: vi.fn(), state }
+})
+vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
 vi.mock('./terminal-drop-worktree-path', () => ({ resolveTerminalDropWorktreePath: () => '/repo' }))
@@ -69,6 +76,7 @@ const source = (executionHostId: string, runtimeEnvironmentId?: string) =>
 describe('internal terminal drop source ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.state = {}
     mocks.write.mockResolvedValue({ sentAnyPath: true, targetCurrent: true, pathsWritten: 1 })
   })
 
@@ -118,6 +126,41 @@ describe('internal terminal drop source ownership', () => {
         expect.objectContaining({ paths: ['/same/path/file.txt'] })
       )
       expect(focus).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.each([null, 'paired hub'])(
+    'accepts the real workspace producer into its local transport owner: %s',
+    async (runtimeOwnerEnvironmentId) => {
+      mocks.state = {
+        settings: { activeRuntimeEnvironmentId: 'foreign-hub' },
+        worktreesByRepo: {
+          'repo-a': [
+            {
+              id: 'source-workspace',
+              repoId: 'repo-a',
+              hostId: 'local',
+              ...(runtimeOwnerEnvironmentId ? { runtimeOwnerEnvironmentId } : {})
+            }
+          ]
+        }
+      }
+      const payload = new Map<string, string>()
+      writeWorkspaceFileDragSourceForWorkspace(
+        { setData: (type, value) => payload.set(type, value) },
+        'source-workspace'
+      )
+      const emittedSource = payload.get(WORKSPACE_FILE_DRAG_SOURCE_MIME)
+      expect(emittedSource).toBeDefined()
+      const { result } = await drop(emittedSource ?? null, 'local', runtimeOwnerEnvironmentId)
+      expect(result).toEqual({ status: 'pasted', pathCount: 1 })
+      expect(mocks.write).toHaveBeenCalledOnce()
+      expect(mocks.error).not.toHaveBeenCalled()
+      expect(JSON.parse(emittedSource ?? '{}')).toMatchObject({
+        executionHostId: runtimeOwnerEnvironmentId
+          ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+          : 'local'
+      })
     }
   )
 })

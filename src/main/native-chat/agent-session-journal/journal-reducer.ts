@@ -26,6 +26,7 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agen
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { journalItemRevisionIsStale } from './journal-item-revision'
+import { observeJournalProviderActivity } from './journal-provider-activity'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
 import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
@@ -52,6 +53,8 @@ export type JournalReducerState = {
   items: Map<string, AgentJournalRenderItem>
   /** Fence of the writer that created each item: the generation a running turn belongs to. */
   itemFences: Map<string, number>
+  /** Latest saved output per owner, rebuilt during the existing row fold. */
+  providerActivityAt: Map<number, number>
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
   submissions: Map<string, AgentJournalSubmission>
@@ -78,6 +81,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     highestFence: 0,
     items: new Map(),
     itemFences: new Map(),
+    providerActivityAt: new Map(),
     tombstones: new Map(),
     submissions: new Map(),
     receipts: new Map(),
@@ -89,7 +93,11 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
   }
 }
 
-export function applyJournalRow(state: JournalReducerState, row: JournalRow): void {
+export function applyJournalRow(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt = row.ts
+): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
@@ -101,6 +109,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
       return
     }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
+    observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertJournalItem(
       state,
@@ -132,6 +141,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
           continue
         }
         const { revision, body } = mutation
+        observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt)
         const itemId = resolveJournalItemId(state, mutation.itemId, body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         const producer = journalBatchMutationProducer(row, mutation)

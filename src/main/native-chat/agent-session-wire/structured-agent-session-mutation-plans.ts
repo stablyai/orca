@@ -1,11 +1,8 @@
 // One plan per mutating method: what it fingerprints, what it does, and how its
 // answer is rebuilt on a replay.
 //
-// The replay half matters more than it looks. The ledger records only that an
-// operation happened, so the durable answer usually comes back out of the
-// journal. Send is fail-closed: admission alone cannot prove non-delivery, so
-// its success commits with the row that accepts it, and a row still pending is
-// one that wrote nothing.
+// Send and /compact prove acceptance by their command receipt, the rest by their ledger row; the
+// journal projects the current answer.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
@@ -59,13 +56,22 @@ export type MutationPlan<TValue> = {
   recoverUnknownFromDurableState?: boolean
 } & (
   | {
+      /** Accepts with a submission or draft; its command receipt commits in that write's transaction. */
+      acceptsWithCommandReceipt: true
+      settlesWithWrite?: never
+      successReceipt?: never
+      settledOutcome?: never
+    }
+  | {
       /** Commits success with its row; paths without a committed receipt use fallback settlement. */
       settlesWithWrite: true
+      acceptsWithCommandReceipt?: never
       successReceipt?: () => JournalOperationReceipt
       settledOutcome?: (value: TValue) => AgentSessionOperationOutcome
     }
   | {
       settlesWithWrite?: never
+      acceptsWithCommandReceipt?: never
       settledOutcome?: (value: TValue) => AgentSessionOperationOutcome
     }
 )
@@ -101,7 +107,7 @@ export function sendPlan(params: {
     method: 'agentSession.send',
     operationIdScope: 'global',
     conversationWrite: true,
-    settlesWithWrite: true,
+    acceptsWithCommandReceipt: true,
     // `delivery` joins the OPERATION fingerprint only; the submission row keeps
     // the body-only fingerprint the reducer's echo-aliasing recomputes.
     fields: {
@@ -184,8 +190,9 @@ export function conversationCommandPlan(params: {
   const clientMessageId = params.envelope.clientOperationId
   return {
     method: 'agentSession.conversationCommand',
+    operationIdScope: 'global',
     conversationWrite: true,
-    settlesWithWrite: true,
+    acceptsWithCommandReceipt: true,
     fields: {
       command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
       ...(params.delivery ? { delivery: params.delivery } : {})
@@ -202,10 +209,7 @@ export function conversationCommandPlan(params: {
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
-    replay: (ctx, outcome) => {
-      if (outcome.status === 'succeeded' && outcome.conversationCommand) {
-        return { recorded: outcome.conversationCommand }
-      }
+    replay: (ctx) => {
       // A card answers from itself until drained, then from the submission it became; only a
       // command that asked to wait can have one, as for a send.
       const queued =

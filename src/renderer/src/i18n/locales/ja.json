@@ -18286,6 +18286,7 @@
         "orcaStopUpdate": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。",
         "orcaStopQuit": "この応答の途中で、{{machine}} の Orca が終了しました。",
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
+        "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。"
       },
       "providerFrame": {
@@ -18422,7 +18423,6 @@
       },
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
-        "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
         "listLabel": "キュー内のメッセージ",
         "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
         "awaitingAnswerHold": "回答を待っています",
@@ -18449,7 +18449,15 @@
         "sendConfirmClear": "キューを消去",
         "sendConfirmSend": "メッセージを送信",
         "fromSender": "送信元:",
-        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。"
+        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。",
+        "save": "保存",
+        "editingMessage": "メッセージを編集中",
+        "cancelEditing": "編集をキャンセル",
+        "editChanged": "編集中にこのメッセージが変更されました。編集したテキストはチャット入力欄にあります。",
+        "editChangedPrompt": "編集中にこのメッセージが変更されました。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
+        "editFailed": "このメッセージは編集できません。",
+        "editGone": "このメッセージはすでに送信または削除されています。編集したテキストはチャット入力欄にあります。",
+        "editGonePrompt": "このメッセージはすでに送信または削除されています。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",

@@ -11,12 +11,21 @@ import type { JournalWriteBody } from './journal-write-queue'
  *  nothing can interleave inside the transaction. */
 export type JournalRowTransactionHook = (db: Database.Database, row: JournalRow) => void
 
-/** An operation's ledger answer, committed with the journal write that makes it true: `write` runs
+/** An operation's receipt, committed with the journal write that makes it true: `write` runs
  *  inside that transaction on the same connection, `committed` synchronously right after its
  *  COMMIT and never after a rollback. */
 export type JournalOperationReceipt = {
-  write: (db: Database.Database) => void
+  write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
+}
+
+export function composeJournalOperationReceipts(
+  ...receipts: JournalOperationReceipt[]
+): JournalOperationReceipt {
+  return {
+    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
+    committed: () => receipts.forEach((receipt) => receipt.committed())
+  }
 }
 
 export type JournalRowWriterDeps = {
@@ -27,7 +36,7 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (rows: readonly JournalRow[]) => void
+  commit: (rows: readonly JournalRow[], savedAt: number) => void
   /** Standing hook run for EVERY appended row — the queued-draft returned
    *  transition rides here so no rejection path can bypass it. Bookkeeping: it
    *  runs in its own savepoint, so its failure is reported and never vetoes the row. */
@@ -48,14 +57,15 @@ export class JournalRowWriter {
   ): Promise<JournalRow> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const row = build(this.deps.nextSequence(), this.deps.now())
+      const savedAt = this.deps.now()
+      const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
       try {
         // One INSERT: the chat's epoch pointer moves only when the epoch does.
         this.deps.database().transaction((db) => {
-          insertJournalRow(db, this.deps.sessionId, row)
+          insertJournalRow(db, this.deps.sessionId, row, savedAt)
           hook?.(db, row)
-          receipt?.write(db)
+          receipt?.write(db, row)
           this.runBookkeeping(db, row)
         })
       } catch (error) {
@@ -66,7 +76,7 @@ export class JournalRowWriter {
       // fail. Rejecting here instead would leave the next append reusing a
       // sequence the table already holds. The ledger first: it cannot throw, the fold can.
       receipt?.committed()
-      this.deps.commit([row])
+      this.deps.commit([row], savedAt)
       return row
     })
   }
@@ -98,7 +108,7 @@ export class JournalRowWriter {
     try {
       this.deps.database().transaction((db) => {
         for (const row of rows) {
-          insertJournalRow(db, this.deps.sessionId, row)
+          insertJournalRow(db, this.deps.sessionId, row, ts)
           this.runBookkeeping(db, row)
         }
         receipt?.write(db)
@@ -108,7 +118,7 @@ export class JournalRowWriter {
       throw error
     }
     receipt?.committed()
-    this.deps.commit(rows)
+    this.deps.commit(rows, ts)
     return rows
   }
 
