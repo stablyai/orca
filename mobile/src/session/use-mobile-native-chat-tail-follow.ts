@@ -35,7 +35,12 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  `scrollToEnd` alongside an immediate non-animated one on content growth. The
  *  animated command eases toward the endpoint measured when it started, so while
  *  tokens kept arriving it ran backwards until the content-size pin yanked it
- *  forward — the visible drift-then-snap. One owner, never animated, removes it.
+ *  forward — the visible drift-then-snap.
+ *
+ *  One owner, never animated, removes it. The offset comes from the content
+ *  container's measured height (`onContentSizeChange`), never from
+ *  `scrollToEnd`'s estimated cell offset, which lands short until the last cell
+ *  is measured.
  *
  *  Intent (`following`) is kept separate from geometry (at-tail): a programmatic
  *  scroll reports metrics like any other, so letting metrics decide intent let
@@ -43,10 +48,12 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  move intent; metrics only decide where a *released* gesture leaves us.
  */
 export function useMobileNativeChatTailFollow<TItem>(args: {
-  /** Guards `scrollToEnd` against an empty list. */
+  /** Guards the tail pin against an empty list. */
   hasItems: boolean
+  /** Identifies the transcript whose measurements belong to this list instance. */
+  sendSurfaceId: string
 }): MobileNativeChatTailFollow<TItem> {
-  const { hasItems } = args
+  const { hasItems, sendSurfaceId } = args
   const listRef = useRef<FlatList<TItem> | null>(null)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
@@ -55,6 +62,24 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   const atTailRef = useRef(true)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
+  // Last measured content height; the only offset the tail pin may scroll to.
+  const lastContentHeightRef = useRef(0)
+  const measuredSurfaceIdRef = useRef(sendSurfaceId)
+
+  // A routed session can switch directly from one non-empty transcript to another. Clear the
+  // old geometry during render so an immediate pin cannot use the previous transcript's height.
+  if (measuredSurfaceIdRef.current !== sendSurfaceId) {
+    measuredSurfaceIdRef.current = sendSurfaceId
+    lastContentHeightRef.current = 0
+  }
+
+  // Why: an emptied list, or a transcript switch reusing this instance, must not pin to a height
+  // measured for content that is gone.
+  useEffect(() => {
+    if (!hasItems) {
+      lastContentHeightRef.current = 0
+    }
+  }, [hasItems])
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -74,14 +99,17 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   }, [])
 
   const pinToTail = useCallback(() => {
-    if (!followingRef.current || !hasItems) {
+    if (!followingRef.current || !hasItems || lastContentHeightRef.current <= 0) {
       return
     }
-    listRef.current?.scrollToEnd({ animated: false })
+    listRef.current?.scrollToOffset({ animated: false, offset: lastContentHeightRef.current })
   }, [hasItems])
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
+      // Record before the guards: a later jump needs the latest measured height
+      // even if this resize arrived while detached.
+      lastContentHeightRef.current = height
       if (!followingRef.current || !hasItems) {
         return
       }
