@@ -56,7 +56,6 @@ const agentLaunch = (extra: Record<string, unknown> = {}): HostLaunchCall => ({
     tabId: HOST_TAB_ID,
     leafId: HOST_LEAF_ID,
     requireFreshPane: true,
-    // Fix checks, an AI button, sends its caller's source.
     launchSource: 'task_page',
     viewMode: 'terminal',
     surfaceOwner: false,
@@ -100,6 +99,10 @@ const mobileQuickCommand = (startupPrompt: string): HostLaunchCall => ({
   }
 })
 const TASK_PAGE = { agent_kind: 'claude-code', launch_source: 'task_page', request_kind: 'new' }
+// The AI button that reaches each workspace kind: fix checks needs a repo with a PR (task_page);
+// in a folder, review notes' "New agent" (also on browser and markdown annotations, notes_send).
+const aiButtonSource = (workspace: LaunchWorkspace): string =>
+  workspace.kind === 'repo' ? 'task_page' : 'notes_send'
 const QUICK_COMMAND = { agent_kind: 'codex', launch_source: 'quick_command', request_kind: 'new' }
 export const AGENT_PHONE = { title: 'Terminal', launchAgent: 'claude', isActive: true }
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
@@ -138,9 +141,9 @@ function aiButton(
     os,
     workspace,
     ...(settings ? { settings } : {}),
-    call: agentLaunch(),
+    call: agentLaunch({ launchSource: aiButtonSource(workspace) }),
     provider,
-    telemetry: TASK_PAGE,
+    telemetry: { ...TASK_PAGE, launch_source: aiButtonSource(workspace) },
     phone: AGENT_PHONE
   }
 }
