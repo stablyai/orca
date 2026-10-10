@@ -142,7 +142,8 @@ describe('agent CLI install-dir fallback', () => {
       '/nix/var/nix/profiles/default/bin',
       join(home, '.nix-profile', 'bin'),
       join(home, '.opencode', 'bin'),
-      join(home, '.vite-plus', 'bin')
+      join(home, '.vite-plus', 'bin'),
+      join(home, '.grok', 'bin')
     ]
     stage(...dirs.map((dir) => join(dir, 'opencode')))
     for (const expected of dirs) {
@@ -208,7 +209,8 @@ describe('agent CLI install-dir fallback', () => {
         '/nix/var/nix/profiles/default/bin',
         join(home, '.nix-profile', 'bin'),
         join(home, '.opencode', 'bin'),
-        join(home, '.vite-plus', 'bin')
+        join(home, '.vite-plus', 'bin'),
+        join(home, '.grok', 'bin')
       ]) {
         expect(seeded).not.toContain(directory)
       }
@@ -226,12 +228,14 @@ describe('agent CLI install-dir fallback', () => {
         // Why pi: it is a probed detect command on every runtime (tui-agent-config.ts,
         // no detectUnsupportedRuntimes) and its installer defaults to ~/.vite-plus/bin,
         // the second dir #829 named and seeded alongside ~/.opencode/bin.
-        join(MOCK_HOME, '.vite-plus', 'bin', 'pi')
+        join(MOCK_HOME, '.vite-plus', 'bin', 'pi'),
+        // Why grok: its installer defaults to ~/.grok/bin, which no version manager owns (#17590).
+        join(MOCK_HOME, '.grok', 'bin', 'grok')
       )
-      // All three come from the fallback: the stubbed PATH holds no system dir.
-      expect(detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'cursor-agent'])).toEqual(
-        new Set(['codex', 'opencode', 'pi'])
-      )
+      // All four come from the fallback: the stubbed PATH holds no system dir.
+      expect(
+        detectCommandsInInstallDirs(['codex', 'opencode', 'pi', 'grok', 'cursor-agent'])
+      ).toEqual(new Set(['codex', 'opencode', 'pi', 'grok']))
     }
   )
 
@@ -244,7 +248,8 @@ describe('agent CLI install-dir fallback', () => {
       '"/nix/var/nix/profiles/default/bin"',
       '"$HOME/.nix-profile/bin"',
       '"$HOME/.opencode/bin"',
-      '"$HOME/.vite-plus/bin"'
+      '"$HOME/.vite-plus/bin"',
+      '"$HOME/.grok/bin"'
     ]
     const offsets = systemDirs.map((dir) => prelude.indexOf(dir))
     expect(offsets.every((offset) => offset >= 0)).toBe(true)

@@ -56,7 +56,7 @@ describe('patchPackagedProcessPath', () => {
     }
   })
 
-  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin) for packaged darwin runs', async () => {
+  it('prepends agent-CLI install dirs (~/.opencode/bin, ~/.vite-plus/bin, ~/.grok/bin) for packaged darwin runs', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
 
@@ -74,7 +74,27 @@ describe('patchPackagedProcessPath', () => {
     // even when `which` resolves them in the user's shell.
     expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
     expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    // Why: Grok's installer drops its binary in ~/.grok/bin (#17590).
+    expect(segments).toContain(join('/Users/tester', '.grok/bin'))
     expect(segments).toContain(join('/Users/tester', 'bin'))
+  })
+
+  it('appends ~/.grok/bin behind the inherited PATH for packaged linux runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/t'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    const grokBin = segments.indexOf(join('/home/t', '.grok/bin'))
+    expect(grokBin).toBeGreaterThan(-1)
+    // Why appended: it is a user-writable dir, so it must not re-rank tools already on PATH (#18234).
+    expect(grokBin).toBeGreaterThan(segments.indexOf('/bin'))
   })
 
   it('omits Linux-only snap/Linuxbrew dirs but keeps Nix on packaged darwin runs', async () => {
