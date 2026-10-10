@@ -4,16 +4,22 @@ import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { AiVaultSessionHistoryChatView } from './AiVaultSessionHistoryChatView'
+import { aiVaultSessionHistoryChatTabId } from '../right-sidebar/ai-vault-session-history-chat'
 
 type HistoryChatTab = Tab & {
   contentType: 'agent-session'
   agentSessionAgent: 'zcode'
 }
 
-/** An Agent Session History tab this build renders read-only: zcode has no structured host
- *  adapter, so its history chats are the vault row's tab viewed through the live-session hook. */
+/** An Agent Session History tab this build renders read-only. ZCode also runs structured chats
+ *  now, so a host-adopted tab (`structured-agent-session-…` id) belongs to the structured
+ *  overlay layer; only the vault row's own read-only tab is this layer's to paint. */
 function isAiVaultHistoryChatTab(tab: Tab): tab is HistoryChatTab {
-  return tab.contentType === 'agent-session' && tab.agentSessionAgent === 'zcode'
+  return (
+    tab.contentType === 'agent-session' &&
+    tab.agentSessionAgent === 'zcode' &&
+    tab.id.startsWith(aiVaultSessionHistoryChatTabId(''))
+  )
 }
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []

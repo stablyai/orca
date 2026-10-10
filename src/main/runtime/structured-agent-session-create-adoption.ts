@@ -1,5 +1,6 @@
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session-record'
@@ -23,7 +24,7 @@ type AdoptionSettings = {
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
   host: StructuredAgentSessionHost | null
   envelope: { sessionId: string; clientOperationId: string }
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'zcode'
   callerKey?: string
   resumeFrom?: { providerSessionId: string }
   location: AgentSessionExecutionLocation
@@ -64,7 +65,7 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
 export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   host: StructuredAgentSessionHost | null
   settings: AdoptionSettings
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'zcode'
   providerSessionId: string
   selfSessionId: string
   selectedAccountHomePath: string
@@ -84,21 +85,30 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     agent: input.agent,
     providerSessionId: input.providerSessionId,
     candidateAccountHomes: structuredAdoptionAccountHomeCandidates(input),
-    resolveTranscript: async ({ agent, providerSessionId, accountHomePath }) =>
-      resolveSessionFilePath(
+    resolveTranscript: async ({ agent, providerSessionId, accountHomePath }) => {
+      // ZCode's conversation lives in its own SQLite store, which the adapter
+      // reads back through `session/resume`; the database's presence is the
+      // adoption proof, and the selected home is the only place it can be.
+      if (agent === 'zcode') {
+        return existsSync(join(accountHomePath, 'cli', 'db', 'db.sqlite'))
+          ? join(accountHomePath, 'cli', 'db', 'db.sqlite')
+          : null
+      }
+      return resolveSessionFilePath(
         agent,
         providerSessionId,
         agent === 'claude'
           ? { claudeProjectsDir: join(accountHomePath, 'projects') }
           : { codexSessionsDirs: [join(accountHomePath, 'sessions')] }
       )
+    }
   })
 }
 
 /** Recognised adoption homes, most-preferred first. */
 function structuredAdoptionAccountHomeCandidates(input: {
   settings: AdoptionSettings
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'zcode'
   selectedAccountHomePath: string
 }): string[] {
   if (input.agent === 'claude') {
@@ -107,6 +117,10 @@ function structuredAdoptionAccountHomeCandidates(input: {
       join(homedir(), '.claude'),
       ...(getClaudeProfileRouter()?.accountHomes() ?? [])
     ]
+  }
+  if (input.agent === 'zcode') {
+    // One store per home; the launch already pinned where the chat runs.
+    return [input.selectedAccountHomePath]
   }
   return [
     input.selectedAccountHomePath,

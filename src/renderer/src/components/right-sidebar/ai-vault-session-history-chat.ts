@@ -12,7 +12,9 @@ export function aiVaultSessionHistoryChatTabId(sessionId: string): string {
 }
 
 /** Whether this row's conversation can render as a read-only chat tab today: an agent whose
- *  transcripts the chat reads through its own store, with no structured chat already open. */
+ *  transcripts the chat reads through its own store, with no structured chat already open.
+ *  ZCode is also a structured agent now, so a row the host has adopted into a live chat goes
+ *  there; the read-only tab is the path left for hosts that have not. */
 export function canOpenAiVaultSessionHistoryChat(session: {
   agent: AiVaultSession['agent']
   structuredSession?: AiVaultSession['structuredSession']

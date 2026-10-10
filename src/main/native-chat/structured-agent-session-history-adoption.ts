@@ -36,7 +36,7 @@ export type CommittedStructuredAgentSessionAdoptionReplay = {
 
 /** Exact committed-operation identity; attach still validates its fingerprint. */
 export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'zcode'
   providerSessionId: string
   selfSessionId: string
   callerKey: string
@@ -82,7 +82,7 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
  * ownership index — without this exemption the replay refuses instead of replaying.
  */
 export function findConflictingStructuredAdoption(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'zcode'
   providerSessionId: string
   selfSessionId: string
   ownership: readonly StructuredAgentSessionAdoptionOwnership[]
@@ -122,11 +122,11 @@ export function structuredAdoptionConflictError(
  * (selected account before the system default).
  */
 export async function resolveStructuredAgentSessionAdoption(input: {
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'zcode'
   providerSessionId: string
   candidateAccountHomes: readonly string[]
   resolveTranscript: (args: {
-    agent: 'claude' | 'codex'
+    agent: 'claude' | 'codex' | 'zcode'
     providerSessionId: string
     accountHomePath: string
   }) => Promise<string | null>

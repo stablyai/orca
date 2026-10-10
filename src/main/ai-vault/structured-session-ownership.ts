@@ -1,6 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import { isAgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
@@ -93,7 +94,7 @@ function ownershipLookup():
     }
   }
   return (row) =>
-    row.agent === 'codex' || row.agent === 'claude'
+    isAgentSessionHandleProvider(row.agent)
       ? (byProviderSession.get(`${row.agent}\0${row.sessionId}`) ?? null)
       : null
 }

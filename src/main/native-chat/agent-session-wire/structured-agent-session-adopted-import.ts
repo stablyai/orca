@@ -43,6 +43,12 @@ async function readAdoptedTranscript(
   if (!adopt) {
     return null
   }
+  // ZCode's conversation lives in its own SQLite store, not a file a legacy
+  // importer can read; the adapter's `session/resume` snapshot seeds the journal
+  // instead, so adoption only has to prove the store answered for this session.
+  if (params.agent === 'zcode') {
+    return null
+  }
   if (!adopt.transcriptPath) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptNotFound'
@@ -88,6 +94,10 @@ async function applyAdoptedTranscript(
   }
   if (prepared) {
     await attached.journal.replaceEpochItems('legacy_import', record.lease.runtimeFence, prepared)
+    return
+  }
+  // ZCode seeds its journal from the adapter's resume snapshot; nothing to import here.
+  if (params.agent === 'zcode') {
     return
   }
   if (!adopt.transcriptPath) {

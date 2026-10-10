@@ -2,8 +2,10 @@ import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { aiVaultSessionHistoryChatTabId } from './ai-vault-session-history-chat'
-import { canOpenAiVaultSessionHistoryChat } from './ai-vault-session-history-chat'
+import {
+  aiVaultSessionHistoryChatTabId,
+  canOpenAiVaultSessionHistoryChat
+} from './ai-vault-session-history-chat'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
 /**
