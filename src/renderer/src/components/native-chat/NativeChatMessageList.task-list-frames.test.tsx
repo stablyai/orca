@@ -86,7 +86,7 @@ describe('live Codex checklist frames', () => {
     fireEvent.click(toggle)
     rerender(transcript([first, active]))
     expect(within(toggle.parentElement!).getByText('Verify').closest('li')).toHaveClass(
-      'text-foreground'
+      'text-chat-foreground-strong'
     )
     expect(within(viewport as HTMLElement).getByText('Started Verify')).toBeInTheDocument()
     rerender(transcript([last]))

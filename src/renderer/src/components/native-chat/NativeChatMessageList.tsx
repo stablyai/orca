@@ -228,7 +228,8 @@ export function NativeChatMessageList({
     isVisible,
     // One pin serves both: revealing a diff and jumping from the rail are
     // mutually exclusive things to be doing.
-    revealIndex: nativeChatSlotIndexOf(slots, railJump?.messageId ?? revealedDiff?.messageId)
+    revealIndex: nativeChatSlotIndexOf(slots, railJump?.messageId ?? revealedDiff?.messageId),
+    typography
   })
   const { showJump, onScroll, scrollToBottom, scrollMessageToTop, readerLeavesEnd } =
     useNativeChatTranscriptScroll({

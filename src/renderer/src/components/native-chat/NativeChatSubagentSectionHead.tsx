@@ -25,7 +25,7 @@ export function NativeChatSubagentSectionHead({
       type="button"
       onClick={() => onSetOpen(agentId, !expanded)}
       aria-expanded={expanded}
-      className="group/subagent-section flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+      className="group/subagent-section flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-chat-foreground-faint hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <ChevronRight
         aria-hidden
@@ -33,7 +33,7 @@ export function NativeChatSubagentSectionHead({
       />
       <Bot aria-hidden className="size-3.5 shrink-0" />
       {state === null ? null : <StatusDot state={state} pulsing={state === 'working'} />}
-      <code className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
+      <code className="min-w-0 truncate font-mono text-2xs text-chat-foreground">
         {entry?.label ?? translate('components.native-chat.subagents.unnamed', 'Subagent')}
       </code>
     </button>

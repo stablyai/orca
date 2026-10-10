@@ -61,7 +61,6 @@ export function NativeChatAssistantMessageRow({
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
-        !isSystem && 'native-chat-message-text',
         isSystem && 'text-xs text-chat-foreground-faint'
       )}
     >
@@ -75,7 +74,7 @@ export function NativeChatAssistantMessageRow({
           rowKey={message.id}
           content={words}
           variant="document"
-          className="text-sm native-chat-message-text"
+          className="text-sm"
           renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}

@@ -44,7 +44,7 @@ export function NativeChatResolutionReceipt({
   const answers = nativeChatReceiptAnswers(body)
   return (
     <div
-      className="space-y-1 border-l border-border pl-3 text-xs text-muted-foreground"
+      className="space-y-1 border-l border-border pl-3 text-xs text-chat-foreground-faint"
       data-native-chat-receipt={body.kind}
     >
       {body.kind === 'question' ? (

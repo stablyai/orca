@@ -73,7 +73,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
         sections={slot.sections}
         onSetSectionOpen={context.subagentDisclosure.setSectionOpen}
         // The type its roster row's list inherits, so both halves of the list match.
-        className="text-xs leading-relaxed text-muted-foreground"
+        className="text-xs leading-relaxed text-chat-foreground-faint"
       />
     )
   }

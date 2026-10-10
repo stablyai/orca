@@ -227,7 +227,7 @@ export function NativeChatToolRun({
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className="group/tool-run flex min-h-6 w-full items-start gap-1.5 rounded-md py-0.5 text-left text-sm native-chat-message-text leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+          className="group/tool-run flex min-h-6 w-full items-start gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           aria-expanded={open}
           aria-live="polite"
           data-native-chat-tool-run-state={live ? 'live' : 'settled'}
@@ -243,7 +243,7 @@ export function NativeChatToolRun({
           {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
           <span
             className={cn(
-              'min-w-0 line-clamp-2 whitespace-normal break-words text-sm native-chat-message-text leading-relaxed transition-colors',
+              'min-w-0 line-clamp-2 whitespace-normal break-words text-sm leading-relaxed transition-colors',
               live
                 ? 'max-w-[72%] shrink-0 animate-pulse text-chat-foreground motion-reduce:animate-none'
                 : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'

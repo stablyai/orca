@@ -84,7 +84,7 @@ export function NativeChatWorkingStatus({
         data-native-chat-turn-status="settled"
         className={cn(
           className,
-          'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70'
+          'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
         )}
         aria-label={translate(
           'components.native-chat.status.toggleDetails',

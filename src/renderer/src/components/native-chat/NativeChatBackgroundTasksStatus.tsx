@@ -86,7 +86,7 @@ function BackgroundTaskRow(props: {
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   return (
     <>
-      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground/80">
+      <li className="flex h-6 min-w-0 items-center gap-2 text-foreground">
         <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
         {/* Every attention state states its reason on the row; `unverifiable` is never dropped. */}
         <AgentChildRowContent
@@ -98,7 +98,7 @@ function BackgroundTaskRow(props: {
           dotTitle={null}
         />
         {meta ? (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
             {meta}
           </span>
         ) : null}
@@ -192,7 +192,7 @@ export function NativeChatBackgroundTasksStatus(props: {
           <div className="flex h-8 items-center px-1.5">
             <button
               type="button"
-              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               aria-expanded={expanded}
               aria-controls={taskListId}
               aria-label={headerText}
@@ -246,7 +246,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                     key={group.kind}
                     className={index > 0 ? 'mt-1.5 border-t border-border/60 pt-1.5' : ''}
                   >
-                    <p className="px-0.5 pb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <p className="px-0.5 pb-1 font-mono text-3xs uppercase tracking-wider text-muted-foreground">
                       {backgroundTaskGroupLabel(group.kind)}
                     </p>
                     <ul

@@ -102,7 +102,7 @@ export function NativeChatSubagentEntries({
             <StatusDot state={state} pulsing={state === 'working'} />
             <span
               className={cn(
-                'min-w-0 truncate font-sans text-[13px]',
+                'min-w-0 truncate font-sans text-sm',
                 state === 'idle' ? 'text-chat-foreground-faint' : 'text-chat-foreground'
               )}
             >
@@ -123,7 +123,7 @@ export function NativeChatSubagentEntries({
                 type="button"
                 onClick={() => onSetSectionOpen?.(agent.id, !sectionOpen)}
                 aria-expanded={sectionOpen}
-                className="group/subagent-entry flex w-full items-center gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+                className="group/subagent-entry flex w-full items-center gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 {entry}
                 <ChevronRight
@@ -189,7 +189,7 @@ export function NativeChatSubagentRun({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="group/subagent-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left font-sans text-[13px] native-chat-message-text leading-relaxed text-chat-foreground-faint hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        className="group/subagent-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left font-sans text-sm leading-relaxed text-chat-foreground-faint hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         aria-expanded={open}
         aria-live="polite"
       >

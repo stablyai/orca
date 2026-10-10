@@ -64,8 +64,11 @@ export function nativeChatAppearanceStyle(
   const { width } = appearance
   const matching = appearance.matchTerminalInterface
   const terminalFontSize = settings?.terminalFontSize ?? 14
-  const fontSize = matching ? terminalFontSize : appearance.fontSize
-  const codeFontSize = matching ? terminalFontSize : appearance.codeFontSize
+  // Clamp labels/controls/spacing to 12-20 when matching terminal interface;
+  // prose may still follow the terminal size if that's the current behavior.
+  const clampedTerminalSize = Math.max(12, Math.min(20, terminalFontSize))
+  const fontSize = matching ? clampedTerminalSize : appearance.fontSize
+  const codeFontSize = matching ? clampedTerminalSize : appearance.codeFontSize
   const maxWidthPx = width === 'wide' ? 960 : width === 'full' ? Number.POSITIVE_INFINITY : 736
   const measuredWidth = nativeChatColumnWidthBucket(measuredColumnWidthPx)
   const columnWidthPx = Math.min(

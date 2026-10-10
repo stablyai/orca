@@ -33,7 +33,7 @@ describe('tool-run summary in a matching chat', () => {
     )
     expect(style['--chat-content-max-width']).toBe('46rem')
     expect(style['--chat-font-family']).toContain('Menlo')
-    const summary = container.querySelector('span.native-chat-message-text')
+    const summary = container.querySelector('span.line-clamp-2')
     expect(summary).toHaveTextContent(live ? 'running 1 agent' : 'ran 1 agent')
     expect(summary).toHaveClass('min-w-0', 'line-clamp-2', 'whitespace-normal', 'break-words')
     expect(summary).not.toHaveClass('truncate', 'whitespace-nowrap', 'font-mono')
@@ -58,7 +58,7 @@ describe('tool-run summary in a matching chat', () => {
       </div>
     )
 
-    const summary = container.querySelector('span.native-chat-message-text')
+    const summary = container.querySelector('span.line-clamp-2')
     expect(summary).toHaveClass('line-clamp-2', 'break-words')
     expect(summary?.textContent).toContain('printf')
     expect(summary?.textContent?.length).toBeLessThan(command.length)
@@ -88,9 +88,8 @@ describe('tool-run summary in a matching chat', () => {
     const header = screen.getByRole('button')
     // Top-aligned in the summary's own type, so `1lh` is one summary line.
     expect(header).toHaveClass('items-start', 'text-sm', 'leading-relaxed')
-    expect(header).toHaveClass('native-chat-message-text')
     expect(header).not.toHaveClass('items-center')
-    const summary = container.querySelector('span.native-chat-message-text')
+    const summary = container.querySelector('span.line-clamp-2')
     expect(summary?.parentElement).toBe(header)
     expect(summary).toHaveClass('min-w-0', 'line-clamp-2')
 

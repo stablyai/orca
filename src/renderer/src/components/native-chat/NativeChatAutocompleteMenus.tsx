@@ -148,7 +148,7 @@ function getPickerEmptyText(
 
 function PickerGroupHeading({ kind }: { kind: 'commands' | 'skills' }): React.JSX.Element {
   return (
-    <div className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+    <div className="px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
       {kind === 'commands'
         ? translate('components.native-chat.composer.commands', 'Commands')
         : translate('components.native-chat.composer.skills', 'Skills')}
@@ -200,7 +200,7 @@ function PickerOption({
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span className="min-w-0 truncate font-mono font-medium">{item.token}</span>
           {item.kind === 'command' && item.argumentHint ? (
-            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+            <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
               {item.argumentHint}
             </span>
           ) : null}
@@ -209,11 +209,11 @@ function PickerOption({
           <span className="block truncate text-xs text-muted-foreground">{description}</span>
         ) : null}
         {annotation ? (
-          <span className="block truncate text-[11px] text-muted-foreground">{annotation}</span>
+          <span className="block truncate text-2xs text-muted-foreground">{annotation}</span>
         ) : null}
       </span>
       {item.kind === 'skill' ? (
-        <span className="shrink-0 pt-0.5 text-[11px] text-muted-foreground">
+        <span className="shrink-0 pt-0.5 text-2xs text-muted-foreground">
           {scopeLabel(item.sources[0]?.sourceKind)}
         </span>
       ) : null}
@@ -268,7 +268,7 @@ function PickerOptionButton({
         }
       }}
       className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-[13px] hover:bg-accent hover:text-accent-foreground',
+        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
         selected && 'border-border bg-accent text-accent-foreground'
       )}
     >

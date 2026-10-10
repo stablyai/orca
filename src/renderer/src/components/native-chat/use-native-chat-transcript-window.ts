@@ -9,7 +9,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
+import {
+  NATIVE_CHAT_ROW_GAP_PX,
+  type NativeChatRowTypography,
+  DEFAULT_ROW_TYPOGRAPHY
+} from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import {
@@ -60,13 +64,16 @@ export function useNativeChatTranscriptWindow({
   scrollRef,
   slots,
   isVisible,
-  revealIndex
+  revealIndex,
+  typography = DEFAULT_ROW_TYPOGRAPHY
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   slots: readonly NativeChatTranscriptSlot[]
   isVisible: boolean
   /** Slot the transcript was asked to reveal, or -1. */
   revealIndex: number
+  /** Chat text scale; gap scales with the text size. */
+  typography?: NativeChatRowTypography
 }): NativeChatTranscriptWindow {
   const sizerElementRef = useRef<HTMLDivElement | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
@@ -98,6 +105,8 @@ export function useNativeChatTranscriptWindow({
     [pinned]
   )
 
+  const scale = typography.lineHeightPx / DEFAULT_ROW_TYPOGRAPHY.lineHeightPx
+  const scaledGapPx = NATIVE_CHAT_ROW_GAP_PX * scale
   const virtualizer = useVirtualizer({
     count: slots.length,
     getScrollElement: () => scrollRef.current,
@@ -105,7 +114,7 @@ export function useNativeChatTranscriptWindow({
     getItemKey,
     rangeExtractor,
     overscan: NATIVE_CHAT_WINDOW_OVERSCAN,
-    gap: NATIVE_CHAT_ROW_GAP_PX,
+    gap: scaledGapPx,
     scrollMargin,
     // A hidden pane has no boxes to measure; retain its last visible row sizes.
     useCachedMeasurements: !isVisible,

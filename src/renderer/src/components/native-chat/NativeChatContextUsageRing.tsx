@@ -193,7 +193,7 @@ export function NativeChatContextUsageRing({
               </ul>
             ) : null}
             {usage.estimated ? (
-              <p className="mt-3 text-[11px] text-muted-foreground">
+              <p className="mt-3 text-2xs text-muted-foreground">
                 {translate(
                   'components.native-chat.contextUsage.estimated',
                   'Estimated from the last response.'

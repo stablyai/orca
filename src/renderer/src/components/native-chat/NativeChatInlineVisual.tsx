@@ -11,7 +11,7 @@ import { useNativeChatVisualDocument } from './use-native-chat-visual-document'
 
 export function NativeChatVisualUnavailable(): React.JSX.Element {
   return (
-    <p className="my-2 text-xs text-muted-foreground">
+    <p className="my-2 text-xs text-chat-foreground-faint">
       {translate('components.native-chat.visualUnavailable', 'Visualization unavailable')}
     </p>
   )

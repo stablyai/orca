@@ -214,7 +214,7 @@ describe('tool sentence rows', () => {
       'bg-chat-code-surface',
       'border-chat-code-border',
       'rounded-lg',
-      'text-xs'
+      'text-chat-code'
     )
     fireEvent.click(button)
     expect(screen.queryByText('command failed')).toBeNull()

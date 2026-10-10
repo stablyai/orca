@@ -55,7 +55,7 @@ export function NativeChatBackgroundTaskRun({
     duration
   ].filter((part): part is string => part !== null)
   return (
-    <div className="min-w-0 py-0.5 font-sans text-[13px] leading-relaxed text-chat-foreground-faint">
+    <div className="min-w-0 py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
       <div className="flex min-h-6 min-w-0 items-center gap-1.5">
         <Icon aria-hidden="true" className="size-3.5 shrink-0 text-chat-foreground-faint" />
         <AgentStateDot state={state} size="sm" title={null} />

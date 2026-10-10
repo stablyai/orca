@@ -57,14 +57,14 @@ export function NativeChatTurnActivityLine({
       {/* One element for every state of the line, so a screen reader hears each new label. The
           trigger overlays it, rather than wrapping it, and the body sits outside it. */}
       <div
-        className="group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm native-chat-message-text leading-relaxed text-muted-foreground"
+        className="group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-chat-foreground-faint"
         data-native-chat-turn-activity="true"
         data-state={open ? 'open' : 'closed'}
         aria-live="polite"
         aria-atomic="true"
       >
         <Loader2 aria-hidden className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
-        <span id={labelId} className="min-w-0 truncate text-foreground/85">
+        <span id={labelId} className="min-w-0 truncate text-chat-foreground">
           {label}
         </span>
         {reasoning ? (
@@ -74,7 +74,7 @@ export function NativeChatTurnActivityLine({
               <button
                 type="button"
                 aria-labelledby={labelId}
-                className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+                className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               />
             </CollapsibleTrigger>
           </>

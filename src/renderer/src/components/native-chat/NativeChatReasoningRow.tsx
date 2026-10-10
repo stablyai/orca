@@ -48,17 +48,17 @@ export function NativeChatReasoningRow({
   const headline = translatedHeadline(nativeChatReasoningHeadline(message, { live: turnIsWorking }))
 
   return (
-    <div className="min-w-0 text-sm text-muted-foreground">
+    <div className="min-w-0 text-sm text-chat-foreground-faint">
       <Collapsible open={disclosure.open} onOpenChange={disclosure.setOpen}>
         <CollapsibleTrigger asChild>
           {/* Laid out like a tool run's header, so its glyph sits in the same column. */}
           <button
             type="button"
-            className="group/reasoning flex min-h-6 w-full min-w-0 items-center gap-1.5 rounded-md py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+            className="group/reasoning flex min-h-6 w-full min-w-0 items-center gap-1.5 rounded-md py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {headline === label ? null : <span className="sr-only">{label}: </span>}
             <NativeChatToolRunIcon iconName="brain" className="text-chat-foreground-faint" />
-            <span className="min-w-0 truncate text-sm native-chat-message-text leading-relaxed text-chat-foreground-faint transition-colors group-hover/reasoning:text-chat-foreground">
+            <span className="min-w-0 truncate text-sm leading-relaxed text-chat-foreground-faint transition-colors group-hover/reasoning:text-chat-foreground">
               {headline}
             </span>
             <NativeChatReasoningChevron />

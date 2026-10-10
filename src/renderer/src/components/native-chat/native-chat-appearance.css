@@ -1,15 +1,19 @@
-/* Code size is opt-in so monospace metadata retains its existing typography. */
-.native-chat-appearance [data-native-chat-code-content],
-.native-chat-markdown pre {
-  font-size: var(--chat-code-font-size, 12px);
-}
-
-.native-chat-message-text {
-  font-size: var(--chat-font-size, 14px);
-}
-
+/* Text steps are ratios of the text size setting, so the tiers scale together. */
 .native-chat-appearance {
+  --text-sm: var(--chat-font-size, 0.875rem);
+  --text-xs: calc(var(--text-sm) * 12 / 14);
+  --text-2xs: calc(var(--text-sm) * 11 / 14);
+  /* Floored so badges stay legible at the smallest setting. */
+  --text-3xs: max(9px, calc(var(--text-sm) * 10 / 14));
+  --text-chat-code: var(--chat-code-font-size, 0.75rem);
+  --ring: var(--chat-focus-ring);
+  /* Icons, gaps and row heights follow the text: 4px at the default 14px. */
+  --spacing: calc(var(--text-sm) / 3.5);
   font-family: var(--chat-font-family, var(--font-sans));
+}
+
+.native-chat-markdown pre {
+  font-size: var(--text-chat-code);
 }
 
 .native-chat-appearance :is(.font-sans, textarea, [contenteditable='true']) {

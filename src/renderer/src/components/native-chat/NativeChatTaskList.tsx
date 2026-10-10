@@ -40,14 +40,24 @@ function changeLabel(change: NativeChatTaskChange): string {
   }
 }
 
-function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): React.JSX.Element {
+function TaskRow({
+  task,
+  label,
+  isInDock = false
+}: {
+  task: NativeChatTask
+  label?: string
+  /** When in a docked card above the composer, use app colors instead of chat colors. */
+  isInDock?: boolean
+}): React.JSX.Element {
   const Icon =
     task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
   return (
     <li
       className={cn(
-        'flex items-start gap-1.5 text-xs text-muted-foreground',
-        task.status === 'in_progress' && 'font-medium text-foreground'
+        'flex items-start gap-1.5',
+        task.status === 'in_progress' &&
+          (isInDock ? 'font-medium text-foreground' : 'font-medium text-chat-foreground-strong')
       )}
     >
       <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
@@ -64,18 +74,22 @@ function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): Rea
   )
 }
 
-function Checklist({ list }: { list: TaskList }): React.JSX.Element {
+function Checklist({
+  list,
+  isInDock = false
+}: {
+  list: TaskList
+  isInDock?: boolean
+}): React.JSX.Element {
   return list.tasks.length === 0 ? (
-    <p className="text-xs text-muted-foreground">
-      {translate('components.native-chat.taskList.empty', 'No tasks')}
-    </p>
+    <p className="text-xs">{translate('components.native-chat.taskList.empty', 'No tasks')}</p>
   ) : (
     <ul
       aria-label={translate('components.native-chat.taskList.title', 'Tasks')}
       className="space-y-1 py-1"
     >
       {list.tasks.map((task, index) => (
-        <TaskRow key={`${task.content}:${index}`} task={task} />
+        <TaskRow key={`${task.content}:${index}`} task={task} isInDock={isInDock} />
       ))}
     </ul>
   )
@@ -112,8 +126,8 @@ export function NativeChatTaskList({
           <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="max-h-40 overflow-y-auto px-3 pb-2 scrollbar-sleek">
-            <Checklist list={list} />
+          <div className="max-h-40 overflow-y-auto px-3 pb-2 text-xs text-muted-foreground scrollbar-sleek">
+            <Checklist list={list} isInDock={true} />
             {list.explanation ? (
               <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
                 {list.explanation}
@@ -126,8 +140,8 @@ export function NativeChatTaskList({
   }
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
   return (
-    <div className="space-y-1 py-1">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="space-y-1 py-1 text-sm text-chat-foreground-faint">
+      <div className="flex items-center gap-1.5 text-xs text-chat-foreground-faint">
         <ListChecks aria-hidden className="size-4 shrink-0" />
         <span className="font-medium">
           {translate('components.native-chat.taskList.title', 'Tasks')}
@@ -156,14 +170,19 @@ export function NativeChatTaskList({
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-chat-foreground-faint">
               {translate('components.native-chat.taskList.unchanged', 'Tasks unchanged')}
             </p>
           )}
           <Collapsible>
-            <CollapsibleTrigger className="group flex items-center gap-1 rounded py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />
-              {translate('components.native-chat.taskList.showAll', 'Full task list')}
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="group flex items-center gap-1 rounded py-0.5 text-xs text-chat-foreground-faint hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />
+                {translate('components.native-chat.taskList.showAll', 'Full task list')}
+              </button>
             </CollapsibleTrigger>
             <CollapsibleContent animation="height" data-native-chat-member-detail>
               <Checklist list={list} />
@@ -174,7 +193,7 @@ export function NativeChatTaskList({
         <Checklist list={list} />
       )}
       {list.explanation ? (
-        <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+        <p className="whitespace-pre-wrap break-words text-xs text-chat-foreground-faint">
           {list.explanation}
         </p>
       ) : null}

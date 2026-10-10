@@ -21,6 +21,10 @@
     {
       "name": "renderer-scrollbar-style",
       "specifier": "./config/oxlint-plugins/renderer-scrollbar-style.mjs"
+    },
+    {
+      "name": "native-chat-design-tokens",
+      "specifier": "./config/oxlint-plugins/native-chat-design-tokens.mjs"
     }
   ],
   "categories": {
@@ -182,6 +186,14 @@
       }
     },
     {
+      "files": ["src/renderer/src/components/native-chat/**/*.{ts,tsx}"],
+      "rules": {
+        "native-chat-design-tokens/no-arbitrary-font-size": "error",
+        "native-chat-design-tokens/no-softened-foreground": "error",
+        "native-chat-design-tokens/no-weakened-focus-ring": "error"
+      }
+    },
+    {
       "files": ["src/shared/**/*.ts"],
       "rules": {
         "no-restricted-properties": [
@@ -198,7 +210,10 @@
       "rules": {
         "react/globals": "off",
         "quadratic-buffer-concat/no-loop-carried-concat": "off",
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off"
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "off",
+        "native-chat-design-tokens/no-arbitrary-font-size": "off",
+        "native-chat-design-tokens/no-softened-foreground": "off",
+        "native-chat-design-tokens/no-weakened-focus-ring": "off"
       }
     },
     {

@@ -30,7 +30,7 @@ export function NativeChatAgentMessageSenders({
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? chatWorktreeId
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center text-xs text-muted-foreground">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center text-xs text-chat-foreground-faint">
       <span>
         {queued
           ? translate('components.native-chat.queuedMessages.fromSender', 'From')

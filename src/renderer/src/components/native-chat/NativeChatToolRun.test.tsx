@@ -325,7 +325,7 @@ describe('NativeChatToolRun', () => {
     it('keeps the run in the transcript type, not a monospace dump', () => {
       const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
 
-      const label = runHeader(container).querySelector('span.native-chat-message-text')
+      const label = runHeader(container).querySelector('span.line-clamp-2')
       expect(label).toHaveClass('text-sm')
       expect(label).not.toHaveClass('font-mono')
     })

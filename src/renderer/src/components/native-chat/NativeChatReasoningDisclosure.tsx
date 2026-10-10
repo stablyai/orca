@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { NativeChatPlainCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 /** A reasoning block's text, under the live activity line or its finished row: quieter prose in the
@@ -26,8 +26,8 @@ export function NativeChatReasoningBody({
       <NativeChatMarkdown
         content={markdown}
         variant="document"
-        className="text-sm native-chat-message-text"
-        renderCodeBlock={NativeChatPlainCodeBlock}
+        className="text-sm"
+        renderCodeBlock={NativeChatCodeBlock}
         onLinkClick={onLinkClick}
         allowFileUriLinks={allowFileUriLinks}
         linkifyFilePaths={onLinkClick !== undefined}

@@ -41,6 +41,16 @@
   transition: none !important;
 }
 
+/* Not inline: the chat root rescales these, so utilities must read the variables. */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: calc(1 / 0.6875);
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: calc(0.875 / 0.625);
+  --text-chat-code: 0.75rem;
+  --text-chat-code--line-height: calc(1 / 0.75);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -57,6 +67,9 @@
   --color-chat-inline-code-border: var(--chat-inline-code-border);
   --color-chat-composer-surface: var(--chat-composer-surface);
   --color-chat-composer-border: var(--chat-composer-border);
+  --color-chat-warning: var(--chat-warning);
+  --color-chat-diff-added: var(--chat-diff-added);
+  --color-chat-diff-removed: var(--chat-diff-removed);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -610,6 +623,19 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
     in srgb,
     var(--chat-source-foreground) var(--chat-composer-border-mix),
     transparent
+  );
+  /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
+  --chat-focus-ring: color-mix(in srgb, var(--chat-source-foreground) 50%, var(--chat-canvas));
+  --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
+  --chat-diff-added: color-mix(
+    in srgb,
+    var(--git-decoration-added) 70%,
+    var(--chat-source-foreground)
+  );
+  --chat-diff-removed: color-mix(
+    in srgb,
+    var(--git-decoration-deleted) 70%,
+    var(--chat-source-foreground)
   );
 }
 

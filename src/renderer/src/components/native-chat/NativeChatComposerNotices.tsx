@@ -107,7 +107,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
       </div>
       {notice.errorText ? (
         <div className="relative mb-2 ml-8 mr-2.5 rounded-md border border-border bg-muted">
-          <pre className="scrollbar-sleek max-h-28 select-text overflow-auto whitespace-pre-wrap break-words py-1.5 pl-2 pr-8 font-mono text-[11px] text-foreground">
+          <pre className="scrollbar-sleek max-h-28 select-text overflow-auto whitespace-pre-wrap break-words py-1.5 pl-2 pr-8 font-mono text-2xs text-foreground">
             {notice.errorText}
           </pre>
           <NativeChatCopyButton

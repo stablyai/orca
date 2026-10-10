@@ -88,7 +88,7 @@ describe('the row an Orca stop leaves', () => {
   ])('names a %s and the machine, muted', (cause, sentence) => {
     renderStatus(orcaStopRow(cause), 'studio-mac')
     const row = screen.getByText(`${sentence} You can continue in this conversation.`)
-    expect(row.parentElement?.parentElement).toHaveClass('text-muted-foreground')
+    expect(row.parentElement?.parentElement).toHaveClass('text-chat-foreground-faint')
     expect(screen.queryByText(LEGACY_TEXT)).toBeNull()
   })
 
@@ -140,13 +140,13 @@ describe('the row an Orca stop leaves', () => {
       screen.getByText(
         'Orca on studio-mac stopped unexpectedly while this response was in progress.'
       ).parentElement?.parentElement
-    ).toHaveClass('text-muted-foreground')
+    ).toHaveClass('text-chat-foreground-faint')
     cleanup()
     renderStatus(represented, null, true)
     expect(
       screen.getByText('This response was interrupted. You can continue in this conversation.')
         .parentElement?.parentElement
-    ).toHaveClass('text-muted-foreground')
+    ).toHaveClass('text-chat-foreground-faint')
   })
 
   it('keeps the host words for a cause this build does not know', () => {
@@ -157,7 +157,7 @@ describe('the row an Orca stop leaves', () => {
   it('keeps the host words when the chat has no machine to name, muted all the same', () => {
     renderStatus(orcaStopRow('update'), null)
     expect(screen.getByText(LEGACY_TEXT).parentElement?.parentElement).toHaveClass(
-      'text-muted-foreground'
+      'text-chat-foreground-faint'
     )
   })
 
@@ -307,7 +307,7 @@ describe('notice rows', () => {
   it('renders compaction as a centered separator', () => {
     renderStatus({ kind: 'status', text: 'Context compacted', presentation: 'compaction' })
     expect(screen.getByRole('separator', { name: 'Context compacted' })).toHaveClass(
-      'text-muted-foreground'
+      'text-chat-foreground-faint'
     )
     expect(
       screen.getByText('Context compacted').parentElement?.querySelectorAll('.bg-border')
@@ -375,7 +375,7 @@ describe('notice rows', () => {
     ['history-item-too-large', 'This part of the chat was too large to show.']
   ])('words a %s row itself, as a muted status line', (presentation, words) => {
     renderStatus({ kind: 'status', text: 'Words an older host wrote', presentation })
-    expect(screen.getByText(words)).toHaveClass('text-muted-foreground', 'text-sm')
+    expect(screen.getByText(words)).toHaveClass('text-chat-foreground-faint', 'text-sm')
     expect(screen.queryByText('Words an older host wrote')).toBeNull()
   })
 })
