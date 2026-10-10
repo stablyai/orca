@@ -110,9 +110,11 @@ export class CellSeatLog {
     return entry && entry.at > this.now() - CELL_RECENT_SEAT_MS ? entry : undefined
   }
 
+  // The newest page's worth: an older leaver the director misses only takes the database path.
   private recentlyLeft(): RecentlyLeftCellSeat[] {
     const cutoff = this.now() - CELL_RECENT_SEAT_MS
-    return [...this.recent.values()].filter((entry) => entry.at > cutoff).map((entry) => ({ ...entry }))
+    const live = [...this.recent.values()].filter((entry) => entry.at > cutoff)
+    return live.slice(-CELL_SEAT_FEED_PAGE_MAX).map((entry) => ({ ...entry }))
   }
 
   private applyToSeats(change: Omit<CellSeatChange, 'seq'>): void {

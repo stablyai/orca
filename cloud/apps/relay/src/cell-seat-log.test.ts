@@ -121,5 +121,21 @@ describe('cell seat cursor', () => {
     now = 1_000 + 10 * 60_000
     expect(log.recentlyLeftOf(host.userId, host.relayHostId)).toBeUndefined()
   })
+
+  it('sends only the newest page of leavers in a full snapshot', () => {
+    const log = new CellSeatLog(CELL_SEAT_FEED_PAGE_MAX * 4, () => 0)
+    const leavers = CELL_SEAT_FEED_PAGE_MAX + 5
+    for (let index = 0; index < leavers; index += 1) {
+      const host = { userId: `user-${index}`, relayHostId: 'abcdefghijklmnop', epoch: 1, generation: 1 }
+      log.append({ kind: 'join', ...host, at: 0 })
+      log.append({ kind: 'leave', ...host, closeCode: 1006, at: 0 })
+    }
+    const page = log.read(null)
+    const left = 'full' in page ? page.recentlyLeft : []
+    expect(left).toHaveLength(CELL_SEAT_FEED_PAGE_MAX)
+    expect(left.at(-1)?.userId).toBe(`user-${leavers - 1}`)
+    // The cell itself still remembers the oldest.
+    expect(log.recentlyLeftOf('user-0', 'abcdefghijklmnop')).toBeDefined()
+  })
 })
 

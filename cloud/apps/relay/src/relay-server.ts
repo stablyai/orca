@@ -202,6 +202,10 @@ export function createRelayServer(
           options.now
         )
       : null
+  // The hello shed's test: the pool is already timing queries out.
+  const databaseShedding = (): boolean =>
+    readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
+    readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -223,6 +227,7 @@ export function createRelayServer(
           mode: () => options.cellFlags?.().flags.admitMode ?? 'db',
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
           dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
+          databaseShedding: () => databaseShedding(),
           book: reserveBook,
           verifyLease: (input) =>
             classifyAssignmentLease({
@@ -625,18 +630,16 @@ export function createRelayServer(
       // the same connect error and backoff a timed-out hello gives it today, 2 s
       // sooner (shipped desktops ignore Retry-After). A rebind over a live control
       // is a lease rotation, not a reconnect, so it is never refused here.
-      if (
-        !isRebind &&
-        reserveAdmission === null &&
-        readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
-        readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
-      ) {
+      if (!isRebind && reserveAdmission === null && databaseShedding()) {
         observability.recordHostHelloShed()
         rejectUpgrade(socket, 503, 'Service Unavailable', HOST_HELLO_SHED_RETRY_AFTER_SECONDS)
         return
       }
-      // A booked host's unit is already counted under the placement ceiling; its upgrade may
-      // rise to the hard cap until the hello hands the booking's unit back.
+      // A booked host's unit was counted under the placement ceiling: the upgrade takes it
+      // over (so it counts once) and may rise to the hard cap.
+      if (reserveAdmission === 'booked') {
+        reserveBook?.handOff(identity.sub, identity.relayHostId)
+      }
       const controlUpgrade =
         connectionLedger?.tryReserveControl(isRebind || reserveAdmission === 'booked') ?? null
       if (

@@ -213,6 +213,8 @@ export type CellReserveAdmission = {
   mode: () => CellAdmitMode
   ticketEnforce: () => boolean
   dryRunEnabled: () => boolean
+  // The pool-pressure shed's condition: a hello memory cannot admit is shed, not queued.
+  databaseShedding: () => boolean
   book: CellReserveBook
   verifyLease: (input: {
     lease: string | undefined
@@ -1047,6 +1049,8 @@ export class HostSessionRegistry {
 
   drain(graceMs: number, options: { paceWindowMs?: number } = {}): void {
     this.draining = true
+    // A draining cell admits no booking, so the units they hold go back now.
+    this.reserveAdmission?.book.clear()
     // A later drain (an emergency one, or shutdown) owns every session again, so nothing
     // queued by an earlier paced drain may still fire: it would re-send and, worse, keep
     // the event loop alive for the rest of a window the operator just cut short.
@@ -1179,6 +1183,12 @@ export class HostSessionRegistry {
             relayHostId: identity.relayHostId,
             helloEpoch: hello.data.assignmentEpoch
           })) === 'valid')
+    }
+    if (reserveMode && !admittedFromMemory && this.reserveAdmission!.databaseShedding()) {
+      // Let in as a seated host, but at another epoch: the wedged pool would only time it out.
+      this.observer.recordAuth(false)
+      socket.close(RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'relay temporarily unavailable')
+      return
     }
     const assignmentReadStartedAt = performance.now()
     // Combined is staging-only compatibility; stamped cells require the durable director epoch.

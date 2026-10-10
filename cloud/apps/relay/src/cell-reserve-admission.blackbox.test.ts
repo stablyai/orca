@@ -149,7 +149,12 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     const connect = async (
       identity: Awaited<ReturnType<typeof host>>,
       epoch: number
-    ): Promise<{ status: number; ack?: Record<string, unknown>; socket?: WebSocket }> => {
+    ): Promise<{
+      status: number
+      ack?: Record<string, unknown>
+      socket?: WebSocket
+      closeCode?: Promise<number>
+    }> => {
       const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/host/control`, {
         headers: { authorization: `Bearer ${identity.token}` },
         perMessageDeflate: false
@@ -164,6 +169,7 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       })
       if (opened.status !== 101) return opened
       cleanup.push(() => socket.terminate())
+      const closeCode = new Promise<number>((resolve) => socket.once('close', resolve))
       socket.send(
         JSON.stringify({
           type: 'host-hello',
@@ -178,7 +184,7 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
         nextMessage(socket),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 500))
       ])
-      if (!challenge || challenge.type !== 'host-challenge') return { status: 101, socket }
+      if (!challenge || challenge.type !== 'host-challenge') return { status: 101, socket, closeCode }
       const plaintext = nacl.box.open(
         Buffer.from(String(challenge.ciphertextB64), 'base64'),
         Buffer.from(String(challenge.nonceB64), 'base64'),
@@ -269,8 +275,10 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     first.socket!.close()
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect((await cell.connect(identity, 4)).ack).toMatchObject({ type: 'host-hello-ack' })
-    // A different epoch is not the seat it remembers, so it falls to the wedged database.
-    expect((await cell.connect(identity, 5)).ack).toBeUndefined()
+    // A different epoch is not the seat it remembers: shed at the hello, not queued on the pool.
+    const other = await cell.connect(identity, 5)
+    expect(other.ack).toBeUndefined()
+    expect(await other.closeCode).toBe(4429)
   })
 
   it('keeps today’s path when the switch is off, even for a booking made while it was on', async () => {
@@ -297,6 +305,16 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     expect('changes' in changes && changes.changes.at(-1)?.kind).toBe('drain-only')
     // A demoted seat no longer holds its epoch against a new booking.
     expect(cell.book(identity, 9)).toEqual([{ outcome: 'ok' }])
+  })
+
+  it('gives every booking unit back when the cell starts to drain', async () => {
+    const cell = await startCell({ admitMode: 'reserve' })
+    const identity = await cell.host()
+    cell.book(identity, 2)
+    expect(cell.relay.sessions.reserveCounts()?.bookings).toBe(1)
+    cell.relay.sessions.drain(30_000)
+    expect(cell.relay.sessions.reserveCounts()?.bookings).toBe(0)
+    expect(cell.book(identity, 3)).toEqual([{ outcome: 'draining' }])
   })
 
   it('takes no demotion on a database-mode cell', async () => {
