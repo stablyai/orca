@@ -262,7 +262,7 @@ describe('step 5 deterministic simulation', () => {
   }, 120_000)
 
   it('re-places a host demoted behind its row above that row, so the repair converges', async () => {
-    const report = await runReservePlacementSimulation({ ...mixed(), durationMs: 25 * 60_000, oldDirectors: 1 })
+    const report = await runReservePlacementSimulation({ ...mixed({}), durationMs: 25 * 60_000, oldDirectors: 1 })
     expect(report.rowAheadDemotions).toBeGreaterThan(0)
     expect(report.violations.filter((violation) => violation.invariant === 8)).toEqual([])
   }, 120_000)
