@@ -12,6 +12,8 @@ import {
 } from '../../lib/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { callRuntimeRpc } from '../runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 
 type StructuredSessionInventoryResponse = {
   snapshots?: RuntimeMobileSessionTabsResult[]
@@ -50,7 +52,7 @@ export function restoreLocalStructuredSessionTabsOnce(
  *  fenced exactly as before, so nothing about first paint changes. */
 export function refreshLocalStructuredSessionTabs(
   expectedGeneration = localStructuredSessionGeneration(),
-  options: { authoritative?: boolean; reacceptCurrentVersion?: boolean } = {}
+  options: { authoritative?: boolean } = {}
 ): Promise<RuntimeMobileSessionTabsResult[]> {
   // Capture request order before IPC: a reply that began before a close cannot retire its fence.
   const authoritativeInventory = beginStructuredAgentSessionAuthoritativeInventory()
@@ -83,4 +85,18 @@ export function refreshLocalStructuredSessionTabs(
       }
       return snapshots
     })
+}
+
+/** Re-reads one worktree, re-applying the version already applied: the window dropped a chat the
+ *  host kept, and nothing republishes an unchanged list. */
+export async function reacceptLocalStructuredSessionTabs(worktreeId: string): Promise<void> {
+  const expectedGeneration = localStructuredSessionGeneration()
+  const snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
+    { kind: 'local' },
+    'session.tabs.list',
+    { worktree: toRuntimeWorktreeSelector(worktreeId) }
+  )
+  if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
+    applyStructuredSessionTabSnapshots([snapshot], undefined, { reacceptCurrentVersion: true })
+  }
 }

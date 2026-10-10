@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { suppressClosedStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
 import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
@@ -114,7 +114,7 @@ describe('structured launch cancellation retirement', () => {
 
     resolveLaunch({ sessionId: SESSION_ID, fence: 1 })
     await Promise.resolve()
-    const suppressed = suppressClosedStructuredSessionTabs(latePublication(), { kind: 'local' })
+    const suppressed = suppressCancelledStructuredSessionTabs(latePublication(), { kind: 'local' })
     expect(suppressed.tabs).toEqual([])
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(true)
     expect(

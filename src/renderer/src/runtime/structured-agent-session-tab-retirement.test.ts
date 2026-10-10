@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
   markCancelled:
     vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>(),
-  refreshLocal: vi.fn<() => Promise<unknown>>(),
+  reacceptLocal: vi.fn<(worktreeId: string) => Promise<void>>(),
   refreshPaired:
     vi.fn<
       (
@@ -39,8 +39,15 @@ vi.mock('./structured-agent-session-close', () => ({
 vi.mock('./runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.callRuntime
 }))
+vi.mock('./local-session-tab-close-owner', () => ({
+  withLocalSessionTabCloseOwner: async (
+    _worktreeId: string,
+    _tabId: string,
+    close: () => Promise<unknown>
+  ) => close()
+}))
 vi.mock('./local-structured-session-tabs-sync/inventory-refresh', () => ({
-  refreshLocalStructuredSessionTabs: mocks.refreshLocal
+  reacceptLocalStructuredSessionTabs: mocks.reacceptLocal
 }))
 vi.mock('./web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: mocks.refreshPaired
@@ -52,13 +59,19 @@ vi.mock('./runtime-worktree-selector', () => ({
 import {
   beginStructuredAgentSessionTabClose,
   retireStructuredAgentSessionTab,
-  suppressClosedStructuredSessionTabs
+  suppressCancelledStructuredSessionTabs
 } from './structured-agent-session-tab-retirement'
 import {
   getStructuredAgentSessionReadOwner,
   findStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from '@/components/native-chat/structured-agent-session-read-owner'
+import {
+  isWebSessionCloseIntentPending,
+  reconcileWebSessionCloseIntents,
+  resetWebSessionCloseIntentForTests
+} from './web-session-close-intent'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
@@ -93,12 +106,21 @@ function snapshot(): RuntimeMobileSessionTabsResult {
 beforeEach(() => {
   vi.clearAllMocks()
   resetStructuredAgentSessionReadOwnersForTests()
+  resetWebSessionCloseIntentForTests()
   mocks.closeSession.mockResolvedValue('closed')
   mocks.callRuntime.mockResolvedValue(undefined)
   mocks.hasTombstone.mockReturnValue(false)
-  mocks.refreshLocal.mockResolvedValue([])
+  mocks.reacceptLocal.mockResolvedValue(undefined)
   mocks.refreshPaired.mockResolvedValue(undefined)
 })
+
+const closing = (owner: string): boolean =>
+  isWebSessionCloseIntentPending(
+    { environmentId: owner },
+    'wt-1',
+    'agent-session:session-1',
+    Date.now()
+  )
 
 describe('structured agent session tab retirement', () => {
   it('marks cancellation and clears local launch state before host cleanup', async () => {
@@ -111,8 +133,8 @@ describe('structured agent session tab retirement', () => {
     expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local')
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
     expect(mocks.stopSends).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
-    expect(mocks.callRuntime).toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
+    expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
   })
 
   // Withdrawn, as a Stop does: nothing more goes out, and nothing is dropped.
@@ -130,7 +152,7 @@ describe('structured agent session tab retirement', () => {
 
   it('suppresses and retires a late cancelled publication', async () => {
     mocks.hasTombstone.mockReturnValue(true)
-    const result = suppressClosedStructuredSessionTabs(snapshot(), target)
+    const result = suppressCancelledStructuredSessionTabs(snapshot(), target)
     expect(result.tabs).toEqual([])
     expect(result.tabGroups).toEqual([])
     expect(result.activeTabId).toBeNull()
@@ -142,7 +164,7 @@ describe('structured agent session tab retirement', () => {
     )
   })
 
-  it('hides a closed chat from host frames until the host answers the close', async () => {
+  it('hides a closing chat from host frames until one stops listing it', async () => {
     let answerClose!: () => void
     mocks.callRuntime.mockImplementation(
       () =>
@@ -156,48 +178,53 @@ describe('structured agent session tab retirement', () => {
       sessionId: 'session-1',
       provisional: false
     })
-
-    try {
-      // A frame the host sent before it handled the close still lists the chat.
-      const hidden = suppressClosedStructuredSessionTabs(snapshot(), target)
-      expect(hidden.tabs).toEqual([])
-      expect(hidden.tabGroups).toEqual([])
-      expect(hidden.activeTabId).toBeNull()
-      expect(mocks.callRuntime).toHaveBeenCalledTimes(1)
-    } finally {
-      answerClose()
-    }
-    // A host that still lists it after answering kept the chat, so it shows again.
-    await vi.waitFor(() =>
-      expect(suppressClosedStructuredSessionTabs(snapshot(), target).tabs).toHaveLength(1)
+    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(true)
+    // A frame the host sent before handling the close still lists the chat.
+    reconcileWebSessionCloseIntents(
+      { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+      'wt-1',
+      new Set(['agent-session:session-1'])
     )
-  })
+    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(true)
 
-  it("re-reads the host's tab list once the close has settled", async () => {
-    let answerClose!: () => void
-    mocks.callRuntime.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          answerClose = () => resolve(undefined)
-        })
-    )
-    beginStructuredAgentSessionTabClose({
-      target,
-      worktreeId: 'wt-1',
-      sessionId: 'session-1',
-      provisional: false
-    })
-    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
-    expect(mocks.refreshLocal).not.toHaveBeenCalled()
-
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     answerClose()
-    await vi.waitFor(() => expect(mocks.refreshLocal).toHaveBeenCalledOnce())
-    expect(mocks.refreshPaired).not.toHaveBeenCalled()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // A successful close waits for the host's own removal frame: no re-read.
+    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(true)
+    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
+    reconcileWebSessionCloseIntents(
+      { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+      'wt-1',
+      new Set()
+    )
+    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
   })
 
-  it('re-reads a paired host after a failed close, so the chat it kept comes back', async () => {
+  it('shows a chat the local host kept by re-reading its worktree', async () => {
+    mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    beginStructuredAgentSessionTabClose({
+      target,
+      worktreeId: 'wt-1',
+      sessionId: 'session-1',
+      provisional: false
+    })
+    await vi.waitFor(() => expect(mocks.reacceptLocal).toHaveBeenCalledWith('wt-1'))
+    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
+    expect(mocks.refreshPaired).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('shows a chat a paired host kept by re-reading its worktree', async () => {
     const paired = { kind: 'environment', environmentId: 'server-1' } as const
-    mocks.callRuntime.mockRejectedValue(new Error('runtime_unavailable'))
+    let failClose!: () => void
+    mocks.callRuntime.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          failClose = () => reject(new Error('runtime_unavailable'))
+        })
+    )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
       target: paired,
@@ -205,38 +232,41 @@ describe('structured agent session tab retirement', () => {
       sessionId: 'session-1',
       provisional: false
     })
+    expect(closing('server-1')).toBe(true)
+    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
+
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
+    failClose()
     await vi.waitFor(() =>
       expect(mocks.refreshPaired).toHaveBeenCalledWith('server-1', 'wt-1', {
         acceptCurrentSnapshot: true
       })
     )
-    expect(suppressClosedStructuredSessionTabs(snapshot(), paired).tabs).toHaveLength(1)
+    expect(closing('server-1')).toBe(false)
+    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 
   it('deduplicates concurrent host retirement', async () => {
     let release!: () => void
-    mocks.callRuntime.mockImplementation(
+    mocks.closeSession.mockImplementation(
       () =>
         new Promise((resolve) => {
-          release = () => resolve(undefined)
+          release = () => resolve('closed')
         })
     )
-    const first = retireStructuredAgentSessionTab({
+    retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1'
     })
-    const second = retireStructuredAgentSessionTab({
+    retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1'
     })
-    expect(second).toBe(first)
-    expect(mocks.callRuntime).toHaveBeenCalledTimes(1)
-    release()
-    await first
     expect(mocks.closeSession).toHaveBeenCalledTimes(1)
+    release()
   })
 
   it('retires an unmounted created reader only on the owning host', async () => {
@@ -261,8 +291,8 @@ describe('structured agent session tab retirement', () => {
       retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
     ).not.toThrow()
     expect(findStructuredAgentSessionReadOwner('session-1', target)).toBeUndefined()
-    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
-    expect(mocks.callRuntime).toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
+    expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
   })

@@ -12,38 +12,38 @@ import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-s
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
+import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
 import {
-  isLocalSessionTabCloseOwned,
-  withLocalSessionTabCloseOwner
-} from './local-session-tab-close-owner'
-import { executionHostIdForStructuredTarget } from './structured-agent-session-owner'
+  executionHostIdForStructuredTarget,
+  structuredAgentSessionFocusOwner
+} from './structured-agent-session-owner'
+import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
-const inFlightRetirements = new Map<string, Promise<void>>()
-
-function structuredAgentSessionHostTabId(sessionId: string): string {
-  return `agent-session:${sessionId}`
-}
+const inFlightRetirements = new Map<string, Promise<boolean>>()
 
 function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionId: string): string {
   return `${target.kind}:${target.kind === 'environment' ? target.environmentId : 'local'}:${worktreeId}:${sessionId}`
 }
 
-/** Best-effort host cleanup; local removal must never wait for bookkeeping. */
+/**
+ * Best-effort host cleanup; local removal must never wait for bookkeeping. Resolves false when the
+ * host tab close failed, so the host may still list the chat.
+ */
 export function retireStructuredAgentSessionTab(args: {
   target: RuntimeClientTarget
   worktreeId: string
   sessionId: string
   onError?: (error: unknown) => void
-}): Promise<void> {
+}): Promise<boolean> {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
   const key = retirementKey(args.target, args.worktreeId, args.sessionId)
   const existing = inFlightRetirements.get(key)
   if (existing) {
     return existing
   }
-  const hostTabId = structuredAgentSessionHostTabId(args.sessionId)
+  const hostTabId = `agent-session:${args.sessionId}`
   // Why: main echoes the host tab id it was asked to close, never this window's tab id.
   const closeHostTab = () =>
     withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
@@ -67,15 +67,17 @@ export function retireStructuredAgentSessionTab(args: {
         }
       }
     }
+    const [, hostTabClose] = results
+    return hostTabClose.status === 'fulfilled'
   })
   inFlightRetirements.set(key, promise)
   return promise
 }
 
-/** Re-reads the host's tab list, which supersedes whatever a close's in-flight hold suppressed. */
-function resyncHostSessionTabs(target: RuntimeClientTarget, worktreeId: string): void {
+/** Re-reads one worktree from the host, including the version already applied. */
+function reacceptHostSessionTabs(target: RuntimeClientTarget, worktreeId: string): void {
   // Lazy imports: both refresh paths apply frames through this module.
-  const resync =
+  const reread =
     target.kind === 'environment'
       ? import('./web-runtime-session-snapshot').then(({ refreshWebRuntimeSessionTabsSnapshot }) =>
           refreshWebRuntimeSessionTabsSnapshot(target.environmentId, worktreeId, {
@@ -83,11 +85,10 @@ function resyncHostSessionTabs(target: RuntimeClientTarget, worktreeId: string):
           })
         )
       : import('./local-structured-session-tabs-sync/inventory-refresh').then(
-          ({ refreshLocalStructuredSessionTabs }) =>
-            refreshLocalStructuredSessionTabs(undefined, { reacceptCurrentVersion: true })
+          ({ reacceptLocalStructuredSessionTabs }) => reacceptLocalStructuredSessionTabs(worktreeId)
         )
-  resync.catch((error: unknown) =>
-    console.warn('[structured-agent-session] tab resync after close failed', error)
+  reread.catch((error: unknown) =>
+    console.warn('[structured-agent-session] tab re-read after a failed close failed', error)
   )
 }
 
@@ -111,11 +112,19 @@ export function beginStructuredAgentSessionTabClose(args: {
     // the rest goes back to the conversation's draft.
     stopStructuredAgentSessionSends(args.sessionId)
   }
-  // Why: the close's hold hid this chat from host frames, so a host that refused or never got the
-  // close must be asked again, or the chat it kept stays off screen.
-  void retireStructuredAgentSessionTab(args).then(() =>
-    resyncHostSessionTabs(args.target, args.worktreeId)
-  )
+  const intentOwner = structuredAgentSessionFocusOwner(args.target)
+  const hostTabId = `agent-session:${args.sessionId}`
+  // Why: a host frame sent before the host handles the close still lists the chat and would re-add
+  // it at the end of the strip; the intent lifts once a host frame stops listing it.
+  recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+  void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
+    if (!hostTabClosed) {
+      // The host kept the chat: show it again. Its frame is at the version this window already
+      // applied, so only a re-read that accepts that version brings it back.
+      clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
+      reacceptHostSessionTabs(args.target, args.worktreeId)
+    }
+  })
 }
 
 /**
@@ -126,7 +135,7 @@ export function acceptPairedHostStructuredSessions(
   frame: RuntimeMobileSessionTabsResult,
   environmentId: string
 ): RuntimeMobileSessionTabsResult {
-  const snapshot = suppressClosedStructuredSessionTabs(frame, {
+  const snapshot = suppressCancelledStructuredSessionTabs(frame, {
     kind: 'environment',
     environmentId
   })
@@ -137,32 +146,22 @@ export function acceptPairedHostStructuredSessions(
   return snapshot
 }
 
-/**
- * A host snapshot minus the chats this window closed: a cancelled launch is retired again
- * idempotently, and a chat stays hidden until the host answers its close, since a frame sent
- * before the host handled it still lists the chat and would re-add it at the end of the strip.
- */
-export function suppressClosedStructuredSessionTabs(
+/** A host snapshot containing a cancelled session is suppressed and retired again idempotently. */
+export function suppressCancelledStructuredSessionTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   target: RuntimeClientTarget,
   onError?: (error: unknown) => void
 ): RuntimeMobileSessionTabsResult {
   const cancelledSessionIds = new Set<string>()
-  const hiddenSessionIds = new Set<string>()
   for (const tab of snapshot.tabs) {
-    if (tab.type !== 'agent-session') {
-      continue
-    }
-    if (hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)) {
-      cancelledSessionIds.add(tab.sessionId)
-      hiddenSessionIds.add(tab.sessionId)
-    } else if (
-      isLocalSessionTabCloseOwned(snapshot.worktree, structuredAgentSessionHostTabId(tab.sessionId))
+    if (
+      tab.type === 'agent-session' &&
+      hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     ) {
-      hiddenSessionIds.add(tab.sessionId)
+      cancelledSessionIds.add(tab.sessionId)
     }
   }
-  if (hiddenSessionIds.size === 0) {
+  if (cancelledSessionIds.size === 0) {
     return snapshot
   }
   for (const sessionId of cancelledSessionIds) {
@@ -174,7 +173,7 @@ export function suppressClosedStructuredSessionTabs(
     })
   }
   const tabs = snapshot.tabs.filter(
-    (tab) => tab.type !== 'agent-session' || !hiddenSessionIds.has(tab.sessionId)
+    (tab) => tab.type !== 'agent-session' || !cancelledSessionIds.has(tab.sessionId)
   )
   const visibleTabIds = new Set(tabs.map((tab) => tab.id))
   return {

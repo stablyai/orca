@@ -32,7 +32,7 @@ import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
 } from '../../lib/structured-agent-session-launch-cancellation'
-import { suppressClosedStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 
@@ -51,7 +51,7 @@ export type StructuredSessionSnapshotApplyOptions = {
    * whereas a subscription frame can be, and stays fenced.
    */
   authoritative?: boolean
-  /** Re-applies a publication at the version already applied: a close's hold may have hidden part of it. */
+  /** Re-applies a publication at the version already applied: the window dropped a chat the host kept. */
   reacceptCurrentVersion?: boolean
   /** Sequence allocated when the inventory request began, before a close can race its reply. */
   authoritativeInventory?: number
@@ -151,7 +151,7 @@ export function applyLocalStructuredSessionTabSnapshots<
     ) {
       continue
     }
-    const effectiveSnapshot = suppressClosedStructuredSessionTabs(snapshot, { kind: 'local' })
+    const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })
     for (const tab of effectiveSnapshot.tabs) {
       if (tab.type === 'agent-session') {
         options.onAcceptedAgentSession?.(snapshot.worktree, tab.sessionId)
