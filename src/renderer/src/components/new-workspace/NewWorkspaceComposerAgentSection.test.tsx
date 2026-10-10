@@ -24,6 +24,8 @@ describe('NewWorkspaceComposerAgentSection agent picker', () => {
           visibleQuickAgents={AGENT_CATALOG}
           defaultTuiAgent="blank"
           handleSetDefaultAgent={vi.fn()}
+          setupOnlyIsDefault={false}
+          handleSetSetupOnlyDefault={vi.fn()}
         />
       </TooltipProvider>
     )

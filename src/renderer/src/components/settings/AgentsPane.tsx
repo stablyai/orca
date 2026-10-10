@@ -50,6 +50,10 @@ import {
 } from './agent-availability-settings'
 import { AgentAvailabilityControl, type AgentCatalogRowProps } from './AgentCatalogRow'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
+import {
+  buildDefaultAgentSettingsUpdate,
+  isNewWorkspaceSetupOnlyDefault
+} from '../../../../shared/new-workspace-setup-only'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 import { getSettingsHostScopeEnvironmentId, type SettingsHostScope } from './settings-host-scope'
 
@@ -224,7 +228,9 @@ export function AgentsPane({
     cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
     envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
-    onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
+    onSetDefault: isDetected
+      ? () => updateSettings(buildDefaultAgentSettingsUpdate(agent.id))
+      : () => {},
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
     onSaveOverride: isDetected
       ? (value) => {
@@ -250,12 +256,12 @@ export function AgentsPane({
   return (
     <div className="space-y-8">
       <AgentDefaultSetting
-        defaultAgent={defaultAgent}
+        defaultAgent={isNewWorkspaceSetupOnlyDefault(settings) ? 'setup-only' : defaultAgent}
         detectedIds={detectedIds}
         enabledDetectedAgents={enabledDetectedAgents}
         catalog={catalog}
         description={getSettingOwnershipSummary('agentLaunchDefaults').description}
-        onSetDefault={(agent) => updateSettings({ defaultTuiAgent: agent })}
+        onSetDefault={(agent) => updateSettings(buildDefaultAgentSettingsUpdate(agent))}
       />
       <AgentRuntimeSetting
         settings={settings}

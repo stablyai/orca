@@ -26,6 +26,7 @@ import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { isNewWorkspaceSetupOnlyDefault } from '../../../shared/new-workspace-setup-only'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
@@ -184,14 +185,27 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const [quickSetupOnlyOverride, setQuickSetupOnlyOverride] = useState<boolean | undefined>(
+    undefined
+  )
+  const quickSetupOnly =
+    quickAgent === null &&
+    (quickSetupOnlyOverride ??
+      (quickAgentOverride === undefined && isNewWorkspaceSetupOnlyDefault(settings)))
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
+    setQuickSetupOnlyOverride(false)
+  }, [])
+
+  const handleQuickSetupOnlySelect = useCallback(() => {
+    setQuickAgentOverride(null)
+    setQuickSetupOnlyOverride(true)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+    await submitQuick(quickAgent, { setupOnly: quickSetupOnly })
+  }, [quickAgent, quickSetupOnly, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -305,6 +319,8 @@ function QuickTabBody({
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        quickSetupOnly={quickSetupOnly}
+        onQuickSetupOnlySelect={handleQuickSetupOnlySelect}
         {...cardProps}
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}

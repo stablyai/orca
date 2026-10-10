@@ -170,6 +170,8 @@ export async function executeWorktreeCreation(
   // workspace) is handed it; anyone who moved on (another workspace or an app
   // view) keeps their place and gets a toast instead (#9944).
   const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
+  // Why: "None" leaves setup as the only surface; without a setup run it falls back to a shell.
+  const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
 
   // Why: the worktree exists past this point and nothing awaits this caller, so
   // each follow-up step is best-effort — an escaped throw would strand the
@@ -185,7 +187,8 @@ export async function executeWorktreeCreation(
         ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
         ...(startupOpt ? { startup: startupOpt } : {}),
         ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {}),
+        ...(setupIsOnlySurface ? { providesInitialSurface: true } : {})
       })
       primaryTabId = activation === false ? null : activation.primaryTabId
     } catch (error) {
@@ -243,6 +246,7 @@ export async function executeWorktreeCreation(
     const hasExplicitTerminalWork = Boolean(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
+    const callerProvidesSurface = preparedRequest.agent !== null || setupIsOnlySurface
     if (preparedRequest.agent === null || hasExplicitTerminalWork) {
       try {
         primaryTabId = ensureWorktreeHasInitialTerminal(
@@ -254,7 +258,7 @@ export async function executeWorktreeCreation(
           result.defaultTabs,
           {
             activateCreatedTabs: false,
-            ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
+            ...(callerProvidesSurface ? { callerProvidesSurface: true } : {}),
             ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
           }
         )

@@ -1,6 +1,7 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { isNewWorkspaceSetupOnlyDefault } from '../../../../shared/new-workspace-setup-only'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
 import {
@@ -174,6 +175,10 @@ export function createWorktreeEventRuntime(
       ...(setup ? { setup } : {}),
       ...(startup ? { startup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
+      // Why: CLI creates carry no agent choice, so the "None" default decides whether a shell joins Setup.
+      ...(setup && !startup && isNewWorkspaceSetupOnlyDefault(useAppStore.getState().settings)
+        ? { providesInitialSurface: true }
+        : {}),
       ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
       // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
       notifyHostRuntime: false,

@@ -1,4 +1,4 @@
-import { Check, Terminal } from 'lucide-react'
+import { Ban, Check, Terminal } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -43,15 +43,15 @@ export function AgentDefaultSetting({
   description,
   onSetDefault
 }: {
-  defaultAgent: TuiAgent | 'blank' | null
+  defaultAgent: TuiAgent | 'blank' | 'setup-only' | null
   detectedIds: Set<string> | null
   enabledDetectedAgents: AgentCatalogEntry[]
   catalog: AgentCatalogEntry[]
   description: string
-  onSetDefault: (agent: TuiAgent | 'blank' | null) => void
+  onSetDefault: (agent: TuiAgent | 'blank' | 'setup-only' | null) => void
 }): React.JSX.Element {
   const storedDefaultAgent =
-    defaultAgent !== null && defaultAgent !== 'blank'
+    defaultAgent !== null && defaultAgent !== 'blank' && defaultAgent !== 'setup-only'
       ? catalog.find((agent) => agent.id === defaultAgent)
       : undefined
   const defaultAgentPills =
@@ -74,6 +74,18 @@ export function AgentDefaultSetting({
           <Terminal className="size-3.5" />
           {translate('auto.components.settings.AgentsPane.110b74b022', 'No agent (blank terminal)')}
           {defaultAgent === 'blank' && <Check className="size-3.5" />}
+        </DefaultAgentPill>
+        <DefaultAgentPill
+          active={defaultAgent === 'setup-only'}
+          onClick={() => onSetDefault('setup-only')}
+          title={translate(
+            'auto.components.settings.AgentsPane.setupOnlyHint',
+            'New workspaces open only the setup script tab; without a setup script they get a blank terminal'
+          )}
+        >
+          <Ban className="size-3.5" />
+          {translate('auto.components.settings.AgentsPane.setupOnly', 'None (setup script only)')}
+          {defaultAgent === 'setup-only' && <Check className="size-3.5" />}
         </DefaultAgentPill>
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id

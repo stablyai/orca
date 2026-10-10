@@ -124,6 +124,8 @@ export type WorktreeCreationRequest = {
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */
   suppressTerminalFocusOnCompletion?: boolean
+  /** "None" in the composer: when setup runs, open only its tab instead of an extra shell. */
+  setupOnly?: boolean
 }
 
 /** Renderer-only, session-ephemeral record of an in-flight (or failed) worktree

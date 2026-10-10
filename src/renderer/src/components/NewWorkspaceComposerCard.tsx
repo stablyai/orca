@@ -38,6 +38,10 @@ import {
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
+import {
+  buildDefaultAgentSettingsUpdate,
+  isNewWorkspaceSetupOnlyDefault
+} from '../../../shared/new-workspace-setup-only'
 
 // Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
 // reaches it without an explicit "Set location" click. Shared with the warm below so both hit
@@ -93,6 +97,7 @@ export default function NewWorkspaceComposerCard(
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
+  const setupOnlyIsDefault = useAppStore((state) => isNewWorkspaceSetupOnlyDefault(state.settings))
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
@@ -272,10 +277,13 @@ export default function NewWorkspaceComposerCard(
   )
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null): void => {
-      void updateSettings({ defaultTuiAgent: next })
+      void updateSettings(buildDefaultAgentSettingsUpdate(next))
     },
     [updateSettings]
   )
+  const handleSetSetupOnlyDefault = React.useCallback((): void => {
+    void updateSettings(buildDefaultAgentSettingsUpdate('setup-only'))
+  }, [updateSettings])
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
       '[data-agent-combobox-root="true"][role="combobox"]'
@@ -337,6 +345,8 @@ export default function NewWorkspaceComposerCard(
           visibleQuickAgents={visibleQuickAgents}
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
+          setupOnlyIsDefault={setupOnlyIsDefault}
+          handleSetSetupOnlyDefault={handleSetSetupOnlyDefault}
         />
         <NewWorkspaceComposerAdvancedSection
           {...props}

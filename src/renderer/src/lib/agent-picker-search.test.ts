@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_PICKER_QUERY_MAX_BYTES,
   agentPickerBlankTerminalMatches,
+  agentPickerSetupOnlyMatches,
   getAgentPickerCommandValue,
   searchAgentPickerEntries
 } from './agent-picker-search'
@@ -194,3 +195,12 @@ function entry(id: AgentCatalogEntry['id'], label: string, cmd: string): AgentCa
     homepageUrl: 'https://example.com'
   }
 }
+
+describe('agentPickerSetupOnlyMatches', () => {
+  it('matches the None option by label or setup keywords', () => {
+    expect(agentPickerSetupOnlyMatches('')).toBe(true)
+    expect(agentPickerSetupOnlyMatches('none')).toBe(true)
+    expect(agentPickerSetupOnlyMatches('setup')).toBe(true)
+    expect(agentPickerSetupOnlyMatches('claude')).toBe(false)
+  })
+})

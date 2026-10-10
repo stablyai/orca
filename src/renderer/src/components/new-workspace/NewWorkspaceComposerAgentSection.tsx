@@ -11,6 +11,8 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
   | 'onQuickAgentChange'
+  | 'quickSetupOnly'
+  | 'onQuickSetupOnlySelect'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -23,11 +25,15 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   handleSetDefaultAgent: (
     next: Parameters<NonNullable<React.ComponentProps<typeof AgentCombobox>['onSetDefault']>>[0]
   ) => void
+  setupOnlyIsDefault: boolean
+  handleSetSetupOnlyDefault: () => void
 }
 
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   onQuickAgentChange,
+  quickSetupOnly = false,
+  onQuickSetupOnlySelect,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
@@ -36,7 +42,9 @@ export function NewWorkspaceComposerAgentSection({
   onToggleAdvanced,
   visibleQuickAgents,
   defaultTuiAgent,
-  handleSetDefaultAgent
+  handleSetDefaultAgent,
+  setupOnlyIsDefault,
+  handleSetSetupOnlyDefault
 }: NewWorkspaceComposerAgentSectionProps): React.JSX.Element {
   return (
     <>
@@ -75,6 +83,16 @@ export function NewWorkspaceComposerAgentSection({
           onOpenManageAgents={onOpenAgentSettings}
           defaultAgent={defaultTuiAgent}
           onSetDefault={handleSetDefaultAgent}
+          setupOnly={
+            onQuickSetupOnlySelect
+              ? {
+                  selected: quickSetupOnly,
+                  isDefault: setupOnlyIsDefault,
+                  onSelect: onQuickSetupOnlySelect,
+                  onSetDefault: handleSetSetupOnlyDefault
+                }
+              : undefined
+          }
           allowNarrowTrigger
           triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
           onTriggerEnter={createDisabled ? undefined : onCreate}

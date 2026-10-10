@@ -83,6 +83,21 @@ export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
   )
 }
 
+export function agentPickerSetupOnlyMatches(rawQuery: string): boolean {
+  const query = getAgentPickerSearchQuery(rawQuery)
+  if (query === null) {
+    return false
+  }
+  if (!query) {
+    return true
+  }
+
+  return (
+    scoreCandidate(query, 'None', 0) !== NO_MATCH ||
+    scoreCandidate(query, 'setup script only', 0) !== NO_MATCH
+  )
+}
+
 function scoreAgent(agent: AgentCatalogEntry, query: string): number {
   return Math.min(
     scoreCandidate(query, agent.label, 0),
