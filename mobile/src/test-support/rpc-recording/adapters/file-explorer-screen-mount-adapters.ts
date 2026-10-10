@@ -1,22 +1,13 @@
 import { createElement } from 'react'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
-import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import { loadHostClientContext } from '../host-client-context-exposure'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 
 const HOST = 'host-1'
 const WORKTREE = 'wt-files'
-
-/**
- * The panel reads its client through the shared host-client context, whose handle is module-private
- * in `client-context.tsx`. Exposing it mounts the real `useHostClient` — acquire, subscribe,
- * release — over a scripted client, instead of reconstructing the hook against a prop.
- */
-export const fileExplorerScreenMountExposures: readonly OperationExposure[] = [
-  hostClientContextExposure
-]
 
 /** The mobile files tab: the directory read, and the capped legacy list it falls back to. */
 export function fileExplorerScreenMountAdapters(
