@@ -9,6 +9,13 @@ import {
 import { isRpcResponse } from './rpc-response-shape'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
+import {
+  releaseSocketTimer,
+  rememberSocketDeadlineClock,
+  startSocketDeadlineClock,
+  takeSocketDeadline
+} from './socket-deadline-clock'
+import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 
@@ -87,14 +94,8 @@ export class RpcClientSocketSession {
   }
 
   clearTimers(): void {
-    if (this.connectTimer) {
-      clearTimeout(this.connectTimer)
-      this.connectTimer = null
-    }
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer)
-      this.handshakeTimer = null
-    }
+    this.connectTimer = releaseSocketTimer(this.connectTimer)
+    this.handshakeTimer = releaseSocketTimer(this.handshakeTimer)
   }
 
   clearKey(): void {
@@ -248,58 +249,54 @@ export class RpcClientSocketSession {
   }
 
   private armConnectTimeout(): void {
-    this.connectTimer = setTimeout(() => {
-      this.connectTimer = null
-      if (
-        this.options.getCurrentSocket() === this.socket &&
-        this.socket.readyState === WEBSOCKET_CONNECTING_STATE
-      ) {
-        console.log('[net] connect-timeout fired (onopen never arrived)', {
-          attempt: this.options.getReconnectAttempt(),
-          timeoutMs: CONNECT_TIMEOUT_MS
-        })
-        this.options.emitLog(
-          'error',
-          'WebSocket connect timeout',
-          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`,
-          { code: 'connect-timeout' }
-        )
-        this.options.onForcedClose(this)
-      }
-    }, CONNECT_TIMEOUT_MS)
+    this.armSocketDeadline('connect', CONNECT_TIMEOUT_MS)
   }
 
   private armHandshakeTimeout(): void {
-    this.handshakeTimer = setTimeout(() => {
-      this.handshakeTimer = null
-      if (this.options.getCurrentSocket() !== this.socket || this.authenticated) {
+    this.armSocketDeadline('handshake', HANDSHAKE_TIMEOUT_MS)
+  }
+
+  private armSocketDeadline(kind: SocketDeadlineKind, timeoutMs: number): void {
+    const timer = setTimeout(() => {
+      const sample = takeSocketDeadline(timer)
+      if (kind === 'connect') {
+        this.connectTimer = null
+      } else {
+        this.handshakeTimer = null
+      }
+      const current = this.options.getCurrentSocket() === this.socket
+      const pending =
+        kind === 'connect'
+          ? current && this.socket.readyState === WEBSOCKET_CONNECTING_STATE
+          : current && !this.authenticated
+      if (!pending) {
         return
       }
-      console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
-        timeoutMs: HANDSHAKE_TIMEOUT_MS
-      })
-      this.options.emitLog(
-        'error',
-        'Handshake timeout',
-        `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`,
-        { code: 'handshake-timeout' }
+      reportSocketDeadline(
+        {
+          kind,
+          ...sample,
+          timeoutMs,
+          ...(kind === 'connect' ? { attempt: this.options.getReconnectAttempt() } : {})
+        },
+        this.options.emitLog,
+        () => this.options.onForcedClose(this)
       )
-      this.options.onForcedClose(this)
-    }, HANDSHAKE_TIMEOUT_MS)
+    }, timeoutMs)
+    rememberSocketDeadlineClock(timer, startSocketDeadlineClock())
+    if (kind === 'connect') {
+      this.connectTimer = timer
+    } else {
+      this.handshakeTimer = timer
+    }
   }
 
   private clearConnectTimer(): void {
-    if (this.connectTimer) {
-      clearTimeout(this.connectTimer)
-      this.connectTimer = null
-    }
+    this.connectTimer = releaseSocketTimer(this.connectTimer)
   }
 
   private clearHandshakeTimer(): void {
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer)
-      this.handshakeTimer = null
-    }
+    this.handshakeTimer = releaseSocketTimer(this.handshakeTimer)
   }
 
   private isStale(eventName: string): boolean {

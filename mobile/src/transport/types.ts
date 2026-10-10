@@ -54,6 +54,7 @@ export type ConnectionDiagnosticCode =
   | 'network-changed'
   | 'connect-timeout'
   | 'handshake-timeout'
+  | 'suspended-dial'
   | 'authentication-rejected'
   | 'socket-closed'
   | 'liveness-timeout'
