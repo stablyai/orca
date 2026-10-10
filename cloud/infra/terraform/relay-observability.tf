@@ -1539,3 +1539,71 @@ resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature"
 
   depends_on = [google_logging_metric.relay_assignment_lease_shadow]
 }
+
+# relay-control-flag-channel.ts logs one line per change of cause, not per failed poll, and nothing
+# on recovery: a cell stuck unreadable writes exactly one line, so any count is the signal.
+resource "google_logging_metric" "relay_control_flags_unreadable" {
+  project     = var.project_id
+  name        = "orca_relay_control_flags_unreadable"
+  description = "Cells that started failing to read their switch file (cells/<cell>.json in the relay-control bucket). The cell keeps its last applied switches."
+  filter      = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_control_flags_unreadable\""
+  label_extractors = {
+    cell_id = "REGEXP_EXTRACT(jsonPayload.object, \"cells/([^.]+)\")"
+    failure = "EXTRACT(jsonPayload.failure)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+    labels {
+      key         = "failure"
+      value_type  = "STRING"
+      description = "metadata, not-found, http, network, malformed, or void (the object failed the parser)."
+    }
+  }
+}
+
+# Console only until the step-3/5 roll finishes: a single storage 5xx on one cell also writes a line.
+resource "google_monitoring_alert_policy" "relay_control_flags_unreadable" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell cannot read its switch file"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = []
+
+  conditions {
+    display_name = "Switch-file read failures on a cell"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_control_flags_unreadable\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A cell logged `orca_relay_control_flags_unreadable`: its read of `cells/<cell>.json` in `<project>-relay-control` failed, and it keeps its last applied switches (defaults, all off, if it never read one). The line is written once per change of cause and nothing marks recovery, so this incident closing does not mean the cell recovered: compare the object's generation with the cell's last `orca_relay_cell_flags_applied` line. `failure` says why: `not-found` (no object for this cell), `metadata` or `http` (token, IAM, or storage), `network`, `malformed` or `void` (the object is unparseable or failed the schema; fix the object). Many cells at once points to the bucket or its IAM. A one-off `http` or `network` that the next poll cleared needs nothing."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_control_flags_unreadable]
+}
