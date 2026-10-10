@@ -1,5 +1,6 @@
 import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { classifyExternalAppUrl } from '../../../../shared/external-app-url'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'
 import {
@@ -149,6 +150,16 @@ export function handleOscLink(
         rawText
       )
     )
+  }
+
+  // Why: OSC custom handoff matches WebLinks: real Mod/Ctrl only, not plain action (#13225).
+  const classified = classifyExternalAppUrl(rawText)
+  if (classified.ok && classified.kind === 'custom') {
+    if (!isTerminalLinkDirectActivation(event)) {
+      return false
+    }
+    void Promise.resolve(window.api.shell.openUrl(classified.url)).catch(() => undefined)
+    return finish(true)
   }
   return false
 }

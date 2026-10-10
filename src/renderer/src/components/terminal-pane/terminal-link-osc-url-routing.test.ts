@@ -207,6 +207,59 @@ describe('handleOscLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('opens custom app schemes through shell after an owned gesture', () => {
+    setPlatform('Macintosh')
+
+    expect(
+      handleOscLink('obsidian://open?vault=notes', { metaKey: true, ctrlKey: false }, deps)
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledWith('obsidian://open?vault=notes')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('does not hand off a custom OSC URL on a plain click', () => {
+    setPlatform('Macintosh')
+
+    expect(
+      handleOscLink('obsidian://open?vault=notes', { metaKey: false, ctrlKey: false }, deps)
+    ).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not hand off a custom OSC URL on the wrong platform modifier', () => {
+    setPlatform('Macintosh')
+
+    expect(
+      handleOscLink('obsidian://open?vault=notes', { metaKey: false, ctrlKey: true }, deps)
+    ).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('opens custom OSC schemes with Ctrl+click on non-Mac', () => {
+    setPlatform('Windows')
+
+    expect(
+      handleOscLink('obsidian://open?vault=notes', { metaKey: false, ctrlKey: true }, deps)
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledWith('obsidian://open?vault=notes')
+  })
+
+  it('does not open custom app schemes without an owned gesture', () => {
+    setPlatform('Macintosh')
+
+    expect(handleOscLink('obsidian://open?vault=notes', undefined, deps)).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not open denied schemes from OSC 8', () => {
+    setPlatform('Macintosh')
+
+    expect(handleOscLink('javascript:alert(1)', { metaKey: true, ctrlKey: false }, deps)).toBe(
+      false
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
   it('falls back to the system browser when no worktree owns the terminal pane', () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: true }
