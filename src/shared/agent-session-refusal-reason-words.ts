@@ -75,6 +75,7 @@ const REASON_WORDS = {
     journalWriteFailed: causeWords('recordFailed', 'retry'),
     // Any other write reads the code's words, as a client before this reason does.
     stopFailed: { fact: 'stopFailed', action: 'retry', step: 'tryAgain', writes: ['stop'] },
+    cancelNotSaved: causeWords('cancelNotSaved', 'retry'),
     attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',

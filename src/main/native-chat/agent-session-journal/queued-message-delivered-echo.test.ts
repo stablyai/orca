@@ -103,13 +103,7 @@ async function handOffAndReject(
       fence: 0
     })
   } else {
-    // A Stop withdraws the queued hand-off, which returns its card.
-    await journal.stops.accept({
-      event: { reason: 'user-stop' },
-      fence: 0,
-      hostInstance: 'p',
-      words: {}
-    })
+    await journal.rejectQueuedSubmissions(0, STOP_WITHDRAWAL)
   }
   expect(journal.queuedMessages.get('draft-1')).toMatchObject({
     state: 'waiting',

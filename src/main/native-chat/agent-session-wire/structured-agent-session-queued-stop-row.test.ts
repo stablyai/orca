@@ -134,15 +134,9 @@ describe("Stop's event", () => {
     await expectHeld('stopped', first)
     const person = rig.send('the person asks for a turn')
     await person.result
-    // A later Stop supersedes. Nothing runs ahead of the send made before it, so that send is what
-    // this Stop stops: withdrawn, as on a Stop of the turn it would have opened, and lifting nothing.
+    // A later Stop supersedes: the send made before it no longer lifts anything.
     await rig.stop()
-    expect(await rig.submission(person.id)).toMatchObject({
-      dispatchState: 'rejected',
-      rejection: { kind: 'cancelled' }
-    })
-    expect((await rig.submission(person.id))?.keptAsQueuedMessageId).toBeUndefined()
-    expect(await rig.drafts()).toEqual([{ messageId: first, state: 'waiting' }])
+    await rig.settleAccepted(person.id, 'person')
     await expectHeld('stopped', first)
     // Orchestration mail sent after the second Stop: once accepted, the queue carries on.
     const mail = await mailTurn()

@@ -342,7 +342,7 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('refuses a strict prompt interruption that throws once saved, the same on a retry, and never retries it', async () => {
+  it('answers a strict prompt interruption that throws once saved from its receipt, the same on a retry, and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
@@ -355,19 +355,12 @@ describe('cancel', () => {
       ...fields
     }
 
-    // Saved before the interrupt, which then threw: the Stop did not take effect, its receipt says
-    // so, and the retry is answered from it without reaching the provider again.
+    // Saved before the interrupt, which then threw: the answer is its receipt, never rewritten, and
+    // the retry is answered from it without reaching the provider again. The card stays pending.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const refused = {
-      ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        details: { reason: 'stopFailed', agent: 'codex' },
-        message: "Couldn't stop Codex. Try again."
-      }
-    }
-    expect(await host.cancel(CALLER, params)).toMatchObject(refused)
-    expect(await host.cancel(CALLER, params)).toMatchObject(refused)
+    const answered = await host.cancel(CALLER, params)
+    expect(answered).toMatchObject({ ok: true })
+    expect(await host.cancel(CALLER, params)).toEqual({ ...answered, replayed: true })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
     expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
       ok: true,

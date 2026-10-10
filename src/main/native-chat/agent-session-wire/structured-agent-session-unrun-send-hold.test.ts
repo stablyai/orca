@@ -2,7 +2,7 @@
 // nothing until it proves its start. So when the chat ends then, the message is settled as a
 // queued one is for the same end (`journal-unsent-send-hold.ts`): a quit or a close keeps a
 // person's words as an ordinary card that waits for the chat's next turn, a person's Stop
-// withdraws it and holds those queued behind it. Against the real host, store and journal, with an agent that stays starting.
+// withdraws it. Against the real host, store and journal, with an agent that stays starting.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -118,7 +118,7 @@ describe('a message held behind a start that never answered, then the chat ends'
     }
   )
 
-  it("is withdrawn by a person's Stop, as the message it stops, and kept as no card", async () => {
+  it("is withdrawn by a person's Stop, as a queued one is, and kept as no card", async () => {
     const id = await heldBehindHungStart('stopped')
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -130,25 +130,5 @@ describe('a message held behind a start that never answered, then the chat ends'
       })
     )
     expect(await rig.drafts()).toEqual([])
-  })
-
-  it('holds the messages queued behind it as cards the Stop pauses', async () => {
-    const id = await heldBehindHungStart('stopped')
-    const behind = rig.send('queued behind it')
-    await behind.result
-
-    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-
-    expect(await rig.submission(id)).toMatchObject({
-      dispatchState: 'rejected',
-      ...words('cancelled')
-    })
-    expect(await rig.submission(behind.id)).toMatchObject({
-      dispatchState: 'rejected',
-      rejection: { kind: 'returnedToQueue' },
-      keptAsQueuedMessageId: behind.id
-    })
-    expect(await rig.drafts()).toEqual([{ messageId: behind.id, ...KEPT }])
-    expect(derivedPauses()).toEqual(['stopped'])
   })
 })

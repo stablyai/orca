@@ -1,6 +1,6 @@
 // A Stop's event and the queue. A Stop never withdraws a draft and no text ever
-// travels back over the wire: it is accepted with ONE Stop event (`JournalStopEvent`), the sends
-// it holds becoming cards in the same transaction (`journal-stop-acceptance.ts`), and the queue's
+// travels back over the wire: it is accepted with ONE Stop event (`JournalStopEvent`), withdrawing
+// every queued send in the same transaction (`journal-stop-acceptance.ts`), and the queue's
 // pause is derived from that event (`queued-message-pause.ts`) until any turn is sent after it and
 // accepted, or the person Resumes. The cards stay published, and Send-now sends one card without
 // lifting the pause for the rest until that card's turn starts.

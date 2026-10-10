@@ -54,7 +54,7 @@ function dispatchRejectionWasTransportWriteFailure(reason: string | null | undef
  * What a rejection means for the chat, whatever wrote it:
  * - `withdrawn`: the user's Stop took it back; nothing failed.
  * - `undelivered`: accepted, then never handed over (Orca restarted, the chat closed, the provider
- *   never took it or stopped first, or a Stop kept it as a held card).
+ *   never took it or stopped first).
  * - `startFailed`: the agent it waited on did not start.
  * - `content`: the provider, or Orca's check of the message, refused this payload.
  * - `transport`: Orca could not hand it over.
@@ -69,8 +69,7 @@ export type DispatchRejectionCategory =
 export type DispatchRejectionClassification = {
   category: DispatchRejectionCategory
   /** `failure` when the chat reads Failed; null only when no one failed the user: a withdrawal, a
-   *  host restart, a chat close, a Stop that kept it as a card, or a send the provider never
-   *  received after a restart. */
+   *  host restart, a chat close, or a send the provider never received after a restart. */
   verdict: 'failure' | null
   /** The situation, when the row carried one or a legacy marker names it; absent for a legacy
    *  sentence, whose words are all a reader has, and for a fact this build cannot place. */
@@ -80,7 +79,6 @@ export type DispatchRejectionClassification = {
 const KIND_CATEGORY = {
   cancelled: 'withdrawn',
   hostRestarted: 'undelivered',
-  returnedToQueue: 'undelivered',
   chatClosed: 'undelivered',
   notDelivered: 'undelivered',
   providerExited: 'undelivered',
@@ -111,7 +109,6 @@ const KIND_CATEGORY = {
 const KIND_VERDICT = {
   cancelled: null,
   hostRestarted: null,
-  returnedToQueue: null,
   chatClosed: null,
   notDelivered: null,
   providerExited: 'failure',

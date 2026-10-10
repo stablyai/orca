@@ -1,6 +1,6 @@
 // A Stop accepts through its own command receipt, saved before it acts: its target is captured as
-// it is accepted, the sends queued behind what it stops are held as paused cards in the same
-// transaction, and a retry of its id is answered from the receipt without resolving a target again.
+// it is accepted, the sends still queued are withdrawn in the same transaction, and a retry of its
+// id is answered from the receipt without resolving a target again.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -121,7 +121,7 @@ describe('a retry of the same id', () => {
     expect(stopEvents()).toHaveLength(1)
   })
 
-  it('after a newer turn started interrupts nothing and holds nothing', async () => {
+  it('after a newer turn started interrupts nothing and withdraws nothing', async () => {
     const working = await rig.workingSend()
     await turnRow('turn-1', 'running')
     const id = opId()
@@ -182,7 +182,27 @@ describe('what a Stop captures as it is accepted', () => {
     expect(stopEvents()).toEqual([])
   })
 
-  it('a Stop naming a turn already over holds none of what a newer turn queued', async () => {
+  // A rewind removes the turn's row, so the journal no longer shows it: it is still over, never a
+  // turn that may be opening while the next send works.
+  it('a Stop naming a turn a rewind removed is late while the next send opens its turn', async () => {
+    await rig.workingSend()
+    await turnRow('turn-1', 'running')
+    await turnRow('turn-1', 'interrupted')
+    await journal().appendTombstone(
+      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 900 },
+      { fence: 1 }
+    )
+    expect(journal().activeTurnId()).toBeNull()
+
+    expect(await namedStop('turn-1')).toMatchObject({
+      ok: true,
+      value: { turnId: 'turn-1', cancelled: false }
+    })
+    expect(rig.cancelTurn).not.toHaveBeenCalled()
+    expect(stopEvents()).toEqual([])
+  })
+
+  it('a Stop naming a turn already over withdraws none of what a newer turn queued', async () => {
     await rig.workingSend()
     await turnRow('turn-new', 'running')
     const behind = await queuedSend('queued behind the newer turn')
@@ -196,32 +216,25 @@ describe('what a Stop captures as it is accepted', () => {
   })
 })
 
-describe('the sends a Stop holds', () => {
-  it('holds each queued send as a paused card visible to every client, which Resume sends', async () => {
+describe('the sends a Stop withdraws', () => {
+  it('withdraws each queued send in the transaction that writes its event', async () => {
     const working = await rig.workingSend()
     const queued = await queuedSend('queued behind the turn')
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
-    const kept = await rig.submission(queued)
-    expect(kept).toMatchObject({
+    expect(await rig.submission(queued)).toMatchObject({
       dispatchState: 'rejected',
-      rejection: { kind: 'returnedToQueue' },
-      keptAsQueuedMessageId: queued
+      rejection: { kind: 'cancelled' }
     })
-    // Held in the Stop's own transaction, behind its event.
-    expect(stopEvents()[0]?.sequence).toBeGreaterThan(kept?.acceptedSequence ?? 0)
-    expect(await rig.drafts()).toEqual([{ messageId: queued, state: 'waiting' }])
+    expect((await rig.submission(queued))?.keptAsQueuedMessageId).toBeUndefined()
+    expect(await rig.drafts()).toEqual([])
     await rig.settleAccepted(working, 'stopped')
     await new Promise((resolve) => setTimeout(resolve, 200))
     expect(await rig.handoff(queued)).toBeUndefined()
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-
-    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-    await eventually(async () => expect((await rig.handoff(queued))?.handedOverAt).toBeDefined())
   })
 
-  it('does not hold a send that arrives after it: that one runs once the Stop lands', async () => {
+  it('does not withdraw a send that arrives after it: that one runs once the Stop lands', async () => {
     const working = await rig.workingSend()
     const queued = await queuedSend('queued before the stop')
     await rig.stop()
@@ -234,13 +247,12 @@ describe('the sends a Stop holds', () => {
       expect((await rig.submission(after.id))?.handedOverAt).toBeDefined()
     )
     expect((await rig.submission(after.id))?.keptAsQueuedMessageId).toBeUndefined()
-    // The card the Stop held waits until that send is accepted.
-    expect(await rig.handoff(queued)).toBeUndefined()
+    expect(await rig.submission(queued)).toMatchObject({ rejection: { kind: 'cancelled' } })
   })
 })
 
 describe('a Stop that cannot be saved', () => {
-  it('refuses in plain words and interrupts nothing, holding nothing', async () => {
+  it('refuses in plain words and interrupts nothing, withdrawing nothing', async () => {
     await rig.workingSend()
     const queued = await queuedSend('queued behind the turn')
     const db = openTestJournalHostDatabase(rig.root).db

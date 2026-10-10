@@ -140,7 +140,7 @@ type PerformCancelInput = {
   /** Hands the child's end to the Stop's next serialized step, for a provider whose Stop ends
    *  its session. */
   endSession?: (windDown: StructuredAgentSessionStopWindDown) => void
-  /** Whether this Stop held any queued message; awaited only after the interrupt. */
+  /** Whether this Stop withdrew any queued message; awaited only after the interrupt. */
   withdrewQueued?: Promise<boolean>
   /** The session's child records: a background Stop reaches the tasks they offer a stop. */
   childWork?: () => readonly AgentChildWorkView[] | undefined

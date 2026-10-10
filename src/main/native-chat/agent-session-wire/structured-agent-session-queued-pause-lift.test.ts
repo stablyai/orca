@@ -500,11 +500,8 @@ describe('a failed Stop', () => {
       })
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      // Saved before the interrupt; the failure after it says the Stop did not take effect.
-      expect(await rig.stop()).toMatchObject({
-        ok: false,
-        refusal: { details: { reason: 'stopFailed' } }
-      })
+      // Saved before the interrupt, so the answer is its receipt; the failure after it is logged.
+      expect(await rig.stop()).toMatchObject({ ok: true })
     } finally {
       failing.mockRestore()
       warned.mockRestore()

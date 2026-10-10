@@ -4,7 +4,7 @@
 // instead of waiting behind a provider that may never answer.
 
 export class StructuredAgentSessionAcquireAborts {
-  private readonly controllers = new Map<string, AbortController>()
+  private readonly inFlight = new Map<string, AbortController>()
   /** Set by quit: the host is going away, so an attach that begins after it starts aborted. */
   private quitReason: Error | null = null
 
@@ -14,33 +14,26 @@ export class StructuredAgentSessionAcquireAborts {
     if (this.quitReason) {
       controller.abort(this.quitReason)
     }
-    this.controllers.set(sessionId, controller)
+    this.inFlight.set(sessionId, controller)
     return {
       signal: controller.signal,
       end: () => {
-        if (this.controllers.get(sessionId) === controller) {
-          this.controllers.delete(sessionId)
+        if (this.inFlight.get(sessionId) === controller) {
+          this.inFlight.delete(sessionId)
         }
       }
     }
   }
 
-  /** Whether the session's queue is waiting on a provider now. */
-  inFlight(sessionId: string): boolean {
-    return this.controllers.has(sessionId)
-  }
-
-  /** Whether it aborted a wait; a no-op when the session has nothing in flight. */
-  abort(sessionId: string, reason: string | Error): boolean {
-    const controller = this.controllers.get(sessionId)
-    controller?.abort(typeof reason === 'string' ? new Error(reason) : reason)
-    return controller !== undefined
+  /** A no-op when the session has nothing in flight. */
+  abort(sessionId: string, reason: string | Error): void {
+    this.inFlight.get(sessionId)?.abort(typeof reason === 'string' ? new Error(reason) : reason)
   }
 
   /** Quit: every start under way stops, and so does any the attach drain still runs. */
   abortAll(reason: string): void {
     this.quitReason ??= new Error(reason)
-    for (const controller of this.controllers.values()) {
+    for (const controller of this.inFlight.values()) {
       controller.abort(this.quitReason)
     }
   }

@@ -1,6 +1,5 @@
-// What a person's Stop settles as it is accepted: the send it stops is withdrawn, as the turn it
-// would have opened; the sends queued behind it become held cards; a send no card can carry is
-// withdrawn in words that say so. A start the Stop ended settles what it was handed the same way.
+// A person's Stop accepted in one transaction: it withdraws every queued send with exactly the rows
+// the chat's queued withdrawal writes, then its Stop event, and nothing it has not handed over.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,17 +11,15 @@ import {
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
-import { readAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import type { AgentSessionJournal } from './journal-store'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
-import { holdUnsentSends } from './journal-unsent-send-hold'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-stop',
@@ -31,10 +28,9 @@ const IDENTITY: AgentSessionJournalIdentity = {
   agent: 'codex',
   providerHandle: claudeProviderHandle('native-1', null)
 }
-const WORDS = { agentName: 'Codex' }
-/** What a withdrawn send records: the marker released clients hide, and the fact newer ones word. */
-const WITHDRAWN = { reason: DISPATCH_REJECTED_CANCELLED, rejection: { kind: 'cancelled' } }
-const RETURNED = 'Codex was stopped before it read this message, so it went back to the queue.'
+const WITHDRAWAL = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
+  surface: 'rejection'
+})
 
 let root: string
 let clock = 1_000
@@ -53,30 +49,19 @@ function text(value: string): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text: value }] }
 }
 
-const IMAGE: AgentJournalMessageItem = {
-  kind: 'message',
-  role: 'user',
-  blocks: [
-    { type: 'text', text: 'look' },
-    { type: 'image-ref', path: '/tmp/attachment.png' }
-  ]
-}
-
-async function open(): Promise<AgentSessionJournal> {
+async function open(directory: string): Promise<AgentSessionJournal> {
+  clock = 1_000
   return journals.open({
     identity: IDENTITY,
-    stateDirectory: root,
+    stateDirectory: join(root, directory),
     now: () => (clock += 1),
     mintEpoch: () => 'epoch-1'
   })
 }
 
 /** A person's send, accepted and queued. */
-async function accept(
-  journal: AgentSessionJournal,
-  id: string,
-  body = text(`text of ${id}`)
-): Promise<void> {
+async function accept(journal: AgentSessionJournal, id: string): Promise<void> {
+  const body = text(`text of ${id}`)
   await journal.appendSubmission({
     clientMessageId: id,
     payloadFingerprint: structuredAgentSessionPayloadFingerprint({
@@ -92,98 +77,73 @@ async function accept(
   })
 }
 
-function handOver(journal: AgentSessionJournal, id: string) {
-  return journal.resolveDispatch({
-    clientMessageId: id,
+/** One send handed over, then two queued behind it. */
+async function queuedBehindRunning(directory: string): Promise<AgentSessionJournal> {
+  const journal = await open(directory)
+  await accept(journal, 'running')
+  await journal.resolveDispatch({
+    clientMessageId: 'running',
     state: 'pending',
     fence: 0,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-}
-
-function stop(journal: AgentSessionJournal) {
-  return journal.stops.accept({
-    event: { reason: 'user-stop' },
-    fence: 0,
-    hostInstance: 'host-instance',
-    words: WORDS
-  })
-}
-
-it('withdraws the send it stops when nothing runs ahead of it, and holds those behind it', async () => {
-  const journal = await open()
   await accept(journal, 'first')
   await accept(journal, 'second')
+  return journal
+}
 
-  expect((await stop(journal)).settled).toEqual(['first', 'second'])
-
-  expect(journal.submission('first')).toMatchObject({ dispatchState: 'rejected', ...WITHDRAWN })
-  expect(journal.submission('first')).not.toHaveProperty('keptAsQueuedMessageId')
-  expect(journal.submission('second')).toMatchObject({
-    dispatchState: 'rejected',
-    reason: RETURNED,
-    rejection: { kind: 'returnedToQueue' },
-    keptAsQueuedMessageId: 'second'
-  })
-  expect(journal.queuedMessages.list().map((card) => card.messageId)).toEqual(['second'])
-  expect(journal.stopMarks.latest()).not.toBeNull()
-})
-
-it('holds every queued send behind a send already handed over', async () => {
-  const journal = await open()
-  await accept(journal, 'running')
-  await handOver(journal, 'running')
-  await accept(journal, 'behind')
-
-  expect((await stop(journal)).settled).toEqual(['behind'])
-
-  expect(journal.submission('running')).toMatchObject({ dispatchState: 'pending' })
-  expect(journal.submission('behind')).toMatchObject({
-    rejection: { kind: 'returnedToQueue' },
-    keptAsQueuedMessageId: 'behind'
-  })
-})
-
-// TEMPORARY until queued cards hold attachments: the words say it was withdrawn, never queued.
-it('withdraws a send behind it that no card can carry, in words that say so', async () => {
-  const journal = await open()
-  await accept(journal, 'running')
-  await handOver(journal, 'running')
-  await accept(journal, 'image', IMAGE)
-
-  await stop(journal)
-
-  const image = journal.submission('image')
-  expect(image).toMatchObject({ dispatchState: 'rejected', ...WITHDRAWN })
-  expect(image).not.toHaveProperty('keptAsQueuedMessageId')
-  expect(journal.queuedMessages.list()).toEqual([])
-  // Every client words it from the fact: not sent, and nothing says it waits to run.
-  const fact = readAgentSessionFailureFact(image?.rejection)
-  expect(fact && agentSessionFailureSentence(fact, 'rejection', WORDS)).toBe(
-    'This message was withdrawn before the agent started it.'
-  )
-})
-
-it('leaves the first send a stopped start was handed to its end, and holds the rest', async () => {
-  const journal = await open()
-  for (const id of ['first', 'second', 'image']) {
-    await accept(journal, id, id === 'image' ? IMAGE : undefined)
-    await handOver(journal, id)
+function rowsAfter(journal: AgentSessionJournal, sequence: number) {
+  const since = journal.readSince({ epoch: journal.epoch, sequence })
+  if (!since.ok) {
+    throw new Error('expected the rows readable')
   }
+  return since.rows
+}
 
-  await holdUnsentSends(journal, {
+it("withdraws every queued send with the queued withdrawal's own rows, then writes its event", async () => {
+  const withdrawn = await queuedBehindRunning('withdrawal')
+  const before = withdrawn.cursor().sequence
+  expect(await withdrawn.rejectQueuedSubmissions(0, WITHDRAWAL)).toEqual(['first', 'second'])
+  const withdrawalRows = rowsAfter(withdrawn, before)
+
+  const stopped = await queuedBehindRunning('stop')
+  const accepted = await stopped.stops.accept({
+    event: { reason: 'user-stop' },
     fence: 0,
-    hostInstance: 'host-instance',
-    hold: { cause: 'userStop', words: WORDS },
-    unrun: true
+    withdrawal: WITHDRAWAL
+  })
+  const stopRows = rowsAfter(stopped, before)
+
+  expect(accepted.withdrawn).toEqual(['first', 'second'])
+  // The same rows in kind, fact and words, all but where and when they landed.
+  const shape = ({ seq: _seq, ts: _ts, ...row }: { seq: number; ts: number }) => row
+  expect(stopRows.slice(0, -1).map(shape)).toEqual(withdrawalRows.map(shape))
+  expect(stopRows.at(-1)).toMatchObject({ kind: 'tombstone', stopEvent: { reason: 'user-stop' } })
+  expect(accepted.mark.sequence).toBe(stopRows.at(-1)?.seq)
+  // One transaction stamps them alike; the withdrawal wrote each on its own.
+  const settled = (journal: AgentSessionJournal, id: string) => ({
+    ...journal.submission(id),
+    resolvedAt: undefined
+  })
+  for (const id of ['first', 'second']) {
+    expect(settled(stopped, id)).toEqual(settled(withdrawn, id))
+  }
+  // A send already handed over is not the queue's to withdraw.
+  expect(stopped.submission('running')).toMatchObject({ dispatchState: 'pending' })
+})
+
+it('writes only its event with nothing queued', async () => {
+  const journal = await open('empty')
+  const before = journal.cursor().sequence
+
+  const accepted = await journal.stops.accept({
+    event: { reason: 'user-stop' },
+    fence: 0,
+    withdrawal: WITHDRAWAL
   })
 
-  // The child's end withdraws the one the Stop stopped (`unrunRejection`).
-  expect(journal.submission('first')).toMatchObject({ dispatchState: 'pending' })
-  expect(journal.submission('second')).toMatchObject({
-    reason: RETURNED,
-    keptAsQueuedMessageId: 'second'
-  })
-  expect(journal.submission('image')).toMatchObject(WITHDRAWN)
-  expect(journal.queuedMessages.list().map((card) => card.messageId)).toEqual(['second'])
+  expect(accepted.withdrawn).toEqual([])
+  expect(rowsAfter(journal, before)).toEqual([
+    expect.objectContaining({ kind: 'tombstone', stopEvent: expect.anything() })
+  ])
 })

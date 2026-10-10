@@ -1,8 +1,7 @@
 // A Stop accepts through its own command receipt BEFORE it acts: the receipt, and for the chat's
 // Stop its event and every send it settles, commit first, and only then does it interrupt or end
-// anything. A Stop whose acceptance cannot be saved acts on nothing and says so; one saved that
-// then cannot take effect says so too, and its receipt records that. A retry of its id is answered
-// from the receipt and never resolves a target again.
+// anything. A Stop whose acceptance cannot be saved acts on nothing and says so. A retry of its id
+// is answered from the receipt and never resolves a target again.
 
 import { agentSessionFailureSentence } from '../../../shared/agent-session-failure-words'
 import { refuse, type AgentSessionCancelResult } from '../../../shared/agent-session-wire'
@@ -11,6 +10,7 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
+import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session-write-notice-copy'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import {
@@ -32,8 +32,8 @@ import type {
 } from './structured-agent-session-turns'
 
 /** The receipt a Stop accepts with: the row it wrote (its Stop event, or a card's dismissal), else
- *  that it was accepted. A Stop that acted on nothing records the no-op it answered; one that could
- *  not take effect records its refusal. */
+ *  that it was accepted. A Stop that acted on nothing records the no-op it answered. Once committed
+ *  it is never rewritten: a failure after it is answered from it. */
 export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {
   result: (row) => (row ? journalRowReceiptResult(row, 'tombstone', 'item') : { kind: 'stop' }),
   unwritten: (value) => ({
@@ -43,11 +43,10 @@ export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResu
       cancelled: false,
       ...(value.turnId !== undefined ? { turnId: value.turnId } : {})
     }
-  }),
-  refusedAfterAcceptance: (ctx) => stopFailedRefusal(ctx)
+  })
 }
 
-/** What a Stop that did not take effect answers: plain words naming the agent, and to try again. */
+/** What a Stop that could not be saved answers: plain words naming the agent, and to try again. */
 export function stopFailedRefusal(
   ctx: Pick<AgentSessionTurnContext, 'agent'>
 ): AgentSessionWireRefusal {
@@ -101,11 +100,21 @@ function stopReceipt(ctx: AgentSessionTurnContext): AgentSessionOperationReceipt
   return ctx.operationReceipt
 }
 
+/** What a card's Cancel whose dismissal could not be saved answers: words about the card. */
+export function cardCancelNotSavedRefusal(): AgentSessionWireRefusal {
+  return refuse(
+    'agent_session_operation_invalid',
+    { reason: 'cancelNotSaved' },
+    AGENT_SESSION_WRITE_NOTICE_COPY.cancelNotSaved
+  )
+}
+
 /** Nothing was saved, so nothing is interrupted: the agent keeps running and the person is told
  *  to try again. A receipt another call committed first answers this one instead. */
 export function stopNotSaved(
   ctx: Pick<AgentSessionTurnContext, 'agent' | 'logger' | 'sessionId'>,
-  error: unknown
+  error: unknown,
+  refusal: () => AgentSessionWireRefusal = () => stopFailedRefusal(ctx)
 ): Accepted<never> {
   if (error instanceof CommandReceiptExistsError) {
     throw error
@@ -123,5 +132,5 @@ export function stopNotSaved(
   ) {
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
-  return { ok: false, refusal: stopFailedRefusal(ctx) }
+  return { ok: false, refusal: refusal() }
 }

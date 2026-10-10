@@ -34,8 +34,10 @@ import {
   cancelPlan,
   promptPlan,
   sendPlan,
-  setOptionPlan
+  setOptionPlan,
+  type MutationPlan
 } from './structured-agent-session-mutation-plans'
+import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
@@ -111,21 +113,12 @@ export function cancelStructuredAgentSessionTurn(
   }
   const plan = cancelPlan(params)
   const { prompt } = params
-  const { sessionId } = params.envelope
+  if (!prompt && params.turnId === undefined) {
+    abortAcquireForStop(context, caller, params.envelope, plan)
+  }
   // A card's Cancel stops whatever the chat has in flight, as the Stop button does; it reaches the
   // Stop only for a card the live turn raised (`cancelStructuredAgentSessionPrompt`).
-  const stopped = prompt
-    ? { envelope: params.envelope }
-    : {
-        ...params,
-        // A Stop must not wait behind a start the provider may never answer: it is saved outside
-        // the lane, then stops that start. One naming a turn is about a child already gone.
-        ...(params.turnId === undefined &&
-        context.acquireAborts.inFlight(sessionId) &&
-        context.sessions.has(sessionId)
-          ? { acquiring: true as const }
-          : {})
-      }
+  const stopped = prompt ? { envelope: params.envelope } : params
   return mutateWithChatStop(context, caller, stopped, plan, (ctx, stop) =>
     prompt
       ? cancelStructuredAgentSessionPrompt(
@@ -135,6 +128,31 @@ export function cancelStructuredAgentSessionTurn(
         )
       : stop().then(({ outcome }) => outcome)
   )
+}
+
+/** A Stop must not wait behind a start the provider may never answer: the start the session's
+ *  queue is waiting on stops now, as a close's does, and the Stop's own step then finds no child.
+ *  Only a Stop admission would run now; one naming a turn is about a child already gone, so it
+ *  leaves a newer start alone. */
+function abortAcquireForStop(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope,
+  plan: MutationPlan<AgentSessionCancelResult>
+): void {
+  const { store } = context.deps
+  if (
+    !agentSessionMutationAdmitsNow({
+      store,
+      callerKey: caller.callerKey,
+      envelope,
+      plan,
+      now: context.now
+    })
+  ) {
+    return
+  }
+  context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }
 
 export function respondToStructuredAgentSessionPrompt(

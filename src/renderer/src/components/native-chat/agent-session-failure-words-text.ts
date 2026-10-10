@@ -169,12 +169,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
     chatClosed: () => translate('components.native-chat.failureWords.chatClosed', COPY.chatClosed),
     hostRestarted: () =>
       translate('components.native-chat.failureWords.hostRestarted', COPY.hostRestarted),
-    returnedToQueue: (values) =>
-      translate(
-        'components.native-chat.failureWords.returnedToQueue',
-        COPY.returnedToQueue,
-        values
-      ),
     notDelivered: () =>
       translate('components.native-chat.failureWords.notDelivered', COPY.notDelivered),
     notDeliveredSendAgain: () =>

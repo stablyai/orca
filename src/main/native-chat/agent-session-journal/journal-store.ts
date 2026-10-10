@@ -31,7 +31,8 @@ import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
-  rejectJournalPendingSubmissions
+  rejectJournalPendingSubmissions,
+  rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
@@ -368,6 +369,13 @@ export class AgentSessionJournal {
   ): Promise<string[]> {
     return rejectJournalPendingSubmissions(this, fence, rejection)
   }
+
+  /** Reject sends accepted but never handed over, optionally only those `which` names. */
+  rejectQueuedSubmissions = (
+    fence: number,
+    rejection: AgentJournalDispatchRejection,
+    which?: (submission: AgentJournalSubmission) => boolean
+  ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
   /** The escape hatch for a forked handle and an unreadable schema. It invalidates every cursor;
    *  clients reload. */

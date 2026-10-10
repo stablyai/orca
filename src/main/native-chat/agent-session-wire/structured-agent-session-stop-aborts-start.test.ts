@@ -1,8 +1,7 @@
-// A Stop the host admits aborts the start the queue is waiting on, for any agent, but only once the
-// Stop is saved: it is admitted outside the queue, saved, then aborts the start. The message that
-// start was for is what the Stop stops, so it is withdrawn and never sends; a message sent after the
-// Stop is no part of the aborted start, so it gets a start of its own rather than that start's
-// refusal. A Stop that cannot be saved leaves the start alone.
+// A Stop the host admits aborts the start the queue is waiting on as it arrives, for any agent, then
+// captures what is left once on the lane and saves it before acting. The message that start was for
+// is withdrawn with the rest of the queue and never sends; a message sent after the Stop is no part
+// of the aborted start, so it gets a start of its own rather than that start's refusal.
 
 import { afterEach, expect, it, vi } from 'vitest'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
@@ -100,10 +99,19 @@ it('never sends the message it stopped, even after the correction the person sen
   expect(rig.dispatch).toHaveBeenCalledTimes(1)
 })
 
-it('aborts the start only once it is saved, and records the Stop, not a no-op', async () => {
+it('aborts the start the moment the Stop arrives, before its save on the lane', async () => {
   const id = hostTestOperationId()
   let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
   const eventsAtAbort: number[] = []
+  const saving = Promise.withResolvers<void>()
+  const accept = JournalStopAcceptor.prototype.accept
+  vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockImplementation(async function (
+    this: JournalStopAcceptor,
+    ...args
+  ) {
+    await saving.promise
+    return accept.apply(this, args)
+  })
   await duringStart(() => {
     const aborts = rig.host.collaboratorsForTests().runtimeState.acquireAborts
     const abort = aborts.abort.bind(aborts)
@@ -113,16 +121,43 @@ it('aborts the start only once it is saved, and records the Stop, not a no-op', 
     })
     stopping = rig.stop(id)
   })
-  await rig.send('hello').result
-  await eventually(() => expect(stopping).toBeDefined())
+  const first = rig.send('hello')
+  await first.result
+  await eventually(() => expect(eventsAtAbort).toEqual([0]))
+  // Its save still waits on the lane, and the start it ended spawned nothing meanwhile.
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
+  saving.resolve()
+
   expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
-  expect(eventsAtAbort).toEqual([1])
+  expect(stopEvents()).toBe(1)
+  expect(await rig.submission(first.id)).toMatchObject({ rejection: { kind: 'cancelled' } })
   expect(
     rig.store.readCommandReceipt({ kind: 'caller', callerKey: CALLER.callerKey }, id)
   ).toMatchObject({ verdict: 'readable', receipt: { result: { kind: 'journal-row' } } })
+  expect(rig.dispatch).not.toHaveBeenCalled()
 })
 
-it('leaves the start alone when it cannot be saved: the message it was for still sends', async () => {
+it('leaves a later start alone for a retry of a Stop already answered', async () => {
+  const id = hostTestOperationId()
+  let retried: ReturnType<QueuedMessageTestRig['stop']> | undefined
+  await duringStart(() => {
+    retried = rig.stop(id)
+  })
+  // Answered while nothing runs: an accepted no-op, its receipt committed.
+  expect(await rig.stop(id)).toMatchObject({ ok: true, value: { cancelled: false } })
+  const first = rig.send('hello')
+  await first.result
+  await eventually(() => expect(retried).toBeDefined())
+  expect(await retried).toMatchObject({ ok: true, replayed: true })
+  await untilHandedOver(first.id)
+  expect((await rig.submission(first.id))?.rejection).toBeUndefined()
+  expect(rig.dispatch).toHaveBeenCalledTimes(1)
+})
+
+// Labelled: the abort comes before the save, so a Stop whose save fails has already ended the start.
+// It says so in plain words; the message it was for is not withdrawn and sends on the next start.
+it('says the Stop failed when it cannot be saved after ending the start, and the message still sends', async () => {
   let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
   vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockRejectedValue(new Error('disk full'))
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -136,7 +171,9 @@ it('leaves the start alone when it cannot be saved: the message it was for still
     ok: false,
     refusal: { details: { reason: 'stopFailed' } }
   })
-  await untilHandedOver(first.id)
   expect(stopEvents()).toBe(0)
-  expect(rig.dispatch).toHaveBeenCalledTimes(1)
+  expect((await rig.submission(first.id))?.rejection).toBeUndefined()
+  vi.mocked(JournalStopAcceptor.prototype.accept).mockRestore()
+  await rig.send('nudge').result
+  await untilHandedOver(first.id)
 })

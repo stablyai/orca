@@ -29,8 +29,10 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'messageIdReused',
     'operationRefusedEarlier',
     'journalWriteFailed',
-    /** A Stop that could not be saved, or was saved and could not take effect. */
+    /** A Stop that could not be saved. */
     'stopFailed',
+    /** A card's Cancel whose dismissal could not be saved. */
+    'cancelNotSaved',
     /** The message names a chat attachment the host no longer stores. */
     'attachmentExpired',
     // The conversation's state

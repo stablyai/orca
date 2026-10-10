@@ -54,6 +54,8 @@ export type JournalReducerState = {
   itemFences: Map<string, number>
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
+  /** Turn ids whose record a tombstone removed, as a rewind does: over, though no row shows it. */
+  removedTurnIds: Set<string>
   submissions: Map<string, AgentJournalSubmission>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Provider item id → the submission slot that adopted it. Stops an accepted
@@ -79,6 +81,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     items: new Map(),
     itemFences: new Map(),
     tombstones: new Map(),
+    removedTurnIds: new Set(),
     submissions: new Map(),
     receipts: new Map(),
     aliases: new Map(),

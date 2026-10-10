@@ -69,7 +69,7 @@ export type StructuredAgentSessionChildExitContext<
   holdUnrunSends?: (
     sessionId: string,
     fence: number,
-    cause: 'chatClosed' | 'hostRestarted' | 'userStop'
+    cause: 'chatClosed' | 'hostRestarted'
   ) => Promise<void>
   /** Lets the child's sink and the adapter's route for it go; absent leaves both to the next attach. */
   route?: {
@@ -131,23 +131,20 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     : exit.failure
   // A send the child was handed and never echoed cannot have run when a person's Stop ended its
   // start, or any close ended it before it answered its start: settled as the chat settles a queued
-  // send for the same end. A Stop withdraws the first, the one it stopped, as cancelled and holds
-  // the rest as cards; a quit or close keeps a person's message as a held card. A host stop fails
-  // the start (`startFailure`).
+  // send for the same end. A Stop withdraws it as cancelled; a quit or close keeps a person's
+  // message as a held card. A host stop fails the start (`startFailure`).
   const unrunRejection =
     startClose === 'user-stop' ? agentSessionFailureFact('cancelled') : undefined
   const unrunHold =
-    startClose === 'user-stop'
-      ? ('userStop' as const)
-      : expected &&
-          exit.startupUnanswered &&
-          close?.cause !== 'host-stop' &&
-          close?.cause !== 'user-stop' &&
-          close?.cause !== 'context-clear'
-        ? close?.quit
-          ? ('hostRestarted' as const)
-          : ('chatClosed' as const)
-        : undefined
+    expected &&
+    exit.startupUnanswered &&
+    close?.cause !== 'host-stop' &&
+    close?.cause !== 'user-stop' &&
+    close?.cause !== 'context-clear'
+      ? close?.quit
+        ? ('hostRestarted' as const)
+        : ('chatClosed' as const)
+      : undefined
   const endChild = (): void => {
     context.startupAttempts?.childEnded(sessionId, child)
     endProviderChild(session, {

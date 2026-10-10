@@ -19,8 +19,7 @@ import type {
   AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
-  AgentSessionSendResult,
-  AgentSessionWireRefusal
+  AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
@@ -95,9 +94,6 @@ export type MutationCommandReceipt<TValue> = {
   /** A run that wrote nothing: the receipt committed alone, before the answer goes out (a no-op's
    *  answer, or the earlier write it acknowledged), or null to record nothing. */
   unwritten?: (value: TValue, ctx: AgentSessionTurnContext) => CommandReceiptResult | null
-  /** A run that failed once its receipt committed answers this, recorded in place of the
-   *  acceptance so a retry of its id answers the same. Absent: the receipt answers. */
-  refusedAfterAcceptance?: (ctx: AgentSessionTurnContext) => AgentSessionWireRefusal
 }
 
 /** The journal row an accepted command wrote, which must be of a kind it accepts with. */

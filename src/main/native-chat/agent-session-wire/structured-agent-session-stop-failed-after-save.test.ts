@@ -1,6 +1,7 @@
-// A Stop saved, then unable to take effect, says so rather than answering "nothing to stop": its
-// receipt records the refusal, so a retry of its id answers the same, and a new press tries again.
-// A card's own Cancel saves its receipt with the dismissal row, in one transaction.
+// A Stop saved, then unable to take effect, is answered from its receipt, never rewritten: the
+// failure is logged and the chat says the cancellation was not confirmed. "Couldn't stop" is only
+// for a Stop that could not be saved. A card's own Cancel saves its receipt with the dismissal row,
+// in one transaction, and one that cannot be saved says so about the card.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -17,14 +18,6 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 
 const CALLER_SCOPE = { kind: 'caller', callerKey: CALLER.callerKey } as const
-const NOT_STOPPED = {
-  ok: false,
-  refusal: {
-    code: 'agent_session_operation_invalid',
-    details: { reason: 'stopFailed', agent: 'codex' },
-    message: "Couldn't stop Codex. Try again."
-  }
-}
 
 let rig: QueuedMessageTestRig
 let serial = 0
@@ -57,13 +50,21 @@ function receipt(id: string) {
   return rig.store.readCommandReceipt(CALLER_SCOPE, id)
 }
 
-/** The note the interrupt writes fails, once the Stop is saved and the provider was asked. */
-function failNote(): () => void {
+function statusTexts(): string[] {
+  return journal()
+    .snapshot()
+    .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+}
+
+/** The first `times` status rows written after the Stop is saved and the provider was asked fail. */
+function failNotes(times = 1): () => void {
   const append = AgentSessionJournal.prototype.appendItem
+  let left = times
   const failing = vi
     .spyOn(AgentSessionJournal.prototype, 'appendItem')
     .mockImplementation(async function (this: AgentSessionJournal, ...args) {
-      if (args[1].kind === 'status') {
+      if (args[1].kind === 'status' && left > 0) {
+        left -= 1
         throw new Error('disk full')
       }
       return append.apply(this, args)
@@ -71,46 +72,39 @@ function failNote(): () => void {
   return () => failing.mockRestore()
 }
 
-it('refuses in plain words once saved, records that, and answers a retry of the id the same', async () => {
+it('answers a saved Stop from its receipt, notes it unconfirmed, and answers a retry the same', async () => {
   await rig.workingSend()
   const id = opId()
-  const restore = failNote()
+  const restore = failNotes()
+  let answered: Awaited<ReturnType<QueuedMessageTestRig['stop']>>
   try {
-    expect(await rig.stop(id)).toMatchObject(NOT_STOPPED)
+    answered = await rig.stop(id)
   } finally {
     restore()
   }
-  expect(receipt(id)).toMatchObject({
-    verdict: 'readable',
-    receipt: { status: 'rejected', rejection: { reference: { details: { reason: 'stopFailed' } } } }
-  })
+  expect(answered).toMatchObject({ ok: true })
+  expect(statusTexts()).toContain('Cancellation was not confirmed.')
+  expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
+  expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
+    expect.arrayContaining([expect.stringContaining('a saved Stop failed to take effect')])
+  )
 
-  expect(await rig.stop(id)).toMatchObject(NOT_STOPPED)
+  expect(await rig.stop(id)).toMatchObject({ ok: true, replayed: true })
   expect(rig.cancelTurn).toHaveBeenCalledOnce()
-  // A new press is a new id: it tries again.
-  expect(await rig.stop(opId())).toMatchObject({ ok: true })
-  expect(rig.cancelTurn).toHaveBeenCalledTimes(2)
 })
 
-it('still refuses when recording the failure fails, and says so in the log', async () => {
+it('still answers from its receipt when the note cannot be written either, and logs both', async () => {
   await rig.workingSend()
   const id = opId()
-  const db = openTestJournalHostDatabase(rig.root).db
-  db.exec(`CREATE TRIGGER fail_receipt_update BEFORE UPDATE ON agent_session_command_receipts
-    BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
-  const restore = failNote()
+  const restore = failNotes(2)
   try {
-    expect(await rig.stop(id)).toMatchObject(NOT_STOPPED)
+    expect(await rig.stop(id)).toMatchObject({ ok: true })
   } finally {
     restore()
-    db.exec('DROP TRIGGER fail_receipt_update')
   }
   expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
-    expect.arrayContaining([
-      expect.stringContaining('recording that an accepted command failed did not save')
-    ])
+    expect.arrayContaining([expect.stringContaining("writing a failed Stop's note failed")])
   )
-  // Its acceptance stands: a retry is answered from it and never reaches the provider again.
   expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
   expect(await rig.stop(id)).toMatchObject({ ok: true, replayed: true })
   expect(rig.cancelTurn).toHaveBeenCalledOnce()
@@ -187,7 +181,11 @@ describe("a card's own Cancel", () => {
     try {
       expect(await cancelCard(card, id)).toMatchObject({
         ok: false,
-        refusal: { details: { reason: 'stopFailed' } }
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'cancelNotSaved' },
+          message: "This question or approval wasn't cancelled."
+        }
       })
     } finally {
       db.exec('DROP TRIGGER fail_cancel_receipt')

@@ -95,8 +95,6 @@ export const AGENT_SESSION_FAILURE_COPY = {
   cancelled: 'This message was withdrawn before the agent started it.',
   chatClosed: 'The chat closed before this message was sent.',
   hostRestarted: 'Orca restarted before this message was sent.',
-  returnedToQueue:
-    '{{agent}} was stopped before it read this message, so it went back to the queue.',
   notDelivered: 'This message was not delivered.',
   notDeliveredSendAgain: 'This message was not delivered. Send it again to continue.',
   commandRefused: "This command didn't run.",

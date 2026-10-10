@@ -46,8 +46,6 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'cancelled',
   'chatClosed',
   'hostRestarted',
-  /** A person's Stop took it back before the agent got it and kept it as a held card. */
-  'returnedToQueue',
   'notDelivered',
   /** A conversation command the chat's state refused when its turn to run came. */
   'commandRefused',
@@ -56,7 +54,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'cancelUnconfirmed',
   /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */
   'stopRefused',
-  /** A Stop Orca could not save, or saved and could not carry out: only a refusal says it. */
+  /** A Stop Orca could not save: only a refusal says it. */
   'stopFailed',
   'answerUnconfirmed',
   'hostFault',

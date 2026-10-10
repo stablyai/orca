@@ -13,7 +13,7 @@ import {
   validatePendingPrompt,
   type PendingPromptValidation
 } from './structured-agent-session-prompt-state'
-import { stopNotSaved } from './structured-agent-session-stop-acceptance'
+import { cardCancelNotSavedRefusal, stopNotSaved } from './structured-agent-session-stop-acceptance'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 type CancelOutcome = TurnOutcome<AgentSessionCancelResult>
@@ -114,9 +114,8 @@ async function dismissPrompt(
       commit
     })
   } catch (error) {
-    // Nothing saved, so nothing changed: the Cancel is refused and the card stands.
     if (!committed && !(error instanceof AgentSessionPromptUnavailableError)) {
-      return stopNotSaved(ctx, error)
+      return dismissalNotSaved(ctx, error)
     }
     if (committed) {
       // The adapter's error is Orca's; the row says only what the user needs to know.
@@ -138,8 +137,17 @@ async function dismissPrompt(
     try {
       await commit()
     } catch (error) {
-      return stopNotSaved(ctx, error)
+      return dismissalNotSaved(ctx, error)
     }
   }
   return { ok: true, value: null }
+}
+
+/** Nothing of the Cancel saved: refused in words about the card, which stands. Once a Stop saved
+ *  the receipt, the failure is answered from it. */
+function dismissalNotSaved(ctx: AgentSessionTurnContext, error: unknown): TurnOutcome<never> {
+  if (ctx.operationReceipt?.isCommitted()) {
+    throw error
+  }
+  return stopNotSaved(ctx, error, cardCancelNotSavedRefusal)
 }

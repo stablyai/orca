@@ -37,6 +37,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   sendOutcomeLost:
     "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
   questionChanged: 'This question was already answered or has changed.',
+  cancelNotSaved: "This question or approval wasn't cancelled.",
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",

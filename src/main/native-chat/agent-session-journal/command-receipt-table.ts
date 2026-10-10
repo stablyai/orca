@@ -168,36 +168,3 @@ export function insertCommandReceiptIfAbsent(
   )
   return { inserted: true }
 }
-
-/** An accepted receipt rewritten as refused, in the caller's transaction: a command accepted, then
- *  unable to take effect, answers every retry of its id with that refusal. False when no accepted
- *  receipt of this id and fingerprint stands. */
-export function refuseAcceptedCommandReceipt(
-  db: Database.Database,
-  scope: CommandReceiptScope,
-  receipt: Extract<CommandReceipt, { status: 'rejected' }>
-): boolean {
-  if (!db.isTransaction) {
-    throw new Error('a command receipt must be written inside an open transaction')
-  }
-  const written = commandReceiptSchema.parse(receipt)
-  const claim = commandReceiptScopeSchema.parse(scope)
-  if (written.status !== 'rejected') {
-    throw new Error('only a refusal replaces an accepted command receipt')
-  }
-  const changed = db
-    .prepare(
-      `UPDATE agent_session_command_receipts
-         SET status = 'rejected', result_json = NULL, rejection_json = ?
-       WHERE operation_id = ? AND fingerprint = ? AND status = 'accepted'
-         AND (? = 'global' OR caller_key = ?)`
-    )
-    .run(
-      JSON.stringify(written.rejection),
-      written.operationId,
-      written.fingerprint,
-      claim.kind,
-      claim.kind === 'caller' ? claim.callerKey : null
-    )
-  return Number(changed.changes ?? 0) > 0
-}

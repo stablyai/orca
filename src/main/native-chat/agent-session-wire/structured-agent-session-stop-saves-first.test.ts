@@ -1,6 +1,6 @@
 // A Stop is saved before it acts: its acceptance (its receipt, its Stop event and every send it
-// holds) commits first, and only then does it interrupt or end the child. One that cannot be saved
-// acts on nothing, so the agent keeps running, and the person is asked to try again.
+// withdraws) commits first, and only then does it interrupt or end the child. One that cannot be
+// saved acts on nothing, so the agent keeps running, and the person is asked to try again.
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'

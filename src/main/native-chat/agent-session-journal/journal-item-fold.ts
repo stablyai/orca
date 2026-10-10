@@ -13,6 +13,7 @@ import {
   isRootAgentJournalItem,
   namesAgentJournalProducer
 } from '../../../shared/agent-session-journal-producer'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(
@@ -90,6 +91,10 @@ export function removeJournalItem(
       existing.body,
       undefined
     )
+    const turnId = readAgentJournalTurn(existing.body)?.turnId
+    if (turnId !== undefined) {
+      state.removedTurnIds.add(turnId)
+    }
   }
   state.tombstones.set(itemId, revision)
   state.items.delete(itemId)

@@ -104,25 +104,18 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** A person's Stop of a start that never landed, whose send opens no turn: that send is what it
- *  stops, withdrawn. `held`: a card queued behind the start, which the Stop holds. */
+/** A person's Stop of a start that never landed, whose send opens no turn. `held`: a card queued
+ *  behind the start, which the Stop holds. */
 async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
   // Held for a child that never proves its start, so it is never handed over.
-  const started = rig.send('work on this')
+  rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
   const held = options.held ? await queuedDraft('queued behind the start') : undefined
   expect(await rig.stop()).toMatchObject({ ok: true })
   expect(stopEvents()).toEqual([expect.objectContaining({ reason: 'user-stop' })])
   expect(stopEvents()[0]).not.toHaveProperty('turnId')
   await eventually(() => expect(childPhase()).toBeUndefined())
-  expect(await rig.submission(started.id)).toMatchObject({ rejection: { kind: 'cancelled' } })
-  // Read off the journal, not a client page: a later Resume races the start this test evicts.
-  expect(
-    journal()
-      .queuedMessages.list()
-      .map((card) => card.messageId)
-  ).toEqual(held ? [held] : [])
   return held
 }
 

@@ -114,14 +114,12 @@ it('writes neither when the row cannot be written', async () => {
 // A Stop that reaches the lane first takes the message back; the failed start then failed no one.
 it('writes nothing when a Stop withdrew every queued message first', async () => {
   const journal = await openWithQueued('first')
+  const withdrawal = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
+    surface: 'rejection'
+  })
 
   await Promise.all([
-    journal.stops.accept({
-      event: { reason: 'user-stop' },
-      fence: 0,
-      hostInstance: 'host-instance',
-      words: {}
-    }),
+    journal.rejectQueuedSubmissions(0, withdrawal),
     journal.appendLifecycleBatch(startFailureBatch())
   ])
 

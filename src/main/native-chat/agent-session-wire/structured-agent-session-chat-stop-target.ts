@@ -1,5 +1,5 @@
 // What the chat's Stop acts on, decided ONCE, on the session's lane, as it is accepted: the turn
-// it is about, the provider child it reaches, and whether it holds what is queued. After the
+// it is about, the provider child it reaches, and whether it withdraws what is queued. After the
 // acceptance commits, the Stop acts only while that target still stands, read again from state,
 // so a newer turn or a newer child is never this Stop's.
 
@@ -15,12 +15,11 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 /**
  * - `close`: joins the close an earlier stop began on the child, which takes no input.
- * - `starting`: ends a start that may never land, a child's or one the session's queue is still
- *   waiting on (`child` null); it takes no interrupt.
+ * - `starting`: ends a child's start that may never land; it takes no interrupt.
  * - `interrupt`: interrupts what the child runs, ending it when the interrupt fails.
- * - `hold`: no agent to reach; it only settles what is queued.
+ * - `withdraw`: no agent to reach; it only withdraws what is queued.
  */
-export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'hold'
+export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'withdraw'
 
 export type ChatStopTarget = {
   reach: ChatStopReach
@@ -35,15 +34,13 @@ export type ChatStopTarget = {
 }
 
 /** Null: a late Stop, or one with nothing queued and nothing in flight, which is an accepted
- *  no-op. A Stop naming a turn that already ended holds nothing and interrupts nothing. */
+ *  no-op. A Stop naming a turn that already ended withdraws nothing and interrupts nothing. */
 export function captureChatStopTarget(
   ctx: AgentSessionTurnContext,
   input: {
     child: StructuredAgentSessionProviderChild | null
     turnId?: string
     endsSession: boolean
-    /** A start the session's queue is waiting on, which the Stop aborts once it is saved. */
-    acquiring?: boolean
   }
 ): ChatStopTarget | null {
   const { child, turnId } = input
@@ -64,13 +61,13 @@ export function captureChatStopTarget(
   if (child?.close) {
     return { ...target, reach: 'close', marks: queued }
   }
-  if (child?.phase === 'starting' || (!child && input.acquiring)) {
+  if (child?.phase === 'starting') {
     return { ...target, reach: 'starting', marks: true }
   }
   // A Stop naming no turn ends nothing more unless the session reads working, by the rule every
   // session list and the chat's own Stop read it, over the fold as it stands.
   if (!child || (turnId === undefined && !isMainAgentWorking(ctx))) {
-    return queued ? { ...target, reach: 'hold', marks: true } : null
+    return queued ? { ...target, reach: 'withdraw', marks: true } : null
   }
   // Repeating the Stop in force with nothing sent since writes no second event, so a card queued
   // between the presses sends normally, as after one Stop.

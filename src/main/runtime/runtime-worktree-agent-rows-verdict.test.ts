@@ -140,17 +140,13 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    // As the delivery loop settles a send its start refused.
-    await journal.resolveDispatch({
-      clientMessageId: 'first',
-      state: 'rejected',
-      ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
+    await journal.rejectQueuedSubmissions(
+      1,
+      agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
         surface: 'rejection',
         agentName: 'Claude'
-      }),
-      fence: 1,
-      recovered: true
-    })
+      })
+    )
 
     const summary = publishedSummary(journal)
     expect(summary).toMatchObject({ status: 'idle', turnOutcome: 'failure', latestPrompt: 'hello' })
@@ -235,13 +231,10 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    // The person's Stop withdraws it, as the host accepts one.
-    await journal.stops.accept({
-      event: { reason: 'user-stop' },
-      fence: 1,
-      hostInstance: 'host-instance',
-      words: {}
-    })
+    await journal.rejectQueuedSubmissions(
+      1,
+      agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
+    )
 
     expect(publishedSummary(journal)).toMatchObject({ status: null })
     expect(ingest(publishedSummary(journal)).ps).toBeUndefined()

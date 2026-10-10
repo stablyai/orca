@@ -89,7 +89,8 @@ function causeParts(
   }
   const saysNotDone =
     (write === 'read-history' && AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(cause)) ||
-    (cause === 'questionChanged' && write === 'answer')
+    (cause === 'questionChanged' && write === 'answer') ||
+    (cause === 'cancelNotSaved' && write === 'stop')
   return saysNotDone ? [cause] : [cause, NOT_DONE[write]]
 }
 
