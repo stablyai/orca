@@ -27,6 +27,10 @@ import {
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
 import {
+  forgetRetiredEpochCensuses,
+  resetRetiredEpochCensusesForTests
+} from './retired-epoch-census'
+import {
   clearWebAgentSessionHandoffsForWorktree,
   clearWebAgentSessionHandoffsForEnvironment
 } from '../web-agent-session-handoff'
@@ -101,6 +105,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   hostWorkingClientBoundaryByPaneKey.clear()
   sessionTabsTrackingGenerations.reset()
   resetWebSessionBrowserPlacementsForTests()
+  resetRetiredEpochCensusesForTests()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
@@ -161,6 +166,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
   sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
+  forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)
