@@ -1,4 +1,5 @@
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import type { GlobalSettings } from './global-settings-types'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
   windowsRunnerPathNeedsCmdGuard
@@ -150,4 +151,59 @@ function nativeWindowsPathToWslShellPath(value: string): string {
 function isWslExecutable(value: string | undefined): boolean {
   const basename = value?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
   return basename === 'wsl.exe' || basename === 'wsl'
+}
+
+const SETUP_SUCCESS_EXIT_SUFFIX = ' && exit'
+// Why: Windows PowerShell 5.1 cannot parse `&&`; this form also runs in pwsh.
+const POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX = '; if ($LASTEXITCODE -eq 0) { exit }'
+
+/**
+ * Appends a clause that exits the pane's shell when the setup command succeeds, so the pane
+ * closes the way a typed `exit` closes it. `windowsTerminalShell` is the configured terminal
+ * shell, needed because a cmd-family launch only says the runner is batch, not what types it.
+ */
+export function appendShellExitOnSetupSuccess(
+  command: string,
+  platform: SetupRunnerCommandPlatform,
+  shell: SetupRunnerShell | undefined,
+  windowsTerminalShell: string | undefined
+): string {
+  if (platform === 'posix' || shell?.family === 'posix') {
+    return `${command}${SETUP_SUCCESS_EXIT_SUFFIX}`
+  }
+  // Why: no launch shell means a remote Windows host whose shell we cannot name; leave it open.
+  if (!shell) {
+    return command
+  }
+  const basename =
+    windowsTerminalShell?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  if (['cmd', 'cmd.exe', 'wsl', 'wsl.exe'].includes(basename)) {
+    return `${command}${SETUP_SUCCESS_EXIT_SUFFIX}`
+  }
+  // Why: PowerShell is the default and also the fallback when a configured Git Bash is missing.
+  return `${command}${POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX}`
+}
+
+/** Honours the "Close setup tab when it succeeds" setting for a command that launches setup. */
+export function applySetupAutoCloseSetting(
+  command: string,
+  platform: SetupRunnerCommandPlatform,
+  shell: SetupRunnerShell | undefined,
+  settings:
+    | Partial<Pick<GlobalSettings, 'closeSetupTabOnSuccess' | 'terminalWindowsShell'>>
+    | null
+    | undefined
+): string {
+  return settings?.closeSetupTabOnSuccess === true
+    ? appendShellExitOnSetupSuccess(command, platform, shell, settings.terminalWindowsShell)
+    : command
+}
+
+/** True when the command ends with a clause from {@link appendShellExitOnSetupSuccess}. */
+export function exitsShellOnSetupSuccess(command: string | undefined): boolean {
+  return (
+    command !== undefined &&
+    (command.endsWith(SETUP_SUCCESS_EXIT_SUFFIX) ||
+      command.endsWith(POWERSHELL_SETUP_SUCCESS_EXIT_SUFFIX))
+  )
 }
