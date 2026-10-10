@@ -150,6 +150,7 @@ export function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 export type RendererRecoveryWindowHarness = {
   browserWindowInstance: { loadFile: Mock<() => Promise<void>>; loadURL: Mock<() => Promise<void>> }
   windowHandlers: Record<string, (...args: any[]) => void>
+  send: MainWindowSpy
 }
 
 /** A main window whose webContents events land in `windowHandlers` for suites that drive renderer recovery. */
@@ -187,5 +188,5 @@ export function createRendererRecoveryWindowHarness(): RendererRecoveryWindowHar
     return browserWindowInstance
   })
 
-  return { browserWindowInstance, windowHandlers }
+  return { browserWindowInstance, windowHandlers, send: webContents.send }
 }

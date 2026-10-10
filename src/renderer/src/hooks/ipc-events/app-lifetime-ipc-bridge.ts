@@ -32,6 +32,7 @@ import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-br
 import { registerUpdaterStatusIpcBridge } from './updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { registerWorkspaceShortcutIpcBridge } from './workspace-shortcut-ipc-bridge'
+import { registerSwipeNavigationIpcBridge } from './swipe-navigation-ipc-bridge'
 import { registerZoomIpcBridge } from './zoom-ipc-bridge'
 
 function isRuntimeEnvironmentActive(): boolean {
@@ -97,6 +98,7 @@ export function installAppLifetimeIpcEvents(
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
+  registerSwipeNavigationIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
   unsubs.push(
     window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
