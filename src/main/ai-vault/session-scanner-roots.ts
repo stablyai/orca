@@ -21,6 +21,8 @@ export const AGENT_SESSION_HOME_SEGMENTS = {
   omp: [['.omp', 'agent', 'sessions']]
 } as const satisfies Record<string, readonly (readonly string[])[]>
 
+export type SessionHomeAgent = keyof typeof AGENT_SESSION_HOME_SEGMENTS
+
 /**
  * This host's Claude projects roots, config-dir first. A structured Claude session
  * pins its account home to `CLAUDE_CONFIG_DIR || ~/.claude`, and the CLI writes
@@ -59,7 +61,7 @@ export function claudeProjectsRootDirs(args: {
 
 /** Each WSL home's session roots for one agent, in table order. */
 export function wslHomeSessionDirs(
-  agent: keyof typeof AGENT_SESSION_HOME_SEGMENTS,
+  agent: SessionHomeAgent,
   wslHomeDirs: readonly string[],
   joinUnderHome: (home: string, ...segments: string[]) => string = join
 ): string[] {

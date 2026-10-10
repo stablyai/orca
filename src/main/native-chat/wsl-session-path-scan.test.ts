@@ -6,7 +6,7 @@ vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: mocks.walk
 }))
 
-import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
+import { findWslSessionPath } from './wsl-session-path-scan'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -17,7 +17,7 @@ beforeEach(() => {
   mocks.walk.mockReset()
 })
 
-describe('WSL Codex session path scans', () => {
+describe('WSL session path scans', () => {
   it('shares one root snapshot across concurrent session ids', async () => {
     const scan = deferred<string[]>()
     let filePredicate: ((path: string) => boolean) | undefined
@@ -33,8 +33,8 @@ describe('WSL Codex session path scans', () => {
       }
     )
 
-    const first = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'first')
-    const second = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'second')
+    const first = findWslSessionPath('codex', '\\\\wsl.localhost\\Ubuntu\\sessions', 'first')
+    const second = findWslSessionPath('codex', '\\\\wsl.localhost\\Ubuntu\\sessions', 'second')
     const candidates = [
       '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-first.jsonl',
       '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-second.jsonl',
@@ -56,8 +56,16 @@ describe('WSL Codex session path scans', () => {
       .mockReturnValueOnce(initial.promise)
       .mockResolvedValueOnce(['\\\\wsl.localhost\\Ubuntu\\sessions\\2026\\rollout-created.jsonl'])
 
-    const initialCaller = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'absent')
-    const laterCaller = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'created')
+    const initialCaller = findWslSessionPath(
+      'codex',
+      '\\\\wsl.localhost\\Ubuntu\\sessions',
+      'absent'
+    )
+    const laterCaller = findWslSessionPath(
+      'codex',
+      '\\\\wsl.localhost\\Ubuntu\\sessions',
+      'created'
+    )
     initial.resolve([])
 
     await expect(initialCaller).resolves.toBeNull()
@@ -80,7 +88,8 @@ describe('WSL Codex session path scans', () => {
       }
     )
     const controller = new AbortController()
-    const scan = findWslCodexSessionPath(
+    const scan = findWslSessionPath(
+      'codex',
       '\\\\wsl.localhost\\Ubuntu\\sessions',
       'closed',
       controller.signal
@@ -98,7 +107,8 @@ describe('WSL Codex session path scans', () => {
     const replacementPath = '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-replacement.jsonl'
     mocks.walk.mockReturnValueOnce(abandoned.promise).mockReturnValueOnce(replacementScan.promise)
     const controller = new AbortController()
-    const first = findWslCodexSessionPath(
+    const first = findWslSessionPath(
+      'codex',
       '\\\\wsl.localhost\\Ubuntu\\sessions',
       'first',
       controller.signal
@@ -107,7 +117,8 @@ describe('WSL Codex session path scans', () => {
 
     controller.abort(new Error('closed'))
     await expect(first).rejects.toThrow('closed')
-    const replacement = findWslCodexSessionPath(
+    const replacement = findWslSessionPath(
+      'codex',
       '\\\\wsl.localhost\\Ubuntu\\sessions',
       'replacement'
     )
@@ -116,7 +127,11 @@ describe('WSL Codex session path scans', () => {
     abandoned.resolve([])
     await Promise.resolve()
     await Promise.resolve()
-    const duplicate = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'replacement')
+    const duplicate = findWslSessionPath(
+      'codex',
+      '\\\\wsl.localhost\\Ubuntu\\sessions',
+      'replacement'
+    )
     replacementScan.resolve([replacementPath])
 
     await expect(Promise.all([replacement, duplicate])).resolves.toEqual([
@@ -143,16 +158,16 @@ describe('WSL Codex session path scans', () => {
     )
     const root = '\\\\wsl.localhost\\Ubuntu\\sessions'
     const keeperPath = `${root}\\rollout-keeper.jsonl`
-    const keeper = findWslCodexSessionPath(root, 'keeper')
+    const keeper = findWslSessionPath('codex', root, 'keeper')
     const initialThenCount = scanThen.mock.calls.length
     const duplicateController = new AbortController()
-    const duplicate = findWslCodexSessionPath(root, 'keeper', duplicateController.signal)
+    const duplicate = findWslSessionPath('codex', root, 'keeper', duplicateController.signal)
     const uniqueCanceled = Array.from({ length: 256 }, (_, index) => {
       const controller = new AbortController()
       return {
         controller,
         path: `${root}\\rollout-canceled-${index}.jsonl`,
-        promise: findWslCodexSessionPath(root, `canceled-${index}`, controller.signal)
+        promise: findWslSessionPath('codex', root, `canceled-${index}`, controller.signal)
       }
     })
     const canceledResults = Promise.allSettled([

@@ -1,6 +1,6 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import {
   resolveNativeChatTranscriptAgent,
@@ -8,7 +8,6 @@ import {
 } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
-import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
 import {
   claudeProjectsHostDirs,
@@ -23,9 +22,10 @@ import {
 import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
-  wslCodexSessionsDirs
+  wslAgentSessionsDirs
 } from './host-readable-transcript-path'
-import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
+import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
+import { findWslSessionPath } from './wsl-session-path-scan'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
@@ -157,35 +157,37 @@ async function resolveSessionFileById(
     return null
   }
 
+  // An explicit root is the caller naming the exact tree its session pinned; adding
+  // a fallback there (another root or a distro) could resolve a different account's
+  // transcript, so overrides get no WSL tier.
   if (transcriptAgent === 'claude') {
-    // An explicit root is the caller naming the exact account tree its session pinned;
-    // adding a fallback there could resolve a different account's transcript.
-    return resolveClaudeSessionFile(
-      trimmedId,
-      options.claudeProjectsDir ? [options.claudeProjectsDir] : claudeProjectsDirs(),
+    const override = options.claudeProjectsDir
+    return resolveTiered('claude', trimmedId, override ? [override] : claudeProjectsDirs(), {
+      wslTier: !override,
       signal
-    )
+    })
   }
   if (transcriptAgent === 'codex') {
-    const overrideDirs = options.codexSessionsDirs
-    return resolveCodexSessionFile(
-      trimmedId,
-      overrideDirs ?? codexSessionsDirs(),
-      // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
-      // user left stopped. Only pay that after this host's own Codex roots miss.
-      overrideDirs ? undefined : wslCodexSessionsDirs,
+    const override = options.codexSessionsDirs
+    return resolveTiered('codex', trimmedId, override ?? codexSessionsDirs(), {
+      wslTier: !override,
       signal
-    )
+    })
   }
   if (transcriptAgent === 'grok') {
-    return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir(), signal)
+    const override = options.grokSessionsDir
+    return resolveTiered('grok', trimmedId, [override ?? grokSessionsDir()], {
+      wslTier: !override,
+      signal
+    })
   }
   if (transcriptAgent === 'omp') {
-    return resolveOmpSessionFile(
-      trimmedId,
-      resolveOmpSessionsDir({ sessionsDir: options.ompSessionsDir }),
+    const override = options.ompSessionsDir
+    const root = resolveOmpSessionsDir({ sessionsDir: override })
+    return resolveTiered('omp', trimmedId, root ? [root] : [], {
+      wslTier: override === undefined,
       signal
-    )
+    })
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
@@ -194,79 +196,43 @@ async function resolveSessionFileById(
   return null
 }
 
-async function resolveClaudeSessionFile(
+/**
+ * Search this host's roots in order (an earlier root wins), then — only on a miss —
+ * each running WSL distro's roots for the same agent.
+ */
+async function resolveTiered(
+  agent: SessionIdLookupAgent,
   sessionId: string,
-  projectsDirs: readonly string[],
-  signal?: AbortSignal
+  hostDirs: readonly string[],
+  options: { wslTier: boolean; signal?: AbortSignal }
 ): Promise<string | null> {
-  const targetName = `${sessionId}.jsonl`
-  for (const projectsDir of projectsDirs) {
-    // No existence pre-check: walkSessionFiles already yields [] for a missing root.
-    const files = await walkSessionFiles(projectsDir, 'claude', [], {
-      extensions: new Set(['.jsonl']),
-      filePredicate: (path) => basename(path) === targetName,
-      signal
-    })
-    if (files[0]) {
-      return files[0]
-    }
-  }
-  return null
-}
-
-async function resolveCodexSessionFile(
-  sessionId: string,
-  sessionsDirs: string[],
-  loadFallbackDirs?: () => Promise<string[]>,
-  signal?: AbortSignal
-): Promise<string | null> {
-  // Codex rollout file names embed the session id (rollout-<ts>-<id>.jsonl), so
-  // match the id as a suffix of the file's base name rather than an exact name.
-  // Search each candidate root (managed home first) and stop at the first match.
-  const hit = await findCodexRolloutInDirs(sessionId, sessionsDirs, signal)
-  if (hit) {
+  const { signal } = options
+  const hit = await findFirstInDirs(agent, sessionId, hostDirs, signal)
+  if (hit || !options.wslTier) {
     return hit
   }
-  if (!loadFallbackDirs) {
-    return null
-  }
   signal?.throwIfAborted()
-  // Why: a WSL-hosted session's rollout only exists inside the distro, so fall
-  // back to each distro's Codex homes when the host's own roots came up empty (#10326).
-  const fallbackDirs = (await loadFallbackDirs()).filter((dir) => !sessionsDirs.includes(dir))
+  // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
+  // user left stopped. Only pay that after this host's own roots miss (#10326, #13789).
+  const wslDirs = (await wslAgentSessionsDirs(agent)).filter((dir) => !hostDirs.includes(dir))
   signal?.throwIfAborted()
-  return findCodexRolloutInDirs(sessionId, fallbackDirs, signal)
+  return findFirstInDirs(agent, sessionId, wslDirs, signal)
 }
 
-async function findCodexRolloutInDirs(
+async function findFirstInDirs(
+  agent: SessionIdLookupAgent,
   sessionId: string,
-  sessionsDirs: string[],
+  dirs: readonly string[],
   signal?: AbortSignal
 ): Promise<string | null> {
   let unavailable: WslTranscriptFsError | undefined
-  for (const sessionsDir of sessionsDirs) {
-    // Why: no existence pre-check — walkSessionFiles already yields [] for a
-    // missing/unreadable root, and a sync probe would block the main thread on a
-    // `\\wsl.localhost` root whose distro is stopped.
-    const scanOptions = {
-      extensions: new Set(['.jsonl']),
-      filePredicate: (path: string): boolean => {
-        const name = basename(path, extname(path))
-        return name === sessionId || name.endsWith(`-${sessionId}`)
-      }
-    }
-    const isWslRoot = isWslUncPath(sessionsDir)
+  for (const dir of dirs) {
     try {
-      const files = isWslRoot
-        ? await findWslCodexSessionPath(sessionsDir, sessionId, signal)
-        : (
-            await walkSessionFiles(sessionsDir, 'codex', [], {
-              ...scanOptions,
-              signal
-            })
-          )[0]
-      if (files) {
-        return files
+      const hit = isWslUncPath(dir)
+        ? await findWslSessionPath(agent, dir, sessionId, signal)
+        : await findHostSessionFile(agent, dir, sessionId, signal)
+      if (hit) {
+        return hit
       }
     } catch (error) {
       // A caller abort that races the refusal stays authoritative.
@@ -282,46 +248,30 @@ async function findCodexRolloutInDirs(
   return null
 }
 
-async function resolveGrokSessionFile(
+async function findHostSessionFile(
+  agent: SessionIdLookupAgent,
+  root: string,
   sessionId: string,
-  sessionsDir: string,
   signal?: AbortSignal
 ): Promise<string | null> {
-  // Why: Native Chat runs on the main thread; use the bounded async direct-layout
-  // lookup instead of blocking, then repeating, a recursive full-tree scan.
-  signal?.throwIfAborted()
-  const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
-  signal?.throwIfAborted()
-  return history
-}
-
-// omp keeps one directory per working directory (`-Documents-dog-app`) with the
-// transcript inside it, named `<ISO timestamp>_<session id>.jsonl` — so match the
-// id as a base-name suffix, the way Codex rollout files are matched, and let the
-// walk cover the per-cwd subdirectories.
-async function resolveOmpSessionFile(
-  sessionId: string,
-  sessionsDir: string,
-  signal?: AbortSignal
-): Promise<string | null> {
-  if (!sessionsDir) {
-    return null
+  if (agent === 'grok') {
+    // Why: Native Chat runs on the main thread; use the bounded async direct-layout
+    // lookup instead of a recursive full-tree scan.
+    signal?.throwIfAborted()
+    const history = await findGrokChatHistoryBySessionId(root, sessionId)
+    signal?.throwIfAborted()
+    return history
   }
-  const files = await walkSessionFiles(sessionsDir, 'omp', [], {
+  const { fileMatchesId, directoryPredicate } = SESSION_FILE_ID_LAYOUTS[agent]
+  const wanted = (id: string): boolean => id === sessionId
+  // No existence pre-check: the walk yields [] for a missing root, and a sync
+  // probe would block the main thread.
+  const files = await walkSessionFiles(root, agent, [], {
     extensions: new Set(['.jsonl']),
-    // Why: a session's task-subagent transcripts live in its same-named
-    // `<stamp>_<uuid>/` artifact dir, and a label-named child can still end in
-    // `_<session id>` — so descending would let a subagent transcript win the
-    // suffix match over its own parent. Prune the subtree exactly as the AI
-    // Vault scanner does (session-scanner-source-discovery.ts): it keeps the
-    // walk at one readdir per workspace dir regardless of how much the session
-    // delegated. Depth 0 is the workspace dir, which is never an artifact dir.
-    directoryPredicate: (name, depth) =>
-      depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name),
-    filePredicate: (path) => {
-      const name = basename(path, extname(path))
-      return name === sessionId || name.endsWith(`_${sessionId}`)
-    },
+    filePredicate: (path) => fileMatchesId(path, sessionId),
+    directoryPredicate: directoryPredicate
+      ? (name, depth) => directoryPredicate(name, depth, wanted)
+      : undefined,
     signal
   })
   return files[0] ?? null

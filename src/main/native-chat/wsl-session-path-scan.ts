@@ -1,6 +1,6 @@
 import type { Dirent } from 'node:fs'
-import { basename, extname } from 'node:path'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
 import { wslGatedReaddir } from './wsl-transcript-fs-access'
 
 type ScanWaiter = {
@@ -12,6 +12,8 @@ type ScanWaiter = {
 }
 
 type ScanGeneration = {
+  key: string
+  agent: SessionIdLookupAgent
   root: string
   controller: AbortController
   sessionIdRefCounts: Map<string, number>
@@ -25,39 +27,33 @@ function readDirectory(dirPath: string, signal: AbortSignal): Promise<Dirent[]> 
   return wslGatedReaddir(dirPath, 'scan', signal)
 }
 
-function sessionFileName(path: string): string {
-  return basename(path, extname(path))
-}
-
-function nameMatchesSessionId(name: string, sessionId: string): boolean {
-  return name === sessionId || name.endsWith(`-${sessionId}`)
-}
-
-function matchesRequestedSession(path: string, sessionIds: Map<string, number>): boolean {
-  const name = sessionFileName(path)
-  for (const sessionId of sessionIds.keys()) {
-    if (nameMatchesSessionId(name, sessionId)) {
+function matchesRequestedSession(scan: ScanGeneration, path: string): boolean {
+  const { fileMatchesId } = SESSION_FILE_ID_LAYOUTS[scan.agent]
+  for (const sessionId of scan.sessionIdRefCounts.keys()) {
+    if (fileMatchesId(path, sessionId)) {
       return true
     }
   }
   return false
 }
 
-function createScan(root: string): ScanGeneration {
+function createScan(key: string, agent: SessionIdLookupAgent, root: string): ScanGeneration {
   const scan: ScanGeneration = {
+    key,
+    agent,
     root,
     controller: new AbortController(),
     sessionIdRefCounts: new Map(),
     waiters: new Set(),
     settled: false
   }
-  inFlightScans.set(root, scan)
+  inFlightScans.set(key, scan)
   return scan
 }
 
 function clearScan(scan: ScanGeneration): void {
-  if (inFlightScans.get(scan.root) === scan) {
-    inFlightScans.delete(scan.root)
+  if (inFlightScans.get(scan.key) === scan) {
+    inFlightScans.delete(scan.key)
   }
 }
 
@@ -95,9 +91,14 @@ function settleScan(scan: ScanGeneration, outcome: { paths: string[] } | { error
 
 function startScan(scan: ScanGeneration): void {
   try {
-    const promise = walkSessionFiles(scan.root, 'codex', [], {
+    const { directoryPredicate } = SESSION_FILE_ID_LAYOUTS[scan.agent]
+    const wanted = (id: string): boolean => scan.sessionIdRefCounts.has(id)
+    const promise = walkSessionFiles(scan.root, scan.agent, [], {
       extensions: new Set(['.jsonl']),
-      filePredicate: (path) => matchesRequestedSession(path, scan.sessionIdRefCounts),
+      filePredicate: (path) => matchesRequestedSession(scan, path),
+      directoryPredicate: directoryPredicate
+        ? (name, depth) => directoryPredicate(name, depth, wanted)
+        : undefined,
       readDirectory: (dirPath) => readDirectory(dirPath, scan.controller.signal),
       signal: scan.controller.signal
     })
@@ -127,7 +128,7 @@ function waitForScan(
       if (!removeWaiter(scan, waiter)) {
         return
       }
-      reject(signal.reason ?? new Error('Codex session scan aborted'))
+      reject(signal.reason ?? new Error('WSL session scan aborted'))
       if (!scan.settled && scan.waiters.size === 0) {
         scan.settled = true
         clearScan(scan)
@@ -142,13 +143,15 @@ function waitForScan(
 }
 
 async function scanRoot(
+  agent: SessionIdLookupAgent,
   root: string,
   sessionId: string,
   signal?: AbortSignal
 ): Promise<{ paths: string[]; joined: boolean }> {
   signal?.throwIfAborted()
-  const existing = inFlightScans.get(root)
-  const scan = existing ?? createScan(root)
+  const key = `${agent}\0${root}`
+  const existing = inFlightScans.get(key)
+  const scan = existing ?? createScan(key, agent, root)
   const pending = waitForScan(scan, sessionId, signal)
   if (!existing) {
     startScan(scan)
@@ -156,21 +159,30 @@ async function scanRoot(
   return { paths: await pending, joined: Boolean(existing) }
 }
 
-function findSessionPath(paths: string[], sessionId: string): string | null {
-  return paths.find((path) => nameMatchesSessionId(sessionFileName(path), sessionId)) ?? null
+function findSessionPath(
+  agent: SessionIdLookupAgent,
+  paths: string[],
+  sessionId: string
+): string | null {
+  const { fileMatchesId } = SESSION_FILE_ID_LAYOUTS[agent]
+  return paths.find((path) => fileMatchesId(path, sessionId)) ?? null
 }
 
-/** Share tree discovery, then refresh a shared miss for post-start file creation. */
-export async function findWslCodexSessionPath(
+/**
+ * Find one session's transcript under a `\\wsl.localhost` root. Concurrent lookups
+ * share one tree walk per root; a shared miss is refreshed for post-start file creation.
+ */
+export async function findWslSessionPath(
+  agent: SessionIdLookupAgent,
   root: string,
   sessionId: string,
   signal?: AbortSignal
 ): Promise<string | null> {
-  const first = await scanRoot(root, sessionId, signal)
-  const firstHit = findSessionPath(first.paths, sessionId)
+  const first = await scanRoot(agent, root, sessionId, signal)
+  const firstHit = findSessionPath(agent, first.paths, sessionId)
   if (firstHit || !first.joined) {
     return firstHit
   }
-  const refreshed = await scanRoot(root, sessionId, signal)
-  return findSessionPath(refreshed.paths, sessionId)
+  const refreshed = await scanRoot(agent, root, sessionId, signal)
+  return findSessionPath(agent, refreshed.paths, sessionId)
 }

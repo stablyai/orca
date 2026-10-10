@@ -2630,7 +2630,7 @@
       "src/main/native-chat/transcript-watch-wsl-stall.test.ts": 170,
       "src/main/native-chat/transcript-watch.test.ts": 3388,
       "src/main/native-chat/transcript-window-tool-attribution.test.ts": 146,
-      "src/main/native-chat/wsl-codex-session-path-scan.test.ts": 100,
+      "src/main/native-chat/wsl-session-path-scan.test.ts": 100,
       "src/main/native-chat/wsl-transcript-fs-access.test.ts": 147,
       "src/main/native-chat/wsl-transcript-fs-gate.test.ts": 538,
       "src/main/native-chat/wsl-transcript-fs-process-client.test.ts": 79,
