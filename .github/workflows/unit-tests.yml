@@ -19,6 +19,12 @@ on:
         required: true
         type: string
 
+      pr_failed_unit_exit:
+        description: Stop failed hosted Node 24 PR unit work early.
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
 
@@ -28,7 +34,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
     strategy:
-      fail-fast: false
+      fail-fast: ${{ inputs.pr_failed_unit_exit && github.event_name == 'pull_request' && inputs.node_versions == '["24"]' && inputs.runner == 'ubuntu-24.04-arm' }}
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
         shard: ${{ fromJSON(inputs.shards) }}
@@ -67,7 +73,8 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }} \
+            ${{ inputs.pr_failed_unit_exit && github.event_name == 'pull_request' && inputs.node_versions == '["24"]' && inputs.runner == 'ubuntu-24.04-arm' && matrix.node == '24' && '--bail=1' || '' }}
 
       - name: Upload unit shard assignment
         if: always()
