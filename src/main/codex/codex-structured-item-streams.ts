@@ -122,10 +122,14 @@ export function createCodexStructuredItemStreams(
     }).accepted
   }
 
-  const persist = (key: string, text: string, force: boolean): boolean => {
+  const shouldPersist = (key: string, textLength: number): boolean => {
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    if (!force && checkpointLength > 0 && text.length < nextLength) {
+    return !(checkpointLength > 0 && textLength < nextLength)
+  }
+
+  const persist = (key: string, text: string, force: boolean): boolean => {
+    if (!force && !shouldPersist(key, text.length)) {
       return true
     }
     const state = states.get(key)
@@ -143,6 +147,7 @@ export function createCodexStructuredItemStreams(
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
+    shouldEmit: shouldPersist,
     emit: (key, text) => {
       return persist(key, text, false)
     }

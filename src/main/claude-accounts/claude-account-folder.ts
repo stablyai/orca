@@ -7,6 +7,7 @@ import {
   statSync,
   unlinkSync
 } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
@@ -48,6 +49,20 @@ const logins = new Map<
   { mtimeMs: number; size: number; readAt: number; login: ClaudeFolderLogin | null }
 >()
 
+/** Whether two logins name one account: the same email, and the same organization when both
+ *  name one, so one email in two organizations stays two accounts. */
+export function isSameClaudeLogin(
+  left: { email: string; organizationUuid?: string | null },
+  right: { email: string; organizationUuid?: string | null }
+): boolean {
+  return (
+    left.email.trim().toLowerCase() === right.email.trim().toLowerCase() &&
+    (!left.organizationUuid ||
+      !right.organizationUuid ||
+      left.organizationUuid === right.organizationUuid)
+  )
+}
+
 /** The login parsed Claude state names; null before Claude finishes a sign-in. */
 export function claudeStateLogin(state: Record<string, unknown>): ClaudeFolderLogin | null {
   const parsed = oauthAccount.safeParse(state.oauthAccount)
@@ -84,6 +99,37 @@ export function readClaudeFolderLogin(stateFile: string, maxAgeMs = 0): ClaudeFo
   const read = readClaudeProfileObject(stateFile)
   const login = read.kind === 'present' ? claudeStateLogin(read.value) : null
   logins.set(stateFile, { mtimeMs: stat.mtimeMs, size: stat.size, readAt: Date.now(), login })
+  return login
+}
+
+/** readClaudeFolderLogin without blocking, for a state file across a WSL share. */
+export async function readClaudeFolderLoginAsync(
+  stateFile: string
+): Promise<ClaudeFolderLogin | null> {
+  const current = await stat(stateFile).catch(() => null)
+  if (!current) {
+    logins.delete(stateFile)
+    return null
+  }
+  const recent = logins.get(stateFile)
+  if (recent?.mtimeMs === current.mtimeMs && recent.size === current.size) {
+    return recent.login
+  }
+  let login: ClaudeFolderLogin | null = null
+  try {
+    const state: unknown = JSON.parse(await readFile(stateFile, 'utf8'))
+    if (state && typeof state === 'object' && !Array.isArray(state)) {
+      login = claudeStateLogin(Object.fromEntries(Object.entries(state)))
+    }
+  } catch {
+    // Unreadable reads as signed out, as on the host.
+  }
+  logins.set(stateFile, {
+    mtimeMs: current.mtimeMs,
+    size: current.size,
+    readAt: Date.now(),
+    login
+  })
   return login
 }
 

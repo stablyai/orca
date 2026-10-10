@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -388,6 +389,45 @@ describe('visible hosted review refresh targets', () => {
     expect(
       getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, { selectedOnly: true })
     ).toEqual([])
+  })
+
+  it.each<Partial<AppState>>([
+    { activeWorkspaceExecutionHostId: 'ssh:other' },
+    { visibleWorkspaceHostIds: ['local'] },
+    { workspaceHostScope: 'local' }
+  ])('updates reference demand when owner visibility changes: %j', (patch) => {
+    const store = setup()
+    const previous = store.getState()
+    const next = { ...previous, ...patch }
+    expect(visibleHostedReviewRefreshInputsChanged(next, previous)).toBe(true)
+  })
+
+  it('does not send a colliding runtime owner through the legacy unqualified GitHub action', () => {
+    const first: Repo = {
+      ...repo,
+      executionHostId: 'runtime:first',
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/acme/orca',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/acme/orca.git'
+      }
+    }
+    const second: Repo = { ...first, executionHostId: 'runtime:second' }
+    const store = setup(first)
+    store.setState({
+      repos: [first, second],
+      activeWorktreeId: worktree.id,
+      activeWorkspaceExecutionHostId: 'runtime:second',
+      worktreesByRepo: {
+        first: [{ ...worktree, hostId: 'runtime:first' }],
+        second: [{ ...worktree, hostId: 'runtime:second' }]
+      }
+    })
+    expect(
+      getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, { selectedOnly: true })
+    ).toEqual([])
+    expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('lets normal hosted-review refreshes share the host cache but forces discovery', async () => {

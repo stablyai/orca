@@ -1,3 +1,4 @@
+import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
 // ─── Native chat conversation model (cross-process, IPC-serializable) ────────
 // The single renderer-facing conversation contract for the native chat view.
 // Assembled from layered sources in priority order: on-disk JSONL transcripts,
@@ -50,6 +51,7 @@ export type NativeChatTextBlock = {
   text: string
   /** Optional journal display hints; readers narrow only the values they know. */
   presentation?: string
+  contextClear?: AgentSessionProviderContextBoundary
   tone?: string
   /** Optional structured detail for an otherwise ordinary fallback line. */
   providerFrame?: {

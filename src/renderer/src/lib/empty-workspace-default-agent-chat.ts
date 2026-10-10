@@ -1,4 +1,4 @@
-import { agentTabsDefaultToNativeChat } from '../../../shared/structured-native-chat-launch-route'
+import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -26,10 +26,7 @@ function defaultChatDetectionTarget(
   worktreeId: string
 ): AgentDetectionTarget | undefined {
   // Why: a 'blank' default means the user wants workspaces to open without an agent.
-  if (
-    !agentTabsDefaultToNativeChat(state.settings) ||
-    state.settings?.defaultTuiAgent === 'blank'
-  ) {
+  if (!isNativeChatEnabled(state.settings) || state.settings?.defaultTuiAgent === 'blank') {
     return undefined
   }
   // Why: an unresolved owner is an unknown host, not the local machine.

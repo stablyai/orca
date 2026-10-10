@@ -213,7 +213,7 @@ describe('Store', () => {
         }
       })
 
-      store.removeProject('r1')
+      store.removeProjectForHost('r1', 'local')
       store.flush()
 
       expect(store.getMobileClientTabSelections()['device-a']).toEqual({

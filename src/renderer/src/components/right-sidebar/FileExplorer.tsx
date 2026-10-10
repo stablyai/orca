@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import {
   getExplorerDisplayRootOptions,
@@ -30,6 +31,7 @@ import {
 } from './file-explorer-name-filter-projection'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
@@ -45,6 +47,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+  )
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
@@ -249,6 +254,7 @@ function FileExplorerFiles(): React.JSX.Element {
           repoName={repoName}
           worktreePath={worktreePath}
           connectionId={activeRepo?.connectionId ?? null}
+          runtimeEnvironmentId={runtimeEnvironmentId}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
@@ -376,7 +382,11 @@ function FileExplorerFiles(): React.JSX.Element {
 const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
 
 function FileExplorer(): React.JSX.Element {
-  return <FileExplorerFilesMemo />
+  const ownerKey = useAppStore((state) =>
+    JSON.stringify(getFileExplorerOperationOwnerFromState(state, state.activeWorktreeId))
+  )
+  // Different hosts can expose the same path; their explorer caches must have separate lifetimes.
+  return <FileExplorerFilesMemo key={ownerKey} />
 }
 
 export default React.memo(FileExplorer)

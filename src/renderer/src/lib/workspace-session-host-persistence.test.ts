@@ -8,7 +8,6 @@ import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost,
   persistWorkspaceSessionByHost,
-  persistWorkspaceSessionByHostSync,
   type HostPersistenceState
 } from './workspace-session-host-persistence'
 import {
@@ -423,7 +422,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(owner(worktreeWorkspaceKey(worktreeId))).toBe('runtime:env-1')
   })
 
-  it('builds local-first host snapshots reused by synchronous persistence', () => {
+  it('builds local-first host snapshots', () => {
     const localWorktreeId = 'local-repo::C:\\src\\local'
     const remoteWorktreeId = 'remote-repo::/srv/remote'
     const makeTab = (id: string, worktreeId: string) => ({
@@ -473,13 +472,6 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(snapshots[1].state.tabsByWorktree).toEqual({
       [remoteWorktreeId]: [expect.objectContaining({ id: 'remote-tab' })]
     })
-
-    const setSync = vi.fn()
-    persistWorkspaceSessionByHostSync({ get: vi.fn(), patch: vi.fn(), setSync }, payload, state)
-
-    expect(setSync.mock.calls).toEqual(
-      snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
-    )
   })
 })
 
@@ -704,7 +696,8 @@ describe('persistWorkspaceSessionByHost', () => {
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({
         tabsByWorktree: { [localWorktreeId]: expect.any(Array) }
-      })
+      }),
+      undefined
     )
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({

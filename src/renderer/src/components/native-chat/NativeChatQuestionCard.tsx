@@ -214,6 +214,7 @@ export function NativeChatQuestionCard({
     // above the text input. Its free-text row is the answer input.
     <div
       ref={cardRef}
+      data-native-chat-prompt-card-focus={shouldFocus || undefined}
       role="group"
       aria-label={q.question}
       tabIndex={-1}

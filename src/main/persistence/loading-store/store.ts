@@ -138,11 +138,11 @@ export class Store {
       }
       setMigrationUnsupportedPtyPersistenceListener((entries) => {
         this.state.migrationUnsupportedPtyEntries = entries
-        scheduleSave(this.domains.scheduling)
+        scheduleSave(this.domains.scheduling, ['migrationUnsupportedPtyEntries'])
       })
       agentHookServer.setPaneKeyAliasPersistenceListener((entries) => {
         this.state.legacyPaneKeyAliasEntries = entries
-        scheduleSave(this.domains.scheduling)
+        scheduleSave(this.domains.scheduling, ['legacyPaneKeyAliasEntries'])
       })
       if (
         normalized.changed ||

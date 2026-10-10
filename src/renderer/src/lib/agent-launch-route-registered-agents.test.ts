@@ -47,9 +47,7 @@ const LISTS_GROK = {
   ]
 }
 const SETTINGS = {
-  experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true
+  experimentalNativeChat: true
 }
 const LOCAL: ProspectiveWorkspace = { kind: 'git-worktree', repoId: 'repo-1' }
 const PAIRED: ProspectiveWorkspace = { kind: 'git-worktree', runtimeEnvironmentId: 'env-1' }
@@ -121,12 +119,12 @@ describe('structured launch of a host-registered agent', () => {
     expect(routeFor(store(), 'gemini')).not.toBe('structured-native-chat')
   })
 
-  it('keeps the experimental chat setting authoritative', async () => {
+  it('keeps the Chat UI switch authoritative', async () => {
     await loadHostStructuredAgents('local', REGISTERED, null)
 
-    expect(
-      routeFor(store({ settings: { experimentalStructuredNativeChat: false } }), 'grok')
-    ).not.toBe('structured-native-chat')
+    expect(routeFor(store({ settings: { experimentalNativeChat: false } }), 'grok')).not.toBe(
+      'structured-native-chat'
+    )
   })
 
   it("reads a paired host's list only from the runtime that gave it", async () => {
@@ -172,9 +170,9 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
     mocks.callRuntimeRpc.mockResolvedValue(LISTS_OPENCODE)
 
     // What run 5 saw: the terminal-backed "OpenCode" chat, and no version check on the host.
-    expect(routeFor(withOverrides(), 'opencode')).toBe('legacy-native-chat')
+    expect(routeFor(withOverrides(), 'opencode')).toBe('terminal-tui')
     expect(warn).toHaveBeenCalledWith(
-      '[agent-launch-route] opencode opens legacy-native-chat: agent-without-structured-session ' +
+      '[agent-launch-route] opencode opens terminal-tui: agent-without-structured-session ' +
         '(host local, host agents not learned, host capabilities known)'
     )
     await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
@@ -184,12 +182,10 @@ describe('OpenCode with its Command and environment set (live QA run 5)', () => 
     )
   })
 
-  it('names the settings default when new agent tabs do not open as chats', () => {
-    expect(routeFor(store({ settings: { openAgentTabsInChatByDefault: false } }), 'opencode')).toBe(
+  it('keeps new agent tabs in terminals while Chat UI is off', () => {
+    expect(routeFor(store({ settings: { experimentalNativeChat: false } }), 'opencode')).toBe(
       'terminal-tui'
     )
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('opencode opens terminal-tui: new-tabs-default-to-terminal')
-    )
+    expect(warn).not.toHaveBeenCalled()
   })
 })

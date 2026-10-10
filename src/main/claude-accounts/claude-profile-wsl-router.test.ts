@@ -43,6 +43,7 @@ import {
 import type { ClaudeProfileRouterSettings } from './claude-profile-router'
 import { prepareClaudeProfileDirectory } from './claude-profile-paths'
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
+import { applyClaudeEnvPatch } from './environment'
 import { wslClaudeProfile } from './claude-profile-wsl-paths'
 
 // Why skipped on Windows: the guest is Linux; these run its scripts and Node bundle as the guest.
@@ -138,10 +139,12 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
         ORCA_CLAUDE_INJECTED_CONFIG_DIR: f.profileHome
       }
     })
-    // The failed first setup left no marker, so this launch ran setup again; the next does not.
+    // The failed first setup left no marker, so this launch ran setup again; the next refreshes
+    // alongside the launch instead of before it.
     expect(f.setup.calls).toBe(2)
+    f.setup.gate = new Promise(() => {})
     await f.router.prepareLaunch('Ubuntu')
-    expect(f.setup.calls).toBe(2)
+    expect(f.setup.calls).toBe(3)
   })
 
   it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
@@ -183,7 +186,8 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
       configDir: f.profileHome
     })
-    expect(f.setup.calls).toBe(1)
+    // That launch refreshed in the background.
+    expect(f.setup.calls).toBe(2)
   })
 
   it('sets up a new account folder for sign-in and deletes it without following its links', async () => {
@@ -261,6 +265,61 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     writeFileSync(f.pointer, join(f.profileHome, '../../b/home'))
     await f.router.prepareLaunch('Ubuntu')
     expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
+  })
+
+  it("runs an account with no login of its own on the guest's ~/.claude while that is signed in to it", async () => {
+    const f = fixture()
+    mkdirSync(f.profileHome, { recursive: true })
+    writeFileSync(join(f.profileHome, '..', 'profile.json'), '{}')
+    const login = (dir: string, email: string) =>
+      writeFileSync(
+        join(dir, '.claude.json'),
+        JSON.stringify({ oauthAccount: { emailAddress: email } })
+      )
+    login(guest.home, 'A@example.test')
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: join(guest.home, '.claude'),
+      provenance: 'wsl:Ubuntu:system'
+    })
+    expect(readFileSync(f.pointer, 'utf8')).toBe('')
+    await f.router.publish('Ubuntu')
+    expect(readFileSync(f.pointer, 'utf8')).toBe('')
+
+    login(f.profileHome, 'a@example.test')
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
+    expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
+
+    // Another organization of the same email never stands in for the account.
+    rmSync(join(f.profileHome, '.claude.json'))
+    f.settings.claudeManagedAccounts = [{ ...f.account('a'), organizationUuid: 'org-a' }]
+    writeFileSync(
+      join(guest.home, '.claude.json'),
+      JSON.stringify({
+        oauthAccount: { emailAddress: 'a@example.test', organizationUuid: 'org-b' }
+      })
+    )
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
+    // Another email in the guest's ~/.claude never stands in for the account either.
+    login(guest.home, 'b@example.test')
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
+  })
+
+  it("keeps a shell proxy's key with its address on WSL launches, account or System default", async () => {
+    const f = fixture()
+    mkdirSync(f.profileHome, { recursive: true })
+    writeFileSync(join(f.profileHome, '..', 'profile.json'), '{}')
+    const shell = { ANTHROPIC_BASE_URL: 'https://proxy.example.test', ANTHROPIC_API_KEY: 'k' }
+    for (const selected of ['a', null]) {
+      f.wsl.Ubuntu = selected
+      const prepared = await f.router.prepareLaunch('Ubuntu')
+      expect(applyClaudeEnvPatch({ ...shell }, prepared.envPatch)).toMatchObject(shell)
+    }
   })
 
   it('launches System default from the guest ~/.claude with no account env', async () => {

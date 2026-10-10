@@ -107,6 +107,7 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
     add: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
+    waitForSignInLink: () => Promise.resolve(null),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
   }

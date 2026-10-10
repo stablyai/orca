@@ -21,6 +21,13 @@ function archive(body: Uint8Array = BODY): PinnedRuntimeArchive {
 
 const ok = (body: Uint8Array = BODY): Response => new Response(Buffer.from(body), { status: 200 })
 
+function requestSignal(options: RequestInit | undefined): AbortSignal {
+  if (!options?.signal) {
+    throw new Error('Expected an owned archive request signal')
+  }
+  return options.signal
+}
+
 /** A body that delivers its first half, then fails as Chromium does when the network drops. */
 function droppedMidway(): Response {
   const stream = new ReadableStream<Uint8Array>({
@@ -52,29 +59,56 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     ['a server error', () => Promise.resolve(new Response('busy', { status: 503 }))],
     ['a reset partway through the body', () => Promise.resolve(droppedMidway())]
   ])('retries after %s and still verifies the checksum', async (_name, first) => {
-    const fetcher = vi.fn<typeof fetch>().mockImplementationOnce(first).mockResolvedValue(ok())
+    const signals: AbortSignal[] = []
+    let retiredBeforeRetry = false
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(async (_url, options) => {
+        signals.push(requestSignal(options))
+        return first()
+      })
+      .mockImplementation(async (_url, options) => {
+        retiredBeforeRetry = signals[0]?.aborted === true
+        signals.push(requestSignal(options))
+        return ok()
+      })
     await downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
     expect(fetcher).toHaveBeenCalledTimes(2)
     expect(new Uint8Array(await readFile(destination))).toEqual(BODY)
+    expect(retiredBeforeRetry).toBe(true)
+    expect(signals[0]?.aborted).toBe(true)
+    expect(signals[1]?.aborted).toBe(false)
   })
 
   it('gives up after its bounded attempts with the last error', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error('net::ERR_NETWORK_CHANGED'))
+    const signals: AbortSignal[] = []
+    const failure = new Error('net::ERR_NETWORK_CHANGED')
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      signals.push(requestSignal(options))
+      throw failure
+    })
     await expect(
       downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
-    ).rejects.toThrow('net::ERR_NETWORK_CHANGED')
+    ).rejects.toBe(failure)
     expect(fetcher).toHaveBeenCalledTimes(NO_DELAY.length + 1)
+    expect(signals).toHaveLength(NO_DELAY.length + 1)
+    expect(signals.every((signal) => signal.aborted)).toBe(true)
   })
 
   it.each([
     ['a missing asset', () => new Response('gone', { status: 404 })],
     ['a checksum mismatch', () => ok(new Uint8Array([9, 9]))]
   ])('never retries %s', async (_name, response) => {
-    const fetcher = vi.fn<typeof fetch>(async () => response())
+    const signals: AbortSignal[] = []
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      signals.push(requestSignal(options))
+      return response()
+    })
     await expect(
       downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
     ).rejects.toThrow()
     expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(signals[0]?.aborted).toBe(true)
   })
 
   it('stops waiting to retry once the caller cancels', async () => {

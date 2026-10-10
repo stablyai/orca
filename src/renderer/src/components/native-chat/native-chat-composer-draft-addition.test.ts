@@ -115,4 +115,45 @@ describe('native-chat composer draft addition', () => {
     expect(next.drafts.readNativeChatDraftCache('agent-session:s2')).toBe('please go\n\ngo')
     expect(storage.drafts.get('agent-session:s2')?.text).toBe('please go\n\ngo')
   })
+
+  it.each(['delayed load', 'crash replay'])(
+    'keeps picked nodes when appending through %s',
+    async (mode) => {
+      const document = {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'nativeChatSkill', attrs: { token: '$review' } },
+              { type: 'text', text: '-long' }
+            ]
+          }
+        ]
+      }
+      storage.drafts.set(SCOPE, { text: '$review-long', document, images: [], savedAt: 1 })
+      let next: DraftModules
+      if (mode === 'crash replay') {
+        const crashed = await reload({
+          using: { ...storage, write: () => new Promise<void>(() => {}) }
+        })
+        crashed.drafts.appendNativeChatDraftCache(SCOPE, '@/stored/file.pdf')
+        crashed.store.clearNativeChatComposerDraftsForTests()
+        next = await reload()
+      } else {
+        const { using, land } = slowLoading()
+        next = await reload({ using, hydrate: false })
+        await next.store.waitForNativeChatComposerDrafts(1)
+        next.drafts.appendNativeChatDraftCache(SCOPE, '@/stored/file.pdf')
+        land()
+        await next.store.waitForNativeChatComposerDrafts(1_000)
+      }
+      await next.store.nativeChatComposerDraftWritesSettled()
+      expect(next.drafts.readNativeChatDraftCache(SCOPE)).toBe('$review-long\n\n@/stored/file.pdf')
+      expect(next.store.readNativeChatComposerDraft(SCOPE).document?.content?.[0]).toEqual(
+        document.content[0]
+      )
+      expect(storage.drafts.get(SCOPE)?.document?.content?.[0]).toEqual(document.content[0])
+    }
+  )
 })

@@ -7,7 +7,7 @@
  */
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { probeInstallLockExistsCommand } from './ssh-relay-install-lock-commands'
 import { isRelayInstallLockStale, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import {
@@ -50,14 +50,6 @@ import {
 // eventually drain. There is no orcad equivalent — orcad has never shipped without one.
 const LEGACY_RELAY_DIR_REGEX = /^relay-v\d+\.\d+\.\d+$/
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string
-): Promise<string> {
-  return execCommand(conn, command, { wrapCommand: host.commandDialect !== 'powershell' })
-}
 
 export type RemoteInstallGcOptions = {
   windowsNodePath?: string

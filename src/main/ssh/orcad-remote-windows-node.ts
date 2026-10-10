@@ -23,6 +23,7 @@ import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-dep
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { joinRemotePath, remoteDirname, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellLiteral } from './ssh-remote-powershell'
+import { ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE } from './orcad-host-unavailable'
 import {
   ORCAD_WINDOWS_HOST_SCRIPT,
   ORCAD_WINDOWS_HOST_SCRIPT_FILENAME,
@@ -37,7 +38,7 @@ const BARE_ARGUMENT = /^[A-Za-z-][A-Za-z0-9._:+=/\\-]*$/u
 const UNQUOTABLE = /["%$`\r\n“”„‘’‚‛]/u
 
 export class OrcadWindowsCommandLineError extends Error {
-  readonly code = 'orcad_windows_command_line_unsafe'
+  readonly code = ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE
   constructor(value: string) {
     super(
       `Orca cannot pass ${JSON.stringify(value)} to node.exe on this Windows host: it contains ` +
@@ -120,6 +121,24 @@ export function orcadWindowsHostOpCommand(
     op,
     ...args
   ])
+}
+
+export function orcadWindowsSlotOpCommand(
+  host: RemoteHostPlatform,
+  slotDir: string,
+  op: OrcadWindowsHostOp,
+  args: readonly string[]
+): string {
+  return orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, slotDir), op, args)
+}
+
+export function orcadWindowsHomeOpCommand(
+  host: RemoteHostPlatform,
+  remoteHome: string,
+  op: OrcadWindowsHostOp,
+  args: readonly string[]
+): string {
+  return orcadWindowsHostOpCommand(host, orcadRemoteBaseDir(host, remoteHome), op, args)
 }
 
 // Content-addressed paths this connection already saw on the host.

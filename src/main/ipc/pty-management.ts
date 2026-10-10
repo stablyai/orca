@@ -1,5 +1,4 @@
 import { ipcMain } from 'electron'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import {
@@ -7,7 +6,7 @@ import {
   getDaemonProvider,
   restartDaemon
 } from '../daemon/daemon-init'
-import { getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
+import { getAllDaemonAdapters, getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
 import {
   getDaemonFolderAccessMismatch,
   refreshDaemonFolderAccessProbe,
@@ -31,13 +30,7 @@ function sleep(ms: number): Promise<void> {
 
 function getDaemonAdapters(): DaemonPtyAdapter[] {
   const provider = getDaemonProvider()
-  if (!provider) {
-    return []
-  }
-  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
-    return [...provider.getAllAdapters()]
-  }
-  return [provider]
+  return provider ? [...getAllDaemonAdapters(provider)] : []
 }
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.

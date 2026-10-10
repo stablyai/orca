@@ -11,7 +11,7 @@ export type TcpForwardingVerdict = 'allowed' | 'refused' | 'unverifiable'
 /** RFC 4254 open-failure codes: sshd policy, versus a port with nothing listening. */
 const ADMINISTRATIVELY_PROHIBITED = 1
 const CONNECT_FAILED = 2
-export const TCP_FORWARDING_PROBE_TIMEOUT_MS = 10_000
+const TCP_FORWARDING_PROBE_TIMEOUT_MS = 10_000
 
 function closeQuietly(channel: ClientChannel | undefined): void {
   try {

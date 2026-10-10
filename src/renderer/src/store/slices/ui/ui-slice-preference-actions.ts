@@ -268,8 +268,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)
-      window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
-      set({ statusBarUsageMode: normalized })
+      // Why: choosing either mode discovers the selector; old hosts never arm the new notice.
+      const updates = {
+        statusBarUsageMode: normalized,
+        ...(!get().statusBarCompactChangeNoticeDismissed
+          ? { statusBarCompactChangeNoticeDismissed: true }
+          : {})
+      }
+      window.api.ui.set(updates).catch(console.error)
+      set(updates)
     }
   }
 }

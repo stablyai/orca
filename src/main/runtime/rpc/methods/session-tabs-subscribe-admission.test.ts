@@ -36,7 +36,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({
-      experimentalStructuredNativeChat: options.structuredChat === true
+      experimentalNativeChat: options.structuredChat === true
     }),
     restoreStructuredAgentSessionTabs: restore,
     listMobileSessionTabs,

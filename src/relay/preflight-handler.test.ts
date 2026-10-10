@@ -31,7 +31,7 @@ vi.mock('../main/wsl', () => ({
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
-vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import {
   buildCommandLookupSpecs,

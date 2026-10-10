@@ -240,12 +240,12 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: treat only explicit true as dismissed so a false from migration still surfaces.
           usagePercentageDisplayChangeNoticeDismissed:
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
+          statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
           codexTerminalServerIsolationNoticeSeen:
             ui.codexTerminalServerIsolationNoticeSeen === true,
           codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
-          claudeAccountSignInNoticeSeen: ui.claudeAccountSignInNoticeSeen === true,
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

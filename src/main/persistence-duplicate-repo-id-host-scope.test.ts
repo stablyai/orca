@@ -6,9 +6,9 @@ import {
 } from './persistence-test-harness'
 /**
  * The same repo id may be registered on two execution hosts (see `removeProjectForHost`).
- * Every deletion that resolves a *row* must therefore delete only that row: `removeProject`
- * is id-only and would take the sibling host's registration with it. Since #11994 those
- * deletions fan out to every paired device, so a cross-host over-delete is no longer local.
+ * Every deletion that resolves a *row* must therefore delete only that row, never the sibling
+ * host's registration. Since #11994 those deletions fan out to every paired device, so a
+ * cross-host over-delete is no longer local.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -122,6 +122,23 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
 
     expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup', '/remote/dup'])
   })
+
+  it.each(['git', 'folder'] as const)(
+    'removing the local %s row keeps the other host row and its metadata',
+    async (kind) => {
+      // A stale renderer catalog once sent id-only removal when it could not see the SSH twin (#13071).
+      const store = await createStoreFromState({
+        repos: duplicateIdRepos().map((repo) => ({ ...repo, kind }))
+      })
+      store.setWorktreeMetaForHost('dup::/remote/dup', 'ssh:ssh-1', { displayName: 'SSH wt' })
+
+      store.removeProjectForHost('dup', 'local')
+      expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
+      expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
+        'SSH wt'
+      )
+    }
+  )
 
   it('removeProjectForHost drops only the addressed host row', async () => {
     const store = await createStoreWithDuplicateRepoId()

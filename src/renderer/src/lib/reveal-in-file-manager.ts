@@ -33,10 +33,7 @@ export function isRevealInFileManagerBlocked(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   owner: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
 ): boolean {
-  return (
-    isLocalPathOpenBlocked(settings, { connectionId: owner.connectionId }) ||
-    Boolean(owner.runtimeEnvironmentId?.trim())
-  )
+  return isLocalPathOpenBlocked(settings, owner)
 }
 
 /** Shows a client-local path selected in the OS file manager, and says why when it cannot. */

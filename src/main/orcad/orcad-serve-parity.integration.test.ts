@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../shared/orcad-artifacts'
 import {
   ORCAD_NATIVE_PREFLIGHT_FLAG,

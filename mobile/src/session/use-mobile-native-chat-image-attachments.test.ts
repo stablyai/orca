@@ -126,8 +126,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       {
         id: 'img-1',
         path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///a.jpg'
       }
     ])
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)

@@ -1,10 +1,8 @@
 import type { GitHubClientMocks } from './client-test-mocks'
-import {
-  _resetOwnerRepoCache,
-  _resetMergeQueueCacheForTests,
-  _resetPRStackSummaryCacheForTests,
-  __resetTrackedUpstreamBranchCacheForTests
-} from './client'
+import { _resetOwnerRepoCache } from './gh-utils'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { _resetPRStackSummaryCacheForTests } from './client/lookup/pr-stack-summary-cache'
+import { __resetTrackedUpstreamBranchCacheForTests } from './client/lookup/tracked-upstream-cache'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'

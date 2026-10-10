@@ -5,7 +5,6 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
   claudeProviderFrameKind,
@@ -35,6 +34,8 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
+import { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 
 export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
@@ -45,22 +46,7 @@ export type ClaudeJournalTranslatorDeps = {
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
-}
-
-export function createClaudeSessionJournalTranslator(
-  sink: StructuredAgentSessionEventSink | undefined,
-  prompts: ClaudePromptRegistry,
-  fallbackIdPrefix: string,
-  onBackgroundTaskJournalFailure?: (error: Error) => void
-): ClaudeJournalTranslator | null {
-  return sink
-    ? createClaudeJournalTranslator({
-        sink,
-        fallbackIdPrefix,
-        ...(onBackgroundTaskJournalFailure ? { onBackgroundTaskJournalFailure } : {}),
-        bindPromptItemId: (itemId, promptKey) => prompts.bindJournalItemId(itemId, promptKey)
-      })
-    : null
+  account?: () => AgentSessionAccountKind | undefined
 }
 
 export function createClaudeJournalTranslator(
@@ -184,7 +170,8 @@ export function createClaudeJournalTranslator(
     backgroundTasks,
     providerFallback,
     corrections,
-    turn
+    turn,
+    authenticationFailures: new ClaudeAuthenticationFailures(deps.account)
   }
 
   const resultContext: ClaudeResultJournalContext = { ...messageContext, prompts, context }

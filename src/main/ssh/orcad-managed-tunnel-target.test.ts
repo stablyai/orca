@@ -37,6 +37,22 @@ function setup(verdicts: OrcadTunnelIdentity[], rereadPort: number) {
 }
 
 describe('forwardToVerifiedOrcad', () => {
+  it.each(['verified', 'unreachable', 'foreign'] as const)(
+    'retires a forward superseded during its %s identity check',
+    async (verdict) => {
+      const state = setup([], 6_768)
+      let current = true
+      state.verify.mockImplementationOnce(async () => {
+        current = false
+        return verdict === 'verified' ? { verdict } : { verdict, detail: 'late reply' }
+      })
+      await expect(
+        forwardToVerifiedOrcad({ ...state.args, stillCurrent: () => current })
+      ).resolves.toBeNull()
+      expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+      expect(state.rereadRemotePort).not.toHaveBeenCalled()
+    }
+  )
   it('keeps a forward whose server proves it is this orcad', async () => {
     const state = setup([], 6_768)
     await expect(forwardToVerifiedOrcad(state.args)).resolves.toMatchObject({ remotePort: 6_768 })

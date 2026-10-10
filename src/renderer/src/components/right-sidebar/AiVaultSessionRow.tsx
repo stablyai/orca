@@ -46,6 +46,7 @@ export function VaultSessionRow({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   resumeLabel: defaultResumeLabel,
   resumeActions,
   onResumeInWorktree,
@@ -76,6 +77,7 @@ export function VaultSessionRow({
   onResume: () => void
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
   resumeLabel: string
   resumeActions: AiVaultSessionResumeActions
   onResumeInWorktree: () => void
@@ -199,6 +201,7 @@ export function VaultSessionRow({
               onResume={onResume}
               onContinueInNewSession={onContinueInNewSession}
               onResumeInNewChat={onResumeInNewChat}
+              onResumeInNewCli={onResumeInNewCli}
               onCopyResume={onCopyResume}
               onCopyId={onCopyId}
               onCopyPath={onCopyPath}
@@ -246,6 +249,7 @@ export function VaultSessionRow({
               subagentResume={subagentResume}
               onContinueInNewSession={onContinueInNewSession}
               onResumeInNewChat={onResumeInNewChat}
+              onResumeInNewCli={onResumeInNewCli}
               onOpenLog={onOpenLog}
             />
           ) : null}
@@ -263,6 +267,7 @@ export function VaultSessionRow({
           onResume={onResume}
           onContinueInNewSession={onContinueInNewSession}
           onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
           onCopyResume={onCopyResume}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}

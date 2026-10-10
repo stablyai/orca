@@ -605,7 +605,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        setPtyOwnership(scopedPtyId, 'ssh-1')
+        setPtyOwnership(scopedPtyId, 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,

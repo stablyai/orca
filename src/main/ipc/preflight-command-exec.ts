@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { getSystemCliInstallDirectories } from '../../shared/system-cli-install-dirs'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   beginLocalCommandSelection,
   isCommandOnLocalPath,
@@ -59,18 +59,26 @@ async function withPreflightTimeout<T>(
 export async function execLocalPreflightCommandOrThrow(
   command: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number; terminationBarrier?: boolean } = {}
 ): Promise<PreflightCommandResult> {
   const env = options.env ?? buildLocalPreflightEnv()
   const timeoutMs = options.timeoutMs ?? PREFLIGHT_COMMAND_TIMEOUT_MS
   // Node cannot execFile a batch shim; the shared runner handles its argv safely.
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)) {
-    const result = await withPreflightTimeout(
-      command,
-      runProcess({ program: command, args, env, timeoutMs }),
-      timeoutMs
-    )
-    if (result.timedOut || result.code !== 0) {
+  if (
+    options.terminationBarrier ||
+    (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command))
+  ) {
+    const pending = runProcess({
+      program: command,
+      args,
+      env,
+      timeoutMs,
+      ...(options.terminationBarrier ? { terminationBarrier: true } : {})
+    })
+    const result = options.terminationBarrier
+      ? await pending
+      : await withPreflightTimeout(command, pending, timeoutMs)
+    if (result.timedOut || result.outputTruncated || result.code !== 0) {
       throw Object.assign(new Error(`Failed running ${command}`), {
         ...result,
         code: result.timedOut ? 'ETIMEDOUT' : result.code
@@ -165,17 +173,29 @@ async function probeRunnableLocalCommand(command: string): Promise<LocalCommandP
   const candidates = explicit ? [] : await localProbeCandidates(command, env)
   const probes = candidates.length ? candidates.slice(0, PREFLIGHT_LOCAL_PROBE_LIMIT) : [command]
   const deadline = Date.now() + PREFLIGHT_COMMAND_TIMEOUT_MS
-  for (const binary of probes) {
-    const timeoutMs = deadline - Date.now()
-    if (timeoutMs <= 0) {
+  let recoveryDeadline: number | undefined
+  let timedOutBinary: string | undefined
+  for (const [index, binary] of probes.entries()) {
+    const remainingMs = (recoveryDeadline ?? deadline) - Date.now()
+    if (remainingMs <= 0) {
       return { status: 'timeout', binary }
     }
+    // Healthy CLIs keep their full budget; only timeout recovery divides a second budget.
+    const timeoutMs = recoveryDeadline
+      ? Math.max(1, Math.floor(remainingMs / (probes.length - index)))
+      : remainingMs
     try {
-      await execLocalPreflightCommandOrThrow(binary, ['--version'], { env, timeoutMs })
+      await execLocalPreflightCommandOrThrow(binary, ['--version'], {
+        env,
+        timeoutMs,
+        ...(probes.length > 1 ? { terminationBarrier: true } : {})
+      })
       return { status: 'available', binary }
     } catch (error) {
       if (probeTimedOut(error)) {
-        return { status: 'timeout', binary }
+        timedOutBinary = binary
+        recoveryDeadline ??= Date.now() + PREFLIGHT_COMMAND_TIMEOUT_MS
+        continue
       }
       if (
         candidates.length === 0 &&
@@ -188,6 +208,9 @@ async function probeRunnableLocalCommand(command: string): Promise<LocalCommandP
         return { status: 'absent' }
       }
     }
+  }
+  if (timedOutBinary) {
+    return { status: 'timeout', binary: timedOutBinary }
   }
   return {
     status: candidates.length > PREFLIGHT_LOCAL_PROBE_LIMIT ? 'limit_reached' : 'exec_failed',

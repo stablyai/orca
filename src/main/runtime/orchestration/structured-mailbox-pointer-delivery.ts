@@ -37,8 +37,9 @@ export type StructuredPointerTarget = {
   sessionId: string
   /**
    * The dispatch whose mailbox this is, or null for direct peer mail addressed to the worker's own
-   * handle outside any dispatch. Nothing downstream needs a dispatch to deliver — it only scopes
-   * the operation-ledger budget — so a worker between dispatches is nudged, not dropped.
+   * handle outside any dispatch. Nothing downstream needs a dispatch to deliver — it only names
+   * the caller on the operation row and the mail's source — so a worker between dispatches is
+   * nudged, not dropped.
    */
   dispatchId: string | null
 }
@@ -55,7 +56,7 @@ export type StructuredPointerSendOutcome =
   | { kind: 'unattached' }
 
 export type StructuredPointerSessionFacts = {
-  /** Every send the session recorded, oldest first: what the lane's own sends settled as. */
+  /** Current-context sends, oldest first: what the lane's own sends settled as. */
   submissions: readonly StructuredPointerSubmission[]
 }
 
@@ -72,6 +73,7 @@ export type StructuredMailboxPointerHost = {
   }) => Promise<StructuredPointerSendOutcome>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
+  currentContextClearOperationId: (sessionId: string) => string | undefined
 }
 
 type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
@@ -164,7 +166,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     reservedTypes?: ReadonlySet<string>,
-    attemptedSessions = new Set<string>()
+    attemptedContexts = new Set<string>()
   ): Promise<void> {
     const db = this.deps.getDb()
     if (!db || this.inFlight.has(mailboxHandle)) {
@@ -188,37 +190,63 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       return
     }
     this.inFlight.add(mailboxHandle)
+    let contextKey: string | undefined
     try {
-      await this.attempt(db, mailboxHandle, target, unread, reservedTypes)
+      const session = await this.deps.host.readSessionFacts(target.sessionId)
+      const contextClearOperationId = this.deps.host.currentContextClearOperationId(
+        target.sessionId
+      )
+      contextKey = JSON.stringify([target.sessionId, contextClearOperationId])
+      if (attemptedContexts.has(contextKey)) {
+        return
+      }
+      attemptedContexts.add(contextKey)
+      await this.attempt(
+        db,
+        mailboxHandle,
+        target,
+        unread,
+        reservedTypes,
+        session,
+        contextClearOperationId
+      )
     } finally {
       this.inFlight.delete(mailboxHandle)
       // A thrown attempt follows too; its own failure is what still propagates.
-      await this.followMovedTarget(mailboxHandle, target, reservedTypes, attemptedSessions).catch(
-        () => undefined
-      )
+      if (contextKey !== undefined) {
+        await this.followChangedContext(
+          mailboxHandle,
+          target,
+          reservedTypes,
+          attemptedContexts
+        ).catch(() => undefined)
+      }
     }
   }
 
-  /**
-   * A `/clear` while the attempt was in flight moved the mailbox to a successor, whose idle edge
-   * found it in flight and was dropped; nothing else retries it. Only an actual move retries, so
-   * an unchanged rejected or unknown send keeps its suppression, and each session is tried once.
-   */
-  private async followMovedTarget(
+  /** Clear's idle edge can land during a send; retry only a changed context, once per context. */
+  private async followChangedContext(
     mailboxHandle: string,
     attempted: StructuredPointerTarget,
     reservedTypes: ReadonlySet<string> | undefined,
-    attemptedSessions: Set<string>
+    attemptedContexts: Set<string>
   ): Promise<void> {
-    attemptedSessions.add(attempted.sessionId)
     const current = this.deps.resolveStructuredTarget(mailboxHandle)
-    if (!current || attemptedSessions.has(current.sessionId)) {
+    if (
+      !current ||
+      attemptedContexts.has(
+        JSON.stringify([
+          current.sessionId,
+          this.deps.host.currentContextClearOperationId(current.sessionId)
+        ])
+      )
+    ) {
       return
     }
     if (this.parkedUntilJournalEdge.get(mailboxHandle)?.sessionId === attempted.sessionId) {
       this.parkedUntilJournalEdge.delete(mailboxHandle)
     }
-    await this.deliver(mailboxHandle, current, reservedTypes, attemptedSessions)
+    await this.deliver(mailboxHandle, current, reservedTypes, attemptedContexts)
   }
 
   // A session whose agent is not running needs nothing first: an accepted send starts it.
@@ -227,10 +255,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     unread: readonly MessageRow[],
-    reservedTypes: ReadonlySet<string> | undefined
+    reservedTypes: ReadonlySet<string> | undefined,
+    session: StructuredPointerSessionFacts | null,
+    contextClearOperationId: string | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
-    const session = await this.deps.host.readSessionFacts(sessionId)
     if (!session) {
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
       return
@@ -264,6 +293,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       sessionId,
       messageIds: staged,
       submissions: session.submissions,
+      contextClearOperationId,
       sentByThisProcess: this.sentOperationIds.get(mailboxHandle)
     })
     if (operation.kind === 'stamp') {

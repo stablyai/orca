@@ -23,10 +23,19 @@ function deferred() {
   return { promise, resolve }
 }
 
+// A guest the page stream keeps painting while it streams.
+function createStreamedGuest() {
+  return {
+    isDestroyed: () => false,
+    setBackgroundThrottling: vi.fn(),
+    capturePage: vi.fn(async () => null)
+  }
+}
+
 describe('RuntimeBrowserCommands screencast fanout', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()
-    webContentsFromId.mockReturnValue({ isDestroyed: () => false })
+    webContentsFromId.mockReturnValue(createStreamedGuest())
     startBrowserScreencast.mockReset()
   })
 
@@ -263,7 +272,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
 describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   beforeEach(() => {
     webContentsFromId.mockReset()
-    webContentsFromId.mockReturnValue({ isDestroyed: () => false })
+    webContentsFromId.mockReturnValue(createStreamedGuest())
     startBrowserScreencast.mockReset()
   })
 

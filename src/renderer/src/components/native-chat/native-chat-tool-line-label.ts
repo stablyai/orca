@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { nativeChatCommandLanguage } from './native-chat-command-language'
 import { nativeChatToolCategory } from './native-chat-tool-category'
 import {
   nativeChatFullCommand,
@@ -25,6 +26,8 @@ export function nativeChatToolLineLabel(
   filePath: string | null
   /** The whole command, when the row had to shorten it. */
   commandDetail: string | null
+  /** Grammar of `commandDetail`; null when the row holds no command text. */
+  commandLanguage: string | null
 } {
   const display = createToolInputDisplay(call.input)
   const category = nativeChatToolCategory(call.name, call.mcpIdentity)
@@ -36,6 +39,7 @@ export function nativeChatToolLineLabel(
     (call.state === 'completed' || result !== undefined)
   const failed = call.state === 'failed' || result?.isError === true
   let commandDetail: string | null = null
+  let commandLanguage: string | null = null
   let verb: string | null = null
   let target = display.label
   let title = display.filePath ?? target
@@ -46,6 +50,7 @@ export function nativeChatToolLineLabel(
     target = fullCommand === null ? target : summarizeToolInput(fullCommand)
     title = fullCommand ?? target
     if (fullCommand !== null) {
+      commandLanguage = nativeChatCommandLanguage(call.name, call.input)
       const plainCommand = nativeChatPlainCommandInput(call.input)
       if (plainCommand?.trim() === fullCommand) {
         commandDetail = plainCommand === target ? null : plainCommand
@@ -115,5 +120,5 @@ export function nativeChatToolLineLabel(
       verb = translate('components.native-chat.tool.row.triedSearchWeb', 'Tried to search the web')
     }
   }
-  return { verb, target, title, command, filePath, commandDetail }
+  return { verb, target, title, command, filePath, commandDetail, commandLanguage }
 }

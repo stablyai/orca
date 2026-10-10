@@ -199,7 +199,6 @@ describe('new workspace card file drop ownership', () => {
     cards.splice(cards.indexOf(b), 1)
     await drop(a)
     expect(first).toHaveBeenCalledTimes(2)
-    expect(a.querySelector('[data-native-file-drop-target]')).toBeNull()
   })
   it('keeps a preparation captured for the original card when another card mounts', async () => {
     const gate = Promise.withResolvers<{ paths: string[]; failures: never[] }>()

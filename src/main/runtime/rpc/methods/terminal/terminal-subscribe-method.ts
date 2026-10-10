@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../core'
-import { TerminalSubscribe } from './stream-schemas'
+import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
 import { isTerminalReadPayloadIncomplete } from './terminal-stream-replay'
 import { runTerminalBinarySubscription } from './terminal-legacy-subscribe-binary'
 import {
@@ -13,6 +13,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
   // Streams live terminal output over WebSocket; mobile clients pass client+viewport for server-side auto-fit.
   defineStreamingMethod({
     name: 'terminal.subscribe',
+    permission: 'workspace',
     params: TerminalSubscribe,
     handler: async (
       params,

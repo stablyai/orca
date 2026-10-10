@@ -2,8 +2,9 @@
  *  its Stop event's reason (`JournalStopEvent`); the others are in memory only. */
 export type StructuredAgentSessionChildEndCause =
   | 'user-stop'
-  /** The user closed this chat: its tab, its launch, or a `/clear` that replaces it. */
+  /** The user closed this chat or its launch. */
   | 'user-close'
+  | 'context-clear'
   | 'host-stop'
   | 'exit'
   | 'attach-failed'
@@ -13,5 +14,5 @@ export type StructuredAgentSessionChildEndCause =
  *  is what a turn's end reads, so never rename an arm. */
 export type StructuredAgentSessionStopCause = Extract<
   StructuredAgentSessionChildEndCause,
-  'user-stop' | 'user-close' | 'host-stop' | 'evict'
+  'user-stop' | 'user-close' | 'context-clear' | 'host-stop' | 'evict'
 >

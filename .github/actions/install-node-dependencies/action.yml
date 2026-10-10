@@ -209,6 +209,10 @@ runs:
           git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
         fi
 
+    - name: Build internal packages
+      shell: bash
+      run: pnpm run build:packages
+
     # pnpm checks the cached record's policy and validity; never bypass verification.
     - name: Save pnpm verification record on main
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.verification-cache.outputs.key != '' && steps.verification-cache.outputs.cache-hit != 'true'

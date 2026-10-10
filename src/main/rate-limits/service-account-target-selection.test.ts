@@ -368,7 +368,6 @@ describe('RateLimitService', () => {
       wslDistro: target?.wslDistro ?? null,
       wslLinuxConfigDir: target?.runtime === 'wsl' ? '/home/jin/.claude' : null,
       envPatch: target?.runtime === 'wsl' ? { CLAUDE_CONFIG_DIR: '/home/jin/.claude' } : {},
-      stripAuthEnv: target?.runtime === 'wsl',
       provenance: target?.runtime === 'wsl' ? 'managed:wsl-account:wsl:Ubuntu' : 'system'
     }))
     service.setClaudeAuthPreparationResolver(resolver)
@@ -385,8 +384,7 @@ describe('RateLimitService', () => {
         authPreparation: expect.objectContaining({
           runtime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxConfigDir: '/home/jin/.claude',
-          stripAuthEnv: true
+          wslLinuxConfigDir: '/home/jin/.claude'
         }),
         allowPtyFallback: true,
         allowUsagePanelSupplement: true,
@@ -404,7 +402,6 @@ describe('RateLimitService', () => {
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'system'
     }))
 
@@ -450,7 +447,6 @@ describe('RateLimitService', () => {
       wslDistro: 'Ubuntu',
       wslLinuxConfigDir: '/home/jin/.claude',
       envPatch: {},
-      stripAuthEnv: true,
       provenance: 'wsl:Ubuntu:system'
     }))
 
@@ -561,7 +557,6 @@ describe('RateLimitService', () => {
       wslDistro: target?.wslDistro ?? null,
       wslLinuxConfigDir: target?.runtime === 'wsl' ? '/home/jin/.claude' : null,
       envPatch: {},
-      stripAuthEnv: target?.runtime === 'wsl',
       provenance: target?.runtime === 'wsl' ? 'managed:wsl-account-1:wsl:Ubuntu' : 'system'
     }))
 

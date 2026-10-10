@@ -9,6 +9,7 @@ import type { JournalLoad } from '../native-chat/agent-session-journal/journal-o
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 
 /** How long a Stop, counted from its cancel, lets the agent end its turn before the child goes. */
 export const ACP_STOP_GRACE_MS = 4_000
@@ -25,6 +26,7 @@ export type AcpStructuredSessionAdapterDeps = {
   readProcessStartTime?: (pid: number) => Promise<number | null>
   /** Every exit, expected or not: the host ends that child's record. */
   onEvent?: (event: StructuredAgentSessionLifecycleEvent) => void
+  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** A send this adapter admitted, settled once the agent answered for it. */
   onDispatchSettledLate?: (
     settlement: { sessionId: string; clientMessageId: string } & (

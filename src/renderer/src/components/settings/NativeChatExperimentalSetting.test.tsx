@@ -45,37 +45,19 @@ function listedNames(container: HTMLElement): string[] {
 }
 
 describe('NativeChatExperimentalSetting shell environment', () => {
-  it('shows only when Chat UI, the Chat UI default view, and structured chat are all on', () => {
-    for (const experimentalNativeChat of [false, true]) {
-      for (const openAgentTabsInChatByDefault of [false, true]) {
-        for (const experimentalStructuredNativeChat of [false, true]) {
-          const { container, unmount } = renderSetting({
-            experimentalNativeChat,
-            openAgentTabsInChatByDefault,
-            experimentalStructuredNativeChat
-          })
-          const expected =
-            experimentalNativeChat &&
-            openAgentTabsInChatByDefault &&
-            experimentalStructuredNativeChat
-          expect(
-            container.querySelector(SHELL_ENV_TOGGLE) !== null,
-            JSON.stringify({
-              experimentalNativeChat,
-              openAgentTabsInChatByDefault,
-              experimentalStructuredNativeChat
-            })
-          ).toBe(expected)
-          unmount()
-        }
-      }
-    }
+  it('shows structured controls when Chat UI is on', () => {
+    const enabled = renderSetting({ experimentalNativeChat: true })
+    expect(enabled.container.querySelector(SHELL_ENV_TOGGLE)).not.toBeNull()
+    expect(enabled.container.textContent).not.toContain('Default view')
+    enabled.unmount()
+
+    const disabled = renderSetting({ experimentalNativeChat: false })
+    expect(disabled.container.querySelector(SHELL_ENV_TOGGLE)).toBeNull()
+    disabled.unmount()
   })
 
   const structuredOn = {
-    experimentalNativeChat: true,
-    openAgentTabsInChatByDefault: true,
-    experimentalStructuredNativeChat: true
+    experimentalNativeChat: true
   }
   const chooseNames = { ...structuredOn, nativeChatInheritShellEnvironment: false }
 
@@ -215,9 +197,7 @@ describe('NativeChatExperimentalSetting shell environment', () => {
 describe('NativeChatExperimentalSetting queue follow-ups', () => {
   const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
   const structuredOn = {
-    experimentalNativeChat: true,
-    openAgentTabsInChatByDefault: true,
-    experimentalStructuredNativeChat: true
+    experimentalNativeChat: true
   }
 
   it('shows the switch, with copy naming the image exception, when the host queues messages', () => {
@@ -249,12 +229,19 @@ describe('NativeChatExperimentalSetting queue follow-ups', () => {
     expect(container.querySelector(QUEUE_TOGGLE)).not.toBeNull()
   })
 
-  it('stays hidden outside structured chat even when the host queues messages', () => {
+  it('hides the switch with Chat UI off when no structured chats are held', () => {
     setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
-    const { container } = renderSetting({
-      ...structuredOn,
-      experimentalStructuredNativeChat: false
-    })
+    const { container } = renderSetting({ experimentalNativeChat: false })
     expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+  })
+})
+
+describe('NativeChatExperimentalSetting inline visuals', () => {
+  it('leaves Inline visuals on the Chat page even while structured chat is enabled', () => {
+    const { queryByRole, getByRole } = renderSetting({
+      experimentalNativeChat: true
+    })
+    expect(getByRole('switch', { name: 'Toggle automatic resume after a restart' })).toBeTruthy()
+    expect(queryByRole('switch', { name: 'Toggle inline visuals' })).toBeNull()
   })
 })

@@ -43,7 +43,6 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   attachmentDirectory?: string
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
-  modelCatalog?: ClaudeStructuredSessionAdapterDeps['modelCatalog']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
   onSessionIdle?: ClaudeStructuredSessionAdapterDeps['onSessionIdle']
@@ -55,7 +54,11 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'started' || event.type === 'options-skipped') {
+  if (
+    event.type === 'started' ||
+    event.type === 'options-reported' ||
+    event.type === 'options-skipped'
+  ) {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.
@@ -158,8 +161,7 @@ export function createStructuredClaudeRuntimeAdapter(
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
-    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-    ...(deps.modelCatalog ? { modelCatalog: deps.modelCatalog } : {})
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }
 

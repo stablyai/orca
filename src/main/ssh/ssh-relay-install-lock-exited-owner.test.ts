@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { tryStealInstallLockCommand } from './ssh-relay-install-lock-commands'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'

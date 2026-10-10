@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { journalLifecycleMutationItemId } from '../native-chat/agent-session-journal/journal-row-builders'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../shared/agent-session-stop-row-identity'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLifecycleBatchInput } from '../native-chat/agent-session-journal/journal-store-contracts'
@@ -110,7 +110,7 @@ describe('a Grok crash whose pipes close before its exit is seen', () => {
     const turnKey = settled.turn!.itemId
     expect(
       settled.batch.mutations.flatMap((mutation) =>
-        mutation.kind === 'item' ? [agentJournalItemKey(mutation.identity)] : []
+        mutation.kind === 'item' ? [journalLifecycleMutationItemId(mutation)] : []
       )
     ).toEqual(expect.arrayContaining([settled.statuses[0]!.itemId, turnKey]))
     // No later stale-session pass rewrites it: nothing is left for one.

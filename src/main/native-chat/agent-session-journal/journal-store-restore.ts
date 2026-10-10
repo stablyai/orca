@@ -33,9 +33,13 @@ export async function restoreJournalStore(
     replay: () => replayJournal(database.db, host.identity.sessionId),
     start: () => collaborators.epochController.start('session_created', 0),
     adopt: host.adopt,
-    // Roster notices are about the conversation, not any turn in it.
+    // Journal-open revisions are host recovery, not new provider output.
     appendItem: (identity, body, fence) =>
-      host.journal().appendItem(identity, body, { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
+      host.journal().appendItem(identity, body, {
+        fence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+        recovered: true
+      }),
     highestFence: () => host.state().highestFence
   })
 }

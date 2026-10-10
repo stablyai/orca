@@ -3,7 +3,8 @@ import {
   isPrereleaseAppVersion,
   parseCliVersion
 } from '../shared/app-version'
-import { runProcess, type ProcessSpec } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 
 /** One line naming why a probe said no; the binary's own words, bounded. */
 function warnRefused(program: string, why: string, output = ''): void {
@@ -53,14 +54,15 @@ export async function probeAgentCliVersion(
   return true
 }
 
+/** A stable release at or after `floor`, on any later major line too. */
+export function isStableCliVersionFrom(version: string, floor: string): boolean {
+  return !isPrereleaseAppVersion(version) && hasReachedAppVersion(version, floor)
+}
+
 /** A stable release on `major`'s line, at or after `floor`. */
 export function isStableCliVersionOnLine(
   version: string,
   line: { major: number; floor: string }
 ): boolean {
-  return (
-    version.startsWith(`${line.major}.`) &&
-    !isPrereleaseAppVersion(version) &&
-    hasReachedAppVersion(version, line.floor)
-  )
+  return version.startsWith(`${line.major}.`) && isStableCliVersionFrom(version, line.floor)
 }

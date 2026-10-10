@@ -4,7 +4,6 @@ import {
   FolderOpen,
   LocateFixed,
   MessageSquarePlus,
-  MessagesSquare,
   PanelTopOpen,
   Play,
   Trash2
@@ -13,6 +12,7 @@ import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdow
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
 
 export function SessionActionMenuItems({
   menuKind = 'dropdown',
@@ -22,6 +22,7 @@ export function SessionActionMenuItems({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -41,6 +42,8 @@ export function SessionActionMenuItems({
   onResume: () => void
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
+  // Offered only on rows native chat owns, where it forks: see ai-vault-session-cli-fork.
+  onResumeInNewCli?: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -59,6 +62,15 @@ export function SessionActionMenuItems({
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
+  // Why: Jump/Resume items act on this conversation; the hand-off starts a new one, so it sits apart.
+  const hasItemsAboveHandOff = Boolean(
+    onJumpToOriginalPane ||
+    showJumpToWorktree ||
+    !resumeHidden ||
+    onResumeInNewChat ||
+    onResumeInNewCli ||
+    onCopyResume
+  )
   const deleteLabel = translate('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
   const deleteItem = (
     <Item
@@ -100,24 +112,12 @@ export function SessionActionMenuItems({
           {resumeLabel}
         </Item>
       ) : null}
-      {onResumeInNewChat ? (
-        <Item onSelect={onResumeInNewChat}>
-          <MessagesSquare className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewChat',
-            'Resume in New Chat'
-          )}
-        </Item>
-      ) : null}
-      {onContinueInNewSession ? (
-        <Item onSelect={onContinueInNewSession}>
-          <MessageSquarePlus className="size-3.5" />
-          {translate(
-            'components.agentSessionContinuation.continueInNewSession',
-            'Continue in New Session…'
-          )}
-        </Item>
-      ) : null}
+      <AiVaultSessionSurfaceSwitchMenuItems
+        menuKind={menuKind}
+        tooltipSide={menuKind === 'context' ? 'right' : 'left'}
+        onResumeInNewChat={onResumeInNewChat}
+        onResumeInNewCli={onResumeInNewCli}
+      />
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>
           <Copy className="size-3.5" />
@@ -126,6 +126,18 @@ export function SessionActionMenuItems({
             'Copy Resume Command'
           )}
         </Item>
+      ) : null}
+      {onContinueInNewSession ? (
+        <>
+          {hasItemsAboveHandOff ? <Separator /> : null}
+          <Item onSelect={onContinueInNewSession}>
+            <MessageSquarePlus className="size-3.5" />
+            {translate(
+              'components.agentSessionContinuation.handOffToAnotherAgent',
+              'Hand Off to Another Agent'
+            )}
+          </Item>
+        </>
       ) : null}
       {hasLocalPathActions ? (
         <>

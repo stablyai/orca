@@ -29,6 +29,7 @@ export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSe
 export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.searchSessions',
+    permission: 'workspace',
     params: AiVaultSearchRequestSchema,
     handler: (params, { runtime, clientKind, clientCapabilities }) => {
       const response = searchSessionService(params, clientKind ? 'relay' : 'runtime')
@@ -41,12 +42,14 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.searchStatus',
+    permission: 'workspace',
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
       sessionSearchServiceStatus(params, clientKind ? 'relay' : 'runtime')
   }),
   defineMethod({
     name: 'aiVault.setSearchEnabled',
+    permission: 'settings-write',
     params: AiVaultSetSearchEnabledParamsSchema,
     handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
       // Paired clients only: an in-process caller writes this host's own settings directly,
@@ -66,12 +69,14 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
+    permission: 'workspace',
     params: AiVaultSessionTitlesParams,
     handler: (params, { runtime, signal }) =>
       runtime.resolveAiVaultSessionTitles(params.requests, signal)
   }),
   defineMethod({
     name: 'aiVault.listSessions',
+    permission: 'workspace',
     params: AiVaultListSessionsParams,
     handler: async (params, { runtime, clientKind, clientCapabilities }) => {
       await ensureStructuredAgentSessionHostUnlessRefused(() =>
@@ -107,11 +112,13 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.prepareSessionResume',
+    permission: 'workspace',
     params: AiVaultPrepareSessionResumeParams,
     handler: async (params, { runtime }) => {
       const args: AiVaultPrepareSessionResumeArgs = {
         agent: params.agent,
         ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+        ...(params.fork ? { fork: true } : {}),
         filePath: params.filePath,
         codexHome: params.codexHome,
         // Why: the RPC executes on the transcript-owning host; never let a

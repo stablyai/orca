@@ -35,7 +35,7 @@ import {
   findSlotProblems,
   readManifest
 } from './orcad-prebuild-slot-contents.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
 
 const root = resolve(import.meta.dirname, '../..')

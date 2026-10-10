@@ -68,9 +68,20 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: '100.64.1.20',
       noPairing: true,
       mobilePairing: false,
+      grantDesktopControl: false,
       recipeJson: false,
       projectRoot: null
     })
+  })
+
+  it('forwards the pairing-time desktop-control grant', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(['serve', '--grant-desktop-control'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith(
+      expect.objectContaining({ grantDesktopControl: true, mobilePairing: false })
+    )
   })
 
   it('starts a foreground headless server with mobile pairing enabled', async () => {
@@ -87,6 +98,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: '100.64.1.20',
       noPairing: false,
       mobilePairing: true,
+      grantDesktopControl: false,
       recipeJson: false,
       projectRoot: null
     })
@@ -113,6 +125,7 @@ describe('orca cli worktree awareness', () => {
       pairingAddress: 'wss://sandbox.example.com',
       noPairing: false,
       mobilePairing: false,
+      grantDesktopControl: false,
       recipeJson: true,
       projectRoot: '/workspace/repo'
     })

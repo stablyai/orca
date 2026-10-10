@@ -18,7 +18,13 @@ type UsageScannerMocks = {
 
 export type StoreSessionMockApi = {
   worktrees: { list: Mock; create: Mock; remove: Mock; updateMeta: Mock }
-  repos: { list: Mock; add: Mock; remove: Mock; update: Mock; pickFolder: Mock }
+  repos: {
+    list: Mock
+    add: Mock
+    removeForHost: Mock
+    update: Mock
+    pickFolder: Mock
+  }
   pty: { kill: Mock }
   gh: { prForBranch: Mock; issue: Mock }
   settings: { get: Mock; set: Mock }
@@ -41,7 +47,7 @@ export function createStoreSessionMockApi(): StoreSessionMockApi {
     repos: {
       list: vi.fn().mockResolvedValue([]),
       add: vi.fn().mockResolvedValue({}),
-      remove: vi.fn().mockResolvedValue(undefined),
+      removeForHost: vi.fn().mockResolvedValue(undefined),
       update: vi.fn().mockResolvedValue({}),
       pickFolder: vi.fn().mockResolvedValue(null)
     },

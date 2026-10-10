@@ -42,6 +42,9 @@ export function createProjectGroupCatalogActions(
         })
       } catch (err) {
         console.error('Failed to fetch project groups:', err)
+        if (options?.throwOnError) {
+          throw err
+        }
       }
     },
 
