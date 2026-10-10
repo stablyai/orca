@@ -118,7 +118,7 @@ describe('shared child execution projection', () => {
   })
 
   it.each(['parent-1', 'parent-2'])(
-    'reopens a child for real follow-up in %s and fences old execution events',
+    'reopens a child for real follow-up in %s in its own row and fences old execution events',
     (parent) => {
       const h = harness()
       firstRun(h)
@@ -130,18 +130,19 @@ describe('shared child execution projection', () => {
       expect(h.tracker.state).toBeNull()
       h.send(turn('turn/started', CHILD, 'child-2'))
       h.send(turn('turn/completed', PRIMARY, parent))
-      expect(h.state(parent)).toBe('working')
+      // One entry per child: the follow-up reopens the row that spawned it.
+      expect(h.state('parent-1')).toBe('working')
       expect(h.tracker.state?.tasks).toHaveLength(1)
       h.send(turn('turn/completed', CHILD, 'child-1'))
       h.send(turn('turn/started', CHILD, 'child-1'))
       h.send(activity('parent-1', 'completed'))
-      expect(h.state(parent)).toBe('working')
+      expect(h.state('parent-1')).toBe('working')
       expect(h.tracker.state?.tasks).toHaveLength(1)
       if (parent === 'parent-2') {
-        expect(h.state('parent-1')).toBe('completed')
+        expect(h.state('parent-2')).toBeUndefined()
       }
       h.send(turn('turn/completed', CHILD, 'child-2'))
-      expect(h.state(parent)).toBe('completed')
+      expect(h.state('parent-1')).toBe('completed')
       expect(h.tracker.state).toBeNull()
       h.dispose()
     }
@@ -166,8 +167,8 @@ describe('shared child execution projection', () => {
     h.send(activity('parent-2', 'interacted'))
     h.send(activity('parent-1', 'completed'))
     h.send(turn('turn/started', CHILD, 'child-2'))
-    expect(h.state('parent-1')).toBe('completed')
-    expect(h.state('parent-2')).toBe('working')
+    expect(h.state('parent-1')).toBe('working')
+    expect(h.state('parent-2')).toBeUndefined()
     expect(h.tracker.state?.tasks).toHaveLength(1)
     h.dispose()
   })

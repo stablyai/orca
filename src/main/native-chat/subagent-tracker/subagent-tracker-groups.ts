@@ -1,28 +1,20 @@
-// Which group lists each subagent run: the groups this provider run wrote, and the ones earlier
-// runs of the session journaled, inherited one at a time as this run's own reports reach them.
+// Which group lists each subagent: the groups this provider run wrote, and the ones earlier runs of
+// the session journaled, inherited one at a time as this run's own reports reach them. Every lookup
+// is read from the rows themselves, so no second index can disagree with what a row lists.
 
-import { BoundedMap } from '../../../shared/bounded-map'
 import { SubagentRosterRetention } from '../subagent-roster-retention'
 import { subagentGroupJournalBody } from '../agent-session-journal/journal-subagent-group-body'
+import { UNLABELLED_SUBAGENT } from './subagent-tracker-entries'
 import type {
   JournaledSubagentSource,
   SubagentGroup,
+  SubagentReport,
   TrackedSubagent
 } from './subagent-tracker-types'
 
 /** Settled history target; groups with unfinished children remain owned. */
 export const MAX_SUBAGENT_GROUPS = 32
 const MAX_SETTLED_IDENTITIES = 2048
-/** Runs remembered per child, so a late report finds the row its run is listed in. */
-const MAX_RUNS_PER_SUBAGENT = 16
-
-type ChildRuns = {
-  /** The group listing the child's current run. */
-  groupId: string
-  runs: BoundedMap<string, string>
-  /** Which run of the child the current one is: 1, then one more per run started. */
-  attempt: number
-}
 
 export type LocatedSubagent<Placement> = {
   group: SubagentGroup<Placement>
@@ -31,12 +23,16 @@ export type LocatedSubagent<Placement> = {
 
 export class SubagentTrackerGroups<Placement> {
   private readonly groups = new Map<string, SubagentGroup<Placement>>()
-  private readonly children = new Map<string, ChildRuns>()
   private readonly retention = new SubagentRosterRetention(this.groups, {
     maxGroups: MAX_SUBAGENT_GROUPS,
     maxSettledIdentities: MAX_SETTLED_IDENTITIES,
     entries: (group) => [...group.entries.values()].map((tracked) => tracked.entry),
-    identities: (group) => this.release(group),
+    // A released child's every run stays settled, so no replay of any of them lists it again.
+    identities: (group) =>
+      [...group.entries.values()].flatMap(({ entry, runs }) => [
+        settledIdentity(entry.id, null),
+        ...runs.map((run) => settledIdentity(entry.id, run))
+      ]),
     onEvict: (group) => this.onEvict?.(group)
   })
 
@@ -53,99 +49,52 @@ export class SubagentTrackerGroups<Placement> {
     return this.groups.get(groupId)
   }
 
-  /** The child's current run, inheriting the group an earlier provider run last listed it in. */
+  /** The child's entry, inheriting the group an earlier provider run last listed it in. */
   locate(id: string): LocatedSubagent<Placement> | null {
-    const child = this.children.get(id)
-    const group = child ? this.groups.get(child.groupId) : undefined
-    const tracked = group?.entries.get(id)
-    if (group && tracked) {
-      return { group, tracked }
+    const listed = this.listed(id)
+    if (listed) {
+      return listed
     }
-    const inherited = child ? null : (this.journaled?.groupOf(id) ?? null)
-    return inherited !== null && !this.groups.has(inherited) && this.inherit(inherited)
-      ? this.locate(id)
+    const groupId = this.journaled?.groupOf(id) ?? null
+    return groupId !== null && !this.groups.has(groupId) && this.inherit(groupId)
+      ? this.listed(id)
       : null
   }
 
-  /** The entry still showing a known run of the child; null for a run never seen, forgotten, or
-   *  since replaced in its row by a later run. */
-  locateRun(id: string, run: string): LocatedSubagent<Placement> | null {
-    const groupId = this.children.get(id)?.runs.get(run)
-    const group = groupId === undefined ? undefined : this.groups.get(groupId)
-    const tracked = group?.entries.get(id)
-    return group && tracked?.run === run ? { group, tracked } : null
-  }
-
-  /** Whether the child ever ran `run` here, listed or since replaced. */
-  hasRun(id: string, run: string): boolean {
-    return this.children.get(id)?.runs.has(run) ?? false
-  }
-
-  attempt(id: string): number {
-    return this.children.get(id)?.attempt ?? 1
-  }
-
   /** This run's group for a key, else the earlier run's row it continues, else a new one. */
-  groupFor(groupId: string, placement: () => Placement): SubagentGroup<Placement> {
-    const existing = this.groups.get(groupId) ?? this.inherit(groupId)
+  groupFor(group: SubagentReport<Placement>['group']): SubagentGroup<Placement> {
+    const existing = this.groups.get(group.id) ?? this.inherit(group.id)
     if (existing) {
+      existing.outsideTurn ||= group.outsideTurn === true
       return existing
     }
-    const group: SubagentGroup<Placement> = {
-      groupId,
-      placement: placement(),
+    const created: SubagentGroup<Placement> = {
+      groupId: group.id,
+      placement: group.placement(),
+      outsideTurn: group.outsideTurn === true,
       entries: new Map(),
       admittedEntries: 0,
       claimedLabels: new Set(),
       lastSerialized: null
     }
-    this.groups.set(groupId, group)
-    return group
-  }
-
-  /** Lists `run` of the child in `group` as its current run. */
-  place(id: string, group: SubagentGroup<Placement>, run: string | null, newRun: boolean): void {
-    const child = this.children.get(id) ?? {
-      groupId: group.groupId,
-      runs: new BoundedMap<string, string>({
-        maxEntries: MAX_RUNS_PER_SUBAGENT,
-        // A run aged out of the history can never be started again by a late duplicate.
-        onEvict: (_groupId, oldRun) => this.retention.rememberSettled(settledIdentity(id, oldRun))
-      }),
-      attempt: this.journaled?.attempt?.(id) ?? 1
-    }
-    if (newRun && this.children.has(id)) {
-      child.attempt += 1
-    }
-    child.groupId = group.groupId
-    if (run !== null) {
-      child.runs.set(run, group.groupId)
-    }
-    this.children.set(id, child)
-  }
-
-  rekey(from: string, to: string): void {
-    const child = this.children.get(from)
-    if (child) {
-      this.children.delete(from)
-      this.children.set(to, child)
-    }
-  }
-
-  forget(id: string): void {
-    this.children.delete(id)
+    this.groups.set(group.id, created)
+    return created
   }
 
   hasSettled(id: string, run: string | null): boolean {
     return this.retention.hasSettled(settledIdentity(id, run))
   }
 
-  isKnown(id: string): boolean {
-    return this.children.has(id)
+  /** A run an entry no longer remembers is settled for good. */
+  rememberSettledRun(id: string, run: string): void {
+    this.retention.rememberSettled(settledIdentity(id, run))
   }
 
   trim(changed: Iterable<SubagentGroup<Placement>>, retainedGroupId?: string): void {
-    this.retention.trim(changed, retainedGroupId)
+    this.retention.trim(
+      changed,
+      (groupId) => groupId === retainedGroupId || this.groups.get(groupId)?.outsideTurn === true
+    )
   }
 
   sizes(): { groups: number; settledIdentities: number } {
@@ -155,29 +104,19 @@ export class SubagentTrackerGroups<Placement> {
   clear(): void {
     this.retention.clear()
     this.groups.clear()
-    this.children.clear()
   }
 
-  /** An evicted group's children and runs: only those it still lists stop being tracked. */
-  private release(group: SubagentGroup<Placement>): string[] {
-    const identities: string[] = []
-    for (const id of group.entries.keys()) {
-      const child = this.children.get(id)
-      if (!child) {
-        continue
-      }
-      for (const [run, groupId] of child.runs.entries()) {
-        if (groupId === group.groupId) {
-          identities.push(settledIdentity(id, run))
-          child.runs.delete(run)
-        }
-      }
-      if (child.groupId === group.groupId) {
-        identities.push(settledIdentity(id, null))
-        this.children.delete(id)
+  /** An older build could list one child in two rows: the inherited copy that counts is the one
+   *  the journal reading says it last ran in; the other is history. */
+  private listed(id: string): LocatedSubagent<Placement> | null {
+    const chosen = this.journaled?.groupOf(id) ?? null
+    for (const group of this.groups.values()) {
+      const tracked = group.entries.get(id)
+      if (tracked && !(tracked.inherited && chosen !== null && chosen !== group.groupId)) {
+        return { group, tracked }
       }
     }
-    return identities
+    return null
   }
 
   /** Once per group: after that this run's copy is the newer one. */
@@ -190,27 +129,26 @@ export class SubagentTrackerGroups<Placement> {
       groupId,
       // The row keeps the turn it was created beside; a later run's writes never move it.
       placement: row.placement,
+      outsideTurn: false,
       entries: new Map(),
       admittedEntries: row.entries.length,
       claimedLabels: new Set(row.entries.map((entry) => entry.label)),
       lastSerialized: JSON.stringify(subagentGroupJournalBody(groupId, row.entries))
     }
-    this.groups.set(groupId, group)
     for (const entry of row.entries) {
       group.entries.set(entry.id, {
         entry: { ...entry },
         run: null,
+        runs: [],
+        attempt: this.journaled?.attempt?.(entry.id) ?? 1,
         // Each child outlived the run that spawned it, so none is tied to this run's turns.
         backgrounded: true,
         labelBase: entry.label,
-        provisional: false,
+        provisional: entry.label === UNLABELLED_SUBAGENT,
         inherited: true
       })
-      // A child an older build listed in two rows lives only in the one the reading chose.
-      if (this.journaled?.groupOf(entry.id) === groupId && !this.children.has(entry.id)) {
-        this.place(entry.id, group, null, false)
-      }
     }
+    this.groups.set(groupId, group)
     return group
   }
 }

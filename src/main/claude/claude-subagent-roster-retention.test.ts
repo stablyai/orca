@@ -168,9 +168,8 @@ describe('Claude shared settled-only roster retention', () => {
     h.roster.observeChildActivity('original-spawn')
     h.setGroup('resumed')
     h.start('a', 'resume-tool', true)
-    // The resumed run is listed where it resumed; the inherited row keeps its history untouched.
-    expect(h.agents('resumed')).toEqual([expect.objectContaining({ id: 'a', state: 'working' })])
-    expect(h.agents('inherited')).toEqual([])
+    expect(h.agents('inherited').map((entry) => entry.state)).toEqual(['working', 'completed'])
+    expect(h.agents('resumed')).toHaveLength(0)
     expect(h.roster.linkage.settledLinkageFor('original-spawn').linkage).toMatchObject({
       agentId: 'a',
       attempt: 5

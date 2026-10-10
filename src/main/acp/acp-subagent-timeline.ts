@@ -56,25 +56,12 @@ export class AcpSubagentTimeline {
     return { ...this.tracker.sizes(), replies: this.results.size }
   }
 
-  /** No later frame may reacquire working ownership. */
+  /** The journal owns session-end settlement; no later frame may reacquire working ownership. */
   dispose(): void {
     this.disposed = true
     this.tracker.dispose()
     this.results.clear()
     this.written = []
-  }
-
-  /** The provider session is gone: every child it still ran loses contact at this moment. */
-  settleSession(at: number): AcpTimelineEvent[] {
-    if (this.disposed) {
-      return []
-    }
-    this.at = at
-    this.written = []
-    this.tracker.batch(() => this.tracker.settleSession())
-    const events = this.written
-    this.written = []
-    return events
   }
 
   translate(
@@ -133,7 +120,11 @@ export class AcpSubagentTimeline {
     this.at = at
     this.tracker.report({
       id: update.id,
-      group: { id: turn ?? OUTSIDE_TURN, placement: () => placement },
+      group: {
+        id: turn ?? OUTSIDE_TURN,
+        placement: () => placement,
+        outsideTurn: turn === undefined
+      },
       announces: update.knownOnly !== true,
       ...(update.label !== undefined ? { label: update.label } : {}),
       ...(update.state !== undefined ? { state: update.state } : {}),

@@ -230,7 +230,8 @@ export class CodexSubagentRoster {
       ownerThreadId === threadId ? turnId : (this.deps.activeTurn(ownerThreadId) ?? turnId)
     return {
       id: codexSubagentGroupId(ownerThreadId, ownerTurnId),
-      placement: () => this.deps.turnScopeFor(ownerThreadId, ownerTurnId)
+      placement: () => this.deps.turnScopeFor(ownerThreadId, ownerTurnId),
+      outsideTurn: ownerTurnId === null
     }
   }
 }

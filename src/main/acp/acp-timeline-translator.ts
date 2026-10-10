@@ -39,8 +39,7 @@ export class AcpTimelineTranslator {
   private readonly prompts: AcpPromptTurns
   private readonly tools = new AcpToolTimeline()
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
-  /** Read by the session's end, which settles every subagent the child still ran. */
-  readonly subagents = new AcpSubagentTimeline()
+  private readonly subagents = new AcpSubagentTimeline()
   private readonly messages = new AcpTurnMessages()
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   private readonly failures: AcpTurnFailures

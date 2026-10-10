@@ -214,9 +214,11 @@ export class ClaudeSubagentRoster {
   }
 
   private currentGroup(): SubagentReport<AgentJournalTurnScope>['group'] {
+    const key = this.deps.currentGroupKey()
     return {
-      id: this.deps.currentGroupKey() ?? OUTSIDE_TURN,
-      placement: this.deps.currentTurnScope
+      id: key ?? OUTSIDE_TURN,
+      placement: this.deps.currentTurnScope,
+      outsideTurn: key === null
     }
   }
 }

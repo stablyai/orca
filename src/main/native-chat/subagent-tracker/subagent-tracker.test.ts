@@ -99,21 +99,46 @@ describe('SubagentTracker', () => {
     ])
   })
 
-  it('lists a new run in the turn that started it, keeping the earlier run as history', () => {
+  it('reopens a resumed child in the one row that lists it, and ignores its earlier runs', () => {
     const h = harness()
     h.report('turn-1', { id: 'a', run: 'r1', label: 'Audit', tokens: 5 })
+    h.report('turn-1', { id: 'a', run: 'r1', state: 'completed', announces: false })
     h.report('turn-2', { id: 'a', run: 'r2', label: 'Audit' })
-    // The earlier run never ended where this host could see it.
-    expect(h.row('turn-1')).toEqual([expect.objectContaining({ state: 'unverifiable' })])
-    expect(h.row('turn-2')).toEqual([
-      expect.objectContaining({ id: 'a', label: 'Audit', state: 'working', tokens: 5 })
+    expect(h.row('turn-2')).toBeUndefined()
+    expect(h.row('turn-1')).toEqual([
+      { id: 'a', label: 'Audit', state: 'working', startedAt: 130, tokens: 5 }
     ])
-    // A late verdict reaches the run it is about; a stale announcement starts nothing.
-    h.report('turn-2', { id: 'a', run: 'r1', state: 'completed', announces: false })
+    // A late verdict or a replayed announcement of the earlier run changes nothing.
+    h.report('turn-2', { id: 'a', run: 'r1', state: 'failed', announces: false })
     h.report('turn-2', { id: 'a', run: 'r1' })
-    expect(h.row('turn-1')).toEqual([expect.objectContaining({ state: 'completed' })])
-    expect(h.row('turn-2')).toEqual([expect.objectContaining({ state: 'working' })])
+    expect(h.row('turn-1')).toEqual([expect.objectContaining({ state: 'working' })])
     expect(h.tracker.attempt('a')).toBe(2)
+  })
+
+  it('names a placeholder child when a later run is announced with a name', () => {
+    const h = harness()
+    h.report('turn', { id: 'a', run: 'r1' })
+    h.report('turn', { id: 'a', run: 'r2', label: 'Audit' })
+    expect(h.row('turn')).toEqual([expect.objectContaining({ label: 'Audit', state: 'working' })])
+  })
+
+  it('never releases the row no turn owns, so a later child cannot rewrite it from empty', () => {
+    const h = harness()
+    h.tracker.report({
+      id: 'loose',
+      announces: true,
+      state: 'completed',
+      group: { id: 'outside', placement: () => 'outside', outsideTurn: true }
+    })
+    for (let turn = 0; turn < 40; turn++) {
+      h.report(`turn-${turn}`, { id: `c${turn}`, state: 'completed' })
+    }
+    h.tracker.report({
+      id: 'later',
+      announces: true,
+      group: { id: 'outside', placement: () => 'outside', outsideTurn: true }
+    })
+    expect(h.row('outside')?.map((entry) => entry.id)).toEqual(['loose', 'later'])
   })
 
   it('reopens a run started again in the same turn, and never applies an old run to it', () => {
@@ -231,6 +256,9 @@ describe('SubagentTracker', () => {
     })
     h.report('turn-9', { id: 'b', run: 'resume' })
     expect(h.tracker.attempt('b')).toBe(4)
-    expect(h.row('turn-9')).toEqual([expect.objectContaining({ id: 'b', label: 'Two' })])
+    expect(h.row('turn-9')).toBeUndefined()
+    expect(h.row('outside-turn')?.[1]).toEqual(
+      expect.objectContaining({ id: 'b', label: 'Two', state: 'working' })
+    )
   })
 })

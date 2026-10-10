@@ -34,7 +34,8 @@ export class SubagentRosterRetention<Group extends RetainedRosterGroup> {
     this.settledIdentities.set(identity, true)
   }
 
-  trim(changed: Iterable<Group>, retainedGroupId?: string): void {
+  /** `kept` names groups that are never released: rows a later report can name again. */
+  trim(changed: Iterable<Group>, kept?: (groupId: string) => boolean): void {
     for (const group of changed) {
       if (
         group.lastSerialized !== null &&
@@ -49,7 +50,7 @@ export class SubagentRosterRetention<Group extends RetainedRosterGroup> {
       if (this.groups.size <= this.options.maxGroups) {
         break
       }
-      if (groupId === retainedGroupId) {
+      if (kept?.(groupId)) {
         continue
       }
       const group = this.groups.get(groupId)

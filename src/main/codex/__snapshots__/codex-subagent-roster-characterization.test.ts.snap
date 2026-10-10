@@ -176,7 +176,7 @@ exports[`Codex subagent roster rows (characterization) > a child given new work 
               "state": "working",
             },
           ],
-          "groupId": "thread-parent:turn-2",
+          "groupId": "thread-parent:turn-1",
           "type": "subagent-group",
         },
       ],
@@ -184,13 +184,13 @@ exports[`Codex subagent roster rows (characterization) > a child given new work 
       "role": "system",
     },
     "identity": {
-      "clientMessageId": "codex-subagents:thread-parent:turn-2",
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
       "provider": "orca",
     },
     "op": "append",
     "turnScope": {
       "kind": "turn",
-      "turnItemId": "thread-parent/turn-2",
+      "turnItemId": "thread-parent/turn-1",
     },
   },
   {
@@ -215,7 +215,7 @@ exports[`Codex subagent roster rows (characterization) > a child given new work 
               "state": "completed",
             },
           ],
-          "groupId": "thread-parent:turn-2",
+          "groupId": "thread-parent:turn-1",
           "type": "subagent-group",
         },
       ],
@@ -223,13 +223,13 @@ exports[`Codex subagent roster rows (characterization) > a child given new work 
       "role": "system",
     },
     "identity": {
-      "clientMessageId": "codex-subagents:thread-parent:turn-2",
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
       "provider": "orca",
     },
     "op": "append",
     "turnScope": {
       "kind": "turn",
-      "turnItemId": "thread-parent/turn-2",
+      "turnItemId": "thread-parent/turn-1",
     },
   },
   {

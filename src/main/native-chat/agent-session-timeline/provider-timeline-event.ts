@@ -126,4 +126,9 @@ export type ProviderTimelineEvent =
   /** Provider traffic no typed event covers; it becomes the shared bounded fallback row. */
   | ({ type: 'provider.frame'; frameKind: string; payload: unknown } & Joined)
   /** The provider child is gone. The verdict is what the host can prove about its end. */
-  | { type: 'session.ended'; verdict: StructuredAgentSessionTurnVerdict }
+  | {
+      type: 'session.ended'
+      verdict: StructuredAgentSessionTurnVerdict
+      /** When the host saw the end: the moment it lost contact with any child still running. */
+      endedAt?: number
+    }

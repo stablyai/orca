@@ -264,7 +264,8 @@ export function decideSessionEnd(
       resolve: (journal) =>
         providerTimelineSettlement(journal, 'session', {
           turns: runningProviderTimelineTurns(journal),
-          end: event.verdict
+          end: event.verdict,
+          ...(event.endedAt !== undefined ? { lostAt: event.endedAt } : {})
         })
     },
     commit: (next) => next.endSession()

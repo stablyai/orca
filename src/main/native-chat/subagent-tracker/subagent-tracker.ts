@@ -3,8 +3,9 @@
 // An agent's own code only reads its provider's events and reports what it saw about a child in
 // one shape. This tracker decides everything the user sees from that: which turn's row lists a
 // child, its name, how its state may change, what a turn's or the session's end means for it, and
-// how the row is written. A child is released only when it settles (bounded settled history) or
-// the chat ends — never by count while it may still run.
+// how the row is written. A child keeps one entry, in the row of the turn that first spawned it;
+// a later run reopens that entry. A child is released only when it settles (bounded settled
+// history) or the chat ends — never by count while it may still run.
 
 import { isTerminalSubagentState } from '../../../shared/native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
@@ -28,6 +29,8 @@ import type {
 
 /** Children one row lists. Bounds the row, which is rewritten on every change. */
 export const MAX_SUBAGENTS_PER_GROUP = 64
+/** Runs one entry remembers, so a late report for one cannot pass for a new run. */
+const MAX_RUNS_PER_SUBAGENT = 16
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
 export class SubagentTracker<Placement> {
@@ -57,26 +60,23 @@ export class SubagentTracker<Placement> {
     if (!current) {
       return report.announces ? this.create(report, run) : ADMITTED
     }
-    if (run === null || run === current.tracked.run) {
+    const { tracked } = current
+    if (run === null || run === tracked.run) {
       return this.revise(current, report)
     }
-    if (this.groups.hasRun(report.id, run)) {
-      // A late report about a run since superseded: it can still say how that run ended, while a row
-      // still shows it. It never starts that run again.
-      const listed = this.groups.locateRun(report.id, run)
-      return listed
-        ? this.revise(listed, { ...report, label: null, backgrounded: undefined })
-        : ADMITTED
+    if (tracked.runs.includes(run)) {
+      // A run since superseded: nothing it says changes the run shown now.
+      return ADMITTED
     }
-    if (current.tracked.inherited && !report.announces) {
+    if (tracked.inherited && !report.announces) {
       // A verdict on the run an earlier provider process left, under one of its calls.
       return this.revise(current, report)
     }
-    if (current.tracked.run === null && !current.tracked.inherited) {
-      // A provisional child learns the run it belongs to.
-      current.tracked.run = run
-      this.groups.place(report.id, current.group, run, false)
-      return this.revise(current, report)
+    if (tracked.run === null && !tracked.inherited) {
+      // A child listed before its run was known learns it.
+      const learned = { ...tracked, run, runs: [run] }
+      current.group.entries.set(report.id, learned)
+      return this.revise({ group: current.group, tracked: learned }, report)
     }
     return report.announces ? this.startRun(current, report, run) : ADMITTED
   }
@@ -91,7 +91,6 @@ export class SubagentTracker<Placement> {
       id === from ? [to, { ...tracked, entry: { ...tracked.entry, id: to } }] : [id, tracked]
     )
     located.group.entries = new Map(entries)
-    this.groups.rekey(from, to)
   }
 
   /** The child turned out not to be a subagent at all; its row forgets it. */
@@ -101,7 +100,6 @@ export class SubagentTracker<Placement> {
       return ADMITTED
     }
     located.group.entries.delete(id)
-    this.groups.forget(id)
     return this.write(located.group)
   }
 
@@ -111,7 +109,7 @@ export class SubagentTracker<Placement> {
 
   /** Known now, or settled and released: either way not some other kind of work. */
   has(id: string): boolean {
-    return this.groups.isKnown(id) || this.groups.hasSettled(id, null)
+    return this.groups.locate(id) !== null || this.groups.hasSettled(id, null)
   }
 
   hasSettled(id: string, run: string | null): boolean {
@@ -120,7 +118,7 @@ export class SubagentTracker<Placement> {
 
   /** Which run of the child its current one is. */
   attempt(id: string): number {
-    return this.groups.attempt(id)
+    return this.groups.locate(id)?.tracked.attempt ?? 1
   }
 
   /** Keeps a group a child's own traffic just reached, whatever retention would release. */
@@ -175,7 +173,7 @@ export class SubagentTracker<Placement> {
     report: SubagentReport<Placement>,
     run: string | null
   ): StructuredAgentSessionSinkAdmission {
-    const group = this.groups.groupFor(report.group.id, report.group.placement)
+    const group = this.groups.groupFor(report.group)
     if (group.admittedEntries >= MAX_SUBAGENTS_PER_GROUP) {
       return ADMITTED
     }
@@ -188,51 +186,46 @@ export class SubagentTracker<Placement> {
         this.now()
       ),
       run,
+      runs: run === null ? [] : [run],
+      attempt: 1,
       backgrounded: report.backgrounded ?? false,
       labelBase: label ?? UNLABELLED_SUBAGENT,
       provisional: label === null,
       inherited: false
     })
-    this.groups.place(report.id, group, run, false)
     return this.write(group)
   }
 
-  /** A new run of a known child: listed in the turn that started it. The row of the run before keeps
-   *  its history, and stops claiming that run is live. */
+  /** A new run of a known child reopens its one entry, wherever the row listing it is: its clock
+   *  starts again, and it is the next attempt. */
   private startRun(
     current: LocatedSubagent<Placement>,
     report: SubagentReport<Placement>,
     run: string
   ): StructuredAgentSessionSinkAdmission {
-    const group = this.groups.groupFor(report.group.id, report.group.placement)
-    const changed = [group]
-    if (group !== current.group && !isTerminalSubagentState(current.tracked.entry.state)) {
-      this.setState(current.group, report.id, current.tracked, 'unverifiable')
-      changed.push(current.group)
+    const { group, tracked } = current
+    const runs = [...tracked.runs, run]
+    for (const forgotten of runs.splice(0, runs.length - MAX_RUNS_PER_SUBAGENT)) {
+      this.groups.rememberSettledRun(report.id, forgotten)
     }
-    const listed = group.entries.get(report.id)
-    if (!listed && group.admittedEntries >= MAX_SUBAGENTS_PER_GROUP) {
-      return this.write(...changed.slice(1))
-    }
-    if (!listed) {
-      group.admittedEntries += 1
-    }
-    const base = current.tracked.labelBase
+    const label = boundedSubagentLabel(report.label)
+    const named = tracked.provisional && label !== null && label !== UNLABELLED_SUBAGENT
     group.entries.set(report.id, {
       entry: startedSubagentEntry(
         report,
-        listed?.entry.label ?? claimSubagentLabel(group, base),
+        named ? claimSubagentLabel(group, label) : tracked.entry.label,
         this.now(),
-        listed?.entry ?? current.tracked.entry
+        tracked.entry
       ),
       run,
+      runs,
+      attempt: tracked.attempt + 1,
       backgrounded: report.backgrounded ?? false,
-      labelBase: base,
-      provisional: current.tracked.provisional,
+      labelBase: named ? label : tracked.labelBase,
+      provisional: tracked.provisional && !named,
       inherited: false
     })
-    this.groups.place(report.id, group, run, true)
-    return this.write(...changed)
+    return this.write(group)
   }
 
   private revise(
