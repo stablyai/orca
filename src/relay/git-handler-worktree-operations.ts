@@ -139,6 +139,23 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
       return worktrees
     }
 
+    // Why: a bare repo whose checkouts are all linked worktrees (`<root>/.bare` + `<root>/<name>`)
+    // reports the bare directory as the main entry, and its git-common-dir is its own path — so the
+    // gate above passes and the relocation target is a worktree git already listed. Rewriting the
+    // bare row's path there would emit two rows for one path (identical worktreeId), and the
+    // git-derived row wins the downstream last-writer dedup, silently dropping isMainWorktree.
+    // Merge instead: keep git's truth (branch/head/isBare) on the surviving row and mark it primary.
+    const collisionIndex = worktrees.findIndex(
+      (worktree, index) =>
+        index !== mainIndex && areRelayWorktreePathsEqual(worktree.path, location.topLevel)
+    )
+    if (collisionIndex !== -1) {
+      const merged = [...worktrees]
+      merged[collisionIndex] = { ...worktrees[collisionIndex], isMainWorktree: true }
+      merged.splice(mainIndex, 1)
+      return merged
+    }
+
     const normalized = [...worktrees]
     normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
     return normalized

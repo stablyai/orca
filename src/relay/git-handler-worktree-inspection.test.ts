@@ -9,6 +9,7 @@ import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import type { GitHandler } from './git-handler'
 import { gitInit, gitCommit, type MockDispatcher } from './git-handler-test-setup'
+import { readWorktreeList } from '../main/git/worktree-list-reader'
 import {
   createGitHandlerRelay,
   createGitTempDir,
@@ -173,6 +174,52 @@ describe('GitHandler', () => {
           isMainWorktree: true
         })
         expect(mainWorktree?.path).not.toBe(resolvedLinked)
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'matches the desktop listing for a bare repo with a linked worktree',
+      async () => {
+        const sourcePath = path.join(tmpDir, 'source')
+        const bareRepoPath = path.join(tmpDir, 'project', '.bare')
+        const linkedWorktreePath = path.join(tmpDir, 'project', 'main')
+        mkdirSync(sourcePath)
+        mkdirSync(path.dirname(bareRepoPath), { recursive: true })
+        gitInit(sourcePath)
+        writeFileSync(path.join(sourcePath, 'file.txt'), 'hello')
+        gitCommit(sourcePath, 'initial')
+        execFileSync('git', ['clone', '--bare', sourcePath, bareRepoPath], {
+          stdio: 'pipe'
+        })
+        execFileSync(
+          'git',
+          [
+            '--git-dir',
+            bareRepoPath,
+            'worktree',
+            'add',
+            '--quiet',
+            linkedWorktreePath,
+            '-b',
+            'main'
+          ],
+          { stdio: 'pipe' }
+        )
+        const resolvedLinked = await fs.realpath(linkedWorktreePath)
+
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered request returns the worktree list shape.
+        const relayResult = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: resolvedLinked
+        })) as Record<string, unknown>[]
+        const desktopResult = await readWorktreeList(resolvedLinked)
+
+        expect(relayResult).toEqual(desktopResult)
+        expect(relayResult).toHaveLength(1)
+        expect(relayResult[0]).toMatchObject({
+          path: resolvedLinked,
+          isBare: false,
+          isMainWorktree: true
+        })
       }
     )
 

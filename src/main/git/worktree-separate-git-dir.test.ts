@@ -85,6 +85,26 @@ async function createBareRepo(): Promise<string> {
   return realpath(repoPath)
 }
 
+async function createBareRepoWithLinkedWorktree(): Promise<{
+  barePath: string
+  checkoutPath: string
+  head: string
+}> {
+  const root = await mkdtemp(path.join(tmpdir(), 'orca-bare-linked-worktree-'))
+  tempRoots.push(root)
+  const sourcePath = await createCommittedRepo(root, 'source')
+  const barePath = path.join(root, '.bare')
+  execFileSync('git', ['clone', '--bare', '--quiet', sourcePath, barePath])
+  const checkoutPath = path.join(root, 'main')
+  git(barePath, ['worktree', 'add', '--quiet', checkoutPath, 'main'])
+  const head = git(barePath, ['rev-parse', 'refs/heads/main']).trim()
+  return {
+    barePath: await realpath(barePath),
+    checkoutPath: await realpath(checkoutPath),
+    head
+  }
+}
+
 afterEach(async () => {
   revParseTopLevelCalls.count = 0
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -225,4 +245,29 @@ describe('git worktree separate git dir paths', () => {
       isMainWorktree: true
     })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'merges the bare main entry into the checkout it relocates onto',
+    async () => {
+      // Bare + external worktrees (`<root>/.bare` plus `<root>/main`): the bare
+      // main entry's git-common-dir is its own path, so the relocation target is
+      // a checkout git already listed. Emitting both leaves two rows sharing one
+      // path (and one worktreeId), and the git-derived row wins downstream dedup
+      // — dropping isMainWorktree so the checkout loses its Primary badge.
+      const { barePath, checkoutPath, head } = await createBareRepoWithLinkedWorktree()
+
+      const worktrees = await listWorktrees(checkoutPath)
+
+      expect(worktrees.filter((worktree) => worktree.path === checkoutPath)).toEqual([
+        expect.objectContaining({
+          path: checkoutPath,
+          branch: 'refs/heads/main',
+          head,
+          isBare: false,
+          isMainWorktree: true
+        })
+      ])
+      expect(worktrees.map((worktree) => worktree.path)).not.toContain(barePath)
+    }
+  )
 })
