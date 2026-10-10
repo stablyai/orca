@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
-import { RESERVE_DEAD_MAN_MS } from './cell-reserve-dead-man.js'
+import { RESERVE_DEAD_MAN_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from './database.js'
 import { REREGISTER_MAX_ATTEMPTS } from './host-session-registry.js'
 import { startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
@@ -172,10 +172,16 @@ describe('flipping a reserve-mode cell back to the database', () => {
     const reserve = await cell(() => now)
     const seated = await reserve.bookedHost(3)
     expect(reserve.relay.sessions.inReserveMode()).toBe(true)
+    const windowMs = reserveDeadManWindowMs(reserve.config.cellId)
+    expect(windowMs).toBeGreaterThanOrEqual(RESERVE_DEAD_MAN_MS)
+    expect(windowMs).toBeLessThanOrEqual(2 * RESERVE_DEAD_MAN_MS)
+    // Cells trip at different times, so a fleet-wide trip is staggered.
+    const windows = new Set(['c1', 'c2', 'c3', 'c4', 'c5'].map((cell) => reserveDeadManWindowMs(`production-gce-${cell}`)))
+    expect(windows.size).toBeGreaterThan(1)
     // A booking is contact: the window restarts.
-    now += RESERVE_DEAD_MAN_MS - 1_000
+    now += windowMs - 1_000
     await reserve.bookedHost(4)
-    now += RESERVE_DEAD_MAN_MS - 1_000
+    now += windowMs - 1_000
     expect(reserve.relay.sessions.inReserveMode()).toBe(true)
     now += 2_000
     expect(reserve.relay.sessions.inReserveMode()).toBe(false)

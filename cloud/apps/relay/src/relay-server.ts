@@ -19,7 +19,7 @@ import { createRemoteJWKSet } from 'jose'
 import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
-import { ReserveDeadMan } from './cell-reserve-dead-man.js'
+import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { classifyAssignmentLease } from './assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
@@ -209,7 +209,9 @@ export function createRelayServer(
   const databaseShedding = (): boolean =>
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
-  const reserveDeadMan = reserveBook ? new ReserveDeadMan(options.now) : null
+  const reserveDeadMan = reserveBook
+    ? new ReserveDeadMan(options.now, reserveDeadManWindowMs(config.cellId))
+    : null
   // The switch file's admitMode, unless the dead-man has flipped this cell back.
   const effectiveAdmitMode = (): 'db' | 'reserve' => {
     const applied = options.cellFlags?.()
