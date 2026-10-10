@@ -126,7 +126,20 @@ export function setMainPluginLanguagePacks(
 export function translateMain(key: string, fallback: string, options?: TOptions): string {
   // Why: menu registration can run before async init finishes in tests; fall back
   // to the English default instead of returning undefined from an uninitialized i18n.
-  const raw = initialized ? mainI18n.t(key, { defaultValue: fallback, ...options }) : fallback
+  const raw = initialized
+    ? mainI18n.t(key, { defaultValue: fallback, ...options })
+    : interpolateFallback(fallback, options)
   const value = typeof raw === 'string' && raw.length > 0 ? raw : fallback
   return isPseudoLocalizationLocale(mainI18n.language) ? pseudoLocalizeString(value) : value
+}
+
+// Why: startup dialogs can run before init, and their fallbacks still carry {{placeholders}}.
+function interpolateFallback(fallback: string, options: TOptions | undefined): string {
+  if (!options) {
+    return fallback
+  }
+  return fallback.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (placeholder, name: string) => {
+    const value: unknown = options[name]
+    return value === undefined || value === null ? placeholder : String(value)
+  })
 }

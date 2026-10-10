@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   chooseProfileStateCopy,
-  presentProfileStateStartupRecoveryDialog
+  presentProfileStateStartupRecoveryDialog,
+  type ProfileStateDialogTranslate
 } from './profile-state-startup-recovery-dialog'
+
+// English copy with the fallback placeholders filled, as translateMain renders it before i18n loads.
+const english: ProfileStateDialogTranslate = (_key, fallback, options) =>
+  fallback.replace('{{time}}', options?.time ?? '')
 
 describe('profile state startup recovery dialog', () => {
   it('offers a copyable offline export command and does not mutate state', async () => {
@@ -13,7 +18,8 @@ describe('profile state startup recovery dialog', () => {
       message: 'SQLite state is unreadable.\nSQLite path: /tmp/profile-state.db',
       recoveryCommand: 'orca profile state exports',
       showMessageBox,
-      copyToClipboard
+      copyToClipboard,
+      translate: english
     })
 
     expect(showMessageBox).toHaveBeenCalledWith({
@@ -37,7 +43,8 @@ describe('profile state startup recovery dialog', () => {
       message: 'ambiguous profile state',
       recoveryCommand: 'orca profile state exports',
       showMessageBox,
-      copyToClipboard
+      copyToClipboard,
+      translate: english
     })
 
     expect(copyToClipboard).not.toHaveBeenCalled()
@@ -50,7 +57,8 @@ describe('profile state startup recovery dialog', () => {
     await presentProfileStateStartupRecoveryDialog({
       message: 'both profile authorities are present',
       showMessageBox,
-      copyToClipboard
+      copyToClipboard,
+      translate: english
     })
 
     expect(showMessageBox).toHaveBeenCalledWith(
@@ -76,7 +84,8 @@ describe('profile state startup recovery dialog', () => {
         sqliteSavedAt: new Date(1),
         jsonSavedAt: new Date(2),
         formatTime: (time) => `t${time.getTime()}`,
-        showMessageBox
+        showMessageBox,
+        translate: english
       })
     ).resolves.toBe(expected)
     expect(showMessageBox).toHaveBeenCalledWith(
@@ -93,7 +102,7 @@ describe('profile state startup recovery dialog', () => {
 
   it('omits save times it could not read', async () => {
     const showMessageBox = vi.fn().mockResolvedValue({ response: 2 })
-    await chooseProfileStateCopy({ showMessageBox })
+    await chooseProfileStateCopy({ showMessageBox, translate: english })
     expect(showMessageBox.mock.calls[0][0].detail).not.toContain('Last saved')
   })
 })

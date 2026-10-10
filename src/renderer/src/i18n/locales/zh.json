@@ -19568,5 +19568,73 @@
   },
   "projectField": {
     "updateFailed": "无法更新项目字段"
+  },
+  "gpuFallback": {
+    "recoveredLaunch": {
+      "keepSafeButton": "保持安全图形模式",
+      "tryHardwareButton": "尝试硬件加速",
+      "title": "安全图形模式已启用",
+      "message": "Orca 已在安全图形模式下恢复。",
+      "detail": "由于图形进程反复崩溃，已启用安全图形模式。保留它以获得稳定性，或重新启动并再次尝试硬件加速。"
+    },
+    "restartPrompt": {
+      "restartButton": "以安全图形模式重新启动",
+      "keepRunningButton": "继续运行",
+      "title": "以安全图形模式重新启动 Orca？",
+      "message": "Orca 的图形进程反复崩溃。",
+      "detail": "安全图形模式会为此 Orca 版本停用硬件加速和 WebGL。终端和 3D 内容的渲染可能会变慢。选择“继续运行”不会更改图形设置。"
+    }
+  },
+  "profileState": {
+    "startupRecovery": {
+      "quitButton": "退出",
+      "copyCommandButton": "复制恢复命令",
+      "copyCommandDetail": "复制恢复命令，然后在 Orca 关闭后运行它。",
+      "quitDetail": "退出 Orca，确定以哪份配置文件状态为准后再重试。",
+      "title": "无法打开 Orca 配置文件状态",
+      "message": "Orca 无法安全地打开此配置文件。"
+    },
+    "copyChoice": {
+      "lastSaved": "上次保存于 {{time}}。",
+      "useSqliteButton": "使用 SQLite（推荐）",
+      "useJsonButton": "使用 JSON",
+      "quitButton": "退出",
+      "title": "选择配置文件状态",
+      "message": "此配置文件有两个不一致的已保存副本。",
+      "cause": "这通常发生在用旧版本的 Orca 打开此配置文件之后。",
+      "sqliteOption": "SQLite：此版本的 Orca 保存的内容。在旧版本中所做的更改将被丢弃。",
+      "jsonOption": "JSON：包含在旧版本中所做的更改。此版本此后保存的更改将被丢弃。",
+      "archiveNote": "Orca 会在切换前归档两个副本，然后重新启动。"
+    },
+    "recoveryNotApplied": {
+      "quitButton": "退出",
+      "title": "Orca 配置文件状态未更改",
+      "message": "Orca 无法应用所选的配置文件状态。",
+      "reopenDetail": "重新打开 Orca 以再次选择。"
+    },
+    "writeFailure": {
+      "title": "已停止保存",
+      "message": "Orca 已停止保存此配置文件。",
+      "indeterminateDetail": "Orca 无法确认你最近的更改是否已保存。在重新启动 Orca 之前，新的更改将不会被保存。",
+      "safeDetail": "此前保存的更改是安全的。在重新启动 Orca 之前，新的更改将不会被保存。",
+      "okButton": "确定"
+    }
+  },
+  "startupFailure": {
+    "title": "Orca 无法启动"
+  },
+  "localBuild": {
+    "chooseTitle": "选择本地 Orca 构建",
+    "chooseButton": "选择构建",
+    "manifestFilter": "Orca 更新清单",
+    "sameVersionError": "此构建与正在运行的应用版本相同。请再次运行 pn build:mac 以创建具有唯一版本的构建。",
+    "noLiveTerminals": "没有需要重新连接的活动终端。",
+    "oneLiveTerminal": "1 个活动终端将在重新启动后重新连接。",
+    "liveTerminals": "{{count}} 个活动终端将在重新启动后重新连接。",
+    "confirmTitle": "使用本地 Orca 构建？",
+    "schemaCompatibility": "工作区卡片和设置与状态架构 {{schemaVersion}} 兼容。",
+    "signatureRequirement": "该构建必须具有与 Orca 相同的有效代码签名，否则安装将停止。",
+    "useButton": "使用本地构建",
+    "cancelButton": "取消"
   }
 }

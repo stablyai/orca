@@ -26,6 +26,7 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { translateMain } from './i18n/main-i18n'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -142,7 +143,8 @@ if (preflightReady) {
             const userDataPath = app.getPath('userData')
             const choice = await chooseProfileStateCopy({
               ...readProfileStateCopySavedTimes(userDataPath),
-              showMessageBox: (options) => dialog.showMessageBox(options)
+              showMessageBox: (options) => dialog.showMessageBox(options),
+              translate: translateMain
             })
             if (choice !== undefined) {
               // Recovery needs both profile locks, which only a fresh process can own safely.
@@ -162,7 +164,8 @@ if (preflightReady) {
               ? { recoveryCommand: 'orca profile state exports' }
               : {}),
             showMessageBox: (options) => dialog.showMessageBox(options),
-            copyToClipboard: (text) => clipboard.writeText(text)
+            copyToClipboard: (text) => clipboard.writeText(text),
+            translate: translateMain
           })
         } catch (dialogError) {
           console.warn('[profile-state] Recovery dialog failed; exiting safely:', dialogError)

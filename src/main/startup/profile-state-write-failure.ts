@@ -1,4 +1,5 @@
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { profileStateWriterFailureOutcome } from '../persistence/profile-state/profile-state-writer-errors'
 import { recordProfileStateWriteFailureReport } from '../persistence/profile-state/profile-state-writer-diagnostics'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
@@ -10,13 +11,22 @@ let presenting = false
 export function profileStateWriteFailureDialogOptions(error: Error): MessageBoxOptions {
   return {
     type: 'error',
-    title: 'Saving stopped',
-    message: 'Orca has stopped saving this profile.',
+    title: translateMain('profileState.writeFailure.title', 'Saving stopped'),
+    message: translateMain(
+      'profileState.writeFailure.message',
+      'Orca has stopped saving this profile.'
+    ),
     detail:
       profileStateWriterFailureOutcome(error) === 'indeterminate'
-        ? 'Orca could not confirm whether your most recent change was saved. New changes will not be saved until you restart Orca.'
-        : 'Changes saved before this point are safe. New changes will not be saved until you restart Orca.',
-    buttons: ['OK']
+        ? translateMain(
+            'profileState.writeFailure.indeterminateDetail',
+            'Orca could not confirm whether your most recent change was saved. New changes will not be saved until you restart Orca.'
+          )
+        : translateMain(
+            'profileState.writeFailure.safeDetail',
+            'Changes saved before this point are safe. New changes will not be saved until you restart Orca.'
+          ),
+    buttons: [translateMain('profileState.writeFailure.okButton', 'OK')]
   }
 }
 

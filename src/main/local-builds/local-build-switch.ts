@@ -1,4 +1,5 @@
 import { app, dialog, type BrowserWindow } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { SCHEMA_VERSION } from '../../shared/constants'
 import { compareAppVersions } from '../../shared/app-version'
 import { assertLocalBuildCompatibility } from './local-build-compatibility'
@@ -8,10 +9,15 @@ export async function chooseLocalBuild(
   window: BrowserWindow | null
 ): Promise<LocalBuildCandidate | null> {
   const openDialogOptions: Electron.OpenDialogOptions = {
-    title: 'Choose a Local Orca Build',
-    buttonLabel: 'Choose Build',
+    title: translateMain('localBuild.chooseTitle', 'Choose a Local Orca Build'),
+    buttonLabel: translateMain('localBuild.chooseButton', 'Choose Build'),
     properties: ['openFile'],
-    filters: [{ name: 'Orca update manifest', extensions: ['yml'] }]
+    filters: [
+      {
+        name: translateMain('localBuild.manifestFilter', 'Orca update manifest'),
+        extensions: ['yml']
+      }
+    ]
   }
   const selection = await (window
     ? dialog.showOpenDialog(window, openDialogOptions)
@@ -24,22 +30,47 @@ export async function chooseLocalBuild(
   try {
     if (compareAppVersions(candidate.version, app.getVersion()) === 0) {
       throw new Error(
-        'This build has the same version as the running app. Run pn build:mac again to create a uniquely versioned build.'
+        translateMain(
+          'localBuild.sameVersionError',
+          'This build has the same version as the running app. Run pn build:mac again to create a uniquely versioned build.'
+        )
       )
     }
     const compatibility = await assertLocalBuildCompatibility(candidate.compatibility)
     const terminalSummary =
       compatibility.liveTerminalCount === 0
-        ? 'No live terminals need to reconnect.'
-        : `${compatibility.liveTerminalCount} live terminal${
-            compatibility.liveTerminalCount === 1 ? '' : 's'
-          } will reconnect after restart.`
+        ? translateMain('localBuild.noLiveTerminals', 'No live terminals need to reconnect.')
+        : compatibility.liveTerminalCount === 1
+          ? translateMain(
+              'localBuild.oneLiveTerminal',
+              '1 live terminal will reconnect after restart.'
+            )
+          : translateMain(
+              'localBuild.liveTerminals',
+              '{{count}} live terminals will reconnect after restart.',
+              { count: compatibility.liveTerminalCount }
+            )
     const messageBoxOptions: Electron.MessageBoxOptions = {
       type: 'question',
-      title: 'Use Local Orca Build?',
+      title: translateMain('localBuild.confirmTitle', 'Use Local Orca Build?'),
       message: `${app.getVersion()} → ${candidate.version}`,
-      detail: `${terminalSummary}\nWorkspace cards and settings are compatible with state schema ${SCHEMA_VERSION}.\n\nThe build must have the same valid code signature as Orca or installation will stop.`,
-      buttons: ['Use Local Build', 'Cancel'],
+      detail: [
+        terminalSummary,
+        translateMain(
+          'localBuild.schemaCompatibility',
+          'Workspace cards and settings are compatible with state schema {{schemaVersion}}.',
+          { schemaVersion: SCHEMA_VERSION }
+        ),
+        '',
+        translateMain(
+          'localBuild.signatureRequirement',
+          'The build must have the same valid code signature as Orca or installation will stop.'
+        )
+      ].join('\n'),
+      buttons: [
+        translateMain('localBuild.useButton', 'Use Local Build'),
+        translateMain('localBuild.cancelButton', 'Cancel')
+      ],
       defaultId: 0,
       cancelId: 1,
       noLink: true

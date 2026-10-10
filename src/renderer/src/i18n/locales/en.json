@@ -19729,5 +19729,73 @@
     "browser": "Browser",
     "editor": "Editor",
     "terminal": "Terminal"
+  },
+  "gpuFallback": {
+    "recoveredLaunch": {
+      "keepSafeButton": "Keep Safe Graphics Mode",
+      "tryHardwareButton": "Try Hardware Acceleration",
+      "title": "Safe Graphics Mode is Active",
+      "message": "Orca recovered in Safe Graphics Mode.",
+      "detail": "Safe Graphics Mode was enabled after repeated graphics crashes. Keep it for stability, or restart and try hardware acceleration again."
+    },
+    "restartPrompt": {
+      "restartButton": "Restart in Safe Graphics Mode",
+      "keepRunningButton": "Keep Running",
+      "title": "Restart Orca in Safe Graphics Mode?",
+      "message": "Orca's graphics process has crashed repeatedly.",
+      "detail": "Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged."
+    }
+  },
+  "localBuild": {
+    "chooseTitle": "Choose a Local Orca Build",
+    "chooseButton": "Choose Build",
+    "manifestFilter": "Orca update manifest",
+    "sameVersionError": "This build has the same version as the running app. Run pn build:mac again to create a uniquely versioned build.",
+    "noLiveTerminals": "No live terminals need to reconnect.",
+    "oneLiveTerminal": "1 live terminal will reconnect after restart.",
+    "liveTerminals": "{{count}} live terminals will reconnect after restart.",
+    "confirmTitle": "Use Local Orca Build?",
+    "schemaCompatibility": "Workspace cards and settings are compatible with state schema {{schemaVersion}}.",
+    "signatureRequirement": "The build must have the same valid code signature as Orca or installation will stop.",
+    "useButton": "Use Local Build",
+    "cancelButton": "Cancel"
+  },
+  "profileState": {
+    "startupRecovery": {
+      "quitButton": "Quit",
+      "copyCommandButton": "Copy recovery command",
+      "copyCommandDetail": "Copy the recovery command, then run it after Orca closes.",
+      "quitDetail": "Quit Orca and resolve the profile-state authority before retrying.",
+      "title": "Orca profile state cannot be opened",
+      "message": "Orca cannot safely open this profile."
+    },
+    "copyChoice": {
+      "lastSaved": "Last saved {{time}}.",
+      "useSqliteButton": "Use SQLite (Recommended)",
+      "useJsonButton": "Use JSON",
+      "quitButton": "Quit",
+      "title": "Choose profile state",
+      "message": "This profile has two saved copies that don’t match.",
+      "cause": "This usually happens after opening the profile in an older version of Orca.",
+      "sqliteOption": "SQLite: what this version of Orca saved. Changes made in the older version are discarded.",
+      "jsonOption": "JSON: includes changes made in the older version. Changes this version saved since then are discarded.",
+      "archiveNote": "Orca archives both copies before switching, then restarts."
+    },
+    "recoveryNotApplied": {
+      "quitButton": "Quit",
+      "title": "Orca profile state was not changed",
+      "message": "Orca could not apply the selected profile state.",
+      "reopenDetail": "Reopen Orca to choose again."
+    },
+    "writeFailure": {
+      "title": "Saving stopped",
+      "message": "Orca has stopped saving this profile.",
+      "indeterminateDetail": "Orca could not confirm whether your most recent change was saved. New changes will not be saved until you restart Orca.",
+      "safeDetail": "Changes saved before this point are safe. New changes will not be saved until you restart Orca.",
+      "okButton": "OK"
+    }
+  },
+  "startupFailure": {
+    "title": "Orca could not start"
   }
 }
