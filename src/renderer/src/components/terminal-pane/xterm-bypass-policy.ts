@@ -300,6 +300,36 @@ export function isAppOwnedCopyChord(
 }
 
 /**
+ * macOS chords owned only by the native app menu (Quit, Hide, Hide Others,
+ * Minimize). Matched by logical key like the clipboard bindings; Cmd+Comma stays
+ * with terminal apps.
+ */
+export function isMacNativeMenuChord(
+  event: XtermBypassEvent,
+  options: Pick<XtermBypassOptions, 'isMac'>
+): boolean {
+  if (!options.isMac || !isXtermHandledKeyEvent(event.type)) {
+    return false
+  }
+  if (!event.metaKey || event.ctrlKey || event.shiftKey) {
+    return false
+  }
+  const key = event.key.toLowerCase()
+  if (event.altKey) {
+    // Why: Option rewrites `key` on macOS (Option+H -> ˙), so Hide Others resolves the physical key
+    // through the layout map; physical KeyH is only the fallback when the layout cannot answer.
+    const layoutBaseKey = event.code
+      ? getLayoutBaseCharacterForCode(event.code)?.toLowerCase()
+      : undefined
+    if (layoutBaseKey !== undefined && isLatinLetterKey(layoutBaseKey)) {
+      return layoutBaseKey === 'h'
+    }
+    return key === 'h' || event.code === 'KeyH'
+  }
+  return key === 'q' || key === 'h' || key === 'm'
+}
+
+/**
  * Decide whether plain Ctrl+C should bypass xterm's kitty CSI-u encoder and
  * be sent as ETX through Terminal.input() instead.
  */
@@ -378,10 +408,11 @@ export function shouldBypassXtermKeyboardEvent(
   }
 
   if (isMac) {
-    // Why: window-level handlers already consume other Cmd chords before xterm
-    // sees them in Electron. Web clients still need paste to bubble to
-    // Chromium's native paste event instead of xterm's Kitty encoder.
+    // Why: window-level handlers consume Orca's Cmd chords before xterm. Native-menu-only
+    // chords and web-client paste must bubble past xterm's Kitty encoder, which would
+    // otherwise preventDefault them.
     return (
+      isMacNativeMenuChord(event, options) ||
       matchesClipboardBinding('Mod+C', event, 'darwin') ||
       matchesClipboardBinding('Mod+V', event, 'darwin')
     )

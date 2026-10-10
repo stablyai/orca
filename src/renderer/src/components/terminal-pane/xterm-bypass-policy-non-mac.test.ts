@@ -10,6 +10,17 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
   const withSel = { isMac: false, hasSelection: true }
   const noSel = { isMac: false, hasSelection: false }
 
+  it('leaves Ctrl+Q and Meta+Q to the terminal', () => {
+    for (const chord of [{ ctrlKey: true }, { metaKey: true }]) {
+      expect(
+        shouldBypassXtermKeyboardEvent(event({ key: 'q', code: 'KeyQ', ...chord }), {
+          ...noSel,
+          kittyKeyboardFlags: 1
+        })
+      ).toBe(false)
+    }
+  })
+
   it('bubbles Ctrl+Shift+C (standard terminal copy on Linux/Windows)', () => {
     expect(
       shouldBypassXtermKeyboardEvent(
