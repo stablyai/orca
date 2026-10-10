@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
-import { RelayDispatcher, type RelayClientSessionIdentity } from './dispatcher'
+import { RelayDispatcher, type RelayClientSessionIdentity } from '../wsl-guest/dispatcher'
 import { boundedPtyRecoveryEnd } from './relay-pty-source-activation'
-import { encodeJsonRpcFrame, MessageType } from './protocol'
+import { encodeJsonRpcFrame, MessageType } from '../wsl-guest/protocol'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 

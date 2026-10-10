@@ -6,7 +6,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { writeFileSync, readFileSync } from 'node:fs'
 import { SshChannelMultiplexer } from '../../../src/main/ssh/ssh-channel-multiplexer'
 import { readFileViaStream } from '../../../src/main/ssh/ssh-filesystem-stream-reader'
-import { RelayDispatcher } from '../../../src/relay/dispatcher'
+import { RelayDispatcher } from '../../../src/wsl-guest/dispatcher'
 import { RelayStreamRegistry } from '../../../src/relay/fs-stream-registry'
 import { readRelayFileStreamMetadata } from '../../../src/relay/fs-handler-file-read'
 

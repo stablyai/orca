@@ -250,6 +250,7 @@ const MANAGED_HOOK_PREFIXES = [
   'src/packages/process-host/',
   'config/scripts/build-relay',
   'src/relay/',
+  'src/wsl-guest/',
   'src/shared/agent-hook',
   'src/main/agent-hooks/'
 ]

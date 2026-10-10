@@ -9,7 +9,7 @@ import { listFilesWithRg } from './fs-handler-list-files'
 import { listRelayMarkdownDocuments } from './fs-markdown-document-listing'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 it.skipIf(process.platform === 'win32')(
   'keeps readable SSH Markdown documents when a child directory is unreadable',

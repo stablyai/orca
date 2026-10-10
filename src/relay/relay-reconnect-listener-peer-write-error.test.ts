@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { RelayReconnectListener } from './relay-reconnect-listener'
 import { RelaySocketOwnership } from './relay-socket-ownership'
-import { encodeHandshakeFrame, FrameDecoder, RELAY_VERSION } from './protocol'
-import { RelayDispatcher } from './dispatcher'
+import { encodeHandshakeFrame, FrameDecoder, RELAY_VERSION } from '../wsl-guest/protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
 
 // Why: on Windows named pipes a relay write can fail with EPIPE/ECONNRESET before EOF is read. The

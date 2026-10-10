@@ -17,6 +17,7 @@ on:
       - 'src/main/ssh/ssh-hostile-host-*'
       - 'src/main/ssh/sftp-*'
       - 'src/relay/**'
+      - 'src/wsl-guest/**'
       - 'src/shared/node-runtime-pin.ts'
       - 'src/shared/orcad-artifacts.ts'
       - 'config/scripts/build-orcad-*.mjs'

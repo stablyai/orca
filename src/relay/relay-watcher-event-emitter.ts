@@ -1,6 +1,6 @@
 import type { WatcherProcessEvent } from '../main/ipc/parcel-watcher-process'
 import { resolveRuntimePath } from '../shared/cross-platform-path'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import {
   createRelayClientResyncMarkerPublisher,
   type RelayClientResyncMarkerPublisher

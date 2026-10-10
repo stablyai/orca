@@ -19,7 +19,7 @@ import {
   createWorkspaceSpaceScanBudget,
   WorkspaceSpaceScanCapacityError
 } from '../shared/workspace-space-scan-budget'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 
 const RELAY_FS_CONCURRENCY = 48
 const DU_TIMEOUT_MS = 120_000

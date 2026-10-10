@@ -18,6 +18,7 @@ on:
       - 'src/main/ssh/ssh-windows-host-*'
       - 'src/main/ssh/ssh-session-command-audit.ts'
       - 'src/relay/**'
+      - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
       - 'pnpm-workspace.yaml'
       - 'src/shared/node-runtime-pin.ts'

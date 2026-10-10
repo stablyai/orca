@@ -130,7 +130,6 @@ src/relay/ai-vault-service-spawn.ts
 src/relay/external-automations-handler.ts
 src/relay/fs-handler-git-fallback.ts
 src/relay/fs-handler-list-files.ts
-src/relay/preflight-handler.ts
 src/relay/pty-shell-utils.ts
 src/relay/subprocess-tree-termination.ts
 src/relay/workspace-space-scan.ts
@@ -140,3 +139,4 @@ src/shared/fish-binary-requirement.ts
 src/shared/process-table-snapshot-reader.ts
 src/shared/pty-slave-line-discipline-echo.ts
 src/shared/shell-process-readiness.ts
+src/wsl-guest/preflight-handler.ts

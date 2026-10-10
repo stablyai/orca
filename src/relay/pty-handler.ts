@@ -12,7 +12,7 @@ import {
   applyOpenCodePluginSelection,
   restoreOpenCodeCapabilities
 } from './opencode-plugin-selection'
-import { resolveCommandPathForRelay } from './preflight-handler'
+import { resolveCommandPathForRelay } from '../wsl-guest/preflight-handler'
 import { applyRelayAgentWorkspaceTrust } from './agent-workspace-trust-spawn'
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
@@ -22,7 +22,7 @@ import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { isSupportedWindowsShellOverride } from '../shared/windows-terminal-shell'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import {
   resolveDefaultShell,
   resolveProcessCwd,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayDispatcher, type RelayClientSinkOptions } from './dispatcher'
-import { HEADER_LENGTH, encodeJsonRpcFrame, parseJsonRpcMessage } from './protocol'
+import { RelayDispatcher, type RelayClientSinkOptions } from '../wsl-guest/dispatcher'
+import { HEADER_LENGTH, encodeJsonRpcFrame, parseJsonRpcMessage } from '../wsl-guest/protocol'
 import type { WatcherProcessEvent } from '../main/ipc/parcel-watcher-process'
 import { emitRelayWatcherEvents } from './relay-watcher-event-emitter'
 

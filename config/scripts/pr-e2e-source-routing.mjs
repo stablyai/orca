@@ -189,7 +189,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-localhost.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:relay\/(?:agent-hook|relay-agent-hook-runtime|plugin-overlay)|main\/(?:agent-hooks\/|ssh\/ssh-relay-session\.ts$)|shared\/agent-hook)/.test(
+      /^src\/(?:relay\/(?:agent-hook|relay-agent-hook-runtime|plugin-overlay)|wsl-guest\/(?:agent-hook|plugin-overlay)|main\/(?:agent-hooks\/|ssh\/ssh-relay-session\.ts$)|shared\/agent-hook)/.test(
         file
       )
   },
@@ -256,7 +256,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     // admission that decide whether a pane rebinds live in the renderer store.
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/main\/runtime\/(?:public-ssh-state|ssh-file-explorer-chunk-read)\.ts|src\/relay\/|src\/shared\/(?:ssh-|skill-ssh-relay-contract)|src\/renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts|src\/renderer\/src\/store\/slices\/(?:ssh|direct-ssh-)|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
+      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/main\/runtime\/(?:public-ssh-state|ssh-file-explorer-chunk-read)\.ts|src\/relay\/|src\/wsl-guest\/|src\/shared\/(?:ssh-|skill-ssh-relay-contract)|src\/renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts|src\/renderer\/src\/store\/slices\/(?:ssh|direct-ssh-)|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
         file
       )
   },

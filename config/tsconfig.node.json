@@ -21,6 +21,7 @@
     "../src/shared/**/*",
     "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/relay/**/*",
+    "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
   "compilerOptions": {

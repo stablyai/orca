@@ -1,4 +1,4 @@
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import type { GitStatusReadLeaseOwner } from '../shared/git-status-read-lease-owner'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { SubmodulePathsCache } from './git-handler-submodule-ops'

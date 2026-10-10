@@ -1,6 +1,6 @@
 import type { RemoteArtifactInput } from '../shared/artifact-cli-bridge'
-import { DISPATCHER_CONTROL_QUEUE_MAX_BYTES } from './dispatcher-writer-admission'
-import { encodeJsonRpcFrame } from './protocol'
+import { DISPATCHER_CONTROL_QUEUE_MAX_BYTES } from '../wsl-guest/dispatcher-writer-admission'
+import { encodeJsonRpcFrame } from '../wsl-guest/protocol'
 
 export type RemoteArtifactCliForwardingParams = {
   argv: string[]

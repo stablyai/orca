@@ -1,4 +1,4 @@
-import { STREAM_ACK_STALL_RECHECK_MS } from './protocol'
+import { STREAM_ACK_STALL_RECHECK_MS } from '../wsl-guest/protocol'
 
 /** Waiters wake on ack, abort, or a stall recheck so a vanished client cannot strand a pump. */
 export class RelayStreamAckWindow {
