@@ -14,6 +14,7 @@ import {
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
+  claimMobileRelayPairingJournalPublication,
   clearMobileRelayPairingJournal,
   loadMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
@@ -22,7 +23,7 @@ import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
-import { relayFailureAllowsGraceRetry as relayRejectedCredential } from './relay-credential-eligibility'
+import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { relayHost } from './pairing-relay-host'
 import {
@@ -36,6 +37,7 @@ type RecoveryDependencies = {
   loadJournal: typeof loadMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
+  claimJournal: typeof claimMobileRelayPairingJournalPublication
   readCredentialBundle: typeof readMobileRelayCredentialBundle
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   loadHosts: typeof loadHosts
@@ -50,6 +52,7 @@ const defaultDependencies: RecoveryDependencies = {
   loadJournal: loadMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
+  claimJournal: claimMobileRelayPairingJournalPublication,
   readCredentialBundle: readMobileRelayCredentialBundle,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   loadHosts,
@@ -161,7 +164,7 @@ async function runRecovery(
     } catch (error) {
       // Why: ambiguous pairing state advances only by credential priority and
       // authoritative status; a transport failure never rewrites the journal.
-      if (error instanceof Error && relayRejectedCredential(error)) {
+      if (isExplicitCredentialRejection(error)) {
         rejectedCredentials++
       }
     } finally {
@@ -275,6 +278,20 @@ async function publishCommitted(
     throw new Error('relay pairing recovery was not committed')
   }
   const installed = endpoints.installStatus.result
+  const release = await dependencies.claimJournal(journal.metadata.journalId)
+  try {
+    await writeCommitted(journal, endpoints.relay, installed, dependencies)
+  } finally {
+    release()
+  }
+}
+
+async function writeCommitted(
+  journal: MobileRelayPairingJournal,
+  relay: NonNullable<PairingGetEndpointsResult['relay']>,
+  installed: DeviceCredentialInstalled,
+  dependencies: RecoveryDependencies
+): Promise<void> {
   const reconciledJournal: MobileRelayPairingJournal = {
     ...journal,
     metadata: {
@@ -289,7 +306,7 @@ async function publishCommitted(
   await dependencies.writeCredentialBundle(
     promotePairingJournalCredential({ journal: reconciledJournal, installed })
   )
-  await dependencies.savePairedHost(relayHost(reconciledJournal, endpoints.relay))
+  await dependencies.savePairedHost(relayHost(reconciledJournal, relay))
   await dependencies.clearJournal(journal.metadata.journalId)
 }
 

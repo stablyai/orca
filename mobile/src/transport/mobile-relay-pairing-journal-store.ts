@@ -20,6 +20,8 @@ let journalMutation: Promise<void> = Promise.resolve()
 // are protected from replacement; a journal left by an ended attempt or an
 // earlier launch belongs to recovery, which a new scan supersedes.
 const inFlightJournalIds = new Set<string>()
+// Journals recovery is publishing right now; a superseding save waits for them.
+const publications = new Map<string, Promise<void>>()
 
 export async function saveMobileRelayPairingJournal(
   journal: MobileRelayPairingJournal
@@ -30,9 +32,27 @@ export async function saveMobileRelayPairingJournal(
   if (metadata.journalId !== secrets.journalId) {
     throw new Error('mobile relay pairing journal identity mismatch')
   }
+  for (;;) {
+    const blocked = await replaceJournal(metadata, secrets)
+    if (!blocked) {
+      return
+    }
+    // Why: waiting outside the mutation chain lets the publication clear its journal.
+    await blocked.publication
+  }
+}
+
+function replaceJournal(
+  metadata: MobileRelayPairingJournalMetadata,
+  secrets: MobileRelayPairingJournal['secrets']
+): Promise<{ publication: Promise<void> } | null> {
   const mutation = journalMutation.then(async () => {
     const existingRaw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
     const existing = existingRaw ? parseMetadata(existingRaw) : null
+    const publication = existing ? publications.get(existing.journalId) : undefined
+    if (publication && existing?.journalId !== metadata.journalId) {
+      return { publication }
+    }
     if (
       existing &&
       existing.journalId !== metadata.journalId &&
@@ -50,9 +70,38 @@ export async function saveMobileRelayPairingJournal(
       inFlightJournalIds.delete(existing.journalId)
     }
     inFlightJournalIds.add(metadata.journalId)
+    return null
   })
-  journalMutation = mutation.catch(() => {})
+  journalMutation = mutation.then(
+    () => undefined,
+    () => undefined
+  )
   return mutation
+}
+
+// Recovery publishes a committed install only while its journal is still the
+// stored one, and a superseding scan waits until that publication releases, so
+// a late recovery can never overwrite the credentials a newer pairing wrote.
+export async function claimMobileRelayPairingJournalPublication(
+  journalId: string
+): Promise<() => void> {
+  let release = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const claim = journalMutation.then(async () => {
+    const raw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
+    if ((raw ? parseMetadata(raw) : null)?.journalId !== journalId) {
+      throw new Error('stale mobile relay pairing journal')
+    }
+    publications.set(journalId, done)
+  })
+  journalMutation = claim.catch(() => {})
+  await claim
+  return () => {
+    publications.delete(journalId)
+    release()
+  }
 }
 
 export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairingJournal | null> {
@@ -165,5 +214,6 @@ function requireNativeSecretStore(): void {
 export function resetMobileRelayPairingJournalStoreForTests(): void {
   journalMutation = Promise.resolve()
   inFlightJournalIds.clear()
+  publications.clear()
   resetPairingKeychainForTests()
 }

@@ -23,6 +23,7 @@ vi.mock('react-native', () => ({ Platform: platform }))
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  claimMobileRelayPairingJournalPublication,
   loadMobileRelayPairingJournal,
   releaseMobileRelayPairingJournal,
   resetMobileRelayPairingJournalStoreForTests,
@@ -376,6 +377,36 @@ describe('mobile relay pairing journal store', () => {
 
     await expect(saveMobileRelayPairingJournal(replacement)).resolves.toBeUndefined()
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+  })
+
+  it('makes a superseding scan wait for a publication in progress, and refuses a stale claim', async () => {
+    const created = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(10)
+    })
+    await saveMobileRelayPairingJournal(created)
+    releaseMobileRelayPairingJournal(created.metadata.journalId)
+    const release = await claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+    const replacement = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(12)
+    })
+    let saved = false
+    const save = saveMobileRelayPairingJournal(replacement).then(() => (saved = true))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(saved).toBe(false)
+
+    await clearMobileRelayPairingJournal(created.metadata.journalId)
+    release()
+    await save
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+    await expect(
+      claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+    ).rejects.toThrow(/stale/)
   })
 
   it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {
