@@ -8,6 +8,7 @@ import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { toast } from 'sonner'
 import { releaseAgentLaunchPaneSpawn } from './agent-launch-pane-spawn-hold'
 import { applyAgentLaunchPaneVerdict } from './agent-launch-pane-verdict-application'
+import { publishAgentLaunchTab } from './agent-launch-tab-publication'
 import { AGENT_LAUNCH_NOTHING_RAN_DATA } from '../../../shared/agent-launch-nothing-ran'
 
 const storeBox = vi.hoisted(() => {
@@ -279,6 +280,30 @@ describe('a plain new-tab launch the host proves ran nothing', () => {
       .getState()
       .groupsByWorktree[WT]?.find((candidate) => candidate.tabOrder.includes(replacement.id))
     expect(group?.activeTabId).toBe(replacement.id)
+  })
+
+  // Why: the host's request to show its tab can arrive after its failure; the window already moved on.
+  it('never brings back the host tab when its show request arrives after the failure', async () => {
+    const store = seed()
+    const { tabId, reply } = await launchFresh()
+    const leafId = launchLeafId(store, tabId)
+
+    reply.reject(nothingRan())
+    await vi.waitFor(() => expect(windowLaunchedTabs(store)).toHaveLength(1))
+    expect(() =>
+      publishAgentLaunchTab({
+        requestId: 'late',
+        worktreeId: WT,
+        tabId,
+        leafId,
+        launchAgent: 'claude',
+        viewMode: 'terminal',
+        viewer: 'focus-in-workspace'
+      })
+    ).toThrow('agent_launch_tab_closed')
+
+    expect(worktreeTabs(store)).toHaveLength(1)
+    expect(store.getState().activeTabId).toBe(windowLaunchedTabs(store)[0]!.id)
   })
 
   it.each([

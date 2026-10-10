@@ -21,6 +21,8 @@ import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-crea
 import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
 import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
 import { releaseAgentLaunchPaneSpawn } from './agent-launch-pane-spawn-hold'
+import { wasAgentLaunchPaneClosedByUser } from './agent-launch-pane-closes'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore
@@ -85,6 +87,11 @@ export function publishAgentLaunchTab(
     return { tabId, created: madeForThisLaunch, placement: { groupId } }
   }
 
+  // The window already closed this launch's pane, before the host's request arrived: showing it
+  // again would bring back a tab the window or the user is done with.
+  if (wasAgentLaunchPaneClosedByUser(tabId, leafId)) {
+    throw new Error(AGENT_LAUNCH_TAB_CLOSED_CODE)
+  }
   const placement = resolveUnifiedTabCreatePlacement({
     groups: store.groupsByWorktree[worktreeId] ?? [],
     tabs: store.unifiedTabsByWorktree[worktreeId] ?? [],
