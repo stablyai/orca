@@ -194,8 +194,11 @@ export function setHostWorkspaceSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): void {
-  const prior =
+  const persisted =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+  const prior = persisted ? withRequiredWorkspaceSessionMaps(persisted) : undefined
+  // Host slices omit empty maps; retirement and rebasing need them before inspecting membership.
+  session = withRequiredWorkspaceSessionMaps(session)
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
