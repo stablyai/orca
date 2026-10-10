@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 
 export function useGitLabItemDetailsEffect(
   item: GitLabWorkItem | null,
@@ -21,7 +22,7 @@ export function useGitLabItemDetailsEffect(
     let stale = false
     setLoading(true)
     setError(null)
-    void window.api.gl
+    void routedGitLab
       .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
       .then((data) => {
         if (stale) {
