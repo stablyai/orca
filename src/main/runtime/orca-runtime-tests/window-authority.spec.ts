@@ -407,6 +407,46 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('restores headless graph authority when a promoted serve window closes', () => {
+    const runtime = createRuntime()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    runtime.markGraphUnavailable(TEST_WINDOW_ID)
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
+      graphStatus: 'ready'
+    })
+  })
+
+  it('promotes a reopened window after a promoted serve window closed', () => {
+    const runtime = createRuntime()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.markGraphReady(TEST_WINDOW_ID)
+    runtime.markGraphUnavailable(TEST_WINDOW_ID)
+
+    runtime.attachWindow(2)
+    runtime.syncWindowGraph(2, { tabs: [], leaves: [] })
+    runtime.markGraphReady(2)
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: 2,
+      graphStatus: 'ready'
+    })
+
+    runtime.markGraphUnavailable(2)
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
+      graphStatus: 'ready'
+    })
+  })
+
   it('stays unavailable during initial loads before a graph is published', () => {
     const runtime = createRuntime()
 
