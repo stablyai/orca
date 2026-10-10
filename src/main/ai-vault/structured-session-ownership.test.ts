@@ -277,15 +277,39 @@ describe('Session History ownership read from the agent registration', () => {
     ).rejects.toThrow('agent_session_conflict')
   })
 
-  it.each(['\\', '`', '^'])('reads a command continued with %s as one', async (mark) => {
+  it.each(
+    ['\\', '`', '^'].flatMap((mark) =>
+      ['\n', '\r', '\r\n'].map((lineBreak) => ({ mark, lineBreak }))
+    )
+  )(
+    'reads a command continued with $mark and a $lineBreak line break as one',
+    async ({ mark, lineBreak }) => {
+      installOwnership({ provider: 'claude' })
+
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(
+          `claude ${mark}${lineBreak}  --resume ${PROVIDER_SESSION}`,
+          async () => undefined
+        )
+      ).rejects.toThrow('agent_session_conflict')
+    }
+  )
+
+  it.each(['\r', '\r\n'])('reads each %j line as its own Claude command', async (lineBreak) => {
     installOwnership({ provider: 'claude' })
 
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(
-        `claude ${mark}\n  --resume ${PROVIDER_SESSION}`,
+        `claude --resume ${OTHER_SESSION}${lineBreak}claude --resume ${PROVIDER_SESSION}${lineBreak}`,
         async () => undefined
       )
     ).rejects.toThrow('agent_session_conflict')
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${OTHER_SESSION}${lineBreak}echo -c${lineBreak}`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
   })
 
   it('allows a fork whose own command names claude again', async () => {

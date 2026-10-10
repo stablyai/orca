@@ -226,14 +226,16 @@ type ResumeInvocation = StructuredAgentResumeInvocation & {
   history: StructuredAgentSessionHistory
 }
 
-// A newline ends a shell command as `;` does, so the tokenizer keeps it as a token.
-const SHELL_COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&', '\n'])
+// A line break ends a shell command as `;` does, so the tokenizer keeps it as a token. A PTY's
+// Enter sends a bare `\r`.
+const LINE_BREAKS = new Set(['\r\n', '\r', '\n'])
+const SHELL_COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&', ...LINE_BREAKS])
 
 function parseResumeInvocations(command: string): ResumeInvocation[] {
   // Keep this deliberately conservative: shell quoting is normalized only
   // enough to identify executable/flag tokens; an unrecognized shape is not
   // treated as proof that a different session is being resumed.
-  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\n|[^\s]+/g) ?? []
+  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\r\n|\r|\n|[^\s]+/g) ?? []
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
   const binaries = new Map<string, StructuredAgentRuntimeRegistration>()
   for (const registration of STRUCTURED_AGENT_RUNTIME_REGISTRATIONS) {
@@ -273,10 +275,10 @@ function parseResumeInvocations(command: string): ResumeInvocation[] {
   return invocations
 }
 
-/** A newline after a line-continuation mark (POSIX `\`, PowerShell `` ` ``, cmd `^`) is inside
+/** A line break after a line-continuation mark (POSIX `\`, PowerShell `` ` ``, cmd `^`) is inside
  *  one command. */
 function continuesLine(tokens: readonly string[], index: number): boolean {
-  return tokens[index] === '\n' && /[\\`^]$/.test(tokens[index - 1] ?? '')
+  return LINE_BREAKS.has(tokens[index]!) && /[\\`^]$/.test(tokens[index - 1] ?? '')
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

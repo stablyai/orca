@@ -262,6 +262,15 @@ describe('the agent named again inside its own command', () => {
     await allowed(command)
   })
 
+  it.each(['\r', '\r\n'])('ends at a %j line break, as a PTY Enter sends', async (lineBreak) => {
+    installOwnership({ handle: PI_HANDLE })
+    await refused(`pi --session ${OTHER_UUID}${lineBreak}pi --session ${PI_ID}${lineBreak}`)
+    await allowed(`pi --session ${OTHER_UUID}${lineBreak}echo -c${lineBreak}`)
+    installOwnership({ handle: acp('opencode', OPENCODE_ID) })
+    await refused(`opencode -s ses_other${lineBreak}opencode -s ${OPENCODE_ID}${lineBreak}`)
+    await allowed(`opencode -s ses_other${lineBreak}echo -c${lineBreak}`)
+  })
+
   it('ends at a newline, which starts another command', async () => {
     installOwnership({ handle: PI_HANDLE })
     await allowed(`pi --session ${OTHER_UUID}\necho -c`)
