@@ -12,6 +12,8 @@ export type ShadowCompareClass =
   // Neither the database nor the map has the host.
   | 'agree-absent'
   | 'map-incomplete'
+  // The cell's image has no seat feed (c17/c18 by design): outside the map, so not a coverage gap.
+  | 'cell-no-feed'
   | 'cell-unpolled'
   | 'db-only-left'
   | 'db-only-unseen'
@@ -58,7 +60,11 @@ export function classifyShadowSeat(
     if (liveness.includes('unknown')) return { class: 'cell-unlive-pending', explained: true }
     return { class: 'map-only', explained: false }
   }
-  if (directory.cellState(answer.cellId)?.status !== 'live') {
+  const answerStatus = directory.cellState(answer.cellId)?.status
+  if (answerStatus === 'no-feed') {
+    return { class: 'cell-no-feed', explained: true }
+  }
+  if (answerStatus !== 'live') {
     return { class: 'cell-unpolled', explained: true }
   }
   if (seats.length > 1) {
@@ -77,6 +83,9 @@ export function classifyShadowSeat(
   const mapBehind =
     answer.assignmentEpoch > seat.epoch && now - movedAt <= SHADOW_COMPARE_LAG_BOUND_MS
   if (seat.cellId !== answer.cellId) {
+    if (directory.cellState(seat.cellId)?.status === 'no-feed') {
+      return { class: 'cell-no-feed', explained: true }
+    }
     // A stale seat cell is a coverage gap, kept visible rather than explained away.
     const seatPolledAt = directory.cellState(seat.cellId)?.lastLiveAt ?? 0
     if (now - seatPolledAt > SHADOW_COMPARE_LAG_BOUND_MS) {
