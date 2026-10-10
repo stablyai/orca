@@ -296,6 +296,13 @@ export class ShadowSeatDirectory {
     cursor.lastAnsweredAt = now
     cursor.incarnation = undefined
     cursor.seq = undefined
+    // An image without the feed reserves nothing: it is a database-path cell.
+    cursor.flagsApplied = undefined
+    cursor.polledAt = undefined
+    cursor.bookings = undefined
+    cursor.units = undefined
+    cursor.ceiling = undefined
+    cursor.intake = undefined
   }
 
   fail(cellId: string, reason: string): void {

@@ -170,6 +170,33 @@ describe('reserve assignment on a director', () => {
     expect(plan.kind === 'database' && typeof plan.placeFresh).toBe('function')
   })
 
+  it('leaves a cell without a feed (c17/c18) on today’s path without starving the reserve pool', async () => {
+    const cells = cellList(['c1', 'c2', 'c17'])
+    let rowOnOld = false
+    const { assignment, directory, reserved, now } = setup({
+      cells,
+      feeds: [feed('c1'), feed('c2', { admitMode: 'db' })],
+      row: async () => (rowOnOld ? { cellId: 'c17', assignmentEpoch: 5 } : null)
+    })
+    directory.markNoFeed('c17', now.value)
+    expect(directory.isComplete()).toBe(true)
+    // An old image reports no ceiling; counting it as a database cell would zero the share.
+    expect(await assignment.plan(HOST, { reconnect: false, region: US })).toMatchObject({
+      kind: 'answer',
+      lane: 'placement',
+      assignment: { cellId: 'c1' }
+    })
+    expect(reserved.map((call) => call.cellId)).not.toContain('c17')
+    rowOnOld = true
+    expect(
+      await assignment.plan({ ...HOST, relayHostId: 'qrstuvwxyzabcdef' }, { reconnect: true, region: US })
+    ).toMatchObject({ kind: 'database', epochFloor: 5 })
+    // A cell that rolled back to an image without the feed is a database cell again.
+    directory.markNoFeed('c1', now.value)
+    expect(directory.admitModeOf('c1')).toBe('db')
+    expect(directory.cellState('c1')?.ceiling).toBeUndefined()
+  })
+
   it('reads the row once for a host the map never saw, and refuses it while the database is down', async () => {
     const down = setup({ row: async () => Promise.reject(new Error('timeout')) })
     expect(await down.assignment.plan(HOST, { reconnect: false, region: US })).toMatchObject({
