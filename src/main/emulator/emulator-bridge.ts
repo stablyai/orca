@@ -1,4 +1,3 @@
-import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import type { EmulatorSessionInfo } from './emulator-types'
 import type { SimulatorDevice } from './simctl-simulator-devices'
@@ -10,9 +9,18 @@ import {
   type EmulatorStartLease
 } from './emulator-start-lease-registry'
 import { listAvailableEmulatorDevices } from './emulator-device-inventory'
-import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
+import type { AdbConnectionStatus } from './android/adb-device-connection'
+import { resolveEmulatorBackendForDevice } from './emulator-backend-for-device'
+import {
+  adbNetworkConnectionStatus,
+  connectAdbNetworkDevice,
+  currentAdbNetworkAddress,
+  disconnectAdbNetworkDevice
+} from './emulator-bridge-adb-connection'
+import { readIosAccessibilityTree } from './emulator-ios-accessibility-tree'
+import { destroyManagedEmulatorSessions } from './emulator-session-teardown'
 import type {
   EmulatorBackend,
   EmulatorBackendCapabilities,
@@ -61,6 +69,22 @@ export class EmulatorBridge {
 
   async checkServeSimAvailable(): Promise<void> {
     return this.iosBackend.checkServeSimAvailable()
+  }
+
+  async adbConnect(address: string): Promise<AdbConnectionStatus> {
+    return connectAdbNetworkDevice(this.androidBackend, address)
+  }
+
+  async adbConnectionStatus(address: string): Promise<AdbConnectionStatus> {
+    return adbNetworkConnectionStatus(this.androidBackend, address)
+  }
+
+  adbCurrentAddress(): string | null {
+    return currentAdbNetworkAddress(this.androidBackend)
+  }
+
+  async adbDisconnect(address: string): Promise<AdbConnectionStatus> {
+    return disconnectAdbNetworkDevice(this.androidBackend, this.sessionRegistry, address)
   }
 
   registerActiveEmulator(
@@ -203,24 +227,13 @@ export class EmulatorBridge {
       if (backend.kind !== 'ios') {
         return backend.accessibilityTree!(device)
       }
-      const udid = await backend.resolveDeviceId(device)
-      const worktreeId = opts?.worktreeId
-      // Fall back to the udid-keyed session so an explicit --device read works
-      // from a worktree with no active emulator (matching tap/type reachability);
-      // sessions are stored once per udid, so both lookups hit the same state.
-      const session =
-        (worktreeId ? this.getActiveForWorktree(worktreeId) : null) ??
-        this.sessionRegistry.getSession(udid)
-      if (worktreeId && session && session.deviceUdid !== udid) {
-        throw new EmulatorError(
-          'emulator_no_active',
-          `iOS simulator ${udid} is not active for this worktree (active: ${session.deviceUdid}); attach the requested simulator first.`
-        )
-      }
-      // Heal sessions registered without an axUrl (parse-time derivation only
-      // covers fresh --detach output) by deriving it from the mjpeg stream URL.
-      const axUrl = session?.axUrl ?? deriveAxUrlFromStreamUrl(session?.streamUrl)
-      return backend.accessibilityTree!(udid, axUrl)
+      return readIosAccessibilityTree(
+        backend,
+        device,
+        this.sessionRegistry,
+        opts?.worktreeId,
+        (worktreeId) => this.getActiveForWorktree(worktreeId)
+      )
     })
   }
 
@@ -270,24 +283,7 @@ export class EmulatorBridge {
   }
 
   async destroyAllSessions(): Promise<void> {
-    const promises: Promise<unknown>[] = []
-    for (const session of this.sessionRegistry.listSessions()) {
-      if (!session.managed) {
-        continue
-      }
-      const backend = this.backendForKind(session.backend)
-      if (!backend) {
-        continue
-      }
-      promises.push(
-        backend
-          .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
-          .catch(() => {})
-          .then(() => backend.shutdownDevice(session.deviceUdid).catch(() => {}))
-      )
-    }
-    await Promise.allSettled(promises)
-    this.sessionRegistry.clear()
+    await destroyManagedEmulatorSessions(this.sessionRegistry, (kind) => this.backendForKind(kind))
   }
 
   async onAppQuit(): Promise<void> {
@@ -340,17 +336,10 @@ export class EmulatorBridge {
   }
 
   private async backendForDevice(device: string): Promise<EmulatorBackend> {
-    for (const backend of this.backends) {
-      if (await backend.ownsDevice(device)) {
-        return backend
-      }
-    }
-    // Why: fall back to a host-supported backend, else the platform-primary one,
-    // so an unrecognized device (e.g. no SDK yet) surfaces the right setup error
-    // — Android on Windows/Linux, iOS/CoreSimulator on macOS — not iOS-on-Windows.
-    return (
-      this.backends.find((backend) => backend.isSupportedOnHost()) ??
-      (platform() === 'darwin' ? this.iosBackend : this.androidBackend)
-    )
+    return resolveEmulatorBackendForDevice(device, {
+      backends: this.backends,
+      androidBackend: this.androidBackend,
+      iosBackend: this.iosBackend
+    })
   }
 }

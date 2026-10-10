@@ -2,6 +2,8 @@ import { defineMethod } from '../core'
 import path from 'node:path'
 import { z } from 'zod'
 import {
+  AdbAddressOptionalParams,
+  AdbConnectParams,
   AttachParams,
   AxParams,
   ButtonParams,
@@ -146,5 +148,23 @@ export const EMULATOR_METHODS = [
     permission: 'workspace',
     params: EmulatorUnregisterActiveParams,
     handler: async (params, { runtime }) => runtime.emulatorUnregisterActive(params)
+  }),
+  defineMethod({
+    name: 'emulator.adbConnect',
+    permission: 'workspace',
+    params: AdbConnectParams,
+    handler: async (params, { runtime }) => runtime.emulatorAdbConnect(params)
+  }),
+  defineMethod({
+    name: 'emulator.adbDisconnect',
+    permission: 'workspace',
+    params: AdbAddressOptionalParams,
+    handler: async (params, { runtime }) => runtime.emulatorAdbDisconnect(params)
+  }),
+  defineMethod({
+    name: 'emulator.adbConnectionStatus',
+    permission: 'workspace',
+    params: AdbAddressOptionalParams,
+    handler: async (params, { runtime }) => runtime.emulatorAdbConnectionStatus(params)
   })
 ]
