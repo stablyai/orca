@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
@@ -90,6 +91,7 @@ export function createRuntime(
     isWsl?: boolean
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
+    launchAgent?: TuiAgent
   } = {}
 ): MailboxNotificationHarness {
   const runtime = new OrcaRuntimeService(null, undefined, {
@@ -116,7 +118,10 @@ export function createRuntime(
       tabId: TAB_ID,
       leafId: LEAF_ID,
       incarnationId: 'mailbox-incarnation',
-      agentLaunchAuthority: { launchToken: LAUNCH_TOKEN, launchAgent: 'codex' }
+      agentLaunchAuthority: {
+        launchToken: LAUNCH_TOKEN,
+        launchAgent: options.launchAgent ?? 'codex'
+      }
     },
     options.isWsl
   )

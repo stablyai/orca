@@ -191,7 +191,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
    */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!live) {
+    if (!live || (live.ptyId && this.isPtyAwaitingUserInput(live.ptyId))) {
       return false
     }
     const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
