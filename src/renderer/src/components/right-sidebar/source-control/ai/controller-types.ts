@@ -8,7 +8,11 @@ import type { Repo } from '../../../../../../shared/repo-types'
 
 export type SourceControlAiStoreSnapshot = Pick<
   AppState,
-  'settings' | 'repos' | 'ensureDetectedAgents' | 'ensureRemoteDetectedAgents'
+  | 'settings'
+  | 'repos'
+  | 'ensureDetectedAgents'
+  | 'ensureRemoteDetectedAgents'
+  | 'ensureRuntimeDetectedAgents'
 >
 
 export type SourceControlAiControllerParams = {
