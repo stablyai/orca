@@ -11,6 +11,9 @@ export const DIRECTOR_REGIONAL_PLACEMENT_SECRET =
 export const DIRECTOR_REGIONAL_PLACEMENT_ENV =
   'ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED'
 export const DIRECTOR_CORRECTION_COHORT_ENV = 'ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT'
+// Step 5 placement on the directors; only this deploy changes it, so the reserve guard sees it.
+export const DIRECTOR_RESERVE_PLACEMENT_ENV = 'ORCA_RELAY_RESERVE_PLACEMENT'
+const RESERVE_PLACEMENT_MODES = ['off', 'dry-run', 'on']
 export const DIRECTOR_REHOME_IDENTITY_ENV =
   'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT'
 export const DIRECTOR_REHOME_AUDIENCE_ENV = 'ORCA_RELAY_REHOME_AUDIENCE'
@@ -250,6 +253,9 @@ export function directorDeploymentEnvironment(config) {
       config['region-correction-cohort-percent'] !== 'preserve') {
     environment[DIRECTOR_CORRECTION_COHORT_ENV] = correctionCohortPercent(config['region-correction-cohort-percent'])
   }
+  if (config['reserve-placement'] !== undefined && config['reserve-placement'] !== 'preserve') {
+    environment[DIRECTOR_RESERVE_PLACEMENT_ENV] = config['reserve-placement']
+  }
   const serviceAccount = projectServiceAccount(config, 'capacity-service-account')
   const asiaProofServiceAccount = projectServiceAccount(config, 'asia-proof-service-account')
   const rehomeDirectorServiceAccount = projectServiceAccount(
@@ -315,10 +321,17 @@ export function parseArguments(argv) {
       values['rehome-audience'] !== undefined ||
       values['expected-rehome-generation'] !== undefined ||
       values['rehome-control-origin'] !== undefined ||
-      values['region-correction-cohort-percent'] !== undefined
+      values['region-correction-cohort-percent'] !== undefined ||
+      values['reserve-placement'] !== undefined
     ) {
       throw new Error('director configuration arguments require --role director')
     }
+  }
+  if (
+    values['reserve-placement'] !== undefined &&
+    !['preserve', ...RESERVE_PLACEMENT_MODES].includes(values['reserve-placement'])
+  ) {
+    throw new Error('--reserve-placement must be preserve, off, dry-run or on')
   }
   if (
     values.role === 'director' &&
@@ -756,6 +769,17 @@ export function assertReserveCompatibleTrafficMove(servingReserve, candidateRese
   }
 }
 
+// With placement off no director books a reserve cell, so each one's dead-man trips (60-120 s)
+// and every host re-registers at once: the cells go to db first, on purpose.
+export function assertReservePlacementKept(servingPlacement, candidatePlacement, reserve) {
+  if (servingPlacement !== 'on' || candidatePlacement === 'on') return
+  if (reserve !== undefined && reserve.length > 0) {
+    throw new Error(
+      `reserve placement would turn ${candidatePlacement} while cells are reserve (${reserve.join(', ')}); flip them to db first`
+    )
+  }
+}
+
 function directorCellIds(...environments) {
   const ids = new Set()
   for (const environment of environments) {
@@ -845,6 +869,11 @@ export async function deployDirector(config, tag, overrides = {}) {
   deploymentEnvironment[DIRECTOR_CORRECTION_COHORT_ENV] ??= correctionCohortPercent(
     currentEnvironment[DIRECTOR_CORRECTION_COHORT_ENV] ?? '0'
   )
+  const servingReservePlacement = currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ?? 'off'
+  if (currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] !== undefined) {
+    deploymentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ??= servingReservePlacement
+  }
+  const candidateReservePlacement = deploymentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ?? 'off'
   if (config['region-correction-cohort-percent'] !== undefined &&
       config['region-correction-cohort-percent'] !== 'preserve' &&
       config['expected-rehome-generation'] === undefined) {
@@ -955,19 +984,30 @@ export async function deployDirector(config, tag, overrides = {}) {
     }
     await operations.waitForHealth(candidate.origin, requiredCapacityProtocol)
     await verifyRehomeDisabled(candidate.origin)
-    const servingOrigin = initialService.status?.url
-    if (!servingOrigin) throw new Error('relay service reports no URL for the serving revision')
-    const cellIds = directorCellIds(currentEnvironment, environment)
-    const servingReserve = await operations.readReserveCells(config, servingOrigin, cellIds)
-    const candidateReserve = await operations.readReserveCells(config, candidate.origin, cellIds)
-    assertReserveCompatibleTrafficMove(servingReserve, candidateReserve)
-    console.warn(
-      JSON.stringify({
-        event: 'director_reserve_support_checked',
-        serving: servingReserve === undefined ? 'unsupported' : servingReserve,
-        candidate: candidateReserve === undefined ? 'unsupported' : candidateReserve
-      })
-    )
+    // The same image on both sides supports the same things; only an image change, or turning
+    // placement off, needs every cell's admit mode (and the admin token that reads it).
+    const sameImage =
+      servingRevision.spec?.containers?.[0]?.image?.split('@').at(-1) === config.image?.split('@').at(-1)
+    const placementOff = servingReservePlacement === 'on' && candidateReservePlacement !== 'on'
+    if (sameImage && !placementOff) {
+      console.warn(JSON.stringify({ event: 'director_reserve_support_checked', skipped: 'same image' }))
+    } else {
+      const servingOrigin = initialService.status?.url
+      if (!servingOrigin) throw new Error('relay service reports no URL for the serving revision')
+      const cellIds = directorCellIds(currentEnvironment, environment)
+      const servingReserve = await operations.readReserveCells(config, servingOrigin, cellIds)
+      const candidateReserve = await operations.readReserveCells(config, candidate.origin, cellIds)
+      assertReserveCompatibleTrafficMove(servingReserve, candidateReserve)
+      assertReservePlacementKept(servingReservePlacement, candidateReservePlacement, candidateReserve ?? servingReserve)
+      console.warn(
+        JSON.stringify({
+          event: 'director_reserve_support_checked',
+          reservePlacement: { serving: servingReservePlacement, candidate: candidateReservePlacement },
+          serving: servingReserve === undefined ? 'unsupported' : servingReserve,
+          candidate: candidateReserve === undefined ? 'unsupported' : candidateReserve
+        })
+      )
+    }
     operations.updateTraffic(config, [`--to-tags=${tag}=100`])
     promoted = true
     removeDirectorTrafficTags(config, operations, new Set([SELECTOR_ROLLBACK_TAG]))

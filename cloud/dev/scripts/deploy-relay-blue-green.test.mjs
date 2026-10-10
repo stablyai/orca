@@ -15,6 +15,7 @@ import {
   assertRegionalRehomeDisabled,
   assertReserveCompatibleTrafficMove,
   deployDirector,
+  DIRECTOR_RESERVE_PLACEMENT_ENV,
   directorDeploymentEnvironment,
   directorCellSetAddition,
   directorStartupProbeArguments,
@@ -431,7 +432,8 @@ function directorHarness({
   dropRequestedMinimum = false,
   servingServiceAccount,
   servingImageDigest = `sha256:${'f'.repeat(64)}`,
-  reserveCells = {}
+  reserveCells = {},
+  servingEnvironment = {}
 } = {}) {
   const state = {
     activeRevision: 'relay-00001-old',
@@ -442,7 +444,8 @@ function directorHarness({
         'relay-00001-old',
         {
           env: {
-            ORCA_RELAY_ROLE: 'director'
+            ORCA_RELAY_ROLE: 'director',
+            ...servingEnvironment
           },
           secrets: {
             [DIRECTOR_REGIONAL_PLACEMENT_ENV]: {
@@ -916,4 +919,49 @@ test('reads a census-less director as unsupported and fails closed on any other 
     if (environment === undefined) delete process.env.ORCA_RELAY_ADMIN_ID_TOKEN
     else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
   }
+})
+
+test('a same-image deploy reads no admit modes, and keeps the serving reserve placement', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const harness = directorHarness({ servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' } })
+  let reads = 0
+  harness.operations.readReserveCells = async () => {
+    reads += 1
+    return []
+  }
+  await deployDirector({ image: `relay@${servingImageDigest}` }, 'candidate-new', harness.operations)
+  assert.equal(reads, 0)
+  assert.equal(harness.state.revisions.get(harness.state.activeRevision).env[DIRECTOR_RESERVE_PLACEMENT_ENV], 'on')
+})
+
+test('turning reserve placement off is refused while any cell is reserve, even on the same image', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
+  const reserved = directorHarness({
+    servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'], [candidateOrigin]: ['production-gce-c3'] }
+  })
+  await assert.rejects(
+    deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', reserved.operations),
+    /reserve placement would turn off while cells are reserve \(production-gce-c3\); flip them to db first/
+  )
+  assert.equal(reserved.state.activeRevision, 'relay-00001-old')
+  const allDb = directorHarness({
+    servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': [], [candidateOrigin]: [] }
+  })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', allDb.operations)
+  assert.equal(allDb.state.revisions.get(allDb.state.activeRevision).env[DIRECTOR_RESERVE_PLACEMENT_ENV], 'off')
+})
+
+test('--reserve-placement takes only a known mode, and only for a director', () => {
+  const base = ['--project', 'p', '--region', 'r', '--service', 's', '--image', `relay@sha256:${'a'.repeat(64)}`, '--release-id', '1']
+  assert.equal(parseArguments([...base, '--role', 'director', '--reserve-placement', 'on'])['reserve-placement'], 'on')
+  assert.throws(() => parseArguments([...base, '--role', 'director', '--reserve-placement', 'yes']), /must be preserve, off, dry-run or on/)
+  assert.throws(
+    () => parseArguments([...base, '--role', 'cell', '--director-origin', 'https://d', '--admin-audience', 'a', '--reserve-placement', 'on']),
+    /require --role director/
+  )
+  assert.equal(directorDeploymentEnvironment({ 'reserve-placement': 'preserve' })[DIRECTOR_RESERVE_PLACEMENT_ENV], undefined)
+  assert.equal(directorDeploymentEnvironment({ 'reserve-placement': 'dry-run' })[DIRECTOR_RESERVE_PLACEMENT_ENV], 'dry-run')
 })
