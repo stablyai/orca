@@ -137,6 +137,30 @@ describe('filterWorktrees', () => {
     ).toEqual([folder])
   })
 
+  it('keeps an awake main worktree when the default-branch exemption is off (#19108)', () => {
+    const awakeMain = worktree({
+      worktreeId: 'main',
+      branch: 'main',
+      isMainWorktree: true,
+      status: 'working',
+      liveTerminalCount: 1
+    })
+    const sleepingFeature = worktree({ worktreeId: 'feature', isMainWorktree: false })
+
+    expect(
+      filterWorktrees(
+        [awakeMain, sleepingFeature],
+        {
+          filterRepoIds: new Set(),
+          hideSleeping: true,
+          hideDefaultBranch: false,
+          alwaysShowDefaultBranch: false
+        },
+        ''
+      )
+    ).toEqual([awakeMain])
+  })
+
   it('re-hides the sleeping main worktree when the desktop setting is off', () => {
     const main = worktree({ worktreeId: 'main', branch: 'main', isMainWorktree: true })
 

@@ -122,6 +122,15 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
     })
   })
 
+  it('writes the default-branch exemption only when that toggle changes (#19108)', () => {
+    expect(
+      buildWorkspaceViewSettingsUpdate(
+        { alwaysShowDefaultBranch: false },
+        { ...next, alwaysShowDefaultBranch: false }
+      )
+    ).toEqual({ alwaysShowDefaultBranchWorkspace: false })
+  })
+
   it('never invents alwaysShowDefaultBranchWorkspace for patches that omit it (#8873)', () => {
     expect(
       'alwaysShowDefaultBranchWorkspace' in

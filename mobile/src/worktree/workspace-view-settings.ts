@@ -63,9 +63,8 @@ export function sortModeFromDesktop(
  * web clients, and this screen's mirror refreshes only on connect/focus. Echoing the
  * whole snapshot let a stale mirror revert sibling fields another client had just
  * changed; the host merges partial updates field-by-field, so sending only the
- * touched fields is lossless. This also supersedes the old #8873 special case:
- * alwaysShowDefaultBranchWorkspace has no mobile toggle, so it is simply never in a
- * patch and can no longer revert a desktop opt-out.
+ * touched fields is lossless. The default-branch exemption is included only when
+ * that toggle itself changes, so a hide-sleeping edit cannot revert a desktop opt-out.
  */
 export function buildWorkspaceViewSettingsUpdate(
   patch: Partial<MobileViewState>,
