@@ -251,6 +251,41 @@ describe('reserve assignment on a director', () => {
     })
   })
 
+  it('after a WRONG_CELL leave, any director reads the row and mints above it', async () => {
+    const leftWrongCell = (row: () => Promise<{ cellId: string; assignmentEpoch: number } | null>) => {
+      const harness = setup({ row })
+      // Another director demoted the seat: this one only sees the leave in c1's feed.
+      harness.directory.apply(
+        'c1',
+        feed('c1', {
+          full: undefined,
+          seq: 3,
+          changes: [
+            { seq: 2, kind: 'join', ...HOST, epoch: 7, generation: 1, at: 1 },
+            { seq: 3, kind: 'leave', ...HOST, epoch: 7, generation: 1, closeCode: 4409, at: 2 }
+          ]
+        }),
+        harness.now.value,
+        harness.now.value
+      )
+      return harness
+    }
+    const row = vi.fn(async () => ({ cellId: 'c2', assignmentEpoch: 8 }))
+    const read = leftWrongCell(row)
+    expect(await read.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      lane: 'placement',
+      assignment: { assignmentEpoch: 9 }
+    })
+    expect(row).toHaveBeenCalledTimes(1)
+    // The database down: placed as before the read existed, above what the map knows.
+    const down = leftWrongCell(async () => Promise.reject(new Error('timeout')))
+    expect(await down.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      assignment: { assignmentEpoch: 8 }
+    })
+  })
+
   it('paces with Retry-After when every reserve cell is out of budget and no database cell exists', async () => {
     const { assignment } = setup({ reserve: () => ({ outcome: 'intake' }) })
     await expect(assignment.plan(HOST, { reconnect: false, region: US })).rejects.toBeInstanceOf(

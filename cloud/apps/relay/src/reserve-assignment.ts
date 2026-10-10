@@ -139,13 +139,20 @@ export class ReserveAssignment {
       ...(rowFloor === undefined ? [] : [rowFloor])
     ]
     let row: { cellId: string; assignmentEpoch: number } | null = null
-    if (known.length === 0) {
+    // A seat closed with WRONG_CELL was demoted (or failed to re-register) because its row is
+    // ahead, which every director sees in that cell's feed: read the row, so the re-assign mints
+    // above it on any director, not just the one that demoted it.
+    const leftWrongCell = left?.closeCode === RELAY_CLOSE_CODE.WRONG_CELL
+    if (known.length === 0 || leftWrongCell) {
       try {
         row = await this.input.readRow(identity)
       } catch {
         // A host the map never saw, with the database down: its epoch cannot be minted safely.
-        this.summary.retries.database += 1
-        return { kind: 'retry', retryAfterSeconds: 2, reason: 'database' }
+        // One the map knows places as it did before this read existed.
+        if (known.length === 0) {
+          this.summary.retries.database += 1
+          return { kind: 'retry', retryAfterSeconds: 2, reason: 'database' }
+        }
       }
       if (row) known.push(row.assignmentEpoch)
     }
