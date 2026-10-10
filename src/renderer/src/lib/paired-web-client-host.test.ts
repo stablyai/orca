@@ -1,22 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getFileExplorerOperationOwnerFromState } from '@/components/right-sidebar/file-explorer-operation-owner'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import {
+  getRuntimeEnvironmentIdForWorktree,
+  type WorktreeRuntimeOwnerState
+} from './worktree-runtime-owner'
+import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 import { resolveTerminalHostOwnership } from './terminal-worktree-route'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 const ENV = 'web-env'
+const ENV_HOST = `runtime:${ENV}` as const
 const WT = 'repo-1::/srv/proj'
 
-function webState(overrides: Record<string, unknown> = {}): never {
+function webState(overrides: WorktreeRuntimeOwnerState = {}): WorktreeRuntimeOwnerState {
   return {
     settings: { activeRuntimeEnvironmentId: null },
     runtimeEnvironments: [{ id: ENV }],
     runtimeEnvironmentCatalogHydrated: true,
-    repos: [{ id: 'repo-1', connectionId: null, executionHostId: `runtime:${ENV}` }],
+    repos: [{ id: 'repo-1', connectionId: null, executionHostId: ENV_HOST }],
     worktreesByRepo: {
-      'repo-1': [
-        { id: WT, repoId: 'repo-1', hostId: `runtime:${ENV}`, runtimeOwnerEnvironmentId: ENV }
-      ]
+      'repo-1': [{ id: WT, repoId: 'repo-1', hostId: ENV_HOST, runtimeOwnerEnvironmentId: ENV }]
     },
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
@@ -25,10 +27,10 @@ function webState(overrides: Record<string, unknown> = {}): never {
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
     ...overrides
-  } as never
+  }
 }
 
-const UNSTAMPED_LOCAL_ROW = {
+const UNSTAMPED_LOCAL_ROW: WorktreeRuntimeOwnerState = {
   worktreesByRepo: { 'repo-1': [{ id: WT, repoId: 'repo-1', hostId: 'local' }] }
 }
 
@@ -47,9 +49,9 @@ describe('a paired web client routes every owner through its server (#9047)', ()
         kind: 'runtime',
         runtimeEnvironmentId: ENV
       })
-      expect(getFileExplorerOperationOwnerFromState(state, WT)).toMatchObject({
-        kind: 'runtime',
-        environmentId: ENV
+      expect(resolveWorktreeOperationRoute(state, WT)).toEqual({
+        executionHostId: ENV_HOST,
+        runtimeEnvironmentId: ENV
       })
     }
   })
@@ -60,7 +62,9 @@ describe('a paired web client routes every owner through its server (#9047)', ()
       resolveTerminalHostOwnership(webState(), 'ephemeral-setup-terminal:panel-1', 'spawn')
     ).toEqual({ kind: 'runtime', runtimeEnvironmentId: ENV })
     const folderState = webState({
-      folderWorkspaces: [{ id: 'folder-1', executionHostId: 'local', connectionId: null }]
+      folderWorkspaces: [
+        { id: 'folder-1', projectGroupId: 'group-1', executionHostId: 'local', connectionId: null }
+      ]
     })
     expect(getRuntimeEnvironmentIdForWorktree(folderState, folderWorkspaceKey('folder-1'))).toBe(
       ENV
@@ -70,10 +74,9 @@ describe('a paired web client routes every owner through its server (#9047)', ()
   it('keeps an SSH target as the place and the server as the transport', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     const state = webState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: 'ssh:target-1' })
-    expect(getFileExplorerOperationOwnerFromState(state, WT)).toEqual({
-      kind: 'runtime',
-      environmentId: ENV,
-      executionHostId: 'ssh:target-1'
+    expect(resolveWorktreeOperationRoute(state, WT)).toEqual({
+      executionHostId: 'ssh:target-1',
+      runtimeEnvironmentId: ENV
     })
   })
 

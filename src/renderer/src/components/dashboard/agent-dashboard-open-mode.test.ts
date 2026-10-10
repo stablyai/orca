@@ -12,7 +12,7 @@ function dashboardState(): Parameters<typeof toggleAgentDashboardFromShortcut>[0
     agentDashboardDrawerOpen: false,
     setSidebarOpen: vi.fn(),
     setAgentDashboardDrawerOpen: vi.fn()
-  } as never
+  }
 }
 
 describe('Agent Dashboard open mode', () => {
