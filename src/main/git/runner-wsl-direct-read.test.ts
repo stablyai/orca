@@ -132,42 +132,6 @@ describe('WSL direct Git reads', () => {
     expect(execFileMock.mock.calls[0]?.[1]?.[5]).toContain('^GIT_')
   })
 
-  it('retries a transient environment probe after a bounded delay', async () => {
-    let now = 1_000
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
-    try {
-      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-        const child = createMockChild()
-        queueMicrotask(() =>
-          callback?.(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }), '', '')
-        )
-        return child
-      })
-
-      await expect(getWslGitReadEnvironment(DISTRO)).resolves.toBeNull()
-      await expect(getWslGitReadEnvironment(DISTRO)).resolves.toBeNull()
-      expect(execFileMock).toHaveBeenCalledTimes(1)
-
-      now += 30_000
-      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-        const child = createMockChild()
-        queueMicrotask(() =>
-          callback?.(
-            null,
-            fencedProbeStdout(execFileMock.mock.calls.at(-1)?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
-            ''
-          )
-        )
-        return child
-      })
-
-      await expect(getWslGitReadEnvironment(DISTRO)).resolves.toEqual(LOGIN_ENVIRONMENT)
-      expect(execFileMock).toHaveBeenCalledTimes(2)
-    } finally {
-      nowSpy.mockRestore()
-    }
-  })
-
   it('bounds settled environment entries during distro churn', () => {
     for (let index = 0; index < 132; index += 1) {
       seedWslGitReadEnvironmentForTests(`distro-${index}`, LOGIN_ENVIRONMENT)

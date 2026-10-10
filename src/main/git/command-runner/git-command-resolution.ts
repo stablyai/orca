@@ -8,6 +8,7 @@ import {
   invalidateWslGitReadEnvironment,
   isWslGitReadEnvironmentSettled,
   peekWslGitReadEnvironment,
+  retryWslGitLoginProbeIfDue,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
 } from '../wsl-git-read-environment'
 import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
@@ -36,6 +37,7 @@ export function resolveGitCommand(
   if (distro) {
     const environment = peekWslGitReadEnvironment(distro)
     if (environment) {
+      retryWslGitLoginProbeIfDue(distro)
       return resolveCommand('git', args, options.cwd, distro, {
         wslGitReadEnvironment: environment,
         env: options.env,
