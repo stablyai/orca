@@ -25,7 +25,7 @@ import {
 
 export const PROFILE_STATE_BUSY_TIMEOUT_MS = 5_000
 
-// Check the database driver before opening profile state.
+// Keep relay-only Node 18 imports safe while selecting the actual database driver.
 export const isProfileStateSqliteAvailable = isSqliteAvailable
 
 export { ProfileStateDatabaseOpenError }

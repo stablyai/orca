@@ -6,12 +6,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { parseArgs } from './orcad-entry'
 import {
   ORCAD_EXIT_CONFIGURATION,
   ORCAD_EXIT_FAILED,
-  parseArgs,
   resolveOrcadExitCode
-} from './orcad-entry'
+} from './orcad-exit-code'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import {
   beginAgentSessionRuntimeRecord,
@@ -23,6 +23,37 @@ import { ProfileStateAccessError } from '../persistence/profile-state/profile-st
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 
 describe('parseArgs', () => {
+  it('accepts help alongside valid server flags', () => {
+    expect(parseArgs(['--help'])).toEqual({ help: true })
+    expect(parseArgs(['-h'])).toEqual({ help: true })
+    expect(parseArgs(['--json', '--help', '--port', '0'])).toEqual({
+      json: true,
+      help: true,
+      port: 0
+    })
+  })
+
+  it('keeps help-looking values as values', () => {
+    expect(parseArgs(['--bind', '--help'])).toEqual({ bind: '--help' })
+    expect(parseArgs(['--pairing-address', '-h'])).toEqual({ pairingAddress: '-h' })
+    expect(parseArgs(['--project-root', '--help'])).toEqual({ projectRoot: '--help' })
+    expect(parseArgs(['--bind', '--help', '-h'])).toEqual({ bind: '--help', help: true })
+  })
+
+  it('still rejects invalid arguments and incompatible flags with help', () => {
+    expect(() => parseArgs(['--help', '--unknown'])).toThrow('Unknown argument: --unknown')
+    expect(() => parseArgs(['--help', '--port', 'bad'])).toThrow('--port expects an integer')
+    expect(() => parseArgs(['--help', '--bind'])).toThrow('--bind expects a value')
+    expect(() => parseArgs(['--help', '--recipe-json'])).toThrow(
+      '--recipe-json requires --project-root'
+    )
+    for (const flag of ['--no-pairing', '--mobile-pairing']) {
+      expect(() => parseArgs(['--help', '--grant-desktop-control', flag])).toThrow(
+        '--grant-desktop-control applies only to the default runtime pairing offer'
+      )
+    }
+  })
+
   it('accepts --bind and leaves it unset when absent', () => {
     expect(parseArgs(['--bind', '0.0.0.0'])).toEqual({ bind: '0.0.0.0' })
     expect(parseArgs([])).toEqual({})

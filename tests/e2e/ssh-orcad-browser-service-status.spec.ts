@@ -113,21 +113,34 @@ test('an unavailable browser on a responding managed host does not report a serv
         { timeout: 60_000 }
       )
       .toMatch(/^runtime:/)
-    const retained = await page.evaluate((worktreeId) => {
-      const state = window.__store?.getState()
-      const tab = state?.browserTabsByWorktree[worktreeId]?.[0]
-      const repo = state?.repos.find((repo) =>
-        (state.worktreesByRepo[repo.id] ?? []).some((worktree) => worktree.id === worktreeId)
-      )
-      if (repo?.executionHostId) {
-        state?.setActiveWorktree(worktreeId, repo.executionHostId)
+    // Retained desktop pages stay local after conversion; place this one on the managed host.
+    const remoteTabId = await page.evaluate(
+      ({ worktreeId, environmentId, url }) => {
+        const state = window.__store?.getState()
+        const repo = state?.repos.find((repo) =>
+          (state.worktreesByRepo[repo.id] ?? []).some((worktree) => worktree.id === worktreeId)
+        )
+        if (!state || !repo?.executionHostId) {
+          throw new Error('Missing converted workspace')
+        }
+        state.setActiveWorktree(worktreeId, repo.executionHostId)
+        const tab = state.createBrowserTab(worktreeId, url, {
+          title: 'Managed host browser',
+          activate: true,
+          browserRuntimeEnvironmentId: environmentId
+        })
+        if (tab.activePageId) {
+          state.focusBrowserTabInWorktree(worktreeId, tab.activePageId, { surfacePane: true })
+        }
+        return tab.id
+      },
+      {
+        worktreeId: remote.worktreeId,
+        environmentId: environment.id,
+        url: `${SSH_REMOTE_ONLY_ORIGIN}/login`
       }
-      if (tab?.activePageId) {
-        state?.focusBrowserTabInWorktree(worktreeId, tab.activePageId, { surfacePane: true })
-      }
-      return tab?.id ?? null
-    }, remote.worktreeId)
-    expect(retained).toBe(tabId)
+    )
+    expect(remoteTabId).not.toBe(tabId)
     const notice = page.getByTestId('remote-browser-stream-error')
     await expect(notice).toBeVisible({ timeout: 30_000 })
     await page.screenshot({ path: testInfo.outputPath('browser-service-status.png') })
@@ -153,10 +166,26 @@ test('an unavailable browser on a responding managed host does not report a serv
       'The remote browser is unavailable. Check its setup on the server.'
     )
     await expect(notice).not.toContainText('Cannot reach the remote server.')
-    await notice.getByRole('button', { name: 'Reconnect', exact: true }).click()
-    await expect(notice).toContainText(
-      'The remote browser is unavailable. Check its setup on the server.'
-    )
+    // Why: the managed host can mirror a terminal it seeds for this workspace, taking focus.
+    await expect(async () => {
+      await page.evaluate(
+        ({ worktreeId, tabId }) => {
+          const state = window.__store?.getState()
+          const pageId = state?.browserTabsByWorktree[worktreeId]?.find(
+            (tab) => tab.id === tabId
+          )?.activePageId
+          if (pageId) {
+            state?.focusBrowserTabInWorktree(worktreeId, pageId, { surfacePane: true })
+          }
+        },
+        { worktreeId: remote.worktreeId, tabId: remoteTabId }
+      )
+      await notice.getByRole('button', { name: 'Reconnect', exact: true }).click({ timeout: 2_000 })
+      await expect(notice).toContainText(
+        'The remote browser is unavailable. Check its setup on the server.',
+        { timeout: 2_000 }
+      )
+    }).toPass({ timeout: 30_000 })
     console.log('[browser-service-after-retry]', await notice.innerText())
     expect(JSON.parse(await serverCall(page, environment.id, 'repo.list'))).toMatchObject({
       ok: true,

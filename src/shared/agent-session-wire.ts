@@ -326,6 +326,8 @@ export type AgentSessionMutationResult<TValue> =
 // ─── Per-method payloads ────────────────────────────────────────────────────
 
 export type AgentSessionAttachResult = {
+  /** Create's committed opening message, even when its row is outside the returned history page. */
+  firstMessage?: AgentJournalSubmission
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage

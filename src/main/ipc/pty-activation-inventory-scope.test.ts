@@ -91,7 +91,7 @@ describe('scoped activation PTY inventory', () => {
     expect(remoteLists.reduce((count, mock) => count + mock.mock.calls.length, 0)).toBe(1)
     expect(localList).not.toHaveBeenCalled()
     expect(startup).not.toHaveBeenCalled()
-    expect(ptyOwnership.get('ssh:host-17@@pty-1')).toBe('host-17')
+    expect(ptyOwnership.get('ssh:host-17@@pty-1')).toBe('ssh:host-17')
   })
 
   it('waits for local startup and never visits remote providers for a local scope', async () => {

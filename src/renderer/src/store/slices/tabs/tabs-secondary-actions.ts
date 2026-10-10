@@ -1,7 +1,10 @@
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findGroupAndWorktree, findTabAndWorktree } from '../tab-group-state'
-import { findSiblingGroupId, updateSplitRatio } from './tabs-layout'
+import {
+  findSiblingGroupId,
+  updateSplitRatio
+} from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 
 export function createTabsSecondaryActions(
   set: TabsSliceSet,

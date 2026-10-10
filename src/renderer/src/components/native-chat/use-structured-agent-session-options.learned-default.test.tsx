@@ -27,7 +27,7 @@ import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-cat
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
-// The user's report: with no saved pick, every new Grok, OpenCode or OMP chat painted "Model" (or
+// The user's report: with no saved pick, every new Grok, OpenCode, OMP or Pi chat painted "Model" (or
 // the probe's model) before the model the chat runs. The first chat with no pick is the only one
 // that may: once it reports, the host names that model and the next chat starts from it.
 
@@ -41,6 +41,11 @@ const CASES = {
   opencode: {
     ids: ['github-copilot/gpt-6', 'github-copilot/claude-fable-5'],
     runs: 'github-copilot/claude-fable-5',
+    holdsEverywhere: false
+  },
+  pi: {
+    ids: ['anthropic/claude-sonnet-4', 'openai/gpt-6'],
+    runs: 'openai/gpt-6',
     holdsEverywhere: false
   }
 } as const
@@ -163,7 +168,7 @@ describe('a second new chat after one that named no model', () => {
     })
   }
 
-  it.each(['grok', 'opencode'] as const)(
+  it.each(['grok', 'opencode', 'pi'] as const)(
     '%s: names the model the first chat ran on its first frame',
     async (agent) => {
       hostFor(agent)

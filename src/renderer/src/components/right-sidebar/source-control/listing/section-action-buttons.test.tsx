@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
@@ -60,27 +60,35 @@ function renderBranchSection(): void {
 
 // An unstaged section with one plain entry surfaces Discard all + Stage all
 // next to View all — the crowded case the single-line layout has to survive.
-function renderUncommittedSections(): void {
-  const section: SourceControlDisplaySection = {
-    id: 'unstaged',
-    area: 'unstaged',
-    items: [UNSTAGED_ENTRY]
-  }
-  const unfilteredById = new Map<SourceControlDisplaySectionId, SourceControlDisplaySection>([
-    ['unstaged', section]
-  ])
+function renderUncommittedSections({
+  sections = [{ id: 'unstaged', area: 'unstaged', items: [UNSTAGED_ENTRY] }],
+  isStatusTruncated = false,
+  handleStageSectionPaths = vi.fn()
+}: {
+  sections?: SourceControlDisplaySection[]
+  isStatusTruncated?: boolean
+  handleStageSectionPaths?: (
+    sectionId: SourceControlDisplaySectionId,
+    paths: readonly string[]
+  ) => Promise<void>
+} = {}): void {
+  const unfilteredById = new Map<SourceControlDisplaySectionId, SourceControlDisplaySection>(
+    sections.map((section) => [section.id, section])
+  )
   render(
     <TooltipProvider>
       <SourceControlUncommittedSections
-        displaySections={[section]}
+        displaySections={sections}
         unfilteredDisplaySectionsById={unfilteredById}
         normalizedFilter=""
-        collapsedSections={new Set(['unstaged'])}
+        collapsedSections={new Set(sections.map((section) => section.id))}
         toggleSection={vi.fn()}
         onViewSection={vi.fn()}
         isExecutingBulk={false}
         requestDiscardAllInArea={vi.fn()}
         handleStageAllPaths={vi.fn()}
+        handleStageSectionPaths={handleStageSectionPaths}
+        isStatusTruncated={isStatusTruncated}
         handleUnstagePaths={vi.fn()}
         sourceControlViewMode="list"
         visibleTreeRowsBySection={{}}
@@ -147,5 +155,28 @@ describe('source control section header actions', () => {
     // Supplied by the shared Button base variant; pinned here so a change to that
     // variant can't silently start wrapping these labels.
     expect(screen.getByRole('button', { name: 'View all' })).toHaveClass('whitespace-nowrap')
+  })
+
+  it('routes the Changes header Stage all through the section handler', () => {
+    const handleStageSectionPaths = vi.fn(async () => {})
+    renderUncommittedSections({ handleStageSectionPaths, isStatusTruncated: true })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stage all' }))
+
+    expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts'])
+  })
+
+  it('hides the Untracked header Stage all when the listing hit its cap', () => {
+    const untracked: SourceControlDisplaySection = {
+      id: 'untracked',
+      area: 'untracked',
+      items: [{ path: 'new.ts', status: 'untracked', area: 'untracked' }]
+    }
+    renderUncommittedSections({ sections: [untracked], isStatusTruncated: true })
+    expect(screen.queryByRole('button', { name: 'Stage all' })).toBeNull()
+
+    cleanup()
+    renderUncommittedSections({ sections: [untracked], isStatusTruncated: false })
+    expect(screen.getByRole('button', { name: 'Stage all' })).toBeInTheDocument()
   })
 })

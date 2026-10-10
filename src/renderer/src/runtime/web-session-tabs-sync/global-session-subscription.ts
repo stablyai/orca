@@ -1,4 +1,3 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent'
 import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
@@ -16,7 +15,10 @@ import { loadInitialWebSessionTabs } from './load-initial'
 import { handleGlobalSessionEvent } from './global-session-events'
 import { VisibilityResumeCoordinator } from './visibility-resume-coordinator'
 import type { VisibilityResumeOmission, SessionTabsStreamEvent } from './state'
-import type { MirroredRuntimeEnvironment } from './visibility-resume-types'
+import type {
+  MirroredRuntimeEnvironment,
+  SessionTabsSnapshotHandler
+} from './visibility-resume-types'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
 import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
@@ -26,30 +28,9 @@ export type GlobalSubscriptionRefs = {
   activeRuntimeEnvironmentId: Ref<string | null>
   activeRuntimeWorktreeKey: Ref<string | null>
   visibilityResumeOmissions: Ref<Map<string, VisibilityResumeOmission>>
-  snapshotReceipt: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
-  snapshotApply: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => boolean
-  >
-  snapshotAccepted: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
+  snapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
+  snapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
+  snapshotAccepted: Ref<SessionTabsSnapshotHandler<void>>
   ownerRevisions: Ref<Map<string, number | undefined>>
 }
 

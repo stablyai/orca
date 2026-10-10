@@ -135,6 +135,45 @@ export function resolveWorktreeOperationRouteForHost(
 }
 
 /**
+ * Strict variant of the host-qualified resolver for callers that treat a null runtime as local:
+ * rival HUBs projecting the same host report `ambiguous` instead of a transport-less route.
+ */
+export function resolveStrictWorktreeOperationRouteResultForHost(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOperationRouteResolution {
+  const host = parseExecutionHostId(executionHostId)
+  if (!host) {
+    return { kind: 'missing' }
+  }
+  if (host.kind === 'ssh') {
+    const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, host.id)
+    if (hubOwners.hasAmbiguousOwner || hubOwners.environmentIds.size > 1) {
+      return { kind: 'ambiguous' }
+    }
+  }
+  return { kind: 'resolved', route: resolveSelectedHostRoute(state, worktreeId, host) }
+}
+
+function collectHubOwnerEnvironmentIds(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): { environmentIds: Set<string>; hasAmbiguousOwner: boolean } {
+  const environmentIds = new Set<string>()
+  let hasAmbiguousOwner = false
+  for (const owner of ownerRecordsOnHost(state, worktreeId, executionHostId)) {
+    const resolution = resolveExactWorktreeRoute(state, owner)
+    hasAmbiguousOwner ||= resolution.kind === 'ambiguous'
+    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
+      environmentIds.add(resolution.route.runtimeEnvironmentId)
+    }
+  }
+  return { environmentIds, hasAmbiguousOwner }
+}
+
+/**
  * An authoritative host selection already names the target, so only the transport has to be
  * recovered — and only for `ssh:`, which a paired HUB can proxy. Rival HUBs projecting the same
  * host stay unresolved rather than guessing one.
@@ -151,13 +190,7 @@ function resolveSelectedHostRoute(
   if (selectedHost.kind !== 'ssh') {
     return { executionHostId: selectedHost.id, runtimeEnvironmentId: null }
   }
-  const environmentIds = new Set<string>()
-  for (const owner of ownerRecordsOnHost(state, worktreeId, selectedHost.id)) {
-    const resolution = resolveExactWorktreeRoute(state, owner)
-    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
-      environmentIds.add(resolution.route.runtimeEnvironmentId)
-    }
-  }
+  const { environmentIds } = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
   const environmentId = environmentIds.values().next().value
   return {
     executionHostId: selectedHost.id,

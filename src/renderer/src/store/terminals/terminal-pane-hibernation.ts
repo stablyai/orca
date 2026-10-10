@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
@@ -154,7 +155,7 @@ export function createTerminalPaneHibernationActions(
         for (const snapshot of unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []) {
           snapshot.commit?.()
         }
-      } else if (!opts.ptyId.startsWith('remote:')) {
+      } else if (!isRemoteRuntimePtyId(opts.ptyId)) {
         // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
         const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
         try {

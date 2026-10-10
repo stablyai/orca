@@ -51,7 +51,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         resolveCommand: () => realClaudeCommand,
         resolveLaunchArgs: () => [],
         resolveEnv: () => realClaudeLaunchHome().env,
-        resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+        resolveAuthPolicy: () => ({ account: 'system' }),
         hasTranscript: async () => false,
         cliFlags: createClaudeCliFlagSupport(),
         prepareVisuals: createNativeChatVisualsDelivery({ stateDirectory, logger })

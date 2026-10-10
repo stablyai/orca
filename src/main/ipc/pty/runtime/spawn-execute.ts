@@ -1,7 +1,7 @@
 import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
-import { tryGetProviderForAgentSessionOwner } from '../provider/registry'
+import { tryGetProviderForPty } from '../provider/registry'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   agentSessionOwners,
@@ -112,7 +112,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           }
         },
         isLive: async (owner) => {
-          const ownerProvider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+          const ownerProvider = tryGetProviderForPty(owner.ptyId)
           if (!ownerProvider) {
             // Why: a disconnected relay may keep its PTY alive during the
             // grace window; missing transport is unknown, never absence.

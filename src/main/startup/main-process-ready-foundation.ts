@@ -21,11 +21,6 @@ import {
   setDefaultWslDistroOverride
 } from '../git/runner'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import {
-  attachClaudeLivePtyPersistence,
-  onLiveClaudePtysDrained,
-  seedLiveClaudePtysFromPersistence
-} from '../claude-accounts/live-pty-gate'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -254,21 +249,6 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
   })
-  // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
-  attachClaudeLivePtyPersistence(store)
-  // Why: while a live claude defers the managed OAuth refresh, usage shows
-  // "Waiting for Claude session"; refetch when the last live PTY exits so the
-  // error clears immediately instead of after the failure backoff.
-  onLiveClaudePtysDrained(() => {
-    void state.rateLimits?.refreshAfterClaudeLivePtysDrained()
-  })
-  const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
-  seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
-  if (persistedClaudePtyIds.length > 0) {
-    console.log(
-      `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`
-    )
-  }
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)

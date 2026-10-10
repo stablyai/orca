@@ -102,7 +102,15 @@ export function createBridgeNotifyForwarder(args: {
       // to be enforced here because a page served from an older desktop bundle does not read
       // `storageOversize` and would write the key whole over what the device holds.
       const held = options.readStorage()
-      if (!pageMayWriteStorageKey(message.key, host.id, args.route(), held)) {
+      if (
+        !pageMayWriteStorageKey(
+          message.key,
+          host.id,
+          args.route(),
+          held,
+          options.ownsHostArea === true
+        )
+      ) {
         options.onDiagnostic?.({ kind: 'storage-refused', key: message.key })
         return
       }

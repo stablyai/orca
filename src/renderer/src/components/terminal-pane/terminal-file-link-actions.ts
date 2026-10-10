@@ -78,49 +78,55 @@ export function buildFileLinkActions(
     deps.worktreePath,
     deps.runtimeEnvironmentId
   )
-  const worktreeRoot = resolveKnownWorktreeRootPathLink(mappedPath)
+  const worktreeRoot = resolveKnownWorktreeRootPathLink(
+    mappedPath,
+    useAppStore.getState(),
+    fileContext
+  )
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
   const isMac = navigator.userAgent.includes('Mac')
 
   // Why: the OS can only launch a local file, so remote links keep the same row by
   // downloading first — local and remote workspaces offer the same actions.
-  const systemDefaultRow = worktreeRoot
-    ? canOpenWithSystemDefault
-      ? {
-          label: isMac
-            ? translate(
-                'auto.components.terminal.pane.TerminalLinkActionPopover.openInFinder',
-                'Open in Finder'
-              )
-            : translate(
-                'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
-                'Open folder'
-              ),
-          run: () =>
-            openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
-        }
-      : null
-    : canOpenWithSystemDefault
-      ? {
-          label: translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
-            'Open with default app'
-          ),
-          run: () =>
-            openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
-        }
-      : // Why the path shape and not a stat: the popover is built synchronously on hover, and a
-        // remote stat per link would put a round-trip in front of every terminal path. A directory
-        // that does not announce itself with a separator still fails visibly, in the download toast.
-        /[/\\]$/.test(mappedPath)
-        ? null
-        : {
-            label: translate(
-              'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenWithDefaultApp',
-              'Download & open with default app'
-            ),
-            run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
+  const systemDefaultRow = !fileContext.sourceHostResolved
+    ? null
+    : worktreeRoot
+      ? canOpenWithSystemDefault
+        ? {
+            label: isMac
+              ? translate(
+                  'auto.components.terminal.pane.TerminalLinkActionPopover.openInFinder',
+                  'Open in Finder'
+                )
+              : translate(
+                  'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
+                  'Open folder'
+                ),
+            run: () =>
+              openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
           }
+        : null
+      : canOpenWithSystemDefault
+        ? {
+            label: translate(
+              'auto.components.terminal.pane.TerminalLinkActionPopover.openWithDefaultApp',
+              'Open with default app'
+            ),
+            run: () =>
+              openDetectedFilePath(filePath, line, column, { ...deps, openWithSystemDefault: true })
+          }
+        : // Why the path shape and not a stat: the popover is built synchronously on hover, and a
+          // remote stat per link would put a round-trip in front of every terminal path. A directory
+          // that does not announce itself with a separator still fails visibly, in the download toast.
+          /[/\\]$/.test(mappedPath)
+          ? null
+          : {
+              label: translate(
+                'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenWithDefaultApp',
+                'Download & open with default app'
+              ),
+              run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
+            }
   // Why omit, not disable: the popover has no disabled rows. The OS file manager can only show a
   // file on this machine, and the main process refuses every reveal while a remote runtime is focused.
   const canReveal =
