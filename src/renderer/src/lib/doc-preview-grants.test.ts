@@ -78,10 +78,6 @@ describe('buildDocPreviewGrantRequest', () => {
 
     expect(buildDocPreviewGrantRequest(state, 'wt-1', '/var/tmp/report.html')).toBeNull()
   })
-
-  it('refuses a local workspace, which has no remote channel to read over', () => {
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/tmp/report.html')).toBeNull()
-  })
 })
 
 describe('doc preview grant lifetime', () => {

@@ -27,6 +27,8 @@ export type DocPreviewFileAccessResult = {
   mimeType?: string
 }
 
+export type DocPreviewFileBytes = { buffer: Buffer; mimeType: string | undefined }
+
 const DOC_PREVIEW_BINARY_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
@@ -108,9 +110,9 @@ async function openAuthorizedDocPreviewTarget(
 }
 
 /** Canonicalizes, authorizes, opens, and reads on the filesystem's execution host. */
-export async function readAuthorizedDocPreviewFile(
+export async function readAuthorizedDocPreviewBytes(
   request: DocPreviewFileAccessRequest
-): Promise<DocPreviewFileAccessResult> {
+): Promise<DocPreviewFileBytes> {
   const { handle, canonicalTarget } = await openAuthorizedDocPreviewTarget(request)
   try {
     const mimeType = DOC_PREVIEW_BINARY_MIME_TYPES[extname(canonicalTarget).toLowerCase()]
@@ -120,12 +122,7 @@ export async function readAuthorizedDocPreviewFile(
         ? clampReadLimit(request.maxBinaryBytes, DOC_PREVIEW_MAX_BINARY_BYTES)
         : clampReadLimit(request.maxTextBytes, DOC_PREVIEW_MAX_TEXT_BYTES)
     )
-    if (mimeType) {
-      return { content: buffer.toString('base64'), isBinary: true, mimeType }
-    }
-    return isBinaryBuffer(buffer)
-      ? { content: '', isBinary: true }
-      : { content: buffer.toString('utf8'), isBinary: false }
+    return { buffer, mimeType }
   } catch (error) {
     if (error instanceof NodeFileReadTooLargeError) {
       throw new Error('file_too_large')
@@ -134,4 +131,17 @@ export async function readAuthorizedDocPreviewFile(
   } finally {
     await handle.close()
   }
+}
+
+/** Serialization is needed only when bytes cross a runtime/SSH transport. */
+export async function readAuthorizedDocPreviewFile(
+  request: DocPreviewFileAccessRequest
+): Promise<DocPreviewFileAccessResult> {
+  const { buffer, mimeType } = await readAuthorizedDocPreviewBytes(request)
+  if (mimeType) {
+    return { content: buffer.toString('base64'), isBinary: true, mimeType }
+  }
+  return isBinaryBuffer(buffer)
+    ? { content: '', isBinary: true }
+    : { content: buffer.toString('utf8'), isBinary: false }
 }

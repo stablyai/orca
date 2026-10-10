@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeEnvironment: vi.fn(),
@@ -14,11 +17,12 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: mocks.requireSshFilesystemProvider
 }))
 
-import { docPreviewContentType, readDocPreviewFile } from './doc-preview-file-reader'
+import { readDocPreviewFile } from './doc-preview-file-reader'
 import {
   authorizeDocPreviewDirectory,
   mintDocPreviewGrant,
-  revokeAllDocPreviewGrants
+  revokeAllDocPreviewGrants,
+  type DocPreviewGrant
 } from './doc-preview-grant-registry'
 
 // Why the fixtures approve the document directory up front: these tests exercise the transport
@@ -58,12 +62,80 @@ beforeEach(() => {
   })
 })
 
-describe('docPreviewContentType', () => {
-  it('maps document and asset extensions, defaulting to octet-stream', () => {
-    expect(docPreviewContentType('index.html')).toBe('text/html; charset=utf-8')
-    expect(docPreviewContentType('assets/app.CSS')).toBe('text/css; charset=utf-8')
-    expect(docPreviewContentType('assets/logo.png')).toBe('image/png')
-    expect(docPreviewContentType('data.bin')).toBe('application/octet-stream')
+describe('readDocPreviewFile — local filesystem', () => {
+  let fixture = ''
+  let workspace = ''
+  let grant: DocPreviewGrant
+
+  beforeEach(async () => {
+    fixture = await mkdtemp(join(tmpdir(), 'orca-local-doc-'))
+    workspace = join(fixture, 'workspace')
+    await mkdir(join(workspace, 'docs'), { recursive: true })
+    await mkdir(join(workspace, 'data'))
+    await writeFile(join(workspace, 'docs', 'index.html'), '<a href="feature.html">feature</a>')
+    await writeFile(join(workspace, 'docs', 'feature.html'), '<h1>Feature report</h1>')
+    await writeFile(join(workspace, 'data', 'audit.csv'), 'ticker,value\nBTC,1\n')
+    grant = mintDocPreviewGrant({
+      owner: { kind: 'local' },
+      requestBase: workspace,
+      root: join(workspace, 'docs'),
+      entryRelativePath: 'docs/index.html',
+      browserPageId: 'local-page'
+    })
+  })
+
+  afterEach(async () => {
+    await rm(fixture, { recursive: true, force: true })
+  })
+
+  it('serves the linked report and the return page from the same document grant', async () => {
+    const feature = await readDocPreviewFile(grant, 'docs/feature.html')
+    expect(feature).toEqual({
+      ok: true,
+      bytes: Buffer.from('<h1>Feature report</h1>'),
+      contentType: 'text/html; charset=utf-8'
+    })
+    const index = await readDocPreviewFile(grant, 'docs/index.html')
+    expect(index).toEqual({
+      ok: true,
+      bytes: Buffer.from('<a href="feature.html">feature</a>'),
+      contentType: 'text/html; charset=utf-8'
+    })
+  })
+
+  it('requires explicit approval before reading an evidence directory', async () => {
+    expect(await readDocPreviewFile(grant, 'data/audit.csv')).toMatchObject({
+      ok: false,
+      status: 403,
+      reason: 'authorization-required'
+    })
+    expect(authorizeDocPreviewDirectory(grant.id, 'data/audit.csv')).toBe(true)
+    expect(await readDocPreviewFile(grant, 'data/audit.csv')).toEqual({
+      ok: true,
+      bytes: Buffer.from('ticker,value\nBTC,1\n'),
+      contentType: 'text/plain; charset=utf-8'
+    })
+  })
+
+  it('refuses a directory link escaping the workspace boundary', async () => {
+    const outside = join(fixture, 'outside')
+    await mkdir(outside)
+    await writeFile(join(outside, 'outside.html'), 'not authorized')
+    await symlink(outside, join(workspace, 'docs', 'escape'), 'junction')
+    expect(await readDocPreviewFile(grant, 'docs/escape/outside.html')).toMatchObject({
+      ok: false,
+      status: 404,
+      reason: 'unreadable'
+    })
+  })
+
+  it('serves linked Python source as text rather than a blocked download', async () => {
+    await writeFile(join(workspace, 'docs', 'construction.py'), 'x = 1\n')
+    expect(await readDocPreviewFile(grant, 'docs/construction.py')).toEqual({
+      ok: true,
+      bytes: Buffer.from('x = 1\n'),
+      contentType: 'text/plain; charset=utf-8'
+    })
   })
 })
 

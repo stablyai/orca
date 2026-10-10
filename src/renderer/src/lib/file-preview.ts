@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { basename, getRelativePathInsideRoot } from '@/lib/path'
@@ -34,14 +33,10 @@ function pairedOutsideWorktreeMessage(): string {
 /**
  * How a previewable document should be rendered.
  *
- * `browser-tab` keeps local workspaces on the pre-existing embedded browser tab.
- * `doc-preview` renders the document locally from the owning workspace's disk
- * over the `orca-preview` scheme, which is the only option for SSH and paired
- * workspaces: client-hosted browser guests refuse `file:` by design, and a
- * `file://` URL would resolve on the wrong machine anyway.
+ * Documents use a scoped preview grant on their owning filesystem, including local
+ * workspaces. The browsing guest's file-navigation fence remains unchanged.
  */
 export type WorkspaceFilePreviewPlan =
-  | { status: 'browser-tab'; url: string; title: string }
   | { status: 'doc-preview' }
   | { status: 'unsupported'; message: string; reason: 'no-channel' | 'outside-worktree' }
 
@@ -78,15 +73,7 @@ export function getWorkspaceFilePreviewPlan(
     }
     return { status: 'doc-preview' }
   }
-  const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
-  if (availability.state !== 'enabled') {
-    return { status: 'unsupported', message: availability.reason, reason: 'no-channel' }
-  }
-  return {
-    status: 'browser-tab',
-    url: absolutePathToFileUri(filePath),
-    title: basename(filePath) || filePath
-  }
+  return { status: 'doc-preview' }
 }
 
 export function canShowWorkspaceFileBrowserAction(
@@ -103,15 +90,9 @@ export function canShowWorkspaceFileBrowserAction(
 export function useWorkspaceFileBrowserActionPredicate(
   worktreeId: string | null
 ): (filePath: string) => boolean {
-  // Why this subscribes but does not decide: visibility must come from the same plan the action
-  // itself runs, or the two drift apart — they already disagreed about a local workspace whose
-  // managed browser is disabled. The subscription only re-renders the caller; the predicate reads
-  // the live store, so it stays identity-stable for the memoized handlers that depend on it.
+  // Subscribe to owner changes without changing the memoized action predicate.
   useAppStore(
     useShallow((state) => ({
-      managedBrowser: worktreeId
-        ? getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state
-        : null,
       runtimeEnvironmentId: worktreeId
         ? (getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null)
         : null,
@@ -212,15 +193,7 @@ export function openFileInBrowserTab(params: {
   if (plan.status === 'unsupported') {
     return plan
   }
-  if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, { ...params, activate: true })
-    return plan
-  }
-
-  state.createBrowserTab(params.worktreeId, plan.url, {
-    title: plan.title,
-    activate: true
-  })
+  openDocPreviewTab(state, { ...params, activate: true })
   return plan
 }
 
@@ -343,30 +316,18 @@ export function openFilePreviewToSide(params: {
   const layout = state.layoutByWorktree[worktreeId] ?? null
   const existingSibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
 
-  // Why the unfocused split on a paired workspace: the preview opens in the background, and a host
-  // snapshot reads an activated empty group as a terminal pane.
+  // A side preview must leave focus with the source document.
   const targetGroupId =
     existingSibling ??
-    (getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-      ? state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right', { activate: false })
-      : state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right'))
+    state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right', { activate: false })
   if (!targetGroupId) {
     return
   }
 
-  if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, {
-      filePath: params.filePath,
-      worktreeId,
-      targetGroupId,
-      activate: false
-    })
-    return
-  }
-
-  state.createBrowserTab(worktreeId, plan.url, {
-    title: plan.title,
+  openDocPreviewTab(state, {
+    filePath: params.filePath,
+    worktreeId,
     targetGroupId,
-    activate: true
+    activate: false
   })
 }

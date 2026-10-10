@@ -37,6 +37,9 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
   if (typeof request.browserPageId !== 'string' || !request.browserPageId.trim()) {
     return false
   }
+  if (request.owner.kind === 'local') {
+    return true
+  }
   if (request.owner.kind === 'ssh') {
     return Boolean(request.owner.connectionId.trim())
   }
@@ -48,9 +51,9 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
 }
 
 /**
- * Minting never widens what the renderer can already read: an SSH grant reads
- * through the same provider as `fs:readFile`, and a runtime grant through the
- * same worktree-scoped `files.read` RPC the renderer can call directly.
+ * Local grants enforce canonical filesystem containment. SSH grants read through
+ * the same provider as `fs:readFile`; runtime grants use the worktree-scoped
+ * `files.read` RPC. Only trusted renderers can mint grants.
  */
 export function registerDocPreviewGrantHandlers(): void {
   ipcMain.handle(
