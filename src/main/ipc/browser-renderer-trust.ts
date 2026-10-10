@@ -4,6 +4,7 @@ export function setTrustedBrowserRendererWebContentsId(webContentsId: number | n
   trustedBrowserRendererWebContentsId = webContentsId
 }
 
+/** Fails closed: only the pinned main window, or the dev origin in dev, may drive browser IPC. */
 export function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
@@ -21,5 +22,6 @@ export function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean 
     }
   }
 
-  return senderUrl.startsWith('file://')
+  // Why: packaged trust is the pinned main window id; any file:// document must not inherit it.
+  return false
 }

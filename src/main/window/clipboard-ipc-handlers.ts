@@ -311,6 +311,7 @@ function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
   }
 }
 
+/** Fails closed: only the pinned main window, or the dev origin in dev, may use the clipboard. */
 function isTrustedClipboardRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
@@ -328,5 +329,6 @@ function isTrustedClipboardRenderer(sender: WebContents): boolean {
     }
   }
 
-  return senderUrl.startsWith('file://')
+  // Why: packaged trust is the pinned main window id; any file:// document must not inherit it.
+  return false
 }

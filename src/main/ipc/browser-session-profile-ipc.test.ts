@@ -65,9 +65,10 @@ describe('browser session profile IPC', () => {
     detectBrowsersMock.mockReturnValue([])
     setBrowserIdentityModeMock.mockReset()
     setBrowserIdentityModeMock.mockResolvedValue({ ok: true })
-    setTrustedBrowserRendererWebContentsId(null)
+    setTrustedBrowserRendererWebContentsId(91)
   })
 
+  /** Sender matching the renderer id pinned in beforeEach. */
   function trustedSender(): Electron.WebContents {
     return {
       id: 91,

@@ -69,15 +69,24 @@ vi.mock('../browser/browser-manager', () => ({
 }))
 
 import { registerBrowserHandlers, setAgentBrowserBridgeRef, type BrowserGuestArgs } from './browser'
+import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import {
   waitForAnyTabRegistration,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from './browser-tab-registration-wait'
 
+const trustedSender = {
+  id: 91,
+  isDestroyed: () => false,
+  getType: () => 'window',
+  getURL: () => 'file:///renderer/index.html'
+} as Electron.WebContents
+
 describe('registerBrowserHandlers', () => {
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    setTrustedBrowserRendererWebContentsId(trustedSender.id)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
     registerGuestMock.mockReset()
@@ -172,12 +181,6 @@ describe('registerBrowserHandlers', () => {
     const validateHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:isGuestRegistered'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => boolean
-    const trustedSender = {
-      id: 91,
-      isDestroyed: () => false,
-      getType: () => 'window',
-      getURL: () => 'file:///renderer/index.html'
-    } as Electron.WebContents
 
     expect(
       validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 123 })
@@ -218,12 +221,6 @@ describe('registerBrowserHandlers', () => {
         webContentsId: number
       }
     ) => boolean
-    const trustedSender = {
-      id: 91,
-      isDestroyed: () => false,
-      getType: () => 'window',
-      getURL: () => 'file:///renderer/index.html'
-    } as Electron.WebContents
     const guest = {
       id: 123,
       hostWebContents: trustedSender,
@@ -305,12 +302,6 @@ describe('registerBrowserHandlers', () => {
     const proceedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:proceedCertificate'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => unknown
-    const trustedSender = {
-      id: 91,
-      isDestroyed: () => false,
-      getType: () => 'window',
-      getURL: () => 'file:///renderer/index.html'
-    } as Electron.WebContents
 
     expect(
       proceedHandler(
@@ -366,16 +357,7 @@ describe('registerBrowserHandlers', () => {
       ([channel]) => channel === 'browser:activeTabChanged'
     )?.[1] as (event: { sender: Electron.WebContents }, args: { browserPageId: string }) => boolean
 
-    const result = activeTabChangedHandler(
-      {
-        sender: {
-          isDestroyed: () => false,
-          getType: () => 'window',
-          getURL: () => 'file:///renderer/index.html'
-        } as Electron.WebContents
-      },
-      { browserPageId: 'page-1' }
-    )
+    const result = activeTabChangedHandler({ sender: trustedSender }, { browserPageId: 'page-1' })
 
     expect(result).toBe(true)
     expect(onTabChangedMock).toHaveBeenCalledWith(4242, 'wt-browser')
