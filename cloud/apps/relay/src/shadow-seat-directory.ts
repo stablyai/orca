@@ -273,20 +273,6 @@ export class ShadowSeatDirectory {
     return [...this.cells.keys()]
   }
 
-  // Every host seated on more than one cell, for deterministic demotion.
-  duplicateHosts(): Array<{ userId: string; relayHostId: string; seats: ShadowSeat[] }> {
-    const duplicates: Array<{ userId: string; relayHostId: string; seats: ShadowSeat[] }> = []
-    for (const [key, seats] of this.hosts) {
-      if (seats.size < 2) continue
-      const separator = key.indexOf('\u0000')
-      duplicates.push({
-        userId: key.slice(0, separator),
-        relayHostId: key.slice(separator + 1),
-        seats: [...seats.values()]
-      })
-    }
-    return duplicates
-  }
 
   // An old cell (404) has no feed; its last known seats stay, marked by status.
   markNoFeed(cellId: string, now: number): void {
@@ -296,8 +282,7 @@ export class ShadowSeatDirectory {
     cursor.lastAnsweredAt = now
     cursor.incarnation = undefined
     cursor.seq = undefined
-    // An image without the feed reserves nothing: it is a database-path cell.
-    cursor.flagsApplied = undefined
+    // An image without the feed takes no booking. Its reserve switch is #27058's to keep.
     cursor.polledAt = undefined
     cursor.bookings = undefined
     cursor.units = undefined
@@ -573,6 +558,8 @@ export type ShadowSeatPollerOptions = {
   now?: () => number
   pollMs?: number
   log?: (line: string) => void
+  // True while this director places on reserve cells (ORCA_RELAY_RESERVE_PLACEMENT=on).
+  reserver?: () => boolean
 }
 
 export type ShadowSeatPoller = {
@@ -668,6 +655,8 @@ export function startShadowSeatPoller(
     const polledAt = now()
     const since = directory.since(cell.cellId)
     if (since !== undefined) url.searchParams.set('since', since)
+    // Placing on reserve cells: keeps each cell's dead-man from flipping it back to db.
+    if (options.reserver?.()) url.searchParams.set('reserver', '1')
     const response = await fetchImpl(url, {
       headers: { authorization: `Bearer ${await identity()}` },
       signal: AbortSignal.timeout(SHADOW_SEAT_POLL_TIMEOUT_MS)

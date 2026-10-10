@@ -42,7 +42,7 @@ function setup(
     cells?: SeatFeedCell[]
     feeds?: SeatFeedResponse[]
     reserve?: (cellId: string, sticky: boolean) => ReserveAttempt
-    row?: () => Promise<{ cellId: string; assignmentEpoch: number } | null>
+    row?: (identity: { userId: string; relayHostId: string }) => Promise<{ cellId: string; assignmentEpoch: number } | null>
     mode?: 'off' | 'dry-run' | 'on'
     startedAt?: number
   } = {}
@@ -66,7 +66,6 @@ function setup(
       return true
     })
   } satisfies Pick<CellReserveClient, 'reserve' | 'demote'>
-  const winners: string[] = []
   // Each director's estimate starts empty; a second of refill gives it its share.
   const placer = new ReservePlacer(() => now.value, () => 0.25)
   const assignment = new ReserveAssignment({
@@ -79,7 +78,6 @@ function setup(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
     client: client as unknown as CellReserveClient,
     readRow: options.row ?? (async () => null),
-    onDemotionWinner: (winner) => winners.push(winner.cellId),
     now: () => now.value,
     random: () => 0.25,
     log: () => undefined
@@ -89,7 +87,7 @@ function setup(
   for (const response of options.feeds ?? cells.map((cell) => feed(cell.cellId))) {
     directory.apply(response.cellId, { ...response, full: response.full ?? [] }, now.value - 1, now.value - 1)
   }
-  return { assignment, directory, reserved, demoted, winners, now }
+  return { assignment, directory, reserved, demoted, now }
 }
 
 function seated(epoch: number, joinedAt = 0) {
@@ -107,15 +105,28 @@ describe('reserve assignment on a director', () => {
     })
   })
 
-  it('answers no one until every live cell has answered, for at most the startup gate', async () => {
+  it('before every live cell has answered, holds back only hosts that may be on an unheard cell', async () => {
     const cells = cellList(['c1', 'c2'])
-    const gated = setup({ cells, feeds: [feed('c1')], startedAt: 100_500 })
-    expect(await gated.assignment.plan(HOST, { reconnect: false, region: US })).toMatchObject({
+    const onUnheard = { ...HOST, relayHostId: 'qrstuvwxyzabcdef' }
+    const gated = setup({
+      cells,
+      feeds: [feed('c1')],
+      startedAt: 100_500,
+      row: async (identity) =>
+        identity.relayHostId === onUnheard.relayHostId ? { cellId: 'c2', assignmentEpoch: 3 } : null
+    })
+    // A fresh host goes to today's path, with no booking yet.
+    expect(await gated.assignment.plan(HOST, { reconnect: false, region: US })).toEqual({
+      kind: 'database',
+      epochFloor: 0
+    })
+    expect(gated.reserved).toEqual([])
+    expect(await gated.assignment.plan(onUnheard, { reconnect: true, region: US })).toMatchObject({
       kind: 'retry',
       reason: 'map-incomplete'
     })
     gated.now.value = 100_500 + RESERVE_STARTUP_GATE_MS
-    expect((await gated.assignment.plan(HOST, { reconnect: false, region: US })).kind).not.toBe('retry')
+    expect((await gated.assignment.plan(onUnheard, { reconnect: true, region: US })).kind).not.toBe('retry')
   })
 
   it('answers a reconnect from memory at the same epoch with no booking and no database read', async () => {
@@ -191,10 +202,10 @@ describe('reserve assignment on a director', () => {
     expect(
       await assignment.plan({ ...HOST, relayHostId: 'qrstuvwxyzabcdef' }, { reconnect: true, region: US })
     ).toMatchObject({ kind: 'database', epochFloor: 5 })
-    // A cell that rolled back to an image without the feed is a database cell again.
+    // A cell that rolled back to an image without the feed takes no placement.
     directory.markNoFeed('c1', now.value)
-    expect(directory.admitModeOf('c1')).toBe('db')
     expect(directory.cellState('c1')?.ceiling).toBeUndefined()
+    expect(assignment.placementCells().find((cell) => cell.cellId === 'c1')?.general).toBe(false)
   })
 
   it('reads the row once for a host the map never saw, and refuses it while the database is down', async () => {
@@ -217,15 +228,39 @@ describe('reserve assignment on a director', () => {
     )
   })
 
-  it('demotes the outranked seat of a duplicate once, and reports the winner', async () => {
-    const { assignment, demoted, winners, now } = setup({
-      feeds: [feed('c1', { full: [seated(5, 1_000)] }), feed('c2', { full: [seated(6, 2_000)] })]
+  it('tells the old reserve seat to go when it books the host elsewhere, naming that seat exactly', async () => {
+    const { assignment, directory, demoted, now } = setup({
+      feeds: [feed('c1', { full: [seated(5, 1_000)] }), feed('c2')],
+      // c1 is full, so the host lands on c2.
+      reserve: (cellId) => (cellId === 'c1' ? { outcome: 'full' } : { outcome: 'ok' })
     })
-    now.value = 2_000 + 10_000
-    assignment.demoteDuplicates()
-    assignment.demoteDuplicates()
+    // The host left c1 for a reason that moves it: its next placement is fresh, above 5.
+    directory.apply(
+      'c1',
+      feed('c1', {
+        full: undefined,
+        seq: 2,
+        changes: [{ seq: 2, kind: 'drain-only', ...HOST, epoch: 5, generation: 1, at: 2 }]
+      }),
+      now.value,
+      now.value
+    )
+    const plan = await assignment.plan(HOST, { reconnect: true, region: US })
+    expect(plan).toMatchObject({ kind: 'answer', lane: 'placement', assignment: { assignmentEpoch: 6 } })
     expect(demoted).toEqual([{ cellId: 'c1', epoch: 5, joinedAt: 1_000 }])
-    expect(winners).toEqual(['c2', 'c2'])
+  })
+
+  it('answers a reconnect only at the newest epoch, newest join first', async () => {
+    const { assignment, reserved } = setup({
+      feeds: [feed('c1', { full: [seated(6, 1_000)] }), feed('c2', { full: [seated(5, 3_000)] })]
+    })
+    // c2's seat joined later but at an older epoch: a stale rebind, never the answer.
+    expect(await assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      lane: 'sticky',
+      assignment: { cellId: 'c1', assignmentEpoch: 6 }
+    })
+    expect(reserved).toEqual([])
   })
 
   it('in dry run only asks a cell to check a booking, and never changes the answer', async () => {

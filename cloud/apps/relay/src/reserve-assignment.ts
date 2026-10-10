@@ -9,8 +9,6 @@ import { CELL_RESERVE_TTL_MS } from './cell-reserve-contract.js'
 import type { CellReserveClient } from './cell-reserve-client.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import {
-  demotionLosers,
-  demotionWinner,
   mintEpoch,
   type PlacementCell,
   type ReservePlacer
@@ -25,10 +23,6 @@ import type { SeatFeedCell, ShadowSeat, ShadowSeatDirectory } from './shadow-sea
 export const RESERVE_STICKY_RECENT_MS = 10 * 60_000
 // A starting director waits this long for every live cell before it answers.
 export const RESERVE_STARTUP_GATE_MS = 30_000
-export const RESERVE_DUPLICATE_GRACE_MS = 10_000
-// A drain-only seat is still inside its drain or rehome grace.
-export const RESERVE_DRAIN_DUPLICATE_GRACE_MS = 5 * 60_000
-const DEMOTION_RESEND_MS = 60_000
 const SUMMARY_INTERVAL_MS = 60_000
 // A leaver for these reasons was moved off its cell; it is not sent back there.
 const NO_REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([
@@ -55,15 +49,7 @@ export type ReservePlan =
       placeFresh?: () => Promise<RelayAssignment | null>
     }
 
-export type DemotionWinner = {
-  cellId: string
-  userId: string
-  relayHostId: string
-  epoch: number
-}
-
 export class ReserveAssignment {
-  private readonly demotionsSent = new Map<string, number>()
   private summary: PlacementSummary = emptySummary()
   private summaryAt: number
 
@@ -77,7 +63,6 @@ export class ReserveAssignment {
       client: CellReserveClient
       // One primary-key read of the host's row: only for a host the map has never seen.
       readRow: (identity: Identity) => Promise<{ cellId: string; assignmentEpoch: number } | null>
-      onDemotionWinner?: (winner: DemotionWinner) => void
       now?: () => number
       random?: () => number
       log?: (line: string) => void
@@ -132,10 +117,8 @@ export class ReserveAssignment {
     if (!this.hasReserveCells()) return { kind: 'database' }
     const now = this.now()
     const { directory } = this.input
-    if (!directory.isComplete() && now - this.input.startedAt < RESERVE_STARTUP_GATE_MS) {
-      this.summary.retries.mapIncomplete += 1
-      return { kind: 'retry', retryAfterSeconds: 1, reason: 'map-incomplete' }
-    }
+    // Until every live cell has answered, only a host that may be on an unheard cell waits.
+    const incomplete = !directory.isComplete() && now - this.input.startedAt < RESERVE_STARTUP_GATE_MS
     const seats = directory.seatsOf(identity.userId, identity.relayHostId)
     const left = directory
       .recentlyLeftOf(identity.userId, identity.relayHostId, now)
@@ -159,6 +142,15 @@ export class ReserveAssignment {
       if (row) known.push(row.assignmentEpoch)
     }
     const epochFloor = known.length === 0 ? 0 : Math.max(...known)
+    const lastCellId = seats[0]?.cellId ?? left?.cellId ?? row?.cellId
+    if (incomplete) {
+      if (lastCellId !== undefined && directory.cellState(lastCellId)?.status === 'pending') {
+        this.summary.retries.mapIncomplete += 1
+        return { kind: 'retry', retryAfterSeconds: 1, reason: 'map-incomplete' }
+      }
+      // Fresh placement waits for the full map; today's path places meanwhile.
+      if (lastCellId === undefined) return { kind: 'database', epochFloor }
+    }
 
     if (request.reconnect) {
       const sticky = await this.stickyFromMemory(identity, seats, left, now)
@@ -168,10 +160,9 @@ export class ReserveAssignment {
       }
     }
     const placeFresh = async (): Promise<RelayAssignment | null> =>
-      await this.placeFresh(identity, request.region, epochFloor)
+      await this.placeFresh(identity, request.region, epochFloor, seats)
     // Where the host was last seen decides who owns it: a database-mode cell keeps today's
     // path, sticky included; only a fresh placement may be booked on a reserve-mode cell.
-    const lastCellId = seats[0]?.cellId ?? left?.cellId ?? row?.cellId
     const lastOnReserve = lastCellId !== undefined && directory.admitModeOf(lastCellId) === 'reserve'
     if (!lastOnReserve && (seats.length > 0 || left !== undefined || row !== null)) {
       return { kind: 'database', epochFloor, placeFresh }
@@ -189,12 +180,29 @@ export class ReserveAssignment {
     left: { cellId: string; epoch: number; incarnation?: string; closeCode?: number } | undefined,
     now: number
   ): Promise<RelayAssignment | null> {
-    const candidates: Array<{ cellId: string; epoch: number; incarnation?: string; seated: boolean }> = [
+    // Highest epoch first, then the newest join: only the newest grant may be answered from
+    // memory, so a stale seat (or a leaver at a lower epoch) is never sent back.
+    const newest = Math.max(0, ...seats.map((seat) => seat.epoch), left?.epoch ?? 0)
+    const candidates: Array<{
+      cellId: string
+      epoch: number
+      incarnation?: string
+      seated: boolean
+      joinedAt: number
+    }> = [
       ...seats
         .filter((seat) => seat.state === 'active')
-        .map((seat) => ({ cellId: seat.cellId, epoch: seat.epoch, incarnation: seat.incarnation, seated: true })),
-      ...(left && !NO_REJOIN_CLOSE_CODES.has(left.closeCode ?? 0) ? [{ ...left, seated: false }] : [])
+        .map((seat) => ({
+          cellId: seat.cellId,
+          epoch: seat.epoch,
+          incarnation: seat.incarnation,
+          seated: true,
+          joinedAt: seat.joinedAt
+        })),
+      ...(left && !NO_REJOIN_CLOSE_CODES.has(left.closeCode ?? 0) ? [{ ...left, seated: false, joinedAt: -1 }] : [])
     ]
+      .filter((candidate) => candidate.epoch === newest)
+      .sort((first, second) => second.joinedAt - first.joinedAt)
     for (const candidate of candidates) {
       const cell = this.input.cells().find((entry) => entry.cellId === candidate.cellId)
       const state = this.input.directory.cellState(candidate.cellId)
@@ -228,7 +236,8 @@ export class ReserveAssignment {
   private async placeFresh(
     identity: Identity,
     region: RelayRegion,
-    epochFloor: number
+    epochFloor: number,
+    seats: readonly ShadowSeat[] = []
   ): Promise<RelayAssignment | null> {
     const placements = this.placementCells()
     if (this.random() >= this.input.placer.reservePoolShare(placements, region)) return null
@@ -253,6 +262,7 @@ export class ReserveAssignment {
       this.summary.calls += result.calls
       if (result.kind === 'placed') {
         this.summary.placed += 1
+        this.supersede(identity, seats, result.cellId, result.epoch)
         const cell = this.input.cells().find((entry) => entry.cellId === result.cellId)!
         return {
           ...identity,
@@ -295,54 +305,30 @@ export class ReserveAssignment {
     return null
   }
 
-  // Every director sees the same reports and so names the same loser. Only duplicates that
-  // involve a reserve-mode cell are this code's: the database still settles the rest.
-  demoteDuplicates(): void {
-    if (this.input.mode !== 'on') return
-    const now = this.now()
-    const { directory } = this.input
-    for (const [key, sentAt] of this.demotionsSent) {
-      if (now - sentAt > DEMOTION_RESEND_MS) this.demotionsSent.delete(key)
-    }
-    for (const duplicate of directory.duplicateHosts()) {
-      if (!duplicate.seats.some((seat) => directory.admitModeOf(seat.cellId) === 'reserve')) continue
-      const grace = duplicate.seats.some((seat) => seat.state !== 'active')
-        ? RESERVE_DRAIN_DUPLICATE_GRACE_MS
-        : RESERVE_DUPLICATE_GRACE_MS
-      const losers = demotionLosers(duplicate.seats, now, grace)
-      if (losers.length === 0) continue
-      const winner = demotionWinner(duplicate.seats)!
-      for (const loser of losers) {
-        const key = `${duplicate.userId}\u0000${duplicate.relayHostId}\u0000${loser.cellId}\u0000${loser.joinedAt}`
-        if (this.demotionsSent.has(key)) continue
-        const cell = this.input.cells().find((entry) => entry.cellId === loser.cellId)
-        if (!cell) continue
-        this.demotionsSent.set(key, now)
-        this.summary.demotions += 1
-        void this.input.client.demote(cell, {
-          v: 1,
-          userId: duplicate.userId,
-          relayHostId: duplicate.relayHostId,
-          epoch: loser.epoch,
-          joinedAt: loser.joinedAt
+  // Supersede at placement: the old seats this director's map holds on reserve cells are told
+  // to go. Each cell checks the seat's epoch and join itself, so a stale map only misses.
+  private supersede(identity: Identity, seats: readonly ShadowSeat[], cellId: string, epoch: number): void {
+    for (const seat of seats) {
+      if (seat.cellId === cellId || seat.epoch >= epoch) continue
+      if (this.input.directory.admitModeOf(seat.cellId) !== 'reserve') continue
+      const cell = this.input.cells().find((entry) => entry.cellId === seat.cellId)
+      if (!cell) continue
+      this.summary.supersedes += 1
+      void this.input.client.demote(cell, {
+        v: 1,
+        userId: identity.userId,
+        relayHostId: identity.relayHostId,
+        epoch: seat.epoch,
+        joinedAt: seat.joinedAt
+      })
+      this.input.log?.(
+        JSON.stringify({
+          event: 'orca_relay_reserve_supersede',
+          relayHostIdDigest: relayHostLogDigest(identity.relayHostId),
+          fromCellId: seat.cellId,
+          toCellId: cellId
         })
-        this.input.log?.(
-          JSON.stringify({
-            event: 'orca_relay_reserve_demotion',
-            relayHostIdDigest: relayHostLogDigest(duplicate.relayHostId),
-            loserCellId: loser.cellId,
-            winnerCellId: winner.cellId
-          })
-        )
-      }
-      if (directory.admitModeOf(winner.cellId) === 'reserve') {
-        this.input.onDemotionWinner?.({
-          cellId: winner.cellId,
-          userId: duplicate.userId,
-          relayHostId: duplicate.relayHostId,
-          epoch: winner.epoch
-        })
-      }
+      )
     }
   }
 
@@ -374,7 +360,7 @@ type PlacementSummary = {
   placed: number
   calls: number
   database: number
-  demotions: number
+  supersedes: number
   outcomes: Record<string, number>
   retries: { mapIncomplete: number; database: number; paced: number }
   dryRun: { outcomes: Record<string, number>; latenciesMs: number[] }
@@ -387,7 +373,7 @@ function emptySummary(): PlacementSummary {
     placed: 0,
     calls: 0,
     database: 0,
-    demotions: 0,
+    supersedes: 0,
     outcomes: {},
     retries: { mapIncomplete: 0, database: 0, paced: 0 },
     dryRun: { outcomes: {}, latenciesMs: [] }

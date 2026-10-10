@@ -164,7 +164,8 @@ export function createRelayServer(
   })
   const ready = readiness.check
   const shadowSeatPoller = startShadowSeatPoller(config, {
-    listCells: () => assignments.seatFeedCells()
+    listCells: () => assignments.seatFeedCells(),
+    reserver: () => config.reservePlacement === 'on'
   })
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
@@ -195,10 +196,20 @@ export function createRelayServer(
           random: options.random
         })
       : undefined
-  const demotionTimer = reservePlacement
-    ? setInterval(() => reservePlacement.demoteDuplicates(), 1_000)
-    : null
-  demotionTimer?.unref()
+  // Turning placement off while a cell is in reserve mode strands that cell's hosts on its
+  // memory: its dead-man flips it back, and this says so loudly until then.
+  const offWithReserveTimer =
+    config.role === 'director' && shadowSeatPoller && (config.reservePlacement ?? 'off') === 'off'
+      ? setInterval(() => {
+          const { directory } = shadowSeatPoller
+          const cells = directory.cellIds().filter((cellId) => directory.admitModeOf(cellId) === 'reserve')
+          if (cells.length === 0) return
+          console.error(
+            JSON.stringify({ event: 'orca_relay_reserve_placement_off_with_reserve_cells', cells })
+          )
+        }, 60_000)
+      : null
+  offWithReserveTimer?.unref()
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
