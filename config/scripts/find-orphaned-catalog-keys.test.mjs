@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { collectLiteralKeys, isKeyReferenced } from './find-orphaned-catalog-keys.mjs'
+import {
+  collectLiteralKeys,
+  findOrphanedKeys,
+  isKeyReferenced
+} from './find-orphaned-catalog-keys.mjs'
 
 const sets = ({ referenced = [], literals = [], english = [] } = {}) => ({
   referenced: new Set(referenced),
@@ -74,5 +81,39 @@ describe('collectLiteralKeys', () => {
     const found = collectLiteralKeys("t('first.keyname')")
     collectLiteralKeys("t('second.keyname')", found)
     expect([...found].sort()).toEqual(['first.keyname', 'second.keyname'])
+  })
+})
+
+describe('findOrphanedKeys with a supplied extraction', () => {
+  let root
+
+  afterEach(async () => {
+    await fs.rm(root, { recursive: true, force: true })
+  })
+
+  // Why: the extraction gate hands in the keys its own AST pass found. That
+  // must skip the second extraction — this fixture has no node_modules, so a
+  // real extract call would throw instead of returning.
+  it('judges the catalog against the supplied keys and the source literals', async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'orca-orphan-fixture-'))
+    const locales = path.join(root, 'src', 'renderer', 'src', 'i18n', 'locales')
+    await fs.mkdir(locales, { recursive: true })
+    await fs.writeFile(
+      path.join(locales, 'en.json'),
+      JSON.stringify({ menu: { extracted: 'A', tabledKey: 'B', stranded: 'C' } })
+    )
+    await fs.writeFile(
+      path.join(root, 'src', 'tabs.ts'),
+      "export const tabs = [{ key: 'menu.tabledKey' }]\n"
+    )
+    // A test naming the key must not keep it alive.
+    await fs.writeFile(
+      path.join(root, 'src', 'tabs.test.ts'),
+      "expect(translate('menu.stranded')).toBe('C')\n"
+    )
+
+    const result = await findOrphanedKeys(root, new Map([['menu.extracted', 'A']]))
+
+    expect(result).toEqual({ total: 3, referenced: 1, orphans: ['menu.stranded'] })
   })
 })

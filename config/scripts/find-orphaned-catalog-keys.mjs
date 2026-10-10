@@ -129,9 +129,11 @@ export function isKeyReferenced(key, { referenced, literals, english }) {
   return base !== key && (referenced.has(base) || literals.has(base) || english.has(base))
 }
 
-export async function findOrphanedKeys(root = process.cwd()) {
+// Why `extracted`: verify:localization-extraction has already paid for the AST
+// pass, so the gate hands its result in rather than extracting a second time.
+export async function findOrphanedKeys(root = process.cwd(), extracted) {
   const english = flattenCatalog(JSON.parse(await fs.readFile(path.join(root, EN_CATALOG), 'utf8')))
-  const referenced = await extractReferencedKeys(root)
+  const referenced = extracted ?? (await extractReferencedKeys(root))
   const literals = await collectLiteralStrings(await collectSourceFiles(root))
   const orphans = [...english.keys()].filter(
     (key) => !isKeyReferenced(key, { referenced, literals, english })
@@ -140,9 +142,9 @@ export async function findOrphanedKeys(root = process.cwd()) {
 }
 
 async function main(root = process.cwd()) {
-  // Why --check: without a gate the prune regrows. verify:localization-extraction
-  // already computes the unreferenced set but only fails on keys missing from
-  // English, so a reverted feature strands its keys and nothing notices.
+  // Why --check: without a gate the prune regrows — a reverted feature strands
+  // its keys and nothing notices. verify:localization-extraction applies the
+  // same test on its own pass; this is the standalone way to run and list it.
   const check = process.argv.includes('--check')
   const { total, referenced, orphans } = await findOrphanedKeys(root)
   console.log(

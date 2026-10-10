@@ -35,6 +35,8 @@ export function affectsLocalizationExtraction(paths) {
       path.startsWith('config/patches/') ||
       path.startsWith('config/scripts/localization-') ||
       path.startsWith('config/scripts/verify-localization-') ||
+      // The extraction check imports the orphan detector, so it is an input too.
+      path.startsWith('config/scripts/find-orphaned-catalog-keys.') ||
       path.startsWith('.github/actions/install-node-dependencies/')
   )
 }

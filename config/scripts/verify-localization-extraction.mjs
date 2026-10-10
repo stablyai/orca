@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { findOrphanedKeys } from './find-orphaned-catalog-keys.mjs'
 
 const EN_CATALOG_PATH = path.join('src', 'renderer', 'src', 'i18n', 'locales', 'en.json')
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
@@ -135,14 +136,26 @@ export async function main(root = process.cwd()) {
       fs.readFile(path.join(root, EN_CATALOG_PATH), 'utf8').then(JSON.parse)
     ])
     const result = compareExtraction(extractedCatalog, englishCatalog)
+    // Why here: this is the one AST pass CI already pays for. Reusing it turns the
+    // report-only count below into a gate without a second extraction — a key
+    // fails only when no source literal spells it out either.
+    const { orphans: unreachable } = await findOrphanedKeys(root, result.extracted)
 
     console.log(
       `Extracted ${result.extracted.size} keys; ${result.dynamicDefaults.length} dynamic defaults are report-only, ${result.orphans.length} existing English entries are not statically referenced, and ${result.fallbackDrift.length} inline defaults differ.`
     )
 
-    if (result.missingFromEnglish.length > 0 || result.placeholderMismatches.length > 0) {
+    if (
+      result.missingFromEnglish.length > 0 ||
+      result.placeholderMismatches.length > 0 ||
+      unreachable.length > 0
+    ) {
       printKeys('Extracted keys missing from en.json', result.missingFromEnglish)
       printKeys('Extracted defaults with incompatible placeholders', result.placeholderMismatches)
+      printKeys(
+        'Catalog keys no source references (delete them from every locale, then run `pnpm run sync:localization-runtime-catalog`)',
+        unreachable
+      )
       return 1
     }
 
