@@ -6,6 +6,7 @@ import type { AgentSessionModelCatalogResult } from './agent-session-wire'
 import { cloneNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import {
   agentModelListNames,
+  listedAgentModelId,
   unlistedAgentModelReplacement,
   verifiedListReplacementRecord
 } from './agent-session-model-fallback'
@@ -16,6 +17,17 @@ function catalogListsSeedModel(
 ): boolean {
   const model = seed.model
   return model === undefined || agentModelListNames(state.catalog?.models ?? [], model)
+}
+
+/** A seed saved under the provider id a listed alias runs, named by that row's id. */
+function seedNamingListedRow(
+  state: StructuredAgentSessionOptionState,
+  seed: Readonly<Record<string, string>>
+): Readonly<Record<string, string>> {
+  const model = seed.model
+  const id =
+    model === undefined ? undefined : listedAgentModelId(state.catalog?.models ?? [], model)
+  return id === undefined || id === model ? seed : { ...seed, model: id }
 }
 
 /** The host's current list lacks this seed, so the host starts the chat on its replacement. */
@@ -83,7 +95,7 @@ export function structuredAgentSessionOptionView(
     record: cloneNativeChatSessionOptionRecord(state.record)
   }
   if (seeded) {
-    view = commitStructuredAgentSessionOptionValues(view, seed)
+    view = commitStructuredAgentSessionOptionValues(view, seedNamingListedRow(state, seed))
   }
   return withVerifiedModelReplacement({
     ...commitStructuredAgentSessionOptionValues(view, held),

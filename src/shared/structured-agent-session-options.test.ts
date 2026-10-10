@@ -11,7 +11,10 @@ import {
   settleStructuredAgentSessionBuiltinCatalog,
   structuredAgentSessionOptionSnapshot
 } from './structured-agent-session-options'
-import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
+import {
+  sessionOptionsPredateHostModelReplacement,
+  structuredAgentSessionOptionView
+} from './structured-agent-session-option-view'
 
 function viewModel(...args: Parameters<typeof structuredAgentSessionOptionView>) {
   const model = structuredAgentSessionOptionSnapshot(
@@ -322,18 +325,54 @@ describe('structured agent session options', () => {
       {
         origin: 'probe',
         models: [
-          { id: 'luna', label: 'Luna', isDefault: true, efforts: [], resolvedModel: 'gpt-5.6-luna' }
+          {
+            id: 'luna',
+            label: 'Luna',
+            isDefault: true,
+            efforts: [],
+            resolvedModel: 'gpt-5.6-luna'
+          },
+          { id: 'sol', label: 'Sol', isDefault: false, efforts: [] }
         ],
         fetchedAt: 1
       },
       { newLaunch: true }
     )
-    // The same rule the host applies, so the picker never shows the placeholder for a listed seed.
-    expect(
-      structuredAgentSessionOptionView(hosted, { model: 'gpt-5.6-luna' }, {}).catalogSource
-    ).toBe('host')
+    // The same rule the host applies, and the picker selects the alias row instead of adding the raw id.
+    const picker = structuredAgentSessionOptionSnapshot(
+      structuredAgentSessionOptionView(hosted, { model: 'gpt-5.6-luna' }, {})
+    ).find((descriptor) => descriptor.id === 'model')?.kind
+    expect(picker).toEqual({
+      type: 'select',
+      currentValue: 'luna',
+      choices: [
+        { value: 'luna', label: 'Luna' },
+        { value: 'sol', label: 'Sol' }
+      ]
+    })
     expect(structuredAgentSessionOptionView(hosted, { model: 'gpt-next' }, {}).catalogSource).toBe(
       'seed'
     )
+  })
+
+  it("re-reads options only when the session's own answer holds a model the host would replace", () => {
+    const live = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [{ id: 'gpt-gone', label: 'Gone', isDefault: false, efforts: [] }],
+        current: { model: 'gpt-gone', confirmed: ['model'] }
+      }
+    )
+    const catalog = {
+      origin: 'probe' as const,
+      models: [{ id: 'luna', label: 'Luna', isDefault: true, efforts: [] }],
+      fetchedAt: 1,
+      unlistedModelReplacement: 'luna'
+    }
+    expect(sessionOptionsPredateHostModelReplacement(live, catalog)).toBe(true)
+    expect(
+      sessionOptionsPredateHostModelReplacement({ ...live, catalogSource: 'host' }, catalog)
+    ).toBe(false)
   })
 })

@@ -28,7 +28,7 @@ export async function performSetOption(
     }
     throw error
   }
-  // A model set here is a picker's: no caller names one through this path.
+  // Any model set here counts as a picker's, whoever calls this public RPC.
   await ctx.persistOptions(
     applied ?? { [input.key]: input.value },
     input.key === 'model' ? 'picker' : undefined

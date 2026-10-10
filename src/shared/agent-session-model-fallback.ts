@@ -15,7 +15,18 @@ export function agentModelListNames(
   models: readonly ListedModelIdentity[],
   selected: string
 ): boolean {
-  return models.some((model) => model.id === selected || model.resolvedModel === selected)
+  return listedAgentModelId(models, selected) !== undefined
+}
+
+/** The id of the row naming `selected`: an exact id first, else the alias that runs it. */
+export function listedAgentModelId(
+  models: readonly ListedModelIdentity[],
+  selected: string
+): string | undefined {
+  return (
+    models.find((model) => model.id === selected) ??
+    models.find((model) => model.resolvedModel === selected)
+  )?.id
 }
 
 /** What a selection the list no longer offers gives way to: the list's default, else its first. */
