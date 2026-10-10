@@ -4228,7 +4228,8 @@
           },
           "usagePercentageLabel": {
             "used": "{{value0}}% used",
-            "remaining": "{{value0}}% left"
+            "remaining": "{{value0}}% left",
+            "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",
@@ -4329,6 +4330,10 @@
           "StatusBarUsageChangeNotices": {
             "compactTitle": "Usage display is now compact",
             "compactBody": "One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits."
+          },
+          "usageUnitLabel": {
+            "used": "Used",
+            "remaining": "Remaining"
           }
         }
       },
@@ -19166,6 +19171,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "New",
       "title": "Native chat got an upgrade",
+      "chatModeNote": "New agent tabs still open in the terminal, as before.",
+      "chatModeLabel": "Turn on chat mode",
+      "chatModeHint": "New agent tabs open as chat instead.",
       "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
       "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
       "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
@@ -19548,7 +19556,11 @@
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
-      "signIn": "Sign in"
+      "signIn": "Sign in",
+      "moreSignInOptions": "More sign-in options",
+      "copySignInLink": "Copy sign-in link instead",
+      "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
+      "signInLinkCopyFailed": "Could not copy the link."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",

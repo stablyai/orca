@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import { spawnMock, openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -138,7 +139,7 @@ describe('registerPtyHandlers', () => {
     }
 
     try {
-      setPtyOwnership(appPtyId, connectionId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(connectionId))
       registerPtyHandlers(
         mainWindow as never,
         runtime as never,

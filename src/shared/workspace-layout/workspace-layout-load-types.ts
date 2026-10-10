@@ -10,10 +10,13 @@ import type { LayoutLoadChange } from './workspace-layout-load-report'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 export type WorkspaceLayoutLoadContext = {
-  /** Mints ids for groups and tabs the stored data lacks or repeats. */
-  mintId: () => string
-  /** Mints pane ids (UUIDs) for a pane id two tabs repeat, or a legacy row's one pane. */
-  mintLeafId: () => string
+  /**
+   * Mints ids for groups and tabs the stored data lacks or repeats. `seed` names what the id
+   * stands in for, unique in the partition, so a context may derive the id from it.
+   */
+  mintId: (seed: string) => string
+  /** Mints pane ids (UUIDs) for a repeated pane id or a legacy row's one pane; `seed` as above. */
+  mintLeafId: (seed: string) => string
 }
 
 /** A stored session partition, split into the layout and what is kept beside it. */

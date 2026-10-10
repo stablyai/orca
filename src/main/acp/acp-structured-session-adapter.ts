@@ -105,7 +105,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
         throw new Error('closed while starting')
       }
       this.sessions.set(sessionId, session)
-      return acquisition
+      // Its saved picks restored: what it runs now is what its start resolved.
+      return { ...acquisition, catalogListing: session.options.startListing() }
     } catch (error) {
       const { connection } = attempt
       if (connection && error instanceof AcpConnectionClosedError) {
@@ -227,7 +228,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   readOptions = async (input: { sessionId: string; fence: number }) => {
     const { options } = this.live(input.sessionId)
-    return withLiveCatalogListing(options.read(), options.configuredDefault())
+    // Only the start says what the config resolved: the session may have moved since.
+    return withLiveCatalogListing(options.read())
   }
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>

@@ -64,6 +64,8 @@ const fsAllowances: Record<string, readonly string[]> = {
     'unlinkSync',
     'writeFileAtomically'
   ],
+  // The BROWSER stand-in a hidden sign-in hands its link through; holds no login.
+  'claude-accounts/claude-sign-in-browser.ts': ['rm', 'writeFile'],
   // The guest helper answers the host on stdout.
   'claude-accounts/claude-profile-wsl-entry.ts': ['write']
 }

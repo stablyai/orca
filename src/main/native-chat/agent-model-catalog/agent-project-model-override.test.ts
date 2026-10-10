@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -212,6 +212,7 @@ describe('workspaceMayOverrideDefaultModel', () => {
     ['.pi/settings.json', '{"modelThinkingLevels":{"openai/gpt-6":"high"}}'],
     ['.pi/settings.json', '{"enabledModels":["openai/*"]}'],
     ['.pi/settings.json', '{"extensions":["./tools/pick-model.ts"]}'],
+    ['.pi/settings.json', '{"packages":["npm:pi-model-router"]}'],
     ['.pi/settings.json', '{"defaultModel":'],
     ['.pi/extensions/pick-model.ts', 'export default () => {}\n']
   ])(
@@ -235,4 +236,34 @@ describe('workspaceMayOverrideDefaultModel', () => {
     write(join(worktree, '.pi', 'settings.json'), '{"defaultModel":"gpt-6"}')
     expect(await mayOverride('pi', worktree, join(worktree, '.pi'))).toBe(false)
   })
+
+  it('ignores an empty Pi settings file and an extensions folder of only dotfiles', async () => {
+    const worktree = join(root, 'pi-empty')
+    write(join(worktree, '.git'), 'gitdir: /elsewhere')
+    write(join(worktree, '.pi', 'settings.json'), '')
+    write(join(worktree, '.pi', 'extensions', '.DS_Store'), 'x')
+    write(join(worktree, '.pi', 'extensions', '.gitkeep'))
+    expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+    write(join(worktree, '.pi', 'settings.json'), '\uFEFF  \n')
+    expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+  })
+
+  // Windows has no permission bits to make a folder unreadable.
+  it.skipIf(process.platform === 'win32')(
+    'counts a Pi extensions folder it cannot read',
+    async () => {
+      const worktree = join(root, 'pi-locked')
+      write(join(worktree, '.git'), 'gitdir: /elsewhere')
+      const extensions = join(worktree, '.pi', 'extensions')
+      write(join(extensions, '.gitkeep'))
+      expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(false)
+      // Unreadable, it might hold anything.
+      chmodSync(extensions, 0o000)
+      try {
+        expect(await mayOverride('pi', worktree, join(root, 'pi-home'))).toBe(true)
+      } finally {
+        chmodSync(extensions, 0o755)
+      }
+    }
+  )
 })

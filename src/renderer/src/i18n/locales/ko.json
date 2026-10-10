@@ -3982,6 +3982,10 @@
             "compactTitle": "사용량이 이제 간략하게 표시됩니다",
             "compactBody": "공급자별로 주요 지표 하나를 표시합니다. 더 많은 한도를 보려면 사용량 메뉴에서 <detailed>상세</detailed>를 선택하세요."
           },
+          "usageUnitLabel": {
+            "used": "사용",
+            "remaining": "남음"
+          },
           "UsagePercentageDisplayChangeNotice": {
             "title": "사용량이 이제 사용된 %로 표시됩니다",
             "body": "남은 양 표시를 원하시나요? 설정에서 변경할 수 있습니다.",
@@ -19116,6 +19120,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "새 기능",
       "title": "기본 채팅이 업그레이드되었습니다",
+      "chatModeNote": "새 Agent 탭은 이전처럼 터미널에서 열립니다.",
+      "chatModeLabel": "채팅 모드 켜기",
+      "chatModeHint": "새 Agent 탭을 채팅으로 엽니다.",
       "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
       "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
       "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",

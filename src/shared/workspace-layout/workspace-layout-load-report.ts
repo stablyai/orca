@@ -20,8 +20,9 @@ export type LayoutLoadChange = {
 type DiskRecord = Record<string, unknown>
 export type DiskRecords = Record<DiskTable, Map<string, DiskRecord>>
 
-function sortedKeys(map: Record<string, unknown> | undefined): string[] | undefined {
-  return map && Object.keys(map).sort()
+// Why absent reads as empty: the Serializer always writes these maps, so a missing one is no change.
+function sortedKeys(map: Record<string, unknown> | undefined): string[] {
+  return Object.keys(map ?? {}).sort()
 }
 
 /** Every record on disk, by the table its fields are listed in. */

@@ -49,7 +49,7 @@ function legacyLayout(
   row: TerminalTab,
   args: WorkspaceLoadArgs
 ): TerminalLayoutSnapshot {
-  const leafId = recordedLeafId(session, row.id) ?? args.context.mintLeafId()
+  const leafId = recordedLeafId(session, row.id) ?? args.context.mintLeafId(`leaf:${row.id}`)
   return {
     root: { type: 'leaf', leafId },
     activeLeafId: leafId,
@@ -81,7 +81,7 @@ function loadTabs(args: WorkspaceLoadArgs): { tabs: LayoutTab[]; candidates: Ord
   const addTerminal = (row: TerminalTab, entry: Tab | undefined): void => {
     const tab = loadPanes(session, row, loadTerminalTab(row, entry), args)
     if (tabIds.has(tab.id)) {
-      tab.id = args.context.mintId()
+      tab.id = args.context.mintId(`tab:${row.id}`)
     }
     merged.add(row.id)
     tabIds.add(tab.id)
@@ -145,7 +145,12 @@ export function loadWorkspace(args: WorkspaceLoadArgs): WorkspaceLayout {
       ...pickStoredFields(group, ['recentTabIds'])
     }
   }
-  const groups = resolveGroupOrder({ storedGroups, candidates, mintId: args.context.mintId })
+  const groups = resolveGroupOrder({
+    storedGroups,
+    candidates,
+    workspaceKey: key,
+    mintId: args.context.mintId
+  })
   const workspace: WorkspaceLayout = { worktreeId, tabs, groups }
   const groupLayout = pruneGroupLayout(
     session.tabGroupLayouts?.[key],

@@ -1,9 +1,6 @@
 import { sha256 } from './sha256'
 import type { StructuredAgentSessionFirstMessage } from './structured-agent-session-create'
-import {
-  isAgentSessionHandleProvider,
-  type StructuredAgentId
-} from './agent-session-provider-handle'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -68,14 +65,6 @@ export function structuredAgentSessionCreateFingerprint(input: {
       options: input.options
     }
   })
-}
-
-export function showStructuredAgentSessionChoice(input: {
-  hostCapability: boolean
-  workspaceSupport: boolean
-  agent: string
-}): boolean {
-  return input.hostCapability && input.workspaceSupport && isAgentSessionHandleProvider(input.agent)
 }
 
 export function createStructuredAgentSessionOperationId(

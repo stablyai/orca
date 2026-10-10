@@ -96,36 +96,11 @@ export class AgentSessionPromptAnswerRejectedError extends Error {
   }
 }
 
-/**
- * The provider's own root process was observed to exit, but its descendant tree
- * was not proven gone. The lease keys on the root's pid and start time, so its
- * observed death releases the reservation; nothing is claimed about descendants,
- * including one seen still alive.
- */
-export class AgentSessionAcquisitionRootExitObservedError extends Error {
-  constructor(cause: unknown) {
-    // The provider's own diagnostic is the only thing the user can act on.
-    super(cause instanceof Error ? cause.message : String(cause), { cause })
-    this.name = 'AgentSessionAcquisitionRootExitObservedError'
-  }
-}
-
-/** The provider child failed and cleanup proved its whole tree gone — on Windows, that its root
- *  left on its own after stdin end (descendants not addressed, as with Codex) or taskkill reported
- *  the tree terminated. As with a root exit, the provider's own diagnostic is the message. */
-export class AgentSessionAcquisitionExitProvenError extends Error {
-  constructor(cause: unknown) {
-    super(cause instanceof Error ? cause.message : String(cause), { cause })
-    this.name = 'AgentSessionAcquisitionExitProvenError'
-  }
-}
-
-export class AgentSessionAcquisitionExitUnprovenError extends Error {
-  constructor(cause: unknown) {
-    super('agent_session_acquisition_exit_unproven', { cause })
-    this.name = 'AgentSessionAcquisitionExitUnprovenError'
-  }
-}
+export {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from './structured-agent-session-acquisition-errors'
 
 /** What a reservation turns into once something is actually running under it:
  *  the process the host can probe, and the provider handle it was minted with. */
@@ -139,6 +114,10 @@ export type AgentSessionAcquisition = {
    *  acquire that ran the whole handshake before answering; that bridge ends once every adapter
    *  publishes at spawn. Either way the host holds input until the child is `ready`. */
   providerChildPhase?: StructuredAgentSessionProviderChildPhase
+  /** What a `ready` child listed at its start, with the configured default its start resolved;
+   *  the host saves it once. A `starting` child (Claude) hands its listing on `started` and its
+   *  resolved default on the settings readback's `options-reported`. */
+  catalogListing?: AgentModelCatalogLiveListing
 }
 
 /** A refusal before spawn that a person can act on; the site that refused names it. */
@@ -381,12 +360,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
      *  start a new goal rather than rewrite that one's objective in place. */
     replacesGoal: boolean
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records. */
+  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records.
+   *  `stillRunning` is the provider's own answer that one survived its stop; a throw leaves the
+   *  effect unknown. */
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number
     taskIds: readonly string[]
-  }): Promise<{ cancelled: boolean }>
+  }): Promise<{ cancelled: boolean; stillRunning?: true }>
   /** The stops this provider honours for a live session's background work; undefined when the
    *  adapter holds no live session for it. */
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
