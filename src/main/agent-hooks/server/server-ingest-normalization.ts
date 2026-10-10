@@ -2,6 +2,10 @@ import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
+  resolveAgentStatusIdentity,
+  shouldSuppressInheritedTerminalStatus
+} from '../../../shared/agent-status-identity'
+import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
@@ -31,8 +35,25 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     body: unknown,
     isReplay = false
   ): NormalizedLocalHook {
+    const admitHookEvent = (paneKey: string): boolean => {
+      const existing = this.getStatusSnapshotForPane(paneKey)[0]
+      const identity = resolveAgentStatusIdentity({
+        existing: existing
+          ? {
+              agentType: existing.agentType,
+              state: existing.state,
+              updatedAt: existing.receivedAt,
+              restoredUnconfirmed: existing.restoredUnconfirmed
+            }
+          : undefined,
+        incoming: source,
+        now: Date.now()
+      })
+      return !shouldSuppressInheritedTerminalStatus({ ...identity, isHookEvent: true })
+    }
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
+        admitHookEvent,
         admitOpenCodeTui: (identity) => {
           const disposition = this.getAgentStatusDisposition(identity.paneKey, {
             ...identity,
@@ -62,11 +83,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env, { admitHookEvent }) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, { admitHookEvent })
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)

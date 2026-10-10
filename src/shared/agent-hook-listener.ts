@@ -43,6 +43,7 @@ export function normalizeHookPayload(
   options: {
     deferCompactOwnershipToClient?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
+    admitHookEvent?: (paneKey: string) => boolean
     admitOpenCodeTui?: (
       identity: Pick<
         AgentHookEventPayload,
@@ -63,9 +64,6 @@ export function normalizeHookPayload(
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
-  if (source === 'claude') {
-    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
-  }
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
@@ -124,6 +122,12 @@ export function normalizeHookPayload(
           sessionId: providerSession?.id,
           body: record
         })
+  if (options.admitHookEvent?.(paneKey) === false) {
+    return null
+  }
+  if (source === 'claude') {
+    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+  }
   // Why after the resolve: tracking the stamped token first would let a stale
   // shared-server stamp overwrite the pane's live token; the resolved envelope
   // carries the stored token (or nothing) for bound sessions instead.

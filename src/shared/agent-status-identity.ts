@@ -21,11 +21,13 @@ type AgentIdentityResolution = {
 
 export function shouldSuppressInheritedTerminalStatus(args: {
   inheritedFromActivePane: boolean
-  incomingState: AgentStatusState
+  incomingState?: AgentStatusState
+  isHookEvent?: boolean
 }): boolean {
-  // Why: nested child hooks inherit the parent's ORCA_PANE_KEY. A child
-  // completion does not prove the active parent turn completed.
-  return args.inheritedFromActivePane && args.incomingState === 'done'
+  // Child hooks cannot replace the active owner's session, tool, or turn metadata.
+  return (
+    args.inheritedFromActivePane && (args.isHookEvent === true || args.incomingState === 'done')
+  )
 }
 
 function normalizedKnownAgentType(agentType: AgentType | null | undefined): AgentType | null {
