@@ -155,7 +155,11 @@ export function acknowledgeMailboxDelivery(
           `UPDATE messages
            SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
                pointer_process_incarnation = NULL
-           WHERE id IN (${placeholders})`
+           WHERE id IN (${placeholders})
+             AND NOT EXISTS (
+               SELECT 1 FROM question_threads
+               WHERE message_id = messages.id AND status = 'pending'
+             )`
         )
         .run(...messageIds)
     }
