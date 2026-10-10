@@ -210,8 +210,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
     await this.assertOpenTargetIsFile(filePath, target)
-    // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
+    // Why: null names this desktop as the owner (its catalog resolved the worktree); undefined would let the focused server claim it.
+    this.host.openFile(worktree.id, filePath, relativePath, null, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -253,8 +253,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
-    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation)
+    // Why: see openMobileFile.
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, null, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 }
