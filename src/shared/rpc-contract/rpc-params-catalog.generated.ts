@@ -19,6 +19,11 @@ import {
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
 import {
+  MobileGetPairingQrParamsSchema,
+  MobileGetRuntimePairingUrlParamsSchema,
+  MobileRevokeDeviceParamsSchema
+} from '../mobile-pairing-rpc-contract'
+import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
@@ -1047,6 +1052,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedServer.update': ManagedServerUpdate,
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
+  'mobile.getPairingQR': MobileGetPairingQrParamsSchema,
+  'mobile.getRuntimePairingUrl': MobileGetRuntimePairingUrlParamsSchema,
+  'mobile.hostStatus': null,
+  'mobile.listDevices': null,
+  'mobile.listNetworkInterfaces': null,
+  'mobile.revokeDevice': MobileRevokeDeviceParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,

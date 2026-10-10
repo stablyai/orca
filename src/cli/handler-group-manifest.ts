@@ -236,6 +236,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },
   {
+    name: 'server',
+    keys: ['server link', 'server add'],
+    load: async () => (await import('./handlers/server.js')).SERVER_HANDLERS
+  },
+  {
     name: 'linear',
     keys: [
       'linear save-issue',

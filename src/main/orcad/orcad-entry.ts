@@ -21,6 +21,7 @@ import type { ServeReadiness } from '../server/serve-readiness'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath, prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
+import { buildOrcadMobilePairingAccessors } from './orcad-mobile-pairing-accessors'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
@@ -367,6 +368,8 @@ async function startOrcadRuntime(
   // Stops first: no RPC may write while the rest of the runtime is torn down.
   registerCleanup(() => rpc.stop())
   await rpc.start()
+  // Why: the mobile.* RPC handlers resolve the pairing surface through this seam; unwired, every mobile.* call fails closed.
+  runtime.setMobilePairingRpcAccessors(buildOrcadMobilePairingAccessors(rpc))
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,

@@ -98,6 +98,12 @@ export type RuntimeStatus = {
   hostDescriptor?: RuntimeHostDescriptor
   terminalWindowsShell?: string | null
   deviceScope?: DeviceScope
+  /** 'desktop' on the Electron app, 'serve' on a headless host. Optional for older hosts. */
+  hostMode?: 'desktop' | 'serve'
+  /** True when the host has a live DesktopRelayService; false/absent on serve hosts. */
+  relayAvailable?: boolean
+  /** Reachable runtime WebSocket endpoint, or null/absent when unknown. */
+  webSocketEndpoint?: string | null
   floatingWorkspaceEnabled?: boolean
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for older mobile builds.
   protocolVersion?: number

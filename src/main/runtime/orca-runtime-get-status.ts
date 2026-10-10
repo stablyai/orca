@@ -32,6 +32,7 @@ import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
+import type { MobilePairingRpcAccessors } from './rpc/methods/mobile-pairing'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
@@ -64,8 +65,20 @@ function supportsDurableTerminalPromptDelivery(): boolean {
 }
 
 export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+  private rpcStateAccessors: MobilePairingRpcAccessors | null = null
+
   private asRuntimeStatusHost(): RuntimeStatusHost {
     return this as unknown as RuntimeStatusHost
+  }
+
+  // Why: the RPC server owns pairing/relay state, so the runtime exposes it here; absent
+  // accessor → hostMode 'serve' / null endpoint (older hosts).
+  setMobilePairingRpcAccessors(accessors: MobilePairingRpcAccessors | null): void {
+    this.rpcStateAccessors = accessors
+  }
+
+  getMobilePairingRpcAccessors(): MobilePairingRpcAccessors | null {
+    return this.rpcStateAccessors
   }
 
   getStatus(): RuntimeStatus {
@@ -163,6 +176,13 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       ...(degradations.length > 0 ? { degradations } : {}),
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
       ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),
+      hostMode: hasRenderer ? ('desktop' as const) : ('serve' as const),
+      ...(this.rpcStateAccessors
+        ? {
+            relayAvailable: this.rpcStateAccessors.isDesktopRelayProviderAttached(),
+            webSocketEndpoint: this.rpcStateAccessors.getWebSocketEndpoint()
+          }
+        : {}),
       hostPlatform: process.platform,
       machineName: this.readMachineName(),
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
