@@ -7,7 +7,9 @@ import {
   HOST_INSTALLATION_FILENAME,
   computeHostMachineBinding,
   loadHostDescriptor,
-  loadOrCreateHostInstallationId
+  getRuntimeSourceStamp,
+  loadOrCreateHostInstallationId,
+  publishHostDescriptor
 } from './host-descriptor'
 
 function profile(): string {
@@ -94,5 +96,25 @@ describe('loadHostDescriptor', () => {
     expect(await loadHostDescriptor(join(blocker, 'profile'), () => 'machine-a')).toBeNull()
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
+  })
+})
+
+describe('getRuntimeSourceStamp', () => {
+  it('names the profile as the source and the runtime id as the incarnation', () => {
+    const installationId = '0b4c3d5e-1f2a-4b6c-8d7e-9f0a1b2c3d4e'
+    publishHostDescriptor('runtime-stamp-1', { installationId })
+    try {
+      expect(getRuntimeSourceStamp({ getRuntimeId: () => 'runtime-stamp-1' })).toEqual({
+        sourceId: installationId,
+        incarnation: 'runtime-stamp-1'
+      })
+    } finally {
+      publishHostDescriptor('runtime-stamp-1', null)
+    }
+  })
+
+  it('stamps nothing before a descriptor is published or without a runtime', () => {
+    expect(getRuntimeSourceStamp({ getRuntimeId: () => 'runtime-unpublished' })).toBeNull()
+    expect(getRuntimeSourceStamp(undefined)).toBeNull()
   })
 })

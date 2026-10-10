@@ -21,6 +21,8 @@ import {
   didAnotherRuntimeHandleTerminalPrompt
 } from './terminal-prompt-mutation-recovery'
 import { markEnvironmentUsed } from './environments'
+import { readRuntimeSourceStamp } from '../../shared/runtime-source-env'
+import { RuntimeSourceFence } from './runtime-source-fence'
 import { resolveRemotePairing } from './runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -56,6 +58,7 @@ export class RuntimeClient {
   private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
     process.env
   )
+  private readonly runtimeSourceFence = new RuntimeSourceFence(readRuntimeSourceStamp(process.env))
 
   // Why: browser commands trigger first-time session init (agent-browser connect +
   // CDP proxy setup) which can take 15-30s. 60s accommodates cold start without
@@ -162,6 +165,10 @@ export class RuntimeClient {
       return response
     }
     const metadata = readMetadata(this.userDataPath)
+    // Why outside recover(): a refusal here happens before anything is sent, so there is nothing to retry.
+    await this.runtimeSourceFence.check(metadata, method, (target) =>
+      sendRequest<RuntimeStatus>(target, 'status.get', undefined, this.requestTimeoutMs)
+    )
     let response
     try {
       response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)

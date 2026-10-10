@@ -7,6 +7,7 @@ import {
 } from '../../shared/runtime-host-descriptor'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { withFileTransactionLock } from '../file-transaction-lock'
+import type { RuntimeSourceStamp } from '../../shared/runtime-source-env'
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'
 const MAX_INSTALLATION_FILE_BYTES = 4 * 1024
@@ -118,4 +119,15 @@ export function publishHostDescriptor(
 
 export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescriptor | null {
   return publishedByRuntimeId.get(runtimeId) ?? null
+}
+
+/** Null until this runtime publishes a descriptor; unstamped processes keep the unfenced CLI path. */
+export function getRuntimeSourceStamp(
+  runtime: { getRuntimeId?: () => string } | null | undefined
+): RuntimeSourceStamp | null {
+  const runtimeId = runtime?.getRuntimeId?.()
+  const descriptor = runtimeId ? getPublishedHostDescriptor(runtimeId) : null
+  return runtimeId && descriptor
+    ? { sourceId: descriptor.installationId, incarnation: runtimeId }
+    : null
 }
