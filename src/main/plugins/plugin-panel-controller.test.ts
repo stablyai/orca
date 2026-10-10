@@ -42,6 +42,30 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
 }
 
 describe('PluginPanelController identity binding', () => {
+  it('routes commands.invoke with the session plugin identity and never the params', async () => {
+    const plugin = await createPlugin()
+    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { value: 1 } })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall,
+      log: () => vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'commands.invoke',
+        params: { commandId: 'run', pluginId: 'orca-samples.other' }
+      })
+    ).resolves.toMatchObject({ ok: true })
+    expect(executeHostCall).toHaveBeenCalledWith(plugin.pluginKey, 'commands.invoke', {
+      commandId: 'run',
+      pluginId: 'orca-samples.other'
+    })
+  })
+
   it('uses the session identity and rejects caller-supplied plugin claims', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })

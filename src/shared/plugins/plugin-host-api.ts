@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
+import { PLUGIN_EVENT_NAMES, pluginCommandIdSchema } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
 /**
@@ -95,6 +95,20 @@ const eventsSubscribeParams = z.object({
 })
 const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
 
+/** A panel-initiated command round trip rides one panel message result, so
+ *  the serialized value is capped well below the storage limits. */
+export const PLUGIN_COMMAND_RESULT_MAX_BYTES = 64 * 1024
+
+export const commandsInvokeParams = z
+  .object({
+    /** Resolved against the calling plugin's own manifest only; the plugin
+     *  identity always comes from the authenticated call context. */
+    commandId: pluginCommandIdSchema,
+    args: pluginJsonValueSchema.optional()
+  })
+  .strict()
+const commandsInvokeResult = z.object({ value: pluginJsonValueSchema })
+
 export type PluginHostMethodSpec = {
   name: string
   /** pluginApi minor the method appeared in (`1.0` for the v0 set). */
@@ -102,12 +116,20 @@ export type PluginHostMethodSpec = {
   /** Machine-readable resource boundary enforced by the host binding. */
   scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
   stability: 'experimental'
-  capability: PluginCapabilityKind
+  /** Capability the plugin must have consented to. `null` is an explicit
+   *  opt-out for methods that grant no authority beyond what consent to run
+   *  the plugin already gives (the gate still requires an enabled, consented
+   *  plugin). Required key so a missing capability is a type error, never an
+   *  accidental ungated row. */
+  capability: PluginCapabilityKind | null
   /** Mutations are audit-logged with actor `plugin:<id>`. */
   mutation: boolean
   /** Whether sandboxed panels may call this over the postMessage bridge.
-   *  Workers can call every method. */
+   *  Workers can call every method except `panelOnly` rows. */
   panel: boolean
+  /** Callable only from a sandboxed panel; workers are denied with
+   *  `worker_forbidden`. Implies `panel: true`. */
+  panelOnly?: true
   params: z.ZodTypeAny
   result: z.ZodTypeAny
 }
@@ -249,6 +271,17 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
+  }),
+  spec({
+    name: 'commands.invoke',
+    since: '1.0',
+    scope: 'plugin-private',
+    capability: null,
+    mutation: false,
+    panel: true,
+    panelOnly: true,
+    params: commandsInvokeParams,
+    result: commandsInvokeResult
   })
 ]
 

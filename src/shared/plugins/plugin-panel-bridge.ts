@@ -56,6 +56,7 @@ export type PluginPanelActionErrorCode =
   | 'capability_denied'
   | 'consent_required'
   | 'panel_forbidden'
+  | 'worker_forbidden'
   | 'invalid_params'
   | 'rate_limited'
   | 'unavailable'

@@ -6,6 +6,7 @@ import type { KeybindingOverrides } from '../../shared/keybindings'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
 import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginWorkerHandle } from './plugin-host-process'
+import type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { PluginService } from './plugin-service'
 import type { PluginWorkerFactory } from './plugin-worker-manager'
 import { hashPluginTree } from './plugin-content-hash'
@@ -216,6 +217,124 @@ describe('PluginService worker reconciliation', () => {
       'is a built-in action alias'
     )
     expect(factory).not.toHaveBeenCalled()
+  })
+
+  describe('commands.invoke host call', () => {
+    const runtimeDelegate: PluginRuntimeDelegate = {
+      resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
+      listTerminals: vi.fn().mockResolvedValue({ terminals: [] }),
+      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true })
+    }
+
+    it('runs the plugin own command for a panel and returns its value', async () => {
+      const root = await pluginRoot()
+      const harness = createHarness(root)
+      harness.service.setRuntimeDelegate(runtimeDelegate)
+      await harness.service.initialize()
+
+      const outcome = await harness.service.executeHostCall(
+        pluginKey,
+        'commands.invoke',
+        { commandId: 'run', args: { x: 1 } },
+        { viaPanel: true }
+      )
+
+      expect(outcome).toEqual({ ok: true, value: { value: null } })
+      expect(harness.workers[0]!.invokeCommand).toHaveBeenCalledWith('run', { x: 1 })
+    })
+
+    it('rejects undeclared commands before any worker handler runs', async () => {
+      const root = await pluginRoot()
+      const harness = createHarness(root)
+      harness.service.setRuntimeDelegate(runtimeDelegate)
+      await harness.service.initialize()
+
+      const outcome = await harness.service.executeHostCall(
+        pluginKey,
+        'commands.invoke',
+        { commandId: 'someone-elses-command' },
+        { viaPanel: true }
+      )
+
+      expect(outcome).toMatchObject({ ok: false, code: 'action_failed' })
+      expect(harness.factory).not.toHaveBeenCalled()
+    })
+
+    it('rejects a worker caller', async () => {
+      const root = await pluginRoot()
+      const harness = createHarness(root)
+      harness.service.setRuntimeDelegate(runtimeDelegate)
+      await harness.service.initialize()
+
+      const outcome = await harness.service.executeHostCall(
+        pluginKey,
+        'commands.invoke',
+        { commandId: 'run' },
+        { viaPanel: false }
+      )
+
+      expect(outcome).toMatchObject({ ok: false, code: 'worker_forbidden' })
+      expect(harness.factory).not.toHaveBeenCalled()
+    })
+
+    it('rejects built-in action aliases', async () => {
+      const aliasManifest = pluginManifestSchema.parse({
+        manifestVersion: 1,
+        id: 'demo',
+        publisher: 'orca-samples',
+        name: 'Demo',
+        version: '1.0.0',
+        engines: { orca: '>=1.0.0' },
+        pluginApi: 1,
+        contributes: { commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }] },
+        capabilities: []
+      })
+      const root = await pluginRoot(aliasManifest)
+      const service = new PluginService({
+        userDataPath: root,
+        hostVersion: '1.4.0',
+        isPluginSystemEnabled: () => true,
+        getDisabledPlugins: () => [],
+        getPluginConsents: () => ({ [pluginKey]: fingerprintPluginConsent(aliasManifest) }),
+        getDevPluginPaths: () => [root],
+        workerFactory: vi.fn<PluginWorkerFactory>()
+      })
+      services.push(service)
+      service.setRuntimeDelegate(runtimeDelegate)
+      await service.initialize()
+
+      await expect(
+        service.executeHostCall(
+          pluginKey,
+          'commands.invoke',
+          { commandId: 'tasks' },
+          { viaPanel: true }
+        )
+      ).resolves.toMatchObject({
+        ok: false,
+        code: 'action_failed',
+        error: expect.stringContaining('built-in action alias')
+      })
+    })
+
+    it('is denied once the plugin is disabled', async () => {
+      const root = await pluginRoot()
+      const harness = createHarness(root)
+      harness.service.setRuntimeDelegate(runtimeDelegate)
+      await harness.service.initialize()
+      harness.setDisabled([pluginKey])
+      await harness.service.reconcileActivationState()
+
+      await expect(
+        harness.service.executeHostCall(
+          pluginKey,
+          'commands.invoke',
+          { commandId: 'run' },
+          { viaPanel: true }
+        )
+      ).resolves.toMatchObject({ ok: false, code: 'consent_required' })
+    })
   })
 
   it('denies every authority boundary immediately when the feature flag turns off', async () => {

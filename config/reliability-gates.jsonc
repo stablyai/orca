@@ -19711,7 +19711,7 @@
         {
           "file": "src/main/plugins/plugin-host-conformance.test.ts",
           "assertions": [
-            "all 13 v0 methods succeed with the required consented capability through desktop-main and relay adapters",
+            "all 14 v0 methods succeed with the required consented capability (or, for the null-capability panel-only row, an enabled consented plugin) through desktop-main and relay adapters",
             "missing consent, missing capability, unknown method, malformed params, panel-forbidden access, malformed results, and mutation-audit failure return identical codes",
             "malformed qualified keys, client-supplied grants, and client-supplied transport flags are rejected before host policy resolution"
           ]

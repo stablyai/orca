@@ -47,6 +47,7 @@
     <select id="terms" hidden></select>
     <button id="send" hidden>Type "echo hi from plugin" into selected terminal</button>
     <button id="notify">Show a notification</button>
+    <button id="ping">Run the worker's hello-ping command</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -110,6 +111,16 @@
           statusEl.textContent = result.ok
             ? 'typed (accepted=' + result.value.accepted + ')'
             : 'send failed: ' + (result.error || result.errorCode)
+        })
+      })
+
+      document.getElementById('ping').addEventListener('click', function () {
+        // A panel can invoke only its own plugin's worker commands; the
+        // result is request/response, so poll by calling again for fresh data.
+        call('commands.invoke', { commandId: 'hello-ping' }).then(function (result) {
+          statusEl.textContent = result.ok
+            ? 'hello-ping returned ' + JSON.stringify(result.value.value)
+            : 'ping failed: ' + (result.error || result.errorCode)
         })
       })
 

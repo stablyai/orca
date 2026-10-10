@@ -17,6 +17,7 @@ export type PluginGateErrorCode =
   | 'capability_denied'
   | 'consent_required'
   | 'panel_forbidden'
+  | 'worker_forbidden'
 
 export type PluginGateDecision =
   | { granted: true }
@@ -43,6 +44,16 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: `method ${method} is not available to sandboxed panels`
     }
   }
+  // Why: panel-only methods exist so a sandboxed panel can reach its own
+  // worker; a worker invoking its own commands over the host API would only
+  // add re-entrancy, so deny it with a distinct, honest code.
+  if (!subject.viaPanel && spec.panelOnly) {
+    return {
+      granted: false,
+      code: 'worker_forbidden',
+      error: `method ${method} is only available to sandboxed panels`
+    }
+  }
   // Why: a disabled/unknown/stale-consent plugin must fail exactly like an
   // ungranted capability — no probe-able distinction for plugin code.
   if (subject.grantedCapabilities === null) {
@@ -52,7 +63,9 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: 'plugin is not enabled with current consent'
     }
   }
-  if (!subject.grantedCapabilities.includes(spec.capability)) {
+  // A null capability grants no authority beyond running the (consented,
+  // enabled) plugin itself; consent was already enforced above.
+  if (spec.capability !== null && !subject.grantedCapabilities.includes(spec.capability)) {
     return {
       granted: false,
       code: 'capability_denied',
