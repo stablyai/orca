@@ -2,9 +2,13 @@
 // different absolute namespaces for the same directory (e.g. Synology DSM's
 // /var/services/homes/alice shell home vs. /homes/alice SFTP start directory).
 //
+// The start directory is not always the home: a chrooted subsystem can open on an
+// ancestor of it — DSM lands on the shared-folder list, where that same home is
+// /homes/alice or /home — so discovery also searches below the start directory.
+//
 // See: docs/ssh-relay-sftp-namespace.md
 
-import type { SFTPWrapper } from 'ssh2'
+import type { FileEntryWithStats, SFTPWrapper } from 'ssh2'
 import { assertSafeRemotePathSegment, isWindowsRemoteHost } from './ssh-remote-platform'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { redactRelayInstallMarkerTokens } from './ssh-relay-install-marker'
@@ -19,6 +23,10 @@ export type SftpNamespacePathMapping = {
 // SSH_FX_NO_SUCH_FILE. The only status that definitively proves a path is absent;
 // permission denied, generic failure, and code-less errors are inconclusive.
 const SFTP_STATUS_NO_SUCH_FILE = 2
+
+// A start directory that is not the home is a share or export list, not a data
+// directory, so a bounded scan of it either finds the home or proves it absent.
+const MAX_SCANNED_START_DIRECTORY_ENTRIES = 64
 
 type MarkerProbe =
   | { kind: 'present' }
@@ -104,6 +112,53 @@ function joinSftpStartPath(startPath: string, homeRelativePath: string): string 
   return `${startPath.replace(/\/+$/, '')}/${homeRelativePath}`
 }
 
+// Each proper suffix of the shell home, longest first: /var/services/homes/alice
+// yields services/homes/alice, homes/alice, alice. One of them is where a chroot
+// that truncated the shell prefix re-exposes the home.
+function shellHomeSuffixes(shellHome: string): string[] {
+  const segments = shellHome.split('/').filter(Boolean)
+  return segments.slice(1).map((_segment, index) => segments.slice(index + 1).join('/'))
+}
+
+function isSafePosixPathSegment(segment: string): boolean {
+  if (segment.includes('\r') || segment.includes('\n')) {
+    return false
+  }
+  try {
+    assertSafeRemotePathSegment(segment, 'posix')
+    return true
+  } catch {
+    return false
+  }
+}
+
+function readdirSftp(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<FileEntryWithStats[] | undefined> {
+  return new Promise((resolve) => {
+    try {
+      sftp.readdir(remotePath, (err, entries) => {
+        resolve(err ? undefined : entries)
+      })
+    } catch {
+      resolve(undefined)
+    }
+  })
+}
+
+// Only directories can hold the marker, so plain files cost no probe.
+function startDirectoryChildRoots(startPath: string, entries: FileEntryWithStats[]): string[] {
+  return entries
+    .filter(
+      (entry) =>
+        isSafePosixPathSegment(entry.filename) &&
+        (entry.attrs.isDirectory() || entry.attrs.isSymbolicLink())
+    )
+    .slice(0, MAX_SCANNED_START_DIRECTORY_ENTRIES)
+    .map((entry) => joinSftpStartPath(startPath, entry.filename))
+}
+
 function realpathSftp(sftp: SFTPWrapper, remotePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     sftp.realpath(remotePath, (err, resolved) => {
@@ -145,12 +200,37 @@ function logRetainedShellPath(operation: string, detail: string, shellAbsolutePa
   )
 }
 
+// Why: a candidate is adopted only on its own marker hit, so an inconclusive probe
+// must neither adopt it nor end the search; details are collected for one warning.
+async function findMarkedTransferPath(
+  sftp: SFTPWrapper,
+  namespaceRoots: string[],
+  mapping: SftpNamespacePathMapping,
+  inconclusive: string[]
+): Promise<string | null> {
+  for (const namespaceRoot of namespaceRoots) {
+    const probe = await probeMarkerPath(
+      sftp,
+      joinSftpStartPath(namespaceRoot, mapping.homeRelativeProbePath)
+    )
+    if (probe.kind === 'present') {
+      return joinSftpStartPath(namespaceRoot, mapping.homeRelativePath)
+    }
+    if (probe.kind === 'inconclusive') {
+      inconclusive.push(probe.detail)
+    }
+  }
+  return null
+}
+
 /**
  * Pick the path this SFTP session should transfer to.
  *
  * Returns `shellAbsolutePath` unless the session both fails to see the install
- * owner's marker there and does see it under its own start directory. Discovery
- * failures degrade to the shell path rather than inventing a namespace error.
+ * owner's marker there and does see it under the start directory, under a suffix
+ * of the shell home below it, or under one of the start directory's children.
+ * Discovery failures degrade to the shell path rather than inventing a namespace
+ * error.
  */
 export async function resolveSftpTransferPath(
   sftp: SFTPWrapper,
@@ -181,8 +261,7 @@ export async function resolveSftpTransferPath(
     return shellAbsolutePath
   }
 
-  const candidatePath = joinSftpStartPath(startPath, mapping.homeRelativePath)
-  if (candidatePath === shellAbsolutePath) {
+  if (joinSftpStartPath(startPath, mapping.homeRelativePath) === shellAbsolutePath) {
     return shellAbsolutePath
   }
 
@@ -194,18 +273,39 @@ export async function resolveSftpTransferPath(
     return shellAbsolutePath
   }
 
-  const candidateMarker = await probeMarkerPath(
-    sftp,
-    joinSftpStartPath(startPath, mapping.homeRelativeProbePath)
+  const inconclusive: string[] = []
+  const shellHome = shellAbsolutePath.slice(0, -(mapping.homeRelativePath.length + 1))
+  const suffixRoots = shellHomeSuffixes(shellHome).map((suffix) =>
+    joinSftpStartPath(startPath, suffix)
   )
-  if (candidateMarker.kind === 'present') {
-    console.log(
-      `[ssh-relay] SFTP namespace differs; transfer path: ${redactRelayInstallMarkerTokens(candidatePath)}`
-    )
-    return candidatePath
+  let transferPath = await findMarkedTransferPath(
+    sftp,
+    [startPath, ...suffixRoots],
+    mapping,
+    inconclusive
+  )
+  if (!transferPath) {
+    const entries = await readdirSftp(sftp, startPath)
+    if (entries) {
+      transferPath = await findMarkedTransferPath(
+        sftp,
+        startDirectoryChildRoots(startPath, entries),
+        mapping,
+        inconclusive
+      )
+    } else {
+      inconclusive.push('READDIR failed')
+    }
   }
-  if (candidateMarker.kind === 'inconclusive') {
-    logRetainedShellPath('LSTAT', candidateMarker.detail, shellAbsolutePath)
+
+  if (transferPath) {
+    console.log(
+      `[ssh-relay] SFTP namespace differs; transfer path: ${redactRelayInstallMarkerTokens(transferPath)}`
+    )
+    return transferPath
+  }
+  if (inconclusive.length > 0) {
+    logRetainedShellPath('search', inconclusive.join('; '), shellAbsolutePath)
   }
   return shellAbsolutePath
 }
