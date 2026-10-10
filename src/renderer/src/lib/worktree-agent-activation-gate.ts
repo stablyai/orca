@@ -75,6 +75,14 @@ function waitForWorkspaceSessionReady(): Promise<boolean> {
   })
 }
 
+export function canInspectAgentActivationInventory(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.api?.runtime?.call === 'function' &&
+    typeof window.api?.pty?.listSessions === 'function'
+  )
+}
+
 export function workspaceHasSleepingAgentSessions(
   state: Pick<ReturnType<typeof useAppStore.getState>, 'sleepingAgentSessionsByPaneKey'>,
   worktreeId: string
