@@ -1,10 +1,8 @@
 import type { useAppStore } from '@/store'
 import {
   requireExecutionHostPlatform,
-  resolveRepoExecutionHostPlatform,
   resolveWorktreeExecutionHostPlatform
 } from '@/lib/execution-host-facts'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
@@ -19,6 +17,8 @@ export type AgentBackgroundLaunchHost = {
   /** Platform whose shell quoting and CLI naming the startup plan must target. */
   platform: NodeJS.Platform
   isRemote: boolean
+  /** Only a local host's shell is the one this client's terminal setting describes. */
+  isLocalHost: boolean
   /** Accepted status connection; undefined preserves unknown-owner behavior. */
   expectedConnectionId: string | null | undefined
 }
@@ -32,6 +32,19 @@ function resolveFolderWorkspaceConnectionIdForLaunch(
     return undefined
   }
   return getFolderWorkspaceConnectionId(store, parsed.folderWorkspaceId)
+}
+
+// Why the worktree, not the repo: a per-worktree host (nested SSH) outranks the repo's default.
+function resolveLaunchHostFact(
+  store: LaunchStore,
+  worktreeId: string,
+  worktreePath: string | undefined
+): Pick<AgentBackgroundLaunchHost, 'platform' | 'isLocalHost'> {
+  const fact = resolveWorktreeExecutionHostPlatform(store, worktreeId, worktreePath)
+  return {
+    platform: requireExecutionHostPlatform(fact),
+    isLocalHost: fact.kind === 'known' && fact.hostKind === 'local'
+  }
 }
 
 /** Resolves folder launch ownership from workspace scope when no repo row exists. */
@@ -49,11 +62,7 @@ export function resolveAgentBackgroundLaunchHost(args: {
     const sshConnectionId = getRepoSshConnectionId(repo)
     return {
       connectionId: sshConnectionId,
-      platform: requireExecutionHostPlatform(
-        resolveRepoExecutionHostPlatform(store, repo, () =>
-          getLocalProjectExecutionRuntimeContext(store, worktreeId)
-        )
-      ),
+      ...resolveLaunchHostFact(store, worktreeId, worktreePath),
       isRemote: repoIsRemote(repo),
       expectedConnectionId: sshConnectionId
     }
@@ -65,9 +74,7 @@ export function resolveAgentBackgroundLaunchHost(args: {
   }
   return {
     connectionId: folderWorkspaceConnectionId ?? null,
-    platform: requireExecutionHostPlatform(
-      resolveWorktreeExecutionHostPlatform(store, worktreeId, worktreePath)
-    ),
+    ...resolveLaunchHostFact(store, worktreeId, worktreePath),
     isRemote: Boolean(folderWorkspaceConnectionId),
     expectedConnectionId: isFolderWorkspace ? (folderWorkspaceConnectionId ?? null) : undefined
   }

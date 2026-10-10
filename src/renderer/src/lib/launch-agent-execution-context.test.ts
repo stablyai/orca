@@ -188,4 +188,44 @@ describe('resolveAgentLaunchExecutionContext from a Windows client', () => {
       queuedShell: 'powershell'
     })
   })
+
+  it('reads a folder workspace path so a WSL folder on a Windows server quotes for Linux', () => {
+    const base = store({
+      repo: { path: '/unused' },
+      worktreePath: '/unused',
+      runtimeStatusByEnvironmentId: new Map([['win-box', runtimeStatus('win32')]])
+    })
+    const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\project'
+    const context = resolveAgentLaunchExecutionContext(
+      Object.assign(base, {
+        folderWorkspaces: [
+          { id: 'f1', projectGroupId: 'g1', connectionId: null, executionHostId: 'runtime:win-box' }
+        ],
+        projectGroups: [{ id: 'g1', connectionId: null, executionHostId: 'runtime:win-box' }],
+        getKnownWorktreeById: () => ({ path: folderPath })
+      }),
+      { worktreeId: 'folder:f1' }
+    )
+    expect(context).toMatchObject({ resolvedLaunchPlatform: 'linux', queuedShell: undefined })
+  })
+
+  it("ignores a caller's client platform for a workspace on a Linux server", () => {
+    const context = resolveAgentLaunchExecutionContext(
+      store({
+        repo: { path: '/srv/repo', executionHostId: 'runtime:linux-box' },
+        worktreePath: '/srv/repo',
+        runtimeStatusByEnvironmentId: new Map([['linux-box', runtimeStatus('linux')]])
+      }),
+      { worktreeId: 'repo::/srv/repo', launchPlatform: 'win32' }
+    )
+    expect(context).toMatchObject({ resolvedLaunchPlatform: 'linux', queuedShell: undefined })
+  })
+
+  it("keeps a caller's platform for a local launch", () => {
+    const context = resolveAgentLaunchExecutionContext(
+      store({ repo: { path: 'C:\\repo' }, worktreePath: 'C:\\repo' }),
+      { worktreeId: 'repo::C:\\repo', launchPlatform: 'linux' }
+    )
+    expect(context).toMatchObject({ resolvedLaunchPlatform: 'linux', queuedShell: undefined })
+  })
 })

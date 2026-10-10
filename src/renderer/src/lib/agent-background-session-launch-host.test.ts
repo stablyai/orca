@@ -24,8 +24,9 @@ type LaunchStore = Parameters<typeof resolveAgentBackgroundLaunchHost>[0]['store
 type LaunchRepo = Parameters<typeof resolveAgentBackgroundLaunchHost>[0]['repo']
 
 function asLaunchInputs(store: unknown, repo: unknown): { store: LaunchStore; repo: LaunchRepo } {
+  const withRepo = repo ? Object.assign({}, store, { repos: [repo] }) : store
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixtures carry every slice and repo field the host resolver reads.
-  return { store: store as LaunchStore, repo: repo as LaunchRepo }
+  return { store: withRepo as LaunchStore, repo: repo as LaunchRepo }
 }
 
 function makeFolderHostState(args: {
@@ -201,6 +202,35 @@ describe('resolveAgentBackgroundLaunchHost', () => {
     expect(host).toMatchObject({ connectionId: null, isRemote: false, platform: 'linux' })
   })
 
+  it("uses a worktree's nested SSH host over its repo's runtime default", () => {
+    const state = {
+      ...makeFolderHostState({ connectionId: null, folderPath: '/project' }),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::/srv/repo',
+            repoId: 'repo-1',
+            hostId: 'ssh:nested',
+            runtimeOwnerEnvironmentId: 'vm-1'
+          }
+        ]
+      },
+      runtimeStatusByEnvironmentId: new Map([['vm-1', runtimeStatus('win32')]])
+    }
+    const host = resolveAgentBackgroundLaunchHost({
+      ...asLaunchInputs(state, {
+        id: 'repo-1',
+        connectionId: null,
+        executionHostId: 'runtime:vm-1',
+        path: '/srv/repo'
+      }),
+      worktreeId: 'repo-1::/srv/repo',
+      worktreePath: '/srv/repo'
+    })
+
+    expect(host).toMatchObject({ platform: 'linux', isLocalHost: false })
+  })
+
   it('quotes for the Orca server that owns a folder workspace', () => {
     const host = resolveAgentBackgroundLaunchHost({
       ...asLaunchInputs(
@@ -221,12 +251,18 @@ describe('resolveAgentBackgroundLaunchHost', () => {
   it('refuses a launch whose SSH host never reported its OS', () => {
     expect(() =>
       resolveAgentBackgroundLaunchHost({
-        ...asLaunchInputs(makeFolderHostState({ connectionId: null, folderPath: '/project' }), {
-          id: 'repo-1',
-          connectionId: null,
-          executionHostId: 'ssh:silent',
-          path: '/srv/repo'
-        }),
+        ...asLaunchInputs(
+          {
+            ...makeFolderHostState({ connectionId: null, folderPath: '/project' }),
+            repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'ssh:silent' }]
+          },
+          {
+            id: 'repo-1',
+            connectionId: null,
+            executionHostId: 'ssh:silent',
+            path: '/srv/repo'
+          }
+        ),
         worktreeId: 'repo-1::/srv/repo',
         worktreePath: '/srv/repo'
       })
