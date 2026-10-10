@@ -73,6 +73,8 @@ orca computer perform-secondary-action --app <app> --element-index <i> --action 
 
 Prefer semantic actions (`click`, `set-value`, `perform-secondary-action`) over raw `type-text` or `press-key` — they target accessibility elements directly and survive focus changes that keyboard input doesn't.
 
+On macOS, an element click delivered through accessibility does not bring the app forward unless you pass `--restore-window`. The app itself may still change focus in response to the action. Coordinate clicks and element clicks that fall back to mouse input still bring the target forward. Before typing afterward, verify the focused receiver; keyboard actions refuse an unfocused target with `window_not_focused` and guidance to use `--restore-window`.
+
 When accessibility targeting fails, fall back carefully to coordinates:
 
 ```bash
