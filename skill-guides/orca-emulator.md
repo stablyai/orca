@@ -3,7 +3,7 @@ name: orca-emulator
 description: >-
   iOS Simulator control from inside Orca, with the live device view in Orca's
   emulator pane. Use when driving a booted Apple Simulator on macOS: taps,
-  gestures, typing, hardware buttons, rotation, and the accessibility tree, or
+  gestures, typing, hardware buttons, rotation, filtered logs, and the accessibility tree, or
   when an iOS change needs simulator evidence. For an Android device or emulator
   use the Android emulator skill; build and install the app with xcodebuild or
   simctl first.
@@ -20,9 +20,9 @@ license: Apache-2.0
 `ORCA emulator exec --command "<serve-sim command>"`, which forwards the string to serve-sim
 unvalidated with the active device injected.
 
-`install`, `launch`, `permissions`, and `logcat` are Android-only and fail against an iOS
-device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`, `ax`, and
-`exec` work on both backends.
+`install`, `launch`, and `permissions` are Android-only and fail against an iOS device
+with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`, `ax`, `logcat`,
+and `exec` work on both backends.
 
 Emulator control is local to the Mac that owns the simulator; remote and SSH worktrees are
 out of scope.
@@ -43,20 +43,21 @@ Orca reports a clear error when the host is missing macOS or the Xcode tools.
 Use `--json` for agent-driven calls. Unqualified commands target the worktree's active
 device.
 
-| Goal                     | Command                                                     | Constraint                                                                                                                                                            |
-| ------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| List available / running | `ORCA emulator list --json`                                 | Orca-managed sessions plus raw serve-sim streams. Use its ids for `--device` / `--emulator`.                                                                          |
-| List devices everywhere  | `ORCA emulator devices --json`                              | Every backend's devices with a platform column, booted and shutdown.                                                                                                  |
-| Attach / make active     | `ORCA emulator attach "iPhone 16 Pro" --json`               | Starts the helper if needed and makes the device active for the worktree. `--focus` switches the UI; it does not by default.                                          |
-| Single tap               | `ORCA emulator tap <x> <y> --json`                          | Normalized 0..1 coordinates.                                                                                                                                          |
-| Multi-step gesture       | `ORCA emulator gesture '<json>' --json`                     | Begin/move/end points. Use `tap` for a single tap.                                                                                                                    |
-| Type text                | `ORCA emulator type "text" --json`                          | US-ASCII only.                                                                                                                                                        |
-| Hardware button          | `ORCA emulator button home --json`                          | `home` and `side_button` are documented by the CLI spec; other names such as `swipe_home`, `app_switcher`, `lock`, and `siri` are forwarded to serve-sim unvalidated. |
-| Rotate device            | `ORCA emulator rotate landscape_left --json`                | The orientation persists for subsequent gestures.                                                                                                                     |
-| Accessibility tree       | `ORCA emulator ax --json`                                   | serve-sim node tree, capped at 500 nodes, frames normalized 0..1 with a top-left origin. Needs an active session.                                                     |
-| Raw passthrough          | `ORCA emulator exec --command "ca-debug blended on" --json` | serve-sim subcommand string, without a `serve-sim` prefix.                                                                                                            |
-| Stop the helper          | `ORCA emulator kill --json`                                 | Leaves the device booted.                                                                                                                                             |
-| Stop and power off       | `ORCA emulator shutdown --json`                             | Stops the helper and shuts the simulator device down.                                                                                                                 |
+| Goal                     | Command                                                         | Constraint                                                                                                                                                            |
+| ------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| List available / running | `ORCA emulator list --json`                                     | Orca-managed sessions plus raw serve-sim streams. Use its ids for `--device` / `--emulator`.                                                                          |
+| List devices everywhere  | `ORCA emulator devices --json`                                  | Every backend's devices with a platform column, booted and shutdown.                                                                                                  |
+| Attach / make active     | `ORCA emulator attach "iPhone 16 Pro" --json`                   | Starts the helper if needed and makes the device active for the worktree. `--focus` switches the UI; it does not by default.                                          |
+| Single tap               | `ORCA emulator tap <x> <y> --json`                              | Normalized 0..1 coordinates.                                                                                                                                          |
+| Multi-step gesture       | `ORCA emulator gesture '<json>' --json`                         | Begin/move/end points. Use `tap` for a single tap.                                                                                                                    |
+| Type text                | `ORCA emulator type "text" --json`                              | US-ASCII only.                                                                                                                                                        |
+| Hardware button          | `ORCA emulator button home --json`                              | `home` and `side_button` are documented by the CLI spec; other names such as `swipe_home`, `app_switcher`, `lock`, and `siri` are forwarded to serve-sim unvalidated. |
+| Rotate device            | `ORCA emulator rotate landscape_left --json`                    | The orientation persists for subsequent gestures.                                                                                                                     |
+| Accessibility tree       | `ORCA emulator ax --json`                                       | serve-sim node tree, capped at 500 nodes, frames normalized 0..1 with a top-left origin. Needs an active session.                                                     |
+| Filtered logs            | `ORCA emulator logcat --filter com.acme.App --lines 100 --json` | One-shot unified log dump from the last 10 minutes; a non-empty filter is required.                                                                                   |
+| Raw passthrough          | `ORCA emulator exec --command "ca-debug blended on" --json`     | serve-sim subcommand string, without a `serve-sim` prefix.                                                                                                            |
+| Stop the helper          | `ORCA emulator kill --json`                                     | Leaves the device booted.                                                                                                                                             |
+| Stop and power off       | `ORCA emulator shutdown --json`                                 | Stops the helper and shuts the simulator device down.                                                                                                                 |
 
 ## Targeting
 
@@ -87,6 +88,10 @@ and retry.
 - Run `kill` when you are done. A helper left running holds the device until Orca quits.
 - The iOS backend drives private simulator APIs, so an Xcode update can change its behavior.
 
+`logcat --filter` performs a case-insensitive substring search across process, subsystem,
+category, and message. It can match unrelated records and does not isolate one app.
+`--lines` defaults to 500 and accepts 1–10000; results are ordered oldest to newest.
+
 ## Examples
 
 ```text
@@ -96,6 +101,7 @@ ORCA emulator tap 0.5 0.8 --json
 ORCA emulator type "user@example.com" --json
 ORCA emulator button home --json
 ORCA emulator ax --json
+ORCA emulator logcat --filter com.acme.App --lines 100 --json
 ORCA emulator exec --command "ca-debug blended on" --json
 ORCA emulator kill --device "iPhone 16 Pro" --json
 ```

@@ -58,18 +58,18 @@
     {
       "name": "orca-emulator",
       "sourcePath": "skills/orca-emulator",
-      "releaseRevision": 8,
-      "packageDigest": "1dc42e5addc613abd85eba639d4ac36d9c7b3bc6f7186f0a2d54d10dae3f06d3",
-      "gitTreeSha": "110f6ab59bd73428d7de28bd4761d1fc332efa20",
+      "releaseRevision": 9,
+      "packageDigest": "29bc1c440b314e8fb80ff5529a0e20fd855a74f78881659a84b23deecb77d42d",
+      "gitTreeSha": "2c35c25ac224ca3600bda63569e6909efad88e3b",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 2337,
+          "size": 2352,
           "executable": false,
           "classification": "text",
-          "exactSha256": "3da7191179e46cb0e1a6a936f1eb54254f6e98ec38849e1c95f0e11073076b48",
-          "textNormalizedSha256": "3da7191179e46cb0e1a6a936f1eb54254f6e98ec38849e1c95f0e11073076b48",
-          "identitySha256": "3da7191179e46cb0e1a6a936f1eb54254f6e98ec38849e1c95f0e11073076b48"
+          "exactSha256": "321361df698fa8ec655841b5f9335fa819039a611ef6a83b02a63ceb291f14e9",
+          "textNormalizedSha256": "321361df698fa8ec655841b5f9335fa819039a611ef6a83b02a63ceb291f14e9",
+          "identitySha256": "321361df698fa8ec655841b5f9335fa819039a611ef6a83b02a63ceb291f14e9"
         }
       ]
     },
