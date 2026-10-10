@@ -22,6 +22,7 @@ import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fa
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { settingsForRepoOwner } from '../listing/worktree-owner-settings'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
+import { persistLocalBaseRefSettings } from '../../worktree-visibility-settings-write'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
 import {
   buildLocalWorktreeCreateArgs,
@@ -226,9 +227,33 @@ export function createCreateWorktree(
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }
+          const activeAtCreation = getActiveRuntimeTarget(get().settings)
+          const sameHostAtCreation =
+            activeAtCreation.kind === target.kind &&
+            (target.kind !== 'environment' ||
+              (activeAtCreation.kind === 'environment' &&
+                activeAtCreation.environmentId === target.environmentId))
+          let suggestionSettings = {
+            refreshLocalBaseRefOnWorktreeCreate:
+              sameHostAtCreation && get().settings?.refreshLocalBaseRefOnWorktreeCreate === true
+          }
           showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
-            updateSettings: get().updateSettings,
-            getSettings: () => get().settings,
+            updateSettings: async (updates) => {
+              const saved = await persistLocalBaseRefSettings(target, updates)
+              suggestionSettings = {
+                refreshLocalBaseRefOnWorktreeCreate:
+                  saved.refreshLocalBaseRefOnWorktreeCreate === true
+              }
+              const active = getActiveRuntimeTarget(get().settings)
+              if (
+                active.kind === target.kind &&
+                (active.kind !== 'environment' ||
+                  (target.kind === 'environment' && active.environmentId === target.environmentId))
+              ) {
+                await get().fetchSettings()
+              }
+            },
+            getSettings: () => suggestionSettings,
             openSettingsPage: get().openSettingsPage,
             openSettingsTarget: get().openSettingsTarget
           })

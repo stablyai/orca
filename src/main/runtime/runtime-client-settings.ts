@@ -50,6 +50,8 @@ export type RuntimeClientSettings = Pick<
   | 'prBotAuthorOverrides'
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
+  | 'refreshLocalBaseRefOnWorktreeCreate'
+  | 'localBaseRefSuggestionDismissed'
   | 'agentSkillSharingEnabled'
   | 'machineName'
 > & {
@@ -89,6 +91,8 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'zcodePlanSite'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
+  | 'refreshLocalBaseRefOnWorktreeCreate'
+  | 'localBaseRefSuggestionDismissed'
   | 'machineName'
 >
 
@@ -138,6 +142,8 @@ export class RuntimeClientSettingsController {
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
+      refreshLocalBaseRefOnWorktreeCreate: settings.refreshLocalBaseRefOnWorktreeCreate === true,
+      localBaseRefSuggestionDismissed: settings.localBaseRefSuggestionDismissed === true,
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour

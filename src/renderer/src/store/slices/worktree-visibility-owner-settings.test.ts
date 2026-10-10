@@ -5,6 +5,7 @@ import {
 } from '@/runtime/runtime-rpc-client'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getDefaultSettings } from '../../../../shared/constants'
 import {
   hydrateOwnerWorktreeVisibilityDefaults,
   readRuntimeWorktreeVisibilityDefaults
@@ -20,6 +21,31 @@ beforeEach(() => {
 })
 
 describe('runtime worktree visibility defaults', () => {
+  it('hydrates base refresh preferences from the owner instead of the desktop', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: {
+        settings: {
+          worktreeVisibilityDefaults: { external: 'show' },
+          refreshLocalBaseRefOnWorktreeCreate: false,
+          localBaseRefSuggestionDismissed: true
+        }
+      }
+    })
+    const hydrated = await hydrateOwnerWorktreeVisibilityDefaults(
+      {
+        ...getDefaultSettings('/home/test'),
+        activeRuntimeEnvironmentId: 'env-1',
+        refreshLocalBaseRefOnWorktreeCreate: true,
+        localBaseRefSuggestionDismissed: false
+      },
+      {}
+    )
+    expect(hydrated.settings).toMatchObject({
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      localBaseRefSuggestionDismissed: true
+    })
+  })
   it('reads defaults from the selected runtime owner', async () => {
     runtimeCall.mockResolvedValue({
       ok: true,

@@ -87,6 +87,8 @@ export const SettingsUpdate = z
   .object({
     machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
+    refreshLocalBaseRefOnWorktreeCreate: z.boolean().optional(),
+    localBaseRefSuggestionDismissed: z.boolean().optional(),
     defaultTuiAgent: z
       .unknown()
       .transform((value) =>
