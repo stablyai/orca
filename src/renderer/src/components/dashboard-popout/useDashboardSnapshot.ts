@@ -31,6 +31,16 @@ function terminalDialogIsOpen(): boolean {
   return document.querySelector('[role="dialog"][data-state="open"]') !== null
 }
 
+function isBenignViewTransitionError(err: unknown): boolean {
+  if (err instanceof Error) {
+    return err.name === 'InvalidStateError' || err.name === 'AbortError'
+  }
+  if (err && typeof err === 'object' && 'name' in err) {
+    return err.name === 'InvalidStateError' || err.name === 'AbortError'
+  }
+  return false
+}
+
 /**
  * Pop-out side of the dashboard bridge: subscribe to snapshots relayed from the
  * main window and request an initial one on mount. When a card changes column
@@ -42,6 +52,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
   const columnSignatureRef = useRef('')
   const retainedRepoIconsRef = useRef<DashboardSnapshot['repoIconsByRepoId']>(undefined)
   const snapshotRef = useRef(snapshot)
+  const activeTransitionRef = useRef<unknown>(null)
 
   useEffect(() => {
     let topologyRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -110,6 +121,10 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       const nextSignature = columnSignature(next)
       const layoutChanged = nextSignature !== columnSignatureRef.current
       columnSignatureRef.current = nextSignature
+      if (activeTransitionRef.current !== null) {
+        setSnapshot(next)
+        return
+      }
 
       const startViewTransition = document.startViewTransition?.bind(document)
       if (
@@ -123,9 +138,49 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       }
       // flushSync so the DOM reflects `next` synchronously inside the transition
       // callback — the browser captures the "after" state from it.
-      startViewTransition(() => {
-        flushSync(() => setSnapshot(next))
-      })
+      // Absorb benign InvalidStateError/AbortError if Chromium aborts in-flight animations
+      // or if rapid updates collide, avoiding React #185 and unhandled promise rejection storms.
+      try {
+        const transition = startViewTransition(() => {
+          try {
+            flushSync(() => setSnapshot(next))
+          } catch (err: unknown) {
+            setSnapshot(next)
+            if (!isBenignViewTransitionError(err)) {
+              console.warn(
+                'flushSync failed during view transition; fell back to asynchronous snapshot update:',
+                err
+              )
+            }
+          }
+        })
+        activeTransitionRef.current = transition
+        if (
+          transition &&
+          typeof transition === 'object' &&
+          'finished' in transition &&
+          transition.finished instanceof Promise
+        ) {
+          transition.finished
+            .catch((err: unknown) => {
+              if (!isBenignViewTransitionError(err)) {
+                console.warn('Unexpected view transition rejection:', err)
+              }
+            })
+            .finally(() => {
+              if (activeTransitionRef.current === transition) {
+                activeTransitionRef.current = null
+              }
+            })
+        }
+      } catch (err: unknown) {
+        if (isBenignViewTransitionError(err)) {
+          activeTransitionRef.current = null
+          setSnapshot(next)
+        } else {
+          throw err
+        }
+      }
     }
 
     const unsubscribe = window.api.dashboard.onSnapshot(apply)
