@@ -1,5 +1,6 @@
-// One attempt of a chat's reconciliation worker, for a caller inside the chat's action lane: the
-// short recheck and the writes. Everything owed is re-derived here from the lease, this host's
+// One visit of the host's retry to a chat, for a caller inside the chat's action lane: the short
+// recheck and the writes, all through the background handles (`structured-agent-session-
+// background-writes.ts`), so another connection's lock ends the round instead of waiting. Everything owed is re-derived here from the lease, this host's
 // sight of an exit and the journal, so a pass that finds nothing owed writes nothing; only what
 // cannot be derived rides in from the signals (an exit's own account, a proof the lease no longer
 // holds). A lease latched in recovery still gets (b), which touches no process and no lease, as
@@ -15,6 +16,12 @@
 // An empty item plan says nothing of (a) or (b).
 
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
+import {
+  backgroundJournalWrites,
+  backgroundStoreWrites,
+  type BackgroundJournalWrites,
+  type BackgroundStoreWrites
+} from './structured-agent-session-background-writes'
 import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import { queuedMessageReopenMarkStart } from '../agent-session-journal/queued-message-reopen-floor'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
@@ -60,10 +67,7 @@ export type StructuredAgentSessionReconciliationPass = {
   recovering: boolean
 }
 
-/** Every write a pass makes is bookkeeping no person waits on (`JournalWriteOptions`). */
-const BACKGROUND = { background: true } as const
-
-/** `session`: the chat's open conversation, or the worker's own read of a closed one.
+/** `session`: the chat's open conversation, or the retry's own read of a closed one.
  *  `processOpened`: where this host first opened the chat's journal; a send at or before it was an
  *  earlier process's. A later handle's own open cannot tell: this process may have accepted sends
  *  through an earlier handle, which its close or its delivery loop still owns. */
@@ -77,6 +81,11 @@ export async function runStructuredAgentSessionReconciliationPass(
   const lease = context.deps.store.getRecord(sessionId)?.lease
   const recovering = lease?.handoffStage === 'recovering'
   const pass: StructuredAgentSessionReconciliationPass = { failed: [], wrote: false, recovering }
+  // Every write a pass makes is bookkeeping no person waits on: only these handles write.
+  const writes = {
+    store: backgroundStoreWrites(context.deps.store),
+    journal: backgroundJournalWrites(session.journal)
+  }
   // An exit's account judges only its own generation: once a later one acquired, it is spent.
   if (debts.exit && (!lease || lease.runtimeFence > debts.exit.ownerFence + 1)) {
     delete debts.exit
@@ -84,11 +93,11 @@ export async function runStructuredAgentSessionReconciliationPass(
   if (
     !recovering &&
     structuredAgentSessionEndedChildHoldsLease(context, sessionId) &&
-    (await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId, BACKGROUND))
+    (await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId, writes.store))
   ) {
     pass.failed.push(new Error('agent_session_exit_release_owed'))
   }
-  await settleEarlierProcess(context, sessionId, session.journal, processOpened, pass)
+  await settleEarlierProcess(context, sessionId, session.journal, writes, processOpened, pass)
   if (recovering || pass.failed.some(isSqliteContentionFailure)) {
     // What ended is not known until its recovery is decided; the debts wait for that signal.
     return pass
@@ -98,10 +107,10 @@ export async function runStructuredAgentSessionReconciliationPass(
       store: context.deps.store,
       sessionId,
       journal: session.journal,
+      writes: writes.journal,
       ...(debts.exit ? { exit: debts.exit } : {}),
       ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {}),
-      ...(proof ? { proof } : {}),
-      background: true
+      ...(proof ? { proof } : {})
     })
   // Each proof the lease no longer holds judges what its own generation left, oldest first.
   const leaseEvidence = context.deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
@@ -149,6 +158,7 @@ async function settleEarlierProcess(
   context: StructuredAgentSessionReconciliationPassContext,
   sessionId: string,
   journal: StructuredAgentSessionHostSession['journal'],
+  writes: { store: BackgroundStoreWrites; journal: BackgroundJournalWrites },
   processOpened: AgentJournalCursor,
   pass: StructuredAgentSessionReconciliationPass
 ): Promise<void> {
@@ -169,7 +179,7 @@ async function settleEarlierProcess(
       }
     )
   // Another connection's lock ends the pass: the round ends, and every step is tried again.
-  if (!(await attempt(() => journal.queuedMessages.repairAndPrune(BACKGROUND)))) {
+  if (!(await attempt(() => writes.journal.queuedMessages.repairAndPrune()))) {
     return
   }
   // Before a Stop can withdraw one: a Stop never withdraws a card.
@@ -180,7 +190,7 @@ async function settleEarlierProcess(
         fence,
         hostInstance: structuredAgentSessionHostInstance(),
         hold: { cause: 'hostRestarted', which: (entry) => earlier(entry.acceptedSequence) },
-        background: true
+        writes: writes.journal
       })) !== null
   })
   if (!held && pass.failed.some(isSqliteContentionFailure)) {
@@ -192,24 +202,23 @@ async function settleEarlierProcess(
   const floor = journal.reopenFloor()
   const since = queuedMessageReopenMarkStart(floor, processOpened, journal.cursor().epoch)
   if ((converted || floor !== null) && since !== null) {
-    await markStructuredQueueReopen(
-      sessionId,
-      journal,
-      fence,
-      context.deps.logger,
-      since,
-      BACKGROUND
-    )
+    await markStructuredQueueReopen(sessionId, writes.journal, fence, context.deps.logger, since)
   }
   // A rewind left prepared refuses every send until settled. With no provider here, one only its
   // provider can prove stays, quietly, for the next acquisition, which recovers it.
   if (!structuredRewindNeedsProvider(record.rewind)) {
-    await recoverStructuredRewind(context.deps, sessionId, journal, fence).catch((error: unknown) =>
+    const deps = { ...context.deps, background: writes }
+    await recoverStructuredRewind(deps, sessionId, journal, fence).catch((error: unknown) => {
+      // Another connection's lock ends the round, as every other write here does.
+      if (isSqliteContentionFailure(error)) {
+        pass.failed.push(error)
+        return
+      }
       context.deps.logger.warn('recovering a rewind an earlier process left did not finish', {
         scope: 'reconciliation-rewind',
         sessionId,
         error
       })
-    )
+    })
   }
 }

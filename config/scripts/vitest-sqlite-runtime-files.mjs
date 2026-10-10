@@ -123,6 +123,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-reconciliation-parked-debts.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-exit-delivery.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-background-writes.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-background-lock.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-restart-reconcile-retry.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-ended-prompt-cancel.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-roster-provenance.test.ts',

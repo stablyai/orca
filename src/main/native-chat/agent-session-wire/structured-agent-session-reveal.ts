@@ -13,6 +13,8 @@
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
+import type { JournalWriteOptions } from '../agent-session-journal/journal-host-database'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
 import {
@@ -68,10 +70,13 @@ export function createStructuredAgentSessionHostRestore(
     ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
     'openDeps' | 'reconcile' | 'resolveRecovery'
   > & {
-    reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+    reconcileLeases: (
+      sessionId: string | null,
+      options?: JournalWriteOptions
+    ) => Promise<AgentSessionWireRefusal | null>
     resolveRecovery: (sessionId: string) => Promise<unknown>
     startup: Pick<StructuredAgentSessionRetryContext, 'sessions'> & {
-      tasks: Pick<StructuredAgentSessionTaskQueue, 'trackAttach'>
+      tasks: Pick<StructuredAgentSessionTaskQueue, 'trackAttach' | 'busy'>
       clientDelivery: Pick<StructuredAgentSessionRetryContext, 'publishGenerationEnded'>
       queue: {
         sendForRetry: (sessionId: string) => Promise<'contended' | 'done'>
@@ -94,11 +99,26 @@ export function createStructuredAgentSessionHostRestore(
     sessions: startup.sessions,
     now: () => deps.now?.() ?? Date.now(),
     serialize: rest.serialize,
+    laneBusy: (sessionId) => startup.tasks.busy(sessionId),
     // Tracked like a start, so a quit waits for an attempt before it closes what it writes to.
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
       startup.clientDelivery.publishGenerationEnded(sessionId, options),
-    reconcile,
+    reconcile: () =>
+      reconcileLeases(null, { background: true }).then(
+        (refusal) => {
+          if (!refusal) {
+            failures.clear()
+            return 'settled'
+          }
+          failures.report(refusal)
+          return 'failed'
+        },
+        (error: unknown) => {
+          failures.report(error)
+          return isSqliteContentionFailure(error) ? 'contended' : 'failed'
+        }
+      ),
     sendQueued: (sessionId) => startup.queue.sendForRetry(sessionId),
     abandonSend: (sessionId) => startup.queue.abandon(sessionId)
   })

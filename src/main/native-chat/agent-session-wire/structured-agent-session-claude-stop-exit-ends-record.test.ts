@@ -397,7 +397,7 @@ it('sends after a proven exit whose resume-point write and lease release both fa
       expect.arrayContaining(['claude-close-resume-point', 'exit-owner-release'])
     )
   )
-  // The chat's worker writes the release from this host's proof of that exit; no send waits on it.
+  // The host's retry writes the release from this host's proof of that exit; no send waits on it.
   await eventually(() => expect(lease()?.claimStatus).toBe('released'))
 
   await send('Carry on.')
@@ -419,7 +419,7 @@ it('sends after a crash with a long reason whose own lease release failed', asyn
   )
   await eventually(() => expect(child()).toBeNull())
   await eventually(() => expect(scopes()).toContain('exit-owner-release'))
-  // The chat's worker writes the release the exit's own write could not.
+  // The host's retry writes the release the exit's own write could not.
   await eventually(() => expect(lease()?.claimStatus).toBe('released'))
 
   await send('Carry on.')
@@ -527,7 +527,7 @@ it('has the idle reaper join a close still unverifiable, ending the record with 
 
   expect(connection.closeCount).toBe(2)
   expect(lease()).toMatchObject({ claimStatus: 'released', ownerProcess: null })
-  // Closed once the chat's worker has settled what the ended child left.
+  // Closed once the host's retry has settled what the ended child left.
   await eventually(() => expect(host.hasSession(SESSION)).toBe(false))
 })
 

@@ -330,15 +330,12 @@ export class JournalQueuedMessages {
   }
 
   /** Applies owed settlements now, so a skipped live transition heals without a reopen. */
-  settleOwed(): Promise<void> {
+  settleOwed(options?: JournalWriteOptions): Promise<void> {
+    const { sessionId, state, now } = this.deps
     return this.transact(
-      (db) =>
-        settleOwedQueuedMessages(db, {
-          sessionId: this.deps.sessionId,
-          state: this.deps.state(),
-          now: this.deps.now()
-        }),
-      (settled) => settled > 0
+      (db) => settleOwedQueuedMessages(db, { sessionId, state: state(), now: now() }),
+      (settled) => settled > 0,
+      options
     ).then(() => undefined)
   }
 

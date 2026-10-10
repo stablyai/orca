@@ -44,6 +44,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed'), {
@@ -130,9 +131,9 @@ beforeEach(async () => {
   startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   await host.close(SESSION, 'evict')
-  // The stop's release wakes the chat's worker, which opens the chat and closes it again; the
+  // The stop's release wakes the host's retry, which opens the chat and closes it again; the
   // tests below write its journal directly, so it must be shut first.
-  await host.collaboratorsForTests().reconciliation.idle(SESSION)
+  await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
   await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
 })
 
@@ -368,7 +369,7 @@ describe('settling an earlier child before the next one takes its message', () =
     await restartHost()
     await host.reconcileRestartLeases()
     await host.startupSettled()
-    await host.collaboratorsForTests().reconciliation.idle(SESSION)
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
     const id = await accept('for the next child')
 
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))

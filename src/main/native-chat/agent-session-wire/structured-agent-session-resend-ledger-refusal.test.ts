@@ -19,6 +19,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const EXPIRED = {
   ok: false,
@@ -76,8 +77,8 @@ describe('an expired send id', () => {
   it('is answered expired while its chat is closed, not as a chat this host lacks', async () => {
     await attach()
     await host.close(SESSION, 'evict')
-    // The stop's release wakes the chat's worker, which opens it, finds nothing owed, and closes it.
-    await host.collaboratorsForTests().reconciliation.idle(SESSION)
+    // The stop's release wakes the host's retry, which opens it, finds nothing owed, and closes it.
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
 
     await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject(EXPIRED)

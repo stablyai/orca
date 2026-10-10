@@ -23,6 +23,7 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import { settleStructuredAgentSessionLeftovers } from '../native-chat/agent-session-wire/structured-agent-session-leftover-settlement'
+import { backgroundSettlementWrites } from '../native-chat/agent-session-wire/structured-agent-session-background-writes'
 
 // Frame orders are real sessions', scrubbed. A resumed agent's frames still name its ORIGINAL
 // spawn call while the announcement names the message call that resumed it, and a new provider
@@ -476,7 +477,8 @@ describe('a Claude subagent resumed after its provider restarted', () => {
       await settleStructuredAgentSessionLeftovers({
         store: { getRecord: (sessionId) => (sessionId === 'orca-session' ? released : null) },
         sessionId: 'orca-session',
-        journal
+        journal,
+        writes: backgroundSettlementWrites(journal)
       })
     ).toMatchObject({ ok: true })
     const [lost] = rowsListing(journal, 'agent-a')[0]?.agents ?? []

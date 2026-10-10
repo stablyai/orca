@@ -3,10 +3,8 @@
 // waits the lock out. One episode's give-up is never a latch: a commit or a signal re-arms it, and
 // a queued send given up on reads as not sent even when its stored hold cannot be written.
 
-import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session-wire'
-import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -23,55 +21,22 @@ import {
   eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
+import {
+  holdWriteLock,
+  longestStall,
+  releaseWriteLocks
+} from './structured-agent-session-write-lock.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
-let locker: Worker | undefined
 
 afterEach(async () => {
   vi.useRealTimers()
-  await locker?.terminate()
-  locker = undefined
+  await releaseWriteLocks()
   await rig?.dispose()
   rig = undefined
   vi.restoreAllMocks()
 })
-
-/** Another connection, on its own thread, holds the write lock for `ms`: this thread's waits
- *  cannot release it, as another process's could not. Resolves once the lock is held. */
-function holdWriteLock(stateDirectory: string, ms: number): Promise<{ released: Promise<void> }> {
-  const worker = new Worker(
-    `const { workerData, parentPort } = require('node:worker_threads')
-     const { DatabaseSync } = require('node:sqlite')
-     const db = new DatabaseSync(workerData.file)
-     db.exec('BEGIN IMMEDIATE')
-     parentPort.postMessage('locked')
-     setTimeout(() => { db.exec('ROLLBACK'); db.close(); parentPort.postMessage('released') }, workerData.ms)`,
-    { eval: true, workerData: { file: journalDatabasePath(stateDirectory), ms } }
-  )
-  locker = worker
-  let release: () => void = () => undefined
-  const released = new Promise<void>((resolve) => (release = resolve))
-  return new Promise((resolve) =>
-    worker.on('message', (message) => (message === 'locked' ? resolve({ released }) : release()))
-  )
-}
-
-/** The longest the main thread went without running a timer, while `run` ran. */
-async function longestStall(run: () => Promise<unknown>): Promise<number> {
-  let last = performance.now()
-  let longest = 0
-  const probe = setInterval(() => {
-    const now = performance.now()
-    longest = Math.max(longest, now - last)
-    last = now
-  }, 2)
-  try {
-    await run()
-    return Math.max(longest, performance.now() - last)
-  } finally {
-    clearInterval(probe)
-  }
-}
 
 const locked = () => Object.assign(new Error('database is locked'), { errcode: 5 })
 
@@ -98,7 +63,7 @@ describe("another connection's write lock", () => {
     })
     expect(performance.now() - started).toBeLessThan(150)
     expect(stall).toBeLessThan(60)
-    expect(reconciliation.owes(SESSION)).toBe(true)
+    expect(retryOwes(reconciliation, SESSION)).toBe(true)
     expect(turnState(current)).toBe('running')
 
     // A person's send waits the lock out (its own 5 s budget), never behind background work.
@@ -195,7 +160,7 @@ describe('an episode the retry gives up', () => {
     await settleTurns()
     // Ten rounds, then no timer: the set is kept, and nothing retries on its own.
     expect(attempts.mock.calls.length).toBe(given)
-    expect(current.host.collaboratorsForTests().reconciliation.owes(SESSION)).toBe(true)
+    expect(retryOwes(current.host.collaboratorsForTests().reconciliation, SESSION)).toBe(true)
     attempts.mockRestore()
     return attempts
   }
@@ -220,7 +185,7 @@ describe('an episode the retry gives up', () => {
       await settleTurns()
 
       expect(turnState(current)).toBe('interrupted')
-      expect(reconciliation.owes(SESSION)).toBe(false)
+      expect(retryOwes(reconciliation, SESSION)).toBe(false)
     }
   )
 })

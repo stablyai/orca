@@ -18,6 +18,7 @@ import {
   type StructuredAgentSessionLogger
 } from './structured-agent-session-logger'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
 
 export const SCAN_NOW = 1_800_000_000_000
 export const SCAN_CHATS = [
@@ -178,7 +179,8 @@ export async function scanTurnState(current: StructuredAgentSessionHost, session
 export async function scanIdle(current: StructuredAgentSessionHost, sessionIds: readonly string[]) {
   const { reconciliation } = current.collaboratorsForTests()
   await vi.waitFor(
-    () => expect(sessionIds.filter((sessionId) => reconciliation.owes(sessionId))).toEqual([]),
+    () =>
+      expect(sessionIds.filter((sessionId) => retryOwes(reconciliation, sessionId))).toEqual([]),
     { timeout: 10_000 }
   )
 }

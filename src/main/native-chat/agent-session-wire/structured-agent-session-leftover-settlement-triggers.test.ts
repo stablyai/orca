@@ -48,6 +48,7 @@ import {
   turnState,
   watchSettlementCommits
 } from './structured-agent-session-leftover-settlement.test-fixture'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
 
@@ -58,7 +59,7 @@ afterEach(async () => {
 })
 
 describe('an observed exit whose settlement the database refused', () => {
-  it('is settled by the worker in one commit, while the next send starts and delivers', async () => {
+  it('is settled by the retry in one commit, while the next send starts and delivers', async () => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
     const firstSend = await current.workingSend()
@@ -119,7 +120,7 @@ describe('an observed exit whose settlement the database refused', () => {
     expect(turnState(current)).toBe('interrupted')
     expect(commits()).toHaveLength(1)
     const settled = recoveredRows(database.db)
-    // The next start finds nothing left: the worker its end signals writes no row.
+    // The next start finds nothing left: the retry its end signals writes no row.
     expect((await sendText(current, 'next').result).ok).toBe(true)
     await vi.waitFor(() => expect(current.dispatch).toHaveBeenCalledTimes(2))
     await reconciled(current)
@@ -219,7 +220,7 @@ describe('the retry', () => {
       const { database } = await exitWhileSettlementFails(current)
       const reconciliation = current.host.collaboratorsForTests().reconciliation
       const attempts = vi.spyOn(currentJournal(current), 'appendPlannedLifecycleBatch')
-      expect(reconciliation.owes(SESSION)).toBe(true)
+      expect(retryOwes(reconciliation, SESSION)).toBe(true)
 
       await vi.advanceTimersByTimeAsync(990)
       await settleTurns()
@@ -246,7 +247,7 @@ describe('the retry', () => {
       expect(attempts).toHaveBeenCalledTimes(3)
       await vi.advanceTimersByTimeAsync(10)
       await settleTurns()
-      expect(reconciliation.owes(SESSION)).toBe(false)
+      expect(retryOwes(reconciliation, SESSION)).toBe(false)
       expect(turnState(current)).toBe('interrupted')
     } finally {
       vi.useRealTimers()
@@ -314,7 +315,7 @@ describe('a stale prompt', () => {
 })
 
 describe('a late write from an ended generation', () => {
-  it('is settled by the worker its commit wakes', async () => {
+  it('is settled by the retry its commit wakes', async () => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
     // Answered, so the exit leaves nothing to settle and writes no row at the moved fence.
@@ -359,7 +360,7 @@ describe('startup', () => {
     await current.crashReloadHostProcess()
     await reconciled(current)
     const database = openTestJournalHostDatabase(current.root)
-    // The worker opened the chat itself, so it closes it again: nothing else had it open.
+    // The retry opened the chat itself, so it closes it again: nothing else had it open.
     await vi.waitFor(() =>
       expect(current.host.collaboratorsForTests().sessions.has(SESSION)).toBe(false)
     )

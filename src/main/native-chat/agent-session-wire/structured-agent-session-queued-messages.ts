@@ -8,10 +8,9 @@
 
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import {
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
+import type {
+  AgentSessionSendResult,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
@@ -31,6 +30,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import type { StructuredAgentSessionRetry } from './structured-agent-session-reconciliation-retry'
 import { QueuedSendAbandonment } from './structured-agent-session-queued-abandonment'
+import { backgroundJournalWrites } from './structured-agent-session-background-writes'
 import {
   structuredAgentSessionHostInstance,
   structuredQueuePauses
@@ -257,7 +257,9 @@ export type QueuedMessageDrainDeps = {
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
   private disposed = false
-  private readonly abandoned = new QueuedSendAbandonment()
+  private readonly abandoned = new QueuedSendAbandonment((sessionId, journal) =>
+    this.deps.publish(sessionId, journal)
+  )
 
   constructor(private readonly deps: QueuedMessageDrainDeps) {}
 
@@ -281,16 +283,13 @@ export class StructuredAgentSessionQueuedMessageDrain {
     this.abandoned.clear(sessionId)
   }
 
-  /** The retry gave up on the chat's automatic send: its card reads as not sent at once, and the
-   *  stored hold is tried once; should that fail too, this mark still shows it. */
+  /** The retry gave up on the chat's automatic send. */
   abandon(sessionId: string): void {
     const journal = this.deps.sessions.get(sessionId)?.journal
     const next = journal ? oldestActionableQueuedMessage(journal) : null
-    if (!journal || !next) {
-      return
+    if (journal && next) {
+      this.abandoned.mark(sessionId, next.messageId, journal)
     }
-    this.abandoned.mark(sessionId, next.messageId, journal.queuedMessages)
-    this.deps.publish(sessionId, journal)
   }
 
   schedule(sessionId: string): void {
@@ -322,21 +321,22 @@ export class StructuredAgentSessionQueuedMessageDrain {
         this.scheduled.delete(sessionId)
         return this.step(sessionId, false)
       })
+      // Another connection holds the database: the retry sends it in its next round, nothing shown.
+      .then((outcome) => outcome === 'contended' && this.deps.retry().sendContended(sessionId))
       .catch((error: unknown) => {
         this.scheduled.delete(sessionId)
         this.warn(sessionId, error)
       })
   }
 
-  /** The retry's own send of the chat's next card (`StructuredAgentSessionRetry`): whether another
-   *  connection's lock refused it, which ends the retry's round. */
+  /** The retry's own send of the chat's next card (`StructuredAgentSessionRetry`), in the chat's
+   *  lane, which its visit already holds: whether another connection's lock refused it, which ends
+   *  the retry's round. */
   sendForRetry(sessionId: string): Promise<'contended' | 'done'> {
-    return this.deps
-      .serialize(sessionId, () => this.step(sessionId, true))
-      .catch((error: unknown) => {
-        this.warn(sessionId, error)
-        return 'done' as const
-      })
+    return this.step(sessionId, true).catch((error: unknown) => {
+      this.warn(sessionId, error)
+      return 'done' as const
+    })
   }
 
   private warn(sessionId: string, error: unknown): void {
@@ -354,28 +354,37 @@ export class StructuredAgentSessionQueuedMessageDrain {
       return 'done'
     }
     const journal = session.journal
+    // The automatic send is bookkeeping no person waits on: it writes only through this handle.
+    const writes = backgroundJournalWrites(journal)
     if (journal.queuedMessages.settlementOwed() || journal.queuedMessages.deliveredByEchoOwed()) {
       // A live per-row hook was skipped; heal now, before a draft sends, rather than at reopen.
-      await journal.queuedMessages.settleOwed().catch((error: unknown) => {
+      try {
+        await writes.queuedMessages.settleOwed()
+      } catch (error) {
+        if (isSqliteContentionFailure(error)) {
+          return 'contended'
+        }
         this.deps.logger.warn('settling owed queued-message bookkeeping failed', {
           scope: 'queued-settle-owed',
           sessionId,
           error
         })
-      })
+      }
     }
     const fence = this.deps.conversationFence(sessionId)
     // Whatever clears a hold publishes or commits, which re-derives this step.
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
-    const next = work ? nextStructuredQueuedMessage({ journal, record, work }) : null
-    if (this.disposed || !next || (!forRetry && this.deps.retry().sendWaits(sessionId))) {
+    // The retry's own attempt sends what the drain alone waits on (`waits`).
+    const drainWaits = (messageId: string) => !forRetry && this.waits(sessionId, messageId)
+    const next = work ? nextStructuredQueuedMessage({ journal, record, work, drainWaits }) : null
+    if (this.disposed || !next) {
       return 'done'
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
     try {
-      await journal.appendSubmission(
+      await writes.appendSubmission(
         {
           clientMessageId: submissionId,
           // The queue's own automatic send, never kept as a card by a restart or a close.
@@ -390,8 +399,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
           expect: 'waiting',
           settledByOp: null,
           hostInstance: structuredAgentSessionHostInstance(),
-          yieldsToPause: true,
-          background: true
+          yieldsToPause: true
         }
       )
     } catch (error) {
@@ -399,19 +407,12 @@ export class StructuredAgentSessionQueuedMessageDrain {
         // Lost a race with a Send-now, a Delete or a Stop; their transition stands.
         return 'done'
       }
-      // Another connection holds the database: the retry sends it in its next round, nothing shown.
       if (isSqliteContentionFailure(error)) {
-        if (!forRetry) {
-          this.deps.retry().sendContended(sessionId)
-        }
         return 'contended'
       }
-      // A refusal: the draft stays waiting, held with the marker on the card (a stored fact, so it
-      // survives eviction and restart). The hold's own commit notification publishes it. An
-      // explicit Send retries.
-      await journal.queuedMessages
-        .hold({ messageIds: [next.messageId], reason: QUEUED_MESSAGE_PAUSED_SEND_FAILED })
-        .catch(() => {})
+      // A refusal: the draft stays waiting, shown as not sent and held (a stored fact once its hold
+      // lands, so it survives eviction and restart). An explicit Send retries.
+      this.abandoned.mark(sessionId, next.messageId, journal)
       throw error
     }
     this.abandoned.clear(sessionId)

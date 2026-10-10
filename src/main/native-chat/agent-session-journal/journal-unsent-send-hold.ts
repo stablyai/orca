@@ -89,11 +89,11 @@ export async function holdUnsentSends(
     /** In place of the queued sends: those a child that ended before it answered its start was
      *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
     unrun?: true
-    /** Bookkeeping no person waits on (`JournalWriteOptions`): contention stops it, untouched. */
-    background?: true
+    /** What the rows are written through: the journal, or bookkeeping's background handle. */
+    writes?: Pick<AgentSessionJournal, 'resolveDispatch'>
   }
 ): Promise<number | null> {
-  const background = input.background ? { background: input.background } : {}
+  const writes = input.writes ?? journal
   const { hold } = input
   const unsent = journal
     .submissions()
@@ -168,16 +168,14 @@ export async function holdUnsentSends(
     }
     try {
       // The send names its card in the same row, so no surface draws it once the card is gone.
-      await journal.resolveDispatch(
-        {
-          ...(card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject),
-          ...background
-        },
+      await writes.resolveDispatch(
+        card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject,
         keep
       )
     } catch (error) {
-      // Another connection holds the database: nothing was written, so nothing is lost by waiting.
-      if (input.background && isSqliteContentionFailure(error)) {
+      // Another connection holds the database: nothing was written, and the fallback would meet
+      // the same lock, so the caller tries again.
+      if (isSqliteContentionFailure(error)) {
         throw error
       }
       if (!keep) {
@@ -192,9 +190,7 @@ export async function holdUnsentSends(
         cause: hold.cause,
         error: error instanceof Error ? error.message : String(error)
       })
-      await journal
-        .resolveDispatch({ ...reject, ...background })
-        .catch((fallback: unknown) => failures.push(fallback))
+      await writes.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
     }
   }
   if (failures.length > 0) {

@@ -1,6 +1,7 @@
 // The one settlement of what ended generations left unfinished. An observed exit runs it first,
-// with what it saw; the chat's reconciliation worker runs it after every generation end and at
-// startup (`structured-agent-session-reconciliation-worker.ts`). Opening a chat never runs it.
+// with what it saw; the host's retry runs it after every generation end and at startup
+// (`structured-agent-session-reconciliation-retry.ts`). Opening a chat never runs it. Bookkeeping
+// no person waits on, so it writes only through a background handle (`BackgroundSettlementWrites`).
 //
 // Re-derived each time from the journal, the lease and this host's sight of an exit: every turn,
 // call, prompt, reasoning row, subagent roster entry and background task whose execution belongs
@@ -22,6 +23,7 @@ import {
   type StaleStructuredAgentSessionStateJournal
 } from './structured-agent-session-stale-state-settlement'
 import type { DeadGenerationJournal } from './structured-agent-session-unfinished-work'
+import type { BackgroundSettlementWrites } from './structured-agent-session-background-writes'
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import {
@@ -40,7 +42,9 @@ export type StructuredAgentSessionExitSettlement = Omit<
 export type StructuredAgentSessionLeftoverSettlementInput = {
   store: StructuredAgentSessionLeftoverStore
   sessionId: string
+  /** Read for the plan; the settlement's write goes through `writes`. */
   journal: DeadGenerationJournal & StaleStructuredAgentSessionStateJournal
+  writes: BackgroundSettlementWrites
   exit?: StructuredAgentSessionExitSettlement
   /** This host's sight of a child's root exit, which ends its generation even when the release
    *  write failed (`StructuredAgentSessionHostSession.lastEndedChild`). */
@@ -49,8 +53,6 @@ export type StructuredAgentSessionLeftoverSettlementInput = {
    *  proven-dead owner clears it, and a later release writes its own): only what that generation
    *  and earlier ones left is settled, judged by it. Absent: the lease's own evidence judges. */
   proof?: AgentSessionDeathEvidence & { ownerFence: number }
-  /** Bookkeeping no person waits on (`JournalWriteOptions`). */
-  background?: true
 }
 
 export type StructuredAgentSessionLeftoverSettlement =
@@ -83,13 +85,12 @@ export async function settleStructuredAgentSessionLeftovers(
         : (liveFence ?? fence + 1)
     const failureTextContext = structuredAgentSessionFailureWordsContext(record)
     let planned = 0
-    await journal.appendPlannedLifecycleBatch({
+    await input.writes.appendPlannedLifecycleBatch({
       settlementId: exit
         ? `dead-generation:${exit.settlementId}`
         : `${STALE_SESSION_ROW_PREFIX}${sessionId}:${fence}:${proof ? `proof-${proof.ownerFence}:` : ''}seq-${journal.cursor().sequence}`,
       fence,
       recovered: true,
-      ...(input.background ? { background: true } : {}),
       plan: () => {
         const exited = exit
           ? planStructuredAgentSessionDeadGeneration(

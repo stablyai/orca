@@ -1,5 +1,5 @@
 // A turn an exited agent left running, whose settlement write failed, is settled by the chat's
-// reconciliation worker once storage takes it, or by the next startup. A reader opening the chat
+// retry once storage takes it, or by the next startup. A reader opening the chat
 // in between writes nothing, and the turn holds nothing: it is an ended generation's.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +16,7 @@ import {
   sweepOnce,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
+import { retryIdle, retryOwes } from './structured-agent-session-retry.test-fixture'
 
 let rig: RestTestRig
 
@@ -83,12 +84,12 @@ describe('a turn its gone agent left running', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })
 
-  it('is settled by its chat’s worker once storage takes the write, with no send; a reader writes nothing meanwhile', async () => {
-    // The exit's own write and the worker's first attempt both fail; the backoff's retry lands.
+  it('is settled by the host retry once storage takes the write, with no send; a reader writes nothing meanwhile', async () => {
+    // The exit's own write and the retry's first attempt both fail; the backoff's retry lands.
     await exitWithUnwrittenSettlement(2)
     const { reconciliation } = rig.host.collaboratorsForTests()
-    await reconciliation.idle(SESSION)
-    expect(reconciliation.owes(SESSION)).toBe(true)
+    await retryIdle(reconciliation, SESSION)
+    expect(retryOwes(reconciliation, SESSION)).toBe(true)
     expect(await workingTurnState()).toBe('running')
     const cursor = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.cursor()
 
@@ -105,7 +106,7 @@ describe('a turn its gone agent left running', () => {
     )
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
     // Nothing owed once it landed: the idle sweep closes the chat as it would any other.
-    await reconciliation.idle(SESSION)
+    await retryIdle(reconciliation, SESSION)
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(false)

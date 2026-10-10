@@ -15,7 +15,7 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
-import type { JournalWriteOptions } from '../agent-session-journal/journal-database'
+import type { BackgroundLeaseWrites } from './structured-agent-session-background-writes'
 import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-agent-session-lease-release'
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
@@ -124,12 +124,13 @@ export function structuredAgentSessionEndedChildHoldsLease(
 }
 
 /** Writes the release a proven exit allows when the exit handler could not: a start and the
- *  handle's close re-derive it, and a failure is reported, never anyone's refusal. Resolves
- *  whether the lease still names that child. */
+ *  handle's close re-derive it, and a failure is reported, never anyone's refusal. The retry
+ *  writes it through its background handle, where another connection's lock throws for its next
+ *  round. Resolves whether the lease still names that child. */
 export async function releaseLeaseOfEndedStructuredAgentSessionChild(
   context: Pick<StructuredAgentSessionLifetimeContext, 'deps' | 'sessions' | 'now'>,
   sessionId: string,
-  options?: JournalWriteOptions
+  background?: BackgroundLeaseWrites
 ): Promise<boolean> {
   const ended = context.sessions.get(sessionId)?.lastEndedChild
   if (!ended || !structuredAgentSessionEndedChildHoldsLease(context, sessionId)) {
@@ -137,14 +138,13 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
   }
   await releaseStoredStructuredAgentSessionOwnerAfterExit({
     store: context.deps.store,
+    writes: background ?? context.deps.store,
     sessionId,
     expectedFence: ended.fence,
     now: context.now(),
-    ...(ended.reason ? { exitReason: ended.reason } : {}),
-    ...options
+    ...(ended.reason ? { exitReason: ended.reason } : {})
   }).catch((error: unknown) => {
-    // Background work stops on contention, for its retry; anything else is only reported.
-    if (options?.background && isSqliteContentionFailure(error)) {
+    if (background && isSqliteContentionFailure(error)) {
       throw error
     }
     context.deps.logger.warn("releasing an exited agent's lease failed", {

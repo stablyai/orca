@@ -51,8 +51,6 @@ export type StructuredAgentSessionReconciliationSignal = {
   restate?: boolean
 }
 
-const BACKGROUND = { background: true } as const
-
 export class StructuredAgentSessionRetry {
   private readonly owed = new Map<string, OwedChat>()
   /** Where this process first opened each chat's journal: every send at or before it was accepted
@@ -81,7 +79,13 @@ export class StructuredAgentSessionRetry {
       firstOpened: this.firstOpened,
       settle: (sessionId, chat) => this.settle(sessionId, chat),
       warn: (sessionId, error) => this.warn(sessionId, error),
-      inTurn: (run) => this.inTurn(run)
+      inTurn: (run) => this.inTurn(run),
+      // Once the lane's own bookkeeping has cleared too, so the next visit finds it free.
+      afterLane: (sessionId) =>
+        void context
+          .serialize(sessionId, async () => undefined)
+          .then(() => yieldToEvents())
+          .then(() => this.roundSoon())
     }
     this.unsubscribe = context.deps.store.onGenerationEnded((ended) =>
       this.signal(ended.sessionId, { evidence: ended.evidence })
@@ -126,12 +130,14 @@ export class StructuredAgentSessionRetry {
     }
   }
 
-  /** The queue's automatic send met another connection's lock: the next round sends it again. */
+  /** The queue's automatic send met another connection's lock: the next round sends it again.
+   *  Owed, not a failure: only a round counts against the budget, however many sends collided. */
   sendContended = (sessionId: string): void => {
     if (!this.disposed) {
       this.owe(sessionId).send = true
+      this.contended = true
       this.context.publishGenerationEnded(sessionId)
-      this.roundEnded(true, true)
+      this.roundSoon()
     }
   }
 
@@ -144,16 +150,6 @@ export class StructuredAgentSessionRetry {
     return chat?.due ? new Promise((resolve) => chat.attempted.push(resolve)) : Promise.resolve()
   }
 
-  /** Whether a visit is owed: something was signalled, or failed, and has not settled. */
-  owes = (sessionId: string): boolean => this.owed.get(sessionId)?.due === true
-
-  /** Resolves once the chat owes nothing, or waits out a failed round's backoff. */
-  idle = async (sessionId: string): Promise<void> => {
-    while (this.owes(sessionId) && (this.running || this.timer === 'soon' || this.failures === 0)) {
-      await this.attempted(sessionId)
-    }
-  }
-
   /** Shutdown: the timer stops and every slot wait ends; a visit already writing finishes,
    *  tracked, and one that has not started work starts none. */
   dispose = (): void => {
@@ -164,10 +160,6 @@ export class StructuredAgentSessionRetry {
       chat.slotWait?.abort()
       this.settle(sessionId, chat)
     }
-  }
-
-  processOpened(sessionId: string): AgentJournalCursor | undefined {
-    return this.firstOpened.get(sessionId)
   }
 
   private owe(sessionId: string): OwedChat {
@@ -191,6 +183,15 @@ export class StructuredAgentSessionRetry {
     this.contended = false
     if (!this.running && this.timer !== 'soon') {
       this.stopTimer()
+      this.roundSoon()
+    }
+  }
+
+  /** A round now unless one runs, is due or waits out a backoff; the budget stays as it is. */
+  private roundSoon(): void {
+    if (this.running) {
+      this.again = true
+    } else if (!this.disposed && this.timer === null) {
       this.timer = 'soon'
       queueMicrotask(() => void this.round())
     }
@@ -205,15 +206,20 @@ export class StructuredAgentSessionRetry {
     this.again = false
     this.stopped = false
     let failed = false
+    let contended = false
     const end = (visit: Visit) => {
       failed ||= visit === 'failed' || visit === 'contended'
+      contended ||= visit === 'contended'
       this.stopped ||= visit === 'contended'
       this.again ||= visit === 'again'
     }
     if (this.context.deps.store.listRecords().some((record) => record.lease.unreconciled)) {
-      // Store-wide: once a round, for every chat, never once per chat.
-      if (!(await this.context.reconcile('retry', BACKGROUND))) {
-        end('contended')
+      // Store-wide: once a round, for every chat, never once per chat. No chat is visited while a
+      // lease is unreconciled.
+      const reconciled = await this.context.reconcile()
+      if (reconciled !== 'settled') {
+        end(reconciled)
+        this.stopped = true
       }
     }
     const due = [...this.owed].filter(([, chat]) => chat.due)
@@ -226,7 +232,7 @@ export class StructuredAgentSessionRetry {
       })
     )
     this.running = false
-    this.roundEnded(failed, this.stopped)
+    this.roundEnded(failed, contended)
     // After the round's outcome is set, so a waiter reads its backoff, never a round still running.
     for (const [, chat] of due) {
       chat.attempted.splice(0).forEach((resolve) => resolve())

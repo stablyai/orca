@@ -1,5 +1,4 @@
-// The reconciliation workers' few background slots, for a chat's replay and its startup recovery
-// step: outside every chat's lane, so a send or a read never waits behind the scan. A chat a reader
+// The host retry's few background slots, for a chat's replay and its startup recovery step: outside every chat's lane, so a send or a read never waits behind the scan. A chat a reader
 // opened goes ahead of the rest; a quit ends every wait, and a task it has not started never runs.
 
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'

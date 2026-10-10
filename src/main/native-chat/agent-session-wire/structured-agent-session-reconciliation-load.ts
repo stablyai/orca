@@ -1,6 +1,6 @@
-// The reconciliation worker's own read of a chat nobody has open: replayed outside the chat's lane,
-// and never indexed as the chat's conversation, so what its pass writes reaches no reader and no
-// status surface. A reader that opens the chat replays it fresh; the worker then uses theirs.
+// The host retry's own read of a chat nobody has open: replayed outside the chat's lane, and never
+// indexed as the chat's conversation, so what its pass writes reaches no reader and no status
+// surface. A reader that opens the chat replays it fresh; the retry then uses theirs.
 
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'

@@ -40,6 +40,7 @@ import {
   type QueuedRigProviderOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
 type RigSendOptions = { internal?: true; from?: AgentMessageSource }
@@ -234,12 +235,12 @@ export async function createQueuedMessageTestRig(
   /** A host process that dies with no close: a new process loads the same state directory, its
    *  records with it, and runs its startup as the runtime does before any client reaches it: the
    *  restart reconcile and its settlement, then the restore of the chat's tab, which decides a
-   *  lease latched in recovery; that decision's release wakes the chat's worker once more. */
+   *  lease latched in recovery; that decision's release wakes the retry once more. */
   async function crashRestartHostProcess(beforeStartup?: () => unknown): Promise<void> {
     await crashReloadHostProcess(beforeStartup)
     await host.restoreReadableSessions([SESSION])
     await host.startupSettled()
-    await host.collaboratorsForTests().reconciliation.idle(SESSION)
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
   }
 
   /** The same crash, with only the restart reconcile and its settlement: no tab is restored.

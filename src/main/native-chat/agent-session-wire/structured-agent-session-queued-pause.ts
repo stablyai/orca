@@ -6,7 +6,6 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { DerivedQueuePause } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { JournalWriteOptions } from '../agent-session-journal/journal-host-database'
 import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 
 /** A per-process id, minted once per host process like the runtime's own
@@ -36,20 +35,20 @@ export function structuredQueuePauses(journal: PauseJournal): DerivedQueuePause[
  *  chat with cards the earlier process left, and so does a person's close: the idle sweep never closes a chat with cards waiting, so its
  *  eviction never reopens one. `since`: where the chat stopped, for a mark written after a send
  *  that came later, which must still lift it. Bookkeeping, so a failure is reported and never
- *  thrown; the pause then starts where the mark would have gone, holding no less. A background
- *  mark (`JournalWriteOptions`) that met another connection's lock throws, ending the retry's round. */
+ *  thrown; the pause then starts where the mark would have gone, holding no less. One written
+ *  through the retry's background handle that met another connection's lock throws, ending the
+ *  retry's round. */
 export async function markStructuredQueueReopen(
   sessionId: string,
-  journal: Pick<AgentSessionJournal, 'markQueueReopen'>,
+  journal: Pick<AgentSessionJournal, 'markQueueReopen'> & { background?: true },
   fence: number,
   logger: StructuredAgentSessionLogger,
-  since?: number,
-  options?: JournalWriteOptions
+  since?: number
 ): Promise<void> {
   try {
-    await journal.markQueueReopen(fence, since, options)
+    await journal.markQueueReopen(fence, since)
   } catch (error) {
-    if (options?.background && isSqliteContentionFailure(error)) {
+    if (journal.background && isSqliteContentionFailure(error)) {
       throw error
     }
     logger.warn('marking a reopened queue failed', {

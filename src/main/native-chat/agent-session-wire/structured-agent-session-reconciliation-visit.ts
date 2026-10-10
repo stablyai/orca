@@ -18,22 +18,31 @@ import type { StructuredAgentSessionReconciliationSlotWaiter } from './structure
 
 export type StructuredAgentSessionRetryContext = StructuredAgentSessionReconciliationPassContext & {
   deps: StructuredAgentSessionReconciliationPassContext['deps']
-  /** The chat's action lane. */
+  /** The chat's action lane, and whether anything holds it now. */
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  laneBusy: (sessionId: string) => boolean
   /** Lets a quit wait for a visit already writing. */
   track: <T>(operation: Promise<T>) => Promise<T>
   /** Publishes what is current now and wakes the queued-card drain. */
   publishGenerationEnded: (sessionId: string, options?: { restate?: boolean }) => void
-  /** Startup's store-wide lease reconcile (`createReaderReconcile`): whether every lease settled. */
-  reconcile: (sessionId: string, options: { background: true }) => Promise<boolean>
-  /** The queue's automatic send of the chat's next card, and an episode giving up on it
-   *  (`StructuredAgentSessionQueuedMessageDrain.sendForRetry`, `.abandon`). */
+  /** Startup's store-wide lease reconcile, as background bookkeeping: whether every lease settled,
+   *  or why not. */
+  reconcile: () => Promise<'settled' | 'contended' | 'failed'>
+  /** The queue's automatic send of the chat's next card, inside the lane the visit holds, and an
+   *  episode giving up on it (`StructuredAgentSessionQueuedMessageDrain.sendForRetry`, `.abandon`). */
   sendQueued: (sessionId: string) => Promise<'contended' | 'done'>
   abandonSend: (sessionId: string) => void
 }
 
-/** `again`: it wrote, or was signalled meanwhile, so the next round verifies nothing is left. */
-export type StructuredAgentSessionVisit = 'settled' | 'again' | 'parked' | 'failed' | 'contended'
+/** `again`: it wrote, or was signalled meanwhile, so the next round verifies nothing is left.
+ *  `busy`: a person's operation held its lane, so it waits, owed, for that lane to free. */
+export type StructuredAgentSessionVisit =
+  | 'settled'
+  | 'again'
+  | 'parked'
+  | 'failed'
+  | 'contended'
+  | 'busy'
 
 /** A chat with something owed, until a visit finds nothing left. */
 export type StructuredAgentSessionOwedChat = StructuredAgentSessionReconciliationSlotWaiter & {
@@ -60,6 +69,8 @@ export type StructuredAgentSessionVisitHost = {
   warn: (sessionId: string, error: unknown) => void
   /** The round's one-at-a-time turn for a chat's writes; null once the round stopped. */
   inTurn: <T>(run: () => Promise<T>) => Promise<T | null>
+  /** A round once the chat's busy lane frees. */
+  afterLane: (sessionId: string) => void
 }
 
 type Chat = StructuredAgentSessionOwedChat
@@ -80,9 +91,6 @@ export async function visitStructuredAgentSessionOwedChat(
       }
       return host.settle(sessionId, chat)
     }
-    if (store.getRecord(sessionId)?.lease.unreconciled) {
-      return 'failed'
-    }
     if (!context.sessions.has(sessionId) && !chat.loaded) {
       const loaded = await loadStructuredAgentSessionForReconciliation(
         context.deps,
@@ -97,6 +105,10 @@ export async function visitStructuredAgentSessionOwedChat(
       }
     }
     const visit = await host.inTurn(() => write(host, sessionId, chat))
+    if (visit === null) {
+      // The round stopped before this chat's turn: its read is not kept open until the next.
+      dropStructuredAgentSessionLoaded(chat)
+    }
     return visit === 'settled' ? host.settle(sessionId, chat) : visit
   } catch (error) {
     host.warn(sessionId, error)
@@ -105,23 +117,30 @@ export async function visitStructuredAgentSessionOwedChat(
 }
 
 /** The chat's writes, in its lane: the pass, then (d) once nothing else of it is due, the send it
- *  owes, with the card named again. */
+ *  owes, with the card named again. Never waits for a lane inside the round's turn: a person's
+ *  operation holding it leaves the chat owed for when it frees. */
 async function write(
   host: StructuredAgentSessionVisitHost,
   sessionId: string,
   chat: Chat
 ): Promise<Visit> {
   const { context } = host
-  const visit = await context.serialize(sessionId, () => pass(host, sessionId, chat))
-  if ((visit !== 'settled' && visit !== 'parked') || !chat.send) {
+  if (context.laneBusy(sessionId)) {
+    host.afterLane(sessionId)
+    return 'busy'
+  }
+  return context.serialize(sessionId, async () => {
+    const visit = await pass(host, sessionId, chat)
+    if ((visit !== 'settled' && visit !== 'parked') || !chat.send) {
+      return visit
+    }
+    if ((await context.sendQueued(sessionId)) === 'contended') {
+      return 'contended'
+    }
+    delete chat.send
+    context.publishGenerationEnded(sessionId)
     return visit
-  }
-  if ((await context.sendQueued(sessionId)) === 'contended') {
-    return 'contended'
-  }
-  delete chat.send
-  context.publishGenerationEnded(sessionId)
-  return visit
+  })
 }
 
 /** Where this process first opened the chat, if this is the first. */

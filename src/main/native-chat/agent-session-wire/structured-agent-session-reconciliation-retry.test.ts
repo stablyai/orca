@@ -38,6 +38,8 @@ import {
   turnState,
   watchSettlementCommits
 } from './structured-agent-session-leftover-settlement.test-fixture'
+import { retryIdle, retryOwes } from './structured-agent-session-retry.test-fixture'
+import { backgroundSettlementWrites } from './structured-agent-session-background-writes'
 
 let rig: QueuedMessageTestRig | undefined
 
@@ -47,7 +49,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function worker(current: QueuedMessageTestRig) {
+function retryOf(current: QueuedMessageTestRig) {
   return current.host.collaboratorsForTests().reconciliation
 }
 
@@ -64,7 +66,7 @@ describe('a retry dies', () => {
       openTestJournalHostDatabase(current.root).db.exec(REJECT_RECOVERED_ROWS)
     )
     const database = openTestJournalHostDatabase(current.root)
-    expect(worker(current).owes(SESSION)).toBe(true)
+    expect(retryOwes(retryOf(current), SESSION)).toBe(true)
     expect(turnState(current)).toBe('running')
     database.db.exec('DROP TRIGGER reject_recovered')
 
@@ -73,7 +75,8 @@ describe('a retry dies', () => {
       await settleStructuredAgentSessionLeftovers({
         store: current.store,
         sessionId: SESSION,
-        journal: currentJournal(current)
+        journal: currentJournal(current),
+        writes: backgroundSettlementWrites(currentJournal(current))
       })
     ).toMatchObject({ ok: true })
     expect(turnState(current)).toBe('unverifiable')
@@ -113,7 +116,7 @@ describe('a retry dies', () => {
 
     current.host.stopDelivery()
 
-    expect(worker(current).owes(SESSION)).toBe(false)
+    expect(retryOwes(retryOf(current), SESSION)).toBe(false)
     await new Promise((resolve) => setTimeout(resolve, 1_500))
     expect(recoveredRows(database.db)).toEqual([])
     expect(turnState(current)).toBe('running')
@@ -121,7 +124,7 @@ describe('a retry dies', () => {
 })
 
 describe('an observed exit whose release write failed', () => {
-  it('is Working for no reader at once, restated with no row, and the worker owes the release until it lands', async () => {
+  it('is Working for no reader at once, restated with no row, and the retry owes the release until it lands', async () => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
     await current.workingSend()
@@ -164,8 +167,8 @@ describe('an observed exit whose release write failed', () => {
     // item plan never retires it.
     database.db.exec('DROP TRIGGER reject_recovered')
     await vi.waitFor(() => expect(turnState(current)).toBe('interrupted'), { timeout: 10_000 })
-    await worker(current).idle(SESSION)
-    expect(worker(current).owes(SESSION)).toBe(true)
+    await retryIdle(retryOf(current), SESSION)
+    expect(retryOwes(retryOf(current), SESSION)).toBe(true)
     expect(current.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
 
     release.mockRestore()
@@ -184,7 +187,7 @@ describe('a journal no retry can load', () => {
     ['damaged', '}{'],
     ['saved by a newer Orca', null]
   ] as const)(
-    '%s: the startup worker retires instead of replaying it again',
+    '%s: the startup retry settles it instead of replaying it again',
     async (_why, json) => {
       // The owner is proven gone at the restart, so no recovery waits on a person's attach.
       rig = await createQueuedMessageTestRig({
@@ -212,7 +215,7 @@ describe('a journal no retry can load', () => {
         })
       })
 
-      expect(worker(current).owes(SESSION)).toBe(false)
+      expect(retryOwes(retryOf(current), SESSION)).toBe(false)
       await new Promise((resolve) => setTimeout(resolve, 1_200))
       expect(opens).toBe(1)
     }
@@ -255,7 +258,7 @@ describe('the reopen mark after a restart', () => {
 })
 
 describe("an ended generation's closing tail", () => {
-  it('lands at its own fence after the exit settled, and its worker settles what it left running', async () => {
+  it('lands at its own fence after the exit settled, and the retry settles what it left running', async () => {
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
     await current.workingSend()
@@ -285,7 +288,7 @@ describe("an ended generation's closing tail", () => {
     )
 
     expect(currentJournal(current).itemBody(agentJournalItemKey(tail(1)))).not.toBeNull()
-    // Below the moved fence, so its commit woke the worker, which settles it by the exit's proof.
+    // Below the moved fence, so its commit woke the retry, which settles it by the exit's proof.
     await vi.waitFor(() =>
       expect(
         readAgentJournalTurn(

@@ -225,7 +225,7 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
-  it('never stops a worker whose orchestration dispatch is open, and stops it once it settles (P2-19 i)', async () => {
+  it('never stops the retry whose orchestration dispatch is open, and stops it once it settles (P2-19 i)', async () => {
     await rig.dispose()
     let open = true
     const hasOpenDispatch = vi.fn(() => open)

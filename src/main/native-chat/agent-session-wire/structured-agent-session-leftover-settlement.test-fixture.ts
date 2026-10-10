@@ -33,6 +33,7 @@ import {
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { retryIdle, retryOwes } from './structured-agent-session-retry.test-fixture'
 
 export const TURN: AgentJournalItemIdentity = {
   provider: 'codex',
@@ -128,8 +129,8 @@ export async function leaveUnfinishedWork(
 }
 
 /** The child dies on its own while the database refuses every settlement row: the exit releases
- *  its lease (proof written, fence moved) and its work stays saved as running. The chat's
- *  reconciliation worker is left backing off. */
+ *  its lease (proof written, fence moved) and its work stays saved as running. The host's
+ *  retry is left backing off. */
 export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
   const context = current.host.collaboratorsForTests()
   const session = context.sessions.get(SESSION)
@@ -150,6 +151,8 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
     acquisitionGeneration: child.generation
   })
   await context.serialize(SESSION, async () => {})
+  // The retry's first visit waited for the exit's lane; it fails too, and backs off.
+  await context.reconciliation.attempted(SESSION)
   expect(session.child).toBeNull()
   expect(current.store.getRecord(SESSION)?.lease).toMatchObject({
     claimStatus: 'released',
@@ -249,10 +252,11 @@ export function watchSettlementCommits(): () => JournalRow[][] {
     )
 }
 
-/** Once the chat's reconciliation worker has nothing owed: it retired. */
+/** Once the host's retry owes the chat nothing. */
 export function reconciled(current: QueuedMessageTestRig, timeout = 10_000): Promise<void> {
   return vi.waitFor(
-    () => expect(current.host.collaboratorsForTests().reconciliation.owes(SESSION)).toBe(false),
+    () =>
+      expect(retryOwes(current.host.collaboratorsForTests().reconciliation, SESSION)).toBe(false),
     { timeout }
   )
 }
@@ -278,7 +282,7 @@ export function logEveryWrite(db: Database.Database): () => string[] {
 }
 
 /** Startup as the runtime runs it, on any host: the restart reconcile, then the scan of every chat
- *  it begins, with no stored mark of what is owed, until the chat's worker is idle. */
+ *  it begins, with no stored mark of what is owed, until the host's retry is idle. */
 export async function startUpHost(
   host: Pick<
     StructuredAgentSessionHost,
@@ -287,11 +291,11 @@ export async function startUpHost(
 ): Promise<void> {
   await host.reconcileRestartLeases()
   await host.startupSettled()
-  await host.collaboratorsForTests().reconciliation.idle(SESSION)
+  await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
 }
 
 /** Startup as the runtime runs it: the restart reconcile, then the scan of every chat it begins,
- *  until the chat's worker has nothing owed. */
+ *  until the host's retry owes it nothing. */
 export async function startUp(
   current: QueuedMessageTestRig,
   host: Pick<StructuredAgentSessionHost, 'reconcileRestartLeases' | 'startupSettled'> = current.host

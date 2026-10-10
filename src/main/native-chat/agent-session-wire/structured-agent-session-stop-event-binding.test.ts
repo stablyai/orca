@@ -122,7 +122,7 @@ async function stopOfStart(options: { held?: true } = {}): Promise<string | unde
 /** Orchestration mail after the Stop starts a new child and its turn runs. */
 async function mailTurn(): Promise<void> {
   const handedOver = rig.dispatch.mock.calls.length
-  const mail = rig.send('mail for the worker')
+  const mail = rig.send('mail for the retry')
   await mail.result
   await rig.proveStart()
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(handedOver + 1))
@@ -167,7 +167,7 @@ describe('a Stop of a start that never landed binds no later turn', () => {
 
   it('reads a mail turn the child end cut, with no verdict of its own, as news', async () => {
     await stopOfStart()
-    const mail = rig.send('mail for the worker')
+    const mail = rig.send('mail for the retry')
     await mail.result
     await turnOpenedBy(mail.id)
 

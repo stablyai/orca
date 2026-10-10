@@ -1,6 +1,6 @@
 // What startup decides about a lease latched in recovery: nothing, for a chat nobody looks at.
 // Deciding it signals a process that may still run, so only the visible-tab restore, a start or an
-// attach does; that decision's release then wakes the chat's worker, which settles what it left.
+// attach does; that decision's release then wakes the host's retry, which settles what it left.
 // What the earlier process left unsent is kept as a card meanwhile, as every open did on main.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -83,7 +83,7 @@ describe('a hidden chat whose agent outlived the earlier process', () => {
 
     expect(stopOwnerProcess).toHaveBeenCalledWith(OWNER_PID, 'SIGTERM')
     expect(store.getRecord(CHAT)?.lease).toMatchObject({ handoffStage: null, ownerProcess: null })
-    // Its release woke the worker, which settles the turn the owner left by that proof.
+    // Its release woke the retry, which settles the turn the owner left by that proof.
     await idle(current, [CHAT])
     expect(await turnState(current, CHAT)).toBe('interrupted')
   })
@@ -137,12 +137,12 @@ describe('a visible chat whose agent outlived the earlier process', () => {
 })
 
 describe('a chat whose startup lease reconcile failed (storage was busy)', () => {
-  it('is reconciled by its worker after a backoff, and its turn settles with no attach or send', async () => {
+  it('is reconciled by the retry after a backoff, and its turn settles with no attach or send', async () => {
     await seedTestAgentSessionRecordStore(root, { records: [record(CHAT, false)] })
     await seedScanJournal(root, CHAT)
     store = await openTestAgentSessionRecordStore(root)
     const busy = () => new Error('database is locked')
-    // Startup's reconcile and the worker's first retry meet a locked store; the next one lands.
+    // Startup's reconcile and the retry's first retry meet a locked store; the next one lands.
     const reconcile = vi
       .spyOn(store, 'reconcileOnRestart')
       .mockRejectedValueOnce(busy())

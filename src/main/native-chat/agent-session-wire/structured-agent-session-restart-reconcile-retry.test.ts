@@ -147,4 +147,31 @@ describe('a round of the retry', () => {
     expect(order.indexOf(`person:${later}`)).toBeLessThan(order.indexOf(`visit:${later}`))
     expect(new Set(order.filter((entry) => entry.startsWith('visit:'))).size).toBe(3)
   })
+
+  it("never holds the round for a chat's busy lane: a person's long operation delays no other chat", async () => {
+    const chats = await seedChats(3, true)
+    const started = performance.now()
+    const visits: Record<string, number> = {}
+    const pass = reconciliationPass.runStructuredAgentSessionReconciliationPass
+    vi.spyOn(reconciliationPass, 'runStructuredAgentSessionReconciliationPass').mockImplementation(
+      async (...args) => {
+        visits[args[1]] ??= performance.now() - started
+        return pass(...args)
+      }
+    )
+    host = openScanHost(root, store)
+    // A person's operation holds the first chat's lane for 3 s (a Stop waiting out its deadline).
+    const [busy, ...others] = chats
+    const person = host
+      .collaboratorsForTests()
+      .serialize(busy!, () => new Promise((resolve) => setTimeout(resolve, 3_000)))
+    await host.reconcileRestartLeases()
+    await vi.waitFor(() => expect(Object.keys(visits)).toHaveLength(2), { timeout: 10_000 })
+
+    expect(Math.max(...others.map((id) => visits[id] ?? Infinity))).toBeLessThan(1_500)
+    expect(visits[busy!]).toBeUndefined()
+    // The busy chat is visited once its lane frees.
+    await person
+    await vi.waitFor(() => expect(visits[busy!]).toBeGreaterThan(2_900), { timeout: 10_000 })
+  }, 20_000)
 })

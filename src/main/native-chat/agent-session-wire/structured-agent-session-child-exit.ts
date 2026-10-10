@@ -16,6 +16,10 @@ import type {
 } from './structured-agent-session-host-types'
 import { recordProviderChildEnd } from './structured-agent-session-provider-child'
 import {
+  backgroundLeaseWrites,
+  backgroundSettlementWrites
+} from './structured-agent-session-background-writes'
+import {
   releaseStoredStructuredAgentSessionOwnerAfterExit,
   type StructuredAgentSessionLeaseStore
 } from './structured-agent-session-lease-release'
@@ -53,8 +57,8 @@ export type StructuredAgentSessionChildExitSession = Pick<
   'child' | 'lastEndedChild'
 > & { journal: DeadGenerationJournal & StaleStructuredAgentSessionStateJournal }
 
-/** The chat's reconciliation worker's signal (`StructuredAgentSessionReconciliation.signal`): the
- *  one edge every way a generation ends goes through. `exit`: the exit's own settlement, owed when
+/** The host retry's signal (`StructuredAgentSessionRetry.signal`): the one edge every way a
+ *  generation ends goes through. `exit`: the exit's own settlement, owed when
  *  it did not land. */
 export type StructuredAgentSessionGenerationEnded = (
   sessionId: string,
@@ -69,8 +73,7 @@ export type StructuredAgentSessionChildExitContext<
   flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
   publishStatus?: (sessionId: string) => void
   /** A generation ended: every reader re-derives current work, the queued-card drain is
-   *  scheduled with no journal write needed, and the chat's reconciliation worker settles what is
-   *  owed. `restate`: each chat re-baselines at the moved fence. */
+   *  scheduled with no journal write needed, and the host's retry settles what is owed. `restate`: each chat re-baselines at the moved fence. */
   generationEnded: StructuredAgentSessionGenerationEnded
   /** The delivery loop hands over whatever is queued once the child is off the record. */
   wakeDelivery?: (sessionId: string) => void
@@ -246,9 +249,10 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     }
   } finally {
     // What the exited child left is settled first, at its own fence, as its own closing tail lands:
-    // a row its closed sink still delivers lands too, and wakes the chat's worker to settle it once
-    // the release below moves the fence. A settlement or a release that cannot commit stays owed:
-    // the chat's reconciliation worker retries it.
+    // a row its closed sink still delivers lands too, and wakes the retry to settle it once the
+    // release below moves the fence. Both are bookkeeping (`structured-agent-session-background-
+    // writes.ts`): another connection's lock fails them at once, and what did not commit stays owed
+    // to the retry, the settlement as the exit's debt and the release as its repair.
     let released = false
     let owed: StructuredAgentSessionExitSettlement | null = null
     if (settlement) {
@@ -256,6 +260,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         store: context.store,
         sessionId,
         journal: session.journal,
+        writes: backgroundSettlementWrites(session.journal),
         exit: settlement,
         // Ended whether or not the release lands: the host saw the root go.
         ended: { fence: child.fence, rootGone: true }
@@ -268,6 +273,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     try {
       await releaseStoredStructuredAgentSessionOwnerAfterExit({
         store: context.store,
+        writes: backgroundLeaseWrites(context.store),
         sessionId,
         expectedFence: child.fence,
         now: context.now(),

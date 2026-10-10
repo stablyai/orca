@@ -110,7 +110,7 @@ describe('a chat whose lease recovers', () => {
     const current = await recoveringAt14()
     const { reconciliation } = current.collaboratorsForTests()
 
-    // Generation 13's exit could not be settled; the lease recovers, so the worker retires.
+    // Generation 13's exit could not be settled; the lease recovers, so the retry retires.
     reconciliation.signal(CHAT, { evidence: proof13, exit: exit13 })
     await idle(current, [CHAT])
     expect(reconciliation['owed'].get(CHAT)).toMatchObject({
@@ -138,7 +138,7 @@ describe('a chat waiting out a backoff with an exit account', () => {
   it("drops it once a later generation acquired, so generation 14's send stays in doubt", async () => {
     const current = await recoveringAt14()
     const { reconciliation } = current.collaboratorsForTests()
-    // The pass fails once (storage busy): the worker backs off still holding generation 13's.
+    // The pass fails once (storage busy): the retry backs off still holding generation 13's.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.spyOn(JournalQueuedMessages.prototype, 'repairAndPrune').mockRejectedValueOnce(
       Object.assign(new Error('database is locked'), { errcode: 5 })

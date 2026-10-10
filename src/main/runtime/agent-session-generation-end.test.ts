@@ -118,6 +118,7 @@ describe('a generation that ends', () => {
 
     await releaseStoredStructuredAgentSessionOwnerAfterExit({
       store,
+      writes: store,
       sessionId: SESSION,
       expectedFence: fence,
       now: NOW + 1_000,
@@ -251,6 +252,7 @@ describe('a write that ends nothing', () => {
     const first = await liveOwner()
     await releaseStoredStructuredAgentSessionOwnerAfterExit({
       store,
+      writes: store,
       sessionId: SESSION,
       expectedFence: first.fence,
       now: NOW + 1_000,

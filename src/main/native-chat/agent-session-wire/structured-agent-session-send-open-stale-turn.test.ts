@@ -28,6 +28,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => unknown): Promise<unknown> {
@@ -112,9 +113,9 @@ it.each(PROBES)(
   'settles a turn a dead generation left running when a send opens the chat and its start fails, when %s',
   async (_when, probe, settled) => {
     const { host, acquire } = await relaunchAfterCrashMidTurn(probe)
-    // The startup's worker opens the chat in the background and closes it again once done.
+    // The startup retry opens the chat in the background and closes it again once done.
     await host.startupSettled()
-    await host.collaboratorsForTests().reconciliation.idle(SESSION)
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
     await eventually(() => expect(host.hasSession(SESSION)).toBe(false))
 
     const body = hostTestMessage('sent to a chat nobody has open')

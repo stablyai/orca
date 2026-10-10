@@ -17,17 +17,20 @@ export type StructuredAgentSessionLeaseStore = Pick<
   'getRecord' | 'transitionHandoff'
 >
 
+/** What the release writes through: the store itself, or bookkeeping's background handle
+ *  (`BackgroundLeaseWrites`). */
+export type StructuredAgentSessionLeaseWrites = Pick<AgentSessionRecordStore, 'transitionHandoff'>
+
 /** Releases the lease of the child whose exit this host observed, with that exit's evidence.
  *  Throws `agent_session_checkpoint_stale` when the record no longer names that child. */
 export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
-  store: StructuredAgentSessionLeaseStore
+  store: Pick<AgentSessionRecordStore, 'getRecord'>
+  writes: StructuredAgentSessionLeaseWrites
   sessionId: string
   expectedFence: number
   now: number
   exitObservedAt?: number
   exitReason?: string
-  /** Bookkeeping no person waits on (`JournalWriteOptions`). */
-  background?: true
 }): Promise<AgentSessionRecord> {
   const record = input.store.getRecord(input.sessionId)
   if (
@@ -37,15 +40,11 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   ) {
     throw new Error('agent_session_checkpoint_stale')
   }
-  return releaseStoredAgentSessionOwnerAfterSurfaceClose(
-    input.store,
-    {
-      sessionId: input.sessionId,
-      expectedFence: input.expectedFence,
-      now: input.now,
-      ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
-      ...(input.exitReason ? { exitReason: input.exitReason } : {})
-    },
-    input.background ? { background: true } : undefined
-  )
+  return releaseStoredAgentSessionOwnerAfterSurfaceClose(input.writes, {
+    sessionId: input.sessionId,
+    expectedFence: input.expectedFence,
+    now: input.now,
+    ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
+    ...(input.exitReason ? { exitReason: input.exitReason } : {})
+  })
 }

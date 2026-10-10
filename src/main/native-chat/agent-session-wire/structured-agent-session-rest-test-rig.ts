@@ -36,6 +36,7 @@ import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idl
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 export const REST_TEST_CALLER = { callerKey: 'client-1' }
 export const IDLE_MS = STRUCTURED_AGENT_SESSION_IDLE_MS
@@ -228,8 +229,8 @@ export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
 export async function sweepOnce(host: StructuredAgentSessionHost): Promise<void> {
   const { lifetime, reconciliation, serialize } = host.collaboratorsForTests()
   await lifetime.idleSweep.tick()
-  // A close the sweep left to the chat's reconciliation worker lands once that retires.
-  await reconciliation.idle(SESSION)
+  // A close the sweep left to the host's retry lands once that retires.
+  await retryIdle(reconciliation, SESSION)
   await serialize(SESSION, async () => {})
 }
 

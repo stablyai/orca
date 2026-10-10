@@ -1,4 +1,4 @@
-// The startup scan's reconciliation workers over their whole life: what a quit cuts short, what
+// The startup scan's retrys over their whole life: what a quit cuts short, what
 // they never publish or close, and what ends a retry that cannot succeed.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -30,6 +30,7 @@ import {
   scanTurnState as turnState,
   seedScanJournal
 } from './structured-agent-session-startup-scan.test-fixture'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
 
 const CHAT = 'chat-aaaaaaa1'
 
@@ -169,7 +170,7 @@ describe('a chat the startup scan settles', () => {
   })
 })
 
-describe('a startup worker whose step cannot succeed', () => {
+describe('a startup retry whose step cannot succeed', () => {
   it('retires at once on a journal no retry can load, and replays it once', async () => {
     await seed([CHAT])
     // The last row is one no build wrote.
@@ -183,7 +184,7 @@ describe('a startup worker whose step cannot succeed', () => {
     await current.reconcileRestartLeases()
     await current.startupSettled()
 
-    expect(current.collaboratorsForTests().reconciliation.owes(CHAT)).toBe(false)
+    expect(retryOwes(current.collaboratorsForTests().reconciliation, CHAT)).toBe(false)
     await new Promise((resolve) => setTimeout(resolve, 1_200))
     expect(counter.opens).toBe(1)
     expect(warnings).toContain("a chat's history cannot be loaded, so nothing is settled")
@@ -230,7 +231,7 @@ describe('a startup worker whose step cannot succeed', () => {
     await current.reconcileRestartLeases()
     await current.startupSettled()
 
-    expect(current.collaboratorsForTests().reconciliation.owes(CHAT)).toBe(false)
+    expect(retryOwes(current.collaboratorsForTests().reconciliation, CHAT)).toBe(false)
     await new Promise((resolve) => setTimeout(resolve, 1_200))
     expect(counter.opens).toBe(1)
   })
@@ -246,6 +247,6 @@ describe('a startup worker whose step cannot succeed', () => {
     // Attempts at 0 s, 1 s and 3 s: a read each, never a loop.
     expect(counter.opens).toBeGreaterThanOrEqual(2)
     expect(counter.opens).toBeLessThanOrEqual(3)
-    expect(current.collaboratorsForTests().reconciliation.owes(CHAT)).toBe(true)
+    expect(retryOwes(current.collaboratorsForTests().reconciliation, CHAT)).toBe(true)
   })
 })

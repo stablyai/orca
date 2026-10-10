@@ -1,7 +1,7 @@
 // A roster row and a background-task row are revised in place across generations, so each entry
 // carries the generation that last observed it. Settling an ended generation settles only the
 // entries it observed; a later live generation's children stay as they are. And a proof the
-// reconciliation worker holds for an ended generation revises what an earlier settle of it could
+// retry holds for an ended generation revises what an earlier settle of it could
 // only call unverifiable.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -39,6 +39,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { settleStructuredAgentSessionLeftovers } from './structured-agent-session-leftover-settlement'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { backgroundSettlementWrites } from './structured-agent-session-background-writes'
 
 const SESSION = 'orca-session'
 const GROUP = 'claude-session:turn-a'
@@ -202,7 +203,8 @@ describe('settling an ended generation’s roster', () => {
       await settleStructuredAgentSessionLeftovers({
         store: { getRecord: (sessionId) => (sessionId === SESSION ? live : null) },
         sessionId: SESSION,
-        journal
+        journal,
+        writes: backgroundSettlementWrites(journal)
       })
     ).toMatchObject({ ok: true })
 
@@ -219,7 +221,8 @@ describe('settling an ended generation’s roster', () => {
       await settleStructuredAgentSessionLeftovers({
         store: { getRecord: () => live },
         sessionId: SESSION,
-        journal
+        journal,
+        writes: backgroundSettlementWrites(journal)
       })
     ).toEqual({ ok: true, planned: 0 })
   })
@@ -255,12 +258,13 @@ describe('a held proof', () => {
     await settleStructuredAgentSessionLeftovers({
       store: { getRecord: () => released },
       sessionId: SESSION,
-      journal
+      journal,
+      writes: backgroundSettlementWrites(journal)
     })
     expect(turn()).toMatchObject({ state: 'unverifiable' })
 
     // A later probe proved that owner gone; a reservation since cleared the lease's copy, and the
-    // worker holds the proof it was handed.
+    // retry holds the proof it was handed.
     const live = agentSessionRecordFixture(
       agentSessionLeaseFixture({ sessionId: SESSION, runtimeFence: LIVE })
     )
@@ -269,6 +273,7 @@ describe('a held proof', () => {
         store: { getRecord: () => live },
         sessionId: SESSION,
         journal,
+        writes: backgroundSettlementWrites(journal),
         proof: { kind: 'pid-absent', detail: 'owner gone', observedAt: 2_000, ownerFence: ENDED }
       })
     ).toMatchObject({ ok: true })

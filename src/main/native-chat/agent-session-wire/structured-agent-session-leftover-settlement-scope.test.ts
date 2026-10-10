@@ -23,6 +23,7 @@ import {
   sendText,
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
 
@@ -56,7 +57,7 @@ describe('reading a chat', () => {
     // Answered, so no send left pending keeps the conversation open.
     await current.settleAccepted(await current.workingSend(), 'work')
     await leaveUnfinishedWork(current, { prompt: true })
-    // The storage fault stays: the worker keeps retrying in the background, and every attempt
+    // The storage fault stays: the retry keeps retrying in the background, and every attempt
     // rolls back, so any write the readers made would be the only one logged.
     const { database } = await exitWhileSettlementFails(current)
     await current.host.close(SESSION, 'evict')
@@ -74,8 +75,8 @@ describe('reading a chat', () => {
     unsubscribe()
 
     expect(writes()).toEqual([])
-    // Still owed, and still as the dead generation left it: only the chat's worker settles it.
-    expect(current.host.collaboratorsForTests().reconciliation.owes(SESSION)).toBe(true)
+    // Still owed, and still as the dead generation left it: only the host's retry settles it.
+    expect(retryOwes(current.host.collaboratorsForTests().reconciliation, SESSION)).toBe(true)
     expect(turnState(current)).toBe('running')
     expect(holds(current)).toEqual({ working: false, queueHeld: false })
   })

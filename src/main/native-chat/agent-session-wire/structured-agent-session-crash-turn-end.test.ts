@@ -50,6 +50,7 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const PROVIDER_SESSION = 'provider-session-alpha-1'
 /** The tool call's row: the last thing the provider wrote before the crash. */
@@ -304,9 +305,9 @@ async function drainSession(): Promise<void> {
   await reconciled()
 }
 
-/** Once the chat's reconciliation worker settled what a generation's end left. */
+/** Once the host's retry settled what a generation's end left. */
 function reconciled(): Promise<void> {
-  return host.collaboratorsForTests().reconciliation.idle(SESSION)
+  return retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
 }
 
 /** Startup: the reconcile, then the scan it begins. */
@@ -514,7 +515,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     ])
   })
 
-  it('stays as it was when the startup settlement cannot be written, and the worker retries it', async () => {
+  it('stays as it was when the startup settlement cannot be written, and the retry retries it', async () => {
     const log = recordingStructuredAgentSessionLogger()
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }), logger: log.logger })
     await host.history({ sessionId: SESSION, direction: 'tail' })
@@ -528,7 +529,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     expect(new Set(log.scopes())).toEqual(new Set(['reconciliation']))
     expect(await settledTurn()).toEqual(RUNNING_TURN)
     full.mockRestore()
-    // Nothing stored says it is owed: the worker re-derives it after its backoff, from the proof
+    // Nothing stored says it is owed: the retry re-derives it after its backoff, from the proof
     // the record holds.
     await vi.waitFor(
       async () =>
@@ -601,7 +602,7 @@ const PROVEN_TURN = {
   completedAt: LAST_RENEWED_AT
 }
 
-// The relaunch proved the fence-13 owner gone, and the chat's worker settles the turn by that proof,
+// The relaunch proved the fence-13 owner gone, and the host's retry settles the turn by that proof,
 // held across the starts that clear it from the record; what the record holds after a start
 // reserving fence 15 fails is about the start's own child.
 describe('a turn a newer start could not settle before it failed', () => {

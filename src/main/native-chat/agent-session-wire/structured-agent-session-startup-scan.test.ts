@@ -27,6 +27,7 @@ import {
   scanTurnState as turnState,
   seedScanJournal
 } from './structured-agent-session-startup-scan.test-fixture'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -196,7 +197,7 @@ describe('the startup scan', () => {
     await current.reconcileRestartLeases()
     await current.startupSettled()
     const { reconciliation } = current.collaboratorsForTests()
-    expect(reconciliation.owes(RELEASED)).toBe(true)
+    expect(retryOwes(reconciliation, RELEASED)).toBe(true)
 
     database.db.exec('DROP TRIGGER reject_conversion')
     await idle(current, [RELEASED])

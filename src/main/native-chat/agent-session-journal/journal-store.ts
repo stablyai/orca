@@ -390,9 +390,10 @@ export class AgentSessionJournal {
   replaceEpochItems(
     reason: AgentJournalEpochReason,
     fence: number,
-    items: readonly JournalReplacementItem[]
+    items: readonly JournalReplacementItem[],
+    options?: JournalWriteOptions
   ): Promise<AgentJournalCursor> {
-    return this.epochController.replace(reason, fence, items)
+    return this.epochController.replace(reason, fence, items, options)
   }
 
   private adoptLoadedJournal(loaded: JournalLoad): void {

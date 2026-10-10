@@ -26,6 +26,7 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
+import { retryOwes } from './structured-agent-session-retry.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
 
@@ -131,9 +132,12 @@ describe('an exit that settles and releases cleanly', () => {
     await current.host.collaboratorsForTests().serialize(SESSION, async () => {})
     await eventually(async () => expect(await current.handoff(draftId)).toBeDefined())
 
-    // Inside one turn of the chat's lane: no retry round, no backoff.
+    // Inside one turn of the chat's lane, no backoff; the retry's visit once the lane frees finds
+    // nothing left.
     expect(Date.now() - started).toBeLessThan(250)
-    expect(current.host.collaboratorsForTests().reconciliation.owes(SESSION)).toBe(false)
+    await eventually(() =>
+      expect(retryOwes(current.host.collaboratorsForTests().reconciliation, SESSION)).toBe(false)
+    )
   })
 })
 

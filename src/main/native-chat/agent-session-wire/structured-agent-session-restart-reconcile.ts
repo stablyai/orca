@@ -22,7 +22,10 @@ export function createRestartReconciler(deps: {
     records: readonly AgentSessionRecord[]
   ) => Promise<Map<string, AgentSessionOwnerProbe>>
   now: () => number
-}): (sessionId: string, options?: JournalWriteOptions) => Promise<AgentSessionWireRefusal | null> {
+}): (
+  sessionId: string | null,
+  options?: JournalWriteOptions
+) => Promise<AgentSessionWireRefusal | null> {
   let pending: Promise<void> | null = null
   return async (sessionId, options) => {
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
@@ -44,11 +47,8 @@ export function createRestartReconciler(deps: {
       await pending
       return null
     } catch (error) {
-      return classifyStoreFailure(
-        error,
-        deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null,
-        deps.store.getRecord(sessionId)
-      )
+      const record = sessionId === null ? null : deps.store.getRecord(sessionId)
+      return classifyStoreFailure(error, record?.lease.runtimeFence ?? null, record)
     }
   }
 }
@@ -61,8 +61,7 @@ export type ReaderBookkeepingFailures = {
   clear: () => void
 }
 
-/** Startup and the read carry on past a failure: each chat's reconciliation worker retries it with
- *  a backoff, and the next attach or send reconciles and resolves recovery again before it acts. */
+/** Startup and the read carry on past a failure: the host's retry tries it again with a backoff, and the next attach or send reconciles and resolves recovery again before it acts. */
 export function reportEachFailureOnce(
   logger: StructuredAgentSessionLogger
 ): ReaderBookkeepingFailures {
@@ -89,16 +88,13 @@ export function reportEachFailureOnce(
  *  reconciles again before it acts.
  *  Answers whether every lease is settled. */
 export function createReaderReconcile(
-  reconcile: (
-    sessionId: string,
-    options?: JournalWriteOptions
-  ) => Promise<AgentSessionWireRefusal | null>,
+  reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>,
   failures: ReaderBookkeepingFailures
-): (sessionId: string, options?: JournalWriteOptions) => Promise<boolean> {
-  return async (sessionId, options) => {
+): (sessionId: string) => Promise<boolean> {
+  return async (sessionId) => {
     let failure: unknown
     try {
-      const refusal = await reconcile(sessionId, options)
+      const refusal = await reconcile(sessionId)
       if (!refusal) {
         failures.clear()
         return true

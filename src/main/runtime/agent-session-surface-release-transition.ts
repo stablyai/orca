@@ -8,7 +8,6 @@
 // The fence still moves, so the next owner is a new generation: an attach or settlement still
 // holding the stopped owner's fence is refused as stale rather than acting on its successor.
 
-import type { JournalWriteOptions } from '../native-chat/agent-session-journal/journal-database'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
@@ -73,12 +72,9 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     now: number
     exitObservedAt?: number
     exitReason?: string
-  },
-  options?: JournalWriteOptions
+  }
 ): Promise<AgentSessionRecord> {
-  return store.transitionHandoff(
-    args.sessionId,
-    (record) => releaseAgentSessionOwnerAfterSurfaceClose({ ...args, record }),
-    options
+  return store.transitionHandoff(args.sessionId, (record) =>
+    releaseAgentSessionOwnerAfterSurfaceClose({ ...args, record })
   )
 }

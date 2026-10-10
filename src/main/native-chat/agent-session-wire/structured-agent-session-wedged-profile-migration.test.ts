@@ -58,6 +58,7 @@ import {
   codexProviderHandle
 } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 const DEAD_OWNER: AgentSessionProcessIdentity = {
@@ -150,9 +151,9 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
   })
 }
 
-/** Startup as the runtime runs it: the restart reconcile, every chat's worker in the background,
- *  and the boot sweep that opens each chat for its readers once that worker closed it again. A
- *  lease latched in recovery is decided by the sweep, whose release wakes the worker again. */
+/** Startup as the runtime runs it: the restart reconcile, the retry's visit to every chat in the
+ *  background, and the boot sweep that opens each chat for its readers once the retry closed it. A
+ *  lease latched in recovery is decided by the sweep, whose release wakes the retry again. */
 async function startUp(): Promise<void> {
   await host.reconcileRestartLeases()
   await host.startupSettled()
@@ -162,9 +163,9 @@ async function startUp(): Promise<void> {
   await reconciled()
 }
 
-/** The chat's reconciliation worker has retired, or waits out a backoff. */
+/** The host's retry has retired, or waits out a backoff. */
 function reconciled(): Promise<void> {
-  return host.collaboratorsForTests().reconciliation.idle(SESSION)
+  return retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
 }
 
 /** The host starting the agent with no message to deliver, as an operation that needs it does. */
@@ -405,7 +406,7 @@ describe('already-wedged profiles become usable on load', () => {
     const fence = stale.ok ? 13 : (stale.refusal.currentFence ?? 13)
     expect(stale.ok || stale.refusal.code === 'agent_session_checkpoint_stale').toBe(true)
     expect(stale.ok || (await host.attach(CALLER, hostTestAttachParams(fence))).ok).toBe(true)
-    // The reservation over the proven-dead owner ended its generation: the worker settles it.
+    // The reservation over the proven-dead owner ended its generation: the retry settles it.
     await reconciled()
 
     expect(acquire).toHaveBeenCalledOnce()
@@ -488,7 +489,7 @@ describe('already-wedged profiles become usable on load', () => {
             : { outcome: 'pid-absent' },
         stopOwnerProcess
       })
-      // The worker's settlement fails until storage takes it again; it backs off and retries.
+      // The retry's settlement fails until storage takes it again; it backs off and retries.
       const failing = vi
         .spyOn(JournalLifecycleBatchAppender.prototype, 'appendPlanned')
         .mockRejectedValue(new Error('journal unavailable'))
