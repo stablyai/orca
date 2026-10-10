@@ -4,12 +4,15 @@ import type {
   WorkspaceCleanupScanProgress
 } from '../../shared/workspace-cleanup'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
+import type { WorkspaceCleanupAgentStatusReader } from './workspace-cleanup-agent-scratch'
 
 const WORKSPACE_CLEANUP_PROGRESS_EMIT_INTERVAL_MS = 100
 
 export type WorkspaceCleanupScanOptions = {
   onProgress?: (progress: WorkspaceCleanupScanProgress) => void
   signal?: AbortSignal
+  /** Absent: agent liveness is unverifiable, so no worktree is called a stale agent worktree. */
+  readAgentStatusSnapshot?: WorkspaceCleanupAgentStatusReader
 }
 
 export type WorkspaceCleanupProgressEmitter = {

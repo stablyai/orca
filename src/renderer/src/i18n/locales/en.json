@@ -18974,6 +18974,34 @@
           "label": "Host: {{value0}}",
           "unknown": "Unknown host",
           "candidateName": "{{value0}} on {{value1}}"
+        },
+        "reason": {
+          "merged": "Merged",
+          "staleAgent": "Stale agent",
+          "prunable": "Prunable",
+          "unregistered": "Unregistered",
+          "reviewMerged": "Its linked review was merged",
+          "mergedInto": "All branch commits are in {{value0}}",
+          "mergedIntoBase": "All branch commits are in the base branch",
+          "staleAgentDescription": "Coding-agent scratch worktree, idle 7+ days, no live agent reported",
+          "prunableDescription": "Git still lists this worktree, but its folder or Git link is gone",
+          "unregisteredDescription": "No project registers this folder as a worktree"
+        },
+        "strayFolders": {
+          "movedToTrash": "Moved to Trash",
+          "moveFailed": "Could not move folder to Trash",
+          "title": "Unregistered folders: {{value0}}",
+          "description": "Found in worktree folders, not registered by any project. Review each one.",
+          "brokenGitLinkDescription": "Its .git file points to a Git folder that no longer exists",
+          "brokenGitLink": "Broken link",
+          "lastModified": "Last modified {{value0}}",
+          "moveToTrash": "Move to Trash",
+          "truncated": "Showing the first {{value0}} folders.",
+          "skippedRemote": "Worktree folders on remote hosts were not checked.",
+          "skippedWsl": "Worktree folders inside WSL were not checked.",
+          "skippedHoldsProjects": "Worktree folders that also contain projects were not checked.",
+          "skippedUnreadable": "Some worktree folders could not be read.",
+          "trashUnavailable": "This host cannot move folders to the Trash."
         }
       },
       "creation": {

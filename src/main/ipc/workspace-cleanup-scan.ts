@@ -1,9 +1,7 @@
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import { mergeWorktree } from './worktree-logic'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanArgs,
@@ -12,7 +10,8 @@ import type {
 } from '../../shared/workspace-cleanup'
 import {
   handleRepoWorktreeListError,
-  listCleanupGitWorktrees
+  listCleanupGitWorktrees,
+  mergeCleanupGitWorktree
 } from './workspace-cleanup-worktree-listing'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 import { shouldScanBroadWorkspaceCleanupWorktree } from './workspace-cleanup-scan-eligibility'
@@ -24,8 +23,11 @@ import {
 import {
   buildWorkspaceCleanupCandidate,
   buildWorkspaceCleanupCandidateFromError,
+  createWorkspaceCleanupRepoSignals,
   isWorkspaceInactiveForCleanup
 } from './workspace-cleanup-candidate'
+import type { WorkspaceCleanupAgentStatusReader } from './workspace-cleanup-agent-scratch'
+import { scanWorkspaceCleanupStrayDirectoriesForScan } from './workspace-cleanup-stray-directories'
 import { synthesizeDisconnectedSshCleanupCandidates } from './workspace-cleanup-disconnected-ssh'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
@@ -44,7 +46,6 @@ import {
   getTargetWorktreeIdsByRepo,
   hasTargetedWorkspaceCleanupScan
 } from './workspace-cleanup-scan-targets'
-import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Why: SSH repos pay a worktree-list round trip each; strictly serial repos
@@ -97,6 +98,7 @@ export async function scanWorkspaceCleanup(
           includeAllWorkspaces: args.includeAllWorkspaces === true,
           skipGitWorktreeIds: new Set(args.skipGitWorktreeIds ?? []),
           signal: options.signal,
+          readAgentStatusSnapshot: options.readAgentStatusSnapshot,
           onWorktreesDiscovered: progress.addDiscovered,
           onCandidateScanned: progress.addCandidate,
           onErrors: progress.addErrors
@@ -107,7 +109,13 @@ export async function scanWorkspaceCleanup(
       appendWorkspaceCleanupItems(candidates, result.candidates)
       appendWorkspaceCleanupItems(errors, result.errors)
     }
-    return { scannedAt, candidates, errors }
+    const strayDirectoryScan = await scanWorkspaceCleanupStrayDirectoriesForScan(
+      store,
+      args,
+      { scannedAt, candidates },
+      options.signal
+    )
+    return { scannedAt, candidates, errors, ...(strayDirectoryScan ? { strayDirectoryScan } : {}) }
   } finally {
     progress.flush()
   }
@@ -124,6 +132,7 @@ async function scanRepoWorkspaces(
     includeAllWorkspaces: boolean
     skipGitWorktreeIds: Set<string>
     signal?: AbortSignal
+    readAgentStatusSnapshot?: WorkspaceCleanupAgentStatusReader
   } & WorkspaceCleanupScanRepoProgress
 ): Promise<WorkspaceCleanupScanResult> {
   const {
@@ -136,6 +145,7 @@ async function scanRepoWorkspaces(
     includeAllWorkspaces,
     skipGitWorktreeIds,
     signal,
+    readAgentStatusSnapshot,
     onWorktreesDiscovered,
     onCandidateScanned,
     onErrors
@@ -186,15 +196,9 @@ async function scanRepoWorkspaces(
   const mergedWorktrees =
     repoIsFolder && includeAllWorkspaces
       ? listWorkspaceCleanupFolderWorkspaces(store, repo, repoOwnerCount)
-      : gitWorktrees.map((gitWorktree) => {
-          const worktreeId = `${repo.id}::${gitWorktree.path}`
-          // Host-qualified first: the same repoId::path is a different checkout on each host.
-          const hostMeta = readWorktreeMetaForHost(store, worktreeId, route.hostId)
-          const meta = store.getWorktreeMeta(worktreeId)
-          const ownedMeta =
-            hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
-          return mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
-        })
+      : gitWorktrees.map((gitWorktree) =>
+          mergeCleanupGitWorktree(store, repo, route.hostId, gitWorktree, repoOwnerCount)
+        )
   // Why: with includeAllWorkspaces the browser shows every workspace and lets
   // filters narrow it; an age threshold here would hide rows from all views.
   const candidateWorktrees = targetWorktreeIds
@@ -214,6 +218,13 @@ async function scanRepoWorkspaces(
   if (reportDiscoveredUpfront && candidateWorktrees.length > 0) {
     onWorktreesDiscovered?.(candidateWorktrees.length)
   }
+  const signals = createWorkspaceCleanupRepoSignals({
+    repo,
+    route,
+    gitWorktrees,
+    readAgentStatusSnapshot,
+    signal
+  })
   // Why: fs stat has no cancellation, so on a hung network/WSL mount every
   // timed-out row would abandon more threadpool work. After the first timeout,
   // stop statting this repo and use persisted activity only.
@@ -260,7 +271,8 @@ async function scanRepoWorkspaces(
         // forces a fresh read before any selected row can be deleted.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
-        signal
+        signal,
+        signals
       }).catch((error) => {
         if (error instanceof WorkspaceCleanupScanCancelledError) {
           throw error

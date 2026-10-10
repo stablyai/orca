@@ -28,6 +28,7 @@ import {
   WorkspaceCleanupSkeletonRows
 } from './workspace-cleanup-dialog-notices'
 import { WorkspaceCleanupRowList } from './workspace-cleanup-row-list'
+import { WorkspaceCleanupStrayFolders } from './workspace-cleanup-stray-folders'
 import { formatWorkspaceCleanupScanNotice } from './workspace-cleanup-scan-notice'
 import { applyWorkspaceCleanupGitEvidence } from './workspace-cleanup-git-evidence'
 import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
@@ -370,6 +371,7 @@ function WorkspaceCleanupDialogContent({
             {!error && scanNoticeMessage ? (
               <WorkspaceCleanupNotice message={scanNoticeMessage} />
             ) : null}
+            <WorkspaceCleanupStrayFolders scan={scan?.strayDirectoryScan} now={facetNow} />
 
             <WorkspaceCleanupBrowseToolbar
               browse={browse}

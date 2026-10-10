@@ -1,7 +1,14 @@
 import type { Store } from '../persistence'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import type { Repo } from '../../shared/repo-types'
-import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
+import {
+  readWorktreeMetaForHost,
+  type HostQualifiedWorktreeMetaStore
+} from '../persistence/host-qualified-worktree-meta'
+import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
+import { mergeWorktree } from './worktree-logic'
 import type {
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanResult
@@ -80,4 +87,24 @@ export function handleRepoWorktreeListError(args: {
   const errors = [createWorkspaceCleanupScanError(repo, toSafeWorkspaceCleanupRepoScanError(error))]
   onErrors?.(errors)
   return { scannedAt, candidates: [], errors }
+}
+
+/** One listed checkout joined with the metadata this repo owns. */
+export function mergeCleanupGitWorktree(
+  store: Pick<Store, 'getWorktreeMeta'> &
+    Pick<HostQualifiedWorktreeMetaStore, 'getWorktreeMetaForHost'>,
+  repo: Repo,
+  hostId: ExecutionHostId,
+  gitWorktree: GitWorktreeInfo,
+  repoOwnerCount: number
+): Worktree {
+  const worktreeId = `${repo.id}::${gitWorktree.path}`
+  // Host-qualified first: the same repoId::path is a different checkout on each host.
+  const hostMeta = readWorktreeMetaForHost(store, worktreeId, hostId)
+  const meta = store.getWorktreeMeta(worktreeId)
+  const ownedMeta =
+    hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
+  const merged = mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
+  // Why: mergeWorktree drops listing-only flags; the prunable signal reads this one.
+  return gitWorktree.prunable === true ? { ...merged, prunable: true } : merged
 }

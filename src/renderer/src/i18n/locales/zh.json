@@ -18484,6 +18484,34 @@
     },
     "workspace": {
       "cleanup": {
+        "reason": {
+          "merged": "已合并",
+          "staleAgent": "闲置智能体",
+          "prunable": "可修剪",
+          "unregistered": "未注册",
+          "reviewMerged": "关联的评审已合并",
+          "mergedInto": "分支的所有提交都已在 {{value0}} 中",
+          "mergedIntoBase": "分支的所有提交都已在基础分支中",
+          "staleAgentDescription": "编码智能体的临时工作树，闲置 7 天以上，未报告活动智能体",
+          "prunableDescription": "Git 仍列出此工作树，但其文件夹或 Git 链接已不存在",
+          "unregisteredDescription": "没有项目将此文件夹注册为工作树"
+        },
+        "strayFolders": {
+          "movedToTrash": "已移到回收站",
+          "moveFailed": "无法将文件夹移到回收站",
+          "title": "未注册的文件夹：{{value0}}",
+          "description": "在工作树文件夹中发现，未被任何项目注册。请逐一检查。",
+          "brokenGitLinkDescription": "其 .git 文件指向一个已不存在的 Git 文件夹",
+          "brokenGitLink": "链接已断开",
+          "lastModified": "最后修改 {{value0}}",
+          "moveToTrash": "移到回收站",
+          "truncated": "仅显示前 {{value0}} 个文件夹。",
+          "skippedRemote": "未检查远程主机上的工作树文件夹。",
+          "skippedWsl": "未检查 WSL 中的工作树文件夹。",
+          "skippedHoldsProjects": "未检查同时包含项目的工作树文件夹。",
+          "skippedUnreadable": "部分工作树文件夹无法读取。",
+          "trashUnavailable": "此主机无法将文件夹移到回收站。"
+        },
         "browse": {
           "gitStatusCheckFailed": "Git 状态检查失败",
           "gitStatusUnverified": "无法验证 Git 状态",

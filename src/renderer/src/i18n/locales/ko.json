@@ -18519,6 +18519,34 @@
     },
     "workspace": {
       "cleanup": {
+        "reason": {
+          "merged": "병합됨",
+          "staleAgent": "방치된 에이전트",
+          "prunable": "정리 가능",
+          "unregistered": "미등록",
+          "reviewMerged": "연결된 리뷰가 병합되었습니다",
+          "mergedInto": "브랜치의 모든 커밋이 {{value0}}에 있습니다",
+          "mergedIntoBase": "브랜치의 모든 커밋이 기본 브랜치에 있습니다",
+          "staleAgentDescription": "코딩 에이전트 임시 워크트리, 7일 이상 유휴 상태, 활성 에이전트 보고 없음",
+          "prunableDescription": "Git에는 아직 이 워크트리가 표시되지만 폴더나 Git 링크가 없습니다",
+          "unregisteredDescription": "이 폴더를 워크트리로 등록한 프로젝트가 없습니다"
+        },
+        "strayFolders": {
+          "movedToTrash": "휴지통으로 이동했습니다",
+          "moveFailed": "폴더를 휴지통으로 이동할 수 없습니다",
+          "title": "미등록 폴더: {{value0}}",
+          "description": "워크트리 폴더에서 발견되었으며 어떤 프로젝트에도 등록되지 않았습니다. 하나씩 검토하세요.",
+          "brokenGitLinkDescription": ".git 파일이 더 이상 존재하지 않는 Git 폴더를 가리킵니다",
+          "brokenGitLink": "끊어진 링크",
+          "lastModified": "마지막 수정 {{value0}}",
+          "moveToTrash": "휴지통으로 이동",
+          "truncated": "처음 {{value0}}개 폴더를 표시합니다.",
+          "skippedRemote": "원격 호스트의 워크트리 폴더는 확인하지 않았습니다.",
+          "skippedWsl": "WSL 내부의 워크트리 폴더는 확인하지 않았습니다.",
+          "skippedHoldsProjects": "프로젝트도 포함된 워크트리 폴더는 확인하지 않았습니다.",
+          "skippedUnreadable": "일부 워크트리 폴더를 읽을 수 없습니다.",
+          "trashUnavailable": "이 호스트는 폴더를 휴지통으로 이동할 수 없습니다."
+        },
         "browse": {
           "gitStatusCheckFailed": "Git 상태 확인 실패",
           "gitStatusUnverified": "Git 상태를 확인할 수 없음",

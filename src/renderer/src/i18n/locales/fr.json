@@ -18586,6 +18586,34 @@
     },
     "workspace": {
       "cleanup": {
+        "reason": {
+          "merged": "Fusionné",
+          "staleAgent": "Agent inactif",
+          "prunable": "Nettoyable",
+          "unregistered": "Non enregistré",
+          "reviewMerged": "Sa revue liée a été fusionnée",
+          "mergedInto": "Tous les commits de la branche sont dans {{value0}}",
+          "mergedIntoBase": "Tous les commits de la branche sont dans la branche de base",
+          "staleAgentDescription": "Worktree temporaire d'un agent de code, inactif depuis 7 jours ou plus, aucun agent actif signalé",
+          "prunableDescription": "Git liste encore ce worktree, mais son dossier ou son lien Git a disparu",
+          "unregisteredDescription": "Aucun projet n'enregistre ce dossier comme worktree"
+        },
+        "strayFolders": {
+          "movedToTrash": "Placé dans la Corbeille",
+          "moveFailed": "Impossible de placer le dossier dans la Corbeille",
+          "title": "Dossiers non enregistrés : {{value0}}",
+          "description": "Trouvés dans les dossiers de worktrees, enregistrés par aucun projet. Vérifiez-les un par un.",
+          "brokenGitLinkDescription": "Son fichier .git pointe vers un dossier Git qui n'existe plus",
+          "brokenGitLink": "Lien rompu",
+          "lastModified": "Modifié {{value0}}",
+          "moveToTrash": "Placer dans la Corbeille",
+          "truncated": "Affichage des {{value0}} premiers dossiers.",
+          "skippedRemote": "Les dossiers de worktrees sur des hôtes distants n'ont pas été vérifiés.",
+          "skippedWsl": "Les dossiers de worktrees dans WSL n'ont pas été vérifiés.",
+          "skippedHoldsProjects": "Les dossiers de worktrees qui contiennent aussi des projets n'ont pas été vérifiés.",
+          "skippedUnreadable": "Certains dossiers de worktrees n'ont pas pu être lus.",
+          "trashUnavailable": "Cet hôte ne peut pas placer de dossiers dans la Corbeille."
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "Nettoyage alpha de la revue"
         },

@@ -12,6 +12,7 @@ import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notifica
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import { agentHookServer } from '../agent-hooks/server'
 import {
   registerPtyHandlers,
   type CodexHomePtySpawnedLifecycleArgs,
@@ -85,7 +86,10 @@ export function attachMainWindowServices(
   // Why: folder projects get no watch target, so an external `git init` needs its own
   // marker poll to upgrade them without a restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
-  registerWorkspaceCleanupHandlers(store)
+  // Why: the hook server's store is the execution host's one source of agent liveness.
+  registerWorkspaceCleanupHandlers(store, {
+    readAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
+  })
   registerPtyHandlers(
     mainWindow,
     runtime,

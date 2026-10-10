@@ -28,6 +28,8 @@ import {
   type WorkspaceCleanupRemoveResult
 } from './workspace-cleanup-removal'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { WorkspaceCleanupTrashStrayDirectoryResult } from '../../../../shared/workspace-cleanup-stray-directories'
+import { trashWorkspaceCleanupStrayDirectory } from './workspace-cleanup-stray-directories'
 
 export type { WorkspaceCleanupFailure, WorkspaceCleanupRemoveOptions, WorkspaceCleanupRemoveResult }
 export { enrichWorkspaceCleanupCandidates, WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY }
@@ -58,6 +60,9 @@ export type WorkspaceCleanupSlice = {
     worktreeIds: readonly string[],
     options?: WorkspaceCleanupRemoveOptions
   ) => Promise<WorkspaceCleanupRemoveResult>
+  trashWorkspaceCleanupStrayDirectory: (
+    path: string
+  ) => Promise<WorkspaceCleanupTrashStrayDirectoryResult>
 }
 
 const VIEWED_FROM_CLEANUP_MS = 2 * 60 * 60 * 1000
@@ -73,6 +78,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   workspaceCleanupDismissals: {},
   workspaceCleanupViewedCandidates: {},
   scanWorkspaceCleanup: (args) => scanWorkspaceCleanup(get, set, args),
+  trashWorkspaceCleanupStrayDirectory: (path) => trashWorkspaceCleanupStrayDirectory(set, path),
   hydrateWorkspaceCleanupFromCache: () =>
     hydrateWorkspaceCleanupScanFromCache({
       hasLiveScanState: () => get().workspaceCleanupScan !== null || get().workspaceCleanupLoading,

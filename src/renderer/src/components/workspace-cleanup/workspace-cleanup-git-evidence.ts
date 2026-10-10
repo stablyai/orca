@@ -1,6 +1,7 @@
 import type {
   WorkspaceCleanupBlocker,
-  WorkspaceCleanupCandidate
+  WorkspaceCleanupCandidate,
+  WorkspaceCleanupReason
 } from '../../../../shared/workspace-cleanup'
 import {
   applyWorkspaceCleanupPolicy,
@@ -31,6 +32,9 @@ const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'git-status-error',
   'unknown-base'
 ])
+
+// Why: `merged` needs a git read, so the deferred broad-scan row cannot carry it.
+const GIT_DERIVED_REASONS: ReadonlySet<WorkspaceCleanupReason> = new Set(['merged'])
 
 /** Bounds how many worktrees one Git-evidence batch can inspect across a huge fleet. */
 export const WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS = WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
@@ -94,13 +98,19 @@ export function applyWorkspaceCleanupGitEvidence(
     ) {
       return candidate
     }
+    const { mergedBaseRef: _staleMergedBaseRef, ...withoutMergedBaseRef } = candidate
     return applyWorkspaceCleanupPolicy({
-      ...candidate,
+      ...withoutMergedBaseRef,
+      reasons: [
+        ...candidate.reasons.filter((reason) => !GIT_DERIVED_REASONS.has(reason)),
+        ...evidence.reasons.filter((reason) => GIT_DERIVED_REASONS.has(reason))
+      ],
       blockers: [
         ...candidate.blockers.filter((blocker) => !GIT_DERIVED_BLOCKERS.has(blocker)),
         ...evidence.blockers.filter((blocker) => GIT_DERIVED_BLOCKERS.has(blocker))
       ],
-      git: evidence.git
+      git: evidence.git,
+      ...(evidence.mergedBaseRef ? { mergedBaseRef: evidence.mergedBaseRef } : {})
     })
   })
 }

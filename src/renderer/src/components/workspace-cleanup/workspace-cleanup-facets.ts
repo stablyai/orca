@@ -152,7 +152,7 @@ export function buildWorkspaceCleanupFacets(
     gitState: getWorkspaceCleanupGitState(candidate),
     upstreamAhead: toFiniteOrNull(candidate.git.upstreamAhead),
     upstreamBehind: toFiniteOrNull(candidate.git.upstreamBehind),
-    isPrunable: worktree?.prunable ?? false,
+    isPrunable: worktree?.prunable ?? candidate.reasons.includes('prunable'),
     isLocked: worktree?.locked ?? false,
     review,
     reviewState: review.hasReview ? (review.state ?? 'unknown') : null,
@@ -231,7 +231,8 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.provider,
     facets.gitState,
     ...facets.ticketSources,
-    ...facets.blockers
+    ...facets.blockers,
+    ...facets.candidate.reasons
   ]
     .filter((value): value is string => Boolean(value))
     .join(' ')

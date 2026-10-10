@@ -45,6 +45,7 @@ import {
 } from '@/components/github/review-state-presentation'
 import { StatusPill } from './workspace-cleanup-status-pill'
 import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
+import { WorkspaceCleanupReasonChips } from './workspace-cleanup-reason-chips'
 import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
@@ -195,6 +196,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                 </StatusPill>
               ))
             )}
+            <WorkspaceCleanupReasonChips candidate={candidate} reviewInfo={reviewInfo} />
             {workspaceStatusLabel ? (
               <WorkspaceCleanupMetadataChip
                 icon={CircleDot}

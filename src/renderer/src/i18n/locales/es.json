@@ -18484,6 +18484,34 @@
     },
     "workspace": {
       "cleanup": {
+        "reason": {
+          "merged": "Fusionado",
+          "staleAgent": "Agente inactivo",
+          "prunable": "Podable",
+          "unregistered": "Sin registrar",
+          "reviewMerged": "Su revisión vinculada se fusionó",
+          "mergedInto": "Todos los commits de la rama están en {{value0}}",
+          "mergedIntoBase": "Todos los commits de la rama están en la rama base",
+          "staleAgentDescription": "Worktree temporal de un agente de código, inactivo 7+ días, sin agente activo informado",
+          "prunableDescription": "Git aún lista este worktree, pero su carpeta o enlace de Git ya no existe",
+          "unregisteredDescription": "Ningún proyecto registra esta carpeta como worktree"
+        },
+        "strayFolders": {
+          "movedToTrash": "Movida a la Papelera",
+          "moveFailed": "No se pudo mover la carpeta a la Papelera",
+          "title": "Carpetas sin registrar: {{value0}}",
+          "description": "Encontradas en carpetas de worktrees, sin registrar por ningún proyecto. Revise cada una.",
+          "brokenGitLinkDescription": "Su archivo .git apunta a una carpeta de Git que ya no existe",
+          "brokenGitLink": "Enlace roto",
+          "lastModified": "Última modificación {{value0}}",
+          "moveToTrash": "Mover a la Papelera",
+          "truncated": "Se muestran las primeras {{value0}} carpetas.",
+          "skippedRemote": "No se revisaron las carpetas de worktrees en hosts remotos.",
+          "skippedWsl": "No se revisaron las carpetas de worktrees dentro de WSL.",
+          "skippedHoldsProjects": "No se revisaron las carpetas de worktrees que también contienen proyectos.",
+          "skippedUnreadable": "No se pudieron leer algunas carpetas de worktrees.",
+          "trashUnavailable": "Este host no puede mover carpetas a la Papelera."
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "Revisar la limpieza alfa"
         },

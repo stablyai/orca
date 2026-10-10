@@ -1,6 +1,6 @@
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
-import type { Worktree } from '../../shared/worktree/types'
+import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { getWorktreeExecutionHostId } from '../../shared/execution-host'
 import {
   applyWorkspaceCleanupPolicy,
@@ -17,6 +17,34 @@ import {
 } from './workspace-cleanup-git-evidence'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
+import {
+  createWorkspaceCleanupBaseRefResolver,
+  type WorkspaceCleanupBaseRefResolver
+} from './workspace-cleanup-merged'
+import {
+  createWorkspaceCleanupStaleAgentClassifier,
+  type WorkspaceCleanupAgentStatusReader,
+  type WorkspaceCleanupStaleAgentClassifier
+} from './workspace-cleanup-agent-scratch'
+
+/** Per-repo readers for the signals beyond inactivity; absent ones are simply not reported. */
+export type WorkspaceCleanupRepoSignals = {
+  resolveBaseRef?: WorkspaceCleanupBaseRefResolver
+  isStaleAgentWorktree?: WorkspaceCleanupStaleAgentClassifier
+}
+
+export function createWorkspaceCleanupRepoSignals(args: {
+  repo: Repo
+  route: WorkspaceCleanupGitRoute
+  gitWorktrees: readonly GitWorktreeInfo[]
+  readAgentStatusSnapshot?: WorkspaceCleanupAgentStatusReader
+  signal?: AbortSignal
+}): WorkspaceCleanupRepoSignals {
+  return {
+    resolveBaseRef: createWorkspaceCleanupBaseRefResolver(args.repo, args.route, args.signal),
+    isStaleAgentWorktree: createWorkspaceCleanupStaleAgentClassifier(args)
+  }
+}
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
@@ -26,11 +54,18 @@ export async function buildWorkspaceCleanupCandidate(args: {
   skipGit: boolean
   forceGitCheck: boolean
   signal?: AbortSignal
+  signals?: WorkspaceCleanupRepoSignals
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal } = args
+  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal, signals } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
+  if (worktree.prunable === true && !worktree.isMainWorktree && !repoIsFolder) {
+    reasons.push('prunable')
+  }
+  if (signals?.isStaleAgentWorktree?.(worktree, scannedAt)) {
+    reasons.push('stale-agent')
+  }
 
   if (worktree.isMainWorktree) {
     blockers.push('main-worktree')
@@ -53,8 +88,11 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal)
+    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal, signals?.resolveBaseRef)
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
+  if (gitEvidence.mergedBaseRef !== null) {
+    reasons.push('merged')
+  }
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
     worktreeId: worktree.id,
@@ -78,6 +116,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
       upstreamBehind: gitEvidence.upstreamBehind,
       checkedAt: gitEvidence.checkedAt
     },
+    ...(gitEvidence.mergedBaseRef !== null ? { mergedBaseRef: gitEvidence.mergedBaseRef } : {}),
     fingerprint: ''
   }
 

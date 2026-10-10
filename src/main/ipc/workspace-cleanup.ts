@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import type { Store } from '../persistence'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
@@ -21,6 +21,12 @@ import {
   finishWorkspaceCleanupRemovalSnapshotPruneBatch,
   recordWorkspaceCleanupRemovalSnapshotPrune
 } from '../workspace-cleanup-removal-snapshot-prune'
+import type { WorkspaceCleanupTrashStrayDirectoryArgs } from '../../shared/workspace-cleanup-stray-directories'
+import type { WorkspaceCleanupAgentStatusReader } from './workspace-cleanup-agent-scratch'
+import {
+  listWorkspaceCleanupRegisteredWorktreePaths,
+  trashWorkspaceCleanupStrayDirectory
+} from './workspace-cleanup-stray-directory-trash'
 
 export { scanWorkspaceCleanup }
 
@@ -36,9 +42,13 @@ function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): 
   return `${senderId}\0${args.includeAllWorkspaces === true}`
 }
 
-export function registerWorkspaceCleanupHandlers(store: Store): void {
+export function registerWorkspaceCleanupHandlers(
+  store: Store,
+  deps: { readAgentStatusSnapshot?: WorkspaceCleanupAgentStatusReader } = {}
+): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   ipcMain.removeHandler('workspaceCleanup:scan')
+  ipcMain.removeHandler('workspaceCleanup:trashStrayDirectory')
   ipcMain.removeHandler('workspaceCleanup:cancelScan')
   ipcMain.removeHandler('workspaceCleanup:getCachedScan')
   ipcMain.removeHandler('workspaceCleanup:dismiss')
@@ -73,6 +83,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       try {
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
+          readAgentStatusSnapshot: deps.readAgentStatusSnapshot,
           onProgress: scanArgs.scanId
             ? (progress) => {
                 if (!sender.isDestroyed()) {
@@ -85,7 +96,9 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         // fleet snapshot. worktreeIds: [] is still targeted — persisting its
         // empty result would wipe the fleet cache.
         if (!targeted) {
-          void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
+          // Why: stray folders are re-read each scan; a cached one could already be in the Trash.
+          const { strayDirectoryScan: _notPersisted, ...persistable } = result
+          void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, persistable)
         }
         return result
       } finally {
@@ -141,6 +154,16 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
     }
     store.updateUI({ workspaceCleanup: { dismissals: next } })
   })
+
+  ipcMain.handle(
+    'workspaceCleanup:trashStrayDirectory',
+    (_event, args: WorkspaceCleanupTrashStrayDirectoryArgs | undefined) =>
+      trashWorkspaceCleanupStrayDirectory(store, args, {
+        trashItem: (targetPath) => shell.trashItem(targetPath),
+        listRegisteredWorktreePaths: (repo) =>
+          listWorkspaceCleanupRegisteredWorktreePaths(store, repo)
+      })
+  )
 
   ipcMain.handle('workspaceCleanup:clearDismissals', () => {
     store.updateUI({ workspaceCleanup: { dismissals: {} } })

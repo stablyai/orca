@@ -18519,6 +18519,34 @@
     },
     "workspace": {
       "cleanup": {
+        "reason": {
+          "merged": "マージ済み",
+          "staleAgent": "放置された Agent",
+          "prunable": "剪定可能",
+          "unregistered": "未登録",
+          "reviewMerged": "リンクされたレビューはマージ済みです",
+          "mergedInto": "ブランチのすべてのコミットが {{value0}} に含まれています",
+          "mergedIntoBase": "ブランチのすべてのコミットがベースブランチに含まれています",
+          "staleAgentDescription": "コーディング Agent の一時ワークツリー。7日以上アイドルで、稼働中の Agent は報告されていません",
+          "prunableDescription": "Git はこのワークツリーを一覧に表示していますが、フォルダーまたは Git リンクがありません",
+          "unregisteredDescription": "このフォルダーをワークツリーとして登録しているプロジェクトはありません"
+        },
+        "strayFolders": {
+          "movedToTrash": "ゴミ箱に移動しました",
+          "moveFailed": "フォルダーをゴミ箱に移動できませんでした",
+          "title": "未登録のフォルダー: {{value0}}",
+          "description": "ワークツリー用フォルダー内で見つかり、どのプロジェクトにも登録されていません。1つずつ確認してください。",
+          "brokenGitLinkDescription": ".git ファイルが存在しない Git フォルダーを指しています",
+          "brokenGitLink": "壊れたリンク",
+          "lastModified": "最終更新 {{value0}}",
+          "moveToTrash": "ゴミ箱に移動",
+          "truncated": "最初の {{value0}} 件のフォルダーを表示しています。",
+          "skippedRemote": "リモートホスト上のワークツリーフォルダーは確認されていません。",
+          "skippedWsl": "WSL 内のワークツリーフォルダーは確認されていません。",
+          "skippedHoldsProjects": "プロジェクトも含むワークツリーフォルダーは確認されていません。",
+          "skippedUnreadable": "一部のワークツリーフォルダーを読み取れませんでした。",
+          "trashUnavailable": "このホストではフォルダーをゴミ箱に移動できません。"
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "アルファクリーンアップを確認する"
         },

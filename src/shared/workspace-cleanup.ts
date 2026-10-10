@@ -2,14 +2,39 @@
 import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-state'
 import type { ExecutionHostId } from './execution-host'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+import type { WorkspaceCleanupStrayDirectoryScan } from './workspace-cleanup-stray-directories'
 
 export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
+/** Agent scratch worktrees are disposable by design, so they share the archived threshold. */
+export const WORKSPACE_CLEANUP_STALE_AGENT_IDLE_MS = WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
 
 export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
 
-export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
+export const WORKSPACE_CLEANUP_REASONS = [
+  'archived',
+  'idle-clean',
+  'merged',
+  'stale-agent',
+  'prunable',
+  'unregistered'
+] as const
+
+export type WorkspaceCleanupReason = (typeof WORKSPACE_CLEANUP_REASONS)[number]
+
+const WORKSPACE_CLEANUP_REASON_SET: ReadonlySet<string> = new Set(WORKSPACE_CLEANUP_REASONS)
+// Why: a stray folder has no git evidence that deleting it loses nothing.
+const WORKSPACE_CLEANUP_REVIEW_ONLY_REASONS: ReadonlySet<string> = new Set(['unregistered'])
+
+export function isKnownWorkspaceCleanupReason(value: unknown): value is WorkspaceCleanupReason {
+  return typeof value === 'string' && WORKSPACE_CLEANUP_REASON_SET.has(value)
+}
+
+/** Unknown reasons come from a newer host and never make a row ready on their own. */
+export function isWorkspaceCleanupSelectableReason(reason: string): boolean {
+  return isKnownWorkspaceCleanupReason(reason) && !WORKSPACE_CLEANUP_REVIEW_ONLY_REASONS.has(reason)
+}
 
 export type WorkspaceCleanupInactivityInput = {
   isArchived: boolean
@@ -82,6 +107,8 @@ export type WorkspaceCleanupCandidate = {
     upstreamBehind: number | null
     checkedAt: number | null
   }
+  /** Base ref the branch is fully contained in; present only with the `merged` reason. */
+  mergedBaseRef?: string
   fingerprint: string
 }
 
@@ -121,6 +148,8 @@ export type WorkspaceCleanupScanResult = {
   scannedAt: number
   candidates: WorkspaceCleanupCandidate[]
   errors: WorkspaceCleanupScanError[]
+  /** Optional: only full-list broad scans read worktree roots, and older hosts never do. */
+  strayDirectoryScan?: WorkspaceCleanupStrayDirectoryScan
 }
 
 export type WorkspaceCleanupScanProgress = WorkspaceCleanupScanResult & {
@@ -195,7 +224,7 @@ function canSelectWorkspaceCleanupCandidate(
   candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git' | 'reasons'>
 ): boolean {
   return (
-    candidate.reasons.length > 0 &&
+    candidate.reasons.some(isWorkspaceCleanupSelectableReason) &&
     candidate.git.clean === true &&
     candidate.git.checkedAt !== null &&
     !candidate.blockers.some((blocker) => LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker))

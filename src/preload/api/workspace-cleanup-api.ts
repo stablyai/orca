@@ -7,6 +7,10 @@ import type {
   WorkspaceCleanupSnapshotPruneRecordArgs
 } from '../../shared/workspace-cleanup'
 import type {
+  WorkspaceCleanupTrashStrayDirectoryArgs,
+  WorkspaceCleanupTrashStrayDirectoryResult
+} from '../../shared/workspace-cleanup-stray-directories'
+import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
@@ -25,6 +29,10 @@ export type WorkspaceCleanupApi = {
   beginRemovalSnapshotPruneBatch?: (args: WorkspaceCleanupSnapshotPruneBatchArgs) => Promise<void>
   recordRemovalSnapshotPrune?: (args: WorkspaceCleanupSnapshotPruneRecordArgs) => Promise<void>
   finishRemovalSnapshotPruneBatch?: (args: WorkspaceCleanupSnapshotPruneBatchArgs) => Promise<void>
+  /** Moves an unregistered folder from a worktree root to the OS trash after re-checking it. */
+  trashStrayDirectory?: (
+    args: WorkspaceCleanupTrashStrayDirectoryArgs
+  ) => Promise<WorkspaceCleanupTrashStrayDirectoryResult>
 }
 
 export type WorkspaceSpaceApi = {

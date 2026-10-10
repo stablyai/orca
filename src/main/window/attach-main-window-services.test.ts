@@ -131,6 +131,9 @@ vi.mock('../ipc/pty-management', () => ({
 vi.mock('../ipc/workspace-cleanup', () => ({
   registerWorkspaceCleanupHandlers: registerWorkspaceCleanupHandlersMock
 }))
+vi.mock('../agent-hooks/server', () => ({
+  agentHookServer: { getStatusSnapshot: vi.fn(() => []) }
+}))
 vi.mock('../ipc/folder-repo-git-upgrade', () => ({
   startFolderRepoGitUpgradeWatch: startFolderRepoGitUpgradeWatchMock
 }))
@@ -241,7 +244,9 @@ describe('attachMainWindowServices', () => {
     expect(registerRemoteWorkspaceHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
     expect(registerDaemonManagementHandlersMock).toHaveBeenCalledExactlyOnceWith()
     expect(registerDaemonManagementHandlersMock).toHaveBeenCalledAfter(registerPtyHandlersMock)
-    expect(registerWorkspaceCleanupHandlersMock).toHaveBeenCalledExactlyOnceWith(store)
+    expect(registerWorkspaceCleanupHandlersMock).toHaveBeenCalledExactlyOnceWith(store, {
+      readAgentStatusSnapshot: expect.any(Function)
+    })
     expect(startFolderRepoGitUpgradeWatchMock).toHaveBeenCalledExactlyOnceWith(store, mainWindow)
   })
 

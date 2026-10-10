@@ -99,6 +99,30 @@ describe('workspace cleanup snapshot IPC', () => {
     expect(persistScanResultMock).toHaveBeenCalledWith('/profile-a', args, result)
   })
 
+  it('replies with stray folders but never caches them in the fleet snapshot', async () => {
+    const strayDirectoryScan = { directories: [], skippedRoots: [], truncated: false }
+    scanWorkspaceCleanupMock.mockResolvedValue({
+      scannedAt: NOW,
+      candidates: [],
+      errors: [],
+      strayDirectoryScan
+    })
+    registerWorkspaceCleanupHandlers(makeEmptyStore())
+    const handler = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
+
+    const args = { includeAllWorkspaces: true }
+    const result = await handler?.(makeScanEvent(), args)
+
+    expect(result).toMatchObject({ strayDirectoryScan })
+    expect(persistScanResultMock).toHaveBeenCalledWith('/profile-a', args, {
+      scannedAt: NOW,
+      candidates: [],
+      errors: []
+    })
+  })
+
   it('does not rewrite the fleet snapshot for a focused scan', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
     const handler = vi

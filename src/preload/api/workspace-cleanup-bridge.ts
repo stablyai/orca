@@ -30,5 +30,6 @@ export const workspaceCleanupApi = {
   recordRemovalSnapshotPrune: (args) =>
     ipcRenderer.invoke('workspaceCleanup:recordRemovalSnapshotPrune', args),
   finishRemovalSnapshotPruneBatch: (args) =>
-    ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args)
+    ipcRenderer.invoke('workspaceCleanup:finishRemovalSnapshotPruneBatch', args),
+  trashStrayDirectory: (args) => ipcRenderer.invoke('workspaceCleanup:trashStrayDirectory', args)
 } satisfies PreloadApi['workspaceCleanup']
