@@ -1,6 +1,7 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
+import { findVisibleBrowserLinkTarget } from '@/lib/visible-browser-link-target'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import {
@@ -127,13 +128,17 @@ export function registerBrowserStateIpcBridge(
         browserPageId,
         sourcePage.worktreeId
       )
+      const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)
+      const shouldActivate = activate ?? true
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
-        activate: activate ?? true,
+        activate: shouldActivate,
+        // Why both: the anchor only applies when the source tab sits in the visible browser group.
         ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
         ...(sourceUnifiedTab?.executionHostId
           ? { executionHostId: sourceUnifiedTab.executionHostId }
           : {}),
+        ...placement,
         ...(sourceTab
           ? {
               sessionProfileId: sourceTab.sessionProfileId,
@@ -141,6 +146,9 @@ export function registerBrowserStateIpcBridge(
             }
           : {})
       })
+      if (placement && shouldActivate) {
+        store.focusGroup(sourcePage.worktreeId, placement.targetGroupId)
+      }
     })
   )
 }
