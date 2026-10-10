@@ -40,6 +40,8 @@ type CodexActionContext = {
   setCodexAction: Dispatch<SetStateAction<CodexAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
+  /** False once the pane shows another account owner than the one this action targeted. */
+  isCurrentAccountOwner: () => boolean
 }
 
 export function createCodexAccountActionRunner(
@@ -49,6 +51,7 @@ export function createCodexAccountActionRunner(
     accountRuntime,
     codexAccounts,
     fetchSettings,
+    isCurrentAccountOwner,
     isRemoteAccountScope,
     recordFeatureInteraction,
     setCodexAccounts,
@@ -71,6 +74,9 @@ export function createCodexAccountActionRunner(
     setCodexAction(action)
     try {
       const next = await operation()
+      if (!isCurrentAccountOwner()) {
+        return
+      }
       await syncCodexAccounts(next)
       recordFeatureInteraction('codex-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
@@ -147,6 +153,8 @@ type ClaudeActionContext = {
   setClaudeAction: Dispatch<SetStateAction<ClaudeAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
+  /** False once the pane shows another account owner than the one this action targeted. */
+  isCurrentAccountOwner: () => boolean
 }
 
 export function createClaudeAccountActionRunner(
@@ -156,6 +164,7 @@ export function createClaudeAccountActionRunner(
     accountRuntime,
     claudeAccounts,
     fetchSettings,
+    isCurrentAccountOwner,
     isRemoteAccountScope,
     recordFeatureInteraction,
     setClaudeAccounts,
@@ -173,6 +182,9 @@ export function createClaudeAccountActionRunner(
     setClaudeAction(action)
     try {
       const next = await operation()
+      if (!isCurrentAccountOwner()) {
+        return
+      }
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)

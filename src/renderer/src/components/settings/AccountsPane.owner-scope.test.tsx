@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type {
@@ -128,4 +128,29 @@ it("drops a server's late account result after the default runtime moves to anot
   // Server A's roster must not replace server B's in the pane now scoped to B.
   expect(screen.queryByText('alpha@server-a.test')).toBeNull()
   expect(screen.getByText('beta@server-b.test')).toBeTruthy()
+})
+
+it('keeps a late account result once the pane is back on the server it was sent to', async () => {
+  const settingsFor = (environmentId: string) => ({
+    ...getDefaultSettings('/synthetic'),
+    activeRuntimeEnvironmentId: environmentId
+  })
+  const view = render(<AccountsPane settings={settingsFor('server-a')} updateSettings={vi.fn()} />)
+  await act(async () => {})
+  fireEvent.click(screen.getByText('alpha@server-a.test'))
+  for (const environmentId of ['server-b', 'server-a']) {
+    await act(async () =>
+      view.rerender(<AccountsPane settings={settingsFor(environmentId)} updateSettings={vi.fn()} />)
+    )
+  }
+  const alphaRow = (): HTMLElement => {
+    const row = screen.getByText('alpha@server-a.test').closest('button')
+    expect(row).not.toBeNull()
+    return row ?? document.body
+  }
+  expect(within(alphaRow()).queryByText('Active')).toBeNull()
+
+  await act(async () => fake.pendingSelect?.(claudeRoster('acct-a', 'alpha@server-a.test', true)))
+
+  expect(within(alphaRow()).getByText('Active')).toBeTruthy()
 })

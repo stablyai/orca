@@ -72,13 +72,7 @@ import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
 
-export function AccountsPane(props: AccountsPaneProps): React.JSX.Element {
-  // Why: rosters, account ids and in-flight results belong to one owner; a late
-  // result from the previous server must not land in the next owner's pane.
-  return <AccountsPaneForOwner key={getProviderAccountsOwnerKey(props.settings)} {...props} />
-}
-
-function AccountsPaneForOwner({
+export function AccountsPane({
   settings,
   updateSettings,
   wslSupportedPlatform = false,
@@ -117,6 +111,14 @@ function AccountsPaneForOwner({
   // (see #7973); every list/select/remove below must scope to it, not host/WSL.
   const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
   const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
+  // Why: a select/remove can outlive a default-runtime change; its result
+  // belongs to the owner it was sent to, not the one now shown.
+  const accountOwnerKey = getProviderAccountsOwnerKey(settings)
+  const currentAccountOwnerKeyRef = useRef(accountOwnerKey)
+  useEffect(() => {
+    currentAccountOwnerKeyRef.current = accountOwnerKey
+  }, [accountOwnerKey])
+  const isCurrentAccountOwner = (): boolean => currentAccountOwnerKeyRef.current === accountOwnerKey
   // Why: keep the real name separate from the prose fallback below; the scope
   // label must not interpolate the fallback.
   const remoteServerName = isRemoteAccountScope
@@ -308,6 +310,7 @@ function AccountsPaneForOwner({
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
+    isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,
     codexAccounts,
@@ -319,6 +322,7 @@ function AccountsPaneForOwner({
   })
   const runClaudeAccountAction = createClaudeAccountActionRunner({
     settings,
+    isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,
     claudeAccounts,
