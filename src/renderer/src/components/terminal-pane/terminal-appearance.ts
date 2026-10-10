@@ -210,6 +210,8 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
+    pane.terminal.options.mouseEventsRequireAlt =
+      settings.terminalSelectionOverMouseReporting === true
     // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     // Why unconditional: setInlineImagesEnabled is idempotent (attach no-ops when
