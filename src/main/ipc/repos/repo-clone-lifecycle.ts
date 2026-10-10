@@ -21,6 +21,7 @@ import {
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { applyRepoPerformanceConfigOnAdd } from '../../git/repo-performance-config'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
@@ -261,6 +262,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               })
               if (updated) {
                 await prepareLocalWorktreeRootForRepo(store, updated)
+                applyRepoPerformanceConfigOnAdd(updated)
                 invalidateAuthorizedRootsCache()
                 notifyReposChanged(mainWindow)
                 // Why: folder→git upgrade is a real new git repo provisioning event.
@@ -296,6 +298,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
 
           store.addRepo(repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
+          applyRepoPerformanceConfigOnAdd(repo)
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
           emitRepoAdded('clone_url', false, true)

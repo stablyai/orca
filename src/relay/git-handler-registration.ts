@@ -80,6 +80,10 @@ export function registerGitHandlers(
   dispatcher.onRequest('git.forceDeletePreservedBranch', (p) =>
     handlers.exec.forceDeletePreservedBranch(p)
   )
+  // Why a new method name: an old relay answers -32601, which the client treats as unsupported.
+  dispatcher.onRequest('git.repoPerformanceConfig', (p) =>
+    handlers.performanceConfig.repoPerformanceConfig(p)
+  )
   dispatcher.onRequest('git.exec', (p, context) => handlers.exec.exec(p, context))
   dispatcher.onRequest('git.clone', (p, context) => handlers.exec.clone(p, context))
   dispatcher.onRequest('git.isGitRepo', (p) => handlers.worktree.isGitRepo(p))

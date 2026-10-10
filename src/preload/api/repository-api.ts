@@ -24,6 +24,10 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
+import type {
+  GitPerformanceConfigAction,
+  RepoPerformanceConfigOutcome
+} from '../../shared/git-performance-config-types'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
@@ -102,6 +106,11 @@ export type RepositoryApi = {
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
   getGitUsername: (args: { repoId: string }) => Promise<string>
+  // Why optional: desktop-only; the web client has no repository-config channel yet.
+  performanceConfig?: (args: {
+    repoId: string
+    action: GitPerformanceConfigAction
+  }) => Promise<RepoPerformanceConfigOutcome>
   getBaseRefDefault: (args: {
     repoId: string
     hostId?: ExecutionHostId

@@ -121,5 +121,39 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.git.search.gitPerformanceConfigTitle',
+      'Git Performance Tuning'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.gitPerformanceConfigDescription',
+      'Recommended sets repository-local Git options that make status, checkout and fetch faster in large repositories. Orca applies them to projects you add from now on, never changes an option you already set, and Off removes only the options Orca added.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.performance', 'performance'),
+      ...translateSearchKeyword('auto.components.settings.git.search.tuning', 'tuning'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.largeRepository',
+        'large repository'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.monorepo', 'monorepo'),
+      ...translateSearchKeyword('auto.components.settings.git.search.gitStatus', 'git status'),
+      ...translateSearchKeyword('auto.components.settings.git.search.fsmonitor', 'fsmonitor'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.untrackedCache',
+        'untracked cache'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.indexVersion',
+        'index version'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.checkoutWorkers',
+        'checkout workers'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.commitGraph', 'commit graph')
+    ]
+  },
   ...getAutoRenameBranchSearchEntries()
 ])

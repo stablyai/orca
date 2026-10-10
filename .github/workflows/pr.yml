@@ -506,7 +506,8 @@ jobs:
               src/shared/git-binary-compatibility.test.ts \
               src/main/git/worktree-safety-real-git.test.ts \
               src/main/git/worktree-rebase-update-refs-real-git.test.ts \
-              src/relay/git-review-draft-binary-compatibility.test.ts
+              src/relay/git-review-draft-binary-compatibility.test.ts \
+              src/shared/git-performance-config-binary-compatibility.test.ts
           ) &
           pids+=("$!")
 
@@ -519,7 +520,8 @@ jobs:
                 src/shared/git-binary-compatibility.test.ts \
                 src/main/git/worktree-safety-real-git.test.ts \
                 src/main/git/worktree-rebase-update-refs-real-git.test.ts \
-                src/relay/git-review-draft-binary-compatibility.test.ts
+                src/relay/git-review-draft-binary-compatibility.test.ts \
+                src/shared/git-performance-config-binary-compatibility.test.ts
             ) &
             pids+=("$!")
           done

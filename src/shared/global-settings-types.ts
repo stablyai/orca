@@ -41,6 +41,7 @@ import type {
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
 import type { WorktreeVisibilityDefaults } from './repo-types'
+import type { GitTuningMode } from './git-performance-config-types'
 
 export type { WorktreeVisibilityDefaults } from './repo-types'
 
@@ -57,6 +58,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  /** Opt-in repo-local Git performance config; unset means 'off'. */
+  gitTuning?: GitTuningMode
+  /** Separate opt-in for core.fsmonitor under 'recommended'; older Git misreads it. */
+  gitTuningFsmonitor?: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so
    *  the nudge to enable refreshLocalBaseRefOnWorktreeCreate never shows again. */
   localBaseRefSuggestionDismissed: boolean

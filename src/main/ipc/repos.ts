@@ -13,6 +13,7 @@ import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-han
 import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
 import { registerRepoGitUsernameHandler } from './repos/repo-git-username-handler'
 import { registerBaseRefQueryHandlers } from './repos/base-ref-query-handlers'
+import { registerRepoPerformanceConfigHandlers } from './repos/repo-performance-config-handlers'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 export function registerRepoHandlers(
@@ -57,6 +58,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('repos:isGitAvailable')
   ipcMain.removeHandler('repos:getDefaultCreateProjectParent')
   ipcMain.removeHandler('repos:getGitUsername')
+  ipcMain.removeHandler('repos:performanceConfig')
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:searchBaseRefDetails')
@@ -79,4 +81,5 @@ export function registerRepoHandlers(
   registerRepoCloneHandlers(mainWindow, store)
   registerRepoGitUsernameHandler(store)
   registerBaseRefQueryHandlers(store)
+  registerRepoPerformanceConfigHandlers(store)
 }

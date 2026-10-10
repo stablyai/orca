@@ -18,6 +18,10 @@ import {
 } from './CompareAgainstUpstreamSetting'
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
 import {
+  GitPerformanceConfigSetting,
+  gitPerformanceConfigMatchesSearch
+} from './GitPerformanceConfigSetting'
+import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
@@ -308,6 +312,13 @@ export function GitPane({
     compareAgainstUpstreamMatchesSearch(searchQuery) ? (
       <CompareAgainstUpstreamSetting
         key="compare-against-upstream"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
+    gitPerformanceConfigMatchesSearch(searchQuery) ? (
+      <GitPerformanceConfigSetting
+        key="git-performance-config"
         settings={settings}
         updateSettings={updateSettings}
       />

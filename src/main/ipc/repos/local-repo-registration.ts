@@ -9,6 +9,7 @@ import { inspectGitRepoForRegistration, getGitRepoRoot, getRepoName } from '../.
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { applyRepoPerformanceConfigOnAdd } from '../../git/repo-performance-config'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -110,5 +111,6 @@ export async function addLocalRepoFromPath(
 
   store.addRepo(repo)
   await prepareLocalWorktreeRootForRepo(store, repo)
+  applyRepoPerformanceConfigOnAdd(repo)
   return { repo, alreadyExisted: false }
 }

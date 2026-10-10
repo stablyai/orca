@@ -15,6 +15,7 @@ import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
+import { normalizeGitTuningMode } from '../../../shared/git-performance-config-types'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
@@ -171,6 +172,12 @@ export function updateSettings(
     sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
       updates.terminalShortcutPolicy
     )
+  }
+  if ('gitTuning' in updates) {
+    sanitizedUpdates.gitTuning = normalizeGitTuningMode(updates.gitTuning)
+  }
+  if ('gitTuningFsmonitor' in updates) {
+    sanitizedUpdates.gitTuningFsmonitor = updates.gitTuningFsmonitor === true
   }
   if ('sourceControlGroupOrder' in updates) {
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(

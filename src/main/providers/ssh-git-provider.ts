@@ -10,8 +10,44 @@ import type { IGitProvider } from './types'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
 import { SshGitWorktreeProvider } from './ssh-git-worktree-provider'
 import { ReviewDraftContextError } from '../../shared/review-draft-context-error'
+import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
+import { parseGitPerformanceConfigResult } from '../../shared/git-performance-config-wire'
+import type {
+  GitPerformanceConfigAction,
+  GitPerformanceConfigOptions,
+  GitPerformanceConfigResult
+} from '../../shared/git-performance-config-types'
+
+const REPO_PERFORMANCE_CONFIG_METHOD = 'git.repoPerformanceConfig' as const
 
 export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvider {
+  // Why: reconnect replaces this provider, so an upgraded relay is re-probed naturally.
+  private readonly performanceConfigCapability = new CapabilityProbeCache<
+    typeof REPO_PERFORMANCE_CONFIG_METHOD
+  >(Number.POSITIVE_INFINITY)
+
+  /** Runs host-side on the relay; null means the relay predates the method. */
+  async repoPerformanceConfig(
+    repoPath: string,
+    action: GitPerformanceConfigAction,
+    options: GitPerformanceConfigOptions = {}
+  ): Promise<GitPerformanceConfigResult | null> {
+    return this.performanceConfigCapability.runWithFallback<GitPerformanceConfigResult | null>(
+      REPO_PERFORMANCE_CONFIG_METHOD,
+      async () =>
+        parseGitPerformanceConfigResult(
+          await this.mux.request(REPO_PERFORMANCE_CONFIG_METHOD, {
+            repoPath,
+            action,
+            ...(options.fsmonitor ? { fsmonitor: true } : {}),
+            ...(options.keys ? { keys: options.keys } : {})
+          })
+        ),
+      async () => null,
+      isJsonRpcMethodNotFoundError
+    )
+  }
+
   async readReviewDiff(
     worktreePath: string,
     mergeBase: string,

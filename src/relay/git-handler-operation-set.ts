@@ -8,6 +8,7 @@ import { GitHandlerSyncOperations } from './git-handler-sync-operations'
 import { GitHandlerObjectDiffOperations } from './git-handler-object-diff-operations'
 import { GitHandlerExecOperations } from './git-handler-exec-operations'
 import { GitHandlerWorktreeOperations } from './git-handler-worktree-operations'
+import { GitHandlerPerformanceConfigOperations } from './git-handler-performance-config'
 
 export function createGitHandlerOperationSet(host: GitHandlerOperationHost) {
   const read = new GitHandlerReadOperations(host)
@@ -19,6 +20,7 @@ export function createGitHandlerOperationSet(host: GitHandlerOperationHost) {
   const objectDiff = new GitHandlerObjectDiffOperations(host)
   const exec = new GitHandlerExecOperations(host)
   const worktree = new GitHandlerWorktreeOperations(host)
+  const performanceConfig = new GitHandlerPerformanceConfigOperations(host)
 
   return {
     read,
@@ -29,7 +31,8 @@ export function createGitHandlerOperationSet(host: GitHandlerOperationHost) {
     sync,
     objectDiff,
     exec,
-    worktree
+    worktree,
+    performanceConfig
   }
 }
 

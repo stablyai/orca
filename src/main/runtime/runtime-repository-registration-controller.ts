@@ -13,6 +13,7 @@ import { getRepoName, isGitRepo } from '../git/repo'
 import { invalidateAuthorizedRootsCache, isENOENT } from '../ipc/filesystem-auth'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { applyRepoPerformanceConfigOnAdd } from '../git/repo-performance-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
@@ -82,6 +83,7 @@ export class RuntimeRepositoryRegistrationController {
     }
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
+    applyRepoPerformanceConfigOnAdd(repo)
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
   }

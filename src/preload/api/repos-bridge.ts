@@ -5,6 +5,10 @@ import type {
 } from '../../shared/host-repo-catalog-contract'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../../shared/repo-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type {
+  GitPerformanceConfigAction,
+  RepoPerformanceConfigOutcome
+} from '../../shared/git-performance-config-types'
 import type { PreloadApi } from '../api-types'
 
 export const reposApi = {
@@ -57,6 +61,11 @@ export const reposApi = {
 
   getGitUsername: (args: { repoId: string }): Promise<string> =>
     ipcRenderer.invoke('repos:getGitUsername', args),
+
+  performanceConfig: (args: {
+    repoId: string
+    action: GitPerformanceConfigAction
+  }): Promise<RepoPerformanceConfigOutcome> => ipcRenderer.invoke('repos:performanceConfig', args),
 
   getBaseRefDefault: (args: {
     repoId: string

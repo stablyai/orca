@@ -8,6 +8,7 @@ import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
 import { resolveRemoteHomePath } from './remote-home-path'
+import { applyRepoPerformanceConfigOnAdd } from '../../git/repo-performance-config'
 
 export async function addRemoteRepoFromPath(
   store: Store,
@@ -111,6 +112,7 @@ export async function addRemoteRepoFromPath(
   if (mux) {
     mux.notify('session.registerRoot', { rootPath: resolvedPath })
   }
+  applyRepoPerformanceConfigOnAdd(repo)
 
   return { repo, alreadyExisted: false }
 }

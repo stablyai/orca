@@ -22,6 +22,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { getRepoName } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { applyRepoPerformanceConfigOnAdd } from '../git/repo-performance-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
 
@@ -158,6 +159,7 @@ export class RuntimeRepositoryCloneController {
         const updated = store.updateRepo(existing.id, { kind: 'git' })
         if (updated) {
           await prepareLocalWorktreeRootForRepo(store, updated)
+          applyRepoPerformanceConfigOnAdd(updated)
           invalidateAuthorizedRootsCache()
           this.invalidate(updated.id)
           return updated
@@ -190,6 +192,7 @@ export class RuntimeRepositoryCloneController {
     }
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
+    applyRepoPerformanceConfigOnAdd(repo)
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
