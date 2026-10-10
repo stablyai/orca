@@ -22,6 +22,8 @@ import {
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
+const SONNET_ROW = { value: 'sonnet', displayName: 'Sonnet', resolvedModel: 'claude-sonnet-5' }
+
 /** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */
 export function scriptedClaudeExitError(diagnostic: string): Error {
   return withProviderDiagnostic(new Error(diagnostic), providerDiagnostic(diagnostic, 'log'))
@@ -128,7 +130,8 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         closed: false,
         exitVerdict: { root: 'live', tree: 'unverifiable' },
         initializationResult: () => {
-          const initialized = { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
+          // As the real CLI lists it: each row names the model id it runs.
+          const initialized = { models: [SONNET_ROW] }
           const announce = (): void => {
             if (behavior.sendsNoStartFrame) {
               return
@@ -171,10 +174,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           child.calls.push('list_models')
           return control('list_models', () =>
             answer(
-              [
-                { value: 'sonnet', displayName: 'Sonnet' },
-                { value: 'opus', displayName: 'Opus' }
-              ],
+              [SONNET_ROW, { value: 'opus', displayName: 'Opus', resolvedModel: 'claude-opus-5' }],
               false
             )
           )

@@ -174,9 +174,9 @@ describe('a Claude start whose CLI answers initialize but not a control request'
 
     // A turn shows the child running the CLI's own model: the picker follows it, the record
     // keeps what the user chose.
-    turnReportsModel('claude-sonnet-5')
+    turnReportsModel('claude-haiku-5')
     expect(await picker(host)).toEqual({
-      model: 'claude-sonnet-5',
+      model: 'claude-haiku-5',
       effort: 'high',
       confirmed: ['model', 'effort']
     })
@@ -258,7 +258,9 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       ok: true
     })
 
-    await vi.waitFor(() => expect(record(host)?.options).toEqual({ model: 'claude-sonnet-5' }), {
+    // The start's own write: the listed row that runs the model Claude's config chose, and no
+    // effort, since none was learned.
+    await vi.waitFor(() => expect(record(host)?.options).toEqual({ model: 'sonnet' }), {
       timeout: DEADLINE_MS * 40
     })
     expect(record(host)?.lease.claimStatus).toBe('live')

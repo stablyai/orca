@@ -88,6 +88,10 @@ export type AttachFlowInput = {
   eventSink?: StructuredAgentSessionEventSink
   /** Stops acquisition-window events targeting the superseded journal. */
   onAcquiring?: () => Promise<void> | void
+  /** The saved options this start launches with; absent, the record's own. */
+  launchOptions?: (
+    record: AgentSessionRecord
+  ) => Promise<Readonly<Record<string, string>> | undefined>
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
   /** The conversation's own open journal, which the attach adopts: it never opens one itself. */

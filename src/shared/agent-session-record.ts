@@ -1,6 +1,7 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
+import type { AgentSessionModelChooser } from './agent-session-options-replacement'
 import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
@@ -157,6 +158,9 @@ export type AgentSessionRecord = {
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  /** Who chose `options.model`. Absent when it holds none, or on a record from before this was
+   *  kept, which reads as a caller's: only the user's own selection is ever replaced. */
+  modelChosenBy?: AgentSessionModelChooser
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
@@ -165,13 +169,6 @@ export type AgentSessionRecord = {
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
-}
-
-export type AgentSessionOptionsReplacement = {
-  sessionId: string
-  fence: number
-  options: Readonly<Record<string, string>>
-  now: number
 }
 
 const MAX_ID_LENGTH = 512

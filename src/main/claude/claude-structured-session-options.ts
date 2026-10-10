@@ -19,6 +19,7 @@ import {
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentModelCatalogLiveListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { agentModelListNames } from '../../shared/agent-session-model-fallback'
 
 /**
  * The session's current effort, which only `get_settings` reports: the
@@ -201,16 +202,23 @@ export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId
   // An empty list identifies no model, so it is not evidence against one — a live
   // CLI predating `list_models` would otherwise have every model refused under it.
   // Do not turn this into a refusal.
-  return (
-    models.length === 0 ||
-    models.some((model) => model.id === modelId || model.resolvedModel === modelId)
-  )
+  return models.length === 0 || agentModelListNames(models, modelId)
 }
 
 /** The built-in models a running child lists when the CLI gives it none; a chat at rest with no
  *  catalog lists the same. */
 export function claudeFallbackModelOptions(): WireClaudeModel[] {
   return wireClaudeModels(seedModels())
+}
+
+/** Whether `modelId` is a row of the list this child's options answer from: its own, else the seed. */
+export function claudeSessionListsModel(
+  catalog: unknown[] | null,
+  modelId: string | undefined
+): boolean {
+  const discovered = listedModels(catalog ? { models: catalog } : null)
+  const listed = discovered.length > 0 ? discovered : seedModels()
+  return modelId !== undefined && agentModelListNames(listed, modelId)
 }
 
 export async function readClaudeStructuredSessionOptions(
@@ -295,6 +303,7 @@ export function claudeStructuredSessionOptionsFrom(
   let desiredFastMode = decodedFastMode(session)
   if (
     desiredFastMode === true &&
+    model !== undefined &&
     listedModelFastModeSupport(discovered, model) === false &&
     readMutationSequence === session.optionMutationSequence
   ) {
@@ -325,7 +334,7 @@ export function claudeStructuredSessionOptionsFrom(
     models: wireClaudeModels(models),
     ...(support ? { fastModeSupport: support } : {}),
     current: {
-      model,
+      ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

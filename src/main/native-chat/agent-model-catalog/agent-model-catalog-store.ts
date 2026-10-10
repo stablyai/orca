@@ -46,6 +46,11 @@ export type { AgentModelCatalogFailure }
 // `AgentModelCatalogFailures`, which also holds why no chat can start under the account).
 
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
+/** An account-level listing this young is current enough to say a selected model it lacks is gone;
+ *  an older one is re-listed once before it may say so. */
+export const AGENT_MODEL_CATALOG_CURRENT_MS = 60_000
+/** How long a start waits for the one re-listing its selection takes before launching as saved. */
+export const AGENT_MODEL_CATALOG_START_WAIT_MS = 3_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
 /** Lists an agent's models without a session, under the account a launch would pin. `signal`
@@ -82,7 +87,7 @@ export class AgentModelCatalogStore {
   private readonly dueEntries = new Set<string>()
   private nextListingOrder = 0
   private persistence: AgentModelCatalogPersistence | null = null
-  private readonly now: () => number
+  readonly now: () => number
 
   constructor(options?: { now?: () => number }) {
     this.now = options?.now ?? Date.now
@@ -132,6 +137,20 @@ export class AgentModelCatalogStore {
       !entry.discovered ||
       this.now() - entry.discovered.at >= AGENT_MODEL_CATALOG_FRESH_MS
     )
+  }
+
+  /** Only a discovery can call a model gone: a running child's listing is as old as its start. */
+  isCurrent(entry: AgentModelCatalogEntry): boolean {
+    return (
+      !this.dueEntries.has(entry.fingerprint) &&
+      entry.discovered !== null &&
+      this.now() - entry.discovered.at < AGENT_MODEL_CATALOG_CURRENT_MS
+    )
+  }
+
+  /** A listing for this catalog is running, by any lister. */
+  isListing(fingerprint: string): boolean {
+    return this.refreshes.has(fingerprint)
   }
 
   failureDetail(fingerprint: string): string | null {
@@ -275,6 +294,9 @@ export class AgentModelCatalogStore {
       (success) => {
         span.setAttribute('models', success.models.length)
         span.end()
+        if (success.models.length === 0) {
+          this.recordFailure(fingerprint, `${agent} listed no models`, agent)
+        }
         // An older lister still receives its own result, but cannot replace a newer discovery.
         const superseded =
           (this.latestWrittenOrder.get(fingerprint) ?? 0) > order && this.entries.has(fingerprint)

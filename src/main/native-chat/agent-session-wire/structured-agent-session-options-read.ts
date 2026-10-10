@@ -19,6 +19,7 @@ import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionModels } from './structured-agent-session-option-models'
+import { settledAgentModelSelection } from '../agent-model-catalog/agent-model-catalog-selection'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
@@ -58,13 +59,15 @@ async function readStructuredAgentSessionOptionsAtRest(
     throw new Error('agent_session_identity_required')
   }
   const rules = restingOptionRules(deps.agents, record)
+  // Decides as the next start will, without waiting: while an aged list lacking the saved model is
+  // re-listed, the saved model stands.
   const catalog = (await deps.modelCatalog
     ?.read({ agent: record.provider, sessionId })
     .catch(() => null)) ?? { origin: 'unknown' as const }
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models
   const models = listed ?? []
-  const saved = record.options ?? {}
+  const saved = settledAgentModelSelection(catalog, record.options ?? {})
   const fastMode =
     saved.fastMode === undefined
       ? null
@@ -115,7 +118,7 @@ export async function recordStructuredAgentSessionOptionIntent(
     }
   }
   const options = { ...record.options, [input.key]: input.value }
-  await ctx.persistOptions(options)
+  await ctx.persistOptions(options, input.key === 'model' ? 'picker' : undefined)
   ctx.publish()
   return { ok: true, value: { ...input, options } }
 }

@@ -57,6 +57,8 @@ describe('parseClaudeModelList', () => {
       id: 'opus[1m]',
       label: 'Opus (1M context)',
       description: 'Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok',
+      // What the alias runs here: a selection saved as this id names the same row.
+      resolvedModel: 'claude-opus-5[1m]',
       effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
       supportsFastMode: true
     })

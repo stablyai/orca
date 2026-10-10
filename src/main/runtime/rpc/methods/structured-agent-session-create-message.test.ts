@@ -198,6 +198,8 @@ it('merges held option overrides with host seeds before the first acquisition', 
     result: { ok: true }
   })
   expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'held-model', effort: 'medium' })
+  // The client's picker held that model, which a later list may find gone.
+  expect(rig.store.getRecord(SESSION)?.modelChosenBy).toBe('picker')
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
   expect(await rig.host.send({ callerKey: 'client-1' }, restTestSend('first work'))).toMatchObject({
     ok: true

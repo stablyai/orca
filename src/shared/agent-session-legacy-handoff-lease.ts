@@ -32,10 +32,12 @@ export type PersistedAgentSessionLease = Omit<AgentSessionLease, 'runtimeKind' |
 /** A record as a row stores it. Decode through `decodePersistedAgentSessionRecord`. */
 export type PersistedAgentSessionRecord = Omit<
   AgentSessionRecord,
-  'lease' | 'providerHandleChain'
+  'lease' | 'providerHandleChain' | 'modelChosenBy'
 > & {
   lease: PersistedAgentSessionLease
   providerHandleChain: PersistedAgentSessionProviderHandleLink[]
+  /** Any value: decode reads one this build does not know as absent, never setting the chat aside. */
+  modelChosenBy?: unknown
 }
 
 export function isPersistedAgentSessionRuntimeKind(

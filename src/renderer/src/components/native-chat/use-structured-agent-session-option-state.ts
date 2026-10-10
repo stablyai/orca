@@ -117,7 +117,12 @@ export function useStructuredAgentSessionOptionState(args: {
     // A host answer is the account's, not the fence's: keep it rather than blank the default.
     const next =
       sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
-        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
+        ? {
+            ...seeded,
+            catalog: previous.catalog,
+            catalogSource: previous.catalogSource,
+            hostModelReplacement: previous.hostModelReplacement
+          }
         : seeded
     optionMutationGeneration.current += 1
     pendingOptionRef.current = null
@@ -186,8 +191,12 @@ export function useStructuredAgentSessionOptionState(args: {
     }
   }, [contextRefresh])
 
+  // A stopped chat's options are decided against the host's listing, so one that lands re-reads them.
+  const rereadOptions = useCallback(() => optionsReadRef.current?.run(), [])
+
   return {
     conversationSupport,
+    rereadOptions,
     optionState,
     optionStateRef,
     activeOptionRecordRef,

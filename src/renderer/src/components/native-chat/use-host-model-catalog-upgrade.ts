@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
@@ -63,6 +63,9 @@ export function useHostModelCatalogUpgrade(args: {
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
+  /** Every final host answer, once applied; `waitedForListing` when it is the listing the host
+   *  said was running, which a stopped chat's options answer may predate. */
+  onCatalogAnswer?: (catalog: AgentSessionModelCatalogResult, waitedForListing: boolean) => void
 }): { unavailable: AgentSessionUnavailable | null } {
   const {
     activeOptionRecordRef,
@@ -90,6 +93,10 @@ export function useHostModelCatalogUpgrade(args: {
   // A reason the agent's own start gave ends with that agent: its start or stop reads again,
   // dropping an answer read before it.
   const running = args.providerRunning === true
+  const onCatalogAnswer = useRef(args.onCatalogAnswer)
+  useEffect(() => {
+    onCatalogAnswer.current = args.onCatalogAnswer
+  }, [args.onCatalogAnswer])
   useEffect(() => {
     if (!said) {
       return
@@ -137,7 +144,16 @@ export function useHostModelCatalogUpgrade(args: {
     }
     let leave: (() => void) | null = null
     const waitForListing = (): void => {
-      leave = joinHostModelListingWait(waitKey, () => read(true), apply)
+      leave = joinHostModelListingWait(
+        waitKey,
+        () => read(true),
+        (catalog) => {
+          apply(catalog)
+          if (catalog) {
+            onCatalogAnswer.current?.(catalog, true)
+          }
+        }
+      )
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
       // The host already answered that its listing is running: the built-in list stands meanwhile.
@@ -157,6 +173,8 @@ export function useHostModelCatalogUpgrade(args: {
           // Only a host that reports the listing knows the wait param; an older one refuses it.
           if (catalog.listingInProgress === true) {
             waitForListing()
+          } else {
+            onCatalogAnswer.current?.(catalog, false)
           }
         })
         .catch(() => {

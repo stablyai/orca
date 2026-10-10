@@ -77,7 +77,8 @@ export async function handleStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
-        ...(params.options ? { options: params.options } : {}),
+        // A client's create carries what its picker held before the chat existed.
+        ...(params.options ? { options: params.options, optionsModelChosenBy: 'picker' } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(
           params.firstMessage ||

@@ -206,6 +206,8 @@ describe('structured agent definitions', () => {
     expect(codex.fallbackModels()).toBeNull()
     expect(claude.effortDefaultsToModel).toBe(true)
     expect(codex.effortDefaultsToModel).toBe(false)
+    expect(claude.replacesUnlistedModel).toBe(true)
+    expect(codex.replacesUnlistedModel).toBeUndefined()
     expect(claude.acceptsKey('model')).toBe(true)
     expect(codex.acceptsKey('model')).toBe(true)
     expect(claude.acceptsKey('no-such-option')).toBe(false)

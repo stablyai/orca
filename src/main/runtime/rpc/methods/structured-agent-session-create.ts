@@ -20,6 +20,7 @@ import type {
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
+import type { AgentSessionModelChooser } from '../../../../shared/agent-session-options-replacement'
 import {
   resolveUncommittedStructuredCreate,
   type StructuredCreateRefused
@@ -72,6 +73,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   options?: Readonly<Record<string, string>>
+  /** Who chose a model `options` name: a client's picker, else a caller that named it outright. */
+  optionsModelChosenBy?: AgentSessionModelChooser
   /** The tab id the caller reserved for this chat, taken when its tab is published; absent, the tab
    *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
   tabId?: string
@@ -123,15 +126,26 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     hostLaunchDirectory,
     ...resolvedAttach
   } = resolved
+  const explicitOptions =
+    args.options && (atRest ? { ...resolved.options, ...args.options } : args.options)
+  // A model the explicit options name is theirs to vouch for; one the seed still names is its own.
+  const explicit = explicitOptions
+    ? {
+        options: explicitOptions,
+        modelChosenBy: args.options?.model
+          ? (args.optionsModelChosenBy ?? 'caller')
+          : explicitOptions.model
+            ? resolved.modelChosenBy
+            : undefined
+      }
+    : {}
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
       // The ledger covers explicit overrides, never defaults that settings can change on replay.
-      ...(args.options
-        ? { options: atRest ? { ...resolved.options, ...args.options } : args.options }
-        : {}),
+      ...explicit,
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,

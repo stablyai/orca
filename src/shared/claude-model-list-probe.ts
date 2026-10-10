@@ -28,6 +28,8 @@ export type ClaudeListedModel = {
   label: string
   /** Names what the value resolves to on this host (e.g. `Opus 5 with 1M context …`). */
   description?: string
+  /** The model id the value runs on this host (e.g. `claude-opus-5-5[1m]`). */
+  resolvedModel?: string
   /** `--effort` values this model accepts; empty when it has no effort control. */
   effortLevels: string[]
   supportsFastMode: boolean
@@ -50,6 +52,7 @@ type RawListedModel = {
   value?: unknown
   displayName?: unknown
   description?: unknown
+  resolvedModel?: unknown
   supportsEffort?: unknown
   supportedEffortLevels?: unknown
   supportsFastMode?: unknown
@@ -71,6 +74,10 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
   const label = typeof raw.displayName === 'string' && raw.displayName.trim() ? raw.displayName : id
   const description =
     typeof raw.description === 'string' && raw.description.trim() ? raw.description : undefined
+  const resolvedModel =
+    typeof raw.resolvedModel === 'string' && raw.resolvedModel.trim()
+      ? raw.resolvedModel
+      : undefined
   const effortLevels =
     raw.supportsEffort === true && Array.isArray(raw.supportedEffortLevels)
       ? raw.supportedEffortLevels.filter((level): level is string => typeof level === 'string')
@@ -79,6 +86,7 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
     id,
     label,
     ...(description ? { description } : {}),
+    ...(resolvedModel ? { resolvedModel } : {}),
     effortLevels,
     supportsFastMode: raw.supportsFastMode === true
   }

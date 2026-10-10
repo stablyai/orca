@@ -69,6 +69,11 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           : await requireInstalledStructuredHost(ctx, params.sessionId)
       const record =
         params.sessionId === undefined ? null : host.deps.store.getRecord(params.sessionId)
+      // Before a record exists, the selection is the saved one create will seed.
+      const seededModel = record
+        ? undefined
+        : ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)?.model
+      const selected = { ...params, ...(seededModel ? { requiredModel: seededModel } : {}) }
       const read = async (): Promise<AgentSessionModelCatalogResult> => {
         const catalog = host.deps.modelCatalog
         if (!catalog) {
@@ -77,15 +82,15 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
         if (launchDirectory) {
-          return catalog.read({ ...params, workspacePath: launchDirectory })
+          return catalog.read({ ...selected, workspacePath: launchDirectory })
         }
         if (worktree === undefined) {
-          return catalog.read(params)
+          return catalog.read(selected)
         }
         const workspacePath = await ctx.runtime
           .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
           .catch(() => null)
-        return catalog.read({ ...params, workspacePath })
+        return catalog.read({ ...selected, workspacePath })
       }
       const answer = await read()
       // The chat's running agent can say what no listing does: a Pi that started with no model.

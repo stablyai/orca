@@ -397,6 +397,8 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
+  /** The provider's own id this listed alias runs; a selection saved as either names this row. */
+  resolvedModel?: string
   /** Service tiers the provider lists for this model besides its standard one, each valued by the
    *  provider's own tier id. Absent means unknown; a client that reads it offers one speed choice
    *  (`default` for standard) in place of the Fast toggle. */
@@ -425,6 +427,11 @@ export type AgentSessionModelCatalogResult = {
   /** Why no chat can start under the account, as the host's probe last found it. Absent is
    *  unknown, which shows nothing; an older host never sends it. */
   unavailable?: AgentSessionUnavailable
+  /** Sent only while the list is current (listed within the last minute, nothing running or
+   *  failed) for an agent whose host replaces a gone model: a selection this list does not name is
+   *  gone, and the host starts that chat on this model, the account's listed default. Absent (any
+   *  doubt, or an older host) keeps a selection. */
+  unlistedModelReplacement?: string
 } & (
   | { origin: 'unknown' }
   | {
@@ -495,6 +502,7 @@ export type AgentSessionOptionsResult = {
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
   current: {
+    /** Absent when neither a user selection nor the provider identifies this child's model. */
     model?: string
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */

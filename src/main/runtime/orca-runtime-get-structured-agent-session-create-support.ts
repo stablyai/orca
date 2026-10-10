@@ -265,7 +265,10 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
         adoption && isLegacyAgentSessionAccountHome(selectedAccountHome)
           ? { variable: selectedAccountHome.variable, path: adoption.accountHomePath }
           : selectedAccountHome,
-      ...(options ? { options } : {}),
+      // The remembered new-chat selection, not a pick made for this chat.
+      ...(options
+        ? { options, ...(options.model ? { modelChosenBy: 'new-chat-default' as const } : {}) }
+        : {}),
       ...(input.resumeFrom && adoption
         ? {
             // `adopt` is what makes the reservation seed the handle chain. Presence of

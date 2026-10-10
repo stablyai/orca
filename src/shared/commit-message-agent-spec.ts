@@ -31,6 +31,8 @@ export type CommitMessageModel = {
   label: string
   /** Discovery-provided detail, e.g. what a CLI alias resolves to on this host. */
   description?: string
+  /** The model id a CLI alias runs on this host, where the listing states it. */
+  resolvedModel?: string
   /** Omit when the model does not expose an effort selector — the UI then hides the dropdown. */
   thinkingLevels?: ThinkingLevel[]
   /** Required when thinkingLevels is present. */

@@ -41,7 +41,8 @@ function wireClaudeModel(entry: ListedModel): WireClaudeModel {
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
-    ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
+    ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {}),
+    ...(entry.resolvedModel ? { resolvedModel: entry.resolvedModel } : {})
   }
 }
 
@@ -76,7 +77,9 @@ export function claudeCatalogListing(
     models: wireClaudeModels(discovered),
     ...(support ? { fastModeSupport: support } : {}),
     ...(launchOnly ? { launchOnlyModelId: launched } : {}),
-    ...(configured !== undefined ? { configuredDefault: configured } : {})
+    ...(configured !== undefined ? { configuredDefault: configured } : {}),
+    // The SDK answers `list_models` from the child's initialize result for its whole life.
+    frozenListingOf: session.acquisitionGeneration
   }
 }
 

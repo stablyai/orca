@@ -26,6 +26,7 @@ import type {
   AgentSessionLaunchEnv,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
+import type { AgentSessionModelChooser } from '../../../shared/agent-session-options-replacement'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalFromReference,
@@ -63,6 +64,8 @@ export type AgentSessionAttachParams = {
   runtimeKind: 'native'
   /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
   options?: Readonly<Record<string, string>>
+  /** Host-resolved, beside `options`: who chose the model they name. */
+  modelChosenBy?: AgentSessionModelChooser
   /** The tab id a create reserves for this chat, taken when its tab is published. Never on the
    *  attach fingerprint: which tab shows the chat is not which conversation it attaches to. */
   surfaceTabId?: string
@@ -318,6 +321,7 @@ export function reserveRequestFor(input: {
     provider: params.provider,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
+    ...(params.modelChosenBy ? { modelChosenBy: params.modelChosenBy } : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }
       : {}),

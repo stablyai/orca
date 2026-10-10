@@ -19,6 +19,9 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     fallbackModels: () => AgentSessionModelOption[] | null
     /** An unpicked effort reads as the model's default effort, as a running child reports it. */
     effortDefaultsToModel: boolean
+    /** A selected model the account's current list no longer offers gives way to the listed
+     *  default, at rest and at the next start, instead of failing the chat's next turn. */
+    replacesUnlistedModel?: true
   }
 }
 

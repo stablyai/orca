@@ -532,7 +532,8 @@ describe('Claude stream-json connection', () => {
             supportedEffortLevels: ['low', 'high']
           }
         ]
-      }
+      },
+      get_settings: { applied: { model: 'claude-opus-5' }, effective: {}, sources: {} }
     })
     const connection = await open(launchFor(scenario))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
@@ -555,7 +556,8 @@ describe('Claude stream-json connection', () => {
       efforts: [
         { value: 'low', label: 'Low' },
         { value: 'high', label: 'High' }
-      ]
+      ],
+      resolvedModel: 'claude-opus-5'
     })
     expect(options.current.model).toBe('opus')
   })

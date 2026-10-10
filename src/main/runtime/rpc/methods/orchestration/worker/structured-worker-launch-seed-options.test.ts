@@ -61,7 +61,8 @@ describe('the create the seed options land in', () => {
     agent: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
     runtimeKind: 'native',
-    options: { model: 'saved-model', effort: 'low' }
+    options: { model: 'saved-model', effort: 'low' },
+    modelChosenBy: 'new-chat-default'
   }
 
   async function prepare(options?: Record<string, string>) {
@@ -93,6 +94,16 @@ describe('the create the seed options land in', () => {
 
   it('keeps the saved selection when the dispatch named none', async () => {
     expect((await prepare()).options).toEqual({ model: 'saved-model', effort: 'low' })
+  })
+
+  it("records the dispatch's model as a caller's, so a later list never replaces it", async () => {
+    expect(await prepare({ model: 'claude-sonnet-4-5' })).toMatchObject({
+      options: { model: 'claude-sonnet-4-5' },
+      modelChosenBy: 'caller'
+    })
+    expect((await prepare({ effort: 'high' })).modelChosenBy).toBeUndefined()
+    // A dispatch that named no model runs the remembered new-chat selection, still replaceable.
+    expect((await prepare()).modelChosenBy).toBe('new-chat-default')
   })
 
   it('does not let the seed options move the attach fingerprint', async () => {

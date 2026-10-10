@@ -31,9 +31,9 @@ import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
-  type AgentSessionOptionsReplacement,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import type { AgentSessionOptionsReplacement } from '../../shared/agent-session-options-replacement'
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,

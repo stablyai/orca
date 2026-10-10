@@ -41,6 +41,7 @@ import {
   withAgentSessionSpan,
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
+import { agentModelLaunchOptions } from '../agent-model-catalog/agent-model-catalog-selection'
 
 export type StructuredAgentSessionAttachOptions = {
   hostLaunchDirectory?: string
@@ -184,6 +185,8 @@ async function runAttachUnderAbort(
           throw barrier.error
         }
       },
+      launchOptions: (record) =>
+        agentModelLaunchOptions(context.deps.modelCatalog, context.deps.agents, record),
       authority: {
         ...(launchDirectory ? { launchDirectory } : {}),
         spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),

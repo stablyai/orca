@@ -22,6 +22,7 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   restingOptions: {
     acceptsKey: isClaudeStructuredOptionKey,
     fallbackModels: claudeFallbackModelOptions,
-    effortDefaultsToModel: true
+    effortDefaultsToModel: true,
+    replacesUnlistedModel: true
   }
 }

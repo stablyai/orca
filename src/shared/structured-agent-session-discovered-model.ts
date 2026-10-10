@@ -57,6 +57,7 @@ export function discoveredModel(
     label: model.label,
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),
+    ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
     options: [
       ...(effort ? [effort] : []),
       ...(serviceTier

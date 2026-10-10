@@ -9,9 +9,14 @@ import {
   seedTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 import { AcpStructuredOptions } from '../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../acp/generated/acp-protocol.generated'
+import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-options'
@@ -184,4 +189,77 @@ it('persists resumed provider options atomically with owner proof', async () => 
 
   const reopened = await openTestAgentSessionRecordStore(directory)
   expect(reopened.getRecord(SESSION)?.options).toEqual({ model: 'gpt-tui', effort: 'low' })
+})
+
+it('keeps who chose the model through a reopen, a report of it and a replacement, until it changes', async () => {
+  const store = await openTestAgentSessionRecordStore(directory)
+  const reserved = await store.reserveOwner({
+    sessionId: SESSION,
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'folder'
+    },
+    provider: 'claude',
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/claude' },
+    options: { model: 'opus', effort: 'high' },
+    modelChosenBy: 'picker',
+    expectedFence: null,
+    spawnToken: 'spawn-source',
+    claimKeyId: 'key-1',
+    handoffOperationId: null,
+    probe: { outcome: 'indeterminate', reason: 'new session' },
+    operation: {
+      callerKey: 'client-1',
+      operationId: '1800000000000-00000000000000000000000000000001',
+      fingerprint: 'source-create'
+    },
+    now: NOW
+  })
+  expect(reserved.record.modelChosenBy).toBe('picker')
+  const live: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    options: { model: 'opus', effort: 'high' }
+  }
+  const replace = (
+    record: typeof live,
+    options: Record<string, string>,
+    modelChosenBy?: 'picker' | 'caller'
+  ) =>
+    replaceAgentSessionRecordOptions(record, {
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      options,
+      ...(modelChosenBy ? { modelChosenBy } : {}),
+      now: NOW
+    }).modelChosenBy
+  const picked = { ...live, modelChosenBy: 'picker' as const }
+  // The start's replacement of a gone pick, or the child's report of it, stands for the same pick.
+  expect(replace(picked, { model: 'sonnet', effort: 'high' })).toBe('picker')
+  expect(replace(picked, { model: 'sonnet' }, 'caller')).toBe('caller')
+  expect(replace(picked, { effort: 'high' })).toBeUndefined()
+  // A record from before the source was kept stays a caller's; a model reported for a chat that
+  // held none is nobody's pick.
+  expect(replace(live, { model: 'sonnet' })).toBeUndefined()
+  expect(replace({ ...picked, options: {} }, { model: 'sonnet' })).toBeUndefined()
+
+  const reopened = await openTestAgentSessionRecordStore(directory)
+  expect(reopened.getRecord(SESSION)?.modelChosenBy).toBe('picker')
+})
+
+it("reads who chose the model leniently: a value this build does not know is a caller's", async () => {
+  const chat = (sessionId: string, modelChosenBy: string) => ({
+    ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId })),
+    options: { model: 'opus' },
+    modelChosenBy
+  })
+  await seedTestAgentSessionRecordStore(directory, {
+    records: [chat('session-newer', 'remembered'), chat('session-default', 'new-chat-default')]
+  })
+  const store = await openTestAgentSessionRecordStore(directory)
+  // A newer build's value never sets the chat aside; it reads as absent, so nothing replaces it.
+  expect(store.getRecord('session-newer')).toMatchObject({ options: { model: 'opus' } })
+  expect(store.getRecord('session-newer')?.modelChosenBy).toBeUndefined()
+  expect(store.getRecord('session-default')?.modelChosenBy).toBe('new-chat-default')
 })

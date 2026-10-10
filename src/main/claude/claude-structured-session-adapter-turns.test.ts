@@ -254,9 +254,16 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
           efforts: [
             { value: 'low', label: 'Low' },
             { value: 'high', label: 'High' }
-          ]
+          ],
+          resolvedModel: 'claude-opus-5'
         },
-        { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
+        {
+          id: 'sonnet',
+          label: 'Sonnet',
+          isDefault: false,
+          efforts: [],
+          resolvedModel: 'claude-sonnet-5'
+        }
       ],
       current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
     })

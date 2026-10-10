@@ -60,16 +60,21 @@ export async function acquireOwner(
   if (!spawnToken) {
     throw new Error('agent_session_ownership_unknown')
   }
+  let launchOptions: Readonly<Record<string, string>> | undefined
   try {
     try {
       await input.onAcquiring?.()
       // A close or Stop that landed while the attach was still reconciling launches nothing.
       input.acquireSignal?.throwIfAborted()
+      launchOptions = input.launchOptions
+        ? await waitForPromiseWithSignal(input.launchOptions(record), input.acquireSignal)
+        : record.options
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
     const attempt = mintStructuredAgentSessionStartupAttempt({
       record,
+      ...(launchOptions ? { options: launchOptions } : {}),
       identity: journalIdentityFor(record, input.params),
       // Retries must recover the original reservation, not mint a second child.
       spawnToken,

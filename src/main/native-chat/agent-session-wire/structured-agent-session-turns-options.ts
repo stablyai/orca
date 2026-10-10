@@ -28,7 +28,11 @@ export async function performSetOption(
     }
     throw error
   }
-  await ctx.persistOptions(applied ?? { [input.key]: input.value })
+  // Any model set here counts as a picker's, whoever calls this public RPC.
+  await ctx.persistOptions(
+    applied ?? { [input.key]: input.value },
+    input.key === 'model' ? 'picker' : undefined
+  )
   ctx.publish()
   return { ok: true, value: { ...input, ...(applied ? { options: { ...applied } } : {}) } }
 }

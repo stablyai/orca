@@ -5,7 +5,9 @@ import type {
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../shared/agent-session-option-catalog-types'
 
-export type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
+export type ListedModel = Omit<AgentSessionModelOption, 'resolvedModel'> & {
+  resolvedModel: string | null
+}
 
 export function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -94,7 +96,12 @@ export function seedModels(): ListedModel[] {
   }))
 }
 
-export function currentModelId(models: ListedModel[], reportedModel: string | undefined): string {
+/** The listed row the child runs, else the id it reports; absent when nothing identifies it, since
+ *  a catalog default cannot say what environment or settings made this child run. */
+export function currentModelId(
+  models: readonly ListedModel[],
+  reportedModel: string | undefined
+): string | undefined {
   const matched = reportedModel
     ? models.find(
         (model) =>
@@ -103,7 +110,5 @@ export function currentModelId(models: ListedModel[], reportedModel: string | un
           (reportedModel === 'default' && model.isDefault)
       )
     : undefined
-  return (
-    matched?.id ?? reportedModel ?? models.find((model) => model.isDefault)?.id ?? models[0]!.id
-  )
+  return matched?.id ?? reportedModel
 }

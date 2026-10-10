@@ -24,6 +24,8 @@ import {
 
 export function mintStructuredAgentSessionStartupAttempt(input: {
   record: AgentSessionRecord
+  /** What the child launches with when it differs from the record's saved options. */
+  options?: Readonly<Record<string, string>>
   identity: AgentSessionJournalIdentity
   spawnToken: string
   events?: StructuredAgentSessionEventSink
@@ -41,7 +43,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
       accountHome: record.accountHome,
       ...(record.launchDirectory === undefined ? {} : { launchDirectory: record.launchDirectory })
     },
-    ...(record.options ? { options: record.options } : {}),
+    ...((input.options ?? record.options) ? { options: input.options ?? record.options } : {}),
     ...(input.events ? { events: input.events } : {}),
     ...(input.signal ? { signal: input.signal } : {}),
     optionRevision: input.optionRevision

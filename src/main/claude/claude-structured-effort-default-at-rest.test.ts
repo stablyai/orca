@@ -398,8 +398,14 @@ describe('Claude effort default at rest', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     await startChild(store, undefined, events)
 
-    const started = events.find((event) => event.type === 'started')
-    const reported = started?.type === 'started' ? started.reportedOptions : null
+    // The start's last report, once the settings say what the CLI runs.
+    const started = events.findLast(
+      (event) => event.type === 'started' || event.type === 'options-reported'
+    )
+    const reported =
+      started?.type === 'started' || started?.type === 'options-reported'
+        ? started.reportedOptions
+        : null
     expect(reported).not.toHaveProperty('effort')
     // The record the start persists names the listed row the catalog learned under.
     const record = restingRecord(

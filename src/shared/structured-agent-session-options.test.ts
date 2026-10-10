@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
@@ -10,7 +11,10 @@ import {
   settleStructuredAgentSessionBuiltinCatalog,
   structuredAgentSessionOptionSnapshot
 } from './structured-agent-session-options'
-import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
+import {
+  sessionOptionsPredateHostModelReplacement,
+  structuredAgentSessionOptionView
+} from './structured-agent-session-option-view'
 
 function viewModel(...args: Parameters<typeof structuredAgentSessionOptionView>) {
   const model = structuredAgentSessionOptionSnapshot(
@@ -41,6 +45,24 @@ describe('structured agent session options', () => {
         choices: [{ value: 'reported-model', label: 'Reported Model' }]
       }
     })
+  })
+
+  it("names the listed default for a child that reports no model only where the agent's seed proves it", () => {
+    const report = {
+      models: [{ id: 'listed-default', label: 'Listed default', isDefault: true, efforts: [] }],
+      current: {}
+    }
+    const shown = (seed: typeof GROK_SESSION_OPTION_CATALOG) => {
+      const state = applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState('grok', seed),
+        seed,
+        report
+      )
+      const [model] = structuredAgentSessionOptionSnapshot(state)
+      return model?.kind.type === 'select' ? (model.kind.currentValue ?? null) : null
+    }
+    expect(shown(GROK_SESSION_OPTION_CATALOG)).toBe('listed-default')
+    expect(shown(CODEX_SESSION_OPTION_CATALOG)).toBeNull()
   })
 
   it('projects native Codex selects while bridge Codex keeps its agent picker', () => {
@@ -294,5 +316,63 @@ describe('structured agent session options', () => {
     expect(viewModel(live, seed, {})).toBe('gpt-5.6-luna')
     expect(viewModel(live, seed, { model: 'gpt-5.5' })).toBe('gpt-5.5')
     expect(live.record.model?.value).toBe('gpt-5.6-luna')
+  })
+
+  it('counts a seed saved under the provider id a listed alias runs as listed', () => {
+    const hosted = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        origin: 'probe',
+        models: [
+          {
+            id: 'luna',
+            label: 'Luna',
+            isDefault: true,
+            efforts: [],
+            resolvedModel: 'gpt-5.6-luna'
+          },
+          { id: 'sol', label: 'Sol', isDefault: false, efforts: [] }
+        ],
+        fetchedAt: 1
+      },
+      { newLaunch: true }
+    )
+    // The same rule the host applies, and the picker selects the alias row instead of adding the raw id.
+    const picker = structuredAgentSessionOptionSnapshot(
+      structuredAgentSessionOptionView(hosted, { model: 'gpt-5.6-luna' }, {})
+    ).find((descriptor) => descriptor.id === 'model')?.kind
+    expect(picker).toEqual({
+      type: 'select',
+      currentValue: 'luna',
+      choices: [
+        { value: 'luna', label: 'Luna' },
+        { value: 'sol', label: 'Sol' }
+      ]
+    })
+    expect(structuredAgentSessionOptionView(hosted, { model: 'gpt-next' }, {}).catalogSource).toBe(
+      'seed'
+    )
+  })
+
+  it("re-reads options only when the session's own answer holds a model the host would replace", () => {
+    const live = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [{ id: 'gpt-gone', label: 'Gone', isDefault: false, efforts: [] }],
+        current: { model: 'gpt-gone', confirmed: ['model'] }
+      }
+    )
+    const catalog = {
+      origin: 'probe' as const,
+      models: [{ id: 'luna', label: 'Luna', isDefault: true, efforts: [] }],
+      fetchedAt: 1,
+      unlistedModelReplacement: 'luna'
+    }
+    expect(sessionOptionsPredateHostModelReplacement(live, catalog)).toBe(true)
+    expect(
+      sessionOptionsPredateHostModelReplacement({ ...live, catalogSource: 'host' }, catalog)
+    ).toBe(false)
   })
 })

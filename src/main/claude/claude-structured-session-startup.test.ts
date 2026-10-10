@@ -94,9 +94,13 @@ describe('Claude structured session publishes before the CLI answers initialize'
     await vi.advanceTimersByTimeAsync(SLOW_SETTINGS_MS)
     await claudeStartupSettled(adapter, 'session-1')
 
-    expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
-      reportedOptions: { model: 'claude-haiku-4-5', fastMode: true }
-    })
+    const reported = events.find((event) => event.type === 'options-reported')
+    expect(reported).toMatchObject({ reportedOptions: { fastMode: true } })
+    // Claude's own config chose the applied model: shown live, never saved as a pick.
+    expect(reported).not.toHaveProperty('reportedOptions.model', 'claude-haiku-4-5')
+    expect((await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.model).toBe(
+      'claude-haiku-4-5'
+    )
     expect(events.some((event) => event.type === 'auth-diagnostic')).toBe(true)
     await adapter.closeAll()
   })
@@ -121,7 +125,10 @@ describe('Claude structured session publishes before the CLI answers initialize'
       reportedOptions: expect.objectContaining({ model: 'opus' }),
       restoreSkippedOptions: [],
       // The account listing initialize answered, for the host's catalog.
-      catalogListing: { models: [expect.objectContaining({ id: 'claude-sonnet' })] },
+      catalogListing: {
+        models: [expect.objectContaining({ id: 'claude-sonnet' })],
+        frozenListingOf: expect.any(String)
+      },
       // No host revision handed in: nothing has moved it.
       optionRevision: 0
     })

@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
 import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-chat-session-option-state'
@@ -35,6 +35,9 @@ export function useMobileHostModelCatalogUpgrade(args: {
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
+  /** Every final host answer, once applied; `waitedForListing` when it is the listing the host
+   *  said was running, which a stopped chat's options answer may predate. */
+  onCatalogAnswer?: (catalog: AgentSessionModelCatalogResult, waitedForListing: boolean) => void
 }): void {
   const {
     activeOptionRecordRef,
@@ -48,6 +51,10 @@ export function useMobileHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
+  const onCatalogAnswer = useRef(args.onCatalogAnswer)
+  useEffect(() => {
+    onCatalogAnswer.current = args.onCatalogAnswer
+  }, [args.onCatalogAnswer])
   useEffect(() => {
     if (!client || !sessionId || !enabled || !agent || !optionCatalog) {
       return
@@ -86,12 +93,21 @@ export function useMobileHostModelCatalogUpgrade(args: {
     }
     void read(false)
       .then((catalog) => {
-        if (catalog.origin === 'unknown' && catalog.listingInProgress === true && !stale) {
-          // Usable on the built-in list while the listing runs; it lands in place.
+        if (catalog.listingInProgress === true && !stale) {
+          // Usable on the list it has (else the built-in one) while the listing runs; it lands in
+          // place, and a stopped chat's options decided against it are read again.
           apply(catalog)
-          return read(true).then(apply)
+          return read(true).then((settled) => {
+            apply(settled)
+            if (!stale) {
+              onCatalogAnswer.current?.(settled, true)
+            }
+          })
         }
         apply(catalog)
+        if (!stale) {
+          onCatalogAnswer.current?.(catalog, false)
+        }
         return undefined
       })
       .catch(settleBuiltin)

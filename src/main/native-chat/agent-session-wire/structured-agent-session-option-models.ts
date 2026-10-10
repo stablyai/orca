@@ -6,7 +6,7 @@
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 
 /** `row` builds a provider's own row type from the shared one. */
-export function structuredAgentSessionOptionModels<TModel extends AgentSessionModelOption>(
+export function structuredAgentSessionOptionModels<TModel extends { id: string }>(
   catalog: readonly TModel[],
   current: string | undefined,
   row: (unlisted: AgentSessionModelOption) => TModel

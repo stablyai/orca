@@ -4,11 +4,11 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { isReplaceableModelChoice } from '../../../shared/agent-session-options-replacement'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord
 } from './agent-model-catalog-fingerprint'
-import type { AgentModelCatalogConfiguredChoice } from './agent-model-catalog-entry'
 import type {
   AgentModelCatalogEntry,
   AgentModelCatalogLiveListing,
@@ -17,6 +17,13 @@ import type {
   AgentModelCatalogSuccess
 } from './agent-model-catalog-store'
 import { AgentModelCatalogListingStoppedError } from './agent-model-catalog-failures'
+import type { StructuredAgentRegistry } from '../agent-session-wire/structured-agent-registry'
+import {
+  recordConfiguredDefault,
+  workspaceKeepsListedDefault
+} from './agent-model-catalog-workspace-default'
+import { relistingSettledInTime, selectedModelRules } from './agent-model-catalog-selected-model'
+import { childListingClock } from './agent-model-catalog-child-listing-clock'
 
 export type AgentModelCatalogServiceDeps = {
   store: AgentModelCatalogStore
@@ -28,6 +35,8 @@ export type AgentModelCatalogServiceDeps = {
    *  the SAME resolver the create path fills `record.accountHome` with, so a
    *  record-less read can never answer from another account's listing. */
   resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
+  /** Which agents start on the listed default when their selected model is gone. */
+  agents?: Pick<StructuredAgentRegistry, 'definition'>
   /** Session-less listers, one per agent that has one on this host. */
   probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
   /** Agents whose listing marks the model the account is configured to run as its default. */
@@ -58,6 +67,12 @@ export type AgentModelCatalogService = {
     waitForListing?: boolean
     /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
     savedOnly?: boolean
+    /** The model a decision is about; absent, the session record's model when the user's own
+     *  selection chose it. */
+    requiredModel?: string
+    /** A start's read: it waits for the one re-listing its selection takes (its caller caps the
+     *  whole read at a few seconds), and starts no other listing, since the chat's own child lists. */
+    forStart?: boolean
   }) => Promise<AgentSessionModelCatalogResult>
   /** Saves what a running session listed as its account's catalog, so the next chat starts warm. */
   recordLiveListing: (sessionId: string, listing: AgentModelCatalogLiveListing) => void
@@ -95,26 +110,6 @@ function resultFromEntry(
   }
 }
 
-/** A named workspace keeps the listed default only when none of its own config can replace it. */
-async function workspaceKeepsListedDefault(
-  deps: AgentModelCatalogServiceDeps,
-  agent: string,
-  workspacePath: string | null | undefined,
-  accountHomePath: string | null
-): Promise<boolean> {
-  if (workspacePath === undefined) {
-    return true
-  }
-  if (workspacePath === null || !deps.workspaceMayOverrideDefaultModel) {
-    return false
-  }
-  try {
-    return !(await deps.workspaceMayOverrideDefaultModel({ agent, workspacePath, accountHomePath }))
-  } catch {
-    return false
-  }
-}
-
 /** The catalog a new chat of `agent` would read: the account a launch would pin right now. */
 async function newChatCatalogKey(
   deps: AgentModelCatalogServiceDeps,
@@ -130,37 +125,6 @@ async function newChatCatalogKey(
     fingerprint: agentModelCatalogFingerprint({ agent, accountHome, wslDistro: null }),
     accountHome
   }
-}
-
-/** A session launched with no model pick resolved its config scope's default model and effort;
- *  when that scope is the account's (a native workspace with no config of its own), they are the
- *  account's default, and a resolution naming no listed model retires the saved one. */
-async function recordConfiguredDefault(
-  deps: AgentModelCatalogServiceDeps,
-  record: AgentSessionRecord,
-  fingerprint: string,
-  choice: AgentModelCatalogConfiguredChoice | null
-): Promise<void> {
-  const accountHome = record.accountHome
-  if (
-    record.location.wslDistro !== null ||
-    !deps.recordWorkspacePath ||
-    !deps.workspaceMayOverrideDefaultModel
-  ) {
-    return
-  }
-  const workspacePath = await deps.recordWorkspacePath(record)
-  if (
-    !workspacePath ||
-    (await deps.workspaceMayOverrideDefaultModel({
-      agent: record.provider,
-      workspacePath,
-      accountHomePath: isLegacyAgentSessionAccountHome(accountHome) ? accountHome.path : null
-    }))
-  ) {
-    return
-  }
-  deps.store.recordConfiguredDefault(fingerprint, choice)
 }
 
 async function runBounded<T>(
@@ -198,6 +162,7 @@ export function createAgentModelCatalogService(
   // A chat's configured default still being checked against its workspace, per catalog: a read
   // answers after it, so the chat that reported it is followed by an answer naming it.
   const recordingDefaults = new Map<string, Promise<void>>()
+  const childListedAt = childListingClock(deps.store.now)
   const listWith =
     (probe: AgentModelCatalogProbe, home: AgentSessionAccountHome) =>
     (): Promise<AgentModelCatalogSuccess> =>
@@ -235,6 +200,16 @@ export function createAgentModelCatalogService(
       let entry = deps.store.get(fingerprint)
       const probe = deps.probes?.[params.agent]
       const home = probeHome
+      const selection = selectedModelRules({
+        store: deps.store,
+        agents: deps.agents,
+        agent: params.agent,
+        fingerprint,
+        // Only the user's own selection is ever replaced; a model a caller named runs as given.
+        selected:
+          params.requiredModel ??
+          (isReplaceableModelChoice(scoped?.modelChosenBy) ? scoped?.options?.model : undefined)
+      })
       // Every answer carries the reason the probe last found, read when the answer is made.
       const answer = async (
         listed: AgentModelCatalogEntry | null,
@@ -256,14 +231,32 @@ export function createAgentModelCatalogService(
         const holdsEverywhere =
           result?.listingNamesConfiguredModel === true &&
           deps.agentReadsProjectModelConfig?.(params.agent) === false
+        const replacement = selection.replacement(listed, extra.listingInProgress === true)
         return {
           ...(result ?? { origin: 'unknown' }),
           ...(holdsEverywhere ? { defaultHoldsInEveryWorkspace: true as const } : {}),
           ...extra,
-          ...(unavailable ? { unavailable } : {})
+          ...(unavailable ? { unavailable } : {}),
+          ...(replacement ? { unlistedModelReplacement: replacement } : {})
         }
       }
       if (params.savedOnly) {
+        return answer(entry)
+      }
+      // An aged list may not call the selected model gone until it is re-listed, once per read.
+      if (probe && home && !lifetime.signal.aborted && selection.needsRelisting(entry)) {
+        const relisting = deps.store.refresh(
+          fingerprint,
+          params.agent,
+          probe,
+          listWith(probe, home)
+        )
+        return (await relistingSettledInTime(relisting, params))
+          ? answer(deps.store.get(fingerprint) ?? entry)
+          : answer(entry, { listingInProgress: true })
+      }
+      // A start lists nothing else: the chat's own child lists.
+      if (params.forStart) {
         return answer(entry)
       }
       // Past its TTL, only the probe re-derives a held reason. The reason is served meanwhile;
@@ -305,11 +298,12 @@ export function createAgentModelCatalogService(
       }
       // The record's pinned account and host: the account this child listed under.
       const fingerprint = agentModelCatalogFingerprintForRecord(record)
-      const { configuredDefault, ...listed } = listing
+      const { configuredDefault, frozenListingOf, ...listed } = listing
+      const listedAt = frozenListingOf ? { listedAt: childListedAt(frozenListingOf) } : {}
       const saved = deps.store.recordSuccess(
         fingerprint,
         record.provider,
-        { ...listed, origin: 'live-session' },
+        { ...listed, ...listedAt, origin: 'live-session' },
         'live'
       )
       if (saved && configuredDefault !== undefined) {

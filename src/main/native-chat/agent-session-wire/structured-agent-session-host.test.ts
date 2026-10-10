@@ -535,6 +535,8 @@ describe('setOption', () => {
     })
     expect(setOption).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
+    // A model set here is the picker's, which a later list may find gone.
+    expect(store.getRecord(SESSION)?.modelChosenBy).toBe('picker')
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(0)
   })

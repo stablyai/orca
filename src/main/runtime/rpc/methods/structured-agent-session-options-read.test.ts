@@ -95,6 +95,36 @@ describe('agentSession.modelCatalog', () => {
     expect(read).toHaveBeenCalledWith({ agent: 'claude' })
   })
 
+  it('decides about the saved selection create will seed before the chat has a record', async () => {
+    const structuredAgentSessionLaunchSeedOptions = vi.fn(() => ({ model: 'opus', effort: 'high' }))
+    await call(
+      'agentSession.modelCatalog',
+      { agent: 'claude', sessionId: SESSION },
+      STRUCTURED_CLIENT,
+      {
+        structuredAgentSessionLaunchSeedOptions
+      }
+    )
+    expect(structuredAgentSessionLaunchSeedOptions).toHaveBeenCalledWith('claude')
+    expect(read).toHaveBeenCalledWith({
+      agent: 'claude',
+      sessionId: SESSION,
+      requiredModel: 'opus'
+    })
+    read.mockClear()
+    // Once the record exists, the catalog decides about the model it saved.
+    record = agentSessionRecordFixture()
+    await call(
+      'agentSession.modelCatalog',
+      { agent: 'claude', sessionId: SESSION },
+      STRUCTURED_CLIENT,
+      {
+        structuredAgentSessionLaunchSeedOptions
+      }
+    )
+    expect(read).toHaveBeenCalledWith({ agent: 'claude', sessionId: SESSION })
+  })
+
   it('passes a wait for the listing through to the catalog', async () => {
     await call(
       'agentSession.modelCatalog',

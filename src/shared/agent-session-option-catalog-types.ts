@@ -51,6 +51,8 @@ export type CatalogModel = {
   isDefault?: boolean
   /** Tokens the model's context window holds, where the host's listing states it. */
   contextWindowTokens?: number
+  /** The provider's own id this alias runs, where the host's listing states it. */
+  resolvedModel?: string
   options: CatalogOption[]
 }
 

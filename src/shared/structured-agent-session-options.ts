@@ -37,7 +37,14 @@ export function structuredAgentSessionOptionCatalog(
       options: seed.unknownModelOptions ?? []
     })
   }
-  return { ...seed, models, defaultModelIsCliDefault: true }
+  // A child that reports no model has said nothing about what it runs: its list's default is a
+  // guess unless the agent's own seed proves it is what a launch with no model runs.
+  return {
+    ...seed,
+    models,
+    defaultModelIsCliDefault:
+      result.current.model || seed.defaultModelIsCliDefault ? true : undefined
+  }
 }
 
 export type StructuredAgentSessionOptionState = {
@@ -46,6 +53,9 @@ export type StructuredAgentSessionOptionState = {
    *  built-in list before the host answered (shown as the quiet placeholder); `builtin` is the
    *  same list once the host said it has none, usable but naming nothing the host may replace. */
   catalogSource: 'seed' | 'builtin' | 'host' | 'live' | null
+  /** What the host starts a chat on whose selection its current list lacks (`host` source only);
+   *  absent while that list is unverified. */
+  hostModelReplacement?: string
   record: NativeChatSessionOptionRecord
   pendingId: string | null
 }
@@ -94,7 +104,9 @@ export function applyStructuredAgentSessionModelCatalog(
           discoveredModel(model, catalog.fastModeSupport?.supported === true)
         )
   if (catalog.origin === 'unknown' || models.length === 0) {
-    return settleStructuredAgentSessionBuiltinCatalog(state)
+    const settled = settleStructuredAgentSessionBuiltinCatalog(state)
+    // No list to judge by: any replacement an earlier answer named is doubt now.
+    return settled.hostModelReplacement ? { ...settled, hostModelReplacement: undefined } : settled
   }
   // The host says whether its listed default is what this launch runs; an older host never says,
   // so the client's own knowledge of the agent stands in. A reopened chat may keep its own model.
@@ -110,7 +122,8 @@ export function applyStructuredAgentSessionModelCatalog(
       models,
       ...(namesDefault ? { defaultModelIsCliDefault: true } : {})
     },
-    catalogSource: 'host'
+    catalogSource: 'host',
+    hostModelReplacement: catalog.unlistedModelReplacement
   }
 }
 

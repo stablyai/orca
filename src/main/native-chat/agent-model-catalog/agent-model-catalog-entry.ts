@@ -18,6 +18,8 @@ export type AgentModelCatalogSuccess = {
   launchOnlyModelId?: string
   /** A probe that listed models but also found no chat can start (a signed-out Codex): both kept. */
   unavailable?: AgentSessionUnavailable
+  /** When the lister got this list, by the store's clock; absent, now. */
+  listedAt?: number
 }
 
 /** One listing as the store keeps it. */
@@ -40,6 +42,9 @@ export type AgentModelCatalogLiveListing = {
    *  the configured default for that session's config scope. Null when that resolution names no
    *  listed model, so a saved default is stale; absent when this session can't say. */
   configuredDefault?: AgentModelCatalogConfiguredChoice | null
+  /** The child that listed, when it lists only what it got at its start for its whole life: every
+   *  save of its listing is dated by the host's first save of it. */
+  frozenListingOf?: string
 }
 
 /** A configured model as one session resolved it. `effort` is null when the config sends none
@@ -202,15 +207,18 @@ export function agentModelCatalogEntryWithSuccess(
     launchOnly !== undefined && !previous?.models.some((model) => model.id === launchOnly)
       ? success.models.filter((model) => model.id !== launchOnly)
       : success.models
-  if (models.length === 0) {
-    // An empty list identifies no model; it is doubt, not a catalog.
+  const listedAt = success.listedAt ?? at
+  const held = source === 'discovery' ? previous?.discovered : previous?.live
+  // An empty list identifies no model; it is doubt, not a catalog. A list older than the one held
+  // for its source, such as a long-running child's, is no news.
+  if (models.length === 0 || (held && listedAt < held.at)) {
     return null
   }
   const listing: AgentModelCatalogListing = {
     models: models.map((model) => ({ ...model })),
     ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
     origin: success.origin,
-    at
+    at: listedAt
   }
   const { agent, fingerprint } = identity
   const configured = previous?.configured ?? null
