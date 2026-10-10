@@ -16,8 +16,10 @@ vi.mock('os', async () => {
   }
 })
 
+import { wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import { DevinHookService } from './hook-service'
 import {
+  applyDevinManagedHooks,
   getDevinConfigPath,
   getDevinManagedCommand,
   getDevinManagedScriptPath
@@ -171,6 +173,39 @@ describe('DevinHookService', () => {
       const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
       expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
       expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null')
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previous })
+    }
+  })
+
+  it('registers a forward-slash .cmd path on Windows so Devin sh -c can run it (#20855)', () => {
+    const previous = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const legacyCommand = 'C:\\Users\\ada\\.orca\\agent-hooks\\devin-hook.cmd'
+      const command = getDevinManagedCommand(legacyCommand)
+      expect(command).toBe('C:/Users/ada/.orca/agent-hooks/devin-hook.cmd')
+
+      // A reinstall must sweep the backslash entry older builds wrote.
+      const next = applyDevinManagedHooks(
+        { hooks: { Stop: [{ hooks: [{ type: 'command', command: legacyCommand }] }] } },
+        command
+      )
+      const stopCommands = next.hooks?.Stop?.flatMap((definition) =>
+        (definition.hooks ?? []).map((hook) => hook.command)
+      )
+      expect(stopCommands).toEqual([command])
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previous })
+    }
+  })
+
+  it('keeps POSIX managed hook commands unchanged', () => {
+    const previous = process.platform
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    try {
+      const scriptPath = '/home/ada/.orca/agent-hooks/devin-hook.sh'
+      expect(getDevinManagedCommand(scriptPath)).toBe(wrapPosixHookCommand(scriptPath))
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
     }
