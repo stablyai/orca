@@ -138,23 +138,55 @@ describe('reserve placer', () => {
   })
 })
 
+describe('reserve placer under concurrent placements', () => {
+  it('takes back only its own booking when a refusal lands after a later call was counted', async () => {
+    const now = { value: 0 }
+    const placer = warmPlacer(now)
+    const target = cell('c1', { intakeTokens: 20 })
+    placer.pick([target], 'us-central1', new Set())
+    now.value = 1_000
+    target.polledAt = now.value
+    let refuseFirst: (() => void) | undefined
+    const first = placer.place({
+      cells: [target],
+      region: 'us-central1',
+      epoch: 4,
+      reserve: () => new Promise((resolve) => (refuseFirst = () => resolve({ outcome: 'full' })))
+    })
+    now.value = 1_005
+    const second = await placer.place({
+      cells: [target],
+      region: 'us-central1',
+      epoch: 7,
+      reserve: async () => ({ outcome: 'ok' })
+    })
+    expect(second).toMatchObject({ kind: 'placed' })
+    refuseFirst!()
+    await first
+    // The cell's poll sent at 1,003 covers neither; only the second (counted at 1,005) is left.
+    placer.observePoll({ ...target, polledAt: 1_003 })
+    expect(placer.load({ ...target, polledAt: 1_003 })).toBe(1)
+  })
+})
+
 describe('epoch mint and demotion winner', () => {
   it('mints one above every known epoch', () => {
     expect(mintEpoch([])).toBe(1)
     expect(mintEpoch([3, 9, 4])).toBe(10)
   })
 
-  it('picks the newest join, then the higher epoch, then the lower cell id', () => {
+  it('picks the higher epoch, then the newest join, then the lower cell id', () => {
+    // A rebind on a stale seat joins later but keeps its old epoch: it must not win.
     expect(
       demotionWinner([
         { cellId: 'b', epoch: 2, joinedAt: 10 },
         { cellId: 'a', epoch: 1, joinedAt: 20 }
       ])?.cellId
-    ).toBe('a')
+    ).toBe('b')
     expect(
       demotionWinner([
-        { cellId: 'a', epoch: 2, joinedAt: 10 },
-        { cellId: 'b', epoch: 3, joinedAt: 10 }
+        { cellId: 'a', epoch: 3, joinedAt: 10 },
+        { cellId: 'b', epoch: 3, joinedAt: 20 }
       ])?.cellId
     ).toBe('b')
     const tie = [
@@ -176,5 +208,12 @@ describe('epoch mint and demotion winner', () => {
     // A host flapping onto a third cell does not keep the first seat alive.
     expect(demotionLosers(seats, 19_000, 10_000).map((seat) => seat.cellId)).toEqual(['a', 'b'])
     expect(demotionLosers([seats[0]!], 99_000, 10_000)).toEqual([])
+    // A stale seat that rebinds after the newer one joined is outranked from its rebind.
+    const rebound = [
+      { cellId: 'a', epoch: 3, joinedAt: 20_000 },
+      { cellId: 'b', epoch: 5, joinedAt: 4_000 }
+    ]
+    expect(demotionLosers(rebound, 29_999, 10_000)).toEqual([])
+    expect(demotionLosers(rebound, 30_000, 10_000).map((seat) => seat.cellId)).toEqual(['a'])
   })
 })

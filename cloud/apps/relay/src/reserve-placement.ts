@@ -109,11 +109,11 @@ export class ReservePlacer {
       const cell = this.pick(input.cells, input.region, tried)
       if (!cell) break
       tried.add(cell.cellId)
-      this.countBooking(cell)
+      const countedAt = this.countBooking(cell)
       calls += 1
       const answer = await input.reserve(cell.cellId, epoch)
       if (answer.outcome === 'ok') return { kind: 'placed', cellId: cell.cellId, epoch, calls }
-      this.uncountBooking(cell)
+      this.uncountBooking(cell, countedAt)
       if (answer.outcome === 'intake') this.drain(cell)
       if (answer.outcome === 'seated-newer' && 'epoch' in answer && typeof answer.epoch === 'number') {
         epoch = Math.max(epoch, answer.epoch + 1)
@@ -210,17 +210,22 @@ export class ReservePlacer {
       .length
   }
 
-  private countBooking(cell: PlacementCell): void {
+  // Returns the entry it added, so a refusal removes that one and not a concurrent call's.
+  private countBooking(cell: PlacementCell): number {
     const estimate = this.refill(cell, this.now())
     estimate.tokens = Math.max(0, estimate.tokens - 1)
-    estimate.ownBookings.push(this.now())
+    const at = this.now()
+    estimate.ownBookings.push(at)
     if (estimate.ownBookings.length > 1_000) estimate.ownBookings.shift()
+    return at
   }
 
   // A refusal other than `intake` spent no token on the cell.
-  private uncountBooking(cell: PlacementCell): void {
+  private uncountBooking(cell: PlacementCell, at: number): void {
     const estimate = this.refill(cell, this.now())
-    estimate.ownBookings.pop()
+    // A poll may already have dropped it; then there is nothing of this call's to remove.
+    const index = estimate.ownBookings.lastIndexOf(at)
+    if (index >= 0) estimate.ownBookings.splice(index, 1)
     estimate.tokens = Math.min(this.burst(), estimate.tokens + 1)
   }
 
@@ -237,14 +242,13 @@ export function mintEpoch(knownEpochs: Iterable<number>): number {
 
 export type DuplicateSeat = { cellId: string; epoch: number; joinedAt: number }
 
-// Newest cell-reported join wins, then the higher epoch, then the lower cell id. Every
-// director computes it from the same reports, so no two pick different winners.
+// The higher epoch wins (every move mints a higher one, so a rebind on a stale seat cannot
+// win), then the newest cell-reported join, then the lower cell id. Every director computes
+// it from the same reports, so no two pick different winners.
 function outranks(left: DuplicateSeat, right: DuplicateSeat): boolean {
-  return (
-    left.joinedAt > right.joinedAt ||
-    (left.joinedAt === right.joinedAt &&
-      (left.epoch > right.epoch || (left.epoch === right.epoch && left.cellId < right.cellId)))
-  )
+  if (left.epoch !== right.epoch) return left.epoch > right.epoch
+  if (left.joinedAt !== right.joinedAt) return left.joinedAt > right.joinedAt
+  return left.cellId < right.cellId
 }
 
 export function demotionWinner<Seat extends DuplicateSeat>(seats: readonly Seat[]): Seat | null {
@@ -264,7 +268,9 @@ export function demotionLosers<Seat extends DuplicateSeat>(
     let outrankedSince: number | null = null
     for (const other of seats) {
       if (other === seat || !outranks(other, seat)) continue
-      outrankedSince = outrankedSince === null ? other.joinedAt : Math.min(outrankedSince, other.joinedAt)
+      // Outranked from when both seats existed: a stale seat's later rebind starts its own clock.
+      const since = Math.max(other.joinedAt, seat.joinedAt)
+      outrankedSince = outrankedSince === null ? since : Math.min(outrankedSince, since)
     }
     return outrankedSince !== null && now - outrankedSince >= graceMs
   })
