@@ -126,7 +126,7 @@ function formatHostConnection(host: HostListEntry): string {
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
-  return [
+  const lines = [
     ...(status.target && status.target.kind === 'environment'
       ? [`target: environment ${status.target.environment}`]
       : []),
@@ -139,7 +139,14 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`,
     ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
-  ].join('\n')
+  ]
+  if (status.daemon) {
+    lines.push(
+      `daemonReachable: ${status.daemon.reachable}`,
+      `daemonSessionCount: ${status.daemon.sessionCount ?? 'unknown'}`
+    )
+  }
+  return lines.join('\n')
 }
 
 function formatStatusCaller(caller: CliStatusCaller): string {

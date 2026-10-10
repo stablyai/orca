@@ -28,6 +28,7 @@ export async function createRuntimeClientModuleMock(mocks: RuntimeClientModuleMo
     call = mocks.callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
+    getLocalUserDataPath = (): string => mocks.getDefaultUserDataPathMock()
 
     constructor(
       _userDataPath?: string,
