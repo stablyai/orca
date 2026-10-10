@@ -1,18 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const lineEditorProbe = vi.hoisted(() => vi.fn())
+const innerLineEditorProbe = vi.hoisted(() => vi.fn())
+const relayedShellProbe = vi.hoisted(() => vi.fn())
 const processReadinessProbe = vi.hoisted(() => vi.fn())
 const resolveExecutablePath = vi.hoisted(() => vi.fn((value: string) => Promise.resolve(value)))
 const resolveInstalledExecutablePaths = vi.hoisted(() =>
   vi.fn((): Promise<string[]> => Promise.resolve([]))
 )
+// The relayed shell's tty is a different device than the pane's slave, so the probe is
+// keyed on the device path: the outer pty answers through `lineEditorProbe`, the relay
+// child's inner pty through `innerLineEditorProbe`.
+const RELAYED_TTY = '/dev/ttys-inner'
 vi.mock('../shared/pty-slave-line-discipline-echo', () => ({
-  createPtySlaveLineEditorProbe: () => lineEditorProbe
+  createPtySlaveLineEditorProbe: (ptsName: string | undefined) =>
+    ptsName === RELAYED_TTY ? innerLineEditorProbe : lineEditorProbe
 }))
 vi.mock('../shared/shell-process-readiness', () => ({
   readShellProcessReadiness: processReadinessProbe,
   resolveShellExecutablePath: resolveExecutablePath,
-  resolveInstalledShellExecutablePaths: resolveInstalledExecutablePaths
+  resolveInstalledShellExecutablePaths: resolveInstalledExecutablePaths,
+  readRelayedShellReadiness: relayedShellProbe
 }))
 
 import { createShellPromptReadinessProbe } from './shell-prompt-readiness-probe'
@@ -21,6 +29,9 @@ describe('shell prompt readiness probe', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     lineEditorProbe.mockReset()
+    innerLineEditorProbe.mockReset()
+    relayedShellProbe.mockReset()
+    relayedShellProbe.mockResolvedValue(null)
     processReadinessProbe.mockReset()
     resolveExecutablePath.mockClear()
     resolveInstalledExecutablePaths.mockClear()
@@ -322,5 +333,144 @@ describe('shell prompt readiness probe', () => {
 
     expect(lineEditorProbe).toHaveBeenCalledTimes(4)
     expect(processReadinessProbe).toHaveBeenCalledTimes(4)
+  })
+
+  it('accepts a figterm-style relay whose child is the launched shell at its prompt', async () => {
+    // Why 'other': a relay like script(1) leaves the outer pty's lnext bound, so the pane
+    // slave never classifies as line-editor even while the relayed shell is at its prompt.
+    lineEditorProbe.mockResolvedValue('other')
+    relayedShellProbe.mockResolvedValue({ ttyPath: RELAYED_TTY })
+    innerLineEditorProbe.mockResolvedValue('line-editor')
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(onPromptReady).toHaveBeenCalledOnce()
+    expect(relayedShellProbe).toHaveBeenCalledWith({
+      foregroundPid: 42,
+      shellPath: '/bin/zsh',
+      shellName: 'zsh',
+      shellCwd: process.cwd(),
+      shellPathEnv: undefined
+    })
+  })
+
+  it('accepts a relay found behind a line-editor foreground that is not the launched shell', async () => {
+    // The kiro-cli-term shape if the relay runs the pane slave in full line-editor state:
+    // identity mismatch on the foreground, release comes from the shell child instead.
+    lineEditorProbe.mockResolvedValue('line-editor')
+    processReadinessProbe.mockResolvedValue({
+      executablePath: '/usr/bin/figterm',
+      foreground: true
+    })
+    relayedShellProbe.mockResolvedValue({ ttyPath: RELAYED_TTY })
+    innerLineEditorProbe.mockResolvedValue('line-editor')
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(onPromptReady).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a relay whose child pty carries no active line editor', async () => {
+    lineEditorProbe.mockResolvedValue('other')
+    relayedShellProbe.mockResolvedValue({ ttyPath: RELAYED_TTY })
+    innerLineEditorProbe.mockResolvedValue('other')
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(onPromptReady).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-shell foreground with no relayed shell child behind it', async () => {
+    // The sqlite3 REPL shape: prompt output on the pane, no shell child anywhere. The
+    // queued command must wait for the timeout rather than be typed into the REPL.
+    lineEditorProbe.mockResolvedValue('other')
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(relayedShellProbe).toHaveBeenCalledOnce()
+    expect(onPromptReady).not.toHaveBeenCalled()
+  })
+
+  it('invalidates a relayed-shell result that resolves after disposal', async () => {
+    lineEditorProbe.mockResolvedValue('other')
+    const pending: { resolve?: (value: { ttyPath: string } | null) => void } = {}
+    relayedShellProbe.mockImplementation(
+      () => new Promise((resolve) => (pending.resolve = resolve))
+    )
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    probe?.notifyOutput('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(10)
+    probe?.dispose()
+    pending.resolve?.({ ttyPath: RELAYED_TTY })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onPromptReady).not.toHaveBeenCalled()
+    expect(innerLineEditorProbe).not.toHaveBeenCalled()
+  })
+
+  it('bounds relayed-shell probes with the same retry budget', async () => {
+    lineEditorProbe.mockResolvedValue('other')
+    relayedShellProbe.mockResolvedValue(null)
+    const onPromptReady = vi.fn()
+    const probe = createShellPromptReadinessProbe({
+      slavePath: '/dev/ttys048',
+      shellPath: '/bin/zsh',
+      getShellPid: () => 42,
+      onPromptReady,
+      settleMs: 10
+    })
+
+    for (let index = 0; index < 10; index += 1) {
+      probe?.notifyOutput('\x1b[?2004h')
+      await vi.advanceTimersByTimeAsync(10)
+    }
+
+    expect(lineEditorProbe).toHaveBeenCalledTimes(4)
+    expect(relayedShellProbe).toHaveBeenCalledTimes(4)
+    expect(onPromptReady).not.toHaveBeenCalled()
   })
 })

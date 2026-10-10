@@ -9,6 +9,12 @@ import { Session } from './session'
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasZsh = process.platform !== 'win32' && spawnSync('/bin/zsh', ['--version']).status === 0
 const hasBash = process.platform !== 'win32' && spawnSync('/bin/bash', ['--version']).status === 0
+// `script(1)` allocates an inner pty and relays to a command across it -- the shape a
+// figterm-style takeover (`exec -a zsh kiro-cli-term`, #25586) leaves in front of the
+// real shell: a non-shell image in the foreground, the shell one pty behind it.
+const hasScript =
+  process.platform !== 'win32' &&
+  (existsSync('/usr/bin/script') || spawnSync('script', ['--version']).status === 0)
 const COMMAND_OUTPUT = 'ORCA_STARTUP_COMMAND_RAN'
 // A second Bash install with its own canonical path -- the shape a login profile
 // switches to (`exec /opt/homebrew/bin/bash`) and the one #18768 stalled on. A
@@ -134,10 +140,11 @@ type RunningFixture = {
 }
 
 async function startFixture(
-  fixture: ShellFixture,
+  fixture: Pick<ShellFixture, 'name' | 'shellPath' | 'command' | 'startupFile'>,
   startupContent: string,
   extraFiles: Record<string, string> = {},
-  pathEnv: string = process.env.PATH ?? '/usr/bin:/bin'
+  pathEnv: string = process.env.PATH ?? '/usr/bin:/bin',
+  onReadinessEvent?: (event: string) => void
 ): Promise<RunningFixture> {
   const tempHome = mkdtempSync(join(tmpdir(), 'orca-shell-ready-exec-'))
   const previousHome = process.env.HOME
@@ -176,7 +183,8 @@ async function startFixture(
       cols: 80,
       rows: 24,
       subprocess,
-      shellReadySupported: true
+      shellReadySupported: true,
+      ...(onReadinessEvent ? { reportReadinessEvent: onReadinessEvent } : {})
     })
     let output = ''
     let onOutput = (): void => {}
@@ -439,6 +447,53 @@ fi
   exec ${alternateBashPath ?? '/bin/bash'} --noprofile --norc -l -i
 fi
 `
+
+  // #25586: a figterm-style takeover replaces the foreground with a relay binary, so the
+  // prompt the user sees comes from a shell one pty behind it. The wrapper was exec'd
+  // away (the inner shell deliberately drops ZDOTDIR, so no marker can ever arrive), yet
+  // the queued command must still be typed at the real prompt -- long before the 15s
+  // backstop. The relay probe here is `script(1)`, whose foreground image (/usr/bin/script)
+  // is exactly as non-shell as kiro-cli-term's.
+  const relayTest = hasScript && hasZsh ? it : it.skip
+  relayTest(
+    'releases the queued command behind a pty relay the exec left in front of the shell',
+    async () => {
+      const readinessEvents: string[] = []
+      // Why `env -u`: a figterm takeover on a real machine leaves the inner shell without
+      // the wrapper env (#13767 follow-up measured `env | grep ORCA_SHELL` empty), and an
+      // inner wrapper would emit the marker, masking the relay-release path under test.
+      const scriptRelay =
+        process.platform === 'darwin'
+          ? 'script -q /dev/null /bin/zsh -o noglobalrcs -l -i'
+          : `script -q -c '/bin/zsh -o noglobalrcs -l -i' /dev/null`
+      const running = await startFixture(
+        {
+          name: 'zsh relay',
+          shellPath: '/bin/zsh',
+          startupFile: '.zprofile',
+          command: zshFixture.command
+        },
+        `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
+  export ORCA_EXEC_REPRO_DONE=1
+  exec env -u ZDOTDIR -u ORCA_SHELL_FEATURES ${scriptRelay}
+fi
+`,
+        {},
+        process.env.PATH ?? '/usr/bin:/bin',
+        (event) => readinessEvents.push(event)
+      )
+      try {
+        await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
+        expect(running.session.shellState).toBe('ready')
+        expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
+        expect(readinessEvents).toContain('shell-ready-wrapper-replaced')
+        expect(readinessEvents).not.toContain('shell-ready-timeout')
+      } finally {
+        await running.cleanup()
+      }
+    },
+    10_000
+  )
 
   alternateBashTest(
     'releases at the prompt of a second Bash install the pane PATH resolves',
