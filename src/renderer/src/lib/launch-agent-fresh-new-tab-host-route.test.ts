@@ -29,7 +29,12 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => state.connectionId
 }))
-vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
+const client = vi.hoisted(() => ({ platform: 'darwin' }))
+vi.mock('@/lib/new-workspace', () => ({
+  get CLIENT_PLATFORM() {
+    return client.platform
+  }
+}))
 const toast = vi.hoisted(() => ({ error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
 
@@ -41,12 +46,13 @@ beforeEach(() => {
   host.windowMakesHostLaunchTab.mockReturnValue(true)
   state.settings = { disabledTuiAgents: [] }
   state.connectionId = null
+  client.platform = 'darwin'
 })
 
 describe('which plain new-tab launches start through the host', () => {
   function startsThroughHost(
     overrides: { prompt?: string; freshNewTab?: true } = {},
-    launchPlatform: NodeJS.Platform = 'win32'
+    launchPlatform: NodeJS.Platform = 'darwin'
   ): boolean {
     return freshNewTabLaunchesThroughHost(
       { freshNewTab: true, worktreeId: 'wt-1', agent: 'claude', ...overrides },
@@ -83,6 +89,12 @@ describe('which plain new-tab launches start through the host', () => {
   // Why: the window launches a WSL path as Linux; the host would quote it for Windows.
   it('keeps main launch where the window launches on another platform', () => {
     expect(startsThroughHost({}, 'linux')).toBe(false)
+  })
+
+  // Why: the host resolves a Windows runtime and shell from other sources than the window does.
+  it('keeps main launch on a Windows client', () => {
+    client.platform = 'win32'
+    expect(startsThroughHost({}, 'win32')).toBe(false)
   })
 })
 

@@ -31,6 +31,11 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 const focusTerminalTabSurface = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface }))
+// The host route is for macOS and Linux clients; pinned so a Windows runner reads the same.
+vi.mock('@/lib/new-workspace', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  CLIENT_PLATFORM: 'darwin'
+}))
 vi.mock('@/lib/launch-agent-tab-prompt-paste', () => ({
   pasteAgentLaunchPromptOnceReady: vi.fn(async () => ({ delivered: false, failureNotified: false }))
 }))
@@ -248,6 +253,16 @@ describe('a plain new-tab launch the host proves ran nothing', () => {
     if (!tookPane) {
       expect(toast.error).toHaveBeenCalledOnce()
     }
+  })
+
+  // Why: only a launch tab nothing ran in keeps its workspace; the user's own close still lands.
+  it('still leaves the workspace when the user closes its last tab', () => {
+    const store = seed()
+    const tab = store.getState().createTab(WT)
+
+    store.getState().closeTab(tab.id)
+
+    expect(store.getState().activeWorktreeId).toBeNull()
   })
 
   it('leaves an AI button launch refused, as main does', async () => {

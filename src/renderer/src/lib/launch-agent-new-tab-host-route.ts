@@ -49,6 +49,8 @@ export function freshNewTabLaunchesThroughHost(
     args.freshNewTab === true &&
     !args.prompt?.trim() &&
     launchPlatform === CLIENT_PLATFORM &&
+    // Temporary: the host resolves a Windows runtime and shell from other sources than the window.
+    CLIENT_PLATFORM !== 'win32' &&
     windowMakesHostLaunchTab() &&
     isTuiAgentEnabled(args.agent, state.settings?.disabledTuiAgents) &&
     getConnectionIdFromState(state, args.worktreeId) === null
