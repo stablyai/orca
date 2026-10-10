@@ -1,6 +1,7 @@
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { parseClaudeModelList } from './claude-model-list-probe'
 import { labelFromModelId } from './model-id-label'
+import { iterateProcessOutputLines } from './process-output-field-scanner'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
 
 export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
@@ -38,27 +39,6 @@ function uniqueModels(models: CommitMessageModel[]): CommitMessageModel[] {
     seen.add(model.id)
     return true
   })
-}
-
-function* iterateModelOutputLines(output: string): Generator<string> {
-  let lineStart = 0
-
-  for (let index = 0; index < output.length; index++) {
-    const code = output.charCodeAt(index)
-    if (code !== 10 && code !== 13) {
-      continue
-    }
-
-    yield output.slice(lineStart, index)
-    if (code === 13 && output.charCodeAt(index + 1) === 10) {
-      index++
-    }
-    lineStart = index + 1
-  }
-
-  if (lineStart <= output.length) {
-    yield output.slice(lineStart)
-  }
 }
 
 export function withOpenAiThinking(
@@ -131,7 +111,7 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
 
 export function parseLineModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const id = rawLine.trim()
     if (id.length === 0 || id.includes(' ')) {
       continue
@@ -145,80 +125,9 @@ export function parseLineModels(stdout: string): CommitMessageModel[] {
   return uniqueModels(models)
 }
 
-export function parsePiModels(stdout: string): CommitMessageModel[] {
-  const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
-    const parts = getPiModelTableFields(rawLine, 6)
-    if (parts.length < 6 || parts[0] === 'provider') {
-      continue
-    }
-
-    const [provider, model, , , thinking] = parts
-    const id = `${provider}/${model}`
-    models.push({
-      id,
-      label: `${labelFromModelId(provider)} ${labelFromModelId(model)}`,
-      ...(thinking === 'yes'
-        ? {
-            thinkingLevels: [
-              { id: 'off', label: 'Off' },
-              { id: 'low', label: 'Low' },
-              { id: 'medium', label: 'Medium' },
-              { id: 'high', label: 'High' },
-              { id: 'xhigh', label: 'Extra High' }
-            ],
-            defaultThinkingLevel: 'low'
-          }
-        : {})
-    })
-  }
-  return uniqueModels(models)
-}
-
-// Why: model discovery output can include paste-sized noisy lines; only the first fields matter.
-function getPiModelTableFields(line: string, maxFields: number): string[] {
-  const fields: string[] = []
-  let tokenStart = -1
-
-  for (let index = 0; index <= line.length; index += 1) {
-    const isEnd = index === line.length
-    if (!isEnd && !isPiModelTableWhitespace(line.charCodeAt(index))) {
-      if (tokenStart === -1) {
-        tokenStart = index
-      }
-      continue
-    }
-    if (tokenStart !== -1) {
-      fields.push(line.slice(tokenStart, index))
-      tokenStart = -1
-      if (fields.length >= maxFields) {
-        break
-      }
-    }
-  }
-
-  return fields
-}
-
-function isPiModelTableWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
-}
-
 export function parseCursorModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const match = /^([^\s]+)\s+-\s+(.+)$/.exec(rawLine.trim())
     if (!match) {
       continue
@@ -234,7 +143,7 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
 
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const line = rawLine.trim()
     const separator = line.indexOf('\t')
     const id = (separator === -1 ? line : line.slice(0, separator)).trim()

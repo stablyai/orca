@@ -56,7 +56,39 @@ const VALUE_OPTIONS: Partial<Record<AgentType, readonly string[]>> = {
     '--add-dir',
     '--plugin-dir',
     '--worktree-base'
-  ]
+  ],
+  // Pi/devin entries list required-value options only: their optional-value flags
+  // (`--print`, `--resume`, `--respect-workspace-trust`, `--list-models`, …) never
+  // consume a dash-leading token, so listing them would hide a real `--model`/`--thinking`.
+  pi: [
+    '--provider',
+    '--model',
+    '--api-key',
+    '--system-prompt',
+    '--append-system-prompt',
+    '--mode',
+    '--session',
+    '--session-id',
+    '--fork',
+    '--session-dir',
+    '--name',
+    '-n',
+    '--models',
+    '--tools',
+    '-t',
+    '--exclude-tools',
+    '-xt',
+    '--thinking',
+    '--extension',
+    '-e',
+    '--skill',
+    '--prompt-template',
+    '--theme',
+    '--use-theme',
+    '--export',
+    '--tui-mode'
+  ],
+  devin: ['--prompt-file', '--config', '--permission-mode', '--model']
 }
 
 export function agentArgTerminatorIndex(agent: AgentType, tokens: readonly string[]): number {

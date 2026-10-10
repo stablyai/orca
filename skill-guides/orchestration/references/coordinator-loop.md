@@ -21,15 +21,22 @@ when an older CLI rejects the flag. A nested worker must respect
 
 ## Launch preferences
 
-For a fresh Claude, Codex, Cursor, Antigravity, or Muse terminal, `--model`
-accepts an opaque provider model ID. Pass it only when the user named a model;
-otherwise omit it so the worker inherits the user's configured agent default.
-Add `--effort` only when that model supports it:
+For a fresh Claude, Codex, Cursor, Antigravity, Muse, Pi, or Devin terminal,
+`--model` accepts an opaque provider model ID. Pass it only when the user named
+a model; otherwise omit it so the worker inherits the user's configured agent
+default. Add `--effort` only when that model supports it — on Pi it maps to the
+agent's `--thinking` level:
 
 ```text
 ORCA orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ORCA orchestration worker-start --task <task_id> --worktree current --agent muse --model muse-spark-1.3 --json
+ORCA orchestration worker-start --task <task_id> --worktree current --agent pi --model google/gemini-3-pro --effort xhigh --json
+ORCA orchestration worker-start --task <task_id> --worktree current --agent devin --model swe-2-medium --json
 ```
+
+Devin folds effort into the model id itself (`swe-2-medium`, `swe-2-high`,
+`swe-2-max`, …) and has no effort flag, so `--effort` is refused for it, as for
+OMP.
 
 OpenCode also accepts `--model` in an existing worktree when the execution host
 verifies its CLI version and model availability. Creating a new worktree with an

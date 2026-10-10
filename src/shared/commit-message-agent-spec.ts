@@ -4,6 +4,7 @@ import { isTuiAgentEnabled } from './tui-agent-selection'
 import { labelFromModelId } from './model-id-label'
 import { buildPrimaryCommitMessageAgentSpecs } from './commit-message-agent-specs-primary'
 import { buildSecondaryCommitMessageAgentSpecs } from './commit-message-agent-specs-secondary'
+import { parsePiModelList } from './pi-model-list-probe'
 import {
   BASIC_THINKING_LEVELS,
   CLAUDE_THINKING_LEVELS,
@@ -13,7 +14,6 @@ import {
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
-  parsePiModels,
   withOpenAiThinking
 } from './commit-message-model-parsers'
 
@@ -122,7 +122,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     parseClaudeModels,
     parseCodexModels,
     parseLineModels,
-    parsePiModels,
+    parsePiModels: parsePiModelList,
     withOpenAiThinking
   }),
   ...buildSecondaryCommitMessageAgentSpecs({

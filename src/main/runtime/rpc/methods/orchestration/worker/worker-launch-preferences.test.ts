@@ -49,6 +49,64 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort low')
   })
 
+  it('passes an opaque Pi model and thinking level through the shared catalog', () => {
+    const launch = resolveWorkerLaunchPreferences({
+      agent: 'pi',
+      model: 'openai-codex/gpt-6-luna',
+      effort: 'xhigh'
+    })
+
+    expect(launch).toEqual({
+      preferences: { model: 'openai-codex/gpt-6-luna', effort: 'xhigh' },
+      receipt: {
+        requested: { agent: 'pi', model: 'openai-codex/gpt-6-luna', effort: 'xhigh' },
+        effective: { agent: 'pi', model: 'openai-codex/gpt-6-luna', effort: 'xhigh' }
+      }
+    })
+    expect(resolveAgentSessionOptionLaunch('pi', launch.preferences, [], false)).toEqual({
+      args: ['--model', 'openai-codex/gpt-6-luna', '--thinking', 'xhigh'],
+      appliedValues: { model: 'openai-codex/gpt-6-luna', effort: 'xhigh' }
+    })
+  })
+
+  it('does not invent a Pi thinking level when only a model is requested', () => {
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'pi', model: 'google/gemini-3-pro' }).preferences
+    ).toEqual({ model: 'google/gemini-3-pro' })
+  })
+
+  it('rejects a Pi thinking level outside its flag domain', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({
+        agent: 'pi',
+        model: 'google/gemini-3-pro',
+        effort: 'ultra'
+      })
+    ).toThrow('does not support effort ultra')
+  })
+
+  it('passes a Devin model through the existing launch arguments and receipt', () => {
+    const launch = resolveWorkerLaunchPreferences({ agent: 'devin', model: 'swe-2-medium' })
+
+    expect(launch).toEqual({
+      preferences: { model: 'swe-2-medium' },
+      receipt: {
+        requested: { agent: 'devin', model: 'swe-2-medium', effort: null },
+        effective: { agent: 'devin', model: 'swe-2-medium', effort: null }
+      }
+    })
+    expect(resolveAgentSessionOptionLaunch('devin', launch.preferences, [], false)).toEqual({
+      args: ['--model', 'swe-2-medium'],
+      appliedValues: { model: 'swe-2-medium' }
+    })
+  })
+
+  it('rejects Devin effort because its models encode it', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'devin', model: 'swe-2-medium', effort: 'low' })
+    ).toThrow('does not support effort low')
+  })
+
   it('passes an opaque Claude model and portable effort through the shared catalog', () => {
     expect(
       resolveWorkerLaunchPreferences({
@@ -243,11 +301,14 @@ describe('orchestration worker launch preferences', () => {
     }
   })
 
-  it.each(['codex', 'omp'] as const)('rejects %s effort without a model', (agent) => {
-    expect(() => resolveWorkerLaunchPreferences({ agent, effort: 'high' })).toThrow(
-      '--effort requires --model'
-    )
-  })
+  it.each(['codex', 'omp', 'pi', 'devin'] as const)(
+    'rejects %s effort without a model',
+    (agent) => {
+      expect(() => resolveWorkerLaunchPreferences({ agent, effort: 'high' })).toThrow(
+        '--effort requires --model'
+      )
+    }
+  )
 
   it('rejects model selection for agents without a launch catalog', () => {
     expect(() =>

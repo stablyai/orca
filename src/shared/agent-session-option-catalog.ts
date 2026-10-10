@@ -6,6 +6,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG,
   createClaudeCatalogOptions
 } from './agent-session-option-catalog-claude-codex'
+import { DEVIN_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-devin'
 import {
   CURSOR_SESSION_OPTION_CATALOG,
   GEMINI_SESSION_OPTION_CATALOG
@@ -13,6 +14,7 @@ import {
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+import { PI_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-pi'
 import type {
   AgentSessionOptionCatalog,
   AgentSessionOptionCatalogMap,
@@ -41,7 +43,9 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
-  omp: OMP_SESSION_OPTION_CATALOG
+  omp: OMP_SESSION_OPTION_CATALOG,
+  pi: PI_SESSION_OPTION_CATALOG,
+  devin: DEVIN_SESSION_OPTION_CATALOG
 }
 
 export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {

@@ -1,30 +1,10 @@
 import type { CommitMessageModel } from './commit-message-agent-spec'
 import { labelFromModelId } from './model-id-label'
+import { parseModelListJsonObject } from './model-list-json-output'
 
 // Why: `omp models --json` is the one machine-readable listing OMP offers; the
 // default table output groups rows per provider and would need a brittle parser.
 export const OMP_MODEL_LIST_ARGS = ['models', '--json']
-
-/** The outermost JSON value on stdout, or null when none parses. */
-function parseJsonObject(stdout: string): unknown {
-  const trimmed = stdout.trim()
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    // Why: an update notice or extension warning can precede the JSON on stdout;
-    // the listing itself is the outermost object.
-    const start = trimmed.indexOf('{')
-    const end = trimmed.lastIndexOf('}')
-    if (start === -1 || end <= start) {
-      return null
-    }
-    try {
-      return JSON.parse(trimmed.slice(start, end + 1))
-    } catch {
-      return null
-    }
-  }
-}
 
 /** OMP's `provider/model` selector, the id its listing and `--model` share. */
 export function ompModelSelector(
@@ -38,7 +18,7 @@ export function ompModelSelector(
  *  `--model` and `/model` resolve exactly, unlike a bare model id that several
  *  providers can share. */
 export function parseOmpModelList(stdout: string): CommitMessageModel[] {
-  const parsed = parseJsonObject(stdout)
+  const parsed = parseModelListJsonObject(stdout)
   if (!parsed || typeof parsed !== 'object' || !('models' in parsed)) {
     return []
   }
