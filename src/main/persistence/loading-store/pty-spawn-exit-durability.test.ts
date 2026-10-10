@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { fixture } from './profile-state-delayed-authority-fixture'
+import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
 import { createRuntimePtySpawnState } from '../../ipc/pty/runtime/spawn-state'
@@ -78,6 +78,7 @@ it.each(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, connectionId, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.stablePaneOwner = owner
+      await admitRuntimeSpawnPane(store, binding, connectionId)
       ctx.hostSessionBinding = { store, ...binding }
       ctx.metadataLeafId = binding.leafId
       commit = () => commitRuntimePtySpawn(ctx)

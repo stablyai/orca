@@ -64,8 +64,7 @@ const SCENARIOS: Scenario[] = [
       leafId: TEST_LEAF_1,
       ptyId: 'pty-new',
       incarnationId: 'inc-new',
-      startupCwd: '/fixture/local/sub',
-      hostAdmittedMembership: true
+      startupCwd: '/fixture/local/sub'
     },
     placements: (leaf) => [
       [NEW_TAB, 'agrees'],
@@ -110,8 +109,7 @@ const SCENARIOS: Scenario[] = [
       worktreeId: FOLDER_WORKTREE,
       tabId: 'tab-folder',
       leafId: TEST_LEAF_1,
-      ptyId: 'pty-folder',
-      hostAdmittedMembership: true
+      ptyId: 'pty-folder'
     },
     placements: () => [
       [NEW_TAB, 'agrees'],

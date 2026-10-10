@@ -68,7 +68,7 @@ function moveLeafInPartition(
   const boundHere = sourceLayout.ptyIdsByLeafId?.[leafId]
   const remainingLayout = retireLeavesFromTerminalLayout(sourceLayout, new Set([leafId]))
   const remainingPtyIds = Object.values(remainingLayout?.ptyIdsByLeafId ?? {})
-  const { pendingActivationSpawn, ...row } = createMinimalPersistedTerminalTab({
+  const row = createMinimalPersistedTerminalTab({
     worktreeId,
     tabId: targetTabId,
     ptyId: ptyId ?? '',
@@ -78,8 +78,6 @@ function moveLeafInPartition(
   const targetTab = {
     ...row,
     ptyId,
-    // A moved live pane reattaches; only an unbound one still spawns on activation.
-    ...(ptyId ? {} : { pendingActivationSpawn }),
     ...(sourceTab.shellOverride ? { shellOverride: sourceTab.shellOverride } : {})
   }
   const nextTabs = tabs.map((tab) =>

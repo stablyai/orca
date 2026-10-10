@@ -18,7 +18,6 @@ import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
 } from './mobile-session-layout-projection'
-import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
 
 export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
   protected applyMobileSessionTabNavigation(
@@ -169,38 +168,6 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
-  }
-
-  // Why: a headless split only updated the LIVE session snapshot, never the
-  // persisted workspace session layout. So a later snapshot rebuild (e.g. on the
-  // next terminal create) re-derived from the stale single-leaf persisted layout
-  // and collapsed the split. Persist the new split leaf into the workspace
-  // session's terminalLayoutsByTabId so the split survives rebuilds.
-  protected persistHeadlessTerminalSplit(args: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    splitFromLeafId: string
-    direction: 'horizontal' | 'vertical'
-  }): boolean {
-    const session = this.getWorkspaceSessionForWorktree(args.worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return false
-    }
-    const existing = session.terminalLayoutsByTabId?.[args.tabId]
-    const nextLayout = buildHeadlessTerminalSplitLayout(
-      existing ? cloneTerminalLayoutSnapshot(existing) : undefined,
-      args
-    )
-    this.setWorkspaceSessionForWorktree(args.worktreeId, {
-      ...session,
-      terminalLayoutsByTabId: {
-        ...session.terminalLayoutsByTabId,
-        [args.tabId]: nextLayout
-      }
-    })
-    return true
   }
 
   protected persistHeadlessTerminalActiveLeaf(

@@ -170,7 +170,7 @@ describe('pty spawn placement threading', () => {
       leafId: LEAF,
       ptyId: expect.any(String),
       incarnationId: expect.any(String),
-      hostAdmittedMembership: true,
+      mayCreate: false,
       placement: SPLIT,
       origin: 'spawn'
     })

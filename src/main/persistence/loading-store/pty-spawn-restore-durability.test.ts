@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fixture } from './profile-state-delayed-authority-fixture'
+import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
@@ -56,6 +56,7 @@ describe.each(['ipc', 'runtime'])('%s restored scrollback', (controller) => {
         const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
         ctx.result = result
         ctx.metadataLeafId = binding.leafId
+        await admitRuntimeSpawnPane(store, binding)
         ctx.hostSessionBinding = { store, ...binding }
         commit = () => commitRuntimePtySpawn(ctx)
       }

@@ -17,6 +17,9 @@ type On = { workspace: string }
 export type LayoutCommand =
   | (On & {
       type: 'createTerminalTab'
+      /** Ids the runtime minted before applying, e.g. a retried create's. */
+      tabId?: string
+      leafId?: string
       groupId?: string
       afterTabId?: string
       index?: number
@@ -31,6 +34,8 @@ export type LayoutCommand =
       leafId: string
       direction: TerminalPaneSplitDirection
       ratio?: number
+      /** The new pane's id, when the runtime minted it before applying. */
+      newLeafId?: string
     })
   | (On & { type: 'closePane'; tabId: string; leafId: string })
   | (On & {

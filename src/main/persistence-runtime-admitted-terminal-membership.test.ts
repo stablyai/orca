@@ -47,7 +47,23 @@ function persistedTabIds(session: WorkspaceSessionState, worktreeId: string): st
   return (session.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
 }
 
-describe('host-admitted terminal membership survives a stale renderer replay', () => {
+/** `orca terminal create`: the runtime writes the pane, then binds the terminal it started. */
+async function startRuntimePane(
+  store: Awaited<ReturnType<typeof createStore>>,
+  pane: { worktreeId: string; tabId: string; leafId: string; ptyId: string; incarnationId?: string }
+): Promise<boolean> {
+  expect(
+    await store.admitTerminalPane({
+      type: 'createTerminalTab',
+      workspace: pane.worktreeId,
+      tabId: pane.tabId,
+      leafId: pane.leafId
+    })
+  ).toBe('admitted')
+  return store.persistPtyBinding({ ...pane, mayCreate: false })
+}
+
+describe('runtime-admitted terminal membership survives a stale renderer replay', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-host-membership-'))
   })
@@ -57,21 +73,26 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('keeps the first host-admitted tab when the renderer replays its pre-create tab list', async () => {
+  it('keeps the first runtime-admitted tab when the renderer replays its pre-create tab list', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
 
-    // `orca terminal create`: the host mints a tab the renderer has never seen.
     expect(
-      await store.persistPtyBinding({
+      await startRuntimePane(store, {
         worktreeId: WORKTREE,
         tabId: 'host-tab',
         leafId: TEST_LEAF_2,
-        ptyId: 'host-pty',
-        hostAdmittedMembership: true
+        ptyId: 'host-pty'
       })
     ).toBe(true)
-    expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toContain('host-tab')
+    const session = store.getWorkspaceSession()
+    expect(persistedTabIds(session, WORKTREE)).toContain('host-tab')
+    // Written with its tab-bar entry and group, so no view reads a row the tab bar lacks.
+    expect(session.unifiedTabs?.[WORKTREE]?.map((tab) => tab.entityId)).toContain('host-tab')
+    expect(session.tabGroups?.[WORKTREE]?.flatMap((group) => group.tabOrder)).toContain('host-tab')
+    expect(session.terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_2]: 'host-pty'
+    })
 
     // The renderer's debounced writer flushes a snapshot taken before the create.
     store.setWorkspaceSession(rendererSession())
@@ -79,16 +100,15 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toContain('host-tab')
   })
 
-  it('keeps a host-admitted tab in a second worktree of the same repo', async () => {
+  it('keeps a runtime-admitted tab in a second worktree of the same repo', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
 
-    await store.persistPtyBinding({
+    await startRuntimePane(store, {
       worktreeId: OTHER_WORKTREE,
       tabId: 'host-tab-other',
       leafId: TEST_LEAF_2,
-      ptyId: 'host-pty-other',
-      hostAdmittedMembership: true
+      ptyId: 'host-pty-other'
     })
     store.setWorkspaceSession(rendererSession())
 
@@ -100,12 +120,11 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     store.setWorkspaceSession(rendererSession())
 
     expect(
-      await store.persistPtyBinding({
+      await startRuntimePane(store, {
         worktreeId: WORKTREE,
         tabId: 'host-tab',
         leafId: TEST_LEAF_2,
-        ptyId: 'host-pty',
-        hostAdmittedMembership: true
+        ptyId: 'host-pty'
       })
     ).toBe(true)
     expect(store.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(
@@ -118,9 +137,8 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     )
   })
 
-  // Polarity: without the flag the renderer still owns membership, so a renderer
-  // spawn racing its own writer must not freeze the tab list.
-  it('leaves renderer-owned membership alone when the binding is not host-admitted', async () => {
+  // Polarity: a renderer spawn racing its own writer must not freeze the tab list.
+  it('leaves renderer-owned membership alone when the runtime did not admit the pane', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
 
@@ -138,16 +156,15 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
   // Closing must still work afterwards. Closes are host-driven: the retirement is
   // computed from the store's own session (see stageTerminalSurfaceRetirements),
   // which is what outranks the fence this create just raised.
-  it('still lets the authoritative retirement path close the host-admitted tab', async () => {
+  it('still lets the authoritative retirement path close the runtime-admitted tab', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
-    await store.persistPtyBinding({
+    await startRuntimePane(store, {
       worktreeId: WORKTREE,
       tabId: 'host-tab',
       leafId: TEST_LEAF_2,
       ptyId: 'host-pty',
-      incarnationId: 'host-incarnation',
-      hostAdmittedMembership: true
+      incarnationId: 'host-incarnation'
     })
 
     store.setWorkspaceSession(
@@ -163,5 +180,77 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     store.setWorkspaceSession(rendererSession())
 
     expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toEqual(['renderer-tab'])
+  })
+
+  it('refuses to bind a pane closed while its terminal started, and mints no tab for it', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(rendererSession())
+    expect(
+      await store.admitTerminalPane({
+        type: 'createTerminalTab',
+        workspace: WORKTREE,
+        tabId: 'host-tab',
+        leafId: TEST_LEAF_2
+      })
+    ).toBe('admitted')
+    await store.withdrawTerminalPane({
+      type: 'closePane',
+      workspace: WORKTREE,
+      tabId: 'host-tab',
+      leafId: TEST_LEAF_2
+    })
+
+    expect(
+      await store.persistPtyBinding({
+        worktreeId: WORKTREE,
+        tabId: 'host-tab',
+        leafId: TEST_LEAF_2,
+        ptyId: 'host-pty',
+        mayCreate: false
+      })
+    ).toBe(false)
+    expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toEqual(['renderer-tab'])
+  })
+
+  it('refuses to bind a split pane that moved to another tab while its terminal started', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(rendererSession())
+    expect(
+      await store.admitTerminalPane({
+        type: 'splitPane',
+        workspace: WORKTREE,
+        tabId: 'renderer-tab',
+        leafId: TEST_LEAF_1,
+        direction: 'vertical',
+        newLeafId: TEST_LEAF_2
+      })
+    ).toBe('admitted')
+    await expect(
+      store.moveTerminalLeafToNewTab({
+        worktreeId: WORKTREE,
+        sourceTabId: 'renderer-tab',
+        targetTabId: 'moved-tab',
+        leafId: TEST_LEAF_2,
+        ptyId: null
+      })
+    ).resolves.toMatchObject({ status: 'moved' })
+
+    expect(
+      await store.persistPtyBinding({
+        worktreeId: WORKTREE,
+        tabId: 'renderer-tab',
+        leafId: TEST_LEAF_2,
+        ptyId: 'late-pty',
+        mayCreate: false
+      })
+    ).toBe(false)
+    const session = store.getWorkspaceSession()
+    expect(session.terminalLayoutsByTabId['renderer-tab']?.root).toEqual({
+      type: 'leaf',
+      leafId: TEST_LEAF_1
+    })
+    expect(
+      session.terminalLayoutsByTabId['moved-tab']?.ptyIdsByLeafId?.[TEST_LEAF_2]
+    ).toBeUndefined()
   })
 })
