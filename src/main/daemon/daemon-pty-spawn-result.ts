@@ -268,10 +268,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
 
     const reattachSnapshot = await this.overlayDurableRestoreSnapshot(sessionId, result.snapshot)
-    const reattachProviderSequence =
-      typeof reattachSnapshot.outputSequence === 'number'
-        ? { value: reattachSnapshot.outputSequence, generation: 'continued' as const }
-        : providerSequence
     const isAltScreen = reattachSnapshot.modes.alternateScreen
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
@@ -298,7 +294,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             snapshotFrameRestoreAnsi: reattachSnapshot.frameRestoreAnsi
           }
         : {}),
-      ...(reattachProviderSequence ? { providerSequence: reattachProviderSequence } : {}),
+      // Keep the attach baseline: output received during history overlay is already counted live.
+      ...(providerSequence ? { providerSequence } : {}),
       ...(kittyKeyboardFlags !== undefined
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
