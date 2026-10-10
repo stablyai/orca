@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fixture } from './profile-state-delayed-authority-fixture'
+import { fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
@@ -71,6 +71,7 @@ describe.each(['ipc', 'runtime'])('%s failed reattach routing', (controller) => 
         })
         ctx.result = result
         ctx.metadataLeafId = binding.leafId
+        await admitRuntimeSpawnPane(store, binding, connectionId)
         ctx.hostSessionBinding = { store, ...binding }
         shutdown = vi.spyOn(ctx.provider, 'shutdown')
         commit = () => commitRuntimePtySpawn(ctx)

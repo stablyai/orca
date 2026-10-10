@@ -100,14 +100,24 @@ describe('an old client pane tree that predates a split or close', () => {
 
   it('keeps a pane another client split since the tree was built', async () => {
     const store = await openWithPanes([TEST_LEAF_1])
-    // `terminal.split` from the CLI: a host-created pane bound against its source pane.
+    // `terminal.split` from the CLI: the runtime writes the pane, then binds it against its source.
+    await expect(
+      store.admitTerminalPane({
+        type: 'splitPane',
+        workspace: WT,
+        tabId: 'tab-a',
+        leafId: TEST_LEAF_1,
+        direction: 'vertical',
+        newLeafId: NEW_LEAF
+      })
+    ).resolves.toBe('admitted')
     await expect(
       store.persistPtyBinding({
         worktreeId: WT,
         tabId: 'tab-a',
         leafId: NEW_LEAF,
         ptyId: 'pty-new',
-        hostAdmittedMembership: true,
+        mayCreate: false,
         expectedSourceBinding: { tabId: 'tab-a', leafId: TEST_LEAF_1, ptyId: 'pty-1' }
       })
     ).resolves.toBe(true)

@@ -1,6 +1,6 @@
 import { isTerminalSessionStorageCapacityFailure } from '../../../shared/terminal-session-state-save-failure'
 import { afterEach, expect, it, vi } from 'vitest'
-import { deferred, fixture } from './profile-state-delayed-authority-fixture'
+import { deferred, fixture, admitRuntimeSpawnPane } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
@@ -72,6 +72,7 @@ it.each(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
+      await admitRuntimeSpawnPane(store, binding)
       ctx.hostSessionBinding = { store, ...binding }
       shutdown = vi.spyOn(ctx.provider, 'shutdown').mockImplementation(holdShutdown)
       commit = () => commitRuntimePtySpawn(ctx)
@@ -137,6 +138,7 @@ it.each(['ipc', 'runtime'])(
       const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
+      await admitRuntimeSpawnPane(store, binding)
       ctx.hostSessionBinding = { store, ...binding }
       commit = () => commitRuntimePtySpawn(ctx)
     }

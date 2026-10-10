@@ -58,6 +58,8 @@ export type RuntimeStore = {
   abortStagedOrcadMigrationCatalog?: Store['abortStagedOrcadMigrationCatalog']
   getOrcadMigrationCatalogState?: Store['getOrcadMigrationCatalogState']
   persistPtyBinding?: Store['persistPtyBinding']
+  admitTerminalPane?: Store['admitTerminalPane']
+  withdrawTerminalPane?: Store['withdrawTerminalPane']
   getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']

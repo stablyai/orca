@@ -1,4 +1,4 @@
-import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -580,46 +580,48 @@ function makeRuntimeStoreWithWorkspaceSession(
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const runtimeStore = withDurableRuntimeStore({
-    ...store,
-    getWorkspaceSession: (hostId?: string) =>
-      hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
-    setWorkspaceSession: vi.fn(setSession),
-    // Headless close is a durable transaction; keep the in-memory fixture's
-    // persistence contract equivalent to the production store.
-    flushOrThrow: vi.fn(),
-    persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
-      const args = typeof input === 'function' ? input() : input
-      if (!args) {
-        return false
-      }
-      const tabs = session.tabsByWorktree[args.worktreeId] ?? []
-      session = {
-        ...session,
-        tabsByWorktree: {
-          ...session.tabsByWorktree,
-          [args.worktreeId]: tabs.map((tab) =>
-            tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
-          )
-        },
-        terminalLayoutsByTabId: {
-          ...session.terminalLayoutsByTabId,
-          [args.tabId]: {
-            ...(session.terminalLayoutsByTabId[args.tabId] ?? {
-              root: { type: 'leaf', leafId: args.leafId },
-              activeLeafId: args.leafId,
-              expandedLeafId: null
-            }),
-            ptyIdsByLeafId: {
-              ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
-              [args.leafId]: args.ptyId
+  const runtimeStore = withRuntimePaneAdmission(
+    withDurableRuntimeStore({
+      ...store,
+      getWorkspaceSession: (hostId?: string) =>
+        hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
+      setWorkspaceSession: vi.fn(setSession),
+      // Headless close is a durable transaction; keep the in-memory fixture's
+      // persistence contract equivalent to the production store.
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
+        const args = typeof input === 'function' ? input() : input
+        if (!args) {
+          return false
+        }
+        const tabs = session.tabsByWorktree[args.worktreeId] ?? []
+        session = {
+          ...session,
+          tabsByWorktree: {
+            ...session.tabsByWorktree,
+            [args.worktreeId]: tabs.map((tab) =>
+              tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
+            )
+          },
+          terminalLayoutsByTabId: {
+            ...session.terminalLayoutsByTabId,
+            [args.tabId]: {
+              ...(session.terminalLayoutsByTabId[args.tabId] ?? {
+                root: { type: 'leaf', leafId: args.leafId },
+                activeLeafId: args.leafId,
+                expandedLeafId: null
+              }),
+              ptyIdsByLeafId: {
+                ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
+                [args.leafId]: args.ptyId
+              }
             }
           }
         }
-      }
-      return true
+        return true
+      })
     })
-  })
+  )
   return { runtimeStore, getSession: () => session, setSession }
 }
 

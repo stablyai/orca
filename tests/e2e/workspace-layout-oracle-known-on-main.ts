@@ -84,20 +84,6 @@ export const LAYOUT_ORACLE_KNOWN_ON_MAIN: readonly KnownOnMain[] = [
     step: 'relaunch',
     cause: 'tab bar not saved after wake'
   },
-  // Headless runtimes save tab rows and no tab bar; a close then saves a tab bar that lacks the
-  // tabs still open.
-  {
-    scenario: 'headless-*',
-    check: 'rules',
-    rule: 'tab_bar_missing',
-    cause: 'headless saves no tab bar'
-  },
-  {
-    scenario: 'headless-*',
-    check: 'rules',
-    rule: 'tab_lists_disagree',
-    cause: 'headless close saves a partial tab bar'
-  },
   // After a relaunch main holds the tab rows but no tab bar for the worktree until the window
   // saves again; slow enough on Linux CI to outlast the settle wait.
   ...(['tab_lists_disagree', 'tab_bar_missing'] as const).flatMap((rule) =>
@@ -132,16 +118,15 @@ export const LAYOUT_ORACLE_KNOWN_ON_MAIN: readonly KnownOnMain[] = [
     step: 'rename after restart',
     cause: 'orcad title after restart'
   },
-  // Headless group moves save the groups but still no tab bar, so the groups list tabs the tab bar
-  // lacks.
-  ...(['orcad', 'electron'] as const).flatMap((kind) =>
-    ['split-tab-into-new-group', 'move-tab-between-groups'].map((id) => ({
-      scenario: `headless-${kind}-${id}`,
-      check: 'rules' as const,
-      rule: 'group_lists_missing_tab',
-      cause: 'headless saves groups but no tab bar'
-    }))
-  ),
+  // A headless reorder saves rows through the session merge door, which keeps the stored row order,
+  // so rows and the group disagree; hidden until creates saved a tab bar. Fixed in PR 6 with
+  // client-reorder-tabs.
+  ...(['orcad', 'electron'] as const).map((kind) => ({
+    scenario: `headless-${kind}-move-tab-between-groups`,
+    check: 'rules' as const,
+    rule: 'tab_order_disagrees',
+    cause: 'one tab order'
+  })),
   // After a headless move into an existing group, paired clients still see that group's previous
   // tab selected, not the moved one. A split into a new group selects the moved tab.
   ...(['orcad', 'electron'] as const).map((kind) => ({

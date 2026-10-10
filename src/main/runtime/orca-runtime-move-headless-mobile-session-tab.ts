@@ -69,10 +69,7 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       tabGroups: nextGroups,
       tabs: nextTabs
     }
-    this.persistHeadlessTerminalTabOrder(worktreeId, tabOrder)
-    if (nextGroups.length > 1 && snapshot.tabGroupLayout) {
-      this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
-    }
+    this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
@@ -155,18 +152,50 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
     return { moved: true }
   }
 
-  // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split.
+  // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split; the tab bar and rows
+  // follow the groups. Deleted by the switch (PR 6), when moves are layout commands.
   protected persistHeadlessTabGroups(
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],
-    layout: TabGroupLayoutNode
+    layout: TabGroupLayoutNode | undefined
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+    const order = groups.flatMap((group) => group.tabOrder)
+    const groupIdByTabId = new Map(
+      groups.flatMap((group) => group.tabOrder.map((tabId) => [tabId, group.id] as const))
+    )
+    const position = (tabId: string): number => {
+      const index = order.indexOf(tabId)
+      return index === -1 ? order.length : index
+    }
+    const entries = session.unifiedTabs?.[worktreeId]
+    const rows = session.tabsByWorktree[worktreeId]
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
+      ...(rows
+        ? {
+            tabsByWorktree: {
+              ...session.tabsByWorktree,
+              [worktreeId]: [...rows]
+                .sort((a, b) => position(a.id) - position(b.id) || a.sortOrder - b.sortOrder)
+                .map((row, sortOrder) => ({ ...row, sortOrder }))
+            }
+          }
+        : {}),
+      ...(entries
+        ? {
+            unifiedTabs: {
+              ...session.unifiedTabs,
+              [worktreeId]: entries.map((entry) => ({
+                ...entry,
+                groupId: groupIdByTabId.get(entry.id) ?? entry.groupId
+              }))
+            }
+          }
+        : {}),
       tabGroups: {
         ...session.tabGroups,
         [worktreeId]: groups.map((group) => ({
@@ -177,10 +206,7 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
           ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
         }))
       },
-      tabGroupLayouts: {
-        ...session.tabGroupLayouts,
-        [worktreeId]: layout
-      }
+      ...(layout ? { tabGroupLayouts: { ...session.tabGroupLayouts, [worktreeId]: layout } } : {})
     })
   }
 }

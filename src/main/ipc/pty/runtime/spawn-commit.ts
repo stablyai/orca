@@ -150,7 +150,8 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         tabId,
         leafId,
         ptyId: ctx.result.id,
-        hostAdmittedMembership: true,
+        // The runtime wrote the pane before spawning; a pane gone by now was closed meanwhile.
+        mayCreate: false,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(expectedSourceBinding ? { expectedSourceBinding } : {}),

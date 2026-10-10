@@ -259,29 +259,6 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     }
   }
 
-  protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession) {
-      return
-    }
-    const orderIndexByTabId = new Map(tabOrder.map((tabId, index) => [tabId, index]))
-    const tabs = session.tabsByWorktree[worktreeId] ?? []
-    const reordered = [...tabs]
-      .sort((a, b) => {
-        const aIndex = orderIndexByTabId.get(a.id) ?? Number.MAX_SAFE_INTEGER
-        const bIndex = orderIndexByTabId.get(b.id) ?? Number.MAX_SAFE_INTEGER
-        return aIndex - bIndex || a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
-      })
-      .map((tab, index) => ({ ...tab, sortOrder: index }))
-    this.setWorkspaceSessionForWorktree(worktreeId, {
-      ...session,
-      tabsByWorktree: {
-        ...session.tabsByWorktree,
-        [worktreeId]: reordered
-      }
-    })
-  }
-
   protected emitMobileSessionTabsSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void {
     if (this.mobileSessionTabListeners.size === 0) {
       return

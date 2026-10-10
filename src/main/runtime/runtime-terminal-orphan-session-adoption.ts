@@ -47,8 +47,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
         customTitle: null,
         color: null,
         sortOrder: tabsById.size,
-        createdAt: Date.now(),
-        pendingActivationSpawn: true
+        createdAt: Date.now()
       }
       tabsById.set(claim.tabId, tab)
     }

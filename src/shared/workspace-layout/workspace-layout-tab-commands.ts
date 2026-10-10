@@ -40,8 +40,8 @@ export function createTerminalTab(
   const ordinal = getNextTerminalOrdinal(
     terminals.map((tab) => ({ defaultTitle: tab.terminal.defaultTitle, title: '' }))
   )
-  const id = context.mintId()
-  const leafId = context.mintLeafId()
+  const id = command.tabId ?? context.mintId()
+  const leafId = command.leafId ?? context.mintLeafId()
   const tab: LayoutTerminalTab = {
     id,
     entityId: id,

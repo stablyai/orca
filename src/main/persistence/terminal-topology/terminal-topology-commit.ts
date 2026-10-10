@@ -5,6 +5,17 @@ import type {
   TerminalLeafMoveResult
 } from '../../../shared/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type {
+  CommandOf,
+  LayoutRefusalCode
+} from '../../../shared/workspace-layout/workspace-layout-command-types'
+import {
+  admitPaneToSession,
+  withdrawPaneFromSession,
+  type PaneLayoutChange,
+  type TerminalPaneAdmission,
+  type TerminalPaneAdmissionOutcome
+} from './terminal-pane-admission'
 import { startSpan } from '../../observability/tracer'
 import {
   terminalSurfaceCloseMutation,
@@ -18,7 +29,12 @@ import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 // the pane move; the close transform still lives in runtime/ and other writers move here later.
 
 /** Bindings are not listed: `persistPtyBinding` already records `persistence.pty-binding`. */
-type TerminalTopologyCommitKind = 'close_leaf' | 'close_tab' | 'move_leaf'
+type TerminalTopologyCommitKind =
+  | 'close_leaf'
+  | 'close_tab'
+  | 'move_leaf'
+  | 'admit_pane'
+  | 'withdraw_pane'
 
 export function closeLeafOrTab(
   commit: TerminalSurfaceCloseCommit
@@ -40,6 +56,45 @@ export function moveLeaf(
     'move_leaf',
     () => commitLeafMove(request, context),
     (result) => (result.status === 'refused' ? result.reason : undefined)
+  )
+}
+
+/**
+ * Writes the pane, its tab-bar entry and group before its terminal starts (design 4.1), through the
+ * layout module.
+ */
+export function admitPane(
+  hostId: ExecutionHostId,
+  admission: TerminalPaneAdmission,
+  context: TerminalTopologyCommitContext
+): () => DurableProfileStateMutation<TerminalPaneAdmissionOutcome> {
+  return traced(
+    'admit_pane',
+    () =>
+      commitPaneChange(
+        hostId,
+        admitPaneToSession(hostId, context.getSession(hostId), admission),
+        context
+      ),
+    (outcome) => (outcome === 'admitted' || outcome === 'exists' ? undefined : outcome)
+  )
+}
+
+/** Removes a pane `admitPane` wrote whose start then failed, so a failed create leaves no tab. */
+export function withdrawPane(
+  hostId: ExecutionHostId,
+  pane: CommandOf<'closePane'>,
+  context: TerminalTopologyCommitContext
+): () => DurableProfileStateMutation<LayoutRefusalCode | null> {
+  return traced(
+    'withdraw_pane',
+    () =>
+      commitPaneChange(
+        hostId,
+        withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
+        context
+      ),
+    (code) => code ?? undefined
   )
 }
 
@@ -82,7 +137,7 @@ type TopologyState = Pick<
   'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
 >
 
-type TerminalTopologyCommitContext = {
+export type TerminalTopologyCommitContext = {
   state: TopologyState
   hostIds: () => ExecutionHostId[]
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState
@@ -146,4 +201,20 @@ function commitLeafMove(
     value: planned.result,
     rollback: () => restores.forEach((restore) => restore())
   }
+}
+
+function commitPaneChange<T>(
+  hostId: ExecutionHostId,
+  change: PaneLayoutChange<T>,
+  context: TerminalTopologyCommitContext
+): DurableProfileStateMutation<T> {
+  if (!change.session) {
+    return { value: change.value, persist: false }
+  }
+  const restore = writeRestorable(
+    () => context.getSession(hostId),
+    (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
+    change.session
+  )
+  return { value: change.value, rollback: restore }
 }

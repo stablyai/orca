@@ -24,7 +24,7 @@ export function buildHeadlessTerminalSplitLayout(
     direction: 'horizontal' | 'vertical'
   }
 ): TerminalLayoutSnapshot {
-  // Why: PTY admission durably appends a fallback vertical leaf before this exact-direction commit.
+  // Why: the stored tree may already hold the new leaf; it is placed again beside its source.
   const currentRoot = existing?.root ? removeLayoutLeaf(existing.root, args.leafId) : null
   const existingRoot: TerminalPaneLayoutNode = currentRoot ?? {
     type: 'leaf',
