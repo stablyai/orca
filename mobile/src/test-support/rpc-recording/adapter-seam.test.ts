@@ -1,11 +1,14 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import type * as RpcClientContextModule from '../../transport/rpc-client-react-context'
+import { readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
-import {
-  HOST_CLIENT_CONTEXT_LOCAL,
-  hostClientContextExposure
-} from './host-client-context-exposure'
+import { loadHostClientContext } from './host-client-context-exposure'
+import { operationModuleLoader } from './operation-module-loader'
+import { mountFixture } from './recorder-fixture-shape'
+import { screenMount } from './mounted-screen-tree'
+import type { RpcClientContextValue } from '../../transport/rpc-client-context-contract'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const engine = resolve(import.meta.dirname)
@@ -21,24 +24,28 @@ describe('the adapter directory', () => {
     expect(present.sort()).toEqual([...sources].sort())
   })
 
-  it('keeps the host-client context exposure in one place, still anchored on the product source', () => {
-    // The exposure reaches for a module-private local by name, which no type checker follows: a
-    // rename lands as a `ReferenceError` several seconds into a recording. One copy, asserted
-    // against the declaration it names, turns that into one failure that says what moved.
-    const [, source] = hostClientContextExposure
-    const declaration = `const ${HOST_CLIENT_CONTEXT_LOCAL} = createContext`
-    const context = readFileSync(join(root, 'mobile/src/transport/client-context.tsx'), 'utf8')
-    expect(context.split(declaration).length - 1).toBe(1)
-    // Sources only, since the README quotes the string to document it.
-    const copies = [engine, directory]
-      .flatMap((from) =>
-        readdirSync(from, { withFileTypes: true })
-          .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
-          .map((entry) => join(from, entry.name))
-      )
-      .filter((file) => readFileSync(file, 'utf8').includes(source.trim()))
-      .map((file) => relative(root, file))
-      .sort()
-    expect(copies).toEqual([])
+  it('mounts the public host-client context read by the product hook', () => {
+    const modules = operationModuleLoader(root)
+    const context = loadHostClientContext(modules)
+    const { useRpcClientContext } = modules.load<typeof RpcClientContextModule>(
+      'mobile/src/transport/rpc-client-react-context.ts'
+    )
+    const value = mountFixture<RpcClientContextValue>({ getClientId: () => 'scripted-client' })
+    const observed: { value?: RpcClientContextValue } = {}
+    function Harness(): null {
+      observed.value = useRpcClientContext()
+      return null
+    }
+    const screen = screenMount(
+      () => createElement(context.Provider, { value }, createElement(Harness)),
+      () => {}
+    )
+    try {
+      screen.mount()
+      expect(screen.crash()).toBeNull()
+      expect(observed.value).toBe(value)
+    } finally {
+      screen.unmount()
+    }
   })
 })
