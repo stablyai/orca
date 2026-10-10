@@ -16,7 +16,9 @@ import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folde
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import WorktreeCard from '../../WorktreeCard'
 import type { WorktreeGroupBy } from '../grouping/row-types'
-import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { getWorktreeVirtualRowTransform } from '../viewport/virtual-rows'
+import { cn } from '@/lib/utils'
+import type { WorktreeRowDragState } from '../drag/row-state'
 import { getFolderWorkspaceRowGeometry } from './indentation'
 import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
@@ -31,6 +33,9 @@ export type FolderWorkspaceRowContext = {
   activeWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId']
   currentWorktreeId: string | null
   selectedWorktreeIds: ReadonlySet<string>
+  groupKeyByRowKey: ReadonlyMap<string, string>
+  groupIndexByRowKey: ReadonlyMap<string, number>
+  worktreeDragState: WorktreeRowDragState
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -94,6 +99,9 @@ export function renderFolderWorkspaceVirtualRow(args: {
     groupDepth: row.groupDepth,
     lineageDepth: row.depth
   })
+  const dragGroupKey = ctx.groupKeyByRowKey.get(folderWorktreeIdentity)
+  const isDragging = ctx.worktreeDragState.draggingWorktreeId === folderWorktree.id
+  const previewOffset = ctx.worktreeDragState.previewOffsetsByWorktreeId.get(folderWorktree.id) ?? 0
   return (
     <div
       key={vItem.key}
@@ -109,14 +117,25 @@ export function renderFolderWorkspaceVirtualRow(args: {
       data-worktree-virtual-row-start={vItem.start}
       data-index={vItem.index}
       ref={args.measureVirtualRowElement}
-      className="absolute left-0 right-0 top-0"
-      style={{ transform: getVirtualRowTransform(vItem.start) }}
+      className={cn(
+        'absolute left-0 right-0 top-0',
+        isDragging && 'pointer-events-none',
+        ctx.worktreeDragState.draggingWorktreeId !== null &&
+          'transition-transform duration-150 ease-out will-change-transform'
+      )}
+      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, previewOffset) }}
       onClickCapture={ctx.onRowClickCapture}
-      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
     >
       <div
-        className="relative"
+        // Why: the fixed drag preview is the affordance, as for worktree rows.
+        className={cn('relative', isDragging && 'opacity-0')}
         style={surfaceInset > 0 ? { paddingLeft: surfaceInset } : undefined}
+        data-worktree-drag-id={dragGroupKey ? folderWorktree.id : undefined}
+        data-worktree-drag-group-key={dragGroupKey}
+        data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(folderWorktreeIdentity)}
+        onPointerDown={(event) =>
+          ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)
+        }
       >
         <WorktreeCard
           worktree={folderWorktree}

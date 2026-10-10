@@ -15,6 +15,7 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import { buildRows } from '../grouping/build-rows'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
+import type { SortBy } from '../../smart-sort'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
 import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../../host-section-collapse'
@@ -25,6 +26,7 @@ import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-k
 
 type SectionRowsArgs = {
   groupBy: WorktreeGroupBy
+  sortBy: SortBy
   projectOrderBy: ProjectOrderBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
@@ -179,10 +181,12 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         args.visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        args.pinnedDisplayPolicy
+        args.pinnedDisplayPolicy,
+        args.sortBy
       ),
     [
       args.groupBy,
+      args.sortBy,
       worktrees,
       repoMap,
       args.prCache,

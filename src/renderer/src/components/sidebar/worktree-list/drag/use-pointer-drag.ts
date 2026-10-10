@@ -21,6 +21,7 @@ import { useWorktreePointerDragAutoscroll } from './use-pointer-autoscroll'
 import { useWorktreePointerDragWindowEvents } from './use-pointer-window-events'
 import { flushWorktreePointerDragFrame } from './pointer-flush'
 import { EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS, type WorktreePointerDrag } from './row-state'
+import { isFolderWorkspaceDragGroupKey } from './folder-workspace-drag-groups'
 
 export function useWorktreePointerDrag(args: {
   ctx: WorktreeDropCommitContext
@@ -170,20 +171,31 @@ export function useWorktreePointerDrag(args: {
         return
       }
       const rects = getWorktreeSidebarDragRectsForGroup(container, sourceGroupKey)
+      const isFolderWorkspaceDrag = isFolderWorkspaceDragGroupKey(sourceGroupKey)
       const canPreviewWorkspaceBoardOnDrag =
         !workspaceBoardOpen &&
         onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
       if (
         rects.length <= 1 &&
-        !hasWorkspaceKanbanSidebarDropBoard() &&
-        !canPreviewWorkspaceBoardOnDrag
+        (isFolderWorkspaceDrag ||
+          (!hasWorkspaceKanbanSidebarDropBoard() && !canPreviewWorkspaceBoardOnDrag))
       ) {
         return
       }
-      const draggedIds =
+      const selectedIds =
         selectedWorktreeIds.has(getWorktreeHostIdentity(worktree)) && selectedWorktrees.length > 1
           ? selectedWorktrees.map((worktree) => worktree.id)
           : [worktreeId]
+      // Why: a folder drag carries only selected siblings from its own run.
+      const sourceGroupIds = isFolderWorkspaceDrag
+        ? new Set(
+            session.folderWorkspaceDragGroups.find((group) => group.key === sourceGroupKey)
+              ?.worktreeIds
+          )
+        : null
+      const draggedIds = sourceGroupIds
+        ? selectedIds.filter((id) => sourceGroupIds.has(id))
+        : selectedIds
       const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)
       const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
         sourceGroupKey,
