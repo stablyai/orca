@@ -7,6 +7,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 import {
+  getLatestLeafTitle,
   getLatestPtyTitle,
   getLeafDisplayRecord,
   getLeafWorktreeStatus,
@@ -17,6 +18,7 @@ import {
   type TitleDisplayClear
 } from './runtime-worktree-status-projection'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { ptyTitleIsRestored } from './pty-restored-title'
 
 export type RuntimeWorkingTerminalEvidence = {
   paneKey: string | null
@@ -78,9 +80,13 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.liveTerminalCount += 1
     summary.hasAttachedPty = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, leaf.lastOutputAt)
+    const displayLeaf = getLeafDisplayRecord(leaf, args.getTitleDisplayClear(leaf.ptyId))
+    const tabTitle = args.tabs.get(leaf.tabId)?.title ?? null
+    const leafTitle = getLatestLeafTitle(displayLeaf, tabTitle)
     const leafStatus = getLeafWorktreeStatus(
-      getLeafDisplayRecord(leaf, args.getTitleDisplayClear(leaf.ptyId)),
-      args.tabs.get(leaf.tabId)?.title ?? null
+      displayLeaf,
+      tabTitle,
+      freshOwner ? ptyTitleIsRestored(freshOwner, leafTitle) : false
     )
     if (leafStatus === 'working') {
       addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
@@ -141,7 +147,11 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.hasAttachedPty = true
     summary.hasHostSidebarActivity = true
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
-    const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
+    const ptyStatus = getSavedTabWorktreeStatus(
+      owner.title,
+      true,
+      ptyTitleIsRestored(pty, owner.title)
+    )
     if (ptyStatus === 'working') {
       addWorkingTerminalEvidence(workingEvidence, summary.worktreeId, {
         paneKey: pty.paneKey,

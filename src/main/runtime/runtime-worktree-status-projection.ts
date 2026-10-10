@@ -122,7 +122,8 @@ export function getDisplayPromptLifecycle(
 
 export function getLeafWorktreeStatus(
   leaf: LeafStatusRecord,
-  tabTitle: string | null
+  tabTitle: string | null,
+  titleIsRestored = false
 ): RuntimeWorktreeStatus {
   // Why: recompute from the live title each call (no sticky state) so worktree.ps mirrors the desktop sidebar's getWorktreeStatus.
   const titleCandidates = [
@@ -132,7 +133,10 @@ export function getLeafWorktreeStatus(
   ]
   const latestTitle = getLatestAgentCandidateTitle(...titleCandidates)
   const detected = latestTitle ? detectAgentStatusFromTitle(latestTitle) : leaf.lastAgentStatus
-  return getDetectedWorktreeStatus(detected, leaf.ptyId !== null)
+  return getDetectedWorktreeStatus(
+    titleIsRestored && detected === 'permission' ? null : detected,
+    leaf.ptyId !== null
+  )
 }
 
 export function classifyLatestAgentTitle(
@@ -232,8 +236,17 @@ export function getLatestAgentCandidate<T extends TitleCandidate>(...candidates:
   return latest
 }
 
-export function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
-  return getDetectedWorktreeStatus(detectAgentStatusFromTitle(title), hasPty)
+export function getSavedTabWorktreeStatus(
+  title: string,
+  hasPty: boolean,
+  titleIsRestored = false
+): RuntimeWorktreeStatus {
+  const detected = detectAgentStatusFromTitle(title)
+  // Historical permission is not a live block; canonical hook rows still merge separately.
+  return getDetectedWorktreeStatus(
+    titleIsRestored && detected === 'permission' ? null : detected,
+    hasPty
+  )
 }
 
 export function getDetectedWorktreeStatus(

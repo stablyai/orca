@@ -88,6 +88,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
+  /** Restored titles dropped when the inventory reported a new incarnation; a pane may echo them. */
+  replacedRestoredTitles?: string[]
   /** The stale-working timer's cleared title, dated as a genuine title would be, while it stands
    *  over `lastOscTitle`. Display readers project through it (getPtyDisplayRecord); evidence never
    *  reads it. On the record so it lives as long as the native title it retires. In memory only. */
