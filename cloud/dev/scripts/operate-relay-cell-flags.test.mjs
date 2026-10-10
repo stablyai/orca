@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  assertSupportedChanges,
+  assertSupportedObject,
   desiredObject,
   operateCellFlags,
   parseCellFlagsRequest,
@@ -11,6 +11,7 @@ import {
 } from './operate-relay-cell-flags.mjs'
 
 const CELL = 'production-gce-c26'
+const RESERVE = { 'director-origin': 'https://relay.onorca.dev', 'confirm-reserve': `RESERVE ${CELL}` }
 const values = (overrides = {}) => ({
   mode: 'write',
   'cell-id': CELL,
@@ -38,21 +39,45 @@ function fakeGoogleAndCell({
   applyAfterPolls = 2,
   role = 'cell',
   cellId = CELL,
-  supportedFlags = SUPPORTED
+  supportedFlags = SUPPORTED,
+  // Polls that still report admitModeEffective=reserve after a flip back.
+  reregisteringPolls = 0
 } = {}) {
-  const state = { stored, writes: [], polls: 0, applied: { generation: 0, flags: { readinessLocal: false, ticketCheck: 'off' } } }
+  const state = {
+    stored,
+    writes: [],
+    polls: 0,
+    // A cell that has applied whatever object is already there.
+    applied: stored
+      ? { generation: Number(stored.generation), flags: stored.object.flags }
+      : { generation: 0, flags: { readinessLocal: false, ticketCheck: 'off' } },
+    directorAdmitMode: 'db',
+    order: [],
+    reregisteringPolls
+  }
   const fetchImpl = async (url, init = {}) => {
     const target = new URL(url)
+    if (target.pathname === '/v1/admin/cell-admit-mode') {
+      const body = JSON.parse(String(init.body))
+      if (body.admitMode) {
+        state.directorAdmitMode = body.admitMode
+        state.order.push(`director:${body.admitMode}`)
+      }
+      return Response.json({ v: 1, cellId: body.cellId, admitMode: state.directorAdmitMode, updatedAt: 1 })
+    }
     if (target.pathname === '/v1/admin/runtime-status') {
       state.polls += 1
       if (state.stored && state.polls > applyAfterPolls) {
         state.applied = { generation: Number(state.stored.generation), flags: state.stored.object.flags }
       }
+      const reserveApplied = state.applied.flags.admitMode === 'reserve'
+      const effective = reserveApplied || (state.writes.length > 0 && state.reregisteringPolls-- > 0) ? 'reserve' : 'db'
       return Response.json({
         v: 1,
         role,
         cellId,
         flagsApplied: state.applied,
+        admitModeEffective: effective,
         ...(supportedFlags ? { supportedFlags } : {})
       })
     }
@@ -65,6 +90,7 @@ function fakeGoogleAndCell({
       const generation = String(Number(state.stored?.generation ?? 1000) + 1)
       state.stored = { generation, object }
       state.writes.push({ generation, object, metadata })
+      state.order.push(`file:${object.flags.admitMode ?? 'db'}`)
       return Response.json({ generation })
     }
     if (!state.stored) return new Response(null, { status: 404 })
@@ -218,7 +244,7 @@ test('changes only the named switches and keeps every other key the object alrea
     flags: { readinessLocal: true, ticketCheck: 'shadow', readTimeoutMarginMs: 5_000 }
   }
   const request = parseCellFlagsRequest(
-    values({ set: 'admitMode=reserve, intakePerSec=40, readTimeoutMarginMs=default' })
+    values({ set: 'admitMode=reserve, intakePerSec=40, readTimeoutMarginMs=default', ...RESERVE })
   )
   assert.deepEqual(desiredObject(request, current), {
     v: 1,
@@ -282,7 +308,7 @@ test('fails the read-back when the cell ignores a switch the object names', asyn
     return Response.json(body)
   }
   await assert.rejects(
-    run(parseCellFlagsRequest(values({ set: 'admitMode=reserve' })), fake).result,
+    run(parseCellFlagsRequest(values({ set: 'admitMode=reserve', ...RESERVE })), fake).result,
     /ignores admitMode/
   )
 })
@@ -294,16 +320,67 @@ test('refuses a switch the cell image does not support, before writing anything'
     /does not support ticketCheck="enforce"/
   )
   await assert.rejects(
-    run(parseCellFlagsRequest(values({ set: 'admitMode=reserve' })), old).result,
+    run(parseCellFlagsRequest(values({ set: 'admitMode=reserve', ...RESERVE })), old).result,
     /does not support admitMode/
   )
   assert.equal(old.state.writes.length, 0)
   // An image from before supportedFlags still takes the two switches it always had.
   assert.equal((await run(parseCellFlagsRequest(values()), old).result).written, true)
   assert.throws(
-    () => assertSupportedChanges({ readTimeoutMarginMs: 1_500.5 }, SUPPORTED),
+    () => assertSupportedObject({ readTimeoutMarginMs: 1_500.5 }, { supportedFlags: SUPPORTED }),
     /readTimeoutMarginMs/
   )
-  assertSupportedChanges({ admitMode: null, ticketCheck: 'enforce' }, SUPPORTED)
+  assertSupportedObject({ ticketCheck: 'enforce' }, { supportedFlags: SUPPORTED })
 })
+
+test('refuses to carry a bad value already in the file, and a file the cell voided', async () => {
+  const bad = fakeGoogleAndCell({
+    supportedFlags: null,
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { ticketCheck: 'enforce' } } }
+  })
+  // The old image voided generation 7 and still runs generation 0.
+  bad.state.applied = { generation: 0, flags: { readinessLocal: false, ticketCheck: 'off' } }
+  await assert.rejects(
+    run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), bad).result,
+    /does not support ticketCheck="enforce"/
+  )
+  const voided = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { readinessLocal: true } } }
+  })
+  voided.state.applied = { generation: 3, flags: { readinessLocal: false } }
+  await assert.rejects(
+    run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), voided).result,
+    /applied generation 3, not the current 7/
+  )
+  assert.equal(bad.state.writes.length + voided.state.writes.length, 0)
+})
+
+const DIRECTOR = { 'director-origin': RESERVE['director-origin'] }
+
+test('admitMode=reserve needs a typed confirmation, and Postgres records reserve before the file', async () => {
+  assert.throws(
+    () => parseCellFlagsRequest(values({ ...DIRECTOR, set: 'admitMode=reserve' })),
+    /--confirm-reserve "RESERVE production-gce-c26"/
+  )
+  assert.throws(() => parseCellFlagsRequest(values({ set: 'admitMode=db' })), /--director-origin/)
+  const fake = fakeGoogleAndCell()
+  const request = parseCellFlagsRequest(
+    values({ ...DIRECTOR, set: 'admitMode=reserve', 'confirm-reserve': `RESERVE ${CELL}` })
+  )
+  assert.equal((await run(request, fake).result).written, true)
+  assert.deepEqual(fake.state.order, ['director:reserve', 'file:reserve'])
+})
+
+test('a flip back records db in Postgres only after the cell has leased every control', async () => {
+  const fake = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { admitMode: 'reserve' } } },
+    reregisteringPolls: 3
+  })
+  fake.state.directorAdmitMode = 'reserve'
+  const request = parseCellFlagsRequest(values({ ...DIRECTOR, set: 'admitMode=default', 'expected-generation': '7' }))
+  assert.equal((await run(request, fake).result).written, true)
+  assert.deepEqual(fake.state.order, ['file:db', 'director:db'])
+  assert.equal(fake.state.reregisteringPolls, -1)
+})
+
 

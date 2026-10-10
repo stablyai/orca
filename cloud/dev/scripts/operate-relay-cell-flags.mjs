@@ -44,31 +44,43 @@ export const CELL_FLAG_SPECS = {
   readTimeoutMarginMs: { parse: numberIn(1_000, 60_000, true) }
 }
 
-// What images from before `supportedFlags` accept; anything else voids or is dropped there.
-const LEGACY_SUPPORTED_FLAGS = {
-  readinessLocal: { type: 'boolean' },
-  ticketCheck: { type: 'enum', values: ['off', 'shadow'] }
+export const RESERVE_CONFIRMATION = 'RESERVE'
+// How long a flip back may take to lease every control the cell admitted from memory.
+export const REREGISTER_WAIT_MS = 8 * 60_000
+
+// An image from before `supportedFlags` accepts the keys its applied flags list, and only
+// ticketCheck off/shadow: anything else is dropped there, or voids the whole object.
+function legacySupportedFlags(appliedFlags) {
+  return Object.fromEntries(
+    Object.entries(appliedFlags ?? {}).map(([key, value]) => [
+      key,
+      key === 'ticketCheck'
+        ? { type: 'enum', values: ['off', 'shadow'] }
+        : { type: typeof value === 'boolean' ? 'boolean' : typeof value === 'number' ? 'number' : 'enum', values: [value] }
+    ])
+  )
 }
 
-// Refuses a change the cell's image would drop (unknown key) or void the whole object over
-// (a value outside what it accepts). Removing a key is always safe.
-export function assertSupportedChanges(changes, supportedFlags) {
-  const supported = supportedFlags ?? LEGACY_SUPPORTED_FLAGS
-  for (const [key, value] of Object.entries(changes)) {
-    if (value === null) continue
-    const spec = supported[key]
-    const accepted =
-      spec?.type === 'boolean'
-        ? typeof value === 'boolean'
-        : spec?.type === 'enum'
-          ? spec.values.includes(value)
-          : spec?.type === 'number'
-            ? typeof value === 'number' &&
-              (spec.min === undefined || value >= spec.min) &&
-              (spec.max === undefined || value <= spec.max) &&
-              (!spec.integer || Number.isInteger(value))
-            : false
-    if (!accepted) {
+function accepts(spec, value) {
+  if (spec?.type === 'boolean') return typeof value === 'boolean'
+  if (spec?.type === 'enum') return spec.values.includes(value)
+  if (spec?.type === 'number') {
+    return (
+      typeof value === 'number' &&
+      (spec.min === undefined || value >= spec.min) &&
+      (spec.max === undefined || value <= spec.max) &&
+      (!spec.integer || Number.isInteger(value))
+    )
+  }
+  return false
+}
+
+// The whole object as it will be written, not only the change: a bad key or value already in
+// the file would void or be dropped on every later write too.
+export function assertSupportedObject(flags, runtime) {
+  const supported = runtime.supportedFlags ?? legacySupportedFlags(runtime.flagsApplied?.flags)
+  for (const [key, value] of Object.entries(flags)) {
+    if (!accepts(supported[key], value)) {
       throw new Error(
         `the cell's image does not support ${key}=${JSON.stringify(value)}; roll the image first`
       )
@@ -119,6 +131,18 @@ export function parseCellFlagsRequest(values) {
   if (mode === 'write' && values.confirmation !== `${WRITE_CONFIRMATION} ${cellId}`) {
     throw new Error(`write requires the confirmation "${WRITE_CONFIRMATION} ${cellId}"`)
   }
+  // Reserve moves this cell's hosts off the database: it is typed for this cell, every time.
+  if (
+    mode === 'write' &&
+    changes.admitMode === 'reserve' &&
+    values['confirm-reserve'] !== `${RESERVE_CONFIRMATION} ${cellId}`
+  ) {
+    throw new Error(`admitMode=reserve requires --confirm-reserve "${RESERVE_CONFIRMATION} ${cellId}"`)
+  }
+  const directorOrigin = values['director-origin'] ?? ''
+  if (changes.admitMode !== undefined && !/^https:\/\/relay(-staging)?\.onorca\.dev$/.test(directorOrigin)) {
+    throw new Error('an admitMode change needs --director-origin, where Postgres records it')
+  }
   const projectId = values['project-id'] ?? ''
   if (!/^[a-z][a-z0-9-]{4,62}$/.test(projectId)) throw new Error('project id is invalid')
   const cellOrigin = values['cell-origin'] ?? ''
@@ -132,6 +156,7 @@ export function parseCellFlagsRequest(values) {
     mode,
     cellId,
     cellOrigin,
+    directorOrigin,
     projectId,
     expectedGeneration,
     changes
@@ -234,6 +259,27 @@ async function writeObject(fetchImpl, request, object, accessToken, audit) {
   return String((await response.json()).generation)
 }
 
+// The census's record (relay_cell_admit_modes, through a director). Without `admitMode` it only
+// reads. Read back on every write: sweeps act on this, not on the cell's switch file.
+async function directorAdmitMode(fetchImpl, request, idToken, wait, admitMode) {
+  const response = await fetchAdminOnceMore(
+    fetchImpl,
+    `${request.directorOrigin}/v1/admin/cell-admit-mode`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${idToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, cellId: request.cellId, ...(admitMode ? { admitMode } : {}) })
+    },
+    { wait, timeoutMs: 10_000, retryDelayMs: 1_000 }
+  )
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(`director refused admitMode: ${response.status} ${body?.error ?? ''}`)
+  if (admitMode && body?.admitMode !== admitMode) {
+    throw new Error(`director recorded admitMode ${body?.admitMode}, not ${admitMode}`)
+  }
+  return body
+}
+
 // Every known key, not just the ones this run changed: a cell that kept an old value of any
 // switch has not applied this object. A key with no fixed default (the cell reports its own
 // value) is compared only when the object names it.
@@ -243,6 +289,22 @@ export function sameFlags(applied, desired) {
   return Object.entries(CELL_FLAG_SPECS).every(
     ([key, spec]) =>
       (!('default' in spec) && desired?.[key] === undefined) || actual[key] === expected[key]
+  )
+}
+
+// Sweeps resume only once every control the cell admitted from memory holds a lease again.
+async function waitForLeasedControls(fetchImpl, request, idToken, { now, sleep, log }) {
+  const deadline = now() + REREGISTER_WAIT_MS
+  while (now() < deadline) {
+    const runtime = await readRuntime(fetchImpl, request, idToken, sleep).catch(() => null)
+    // An image without the field never admitted from memory.
+    if (runtime && (runtime.admitModeEffective ?? 'db') === 'db') return
+    await sleep(5_000)
+  }
+  log(JSON.stringify({ event: 'orca_relay_cell_reregistration_still_running', cellId: request.cellId }))
+  throw new Error(
+    `cell still re-registering after ${REREGISTER_WAIT_MS} ms; Postgres keeps reserve, so sweeps stay off. ` +
+      'Run again with the same --set once it reports db'
   )
 }
 
@@ -256,9 +318,9 @@ export async function operateCellFlags(request, dependencies) {
     throw new Error(`origin answers as ${runtime.role}/${runtime.cellId}, not ${request.cellId}`)
   }
   if (!runtime.flagsApplied) throw new Error('cell image has no flag channel (no flagsApplied)')
-  assertSupportedChanges(request.changes, runtime.supportedFlags)
   const current = await readCurrentObject(fetchImpl, request, accessToken)
   const object = desiredObject(request, current.object)
+  assertSupportedObject(object.flags, runtime)
   const plan = {
     event: 'orca_relay_cell_flags_plan',
     mode: request.mode,
@@ -276,7 +338,24 @@ export async function operateCellFlags(request, dependencies) {
       `current generation is ${current.generation}, not expected ${request.expectedGeneration}`
     )
   }
+  // The cell applies every readable write; a generation it did not apply was voided there.
+  if (current.generation !== '0' && String(runtime.flagsApplied.generation) !== current.generation) {
+    throw new Error(
+      `the cell applied generation ${runtime.flagsApplied.generation}, not the current ${current.generation}: ` +
+        'the object is voided or not yet read; fix it by hand'
+    )
+  }
+  const admitModeChange =
+    request.changes.admitMode === undefined ? undefined : (request.changes.admitMode ?? 'db')
+  if (admitModeChange !== undefined) {
+    const recorded = await directorAdmitMode(fetchImpl, request, idToken, sleep)
+    log(JSON.stringify({ event: 'orca_relay_cell_admit_mode_recorded_before', ...recorded }))
+  }
   if (request.mode === 'dry-run') return { ...plan, written: false }
+  // Sweeps skip the cell before it starts admitting from memory, never after.
+  if (admitModeChange === 'reserve') {
+    await directorAdmitMode(fetchImpl, request, idToken, sleep, 'reserve')
+  }
   const generation = await writeObject(fetchImpl, request, object, accessToken, audit)
   log(JSON.stringify({ event: 'orca_relay_cell_flags_written', cellId: request.cellId, generation }))
   const deadline = now() + READ_BACK_TIMEOUT_MS
@@ -300,6 +379,11 @@ export async function operateCellFlags(request, dependencies) {
     if (sameFlags(last.flags, object.flags)) {
       const result = { ...plan, written: true, generation, applied: last }
       log(JSON.stringify({ ...result, event: 'orca_relay_cell_flags_applied_read_back' }))
+      if (admitModeChange === 'db') {
+        await waitForLeasedControls(fetchImpl, request, idToken, { now, sleep, log })
+        await directorAdmitMode(fetchImpl, request, idToken, sleep, 'db')
+        log(JSON.stringify({ event: 'orca_relay_cell_admit_mode_recorded', cellId: request.cellId, admitMode: 'db' }))
+      }
       return result
     }
   }
@@ -319,7 +403,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
         'project-id',
         'set',
         'expected-generation',
-        'confirmation'
+        'confirmation',
+        'confirm-reserve',
+        'director-origin'
       ].map((name) => [name, { type: 'string' }])
     )
   })

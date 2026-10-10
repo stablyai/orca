@@ -15,6 +15,11 @@ on:
         description: Exact cell id, e.g. production-gce-c26
         required: true
         type: string
+      confirm-reserve:
+        description: Required for admitMode=reserve, typed as RESERVE <cell-id>
+        required: false
+        default: ''
+        type: string
       set:
         description: >-
           Switches to change, e.g. readinessLocal=true,admitMode=reserve (key=default removes a
@@ -50,7 +55,8 @@ jobs:
   operate:
     if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A flip back waits up to 8 minutes for the cell to lease every control.
+    timeout-minutes: 15
     environment: production
     env:
       MODE: ${{ inputs.mode }}
@@ -58,6 +64,7 @@ jobs:
       FLAG_CHANGES: ${{ inputs.set }}
       EXPECTED_GENERATION: ${{ inputs.expected-generation }}
       CONFIRMATION: ${{ inputs.confirmation }}
+      CONFIRM_RESERVE: ${{ inputs.confirm-reserve }}
       GCP_PROJECT_ID: onorca-cloud
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +97,7 @@ jobs:
             --cell-origin "https://${CELL_ID#production-gce-}.relay.onorca.dev" \
             --project-id "${GCP_PROJECT_ID}" \
             --set "${FLAG_CHANGES}" \
+            --director-origin "https://relay.onorca.dev" --confirm-reserve "${CONFIRM_RESERVE}" \
             --expected-generation "${EXPECTED_GENERATION}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-cell-flags.jsonl"
 
