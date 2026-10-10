@@ -1,4 +1,5 @@
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
@@ -26,6 +27,7 @@ export type PaletteFilterOption = {
   searchText: string
 }
 
+/** Keep display labels and details intact while precomputing case-insensitive search text. */
 function toFilterOption({
   id,
   label,
@@ -46,6 +48,36 @@ function toFilterOption({
   }
 }
 
+/** Static session choices share localized labels between the menu and chips. */
+export function buildPaletteStatusFilterOptions(): PaletteFilterOption[] {
+  return [
+    toFilterOption({
+      id: 'waiting',
+      label: translate('worktreeJumpPalette.filter.statusWaiting', 'Waiting for input'),
+      detail: '',
+      count: 0
+    }),
+    toFilterOption({
+      id: 'finished',
+      label: translate('worktreeJumpPalette.filter.statusFinished', 'Finished / unread result'),
+      detail: '',
+      count: 0
+    }),
+    toFilterOption({
+      id: 'working',
+      label: translate('worktreeJumpPalette.filter.statusWorking', 'Working'),
+      detail: '',
+      count: 0
+    }),
+    toFilterOption({
+      id: 'idle',
+      label: translate('worktreeJumpPalette.filter.statusIdle', 'Idle'),
+      detail: '',
+      count: 0
+    })
+  ]
+}
+
 export type PaletteFilterModel = {
   hosts: readonly PaletteFilterOption[]
   repositories: readonly PaletteFilterOption[]
@@ -61,6 +93,7 @@ export type PaletteFilterModel = {
   equivalentHostIdsById?: ReadonlyMap<string, readonly ExecutionHostId[]>
 }
 
+/** Retain every host for duplicate repository IDs; host-less entries inherit the runtime. */
 function buildRepoHostIndex(
   repos: readonly Repo[],
   defaultHostId: ExecutionHostId
@@ -76,6 +109,7 @@ function buildRepoHostIndex(
   return hostIdsByRepoId
 }
 
+/** Resolve worktree ownership before repository fallback, then use the focused runtime host. */
 export function resolveWorktreeFilterHostId(
   worktree: Pick<Worktree, 'repoId' | 'hostId'>,
   repoById: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>,
@@ -84,6 +118,7 @@ export function resolveWorktreeFilterHostId(
   return getWorktreeExecutionHostId(worktree, repoById.get(worktree.repoId), defaultHostId)
 }
 
+/** Index repository IDs by the sidebar's actual reveal-row keys, excluding unresolved rows. */
 function buildRepoIdsByProjectKey(
   repos: readonly Repo[],
   repoById: Map<string, Repo>,
@@ -105,6 +140,10 @@ function buildRepoIdsByProjectKey(
   return repoIdsByProjectKey
 }
 
+/**
+ * Build host/repository choices and row-identity indexes, leaving session status separate.
+ * Counts exclude archived worktrees; labels use sidebar disambiguation and host registry order.
+ */
 export function buildPaletteFilterModel({
   repos,
   worktrees,

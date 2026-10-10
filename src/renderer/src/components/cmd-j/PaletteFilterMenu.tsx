@@ -4,7 +4,7 @@ import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
-import type { PaletteFilterModel } from './palette-filter-options'
+import { buildPaletteStatusFilterOptions, type PaletteFilterModel } from './palette-filter-options'
 import {
   addPaletteFilterValues,
   clearPaletteFilterField,
@@ -17,6 +17,7 @@ import {
 } from './palette-filter'
 import { PaletteFilterFieldOptions, type PaletteFilterGroup } from './PaletteFilterFieldOptions'
 
+/** Drill into an axis without changing selections; badges prefer selected counts over totals. */
 function CategoryRoot({
   groups,
   onOpenField
@@ -58,6 +59,10 @@ function CategoryRoot({
   )
 }
 
+/**
+ * Edit controlled host, repository and status selections without closing on each toggle.
+ * Closing resets only navigation/search state and returns focus to the palette input.
+ */
 export default function PaletteFilterMenu({
   model,
   filter,
@@ -70,12 +75,13 @@ export default function PaletteFilterMenu({
   onFilterChange: (next: PaletteFilterState) => void
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   // null = category root; non-null = drill into that field's options
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
   const [optionQuery, setOptionQuery] = useState('')
 
+  /** Hide singleton identity axes while always offering the independent status axis. */
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
     // Why: a single host (or single repository) is nothing to disambiguate between,
@@ -97,8 +103,14 @@ export default function PaletteFilterMenu({
         selected: filter.repoIds
       })
     }
+    entries.push({
+      field: 'status',
+      heading: translate('worktreeJumpPalette.filter.statuses', 'Statuses'),
+      options: buildPaletteStatusFilterOptions(),
+      selected: filter.statusIds
+    })
     return entries
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+  }, [filter.hostIds, filter.repoIds, filter.statusIds, model.hosts, model.repositories])
 
   // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =
@@ -107,11 +119,13 @@ export default function PaletteFilterMenu({
   const selectionCount = getPaletteFilterSelectionCount(filter)
   const active = isPaletteFilterActive(filter)
 
+  /** Forget the open menu's drill-down and query without clearing controlled selections. */
   const resetMenuState = useCallback(() => {
     setActiveField(null)
     setOptionQuery('')
   }, [])
 
+  /** Reset transient state on close and bypass category navigation for a single available axis. */
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
@@ -127,13 +141,15 @@ export default function PaletteFilterMenu({
     [groups, resetMenuState]
   )
 
+  /** Leave the options layer and discard its query while keeping every selection. */
   const goBackToRoot = useCallback(() => {
     setActiveField(null)
     setOptionQuery('')
   }, [])
 
   // Why: stopPropagation so the palette's ancestor cmdk doesn't steal keys;
-  // Escape on the options layer steps back instead of closing when both axes exist.
+  // Escape on the options layer steps back instead of closing when multiple axes exist.
+  /** Isolate menu keystrokes and use Escape to step back when multiple axes are available. */
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       event.stopPropagation()
@@ -145,6 +161,7 @@ export default function PaletteFilterMenu({
     [activeGroup, goBackToRoot, groups.length]
   )
 
+  /** Restore palette typing rather than Radix's default focus on the filter trigger. */
   const handleCloseAutoFocus = useCallback(
     (event: Event) => {
       // Why: Radix would return focus to the trigger button, leaving typing dead.
@@ -153,10 +170,6 @@ export default function PaletteFilterMenu({
     },
     [onRequestInputFocus]
   )
-
-  if (groups.length === 0) {
-    return null
-  }
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

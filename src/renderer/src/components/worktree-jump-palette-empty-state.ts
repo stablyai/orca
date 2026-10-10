@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 
+/** Counts current-mode result collections for empty-state decisions, before section display caps. */
 export function getWorktreeJumpPaletteResultCount(
   controller: WorktreeJumpPaletteController
 ): number {
@@ -12,6 +13,10 @@ export function getWorktreeJumpPaletteResultCount(
     : controller.selectableItems.length
 }
 
+/**
+ * Chooses localized empty-state guidance for the active scope and available candidate types.
+ * An active filter takes precedence so an empty attention category suggests clearing its scope.
+ */
 export function getWorktreeJumpPaletteEmptyState(controller: WorktreeJumpPaletteController): {
   title: string
   subtitle: string
@@ -24,7 +29,7 @@ export function getWorktreeJumpPaletteEmptyState(controller: WorktreeJumpPalette
       ),
       subtitle: translate(
         'worktreeJumpPalette.filter.emptySubtitle',
-        'Clear the filter above, or widen it to more hosts and projects.'
+        'Clear the filter above, or choose more hosts, projects, and statuses.'
       )
     }
   }

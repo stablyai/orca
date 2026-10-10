@@ -12,6 +12,10 @@ import type { CmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-co
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaletteItem } from './worktree-jump-palette-model'
 
+/**
+ * Owns the palette's transient query, selection, expansion and focus-restoration state.
+ * Each open reseeds host/project scope from the sidebar without retaining status selections.
+ */
 export function useWorktreeJumpPaletteLocalState({
   createLookupGuard,
   visible
@@ -39,7 +43,6 @@ export function useWorktreeJumpPaletteLocalState({
     [deferredQuery]
   )
   const createWorktreeName = taskSourceUrl ? query.trim() : deferredCreateAction.createWorktreeName
-  const showCreateAction = deferredCreateAction.showCreateAction || taskSourceUrl !== null
   const [selectedItemId, setSelectedItemId] = useState('')
   const latestQueryRef = useRef('')
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -49,6 +52,9 @@ export function useWorktreeJumpPaletteLocalState({
   const [filter, setFilter] = useState<PaletteFilterState>(() =>
     buildPaletteFilterFromSidebarScope(sidebarScope)
   )
+  const showCreateAction =
+    filter.statusIds.length === 0 &&
+    (deferredCreateAction.showCreateAction || taskSourceUrl !== null)
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')

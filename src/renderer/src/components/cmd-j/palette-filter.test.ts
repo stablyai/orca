@@ -45,17 +45,24 @@ const model: PaletteFilterModel = {
   defaultHostId: LOCAL_EXECUTION_HOST_ID
 }
 
-const filterOf = (hostIds: string[], repoIds: string[]): PaletteFilterState => ({
+const filterOf = (
+  hostIds: string[],
+  repoIds: string[],
+  statusIds: string[] = []
+): PaletteFilterState => ({
   hostIds,
-  repoIds
+  repoIds,
+  statusIds
 })
 
 describe('palette filter state', () => {
-  it('reports activity and selection count across both fields', () => {
+  it('reports activity and selection count across all fields', () => {
     expect(isPaletteFilterActive(EMPTY_PALETTE_FILTER)).toBe(false)
     expect(getPaletteFilterSelectionCount(EMPTY_PALETTE_FILTER)).toBe(0)
     expect(isPaletteFilterActive(filterOf([], ['r1']))).toBe(true)
     expect(getPaletteFilterSelectionCount(filterOf(['local'], ['r1']))).toBe(2)
+    expect(isPaletteFilterActive(filterOf([], [], ['waiting']))).toBe(true)
+    expect(getPaletteFilterSelectionCount(filterOf(['local'], ['r1'], ['waiting', 'idle']))).toBe(4)
   })
 
   it('toggles values on and off, keeping each field sorted', () => {
@@ -98,11 +105,48 @@ describe('palette filter state', () => {
     expect(clearPaletteFilterField(filter, 'host')).not.toBe(filter)
     expect(clearPaletteFilterField(repoOnly, 'host')).toBe(repoOnly)
   })
+
+  it('multi-selects and removes statuses while preserving host and project scope', () => {
+    const scoped = filterOf(['local'], ['r1'])
+    const waiting = togglePaletteFilterValue(scoped, 'status', 'waiting')
+    const selected = togglePaletteFilterValue(waiting, 'status', 'finished')
+    expect(selected).toEqual(filterOf(['local'], ['r1'], ['finished', 'waiting']))
+    expect(togglePaletteFilterValue(selected, 'status', 'waiting')).toEqual(
+      filterOf(['local'], ['r1'], ['finished'])
+    )
+    expect(clearPaletteFilterField(selected, 'status')).toEqual(scoped)
+    expect(clearPaletteFilterField(selected, 'host')).toEqual(
+      filterOf([], ['r1'], ['finished', 'waiting'])
+    )
+    expect(clearPaletteFilterField(selected, 'repository')).toEqual(
+      filterOf(['local'], [], ['finished', 'waiting'])
+    )
+  })
+
+  it('bulk-adds statuses in sorted order and preserves no-op identity', () => {
+    const scoped = filterOf(['local'], ['r1'])
+    const selected = addPaletteFilterValues(scoped, 'status', ['waiting', 'idle', 'waiting'])
+    expect(selected).toEqual(filterOf(['local'], ['r1'], ['idle', 'waiting']))
+    expect(addPaletteFilterValues(selected, 'status', ['idle'])).toBe(selected)
+    expect(addPaletteFilterValues(selected, 'status', [])).toBe(selected)
+    expect(clearPaletteFilterField(scoped, 'status')).toBe(scoped)
+  })
 })
 
 describe('buildPaletteFilterPredicate', () => {
   it('returns null when no filter is active so callers can skip the pass', () => {
     expect(buildPaletteFilterPredicate(EMPTY_PALETTE_FILTER, model)).toBeNull()
+  })
+
+  it('skips the host/project pass when only statuses are selected', () => {
+    expect(buildPaletteFilterPredicate(filterOf([], [], ['waiting']), model)).toBeNull()
+  })
+
+  it('keeps host and project matching unchanged when statuses are also selected', () => {
+    const predicate = buildPaletteFilterPredicate(filterOf(['local'], ['r1'], ['working']), model)
+    expect(predicate?.matchesWorktree({ repoId: 'r1' })).toBe(true)
+    expect(predicate?.matchesWorktree({ repoId: 'r2' })).toBe(false)
+    expect(predicate?.matchesProjectRowKey('project:p1')).toBe(true)
   })
 
   it('matches worktrees on the host axis, preferring the worktree stamp over the repo', () => {
