@@ -105,6 +105,15 @@ describe('reserve assignment on a director', () => {
     })
   })
 
+  it('reads what each cell acts on: a tripped dead-man is db, a flip back still leasing is reserve', async () => {
+    const tripped = setup({
+      feeds: [feed('c1', { admitModeEffective: 'db' }), feed('c2', { admitModeEffective: 'db' })]
+    })
+    expect(await tripped.assignment.plan(HOST, { reconnect: false, region: US })).toEqual({ kind: 'database' })
+    const leasing = setup({ feeds: [feed('c1', { admitMode: 'db', admitModeEffective: 'reserve' }), feed('c2')] })
+    expect(leasing.directory.admitModeOf('c1')).toBe('reserve')
+  })
+
   it('before every live cell has answered, holds back only hosts that may be on an unheard cell', async () => {
     const cells = cellList(['c1', 'c2'])
     const onUnheard = { ...HOST, relayHostId: 'qrstuvwxyzabcdef' }

@@ -75,6 +75,9 @@ const SeatFeedSchema = z.object({
   flagsApplied: z
     .object({ generation: z.union([z.string(), z.number()]), flags: z.record(z.unknown()) })
     .optional(),
+  // What the cell acts on: reserve also while a flip back is still leasing its controls, or
+  // db once its dead-man has flipped it back. Absent from older images.
+  admitModeEffective: z.enum(['db', 'reserve']).optional(),
   changes: z.array(SeatChangeSchema).optional(),
   // The cell cut the page (2,000 changes); poll again at once.
   more: z.boolean().optional(),
@@ -134,6 +137,7 @@ export type SeatFeedCellState = {
   reportedSeats?: number
   reportedControls?: number
   flagsApplied?: SeatFeedResponse['flagsApplied']
+  admitModeEffective?: 'db' | 'reserve'
   // Step 5: when the answered poll was sent, and the cell's own reserve numbers.
   polledAt?: number
   bookings?: number
@@ -251,6 +255,7 @@ export class ShadowSeatDirectory {
     cursor.reportedSeats = response.counts?.seats
     cursor.reportedControls = response.counts?.controls
     cursor.flagsApplied = response.flagsApplied
+    cursor.admitModeEffective = response.admitModeEffective
     cursor.polledAt = polledAt
     cursor.bookings = response.counts?.bookings
     cursor.units = response.counts?.units
@@ -265,8 +270,9 @@ export class ShadowSeatDirectory {
 
   // Applied state only: what the cell last said its switch is, never the desired object.
   admitModeOf(cellId: string): 'db' | 'reserve' {
-    const flags = this.cells.get(cellId)?.flagsApplied?.flags
-    return flags?.admitMode === 'reserve' ? 'reserve' : 'db'
+    const cursor = this.cells.get(cellId)
+    if (cursor?.admitModeEffective) return cursor.admitModeEffective
+    return cursor?.flagsApplied?.flags.admitMode === 'reserve' ? 'reserve' : 'db'
   }
 
   cellIds(): string[] {
