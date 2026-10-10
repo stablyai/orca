@@ -125,7 +125,6 @@ export function startControlFlagChannel<Flags>(input: {
       discard()
       return
     }
-    seenGeneration = generation
     const text = await readBounded(response, MAX_OBJECT_BYTES)
     if (text === null) throw new ControlFlagPollError('malformed')
     let body: unknown
@@ -134,6 +133,9 @@ export function startControlFlagChannel<Flags>(input: {
     } catch {
       throw new ControlFlagPollError('malformed')
     }
+    // Only a body read whole is "seen": a read cut off mid-body must be asked for again, or
+    // every later poll would answer 304 and strand that write.
+    seenGeneration = generation
     const flags = input.parse(body)
     if (flags === null) throw new ControlFlagPollError('void')
     applied = { generation, flags }

@@ -209,6 +209,34 @@ describe('control flag channel', () => {
     expect(cancelled).toBe(4)
   })
 
+  it('asks again for a generation whose body was cut off mid-read', async () => {
+    const object = cellObject(5, { readinessLocal: true })
+    const google = fakeGoogle(object)
+    let cut = true
+    const fetchImpl: typeof fetch = async (target, init) => {
+      const url = new URL(String(target))
+      if (url.hostname === 'metadata.google.internal' || !cut) return await google.fetchImpl(target, init)
+      cut = false
+      google.state.storageRequests.push(url)
+      const half = object.body.slice(0, 10)
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(half))
+            controller.error(new Error('connection reset'))
+          }
+        }),
+        { headers: { 'x-goog-generation': '5' } }
+      )
+    }
+    const channel = cellChannel(fetchImpl)
+    await channel.poll()
+    expect(channel.applied().generation).toBe(0)
+    await channel.poll()
+    expect(google.state.storageRequests[1]?.searchParams.get('ifGenerationNotMatch')).toBeNull()
+    expect(channel.applied()).toMatchObject({ generation: 5, flags: { readinessLocal: true } })
+  })
+
   it('reads one at a time and on a jittered 5 s cadence', async () => {
     vi.useFakeTimers()
     const google = fakeGoogle(cellObject(5, { readinessLocal: true }))
