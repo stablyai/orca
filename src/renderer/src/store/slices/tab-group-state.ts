@@ -1,6 +1,7 @@
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -159,6 +160,19 @@ export function isTransientEditorContentType(contentType: TabContentType): boole
   return (
     contentType === 'diff' || contentType === 'conflict-review' || contentType === 'check-details'
   )
+}
+
+export function canRestorePersistedTab(
+  tab: Tab,
+  persistedEditFileIds: ReadonlySet<string>
+): boolean {
+  if (tab.contentType === 'terminal') {
+    return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
+  }
+  if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
+    return false
+  }
+  return !isTransientEditorContentType(tab.contentType) || persistedEditFileIds.has(tab.entityId)
 }
 
 export function getPersistedEditFileIdsByWorktree(

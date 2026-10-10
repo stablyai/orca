@@ -11,7 +11,7 @@ import {
 import {
   dedupeEditorTabsWithinGroups,
   getPersistedEditFileIdsByWorktree,
-  isTransientEditorContentType,
+  canRestorePersistedTab,
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
@@ -118,29 +118,7 @@ function hydrateUnifiedFormat(
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
         }
       })
-      .filter((tab) => {
-        if (tab.contentType === 'terminal') {
-          // Why: old web-client sessions could persist host surface ids
-          // containing "::"; those are invalid pane-key tab ids.
-          return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
-        }
-        // Why dropped rather than converted: a preview used to be an editor tab whose id encoded
-        // the document, and its document was never persisted — so this chrome has always come back
-        // naming a file no restore produces, which is the empty pane the surface was reported for.
-        // A preview is a browser tab now, and the worktree id inside that encoded id can itself
-        // contain the separator, so re-deriving the document from it is guesswork. The reader
-        // reopens the preview; nothing is left pointing at a surface that cannot exist.
-        if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
-          return false
-        }
-        if (!isTransientEditorContentType(tab.contentType)) {
-          return true
-        }
-        // Why: restore skips backing editor state for transient diff/conflict
-        // items. Hydration must drop their tab chrome too or the split group
-        // comes back pointing at a document that no longer exists.
-        return persistedEditFileIds.has(tab.entityId)
-      })
+      .filter((tab) => canRestorePersistedTab(tab, persistedEditFileIds))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     // Why after the sort: the surviving record is the one the strip renders first.
     const deduped = dedupeEditorTabsWithinGroups(hydratedTabs)

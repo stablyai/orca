@@ -1,6 +1,7 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
+import { canRestorePersistedTab, dedupeTabsById } from '../store/slices/tab-group-state'
 
 type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
@@ -60,7 +61,8 @@ export function buildPersistedUnifiedTabSessionData(
   snapshot: Pick<
     WorkspaceSessionSnapshot,
     'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
-  >
+  > &
+    Partial<Pick<WorkspaceSessionSnapshot, 'openFiles'>>
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
@@ -70,6 +72,14 @@ export function buildPersistedUnifiedTabSessionData(
   const sourceGroups = snapshot.groupsByWorktree ?? {}
   const sourceLayouts = snapshot.layoutByWorktree ?? {}
   const sourceActiveGroups = snapshot.activeGroupIdByWorktree ?? {}
+  const persistedEditFileIdsByWorktree = new Map<string, Set<string>>()
+  for (const file of snapshot.openFiles ?? []) {
+    if (file.mode === 'edit') {
+      const ids = persistedEditFileIdsByWorktree.get(file.worktreeId) ?? new Set<string>()
+      ids.add(file.filePath)
+      persistedEditFileIdsByWorktree.set(file.worktreeId, ids)
+    }
+  }
   const worktreeIds = new Set([
     ...Object.keys(sourceTabs),
     ...Object.keys(sourceGroups),
@@ -89,7 +99,14 @@ export function buildPersistedUnifiedTabSessionData(
     }
 
     const groupIds = new Set(groups.map((group) => group.id))
-    const persistedTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
+    const persistedEditFileIds = persistedEditFileIdsByWorktree.get(worktreeId) ?? new Set<string>()
+    // Filter before deduplication so an unrestorable copy cannot hide a live editor.
+    const persistedTabs = dedupeTabsById(
+      [...tabs]
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+        .filter((tab) => groupIds.has(tab.groupId))
+        .filter((tab) => !snapshot.openFiles || canRestorePersistedTab(tab, persistedEditFileIds))
+    )
     if (persistedTabs.length === 0) {
       continue
     }
