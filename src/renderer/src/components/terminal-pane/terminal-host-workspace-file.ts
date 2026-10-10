@@ -1,12 +1,15 @@
 import { callHostRoute } from '@/runtime/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
+import { userNamedFileAccess } from '@/lib/local-file-access'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeTerminalPathResolution } from '../../../../shared/runtime-file-contracts'
 
 export type HostWorkspaceFile = {
+  kind: 'host'
   /** The host's spelling of the path, so the tab's relative path agrees with it. */
   absolutePath: string
   worktreeId: string
@@ -14,6 +17,11 @@ export type HostWorkspaceFile = {
   executionHostId: ExecutionHostId
   isDirectory: boolean
 }
+
+/** A path the host disowned that this computer has; the user's click here is the only authority to read it. */
+export type ClientLocalFile = { kind: 'client'; isDirectory: boolean }
+
+export const CLIENT_LOCAL_FILE_SETTINGS = { activeRuntimeEnvironmentId: null }
 
 /** Strips the host's relative suffix; separators are swapped 1:1, so the slice stays byte-exact. */
 function workspaceRootOf(absolutePath: string, relativePath: string): string | null {
@@ -25,15 +33,33 @@ function workspaceRootOf(absolutePath: string, relativePath: string): string | n
     : null
 }
 
+async function statClientLocalFile(
+  absolutePath: string,
+  hostRefusal: Error
+): Promise<ClientLocalFile> {
+  try {
+    const stat = await statRuntimePath(
+      { settings: CLIENT_LOCAL_FILE_SETTINGS, worktreeId: null, worktreePath: null },
+      absolutePath,
+      userNamedFileAccess()
+    )
+    return { kind: 'client', isDirectory: stat.isDirectory }
+  } catch {
+    // Why: absent here too, so the host may still hold it outside its workspaces.
+    throw hostRefusal
+  }
+}
+
 /**
- * A paired-server link outside its own workspace: the server, not this client's catalog copy, says
- * which of its workspaces holds the path. Null when the link is not a paired-server path outside
- * the source workspace; throws when the host cannot open it from any workspace.
+ * A clicked paired-server link outside its own workspace: the server, not this client's catalog
+ * copy, says which of its workspaces holds the path. A path it disowns without a grant falls to
+ * this computer. Null when the link is not a paired-server path outside the source workspace;
+ * throws when neither the host nor this computer can open it.
  */
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string
-): Promise<HostWorkspaceFile | null> {
+): Promise<HostWorkspaceFile | ClientLocalFile | null> {
   const environmentId = context.settings?.activeRuntimeEnvironmentId?.trim()
   if (
     !environmentId ||
@@ -55,7 +81,12 @@ export async function resolveHostWorkspaceFile(
   const relativePath = resolved.relativePath
   if (relativePath === null || !resolved.absolutePath) {
     // Why: hosts grant reads only inside their workspaces; servers without crossWorkspace land here too.
-    throw new Error(`${absolutePath} is outside every workspace on its host`)
+    const refusal = new Error(`${absolutePath} is outside every workspace on its host`)
+    if (resolved.openTarget?.kind === 'absolute-file') {
+      // Why: a host grant means the host owns the path; it never becomes a read of this computer.
+      throw refusal
+    }
+    return statClientLocalFile(absolutePath, refusal)
   }
   if (!resolved.exists) {
     throw new Error(`File not found on its host: ${absolutePath}`)
@@ -65,6 +96,7 @@ export async function resolveHostWorkspaceFile(
     throw new Error(`The host answered an unexpected path for ${absolutePath}`)
   }
   return {
+    kind: 'host',
     absolutePath: resolved.absolutePath,
     worktreeId: resolved.worktree,
     worktreePath,

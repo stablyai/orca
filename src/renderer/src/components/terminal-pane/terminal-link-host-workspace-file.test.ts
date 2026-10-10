@@ -143,7 +143,8 @@ describe('a paired-server link outside its own workspace', () => {
     expect(openFileMock).not.toHaveBeenCalled()
   })
 
-  it('says the host has no workspace for a path outside all of them', async () => {
+  it('says the host has no workspace for a path outside all of them and this computer', async () => {
+    statMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
     hostAnswers({
       worktree: 'wt-feat',
       relativePath: null,
