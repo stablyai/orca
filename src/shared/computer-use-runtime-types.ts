@@ -113,6 +113,8 @@ export type ComputerActionVerification =
         | 'value_mismatch'
       expected?: string | null
       actualPreview?: string | null
+      /** The AXError the app returned after taking an accessibility action that may still have run. */
+      axError?: number
     }
 
 export type ComputerSnapshotResult = {
