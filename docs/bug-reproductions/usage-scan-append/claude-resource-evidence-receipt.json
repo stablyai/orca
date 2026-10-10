@@ -62,7 +62,8 @@
       "src/main/usage/usage-scan-worker-spawn.ts": "0aaf1c06dd256c31c481690be518ce16903f8334a9cef489e059f0ebd0f8b4f1",
       "src/main/usage/usage-source-cache-file.test.ts": "2734ee35f76e2daca1cc9553ffbf3c8f4e47917a126108d345c07742ebfed12e",
       "src/main/usage/usage-source-cache-file.ts": "ee53cd3c823ce5bd49892bf96486f48d285c0b4e536a295adfe5e94f147712f5"
-    }
+    },
+    "verificationTime": "Captured source and test hashes verified after measurement; later test-only changes are recorded in postCaptureTestWiring."
   },
   "baselines": {
     "original": "51e7181850b022bae2d41091fe1229accef4bd50",
@@ -200,5 +201,33 @@
     "Previously published comparison and hardening artifacts retain their historical source/layout receipts.",
     "Persistence timings exclude real worker IPC/startup/queueing and rendering; readiness uses prestarted real Node workers and includes message transfer but excludes worker startup.",
     "Six counterbalanced rounds per timing scenario; scanner-cache cold, operating-system-page-cache warm; logical payload I/O is distinct from physical device I/O."
-  ]
+  ],
+  "postCaptureTestWiring": {
+    "reason": "Move Electron, worker and discovery mock registrations from the shared test fixture into its three test consumers; inject the checked getPath mock. CI requires mock registration in actual test files.",
+    "changes": {
+      "src/main/claude-usage/persisted-usage-test-fixture.ts": {
+        "capturedSha256": "f05c20c42a0caa4dc5da7bf58d856cba8e060b82a8b9d51da6aa1da9a2b970fe",
+        "finalSha256": "e10b2821f9ef0562ffbe93dffcb3bc0270a5269bcd41c9a5dbc45bb46fcb2cf1"
+      },
+      "src/main/claude-usage/store-checkpoint-persistence.test.ts": {
+        "capturedSha256": "790250603ddb4d66c21d252d302a489171748ff7985dd03a35ceb575a7bb0937",
+        "finalSha256": "e8413312cfeb2da7b41c9d5dd41a3ff1bb321df3457867f73e5ff613b37e6a87"
+      },
+      "src/main/claude-usage/store-source-authority.test.ts": {
+        "capturedSha256": "8e984f7a3e115276f0a85509f34b2e613aab46fbe6ed2adb892b7ccf261c0ad7",
+        "finalSha256": "a907ccf2804569083100fb2580d0bad839bb4ae6dbf39f7137737a496bbde361"
+      },
+      "src/main/claude-usage/persisted-token-columns-store.test.ts": {
+        "capturedSha256": "0ea09ea83a5b94048e6930bf7ff7747f58fd5495e85e6064efb53a354459b662",
+        "finalSha256": "d526a4a8b74e9f0163dec4ed30e315bbb591c75d2f2604af86c09e8db7a6948a"
+      }
+    },
+    "unchangedCapturedFreezeFileCount": 52,
+    "capturedProductionGraphFileCount": 30,
+    "capturedProductionGraphHashesVerifiedUnchanged": true,
+    "capturedToolHashesVerifiedUnchanged": true,
+    "capturedArtifactHashesVerifiedUnchanged": true,
+    "benchmarkRerunRequired": false,
+    "validation": "17 affected tests, Node typecheck, anti-slop, changed-code quality and formatting passed after the test-wiring change."
+  }
 }

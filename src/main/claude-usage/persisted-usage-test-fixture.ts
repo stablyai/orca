@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
 import { readClaudeUsageScanFile } from './transcript-record-parser'
 import { projectClaudeUsageScanFile } from './transcript-usage-projection'
@@ -14,17 +14,6 @@ import {
 import { normalizeClaudeUsageSourceFiles } from './persisted-projection-validation'
 import { usageSourceCachePath } from '../usage/usage-source-cache-file'
 
-const { getPath } = vi.hoisted(() => ({ getPath: vi.fn<() => string>() }))
-vi.mock('electron', () => ({ app: { getPath } }))
-vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanClaudeUsageFilesViaWorker: vi.fn(),
-  splitUsageCacheFileViaWorker: vi.fn()
-}))
-vi.mock('./transcript-file-discovery', () => ({
-  listClaudeTranscriptFiles: vi.fn(),
-  claudeProfileTranscriptDirs: vi.fn(() => [])
-}))
-
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
 import { listClaudeTranscriptFiles } from './transcript-file-discovery'
 import {
@@ -32,7 +21,7 @@ import {
   splitUsageCacheFileViaWorker
 } from '../usage/usage-scan-worker-spawn'
 
-export async function createPersistedUsageTestFixture() {
+export async function createPersistedUsageTestFixture(getPath: Mock<() => string>) {
   const directory = await mkdtemp(join(tmpdir(), 'orca-claude-persisted-usage-'))
   const transcript = join(directory, 'session.jsonl')
   const reportPath = join(directory, 'orca-claude-usage.json')

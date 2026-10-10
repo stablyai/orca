@@ -1,15 +1,26 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createPersistedUsageTestFixture,
   type PersistedUsageTestFixture
 } from './persisted-usage-test-fixture'
 
+const { getPath } = vi.hoisted(() => ({ getPath: vi.fn<() => string>() }))
+vi.mock('electron', () => ({ app: { getPath } }))
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanClaudeUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
+}))
+vi.mock('./transcript-file-discovery', () => ({
+  listClaudeTranscriptFiles: vi.fn(),
+  claudeProfileTranscriptDirs: vi.fn(() => [])
+}))
+
 let fixture: PersistedUsageTestFixture
 
 beforeEach(async () => {
-  fixture = await createPersistedUsageTestFixture()
+  fixture = await createPersistedUsageTestFixture(getPath)
 })
 
 afterEach(async () => {
