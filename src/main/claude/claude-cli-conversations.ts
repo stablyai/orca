@@ -25,7 +25,6 @@ const CLAUDE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
 const CLAUDE_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['claude'],
   rowSessionId: (link) => link.handle.nativeId,
-  executable: 'claude',
   parseResumeArgs: parseClaudeResumeArgs
 }
 

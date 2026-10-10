@@ -122,11 +122,9 @@ export function structuredAdoptionConflictError(
  * (selected account before the system default).
  */
 export async function resolveStructuredAgentSessionAdoption(input: {
-  agent: StructuredAgentId
   providerSessionId: string
   candidateAccountHomes: readonly string[]
   resolveTranscript: (args: {
-    agent: StructuredAgentId
     providerSessionId: string
     accountHomePath: string
   }) => Promise<string | null>
@@ -139,7 +137,6 @@ export async function resolveStructuredAgentSessionAdoption(input: {
     }
     seen.add(trimmed)
     const transcriptPath = await input.resolveTranscript({
-      agent: input.agent,
       providerSessionId: input.providerSessionId,
       accountHomePath: trimmed
     })

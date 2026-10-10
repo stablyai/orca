@@ -3,7 +3,7 @@ import type { StructuredAgentId } from '../../shared/agent-session-provider-hand
 import { agentSessionExecutionLocationsEqual } from '../../shared/agent-session-record'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { listStructuredSessionHistoryOwnership } from './structured-agent-session-history-ownership'
 import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,
@@ -71,17 +71,15 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
         agent: input.agent,
         providerSessionId: input.providerSessionId,
         selfSessionId: input.selfSessionId,
-        ownership: listStructuredProviderSessionOwnership(input.host.deps.store.listRecords())
+        ownership: listStructuredSessionHistoryOwnership(input.host.deps.store.listRecords())
       })
     : null
   if (conflict) {
     throw structuredAdoptionConflictError(conflict)
   }
   return resolveStructuredAgentSessionAdoption({
-    agent: input.agent,
     providerSessionId: input.providerSessionId,
     candidateAccountHomes: input.transcriptImport.accountHomeCandidates(input),
-    resolveTranscript: ({ providerSessionId, accountHomePath }) =>
-      input.transcriptImport.findTranscript({ providerSessionId, accountHomePath })
+    resolveTranscript: input.transcriptImport.findTranscript
   })
 }

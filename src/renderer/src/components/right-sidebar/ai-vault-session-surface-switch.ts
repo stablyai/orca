@@ -16,7 +16,10 @@ export type AiVaultSessionSurfaceSwitchTargets = {
 /** The one gate for moving a session between native chat and the CLI, shared by the session-history
  *  row and the tab menu so both offer the move in exactly the same cases. */
 export function resolveAiVaultSessionSurfaceSwitchTargets(
-  session: Pick<AiVaultSession, 'agent' | 'messageCount' | 'previewMessages' | 'structuredSession'>,
+  session: Pick<
+    AiVaultSession,
+    'agent' | 'sessionId' | 'messageCount' | 'previewMessages' | 'structuredSession'
+  >,
   resumeState: AiVaultSessionResumeState | null,
   resumeInChat: AiVaultResumeInChatEligibility | null
 ): AiVaultSessionSurfaceSwitchTargets {

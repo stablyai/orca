@@ -6,19 +6,14 @@ import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
-import {
-  listStructuredProviderSessionOwnership,
-  type StructuredProviderSessionOwnership
-} from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { listStructuredSessionHistoryOwnership } from '../runtime/structured-agent-session-history-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
-import type {
-  StructuredAgentResumeInvocation,
-  StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
 import {
-  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
-  structuredAgentRuntimeRegistration
-} from '../runtime/structured-agent-runtime-registrations'
+  isSessionHistoryBinary,
+  type StructuredAgentResumeInvocation
+} from '../native-chat/structured-agent-cli-conversations'
+import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
@@ -107,16 +102,11 @@ function ownershipLookup():
   }
 }
 
-/** How `agent`'s chats own Session History rows; null when its registration says they own none. */
-function sessionHistoryOf(agent: StructuredAgentId): StructuredAgentSessionHistory | null {
-  return structuredAgentRuntimeRegistration(agent)?.sessionHistory ?? null
-}
-
 /** The agent whose chats own history rows listed under `rowAgent`; null when none does. */
 function historyRowOwner(rowAgent: string): StructuredAgentId | null {
   return (
     STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(({ sessionHistory }) =>
-      sessionHistory?.rowAgents.includes(rowAgent)
+      sessionHistory?.rowAgents.some((agent) => agent === rowAgent)
     )?.definition.agent ?? null
   )
 }
@@ -188,14 +178,9 @@ function findOwnership(
   )
 }
 
-/** Each chat's history rows, by the row id its agent's registration names for each handle link. */
 function listOwnership(): StructuredProviderSessionOwnership[] {
   const host = getStructuredAgentSessionHost()
-  return host
-    ? listStructuredProviderSessionOwnership(host.deps.store.listRecords(), (record, link) =>
-        sessionHistoryOf(record.provider)?.rowSessionId(link)
-      )
-    : []
+  return host ? listStructuredSessionHistoryOwnership(host.deps.store.listRecords()) : []
 }
 
 function isResumeCommandFor(
@@ -222,11 +207,8 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
   // The first token naming any owning agent's binary decides which agent the command runs.
   for (const [index, token] of normalized.entries()) {
-    const binary = token.split(/[\\/]/).at(-1)?.toLowerCase()
     const registration = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
-      ({ sessionHistory }) =>
-        sessionHistory &&
-        (binary === sessionHistory.executable || binary === `${sessionHistory.executable}.exe`)
+      ({ sessionHistory }) => sessionHistory && isSessionHistoryBinary(sessionHistory, token)
     )
     if (registration?.sessionHistory) {
       const invocation = registration.sessionHistory.parseResumeArgs(normalized.slice(index + 1))

@@ -26,7 +26,6 @@ const CODEX_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
 const CODEX_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['codex'],
   rowSessionId: (link) => link.handle.nativeId,
-  executable: 'codex',
   // `codex fork` carries no `resume` marker, and Codex has no target-less resume flag.
   parseResumeArgs: (args) => resumeInvocationAfterMarker(args, ['resume'])
 }

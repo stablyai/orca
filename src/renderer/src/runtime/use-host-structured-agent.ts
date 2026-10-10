@@ -14,8 +14,8 @@ import type { RuntimeClientTarget } from './runtime-client-target'
 
 type HostStructuredAgentFlag = 'imagePrompts' | 'transcriptAdoption' | 'sessionHistory'
 
-/** What the host registered for the agent, else what every build has always given the agents it
- *  ships: a host with no list predates these flags. An unlisted agent claims nothing. */
+/** What the host registered for the agent. With no record (no list yet, or an older host), the
+ *  answer every build has always given: yes for Claude and Codex, no for any other agent. */
 export function structuredAgentClaims(
   record: AgentSessionRegisteredAgent | undefined,
   agent: string,

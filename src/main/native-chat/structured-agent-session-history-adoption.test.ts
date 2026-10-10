@@ -193,7 +193,6 @@ describe('resolveStructuredAgentSessionAdoption', () => {
 
     await expect(
       resolveStructuredAgentSessionAdoption({
-        agent: 'codex',
         providerSessionId: 'thread-1',
         candidateAccountHomes: ['/home/dev/.orca-codex', '/home/dev/.codex', '/never/probed'],
         resolveTranscript
@@ -210,7 +209,6 @@ describe('resolveStructuredAgentSessionAdoption', () => {
 
     await expect(
       resolveStructuredAgentSessionAdoption({
-        agent: 'claude',
         providerSessionId: 'session-1',
         candidateAccountHomes: ['', '   ', '/home/dev/.claude', ' /home/dev/.claude ', ''],
         resolveTranscript
@@ -225,7 +223,6 @@ describe('resolveStructuredAgentSessionAdoption', () => {
     // A resume under the wrong home lands in a blank chat wearing the old chat's name.
     await expect(
       resolveStructuredAgentSessionAdoption({
-        agent: 'claude',
         providerSessionId: 'session-1',
         candidateAccountHomes: ['/home/dev/.claude-work', '/home/dev/.claude'],
         resolveTranscript: async () => null

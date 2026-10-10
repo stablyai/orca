@@ -19,7 +19,7 @@ export function listStructuredProviderSessionOwnership(
   providerSessionId: (
     record: AgentSessionRecord,
     link: AgentSessionProviderHandleLink
-  ) => string | undefined = (_record, link) => link.handle.nativeId
+  ) => string | undefined
 ): StructuredProviderSessionOwnership[] {
   return records.flatMap((record) =>
     record.providerHandleChain.flatMap((link) => {
