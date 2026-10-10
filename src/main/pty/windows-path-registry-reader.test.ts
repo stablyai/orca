@@ -69,14 +69,11 @@ describe('readWindowsPathRegistry', () => {
     ])
   })
 
-  it('fails closed when the optional native module is unavailable', () => {
+  it('reports an unavailable native module apart from a failed read', () => {
     __setWindowsPathRegistryLoaderForTests(() => {
       throw new Error('native module unavailable')
     })
 
-    expect(readWindowsPathRegistry()).toEqual([
-      { failed: true, value: null },
-      { failed: true, value: null }
-    ])
+    expect(readWindowsPathRegistry()).toBeNull()
   })
 })

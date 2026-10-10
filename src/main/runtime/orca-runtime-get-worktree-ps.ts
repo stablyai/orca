@@ -204,8 +204,8 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveClaudeCommand: () =>
-        resolveStructuredAgentCommand('claude', this.requireStore().getSettings()),
+      resolveClaudeCommand: (options) =>
+        resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
       resolveCodexCommand: (options) =>
         resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
       resolveLaunchArgs: (agent) =>

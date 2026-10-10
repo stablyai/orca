@@ -47,6 +47,10 @@
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
+import {
+  bindOrcaCliToExecutionHost,
+  ORCA_CLI_OWNING_HOST_ENV
+} from '../../shared/cli-execution-host-env'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import { resolveStructuredWorkerIdentityForSession } from './structured-worker-authority'
 
@@ -71,13 +75,14 @@ export function structuredSessionChildIdentityEnv(
  */
 function applyThisAppCli(env: Record<string, string>): void {
   delete env.ORCA_CLI_COMMAND
+  delete env[ORCA_CLI_OWNING_HOST_ENV]
   if (!hasAppEnvironment()) {
     return
   }
   const app = getAppEnvironment()
   const userDataPath = app.getPath('userData')
   const isPackaged = app.isPackaged()
-  env.ORCA_USER_DATA_PATH = userDataPath
+  bindOrcaCliToExecutionHost(env, userDataPath)
   const launcher = prependOrcaCliDirToChildPath(env, {
     isPackaged,
     userDataPath,

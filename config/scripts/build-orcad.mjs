@@ -31,6 +31,7 @@ import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-s
 import { smokeSessionScannerService } from './session-scanner-service-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
+import { stageOrcadWindowsCliLauncher } from './orcad-windows-cli-launcher.mjs'
 import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
   ORCAD_CLI_ENTRY_FILENAME,
@@ -157,6 +158,7 @@ writeFileSync(
 stageNodePty(BUILD_TARGET)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
+stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)
 const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
 mkdirSync(dirname(emojiDatasetOutput), { recursive: true })
 copyFileSync(

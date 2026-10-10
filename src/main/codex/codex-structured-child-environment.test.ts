@@ -40,6 +40,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       ORCA_AGENT_SESSION_ID: 'session-not-a-worker',
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
+      ORCA_CLI_OWNING_HOST: '1',
       ...(process.platform !== 'win32'
         ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
         : {}),
@@ -65,6 +66,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
+      ORCA_CLI_OWNING_HOST: '1',
       ...(process.platform !== 'win32'
         ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
         : {}),
@@ -108,6 +110,7 @@ const ENV_REPORTING_APP_SERVER = String.raw`
         result: {
           sessionId: process.env.ORCA_AGENT_SESSION_ID ?? null,
           cliCommand: process.env.ORCA_CLI_COMMAND ?? null,
+          owningHost: process.env.ORCA_CLI_OWNING_HOST ?? null,
           cliBinDir: process.env.ORCA_CLI_BIN_DIR ?? null,
           path: process.env.PATH ?? process.env.Path ?? null
         }
@@ -125,6 +128,7 @@ describe('the spawned Codex child', () => {
     // The builder's output is an overlay on process.env, so only the spawned child proves the id
     // survives the merge — an Orca launched inside another session inherits that session's id.
     vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
+    vi.stubEnv('ORCA_CLI_OWNING_HOST', 'stale-binding')
     const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
     const env = buildCodexStructuredChildEnvironment(
       {
@@ -147,6 +151,7 @@ describe('the spawned Codex child', () => {
       await expect(connection.request('test/env')).resolves.toEqual({
         sessionId,
         cliCommand: expect.stringMatching(DEV_CLI_LAUNCHER),
+        owningHost: '1',
         cliBinDir: process.platform === 'win32' ? null : expect.stringMatching(DEV_CLI_BIN_DIR),
         path: expect.stringMatching(DEV_CLI_BIN_FIRST)
       })

@@ -11,6 +11,7 @@
 //! was flagged as exactly that across several vendors (#23383).
 
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command};
 
@@ -26,30 +27,60 @@ fn main() {
             launcher.display()
         ))
     };
-    let Some(app_directory) = resources_directory.parent() else {
-        fail(&format!(
-            "Unable to locate Orca.exe next to \"{}\"",
-            resources_directory.display()
-        ))
+    // A headless server slot ships the CLI at out/cli/index.js beside its pinned Node reference.
+    let server_cli_path = resources_directory.join("out").join("cli").join("index.js");
+    let (runtime_path, cli_path, headless) = if server_cli_path.is_file() {
+        let runtime_sha = fs::read_to_string(resources_directory.join(".runtime-node"))
+            .unwrap_or_else(|error| fail(&format!("Unable to read the Orca runtime: {error}")));
+        let runtime_sha = runtime_sha.trim();
+        if runtime_sha.len() != 64 || !runtime_sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            fail("Invalid Orca runtime reference");
+        }
+        if env::var_os("ORCA_USER_DATA_PATH").is_none_or(|value| value.is_empty()) {
+            fail("The Orca server data path is required");
+        }
+        (
+            resources_directory
+                .join("..")
+                .join("runtimes")
+                .join(format!("node-{runtime_sha}"))
+                .join("node.exe"),
+            server_cli_path,
+            true,
+        )
+    } else {
+        let Some(app_directory) = resources_directory.parent() else {
+            fail(&format!(
+                "Unable to locate Orca.exe next to \"{}\"",
+                resources_directory.display()
+            ))
+        };
+
+        let electron_path = app_directory.join("Orca.exe");
+        if !electron_path.is_file() {
+            fail(&format!(
+                "Unable to locate Orca.exe next to \"{}\"",
+                resources_directory.display()
+            ));
+        }
+
+        let cli_path: PathBuf = resources_directory
+            .join("app.asar.unpacked")
+            .join("out")
+            .join("cli")
+            .join("index.js");
+        if !cli_path.is_file() {
+            fail(&format!(
+                "Unable to locate the Orca CLI entrypoint at \"{}\"",
+                cli_path.display()
+            ));
+        }
+        (electron_path, cli_path, false)
     };
-
-    let electron_path = app_directory.join("Orca.exe");
-    if !electron_path.is_file() {
+    if !runtime_path.is_file() {
         fail(&format!(
-            "Unable to locate Orca.exe next to \"{}\"",
-            resources_directory.display()
-        ));
-    }
-
-    let cli_path: PathBuf = resources_directory
-        .join("app.asar.unpacked")
-        .join("out")
-        .join("cli")
-        .join("index.js");
-    if !cli_path.is_file() {
-        fail(&format!(
-            "Unable to locate the Orca CLI entrypoint at \"{}\"",
-            cli_path.display()
+            "Unable to locate the Orca runtime at \"{}\"",
+            runtime_path.display()
         ));
     }
 
@@ -62,21 +93,28 @@ fn main() {
         "NODE_REPL_EXTERNAL_MODULE",
         "ORCA_NODE_REPL_EXTERNAL_MODULE",
     );
-    env::set_var("ELECTRON_RUN_AS_NODE", "1");
-    env::set_var("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER", "1");
+    if !headless {
+        env::set_var("ELECTRON_RUN_AS_NODE", "1");
+        env::set_var("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER", "1");
+    } else {
+        env::remove_var("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER");
+        env::set_var("ORCA_CLI_OWNING_HOST", "1");
+    }
     let requested_command = env::var("ORCA_CLI_COMMAND").unwrap_or_default();
     env::set_var(
         "ORCA_CLI_COMMAND",
-        if requested_command == "orca-ide" {
-            "orca-ide"
+        if headless {
+            launcher.to_string_lossy().into_owned()
+        } else if requested_command == "orca-ide" {
+            "orca-ide".into()
         } else {
-            "orca"
+            "orca".into()
         },
     );
 
     // Each argument stays its own argv entry, so a body holding newlines reaches
     // the CLI intact.
-    let mut command = Command::new(&electron_path);
+    let mut command = Command::new(&runtime_path);
     command.arg(&cli_path).args(env::args_os().skip(1));
 
     match command.status() {

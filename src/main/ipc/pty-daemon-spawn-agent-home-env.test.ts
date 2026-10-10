@@ -445,8 +445,10 @@ describe('registerPtyHandlers', () => {
         })
         try {
           // Why: overriding process.platform doesn't change the loaded node:path dialect; keep this synthetic PATH consistent.
+          // A copied owning-host flag must not reach a desktop pane; its CLI honours ambient selectors.
           const env = await daemonSpawnAndGetEnv({
-            PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
+            PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter),
+            ORCA_CLI_OWNING_HOST: '1'
           })
           const entries = env.PATH.split(delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
@@ -454,6 +456,7 @@ describe('registerPtyHandlers', () => {
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
           expect(env.ORCA_CLI_COMMAND).toBeUndefined()
+          expect(env.ORCA_CLI_OWNING_HOST).toBeUndefined()
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,

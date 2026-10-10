@@ -206,12 +206,29 @@ jobs:
         run: |
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+      - name: Build the Windows CLI launchers for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          node config/scripts/build-windows-cli-launcher.mjs --arch x64 --output .build/windows-cli-launcher/x64/orca.exe
+          node config/scripts/build-windows-cli-launcher.mjs --arch arm64 --output .build/windows-cli-launcher/arm64/orca.exe
       - name: Keep the Windows process-table addons for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022'
         uses: actions/upload-artifact@v7
         with:
           name: orcad-windows-process-tree
           path: .build/windows-process-tree/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      - name: Keep the Windows CLI launchers for the desktop template
+        if: inputs.build_template && matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orcad-windows-cli-launcher
+          path: .build/windows-cli-launcher/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -458,6 +475,11 @@ jobs:
         with:
           name: orcad-windows-process-tree
           path: .build/windows-process-tree
+      - name: Collect the Windows CLI launchers
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-windows-cli-launcher
+          path: .build/windows-cli-launcher
       - name: Merge the lanes and gate the full slot matrix
         shell: bash
         run: |

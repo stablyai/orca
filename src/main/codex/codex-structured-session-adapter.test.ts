@@ -138,6 +138,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       ORCA_AGENT_SESSION_ID: 'session-1',
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
+      ORCA_CLI_OWNING_HOST: '1',
       ...(process.platform !== 'win32'
         ? { ORCA_CLI_BIN_DIR: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin$/) }
         : {}),

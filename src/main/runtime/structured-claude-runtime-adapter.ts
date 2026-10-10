@@ -26,7 +26,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveClaudeLaunchArgs: () => Promise<string[]> | string[]
-  resolveClaudeCommand?: () => string
+  resolveClaudeCommand?: typeof resolveClaudeCommand
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   /** Each chat's visuals folder and skill; absent leaves chats without visuals. */

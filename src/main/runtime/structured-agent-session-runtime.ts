@@ -13,6 +13,7 @@
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { PiRpcSessionDeps } from '../pi/rpc-session'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type { ClaudeStructuredLaunchResolverDeps } from '../claude/claude-structured-launch-resolution'
 import { existsSync } from 'node:fs'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
@@ -100,7 +101,7 @@ export type StructuredAgentSessionRuntimeDeps = {
   claimKeyId: string
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
-  resolveClaudeCommand?: () => string
+  resolveClaudeCommand?: ClaudeStructuredLaunchResolverDeps['resolveCommand']
   openPiConnection?: PiRpcSessionDeps['openConnection']
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport

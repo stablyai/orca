@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import {
+  captureLoginShellEnvironment,
   resetLoginShellEnvironmentCacheForTests,
   resolveLoginShellEnvironment
 } from './login-shell-environment'
@@ -67,4 +68,60 @@ it('bounds retained environments and supports explicit refresh', async () => {
     force: true
   })
   expect(spawner).toHaveBeenCalledTimes(12)
+})
+
+it('says whether the shell produced the env, and a failed forced capture keeps the cached one', async () => {
+  const env = { HOME: '/host' }
+  const spawner = vi
+    .fn<(shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>>()
+    .mockResolvedValueOnce({ PATH: '/profile/bin' })
+    .mockResolvedValueOnce(null)
+  const options = { shellOverride: '/bin/bash', env, spawner }
+  await expect(captureLoginShellEnvironment(options)).resolves.toEqual({
+    status: 'captured',
+    env: { PATH: '/profile/bin' }
+  })
+  await expect(captureLoginShellEnvironment({ ...options, force: true })).resolves.toEqual({
+    status: 'fallback',
+    env
+  })
+  await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/profile/bin' })
+  expect(spawner).toHaveBeenCalledTimes(2)
+})
+
+it('serves the cached env to other readers while a forced capture runs', async () => {
+  const release = Promise.withResolvers<NodeJS.ProcessEnv | null>()
+  const spawner = vi
+    .fn<(shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>>()
+    .mockResolvedValueOnce({ PATH: '/first' })
+    .mockReturnValueOnce(release.promise)
+  const options = { shellOverride: '/bin/bash', env: { HOME: '/host' }, spawner }
+  await resolveLoginShellEnvironment(options)
+  const forced = resolveLoginShellEnvironment({ ...options, force: true })
+  const tick = new Promise((resolve) => setImmediate(() => resolve('still waiting')))
+  await expect(Promise.race([resolveLoginShellEnvironment(options), tick])).resolves.toEqual({
+    PATH: '/first'
+  })
+  release.resolve({ PATH: '/second' })
+  await expect(forced).resolves.toEqual({ PATH: '/second' })
+  await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/second' })
+  expect(spawner).toHaveBeenCalledTimes(2)
+})
+
+it('serves a cached fallback to other readers while a forced capture runs', async () => {
+  const release = Promise.withResolvers<NodeJS.ProcessEnv | null>()
+  const spawner = vi
+    .fn<(shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>>()
+    .mockResolvedValueOnce(null)
+    .mockReturnValueOnce(release.promise)
+  const env = { HOME: '/host' }
+  const options = { shellOverride: '/bin/bash', env, spawner }
+  await expect(captureLoginShellEnvironment(options)).resolves.toMatchObject({ status: 'fallback' })
+  const forced = resolveLoginShellEnvironment({ ...options, force: true })
+  const tick = new Promise((resolve) => setImmediate(() => resolve('still waiting')))
+  await expect(Promise.race([resolveLoginShellEnvironment(options), tick])).resolves.toEqual(env)
+  release.resolve({ PATH: '/profile/bin' })
+  await expect(forced).resolves.toEqual({ PATH: '/profile/bin' })
+  await expect(resolveLoginShellEnvironment(options)).resolves.toEqual({ PATH: '/profile/bin' })
+  expect(spawner).toHaveBeenCalledTimes(2)
 })

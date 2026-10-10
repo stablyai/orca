@@ -10,6 +10,7 @@ import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RIPGREP_ARTIFACTS,
   ORCAD_RIPGREP_LICENSE_ARTIFACTS,
+  ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME,
   orcadArtifactFilenames,
   orcadBunRuntimeFilename,
   orcadNodeRuntimeRelativePath,
@@ -17,6 +18,13 @@ import {
 } from './orcad-artifacts'
 
 describe('standalone runtime artifacts', () => {
+  it.each(SERVER_TARGETS)('ships the native CLI launcher only in Windows %s slots', (target) => {
+    expect(orcadArtifactFilenames(target).includes(ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME)).toBe(
+      target.startsWith('win32-')
+    )
+    expect(orcadTemplateCommonFilenames()).not.toContain(ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME)
+  })
+
   it.each(SERVER_TARGETS)(
     'ships the foreign SQLite reader worker the %s runtime starts',
     (target) => {

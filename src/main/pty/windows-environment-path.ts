@@ -1,6 +1,7 @@
 import type { execFile, execFileSync } from 'node:child_process'
 import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { getRegExePath } from '../win32-utils'
+import { runProcess } from '@orca/process-host'
 import { mergeWindowsPathSegments } from './windows-path-segment-merge'
 import {
   WindowsPathRegistryFallback,
@@ -77,11 +78,21 @@ function registryOutputSegments(
     : []
 }
 
+const FAILED_REGISTRY_READS: RegistryPathRead[] = WINDOWS_PATH_REGISTRY_KEYS.map(() => ({
+  failed: true,
+  segments: []
+}))
+
+/** Null when the native addon cannot load. */
 function readNativeRegistryPaths(
   env: NodeJS.ProcessEnv,
   pathDelimiter: string
-): RegistryPathRead[] {
-  return readWindowsPathRegistry().map((read) => ({
+): RegistryPathRead[] | null {
+  const reads = readWindowsPathRegistry()
+  if (reads === null) {
+    return null
+  }
+  return reads.map((read) => ({
     failed: read.failed,
     segments:
       read.value === null
@@ -106,31 +117,51 @@ function cachePersistedWindowsPathReads(reads: RegistryPathRead[], readSequence:
   return [...segments]
 }
 
-function readRegistryPathAsync(
-  run: ExecFile,
-  executable: string,
-  registryValue: readonly [key: string, valueName: string],
+/** Stdout of `reg query`, or null when the query failed. */
+type RegQuery = (executable: string, args: string[]) => Promise<string | null>
+
+function execFileRegQuery(run: ExecFile): RegQuery {
+  return (executable, args) =>
+    new Promise((resolve) => {
+      run(
+        executable,
+        args,
+        { encoding: 'utf8', timeout: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS, windowsHide: true },
+        (error, stdout) => resolve(error ? null : String(stdout))
+      )
+    })
+}
+
+async function runProcessRegQuery(executable: string, args: string[]): Promise<string | null> {
+  try {
+    const result = await runProcess({
+      program: executable,
+      args,
+      timeoutMs: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS
+    })
+    return result.code === 0 && !result.timedOut ? result.stdout : null
+  } catch {
+    return null
+  }
+}
+
+function readRegExePathsAsync(
+  query: RegQuery,
   env: NodeJS.ProcessEnv,
   pathDelimiter: string
-): Promise<RegistryPathRead> {
-  const [key, valueName] = registryValue
-  return new Promise((resolve) => {
-    run(
-      executable,
-      ['query', key, '/v', valueName],
-      { encoding: 'utf8', timeout: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS, windowsHide: true },
-      (error, stdout) => {
-        if (error) {
-          resolve({ failed: true, segments: [] })
-          return
-        }
-        resolve({
-          failed: false,
-          segments: registryOutputSegments(String(stdout), valueName, env, pathDelimiter)
-        })
-      }
-    )
-  })
+): Promise<RegistryPathRead[]> {
+  return Promise.all(
+    WINDOWS_PATH_REGISTRY_KEYS.map(async ([key, valueName]) => {
+      // Why: `/v Path` fails when the value is absent; the native reader calls that an empty PATH.
+      const stdout = await query(getRegExePath(env), ['query', key])
+      return stdout === null
+        ? { failed: true, segments: [] }
+        : {
+            failed: false,
+            segments: registryOutputSegments(stdout, valueName, env, pathDelimiter)
+          }
+    })
+  )
 }
 
 export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions = {}): string[] {
@@ -166,15 +197,11 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
   const reads = options.execFileSync
     ? WINDOWS_PATH_REGISTRY_KEYS.map(([key, valueName]) => {
         try {
-          const output = options.execFileSync!(
-            getRegExePath(env),
-            ['query', key, '/v', valueName],
-            {
-              encoding: 'utf8',
-              timeout: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS,
-              windowsHide: true
-            }
-          )
+          const output = options.execFileSync!(getRegExePath(env), ['query', key], {
+            encoding: 'utf8',
+            timeout: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS,
+            windowsHide: true
+          })
           return {
             failed: false,
             segments: registryOutputSegments(output, valueName, env, pathDelimiter)
@@ -183,7 +210,8 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
           return { failed: true, segments: [] }
         }
       })
-    : readNativeRegistryPaths(env, pathDelimiter)
+    : // Why: no synchronous reg.exe on the PTY hot path; the async refresh fills the cache.
+      (readNativeRegistryPaths(env, pathDelimiter) ?? FAILED_REGISTRY_READS)
   const segments = reads.flatMap((read) => read.segments)
   if (!useProductionCache) {
     return segments
@@ -227,18 +255,12 @@ export async function readPersistedWindowsPathSegmentsAsync(
   const readSequence = useProductionCache ? ++persistedWindowsPathReadSequence : 0
   const refresh = (
     options.execFile
-      ? Promise.all(
-          WINDOWS_PATH_REGISTRY_KEYS.map((registryValue) =>
-            readRegistryPathAsync(
-              options.execFile!,
-              getRegExePath(env),
-              registryValue,
-              env,
-              pathDelimiter
-            )
-          )
+      ? readRegExePathsAsync(execFileRegQuery(options.execFile), env, pathDelimiter)
+      : // Why: an Orca server slot does not ship the native addon, so reg.exe reads it there.
+        Promise.resolve(
+          readNativeRegistryPaths(env, pathDelimiter) ??
+            readRegExePathsAsync(runProcessRegQuery, env, pathDelimiter)
         )
-      : Promise.resolve(readNativeRegistryPaths(env, pathDelimiter))
   ).then((reads) => {
     const segments = reads.flatMap((read) => read.segments)
     if (!useProductionCache) {

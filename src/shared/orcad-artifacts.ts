@@ -61,6 +61,7 @@ export const ORCAD_ADDON_NAPI_VERSION = 8
 export const ORCAD_NODE_PTY_DIR = 'node_modules/node-pty'
 export const ORCAD_CLI_ENTRY_FILENAME = 'out/cli/index.js'
 export const ORCAD_CLI_PACKAGE_FILENAME = 'out/package.json'
+export const ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME = 'bin/orca.exe'
 // Test files and sources stay out; these are every module the runtime path requires.
 export const ORCAD_NODE_PTY_JS_ARTIFACTS = [
   'package.json',
@@ -205,7 +206,7 @@ export function orcadArtifactFilenames(target: string): string[] {
   )
   filenames.push(...orcadNodePtyNativeArtifacts(target), orcadRipgrepArtifact(target))
   if (isWindowsTarget(target)) {
-    filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME)
+    filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME, ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME)
   }
   return filenames
 }

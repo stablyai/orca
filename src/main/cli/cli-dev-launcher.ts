@@ -7,6 +7,7 @@ import {
   isAbsoluteForPlatform,
   quoteShell
 } from './cli-install-path-format'
+import { ORCA_CLI_OWNING_HOST_ENV } from '../../shared/cli-execution-host-env'
 
 export async function ensureDevLauncher(args: {
   platform: NodeJS.Platform
@@ -59,6 +60,7 @@ export function buildUnixCliLauncher(
     return `#!/usr/bin/env sh
 set -eu
 export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
+export ${ORCA_CLI_OWNING_HOST_ENV}=1
 unset NODE_OPTIONS NODE_REPL_EXTERNAL_MODULE ELECTRON_RUN_AS_NODE
 exec ${quoteShell(execPathValue)} ${quoteShell(cliEntryPath)} "$@"
 `

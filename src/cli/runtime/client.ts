@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readCliRemoteSelectionDefaults } from '../../shared/cli-execution-host-env'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
@@ -65,8 +66,8 @@ export class RuntimeClient {
   constructor(
     userDataPath = getDefaultUserDataPath(),
     requestTimeoutMs = 60_000,
-    remotePairingCode = process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING ?? null,
-    environmentSelector = process.env.ORCA_ENVIRONMENT ?? null,
+    remotePairingCode = readCliRemoteSelectionDefaults().pairingCode,
+    environmentSelector = readCliRemoteSelectionDefaults().environment,
     cliExecutable = resolveOrchestrationCliExecutable(),
     originalArgs?: readonly string[]
   ) {

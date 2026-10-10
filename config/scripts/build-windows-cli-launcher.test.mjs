@@ -186,6 +186,45 @@ describe('Windows CLI launcher', () => {
     ).toBe(false)
   })
 
+  itWindows('runs a server CLI with pinned Node and preserves multiline arguments', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca server launcher '))
+    try {
+      const slot = join(root, 'slot')
+      const launcher = join(slot, 'bin', 'orca.exe')
+      const runtime = join(root, 'runtimes', `node-${'a'.repeat(64)}`, 'node.exe')
+      mkdirSync(dirname(launcher), { recursive: true })
+      mkdirSync(dirname(runtime), { recursive: true })
+      copyFileSync(process.execPath, runtime)
+      writeFileSync(join(slot, '.runtime-node'), `${'a'.repeat(64)}\n`)
+      mkdirSync(join(slot, 'out', 'cli'), { recursive: true })
+      writeFileSync(
+        join(slot, 'out', 'cli', 'index.js'),
+        'console.log(JSON.stringify({argv:process.argv.slice(2),profile:process.env.ORCA_USER_DATA_PATH,launcher:process.env.ORCA_CLI_COMMAND,owningHost:process.env.ORCA_CLI_OWNING_HOST,desktopMarker:process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER??null}))'
+      )
+      const build = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcher],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, build.stderr).toBe(0)
+      const body = 'line one\n\nline two'
+      const child = spawnSync(launcher, ['orchestration', 'send', '--body', body], {
+        encoding: 'utf8',
+        env: { ...process.env, ORCA_USER_DATA_PATH: root, ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER: '1' }
+      })
+      expect(child.status, child.stderr).toBe(0)
+      expect(JSON.parse(child.stdout)).toEqual({
+        argv: ['orchestration', 'send', '--body', body],
+        profile: root,
+        launcher,
+        owningHost: '1',
+        desktopMarker: null
+      })
+    } finally {
+      removeFixtureTree(root)
+    }
+  })
+
   itWindows('preserves a multiline argument from PowerShell through the native launcher', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca cli launcher '))
     try {

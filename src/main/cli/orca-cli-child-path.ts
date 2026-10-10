@@ -25,6 +25,8 @@ export type OrcaCliChildPathOptions = {
   isPackaged: boolean
   userDataPath: string
   resourcesPath?: string | null
+  /** A WSL pane keeps its Linux-side CLI; a Windows server's native launcher cannot run there. */
+  skipHostLauncher?: boolean
   /** Test seam — production reads the real platform, which is what every branch below assumes. */
   platform?: NodeJS.Platform
 }
@@ -44,7 +46,10 @@ export function prependOrcaCliDirToChildPath(
   // Why: matches node:path's `delimiter` for the running platform, but stays correct when a test
   // drives a foreign platform through the seam.
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
-  const hostLauncher = hasAppEnvironment() ? getAppEnvironment().getCliLauncherPath?.() : null
+  const hostLauncher =
+    !opts.skipHostLauncher && hasAppEnvironment()
+      ? getAppEnvironment().getCliLauncherPath?.()
+      : null
   if (hostLauncher) {
     const binDir = dirname(hostLauncher)
     const inheritedEntries = readInheritedPath(env, platform)

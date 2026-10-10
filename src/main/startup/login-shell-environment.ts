@@ -11,8 +11,32 @@ const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
 const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
 const SPAWN_TIMEOUT_MS = 5000
 
-const environmentCache = new Map<string, Promise<NodeJS.ProcessEnv>>()
+/** Whether a profile-loading shell produced the env, or Orca fell back to its own. */
+export type LoginShellEnvironmentCapture = {
+  status: 'captured' | 'fallback'
+  env: NodeJS.ProcessEnv
+}
+
+type CachedEnvironment = { capture: Promise<LoginShellEnvironmentCapture>; settled: boolean }
+
+const environmentCache = new Map<string, CachedEnvironment>()
 const MAX_CACHED_ENVIRONMENTS = 8
+
+function cacheEnvironment(key: string, capture: Promise<LoginShellEnvironmentCapture>): void {
+  const entry: CachedEnvironment = { capture, settled: false }
+  void capture.then(() => {
+    entry.settled = true
+  })
+  environmentCache.delete(key)
+  while (environmentCache.size >= MAX_CACHED_ENVIRONMENTS) {
+    const oldest = environmentCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    environmentCache.delete(oldest)
+  }
+  environmentCache.set(key, entry)
+}
 
 function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return Object.fromEntries(
@@ -132,10 +156,11 @@ export type ResolveLoginShellEnvironmentOptions = {
   spawner?: (shell: string, env: NodeJS.ProcessEnv) => Promise<NodeJS.ProcessEnv | null>
 }
 
-/** Resolves the environment seen by commands launched from Orca's profile-loading terminal shell. */
-export function resolveLoginShellEnvironment(
+/** Captures the environment seen by commands launched from Orca's profile-loading terminal
+ *  shell, saying whether the shell produced it or it is Orca's own env as a fallback. */
+export function captureLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
-): Promise<NodeJS.ProcessEnv> {
+): Promise<LoginShellEnvironmentCapture> {
   const shell =
     options.shellOverride !== undefined ? options.shellOverride : resolveProfileLoadingShell()
   const fallback = options.shellOverride === undefined ? resolveProfileLoadingFallbackShell() : null
@@ -149,30 +174,44 @@ export function resolveLoginShellEnvironment(
   const shellKey = `${shell ?? ''}\0${fallback ?? ''}\0${envKey}`
   const cached = environmentCache.get(shellKey)
   if (cached && !options.force) {
-    return cached
+    return cached.capture
   }
+  const fellBack: LoginShellEnvironmentCapture = { status: 'fallback', env }
   if (!shell) {
-    return Promise.resolve(env)
+    return Promise.resolve(fellBack)
   }
   const spawner = options.spawner ?? spawnShellAndReadEnvironment
   const pending = spawner(shell, env)
-    .then(async (environment) => {
-      if (environment) {
-        return environment
-      }
-      return fallback ? ((await spawner(fallback, env)) ?? env) : env
+    .then(async (environment): Promise<LoginShellEnvironmentCapture> => {
+      const captured = environment ?? (fallback ? await spawner(fallback, env) : null)
+      return captured ? { status: 'captured', env: captured } : fellBack
     })
-    .catch(() => env)
-  environmentCache.delete(shellKey)
-  while (environmentCache.size >= MAX_CACHED_ENVIRONMENTS) {
-    const oldest = environmentCache.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    environmentCache.delete(oldest)
+    .catch(() => fellBack)
+  if (cached?.settled) {
+    // Why: readers keep any settled env, a fallback too, during a forced refresh; only a capture replaces it.
+    void pending.then((capture) => {
+      if (capture.status === 'captured') {
+        cacheEnvironment(shellKey, Promise.resolve(capture))
+      }
+    })
+    return pending
   }
-  environmentCache.set(shellKey, pending)
+  // Why: a forced capture that falls back yields to whatever the earlier in-flight entry settles to.
+  const previous = cached?.capture
+  cacheEnvironment(
+    shellKey,
+    previous
+      ? pending.then((capture) => (capture.status === 'captured' ? capture : previous))
+      : pending
+  )
   return pending
+}
+
+/** Resolves the environment seen by commands launched from Orca's profile-loading terminal shell. */
+export function resolveLoginShellEnvironment(
+  options: ResolveLoginShellEnvironmentOptions = {}
+): Promise<NodeJS.ProcessEnv> {
+  return captureLoginShellEnvironment(options).then((capture) => capture.env)
 }
 
 export function resetLoginShellEnvironmentCacheForTests(): void {

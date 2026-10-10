@@ -32,11 +32,15 @@ export type ClaudeChildEnvSources = {
 export async function resolveClaudeChildEnvSources(
   deps: ClaudeEnvDeps
 ): Promise<ClaudeChildEnvSources> {
-  const command = (deps.resolveCommand ?? resolveClaudeCommand)()
   const overlay = await deps.resolveEnv?.()
   const inheritedEnv = deps.resolveInheritedEnv
     ? await deps.resolveInheritedEnv()
     : cloneDefinedEnv(process.env)
+  const effectiveEnv = { ...inheritedEnv, ...overlay }
+  const command = (deps.resolveCommand ?? resolveClaudeCommand)({
+    pathEnv: effectiveEnv.PATH ?? effectiveEnv.Path ?? null,
+    homePath: effectiveEnv.HOME ?? effectiveEnv.USERPROFILE
+  })
   return { command, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
 }
 

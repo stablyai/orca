@@ -1,7 +1,10 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { ORCAD_CLI_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
+import {
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
+} from '../../shared/orcad-artifacts'
 import { buildUnixCliLauncher } from '../cli/cli-dev-launcher'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
@@ -14,13 +17,17 @@ export function getOrcadCliLauncherPath(): string | null {
 
 export async function prepareOrcadCliLauncher(): Promise<void> {
   launcherPath = null
-  // Windows needs a native argv-preserving launcher; never proxy message bodies through cmd.exe.
-  if (process.platform === 'win32') {
-    return
-  }
-  const entry = join(resolveOrcadInstallRoot(), ...ORCAD_CLI_ENTRY_FILENAME.split('/'))
+  const installRoot = resolveOrcadInstallRoot()
+  const entry = join(installRoot, ...ORCAD_CLI_ENTRY_FILENAME.split('/'))
   // Older server slots and source-only runs may not include the CLI yet.
   if (!existsSync(entry)) {
+    return
+  }
+  if (process.platform === 'win32') {
+    // The slot's native launcher keeps argv intact; never proxy message bodies through cmd.exe.
+    // Temporary: per-slot, so a terminal open across two updates loses `orca` once GC drops it.
+    const native = join(installRoot, ...ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME.split('/'))
+    launcherPath = existsSync(native) ? native : null
     return
   }
   const userDataPath = resolveUserDataPath()

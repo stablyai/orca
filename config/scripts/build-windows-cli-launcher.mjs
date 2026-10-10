@@ -55,6 +55,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
 
   const repoRoot = resolve(import.meta.dirname, '../..')
+  const arch = readArg('--arch')
+  const rustTarget =
+    arch === 'arm64' ? 'aarch64-pc-windows-msvc' : arch === 'x64' ? 'x86_64-pc-windows-msvc' : null
+  if (arch && !rustTarget) {
+    throw new Error(`Unsupported Windows launcher architecture: ${arch}`)
+  }
   const crateRoot = join(repoRoot, 'native', 'windows-cli-launcher')
   const manifestPath = join(crateRoot, 'Cargo.toml')
   const iconPath = join(repoRoot, 'resources', 'build', 'icon.ico')
@@ -71,7 +77,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       iconPath,
       join(repoRoot, 'config/scripts/build-windows-cli-launcher.mjs')
     ],
-    version
+    `${version}:${rustTarget ?? 'host'}`
   )
   const outputPath = readArg('--output') ?? defaultOutputPath(repoRoot)
 
@@ -92,7 +98,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       '--manifest-path',
       manifestPath,
       '--target-dir',
-      targetDirectory
+      targetDirectory,
+      ...(rustTarget ? ['--target', rustTarget] : [])
     ],
     {
       cwd: crateRoot,
@@ -119,7 +126,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(result.status ?? 1)
   }
 
-  const builtPath = join(targetDirectory, 'release', 'orca.exe')
+  const builtPath = rustTarget
+    ? join(targetDirectory, rustTarget, 'release', 'orca.exe')
+    : join(targetDirectory, 'release', 'orca.exe')
   const vcRuntimeImports = findDynamicVcRuntimeImports(
     readPeImportedDllNames(readFileSync(builtPath))
   )

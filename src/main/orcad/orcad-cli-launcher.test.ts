@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { ORCAD_CLI_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
+import {
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
+} from '../../shared/orcad-artifacts'
 import { getOrcadCliLauncherPath, prepareOrcadCliLauncher } from './orcad-cli-launcher'
 
 const roots = vi.hoisted(() => ({ install: '', profile: '' }))
@@ -31,7 +34,7 @@ async function writeCli(): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
-    'console.log(JSON.stringify({profile:process.env.ORCA_USER_DATA_PATH, args:process.argv.slice(2), electron:process.env.ELECTRON_RUN_AS_NODE}))'
+    'console.log(JSON.stringify({profile:process.env.ORCA_USER_DATA_PATH, owningHost:process.env.ORCA_CLI_OWNING_HOST, args:process.argv.slice(2), electron:process.env.ELECTRON_RUN_AS_NODE}))'
   )
 }
 
@@ -59,7 +62,7 @@ describe('orcad profile CLI launcher', () => {
         timeoutMs: 5000
       })
       expect(result.code).toBe(0)
-      expect(JSON.parse(result.stdout)).toEqual({ profile: roots.profile, args })
+      expect(JSON.parse(result.stdout)).toEqual({ profile: roots.profile, owningHost: '1', args })
     }
   )
 
@@ -92,5 +95,15 @@ describe('orcad profile CLI launcher', () => {
     await writeCli()
     await prepareOrcadCliLauncher()
     expect(getOrcadCliLauncherPath()).toBeNull()
+  })
+
+  it("uses the slot's native launcher on Windows", async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    await writeCli()
+    const native = join(roots.install, ...ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME.split('/'))
+    await mkdir(dirname(native), { recursive: true })
+    await writeFile(native, '')
+    await prepareOrcadCliLauncher()
+    expect(getOrcadCliLauncherPath()).toBe(native)
   })
 })
