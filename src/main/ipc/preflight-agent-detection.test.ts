@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
+import type * as ProcessHost from '@orca/process-host'
 
 const {
   handleMock,
@@ -43,7 +44,10 @@ vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 const runProcessMock = vi.hoisted(() => vi.fn())
 // Why: the identity probe starts the resolved executable through runProcess
 // (so Windows `.cmd` shims work), which the child_process mock never sees.
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHost>()),
+  runProcess: runProcessMock
+}))
 
 vi.mock('electron', () => ({
   ipcMain: {
