@@ -71,6 +71,10 @@ export type WorktreeTeardownResult = {
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
+// Why (#23888): a loaded host can take longer than the whole sweep budget just to list its
+// sessions, and on the refusing path that one slow answer failed a removal with nothing to stop.
+export const WORKTREE_INVENTORY_BUDGET_MS = 30_000
+
 export { WORKTREE_TEARDOWN_RPC_MARGIN_MS, teardownRpcDeadline } from './worktree-teardown-deadline'
 
 /**
@@ -103,7 +107,13 @@ export async function killAllProcessesForWorktree(
   deps: WorktreeTeardownDeps
 ): Promise<WorktreeTeardownResult> {
   const sweepBudgetMs = Math.max(1, deps.timeoutMs ?? WORKTREE_PROCESS_SWEEP_TIMEOUT_MS)
-  const deadline = Date.now() + sweepBudgetMs
+  const sweepStartedAt = Date.now()
+  const deadline = sweepStartedAt + sweepBudgetMs
+  // Only the path that refuses on a failed list waits longer; Force Delete already proceeds past it.
+  const inventoryDeadline =
+    deps.requirePhysicalStop && !deps.allowUnverifiedStop
+      ? sweepStartedAt + Math.max(sweepBudgetMs, WORKTREE_INVENTORY_BUDGET_MS)
+      : deadline
   const deadlineError = new Error(
     `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
   )
@@ -181,11 +191,12 @@ export async function killAllProcessesForWorktree(
               deadline,
               stopPty,
               deps.onPtyStopped,
-              deps.requirePhysicalStop
+              deps.requirePhysicalStop,
+              inventoryDeadline
             )
           ),
           0,
-          deadline,
+          inventoryDeadline,
           deps.requirePhysicalStop ? deadlineError : undefined
         )
   const registrySweep =
