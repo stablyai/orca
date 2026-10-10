@@ -180,6 +180,22 @@ export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health
   }
 }
 
+export function getSidebarHostHealthDotClass(health: ExecutionHostHealth): string {
+  switch (health) {
+    case 'local':
+    case 'available':
+      return 'bg-status-success'
+    case 'connecting':
+      return 'bg-status-warning'
+    case 'disconnected':
+      // Why grey: the status bar and SSH settings show disconnected as idle, not as an error.
+      return 'bg-muted-foreground/40'
+    case 'blocked':
+    case 'error':
+      return 'bg-destructive'
+  }
+}
+
 /**
  * The visibility list after toggling one picker row, or undefined when the toggle is refused (the
  * last checked row). A row writes every id it stands for, so exact-id filters match both owners.
