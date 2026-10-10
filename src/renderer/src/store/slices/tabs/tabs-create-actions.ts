@@ -23,6 +23,7 @@ import {
   replaceRecordEntries,
   replaceTabBuckets
 } from '../../record-transitions/keyed-record-transitions'
+import { resolveAutoPlacementGroupId } from './lone-pane-split-source'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -30,6 +31,13 @@ export function createTabsCreateActions(
 ): Pick<TabsSlice, 'createUnifiedTab' | 'createUnifiedTabInSplit'> {
   return {
     createUnifiedTab: (worktreeId, contentType, init) => {
+      // Why: automatic placement — beside a lone pane, or opposite the focused one of two.
+      // Why afterTabId too: an anchor tab is placement intent of its own, like a named group.
+      const besideGroupId =
+        init?.placementFixed || init?.afterTabId || init?.split
+          ? null
+          : resolveAutoPlacementGroupId(get(), worktreeId, init?.targetGroupId, contentType)
+      const targetGroupId = besideGroupId ?? init?.targetGroupId
       const id = init?.id ?? createBrowserUuid()
       const splitGroupId = init?.split ? createBrowserUuid() : undefined
       let replacedEditorId: string | undefined
@@ -54,7 +62,7 @@ export function createTabsCreateActions(
           groups: worktreeGroups ?? [],
           tabs: existingTabs,
           activeGroupId: worktreeActiveGroupId,
-          targetGroupId: splitGroupId ?? init?.targetGroupId,
+          targetGroupId: splitGroupId ?? targetGroupId,
           afterTabId: init?.afterTabId,
           executionHostId: init?.executionHostId,
           lookupWorktrees: () =>
@@ -181,6 +189,11 @@ export function createTabsCreateActions(
       })
       if (replacedEditorId) {
         releaseUnreferencedEditorContent(get, replacedEditorId)
+      }
+      // Why: the group was minted unfocused (a host snapshot reads an activated empty group as a
+      // pane), so focus lands here — focusGroup also emits the active-surface patch.
+      if (besideGroupId && (init?.activate ?? true)) {
+        get().focusGroup(worktreeId, besideGroupId)
       }
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')

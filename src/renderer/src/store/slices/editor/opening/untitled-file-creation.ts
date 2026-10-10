@@ -35,7 +35,8 @@ export async function createUntitledFileInActiveWorkspace(
   get: EditorGet,
   groupId: string | undefined,
   create: (context: UntitledFileCreationContext) => Promise<UntitledMarkdownFileInfo | null>,
-  failureMessage: string
+  failureMessage: string,
+  options?: { placementFixed?: boolean }
 ): Promise<boolean> {
   const state = get()
   const worktreeId = state.activeWorktreeId
@@ -70,7 +71,12 @@ export async function createUntitledFileInActiveWorkspace(
     if (!fileInfo) {
       return false
     }
-    get().openFile(fileInfo, { preview: false, targetGroupId: groupId, focusEditor: true })
+    get().openFile(fileInfo, {
+      preview: false,
+      targetGroupId: groupId,
+      focusEditor: true,
+      ...(options?.placementFixed ? { placementFixed: true } : {})
+    })
     return true
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, failureMessage))

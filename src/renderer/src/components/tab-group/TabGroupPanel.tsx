@@ -367,6 +367,7 @@ export default function TabGroupPanel({
             : undefined
         }
         data-worktree-id={worktreeId}
+        data-tab-area-unsplit={hasSplitGroups ? undefined : ''}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
@@ -381,7 +382,15 @@ export default function TabGroupPanel({
         ) : null}
         {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
           // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
-          <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
+          <div
+            ref={attachEditorFileDropOwner}
+            className={
+              // Diff, conflict-review and check-details share this wrapper but want the whole window.
+              activeTab.contentType === 'editor'
+                ? 'pane-single-cap absolute inset-0 flex min-h-0 min-w-0'
+                : 'absolute inset-0 flex min-h-0 min-w-0'
+            }
+          >
             {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
             <Suspense
               fallback={

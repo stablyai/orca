@@ -131,7 +131,8 @@ export function createBrowserTabActions(
               ...(options?.showInGroup ? { showInGroup: true } : {}),
               // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
               ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
-              activate: shouldActivate
+              activate: shouldActivate,
+              ...(options?.placementFixed ? { placementFixed: true } : {})
             })
           } catch (error) {
             if (options?.validateLinkPlacement) {
@@ -177,7 +178,7 @@ export function createBrowserTabActions(
       return browserTab
     },
 
-    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
+    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection, options) => {
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
@@ -230,7 +231,12 @@ export function createBrowserTabActions(
         title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
         focusAddressBar: true,
         browserRuntimeEnvironmentId: null,
-        ...(split ? { split } : { targetGroupId: groupId })
+        ...(split
+          ? { split }
+          : {
+              targetGroupId: groupId,
+              ...(options?.placementFixed ? { placementFixed: true } : {})
+            })
       })
       get().recordFeatureInteraction('browser-tab-created')
     },
