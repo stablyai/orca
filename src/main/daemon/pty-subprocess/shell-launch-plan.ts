@@ -2,6 +2,7 @@ import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startu
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
 import { isPwshAvailable } from '../../pwsh'
+import { applyCmderSpawnEnvironment, resolveWindowsCmderShellRoot } from '../../cmder'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
 import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
 import {
@@ -38,7 +39,7 @@ import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../shared/claude-profile-routing'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
+import { WINDOWS_CMDER_SHELL, WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
@@ -74,6 +75,7 @@ export function createPtyShellLaunchPlan(
   if (process.platform === 'win32') {
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
     const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
+    const cmderRoot = resolveWindowsCmderShellRoot(shellPath, { env })
     const resolvedShellFamily: WindowsPowerShellShellFamily =
       normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
         ? normalizedShellFamily
@@ -91,6 +93,9 @@ export function createPtyShellLaunchPlan(
       shellPath = resolvedGitBashPath
     } else if (shellPath === WINDOWS_GIT_BASH_SHELL) {
       shellPath = 'powershell.exe'
+    } else if (shellPath.toLowerCase() === WINDOWS_CMDER_SHELL) {
+      // Why: Cmder is cmd.exe plus init.bat; a missing install degrades to plain cmd, not a spawn failure.
+      shellPath = 'cmd.exe'
     } else {
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
@@ -105,6 +110,9 @@ export function createPtyShellLaunchPlan(
       env.ORCA_CODEX_LAUNCH_PREFLIGHT
     ) {
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+    }
+    if (cmderRoot) {
+      applyCmderSpawnEnvironment(env, cmderRoot)
     }
     windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
@@ -127,7 +135,8 @@ export function createPtyShellLaunchPlan(
         resolveSafePtyDefaultCwd(),
         resolvedWslContext,
         opts.command,
-        env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+        cmderRoot !== null
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd

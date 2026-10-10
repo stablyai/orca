@@ -142,6 +142,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'gitlab.updateMRState',
   'gitlab.workItemDetails',
   'host.gitBash.isAvailable',
+  'host.cmder.isAvailable',
   'host.platform',
   'host.pwsh.isAvailable',
   'host.wsl.isAvailable',

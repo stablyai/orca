@@ -4,7 +4,10 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import {
+  WINDOWS_CMDER_SHELL,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../../shared/windows-terminal-shell'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
@@ -19,7 +22,8 @@ export function isAllowedRemoteWindowsTerminalShell(shell: string | undefined): 
     shell === 'pwsh.exe' ||
     shell === 'cmd.exe' ||
     shell === 'wsl.exe' ||
-    shell === WINDOWS_GIT_BASH_SHELL
+    shell === WINDOWS_GIT_BASH_SHELL ||
+    shell === WINDOWS_CMDER_SHELL
   )
 }
 

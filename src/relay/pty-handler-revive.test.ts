@@ -1,6 +1,6 @@
 import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hashWorktreeId } from '../main/terminal-history-id'
@@ -741,4 +741,49 @@ describe('PtyHandler', () => {
       expect(mockPtySpawn.mock.calls.map(([shell]) => shell)).not.toContain('nc.exe')
     })
   })
+
+  // Why real win32: Cmder discovery checks vendor\init.bat on disk with win32 paths.
+  it.skipIf(process.platform !== 'win32')(
+    'revives a Cmder pane with the root its spawn carried',
+    async () => {
+      const cmderRoot = mkdtempSync(join(tmpdir(), 'relay-revive-cmder-'))
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        mkdirSync(join(cmderRoot, 'vendor'))
+        writeFileSync(join(cmderRoot, 'vendor', 'init.bat'), '@echo off')
+        await dispatcher.callRequest('pty.spawn', {
+          cols: 80,
+          rows: 24,
+          cwd: LIVE_CWD,
+          shellOverride: 'cmder',
+          env: { CMDER_ROOT: cmderRoot }
+        })
+        const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
+        expect(JSON.parse(state)[0]).toMatchObject({ cmderRoot })
+
+        await handler.dispose({ waitForPhysicalExit: false })
+        mockPtySpawn.mockClear()
+        dispatcher = createMockDispatcher()
+        handler = createTestPtyHandler(dispatcher)
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+        try {
+          await dispatcher.callRequest('pty.revive', { state })
+        } finally {
+          killSpy.mockRestore()
+        }
+
+        expect(mockPtySpawn).toHaveBeenCalledWith(
+          'cmd.exe',
+          expect.arrayContaining(['/K']),
+          expect.objectContaining({
+            env: expect.objectContaining({
+              ORCA_CMDER_INIT: join(cmderRoot, 'vendor', 'init.bat')
+            })
+          })
+        )
+      } finally {
+        rmSync(cmderRoot, { recursive: true, force: true })
+      }
+    }
+  )
 })

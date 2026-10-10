@@ -49,14 +49,22 @@ export async function readWindowsTerminalCapabilities(
   }
 
   if (target.kind === 'local') {
-    const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, runtimeStatus] =
-      await Promise.all([
-        window.api.wsl.isAvailable().catch(() => false),
-        window.api.wsl.listDistros().catch(() => []),
-        window.api.pwsh.isAvailable().catch(() => false),
-        window.api.gitBash.isAvailable().catch(() => false),
-        window.api.runtime.getStatus().catch(() => null)
-      ])
+    const [
+      wslAvailable,
+      wslDistros,
+      pwshAvailable,
+      gitBashAvailable,
+      cmderAvailable,
+      runtimeStatus
+    ] = await Promise.all([
+      window.api.wsl.isAvailable().catch(() => false),
+      window.api.wsl.listDistros().catch(() => []),
+      window.api.pwsh.isAvailable().catch(() => false),
+      window.api.gitBash.isAvailable().catch(() => false),
+      // Why optional: embedders and test harnesses may expose a preload without the cmder bridge.
+      (window.api.cmder?.isAvailable() ?? Promise.resolve(false)).catch(() => false),
+      window.api.runtime.getStatus().catch(() => null)
+    ])
     const reconciledWslAvailable = await reconcileWslAvailability(wslAvailable, wslDistros, () =>
       window.api.wsl.isAvailable()
     )
@@ -65,12 +73,13 @@ export async function readWindowsTerminalCapabilities(
       wslDistros,
       pwshAvailable,
       gitBashAvailable,
+      cmderAvailable,
       hostPlatform: runtimeStatus?.hostPlatform ?? null,
       isLoading: false
     }
   }
 
-  const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform] =
+  const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, cmderAvailable, hostPlatform] =
     await Promise.all([
       callRuntimeRpc<boolean>(target, 'host.wsl.isAvailable', undefined, {
         timeoutMs: 15_000
@@ -84,7 +93,12 @@ export async function readWindowsTerminalCapabilities(
       callRuntimeRpc<boolean>(target, 'host.gitBash.isAvailable', undefined, {
         timeoutMs: 15_000
       }).catch(() => false),
-      callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, { timeoutMs: 15_000 })
+      callRuntimeRpc<boolean>(target, 'host.cmder.isAvailable', undefined, {
+        timeoutMs: 15_000
+      }).catch(() => false),
+      callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, {
+        timeoutMs: 15_000
+      })
         .then((status) => status.hostPlatform ?? null)
         .catch(() => null)
     ])
@@ -98,6 +112,7 @@ export async function readWindowsTerminalCapabilities(
     wslDistros,
     pwshAvailable,
     gitBashAvailable,
+    cmderAvailable,
     hostPlatform,
     isLoading: false
   }

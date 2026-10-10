@@ -21,7 +21,8 @@ export function bucketWindowsTerminalShell(
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
     return 'powershell'
   }
-  if (normalized === 'cmd.exe') {
+  // Why: Cmder is cmd.exe under the hood; the telemetry enum has no separate bucket.
+  if (normalized === 'cmd.exe' || normalized === 'cmder') {
     return 'command_prompt'
   }
   if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
