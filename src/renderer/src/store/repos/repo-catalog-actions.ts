@@ -18,10 +18,9 @@ import type { RepoSlice } from './repo-state'
 import { arrayElementsUnchanged } from '../catalog-identity'
 import {
   awaitLatestLocalRepoCatalogFetch,
-  claimRepoCatalogGeneration,
-  isLatestRepoCatalogGeneration,
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
+import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
@@ -35,7 +34,6 @@ import {
   mergeProjectHostSetupCompatibility,
   projectCompatibilityFromRepos
 } from '../projects/project-compatibility-core'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { mergeFetchedProjectCompatibilityForHost } from '../projects/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 
@@ -97,17 +95,12 @@ export function createRepoCatalogActions(
         target.kind === 'local' ? startLocalRepoCatalogFetch(get) : () => undefined
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
       // Why: overlapping repos:changed fetches can resolve out of order; a stale one must not overwrite a newer result and resurrect deleted projects (#7020).
-      let generation = 0
-      set((s) => {
-        generation = s.reposFetchGeneration + 1
-        return { reposFetchGeneration: generation }
-      })
-      const targetHostId = getRuntimeTargetHostId(target)
-      claimRepoCatalogGeneration(get, targetHostId, generation)
+      set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
+      const fence = claimHostCatalogFence(get, 'repos', target)
       try {
         const catalog = await fetchRepoCatalogForTarget(target)
-        // A newer same-host fetch superseded us while we awaited — drop this stale result.
-        if (!isLatestRepoCatalogGeneration(get, targetHostId, generation)) {
+        // A newer same-host fetch or a replaced connection superseded us — drop this stale result.
+        if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
         let finalizedHostRepos: Repo[] = []
