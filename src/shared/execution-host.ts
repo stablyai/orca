@@ -15,7 +15,7 @@ export function isNativeLocalLocation(location: {
   executionHostId: string
   wslDistro: string | null
 }): boolean {
-  return location.executionHostId === LOCAL_EXECUTION_HOST_ID && !location.wslDistro
+  return location.executionHostId === LOCAL_EXECUTION_HOST_ID && location.wslDistro === null
 }
 
 export type ParsedExecutionHost =
