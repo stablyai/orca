@@ -7,6 +7,10 @@ import {
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import {
+  pluginStatusBarUpdateParamsSchema,
+  type PluginStatusBarItemState
+} from '../../shared/plugins/plugin-status-bar'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -47,6 +51,20 @@ export type PluginHostServices = {
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
+  statusBar: {
+    update(
+      pluginId: string,
+      itemId: string,
+      state: PluginStatusBarItemState
+    ): { ok: true } | { ok: false; error: string }
+  }
+  panels: {
+    postMessage(
+      pluginId: string,
+      panelId: string,
+      message: unknown
+    ): { ok: true; delivered: boolean } | { ok: false; error: string }
+  }
 }
 
 export type BoundPluginHostMethod = {
@@ -167,6 +185,33 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
     const { events } = params as { events: PluginEventName[] }
     return { subscribed: services.subscribeEvents(pluginId, events) }
+  }),
+  definePluginMethod('statusBar.update', async (params, { pluginId, services }) => {
+    // Already validated by the spec; re-parsing narrows the type without a cast.
+    const { itemId, text, tooltip, severity, visible } =
+      pluginStatusBarUpdateParamsSchema.parse(params)
+    const result = services.statusBar.update(pluginId, itemId, {
+      text,
+      ...(tooltip ? { tooltip } : {}),
+      severity: severity ?? 'normal',
+      visible: visible ?? true
+    })
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    return { ok: true }
+  }),
+  definePluginMethod('panels.postMessage', async (params, { pluginId, services }) => {
+    if (typeof params !== 'object' || params === null || !('panelId' in params)) {
+      throw new Error('invalid panels.postMessage params')
+    }
+    const panelId = String(params.panelId)
+    const message = 'message' in params ? params.message : null
+    const result = services.panels.postMessage(pluginId, panelId, message)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    return { delivered: result.delivered }
   })
 ])
 

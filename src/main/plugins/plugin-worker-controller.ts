@@ -35,6 +35,8 @@ export type PluginWorkerControllerOptions = {
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onStateChanged: (pluginKey: string) => void
   onWorkerGone: (pluginKey: string) => void
+  /** Workers backing visible UI are exempt from idle reap. */
+  isPinned?: (pluginKey: string) => boolean
 }
 
 export class PluginWorkerController {
@@ -138,7 +140,7 @@ export class PluginWorkerController {
   }
 
   reapIdle(): void {
-    this.manager.reapIdle()
+    this.manager.reapIdle(Date.now(), this.options.isPinned)
   }
 
   deliverEventIfRunning(pluginKey: string, event: PluginEventName, payload: unknown): void {

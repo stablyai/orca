@@ -13,6 +13,10 @@ import {
   structuredCloneMessageBytes,
   type PanelMessageBudget
 } from '../../../../shared/plugins/plugin-panel-message-budget'
+import {
+  normalizePanelLiveMessage,
+  readPanelLiveMessageFrame
+} from '../../../../shared/plugins/plugin-panel-live-message'
 import { translate } from '@/i18n/i18n'
 
 /**
@@ -36,6 +40,8 @@ export type PanelBridgeHostOptions = {
   /** The mounted panel iframe's contentWindow, or null when unmounted. */
   getPanelWindow: () => Window | null
   callPanelAction: (call: PanelActionCall) => Promise<PluginPanelActionOutcome>
+  /** Relays `window.orcaPanel.postMessage` frames to the plugin worker. */
+  postPanelMessage?: (call: { sessionToken: string; message: unknown }) => void
   /** False once the requesting panel document/session has been replaced. */
   isActive?: () => boolean
   onPong?: (pingId: number) => void
@@ -63,6 +69,11 @@ export function callPanelActionViaPreload(
     })
   }
   return panelAction(call)
+}
+
+/** Fire-and-forget relay of a live panel message; refusals land in the plugin log. */
+export function postPanelMessageViaPreload(call: { sessionToken: string; message: unknown }): void {
+  void window.api?.plugins?.postPanelMessage?.(call).catch(() => undefined)
 }
 
 export function createPanelBridgeMessageHandler(
@@ -134,6 +145,18 @@ export function createPanelBridgeMessageHandler(
                   'auto.components.rightSidebar.pluginPanelBridgeHost.tooManyRequests',
                   'Too many requests.'
                 )
+        })
+      }
+      return
+    }
+    const liveFrame = readPanelLiveMessageFrame(event.data)
+    if (liveFrame.matched) {
+      // Normalized here too so a non-JSON payload never costs an IPC round trip.
+      const normalized = normalizePanelLiveMessage(liveFrame.message)
+      if (normalized.ok && options.isActive?.() !== false) {
+        options.postPanelMessage?.({
+          sessionToken: options.sessionToken,
+          message: normalized.message
         })
       }
       return

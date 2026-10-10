@@ -91,6 +91,7 @@ export function useStatusBarDensity(): {
   barRef: (node: HTMLElement | null) => void
   usageRef: (node: HTMLElement | null) => void
   segmentsRef: (node: HTMLElement | null) => void
+  leadingRef: (node: HTMLElement | null) => void
 } {
   const [level, setLevel] = useState(0)
   const [overflowing, setOverflowing] = useState(false)
@@ -102,6 +103,7 @@ export function useStatusBarDensity(): {
   const barElementRef = useRef<HTMLElement | null>(null)
   const usageElementRef = useRef<HTMLElement | null>(null)
   const segmentsElementRef = useRef<HTMLElement | null>(null)
+  const leadingElementRef = useRef<HTMLElement | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
 
   const evaluate = useCallback((): void => {
@@ -113,7 +115,10 @@ export function useStatusBarDensity(): {
     const available =
       bar.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
     const usage = measureUsageRow(usageElementRef.current)
-    const fixedWidth = (Number.parseFloat(style.columnGap) || 0) + measureWidth(segmentsElementRef)
+    const columnGap = Number.parseFloat(style.columnGap) || 0
+    // Left-aligned plugin items never clip, so they are fixed width like the segments.
+    const leadingWidth = leadingElementRef.current ? columnGap + measureWidth(leadingElementRef) : 0
+    const fixedWidth = columnGap + measureWidth(segmentsElementRef) + leadingWidth
     const required = usage.naturalWidth + fixedWidth
     const collapses = STATUS_BAR_DENSITY_LEVELS[committedLevelRef.current].collapseUsage
     levelWidthsRef.current = recordStatusBarDensityWidth(
@@ -171,7 +176,8 @@ export function useStatusBarDensity(): {
     return {
       barRef: bind(barElementRef),
       usageRef: bind(usageElementRef),
-      segmentsRef: bind(segmentsElementRef)
+      segmentsRef: bind(segmentsElementRef),
+      leadingRef: bind(leadingElementRef)
     }
   }, [evaluate])
 

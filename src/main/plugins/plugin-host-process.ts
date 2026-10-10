@@ -1,6 +1,4 @@
 import { fork, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   PLUGIN_WORKER_INVOKE_TIMEOUT_MS,
   PLUGIN_WORKER_READY_TIMEOUT_MS,
@@ -33,6 +31,8 @@ export type PluginWorkerHandle = {
   commands: readonly string[]
   invokeCommand(commandId: string, args?: unknown): Promise<unknown>
   deliverEvent(event: PluginEventName, payload: unknown): void
+  /** Fire-and-forget live panel message; false when the worker is gone. */
+  deliverPanelMessage(panelId: string, message: unknown): boolean
   /** Milliseconds timestamp of the last completed work (for idle reap). */
   lastActivityAt(): number
   inFlightCount(): number
@@ -54,20 +54,6 @@ export type StartPluginWorkerOptions = {
   invokeTimeoutMs?: number
   eventTimeoutMs?: number
   signal?: AbortSignal
-}
-
-/**
- * Resolves the compiled child entry from the app path. Mirrors
- * getDaemonEntryPath(): packaged apps must fork the asar-unpacked copy
- * because fork() cannot execute scripts from inside app.asar.
- */
-export function resolvePluginHostEntryPath(appPath: string, isPackaged: boolean): string {
-  const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
-  const directEntryPath = join(basePath, 'plugin-host-entry.js')
-  if (existsSync(directEntryPath)) {
-    return directEntryPath
-  }
-  return join(basePath, 'out', 'main', 'plugin-host-entry.js')
 }
 
 type PendingCall = {
@@ -292,6 +278,14 @@ export async function startPluginWorker(
       }, eventTimeoutMs)
       pendingEvents.set(eventId, timer)
       sendToChild({ type: 'deliverEvent', eventId, event, payload })
+    },
+    deliverPanelMessage(panelId, message) {
+      if (exited || disposed) {
+        return false
+      }
+      lastActivityAt = Date.now()
+      sendToChild({ type: 'deliverPanelMessage', panelId, message })
+      return true
     },
     lastActivityAt: () => lastActivityAt,
     inFlightCount: () => pendingCommands.size + pendingEvents.size,

@@ -3597,6 +3597,10 @@
       },
       "status": {
         "bar": {
+          "PluginStatusBarItems": {
+            "ariaLabel": "{{value0}}，来自 {{value1}} 插件",
+            "attribution": "来自 {{value0}} 插件"
+          },
           "PetStatusSegment": {
             "3668339495": "删除 {{value0}}",
             "cd8c6c654c": "宠物设置...",
@@ -11608,7 +11612,9 @@
             "storage": "在插件自己的存储文件夹中存储数据",
             "secrets": "在插件自己的加密保险库中存储和读取密钥",
             "eventsSubscribe": "在工作树创建或移除以及智能体状态更改时获得通知",
-            "settingsOwn": "读取和更改插件自己的设置"
+            "settingsOwn": "读取和更改插件自己的设置",
+            "statusBar": "在状态栏中显示标有插件名称的简短文本项",
+            "panelMessaging": "在插件的工作进程与其自己的面板之间交换实时消息"
           },
           "decisionFailed": "无法保存权限决定。请重试。"
         },

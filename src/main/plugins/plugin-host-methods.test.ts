@@ -26,7 +26,9 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
       getAll: vi.fn().mockReturnValue({}),
       set: vi.fn().mockReturnValue({ ok: true })
     },
-    subscribeEvents: vi.fn().mockReturnValue([])
+    subscribeEvents: vi.fn().mockReturnValue([]),
+    statusBar: { update: vi.fn().mockReturnValue({ ok: true }) },
+    panels: { postMessage: vi.fn().mockReturnValue({ ok: true, delivered: false }) }
   }
 }
 
@@ -141,7 +143,9 @@ function createTerminalHarness(terminalHandles: string[]): {
     services: bindPluginHostServices({
       delegate,
       pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test'),
-      subscribeEvents: vi.fn().mockReturnValue([])
+      subscribeEvents: vi.fn().mockReturnValue([]),
+      statusBar: { update: vi.fn().mockReturnValue({ ok: true }) },
+      panels: { postMessage: vi.fn().mockReturnValue({ ok: true, delivered: false }) }
     })
   }
 }
@@ -245,5 +249,75 @@ describe('terminal.sendText', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('worker-driven status bar and panel host methods', () => {
+  const call = (
+    method: string,
+    params: unknown,
+    grantedCapabilities: ('statusBar' | 'panelMessaging')[],
+    services = createServices(vi.fn().mockReturnValue({ ok: true })),
+    viaPanel = false
+  ) =>
+    executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method,
+      params,
+      viaPanel,
+      grantedCapabilities,
+      services
+    })
+
+  it('applies statusBar.update defaults and needs no audit log', async () => {
+    const services = createServices(vi.fn())
+    await expect(
+      call('statusBar.update', { itemId: 'pulse', text: 'Pulse\n1' }, ['statusBar'], services)
+    ).resolves.toEqual({ ok: true, value: { ok: true } })
+    expect(services.statusBar.update).toHaveBeenCalledWith('orca-samples.demo', 'pulse', {
+      text: 'Pulse 1',
+      severity: 'normal',
+      visible: true
+    })
+  })
+
+  it.each([
+    ['statusBar.update', { itemId: 'pulse', text: 'x' }, ['panelMessaging'], 'capability_denied'],
+    ['panels.postMessage', { panelId: 'live', message: 1 }, ['statusBar'], 'capability_denied'],
+    [
+      'statusBar.update',
+      { itemId: 'pulse', text: 'x'.repeat(81) },
+      ['statusBar'],
+      'invalid_params'
+    ],
+    [
+      'panels.postMessage',
+      { panelId: 'live', message: () => 1 },
+      ['panelMessaging'],
+      'invalid_params'
+    ]
+  ] as const)('refuses %s with %j', async (method, params, granted, code) => {
+    await expect(call(method, params, [...granted])).resolves.toMatchObject({ ok: false, code })
+  })
+
+  it('keeps both methods off the sandboxed panel bridge', async () => {
+    await expect(
+      call('statusBar.update', { itemId: 'pulse', text: 'x' }, ['statusBar'], undefined, true)
+    ).resolves.toMatchObject({ ok: false, code: 'panel_forbidden' })
+  })
+
+  it('reports whether a mounted panel received the message', async () => {
+    const services = createServices(vi.fn())
+    await expect(
+      call(
+        'panels.postMessage',
+        { panelId: 'live', message: { tick: 1 } },
+        ['panelMessaging'],
+        services
+      )
+    ).resolves.toEqual({ ok: true, value: { delivered: false } })
+    expect(services.panels.postMessage).toHaveBeenCalledWith('orca-samples.demo', 'live', {
+      tick: 1
+    })
   })
 })

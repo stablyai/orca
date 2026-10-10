@@ -327,4 +327,61 @@ describe('createPanelBridgeMessageHandler', () => {
 
     expect(onPong).not.toHaveBeenCalled()
   })
+
+  it('relays live panel messages as JSON copies under the host session', () => {
+    const panelWindow = createFakePanelWindow()
+    const postPanelMessage = vi.fn()
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      postPanelMessage
+    })
+
+    handler(messageEvent({ type: 'orca-panel-message', message: { type: 'ready' } }, panelWindow))
+    handler(messageEvent({ type: 'orca-panel-message', message: 10n }, panelWindow))
+    handler(messageEvent({ type: 'orca-panel-message', message: 'spoof' }, createFakePanelWindow()))
+
+    expect(postPanelMessage).toHaveBeenCalledTimes(1)
+    expect(postPanelMessage).toHaveBeenCalledWith({
+      sessionToken: SESSION_TOKEN,
+      message: { type: 'ready' }
+    })
+    expect(panelWindow.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('charges live panel messages to the shared panel budget', () => {
+    const panelWindow = createFakePanelWindow()
+    const postPanelMessage = vi.fn()
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      postPanelMessage,
+      budget: createPanelMessageBudget({ maxMessages: 2, perMs: 10_000 }),
+      now: () => 0
+    })
+
+    for (let i = 0; i < 5; i += 1) {
+      handler(messageEvent({ type: 'orca-panel-message', message: i }, panelWindow))
+    }
+
+    expect(postPanelMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops relaying live messages once the panel session is replaced', () => {
+    const panelWindow = createFakePanelWindow()
+    const postPanelMessage = vi.fn()
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      postPanelMessage,
+      isActive: () => false
+    })
+
+    handler(messageEvent({ type: 'orca-panel-message', message: 1 }, panelWindow))
+
+    expect(postPanelMessage).not.toHaveBeenCalled()
+  })
 })

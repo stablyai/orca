@@ -245,9 +245,11 @@ export class PluginWorkerManager {
     this.forgetGenerationIfIdle(pluginKey)
   }
 
-  reapIdle(now = Date.now()): void {
+  /** `isPinned` keeps workers that still back visible UI (status-bar items). */
+  reapIdle(now = Date.now(), isPinned: (pluginKey: string) => boolean = () => false): void {
     for (const [pluginKey, record] of this.workers) {
       if (
+        isPinned(pluginKey) ||
         record.handle.inFlightCount() !== 0 ||
         now - record.handle.lastActivityAt() <= this.idleReapMs
       ) {

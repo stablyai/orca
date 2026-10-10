@@ -30,6 +30,25 @@ export type PluginWorkerOrcaApi = {
   host: {
     call(method: string, params?: unknown): Promise<unknown>
   }
+  /** Fill a `contributes.statusBarItems` entry (`statusBar` capability).
+   *  Each update replaces the item's state; the host coalesces to 4/s. */
+  statusBar: {
+    update(
+      itemId: string,
+      item: {
+        text: string
+        tooltip?: string
+        severity?: 'normal' | 'warning' | 'error'
+        visible?: boolean
+      }
+    ): Promise<unknown>
+  }
+  /** Live JSON messages with this plugin's own panels (`panelMessaging`).
+   *  Messages to a panel that is not mounted are dropped. */
+  panels: {
+    postMessage(panelId: string, message: unknown): Promise<unknown>
+    onMessage(panelId: string, handler: (message: unknown) => void | Promise<void>): () => void
+  }
   /** Consented capability kinds (informational — the host re-gates). */
   grantedCapabilities: readonly string[]
   log(message: string): void
@@ -57,6 +76,7 @@ export function createPluginWorkerRuntime(
   const exit = options.exit ?? ((code: number) => process.exit(code))
   const commandHandlers = new Map<string, (args: unknown) => unknown>()
   const eventHandlers = new Map<string, ((payload: unknown) => void | Promise<void>)[]>()
+  const panelHandlers = new Map<string, Set<(message: unknown) => void | Promise<void>>>()
   const pendingHostCalls = new Map<
     number,
     { resolve: (value: unknown) => void; reject: (error: PluginHostCallError) => void }
@@ -65,6 +85,14 @@ export function createPluginWorkerRuntime(
   let initialized = false
   let shuttingDown = false
   let deactivate: (() => unknown) | null = null
+
+  function callHost(method: string, params?: unknown): Promise<unknown> {
+    const callId = nextHostCallId++
+    return new Promise<unknown>((resolve, reject) => {
+      pendingHostCalls.set(callId, { resolve, reject })
+      send({ type: 'hostCall', callId, method, params })
+    })
+  }
 
   async function handleInit(input: {
     pluginRoot: string
@@ -102,13 +130,19 @@ export function createPluginWorkerRuntime(
           eventHandlers.set(event, handlers)
         }
       },
-      host: {
-        call(method, params) {
-          const callId = nextHostCallId++
-          return new Promise<unknown>((resolve, reject) => {
-            pendingHostCalls.set(callId, { resolve, reject })
-            send({ type: 'hostCall', callId, method, params })
-          })
+      host: { call: callHost },
+      statusBar: {
+        update: (itemId, item) => callHost('statusBar.update', { ...item, itemId })
+      },
+      panels: {
+        postMessage: (panelId, message) => callHost('panels.postMessage', { panelId, message }),
+        onMessage(panelId, handler) {
+          const handlers = panelHandlers.get(panelId) ?? new Set()
+          handlers.add(handler)
+          panelHandlers.set(panelId, handlers)
+          return () => {
+            handlers.delete(handler)
+          }
         }
       },
       grantedCapabilities: input.grantedCapabilities,
@@ -168,6 +202,16 @@ export function createPluginWorkerRuntime(
               }
             }
             send({ type: 'eventAck', eventId: message.eventId })
+            return
+          }
+          case 'deliverPanelMessage': {
+            for (const handler of panelHandlers.get(message.panelId) ?? []) {
+              try {
+                await handler(message.message)
+              } catch (error) {
+                send({ type: 'log', level: 'error', message: toErrorMessage(error).slice(0, 8192) })
+              }
+            }
             return
           }
           case 'hostResult': {

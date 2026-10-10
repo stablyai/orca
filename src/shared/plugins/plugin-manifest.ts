@@ -16,6 +16,10 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import {
+  PLUGIN_STATUS_BAR_ITEM_LIMIT,
+  pluginStatusBarItemContributionSchema
+} from './plugin-status-bar'
 
 /**
  * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
@@ -114,6 +118,10 @@ export const pluginManifestSchema = z
         agents: z
           .array(pluginAgentProfileContributionSchema)
           .max(PLUGIN_AGENT_PROFILE_LIMIT)
+          .default([]),
+        statusBarItems: z
+          .array(pluginStatusBarItemContributionSchema)
+          .max(PLUGIN_STATUS_BAR_ITEM_LIMIT)
           .default([])
       })
       .strict()
@@ -124,7 +132,8 @@ export const pluginManifestSchema = z
         languagePacks: [],
         keybindings: [],
         vmRecipes: [],
-        agents: []
+        agents: [],
+        statusBarItems: []
       })),
     capabilities: z.array(pluginCapabilitySchema).max(32).default([])
   })

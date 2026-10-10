@@ -173,6 +173,35 @@ export function registerPluginHandlers(
     }
   )
 
+  // Live panel channel. Identity comes only from the session issued while the
+  // renderer loaded the panel, never from caller-supplied plugin keys.
+  ipcMain.handle('plugins:attachPanel', async (event, args: unknown): Promise<boolean> => {
+    await pluginService.whenReady()
+    const sender = event.sender
+    return pluginService.panels.attach(rendererPanelOwner(sender.id), args, (delivery) => {
+      if (!sender.isDestroyed()) {
+        sender.send('plugins:panelMessage', delivery)
+      }
+    })
+  })
+  ipcMain.handle('plugins:detachPanel', async (event, args: unknown): Promise<void> => {
+    pluginService.panels.detach(rendererPanelOwner(event.sender.id), args)
+  })
+  ipcMain.handle(
+    'plugins:postPanelMessage',
+    async (event, args: unknown): Promise<PluginPanelActionOutcome> => {
+      await pluginService.whenReady()
+      return pluginService.panels.receiveFromPanel(rendererPanelOwner(event.sender.id), args)
+    }
+  )
+
+  // Why here, not at startup: a client rendering a status bar is the trigger
+  // that starts status-bar workers, so headless hosts never fork them.
+  ipcMain.handle('plugins:listStatusBarItems', async () => {
+    await pluginService.whenReady()
+    return pluginService.surfaces.statusBar.listForSurface(pluginService.getDiscovered())
+  })
+
   ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)

@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
+import { pluginIdSchema } from './plugin-manifest-fields'
 import type { PluginCapabilityKind } from './plugin-capabilities'
+import { pluginStatusBarUpdateParamsSchema } from './plugin-status-bar'
+import { panelLiveMessageSchema } from './plugin-panel-live-message'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -94,6 +97,13 @@ const eventsSubscribeParams = z.object({
   events: z.array(z.enum(PLUGIN_EVENT_NAMES)).min(1).max(PLUGIN_EVENT_NAMES.length)
 })
 const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
+
+const statusBarUpdateResult = z.object({ ok: z.literal(true) })
+const panelsPostMessageParams = z
+  .object({ panelId: pluginIdSchema, message: panelLiveMessageSchema })
+  .strict()
+/** `delivered` is false when no frame of that panel is mounted (dropped). */
+const panelsPostMessageResult = z.object({ delivered: z.boolean() })
 
 export type PluginHostMethodSpec = {
   name: string
@@ -249,6 +259,28 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
+  }),
+  // Why not mutations: both are presentation-only and fire several times a
+  // second; auditing them would bury real mutations in the log.
+  spec({
+    name: 'statusBar.update',
+    since: '1.1',
+    scope: 'desktop',
+    capability: 'statusBar',
+    mutation: false,
+    panel: false,
+    params: pluginStatusBarUpdateParamsSchema,
+    result: statusBarUpdateResult
+  }),
+  spec({
+    name: 'panels.postMessage',
+    since: '1.1',
+    scope: 'plugin-private',
+    capability: 'panelMessaging',
+    mutation: false,
+    panel: false,
+    params: panelsPostMessageParams,
+    result: panelsPostMessageResult
   })
 ]
 

@@ -33,6 +33,13 @@ export const pluginWorkerDeliverEventSchema = z.object({
   payload: z.unknown()
 })
 
+/** Live panel → worker message (already JSON-normalized host-side). */
+export const pluginWorkerDeliverPanelMessageSchema = z.object({
+  type: z.literal('deliverPanelMessage'),
+  panelId: z.string().min(1),
+  message: z.unknown()
+})
+
 export const pluginWorkerHostResultSchema = z.object({
   type: z.literal('hostResult'),
   callId: z.number().int().nonnegative(),
@@ -48,6 +55,7 @@ export const pluginWorkerParentMessageSchema = z.discriminatedUnion('type', [
   pluginWorkerInitSchema,
   pluginWorkerInvokeCommandSchema,
   pluginWorkerDeliverEventSchema,
+  pluginWorkerDeliverPanelMessageSchema,
   pluginWorkerHostResultSchema,
   pluginWorkerShutdownSchema
 ])

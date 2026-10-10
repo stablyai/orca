@@ -1,4 +1,5 @@
 import { PANEL_PING_TYPE, PANEL_PONG_TYPE } from './plugin-panel-bridge'
+import { PANEL_LIVE_DELIVERY_TYPE, PANEL_LIVE_MESSAGE_TYPE } from './plugin-panel-live-message'
 
 /**
  * Host-generated shell wrapped around plugin panel HTML before it is handed
@@ -56,7 +57,8 @@ export const PANEL_DESIGN_TOKEN_ALLOWLIST = [
 
 export function buildPluginPanelShellHtml(pluginHtml: string): string {
   // The inline ping responder proves the frame's event loop is alive; the
-  // renderer watchdog demotes the panel when pongs stop arriving.
+  // renderer watchdog demotes the panel when pongs stop arriving. It shares one
+  // listener with the `window.orcaPanel` live-message bridge.
   const prelude =
     '<!doctype html>\n' +
     `<html class="${PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER}">\n` +
@@ -89,12 +91,36 @@ export function buildPluginPanelShellHtml(pluginHtml: string): string {
     '  event.preventDefault()\n' +
     '  event.stopImmediatePropagation()\n' +
     '}, true)\n' +
-    "window.addEventListener('message', function (event) {\n" +
-    '  var data = event.data\n' +
-    `  if (event.source === window.parent && data && data.type === '${PANEL_PING_TYPE}') {\n` +
-    `    window.parent.postMessage({ type: '${PANEL_PONG_TYPE}', pingId: data.pingId }, '*')\n` +
-    '  }\n' +
-    '})\n' +
+    '// Live channel to the plugin worker; the host relays JSON copies only.\n' +
+    ';(function () {\n' +
+    '  var listeners = []\n' +
+    '  var orcaPanel = Object.freeze({\n' +
+    '    postMessage: function (message) {\n' +
+    `      window.parent.postMessage({ type: '${PANEL_LIVE_MESSAGE_TYPE}', message: message }, '*')\n` +
+    '    },\n' +
+    '    onMessage: function (listener) {\n' +
+    "      if (typeof listener !== 'function') throw new TypeError('orcaPanel.onMessage expects a function')\n" +
+    '      listeners.push(listener)\n' +
+    '      return function () {\n' +
+    '        var index = listeners.indexOf(listener)\n' +
+    '        if (index !== -1) listeners.splice(index, 1)\n' +
+    '      }\n' +
+    '    }\n' +
+    '  })\n' +
+    "  try { Object.defineProperty(window, 'orcaPanel', { value: orcaPanel, writable: false, configurable: false }) }\n" +
+    '  catch (_) { window.orcaPanel = orcaPanel }\n' +
+    "  window.addEventListener('message', function (event) {\n" +
+    '    var data = event.data\n' +
+    '    if (event.source !== window.parent || !data) return\n' +
+    `    if (data.type === '${PANEL_PING_TYPE}') {\n` +
+    `      window.parent.postMessage({ type: '${PANEL_PONG_TYPE}', pingId: data.pingId }, '*')\n` +
+    `    } else if (data.type === '${PANEL_LIVE_DELIVERY_TYPE}') {\n` +
+    '      listeners.slice().forEach(function (listener) {\n' +
+    '        try { listener(data.message) } catch (error) { setTimeout(function () { throw error }) }\n' +
+    '      })\n' +
+    '    }\n' +
+    '  })\n' +
+    '})()\n' +
     '</script>\n' +
     '</head>\n'
   return prelude + pluginHtml

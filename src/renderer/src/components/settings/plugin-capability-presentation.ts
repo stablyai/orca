@@ -37,6 +37,16 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         "Read and change the plugin's own settings"
       )
+    case 'statusBar':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.statusBar',
+        'Show short text items in the status bar, labeled with the plugin name'
+      )
+    case 'panelMessaging':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.panelMessaging',
+        "Exchange live messages between the plugin's worker and its own panels"
+      )
     default:
       return fallback
   }

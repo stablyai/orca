@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "id": "live-status",
+  "publisher": "orca-samples",
+  "name": "Live Status",
+  "version": "1.0.0",
+  "description": "Sample plugin with worker-driven status-bar items and a panel that receives live worker messages.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "panels": [{ "id": "live", "title": "Live Status", "icon": "activity", "entry": "panel.html" }],
+    "commands": [{ "id": "live-status-reset", "title": "Live Status: Reset counter" }],
+    "statusBarItems": [
+      { "id": "pulse", "alignment": "right", "priority": 10, "command": "live-status-reset" },
+      { "id": "open-panel", "alignment": "left", "panel": "live" }
+    ]
+  },
+  "capabilities": [{ "kind": "statusBar" }, { "kind": "panelMessaging" }]
+}

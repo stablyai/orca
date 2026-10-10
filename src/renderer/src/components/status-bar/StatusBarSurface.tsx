@@ -35,6 +35,7 @@ import {
 import { useStatusBarController } from './use-status-bar-controller'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { PluginStatusBarItems, PluginStatusBarLeadingItems } from './PluginStatusBarItems'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
@@ -80,6 +81,7 @@ export function StatusBarSurface({
     hasVisibleUsageMeters,
     isEmptyUsageState,
     isRefreshing,
+    leadingRef,
     overflowing,
     petEnabled,
     rosterProviders,
@@ -121,6 +123,7 @@ export function StatusBarSurface({
         setMenuOpen(true)
       }}
     >
+      <PluginStatusBarLeadingItems containerRef={leadingRef} />
       {/* Why: usage gives way first — what it drops stays one click away in its popover. */}
       <div
         className="status-bar-usage-cluster flex min-w-0 flex-1 items-center overflow-clip [overflow-clip-margin:3px]"
@@ -302,6 +305,7 @@ export function StatusBarSurface({
             ) : null}
             {showSsh ? <SshStatusSegment compact={compact} iconOnly={segmentsIconOnly} /> : null}
           </React.Suspense>
+          <PluginStatusBarItems alignment="right" />
           {showFloatingTerminalToggle && (
             <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
               <Tooltip>

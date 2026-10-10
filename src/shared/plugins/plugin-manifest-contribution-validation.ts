@@ -15,6 +15,7 @@ type ContributionValidationManifest = {
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
     agents: PathContribution[]
+    statusBarItems: (IdentifiedContribution & { command?: string; panel?: string })[]
   }
   capabilities: { kind: string }[]
 }
@@ -44,7 +45,7 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
-  for (const path of ['panels', 'commands'] as const) {
+  for (const path of ['panels', 'commands', 'statusBarItems'] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
       (entry) => (entry as IdentifiedContribution).id,
@@ -114,6 +115,28 @@ export function validatePluginManifestContributions(
     }
   }
 
+  const panelIds = new Set(manifest.contributes.panels.map((panel) => panel.id))
+  for (const [index, item] of manifest.contributes.statusBarItems.entries()) {
+    const path = ['contributes', 'statusBarItems', index]
+    if (item.command !== undefined && !commands.has(item.command)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [...path, 'command'],
+        message: `unknown contributed command: ${item.command}`
+      })
+    }
+    if (item.panel !== undefined && !panelIds.has(item.panel)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [...path, 'panel'],
+        message: `unknown contributed panel: ${item.panel}`
+      })
+    }
+    if (item.command !== undefined && item.panel !== undefined) {
+      ctx.addIssue({ code: 'custom', path, message: 'set either command or panel, not both' })
+    }
+  }
+
   if (
     !manifest.main &&
     manifest.contributes.commands.some((command) => command.action === undefined)
@@ -139,6 +162,39 @@ export function validatePluginManifestContributions(
       code: 'custom',
       path: ['capabilities'],
       message: 'events:subscribe capability required when contributes.events is non-empty'
+    })
+  }
+  validateWorkerSurfaceContributions(manifest, ctx)
+}
+
+/** Status-bar text and live panel messages only ever come from a worker. */
+function validateWorkerSurfaceContributions(
+  manifest: ContributionValidationManifest,
+  ctx: RefinementCtx
+): void {
+  const hasCapability = (kind: string): boolean =>
+    manifest.capabilities.some((capability) => capability.kind === kind)
+  if (manifest.contributes.statusBarItems.length > 0) {
+    if (!manifest.main) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['main'],
+        message: 'required when contributes.statusBarItems is non-empty'
+      })
+    }
+    if (!hasCapability('statusBar')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['capabilities'],
+        message: 'statusBar capability required when contributes.statusBarItems is non-empty'
+      })
+    }
+  }
+  if (hasCapability('panelMessaging') && !manifest.main) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when the panelMessaging capability is declared'
     })
   }
 }

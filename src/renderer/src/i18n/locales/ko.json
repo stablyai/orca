@@ -3597,6 +3597,10 @@
       },
       "status": {
         "bar": {
+          "PluginStatusBarItems": {
+            "ariaLabel": "{{value0}}, {{value1}} 플러그인 제공",
+            "attribution": "{{value0}} 플러그인 제공"
+          },
           "PetStatusSegment": {
             "3668339495": "{{value0}} 제거",
             "cd8c6c654c": "애완동물 설정…",
@@ -11608,7 +11612,9 @@
             "storage": "플러그인 자체 저장소 폴더에 데이터 저장",
             "secrets": "플러그인 자체 암호화 금고에 비밀 저장 및 읽기",
             "eventsSubscribe": "워크트리가 생성되거나 제거되고 에이전트 상태가 변경될 때 알림 받기",
-            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경",
+            "statusBar": "플러그인 이름이 표시된 짧은 텍스트 항목을 상태 표시줄에 표시",
+            "panelMessaging": "플러그인 워커와 자체 패널 간에 실시간 메시지 주고받기"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요."
         },

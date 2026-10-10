@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: var(--foreground, #ddd);
+        background: var(--background, transparent);
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        margin: 0 0 12px;
+      }
+      dt {
+        color: var(--muted-foreground, #999);
+      }
+      dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      button {
+        padding: 6px 10px;
+        border: 1px solid var(--border, #555);
+        border-radius: 6px;
+        background: var(--secondary, #2a2a2a);
+        color: var(--foreground, #ddd);
+        cursor: pointer;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Live Status</h1>
+    <dl>
+      <dt>Ticks</dt>
+      <dd id="ticks">waiting for the worker...</dd>
+      <dt>Resets</dt>
+      <dd id="resets">-</dd>
+      <dt>Messages received</dt>
+      <dd id="received">0</dd>
+      <dt>Snapshot</dt>
+      <dd id="snapshot">waiting</dd>
+    </dl>
+    <button id="reset" type="button">Reset from the panel</button>
+    <script>
+      'use strict'
+      var received = 0
+      // window.orcaPanel is injected by Orca's panel shell. Messages are JSON
+      // copies relayed by the host; nothing here can reach the network.
+      window.orcaPanel.onMessage(function (message) {
+        if (!message || message.type !== 'state') return
+        received += 1
+        document.getElementById('ticks').textContent = String(message.ticks)
+        document.getElementById('resets').textContent = String(message.resets)
+        document.getElementById('received').textContent = String(received)
+        if (message.snapshot) document.getElementById('snapshot').textContent = 'received'
+      })
+      document.getElementById('reset').addEventListener('click', function () {
+        window.orcaPanel.postMessage({ type: 'reset' })
+      })
+      window.addEventListener('load', function () {
+        window.orcaPanel.postMessage({ type: 'ready' })
+      })
+    </script>
+  </body>
+</html>

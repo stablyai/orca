@@ -34,8 +34,10 @@ export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
   subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
+  statusBar: PluginHostServices['statusBar']
+  panels: PluginHostServices['panels']
 }): PluginHostServices {
-  const { delegate, pluginsDataDir, subscribeEvents } = input
+  const { delegate, pluginsDataDir, subscribeEvents, statusBar, panels } = input
   return {
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
@@ -83,6 +85,8 @@ export function bindPluginHostServices(input: {
       set: (key, itemKey, value) =>
         new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
     },
-    subscribeEvents
+    subscribeEvents,
+    statusBar,
+    panels
   }
 }

@@ -3597,6 +3597,10 @@
       },
       "status": {
         "bar": {
+          "PluginStatusBarItems": {
+            "ariaLabel": "{{value0}}, del plugin {{value1}}",
+            "attribution": "Del plugin {{value0}}"
+          },
           "PetStatusSegment": {
             "3668339495": "Quitar {{value0}}",
             "cd8c6c654c": "Ajustes de mascota…",
@@ -11608,7 +11612,9 @@
             "storage": "Guardar datos en la carpeta de almacenamiento propia del plugin",
             "secrets": "Guardar y leer secretos en la bóveda cifrada propia del plugin",
             "eventsSubscribe": "Recibir avisos cuando se creen o eliminen worktrees y cuando cambie el estado de un agente",
-            "settingsOwn": "Leer y cambiar la configuración propia del plugin"
+            "settingsOwn": "Leer y cambiar la configuración propia del plugin",
+            "statusBar": "Mostrar elementos de texto breves en la barra de estado, identificados con el nombre del plugin",
+            "panelMessaging": "Intercambiar mensajes en vivo entre el proceso en segundo plano del plugin y sus propios paneles"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo."
         },

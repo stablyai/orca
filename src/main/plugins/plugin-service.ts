@@ -21,7 +21,6 @@ import { PluginAuditLog } from './plugin-audit-log'
 import { executePluginHostCallRequest } from './plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
-import { PluginPanelController } from './plugin-panel-controller'
 import { PluginWorkerController } from './plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
@@ -34,6 +33,7 @@ import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { assertPluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './plugin-installation-state'
+import { PluginClientSurfaces } from './plugin-client-surfaces'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
@@ -47,7 +47,8 @@ export class PluginService {
   private readonly workerController: PluginWorkerController
   private readonly contentVerifier = new PluginContentVerifier()
   readonly contentPacks: PluginContentPackRegistry
-  readonly panels: PluginPanelController
+  readonly surfaces: PluginClientSurfaces
+  readonly panels: PluginClientSurfaces['panels']
   private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
   private runtimeDelegate: PluginRuntimeDelegate | null = null
@@ -67,16 +68,17 @@ export class PluginService {
       Boolean(this.options.getPluginKillListEntry?.(pluginKey))
     )
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
-    this.panels = new PluginPanelController({
+    this.surfaces = new PluginClientSurfaces({
       resolveApprovedPlugin: (pluginKey) => {
         const plugin = this.findValidPlugin(pluginKey)
         return plugin && this.canStartPluginWork(plugin) ? plugin : null
       },
+      ensureWorker: (plugin) => this.workerController.ensure(plugin),
       contentVerifier: this.contentVerifier,
-      executeHostCall: (pluginKey, method, params) =>
-        this.executeHostCall(pluginKey, method, params, { viaPanel: true }),
-      log: (pluginKey) => this.installed.captureLog(pluginKey, 'error')
+      executeHostCall: (...args) => this.executeHostCall(...args),
+      log: (pluginKey, level) => this.installed.captureLog(pluginKey, level)
     })
+    this.panels = this.surfaces.panels
     this.workerController = new PluginWorkerController({
       entryPath: options.hostEntryPath ?? '',
       maxActive: options.maxActiveWorkers,
@@ -92,7 +94,7 @@ export class PluginService {
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false),
-      onWorkerGone: (pluginKey) => this.eventBus.clear(pluginKey)
+      ...this.surfaces.workerHooks((pluginKey) => this.eventBus.clear(pluginKey))
     })
   }
 
@@ -129,11 +131,13 @@ export class PluginService {
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
-    const refresh = this.refreshChain.then(() =>
-      this.performRefresh(enabled, devPaths, consentLists)
-    )
-    this.refreshChain = refresh.catch(() => undefined)
-    return refresh
+    return this.enqueue(() => this.performRefresh(enabled, devPaths, consentLists))
+  }
+
+  private enqueue(task: () => Promise<void>): Promise<void> {
+    const next = this.refreshChain.then(task)
+    this.refreshChain = next.catch(() => undefined)
+    return next
   }
 
   private async performRefresh(
@@ -260,7 +264,8 @@ export class PluginService {
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
               pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
+              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events),
+              ...this.surfaces.hostServices()
             })
           : null,
         audit: this.audit
@@ -297,9 +302,7 @@ export class PluginService {
   }
 
   removePlugin(pluginKey: string, remove: () => Promise<void>): Promise<void> {
-    const removal = this.refreshChain.then(() => this.installed.remove(pluginKey, remove))
-    this.refreshChain = removal.catch(() => undefined)
-    return removal
+    return this.enqueue(() => this.installed.remove(pluginKey, remove))
   }
 
   async deactivatePlugin(pluginKey: string): Promise<void> {
@@ -310,9 +313,7 @@ export class PluginService {
   /** Reconciles live workers and client projections after consent or
    * enablement changes without re-reading plugin files or starting workers. */
   async reconcileActivationState(): Promise<void> {
-    const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
-    this.refreshChain = reconcile.catch(() => undefined)
-    return reconcile
+    return this.enqueue(() => this.performActivationStateReconciliation())
   }
 
   private async performActivationStateReconciliation(): Promise<void> {
@@ -333,7 +334,7 @@ export class PluginService {
   async dispose(): Promise<void> {
     this.disposed = true
     this.housekeeping.dispose()
-    this.panels.dispose()
+    this.surfaces.dispose()
     await this.refreshChain.catch(() => undefined)
     await this.workerController.dispose()
     await this.audit.flush()

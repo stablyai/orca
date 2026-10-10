@@ -54,7 +54,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     collapsedUsageProviders,
     barRef,
     usageRef,
-    segmentsRef
+    segmentsRef,
+    leadingRef
   } = useStatusBarDensity()
 
   useEffect(() => {
@@ -266,6 +267,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     hasVisibleUsageMeters,
     isEmptyUsageState,
     isRefreshing,
+    leadingRef,
     menuOpen,
     menuPoint,
     overflowing,

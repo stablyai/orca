@@ -10,8 +10,10 @@ import {
 } from '../../../../shared/plugins/plugin-panel-shell'
 import {
   callPanelActionViaPreload,
-  createPanelBridgeMessageHandler
+  createPanelBridgeMessageHandler,
+  postPanelMessageViaPreload
 } from './plugin-panel-bridge-host'
+import { usePluginPanelLiveChannel } from './use-plugin-panel-live-channel'
 import { createPanelWatchdog } from './plugin-panel-watchdog'
 import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
 import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
@@ -89,6 +91,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       sessionToken,
       getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
       callPanelAction: callPanelActionViaPreload,
+      postPanelMessage: postPanelMessageViaPreload,
       isActive: () => active,
       onPong: (pingId) => watchdog.handlePong(pingId)
     })
@@ -98,6 +101,8 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       window.removeEventListener('message', handler)
     }
   }, [panelDocument, sessionToken, watchdog])
+
+  usePluginPanelLiveChannel({ sessionToken, frameKey: panelFrameKey, iframeRef })
 
   useEffect(() => {
     if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {

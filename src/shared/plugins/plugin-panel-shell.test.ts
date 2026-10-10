@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { buildPluginPanelShellHtml, PLUGIN_PANEL_CSP } from './plugin-panel-shell'
 
 describe('buildPluginPanelShellHtml', () => {
@@ -14,6 +14,7 @@ describe('buildPluginPanelShellHtml', () => {
     expect(html.indexOf("window.addEventListener('click'")).toBeLessThan(pluginOffset)
     expect(html.indexOf("window.addEventListener('submit'")).toBeLessThan(pluginOffset)
     expect(html.indexOf("Object.defineProperty(window, 'open'")).toBeLessThan(pluginOffset)
+    expect(html.indexOf("Object.defineProperty(window, 'orcaPanel'")).toBeLessThan(pluginOffset)
   })
 
   it('cancels anchor and form default navigation in the fallback path', () => {
@@ -22,7 +23,7 @@ describe('buildPluginPanelShellHtml', () => {
     expect(script).toBeTruthy()
     // Keep happy-dom's global removable for Vitest teardown; production shell
     // keeps the override non-configurable inside the disposable iframe.
-    window.eval(script!.replace('configurable: false', 'configurable: true'))
+    window.eval(script!.replaceAll('configurable: false', 'configurable: true'))
 
     const anchor = document.createElement('a')
     anchor.href = 'https://example.com/'
@@ -39,5 +40,46 @@ describe('buildPluginPanelShellHtml', () => {
     expect(clickAccepted).toBe(false)
     expect(submitAccepted).toBe(false)
     expect(window.open('https://example.com/')).toBeNull()
+  })
+
+  it('exposes window.orcaPanel for live messages from the parent only', () => {
+    const script = buildPluginPanelShellHtml('<main>Plugin</main>').match(
+      /<script>\n([\s\S]*?)<\/script>/
+    )?.[1]
+    window.eval(script!.replaceAll('configurable: false', 'configurable: true'))
+    const orcaPanel = Reflect.get(window, 'orcaPanel')
+    const received: unknown[] = []
+    const unsubscribe = orcaPanel.onMessage((message: unknown) => received.push(message))
+    const postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => undefined)
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'orca-panel-host-message', message: { ticks: 1 } },
+        source: window
+      })
+    )
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'orca-panel-host-message', message: { spoofed: true } },
+        source: null
+      })
+    )
+    unsubscribe()
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'orca-panel-host-message', message: { ticks: 2 } },
+        source: window
+      })
+    )
+    orcaPanel.postMessage({ type: 'ready' })
+
+    expect(received).toEqual([{ ticks: 1 }])
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'orca-panel-message', message: { type: 'ready' } },
+      '*'
+    )
+    expect(() => orcaPanel.onMessage('not a function')).toThrow(TypeError)
+    expect(Object.isFrozen(orcaPanel)).toBe(true)
+    postMessage.mockRestore()
   })
 })

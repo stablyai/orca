@@ -3702,6 +3702,10 @@
       },
       "status": {
         "bar": {
+          "PluginStatusBarItems": {
+            "ariaLabel": "{{value0}}, du plugin {{value1}}",
+            "attribution": "Du plugin {{value0}}"
+          },
           "PetStatusSegment": {
             "3668339495": "Supprimer {{value0}}",
             "cd8c6c654c": "Paramètres du compagnon…",
@@ -11706,7 +11710,9 @@
             "storage": "Stocker des données dans le dossier de stockage propre au plugin",
             "secrets": "Stocker et lire des secrets dans le coffre chiffré propre au plugin",
             "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
-            "settingsOwn": "Lire et modifier les paramètres propres au plugin"
+            "settingsOwn": "Lire et modifier les paramètres propres au plugin",
+            "statusBar": "Afficher de courts éléments de texte dans la barre d'état, libellés avec le nom du plugin",
+            "panelMessaging": "Échanger des messages en direct entre le worker du plugin et ses propres panneaux"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez."
         },

@@ -91,6 +91,25 @@ export const panelActionCallSchema = z
 
 export type PluginPanelActionCall = z.infer<typeof panelActionCallSchema>
 
+/** Renderer → main relay of a live panel message (`window.orcaPanel`); like
+ *  actions, identity comes only from the session issued for the panel. */
+export const panelLiveMessageCallSchema = z
+  .object({ sessionToken: panelSessionTokenSchema, message: z.unknown() })
+  .strict()
+
+export type PanelLiveMessageCall = z.infer<typeof panelLiveMessageCallSchema>
+
+/** Renderer → main: a mounted panel frame starts or stops receiving pushes. */
+export const panelLiveAttachCallSchema = z
+  .object({ sessionToken: panelSessionTokenSchema })
+  .strict()
+
+/** Main → renderer push, routed to the frame(s) mounted with this session. */
+export type PanelLiveMessageDelivery = {
+  sessionToken: string
+  message: unknown
+}
+
 export type PluginPanelEntry = {
   html: string
   sessionToken: string

@@ -1,7 +1,9 @@
 import type {
+  PanelLiveMessageDelivery,
   PluginPanelActionOutcome,
   PluginPanelEntry
 } from '../../shared/plugins/plugin-panel-bridge'
+import type { PluginStatusBarItemSnapshot } from '../../shared/plugins/plugin-status-bar'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
@@ -188,4 +190,17 @@ export type PluginsApi = {
   refresh: () => Promise<PluginHostListEntry[]>
   /** Fires whenever installed plugins, worker states, panels, or content packs change. */
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** Visible plugin status-bar items in render order; calling it is also what
+   *  starts the workers that fill them. */
+  listStatusBarItems: () => Promise<PluginStatusBarItemSnapshot[]>
+  onStatusBarItemsChanged: (callback: (items: PluginStatusBarItemSnapshot[]) => void) => () => void
+  /** Starts/stops worker pushes to a mounted panel frame's session. */
+  attachPanel: (args: { sessionToken: string }) => Promise<boolean>
+  detachPanel: (args: { sessionToken: string }) => Promise<void>
+  /** Relays a panel's `window.orcaPanel.postMessage` to its plugin worker. */
+  postPanelMessage: (args: {
+    sessionToken: string
+    message: unknown
+  }) => Promise<PluginPanelActionOutcome>
+  onPanelMessage: (callback: (delivery: PanelLiveMessageDelivery) => void) => () => void
 }
