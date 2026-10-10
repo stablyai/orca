@@ -1,7 +1,7 @@
 import {
   BrowserNetworkTunnelOpcode,
   type BrowserNetworkTunnelFrame
-} from '../../shared/browser-network-tunnel-protocol'
+} from './browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
 
 export function handleBrowserNetworkTunnelHeartbeat(

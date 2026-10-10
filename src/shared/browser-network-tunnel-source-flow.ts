@@ -1,4 +1,4 @@
-import { BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES } from '../../shared/browser-network-tunnel-protocol'
+import { BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES } from './browser-network-tunnel-protocol'
 import {
   BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES,
   BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS

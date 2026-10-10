@@ -5,7 +5,7 @@ import type {
   BrowserNetworkExecutionRoute,
   BrowserNetworkExecutionRouteContext
 } from './browser-network-execution-route'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 import {
   closeAllLocalSshBrowserRoutes,
   closeLocalSshBrowserRouteForTarget,

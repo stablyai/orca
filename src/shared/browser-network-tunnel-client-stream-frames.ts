@@ -3,7 +3,7 @@ import {
   decodeBrowserNetworkTunnelWindowUpdate,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../shared/browser-network-tunnel-protocol'
+} from './browser-network-tunnel-protocol'
 import { dispatchBrowserNetworkTunnelClientFrame } from './browser-network-tunnel-client-frame-dispatch'
 import type { BrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-stream'
 import {
@@ -62,7 +62,7 @@ function openedStream(
     actions.closeTunnel(new Error('Browser tunnel transport rejected initial credit'))
     return
   }
-  stream.resolveOpen(stream.socket)
+  stream.resolveOpen()
 }
 
 function grantStreamCredit(
@@ -113,7 +113,7 @@ function closeStream(
   }
   stream.remoteClosed = true
   stream.localEnded = true
-  stream.socket.once('end', () => actions.retire(stream))
+  stream.socket.onReadableEnd(() => actions.retire(stream))
   if (!stream.remoteEnded) {
     finishBrowserNetworkSourceData(stream)
   }

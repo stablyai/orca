@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 
 type DeferredSocketSource = Duplex & { setNoDelay?: (noDelay?: boolean) => unknown }
 

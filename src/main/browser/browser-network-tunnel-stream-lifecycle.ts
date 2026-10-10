@@ -3,7 +3,7 @@ import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket,
   type BrowserNetworkTunnelStream
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 
 export function createBrowserNetworkTunnelStream(options: {
   id: number
