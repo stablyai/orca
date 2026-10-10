@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
   const shortcutLabel: { current: string | null } = { current: '⌘N' }
 
   return {
+    bucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
     openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
     popoverContentProps,
     shortcutLabel,
@@ -44,7 +45,7 @@ vi.mock('@/store', () => {
 })
 
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
-  useAgentBucketCounts: () => ({ attention: 0, working: 0, done: 0, idle: 0 })
+  useAgentBucketCounts: () => mocks.bucketCounts
 }))
 
 vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
@@ -106,6 +107,7 @@ function createButton(): HTMLButtonElement {
 }
 
 beforeEach(() => {
+  mocks.bucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
   mocks.shortcutLabel.current = '⌘N'
@@ -131,6 +133,31 @@ afterEach(() => {
 })
 
 describe('SidebarHeader', () => {
+  it.each(['workspaces', 'agents'] as const)(
+    'prioritizes questions, then working, and hides settled counts in the %s view',
+    (sidebarBody) => {
+      mockState.sidebarBody = sidebarBody
+      const render = () => {
+        act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+        return headerButton(sidebarBody === 'agents' ? 'Turn off activity view' : 'View activity')
+      }
+      mocks.bucketCounts = { attention: 2, working: 5, done: 3, idle: 4 }
+      let button = render()
+      expect(button.querySelector('[aria-label="Needs You: 2"]')?.textContent).toBe('2')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeTruthy()
+      expect(button.querySelector('[aria-label="Working: 5"]')).toBeNull()
+
+      mocks.bucketCounts.attention = 0
+      button = render()
+      expect(button.querySelector('[aria-label="Working: 5"]')?.textContent).toBe('5')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
+
+      mocks.bucketCounts.working = 0
+      button = render()
+      expect(button.querySelector('span')).toBeNull()
+    }
+  )
+
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', async () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
