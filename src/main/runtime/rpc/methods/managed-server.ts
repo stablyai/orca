@@ -56,5 +56,12 @@ export const MANAGED_SERVER_METHODS = [
     permission: 'host-admin',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().cancelStop(selector)
+  }),
+  // A new method, not a stop flag: an older desktop would drop the flag and decommission instead.
+  defineMethod({
+    name: 'managedServer.forget',
+    permission: 'host-admin',
+    params: ManagedServerSelector,
+    handler: ({ selector }) => actions().forget(selector)
   })
 ] as const

@@ -11,7 +11,7 @@ import type {
   PtySourceSpan,
   PtySourceTransform
 } from '../shared/pty-source-credit-contract'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import type { PtySourceSendReservation } from './pty-source-credit-ledger'
 import { SshPtySourceCreditAdapter } from './ssh-pty-source-credit-adapter'
 import {

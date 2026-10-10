@@ -9,6 +9,10 @@ import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 
 const confirm = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
+  loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
+    .loadNodeOniguruma
+}))
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
@@ -157,6 +161,36 @@ describe('MessageRow control visibility', () => {
       expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
     }
   )
+
+  it('holds the agent controls back until the turn stops working', () => {
+    const row = (activeTurnIsWorking: boolean) => (
+      <TooltipProvider>
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Message text' }]
+          }}
+          expandSignal={false}
+          activeTurnIsWorking={activeTurnIsWorking}
+          trailingRun
+          onScrollMessageToTop={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    const { rerender } = render(row(true))
+    expect(screen.getByText('Message text')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
+    expect(screen.queryByRole('time')).toBeNull()
+
+    rerender(row(false))
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scroll this message to top' })).toBeInTheDocument()
+    expect(screen.getByRole('time')).toBeInTheDocument()
+  })
 })
 
 describe('which messages can be quoted', () => {

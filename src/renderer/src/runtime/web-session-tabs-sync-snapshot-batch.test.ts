@@ -348,9 +348,8 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(batched.openFiles.some((file) => file.id === '/repo/second.ts')).toBe(false)
   })
 
-  it('seeds a mirrored editor file from the first duplicate open file, as find() did', () => {
-    // Why: two entries share (worktree, id) and differ only in a field the mirrored
-    // file inherits, so which duplicate seeds the spread is observable.
+  it('seeds a mirrored editor file from its own host in single and batched snapshots', () => {
+    // A legacy ID collision must not copy a different host’s disk baseline.
     const duplicate = (signature: string, environmentId: string | null): OpenFile =>
       ({
         id: '/repo/dup.ts',
@@ -385,7 +384,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     for (const label of ['single', 'batch'] as const) {
       resetWebSessionTabsSnapshotFreshnessForTests()
       const state = makeState({
-        openFiles: [duplicate('winner', 'other-env'), duplicate('loser', ENV)]
+        openFiles: [duplicate('other-host', 'other-env'), duplicate('current-host', ENV)]
       })
       const patch = (
         label === 'single'
@@ -395,7 +394,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       const mirrored = patch.openFiles?.find(
         (file) => file.id === '/repo/dup.ts' && file.runtimeEnvironmentId === ENV
       )
-      expect(mirrored?.lastKnownDiskSignature, label).toBe('winner')
+      expect(mirrored?.lastKnownDiskSignature, label).toBe('current-host')
     }
   })
 

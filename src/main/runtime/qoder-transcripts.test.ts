@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane } from './agent-transcript-pane-test-harness'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
 import { extractLastOscTitle } from '../../shared/osc-title-extraction'
 import { getAgentLabel, normalizeTerminalTitle } from '../../shared/agent-detection'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -11,6 +12,17 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
+
+let machineNameStartSpy: { mockRestore(): void } | undefined
+
+beforeEach(() => {
+  machineNameStartSpy = vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  machineNameStartSpy?.mockRestore()
+  machineNameStartSpy = undefined
+})
 
 describe('captured Qoder 1.1.64 startup', () => {
   it.each(['qoder-trust-dialog', 'qoder-no-account', 'qoder-ready'])(
@@ -33,16 +45,13 @@ describe('captured Qoder 1.1.64 startup', () => {
       const shown = await runtime.showTerminal(handle)
       expect(shown.agentIdentity).toBe('qoder')
       if (fixture === 'qoder-trust-dialog') {
-        const readiness = await runtime
-          .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 600 })
-          .catch(() => null)
+        await runtime.readTerminal(handle, { screen: true })
+        const readiness = await waitForTranscriptIdle({ runtime, handle }, 600).catch(() => null)
         expect(readiness?.satisfied ?? false).toBe(false)
       }
       if (fixture === 'qoder-ready') {
-        const readiness = await runtime.waitForTerminal(handle, {
-          condition: 'tui-idle',
-          timeoutMs: 1500
-        })
+        await runtime.readTerminal(handle, { screen: true })
+        const readiness = await waitForTranscriptIdle({ runtime, handle }, 1500)
         expect(readiness.satisfied).toBe(true)
       }
     }
@@ -64,9 +73,8 @@ describe('captured Qoder China 1.1.65 startup', () => {
       size: { cols: 120, rows: 40 }
     })
     expect((await runtime.showTerminal(handle)).agentIdentity).toBe('qoder-cn')
-    const readiness = await runtime
-      .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 800 })
-      .catch(() => null)
+    await runtime.readTerminal(handle, { screen: true })
+    const readiness = await waitForTranscriptIdle({ runtime, handle }, 800).catch(() => null)
     expect(readiness?.satisfied ?? false).toBe(false)
   })
 })

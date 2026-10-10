@@ -134,6 +134,21 @@ export function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
   return getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)?.environmentId ?? null
 }
 
+/** The SSH target behind the paired server that owns this folder, when the owning row names one. */
+export function getNestedSshTargetIdForFolderWorkspace(
+  state: FolderWorkspaceRuntimeOwnerState,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): string | null {
+  const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+  const owner = folderWorkspace?.executionHostId
+    ? folderWorkspace
+    : findFolderProjectGroup(state, folderWorkspaceId, executionHostId)
+  return owner && parseExecutionHostId(owner.executionHostId)?.kind === 'runtime'
+    ? owner.connectionId?.trim() || null
+    : null
+}
+
 export function getExecutionHostIdForFolderWorkspace(
   state: FolderWorkspaceRuntimeOwnerState,
   folderWorkspaceId: string,

@@ -8,14 +8,31 @@ import { readRecord, readString } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
 import { MAX_CODEX_ITEM_STREAM_METADATA_BYTES } from './codex-item-stream-retention'
 import type { CodexAbandonedCommand } from './codex-prompt-registry'
+import { readCodexTurnId } from './codex-structured-thread-facts'
+import { codexPrimaryCommandTaskId } from '../../shared/structured-session-foreground-commands'
 
 const MAX_SETTLED_COMMANDS = 128
 
-type Command = { threadId: string; task: AgentSessionBackgroundTask; bytes: number }
+type Command = {
+  threadId: string
+  turnId: string | null
+  backgrounded: boolean
+  task: AgentSessionBackgroundTask
+  /** Codex's id for the command's process, which a background-terminal stop names. */
+  processId?: string
+  bytes: number
+}
 
 /** A command process starting, or ending: it exited, its thread closed, or the session ended. */
 export type CodexBackgroundCommandChange =
-  | { type: 'started'; threadId: string; task: AgentSessionBackgroundTask }
+  | {
+      type: 'started'
+      threadId: string
+      turnId: string | null
+      backgrounded: boolean
+      task: AgentSessionBackgroundTask
+      processId?: string
+    }
   | { type: 'ended'; threadId: string; taskId: string }
 
 export class CodexBackgroundCommandTracker {
@@ -62,7 +79,36 @@ export class CodexBackgroundCommandTracker {
     this.commands.set(key, command)
     this.liveBytes += command.bytes
     this.trimSettled()
-    return { type: 'started', threadId: command.threadId, task: command.task }
+    return this.liveChange(command)
+  }
+
+  /** A surviving process becomes background work when the turn that launched it ends. */
+  endTurn(threadId: string, turnId: string): CodexBackgroundCommandChange[] {
+    const backgrounded: CodexBackgroundCommandChange[] = []
+    for (const command of this.commands.values()) {
+      if (
+        command.threadId === threadId &&
+        (command.turnId === turnId || command.turnId === null) &&
+        !command.backgrounded
+      ) {
+        command.backgrounded = true
+        backgrounded.push(this.liveChange(command))
+      }
+    }
+    this.rememberSettled(this.turnKey(threadId, turnId))
+    return backgrounded
+  }
+
+  private liveChange(command: Command): Extract<CodexBackgroundCommandChange, { type: 'started' }> {
+    const { threadId, turnId, backgrounded, task, processId } = command
+    return {
+      type: 'started',
+      threadId,
+      turnId,
+      backgrounded,
+      task,
+      ...(processId !== undefined ? { processId } : {})
+    }
   }
 
   /** The thread closed: Codex stops its processes first, so none of them can report an exit. */
@@ -82,7 +128,7 @@ export class CodexBackgroundCommandTracker {
     childLabel?: (threadId: string) => string | null
   ): AgentSessionBackgroundTask[] {
     return [...this.commands.values()]
-      .filter((command) => !coveredThreads?.has(command.threadId))
+      .filter((command) => command.backgrounded && !coveredThreads?.has(command.threadId))
       .map(({ threadId, task }) => {
         // The agent row carrying the child's name is gone by the time this row shows;
         // unqualified it reads as a bare shell string with no owner. Resolved on read so
@@ -94,11 +140,29 @@ export class CodexBackgroundCommandTracker {
       })
   }
 
-  /** The live commands one thread launched, as the strip would publish them. */
-  threadTasks(threadId: string): AgentSessionBackgroundTask[] {
+  /** Whether a running command carries a process id a background-terminal stop could name. */
+  get holdsProcess(): boolean {
+    return [...this.commands.values()].some((command) => command.processId !== undefined)
+  }
+
+  /** Every live process, on every thread. */
+  liveCommands(): CodexBackgroundCommandChange[] {
+    return [...this.commands.values()].map((command) => this.liveChange(command))
+  }
+
+  /** The processes the named tasks run: only backgrounded commands, the ones the strip offers. */
+  backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
+    const named = new Set(taskIds)
+    return [...this.commands.values()].flatMap(({ threadId, backgrounded, task, processId }) =>
+      backgrounded && processId !== undefined && named.has(task.id) ? [{ threadId, processId }] : []
+    )
+  }
+
+  /** Live processes, including foreground tools that are absent from the strip. */
+  threadCommands(threadId: string): CodexBackgroundCommandChange[] {
     return [...this.commands.values()]
       .filter((command) => command.threadId === threadId)
-      .map((command) => command.task)
+      .map((command) => this.liveChange(command))
   }
 
   /** The session ended, and every command with it. */
@@ -124,15 +188,26 @@ export class CodexBackgroundCommandTracker {
       this.liveBytes -= existing.bytes
       this.commands.delete(key)
     }
+    this.rememberSettled(key)
+    return existing
+      ? { type: 'ended', threadId: existing.threadId, taskId: existing.task.id }
+      : null
+  }
+
+  private turnKey(threadId: string, turnId: string): string {
+    return JSON.stringify(['turn', threadId, turnId])
+  }
+
+  private rememberSettled(key: string): void {
+    if (this.settled.has(key)) {
+      return
+    }
     const bytes = Buffer.byteLength(key, 'utf8') + 256
     if (this.liveBytes + bytes <= this.maxMetadataBytes) {
       this.settled.set(key, bytes)
       this.settledBytes += bytes
     }
     this.trimSettled()
-    return existing
-      ? { type: 'ended', threadId: existing.threadId, taskId: existing.task.id }
-      : null
   }
 
   private trimSettled(): void {
@@ -155,8 +230,7 @@ export class CodexBackgroundCommandTracker {
     if (event.method !== 'item/started' && event.method !== 'item/completed') {
       return null
     }
-    // Any command may outlive its turn; `source` says only how Codex launched it. A stdin write
-    // starts no process: it reaches one already tracked.
+    // Track every process; a stdin write reaches one already tracked.
     const item = readCodexThreadItem(readRecord(event.params).item)
     if (item?.type !== 'commandExecution' || item.source === 'unifiedExecInteraction') {
       return null
@@ -166,16 +240,21 @@ export class CodexBackgroundCommandTracker {
     const description = boundCodexCommandDescription(readString(item, 'command') ?? '')
       .replace(/\s+/g, ' ')
       .trim()
+    const turnId = readCodexTurnId(event.params)
+    const processId = readString(item, 'processId') ?? undefined
     const value = {
       threadId: event.threadId,
+      turnId,
+      backgrounded: turnId !== null && this.settled.has(this.turnKey(event.threadId, turnId)),
       task: {
         id:
           event.threadId === this.primaryThreadId
-            ? `codex-command:primary:${encodeURIComponent(item.id)}`
+            ? codexPrimaryCommandTaskId(item.id)
             : `codex-command:thread:${encodeURIComponent(event.threadId)}:${encodeURIComponent(item.id)}`,
         kind: 'command' as const,
         ...(description ? { description } : {})
-      }
+      },
+      ...(processId !== undefined ? { processId } : {})
     }
     return {
       key,

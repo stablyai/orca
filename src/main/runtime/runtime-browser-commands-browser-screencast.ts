@@ -73,6 +73,8 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
       // Why: guest frames come from the window's compositor, which a throttled hidden window stops.
       const win = this.host.getAvailableAuthoritativeWindow()
       const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
+      // Why: on the active tab the guest is the widget a cover hides, and its attach-time unthrottle can predate it.
+      const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       record.started = startBrowserScreencast(guest, {
         format: params.format,
         ...budget,
@@ -123,6 +125,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
           return session.done
         })
         .finally(() => {
+          releaseGuestThrottle()
           releaseThrottle()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)

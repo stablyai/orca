@@ -54,7 +54,13 @@ function startHost(phase: 'ready' | 'starting'): void {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    modelCatalog: { read: vi.fn(), providerStarted },
+    modelCatalog: {
+      read: vi.fn(),
+      recordLiveListing: vi.fn(),
+      prewarm: vi.fn(async () => {}),
+      stop: vi.fn(),
+      providerStarted
+    },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
@@ -102,7 +108,8 @@ it('a published child tells the catalog only once its start is proven', async ()
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
     acquisitionGeneration: 'generation-1',
     reportedOptions: { model: 'sonnet' },
-    restoreSkippedOptions: []
+    restoreSkippedOptions: [],
+    optionRevision: 0
   })
   expect(providerStarted).toHaveBeenCalledTimes(1)
 })

@@ -1,28 +1,48 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { MessageRow } from './NativeChatMessageRow'
+import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { i18n } from '@/i18n/i18n'
+import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
 } from './native-chat-orca-stop-context'
 
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+})
+
+it('keeps a skipped compaction warning truthful instead of showing the success separator', () => {
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    text: 'Nothing to compact (session too small)',
+    presentation: 'compaction-skipped'
+  })
+  expect(screen.getByText('Nothing to compact (session too small)')).toBeInTheDocument()
+  expect(screen.queryByText('Context compacted')).toBeNull()
+})
 
 function orcaStopView(
   hostLabel: string | null,
-  continueAvailable: boolean
+  continueAvailable: boolean,
+  remoteHost: boolean
 ): NativeChatOrcaStopView {
-  return { hostLabel, continueAvailable }
+  return { hostLabel, remoteHost, continueAvailable }
 }
 
 function renderStatus(
   body: AgentJournalStatusItem,
   hostLabel: string | null = null,
-  continueAvailable = false
+  continueAvailable = false,
+  remoteHost = false,
+  agentName?: string
 ) {
   const [message] = projectStructuredItemsToNativeChat([
     {
@@ -34,10 +54,15 @@ function renderStatus(
       turnScope: { kind: 'turn', turnItemId: 'cut-turn' }
     }
   ])
-  const view = orcaStopView(hostLabel, continueAvailable)
+  const view = orcaStopView(hostLabel, continueAvailable, remoteHost)
   return render(
     <NativeChatOrcaStopContext.Provider value={view}>
-      <MessageRow message={message!} expandSignal={false} onScrollMessageToTop={vi.fn()} />
+      <MessageRow
+        message={message!}
+        agentName={agentName}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
     </NativeChatOrcaStopContext.Provider>
   )
 }
@@ -74,6 +99,30 @@ describe('the row an Orca stop leaves', () => {
         'Orca on studio-mac restarted for an update while this response was in progress.'
       )
     ).toBeInTheDocument()
+  })
+
+  it("says a remote host's Orca stopped, not that it was closed", () => {
+    renderStatus(orcaStopRow('quit'), 'QA SSH', true, true)
+    expect(
+      screen.getByText('Orca on QA SSH stopped while this response was in progress.').parentElement
+        ?.parentElement
+    ).toHaveClass('text-muted-foreground')
+    expect(screen.queryByText(/was closed/)).toBeNull()
+  })
+
+  it("keeps this desktop's quit as closed", () => {
+    renderStatus(orcaStopRow('quit'), 'studio-mac', true, false)
+    expect(
+      screen.getByText('Orca on studio-mac was closed while this response was in progress.')
+    ).toBeInTheDocument()
+  })
+
+  it.each([
+    ['update', 'Orca on QA SSH restarted for an update while this response was in progress.'],
+    ['crash', 'Orca on QA SSH stopped unexpectedly while this response was in progress.']
+  ])("keeps a remote host's %s words", (cause, sentence) => {
+    renderStatus(orcaStopRow(cause), 'QA SSH', true, true)
+    expect(screen.getByText(sentence)).toBeInTheDocument()
   })
 
   // A client that re-words unnamed host rows keeps this row's presentation and cause, neutral.
@@ -122,6 +171,139 @@ describe('the row an Orca stop leaves', () => {
 })
 
 describe('notice rows', () => {
+  it('keeps unmatched host auth wording and its next step', async () => {
+    await i18n.changeLanguage('fr')
+    const text = 'Use the host-specific sign-in page, then run /compact again.'
+    render(
+      <NativeChatNoticeRow
+        block={{ type: 'text', tone: 'error', text, failure: { kind: 'notSignedIn' } }}
+        agentName="Grok"
+      />
+    )
+    expect(screen.getByText(text)).toBeInTheDocument()
+  })
+
+  it.each(['providerStartFailed', 'notSignedIn'] as const)(
+    'keeps the host /compact retry instruction for %s',
+    (kind) => {
+      const words = agentSessionFailureWords(
+        { kind },
+        { agentName: 'Grok', command: 'compact', surface: 'row' }
+      )
+      renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, false, 'Grok')
+      expect(screen.getByText(words.text)).toBeInTheDocument()
+      expect(screen.getByText(/Run \/compact again\./)).toBeInTheDocument()
+      expect(screen.queryByText(/send your message again/i)).toBeNull()
+    }
+  )
+  it('updates a mounted auth row when the reader changes language', async () => {
+    renderStatus(
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords({ kind: 'notSignedIn' }, { agentName: 'Grok', surface: 'row' })
+      },
+      null,
+      false,
+      false,
+      'Grok'
+    )
+    expect(
+      screen.getByText('Sign in to Grok with `grok login` on the computer running this chat.')
+    ).toBeInTheDocument()
+    await act(() => i18n.changeLanguage('fr'))
+    expect(
+      screen.getByText(
+        'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'
+      )
+    ).toBeInTheDocument()
+  })
+  it.each([
+    ['fr', 'Grok', 'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'],
+    [
+      'fr',
+      'Pi',
+      'Connectez-vous à Pi en exécutant `pi` puis en utilisant `/login` sur l’ordinateur qui exécute ce chat.'
+    ],
+    ['fr', 'OMP', 'Connectez-vous à OMP.'],
+    [
+      'ja',
+      'Grok',
+      'このチャットを実行しているコンピューターで `grok login` を使って Grok にサインインしてください。'
+    ],
+    [
+      'ja',
+      'Pi',
+      'このチャットを実行しているコンピューターで `pi` を起動し、`/login` を使って Pi にサインインしてください。'
+    ],
+    ['ja', 'OMP', 'OMP にサインインしてください。']
+  ])(
+    'rewords known %s auth facts for %s and keeps literal diagnostics',
+    async (locale, agentName, guidance) => {
+      await i18n.changeLanguage(locale)
+      const detail = 'Provider diagnostic: {{agent}} must remain literal.'
+      const words = agentSessionFailureWords(
+        { kind: 'notSignedIn', detail: { text: detail, audience: 'person' } },
+        { agentName, surface: 'row' }
+      )
+      renderStatus(
+        {
+          kind: 'status',
+          ...words,
+          tone: 'error'
+        },
+        null,
+        false,
+        false,
+        agentName
+      )
+      expect(
+        screen.getByText(`${guidance}${locale === 'ja' ? '' : ' '}${detail}`)
+      ).toBeInTheDocument()
+      expect(screen.queryByText(words.text)).toBeNull()
+    }
+  )
+
+  it('rewords managed-account facts without leaking system login instructions', async () => {
+    await i18n.changeLanguage('fr')
+    renderStatus(
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords(
+          { kind: 'notSignedIn', account: 'managed' },
+          { agentName: 'Claude', surface: 'row' }
+        )
+      },
+      null,
+      false,
+      false,
+      'Claude'
+    )
+    expect(
+      screen.getByText(
+        'Ce compte Claude n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Claude.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/claude auth login/)).toBeNull()
+  })
+
+  it.each([{ kind: 'futureFailure' }, { kind: 'notSignedIn', account: 'futureAccount' }])(
+    'keeps the host fallback for facts this client cannot fully understand (%j)',
+    async (failure) => {
+      await i18n.changeLanguage('ja')
+      const newerRow = {
+        kind: 'status',
+        tone: 'error',
+        text: 'Future host guidance',
+        failure
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates an older client receiving a newer host's unknown failure fact.
+      const row = newerRow as unknown as AgentJournalStatusItem
+      renderStatus(row, null, false, false, 'Grok')
+      expect(screen.getByText('Future host guidance')).toBeInTheDocument()
+    }
+  )
   it('renders compaction as a centered separator', () => {
     renderStatus({ kind: 'status', text: 'Context compacted', presentation: 'compaction' })
     expect(screen.getByRole('separator', { name: 'Context compacted' })).toHaveClass(

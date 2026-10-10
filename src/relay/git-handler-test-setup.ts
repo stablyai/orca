@@ -7,7 +7,7 @@
  */
 import { vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 const TEST_GIT_USER_EMAIL = 'test@test.com'
 const TEST_GIT_USER_NAME = 'Test'

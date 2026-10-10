@@ -44,6 +44,8 @@ const WRITES: AgentSessionWriteKind[] = [
   'answer',
   'option',
   'command',
+  'clear',
+  'compact',
   'goal'
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
@@ -92,6 +94,8 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',
+  clear: 'notDoneCommand',
+  compact: 'notDoneCommand',
   goal: 'notDoneGoal'
 }
 
@@ -453,8 +457,17 @@ describe('the notice for every reason a host names', () => {
         write !== 'read-history'
       const saysNotDone =
         write === 'read-history' && failure.code === 'agent_session_journal_unreadable'
+      // "Run /clear when it's done" already says the command has yet to happen.
+      const clearWhileWorking = (
+        [
+          'runClearWhenDone',
+          'clearAfterAnswer',
+          'runCompactWhenDone',
+          'compactAfterAnswer'
+        ] as const
+      ).some((sentence) => parts.includes(sentence))
       expect(notDone, cell).toEqual(
-        answeredAway || unsupported || saysNotDone ? [] : [NOT_DONE[write]]
+        answeredAway || unsupported || saysNotDone || clearWhileWorking ? [] : [NOT_DONE[write]]
       )
     }
   })
@@ -617,6 +630,57 @@ describe('a chat whose history the host could not open', () => {
   })
 })
 
+describe('a /clear or /compact refused while the agent works', () => {
+  const refused = (reason: 'turnActive' | 'messagesUnsettled' | 'promptPending') =>
+    ({ kind: 'refused', code: 'agent_session_operation_invalid', details: { reason } }) as const
+
+  it('says one plain sentence of what the person sees and can do, whichever reason', () => {
+    for (const reason of ['turnActive', 'messagesUnsettled'] as const) {
+      expect(
+        agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts(refused(reason), 'clear'))
+      ).toBe("The agent is still working. Run /clear when it's done.")
+    }
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(refused('promptPending'), 'clear')
+      )
+    ).toBe("Answer the agent's question or approval, then run /clear.")
+  })
+
+  it('says the same for a /compact, which a host without the queue still refuses', () => {
+    for (const reason of ['turnActive', 'messagesUnsettled'] as const) {
+      expect(
+        agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts(refused(reason), 'compact'))
+      ).toBe("The agent is still working. Run /compact when it's done.")
+    }
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(refused('promptPending'), 'compact')
+      )
+    ).toBe("Answer the agent's question or approval, then run /compact.")
+  })
+
+  it('leaves a command this build does not know its own words', () => {
+    expect(agentSessionWriteNoticeParts(refused('turnActive'), 'command')).toEqual([
+      'turnActive',
+      'notDoneCommand',
+      'waitForTurn'
+    ])
+  })
+
+  it('is the write a /clear or /compact is, and only those', () => {
+    expect(
+      agentSessionWriteKindForMethod('agentSession.conversationCommand', { command: 'clear' })
+    ).toBe('clear')
+    expect(
+      agentSessionWriteKindForMethod('agentSession.conversationCommand', { command: 'compact' })
+    ).toBe('compact')
+    expect(
+      agentSessionWriteKindForMethod('agentSession.conversationCommand', { command: 'rewind' })
+    ).toBe('command')
+  })
+})
+
 // For a line that already says what did not happen and shows its own Retry, such as a chat that
 // could not start: the Retry is the step for retrying and for sending again, and only for those.
 describe('agentSessionRefusalCauseParts', () => {
@@ -661,7 +725,7 @@ describe('agentSessionRefusalCauseParts', () => {
         )
       )
     ).toBe(
-      "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings."
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
     )
     expect(
       agentSessionWriteNoticeEnglish(
@@ -705,7 +769,7 @@ describe('agentSessionRefusalCauseParts', () => {
 
   it('writes the same sentences as before where no Retry stands beside them', () => {
     expect(agentSessionFailureSentence({ kind: 'notSignedIn' }, 'rejection')).toBe(
-      'The agent is not signed in for the selected account. Sign in, then send your message again.'
+      'The agent is not signed in. Sign in, then send your message again.'
     )
   })
 

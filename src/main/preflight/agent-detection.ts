@@ -221,9 +221,8 @@ export async function refreshShellPathAndDetectAgents(
 export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
+    // Why: an unreachable host is unverifiable, not a host with no agents; [] would be cached as one.
+    throw new Error('SSH host is not connected; its agents cannot be listed.')
   }
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
@@ -343,6 +342,8 @@ async function executePreflightCheck(
 ): Promise<PreflightStatus> {
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
+  } else if (process.platform !== 'win32') {
+    await hydrateShellPathForAgentDetection(context, force)
   }
 
   if (force) {
@@ -369,7 +370,7 @@ async function executePreflightCheck(
     getGiteaAuthStatus()
   ])
 
-  const result = {
+  return {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
@@ -377,6 +378,4 @@ async function executePreflightCheck(
     azureDevOps,
     gitea
   }
-
-  return result
 }

@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -21,7 +22,7 @@ export async function downloadAndOpenRemoteTerminalFile(
     if (result.canceled) {
       return
     }
-    await window.api.shell.openFilePath(result.destinationPath)
+    await window.api.shell.openFilePath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
   } catch (error) {
     toast.error(
       extractIpcErrorMessage(

@@ -15,8 +15,29 @@ import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,
-  decodeTerminalStreamFrame
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
+  encodeTerminalStreamJson,
+  type TerminalStreamFrame
 } from '../../src/shared/terminal-stream-protocol'
+
+/**
+ * Why: a refusal reaches the remount only on a stream that did not negotiate sequenced input (an
+ * older peer); a sequenced stream keeps its journal and resends on the same stream instead.
+ */
+function withoutInputAck(frame: TerminalStreamFrame): TerminalStreamFrame {
+  if (frame.opcode !== TerminalStreamOpcode.Subscribe) {
+    return frame
+  }
+  const payload = decodeTerminalStreamJson<{ capabilities?: Record<string, unknown> }>(
+    frame.payload
+  )
+  if (!payload?.capabilities) {
+    return frame
+  }
+  const { inputAck: _inputAck, ...capabilities } = payload.capabilities
+  return { ...frame, payload: encodeTerminalStreamJson({ ...payload, capabilities }) }
+}
 
 const ENVIRONMENT_ID = 'env-1'
 const TERMINAL_HANDLE = 'terminal-1'
@@ -149,7 +170,7 @@ function startHost(): {
         sendBinary: (bytes: Uint8Array) => {
           const frame = decodeTerminalStreamFrame(bytes)
           if (frame) {
-            handlers.get(frame.streamId)?.(frame)
+            handlers.get(frame.streamId)?.(withoutInputAck(frame))
           }
         }
       }

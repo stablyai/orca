@@ -15,6 +15,7 @@ import type { StructuredAgentSessionState } from '../../../src/shared/structured
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
 import {
@@ -41,13 +42,15 @@ export function useMobileStructuredSendWithOutcome(args: {
   sessionId: string | null
   enabled: boolean
   queueCapable: boolean
+  /** The host holds a /compact sent while the agent works as a card. */
+  commandsWait: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   commandPending: { current: boolean }
   controller: Pick<
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
   >
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
 }): (
   text: string,
   images?: string[],
@@ -58,6 +61,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     agent,
     client,
     commandPending,
+    commandsWait,
     controller,
     enabled,
     onSendError,
@@ -98,11 +102,19 @@ export function useMobileStructuredSendWithOutcome(args: {
           agent: agent === 'claude' ? 'claude' : 'codex',
           ...controller
         },
-        canRun: () =>
-          !runningStructuredAgentSessionTurnId(stateRef.current) &&
-          !stateRef.current.items.some(
+        busy: () =>
+          stateRef.current.items.some(
             (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
-          ),
+          )
+            ? 'prompt'
+            : runningStructuredAgentSessionTurnId(stateRef.current)
+              ? 'working'
+              : null,
+        // A card waiting on a prompt nothing here can answer would hold it forever.
+        waitsInLine: (command) =>
+          command === 'compact' &&
+          commandsWait &&
+          !pendingPromptsAllUnanswerableHere(stateRef.current.items),
         onError: onSendError,
         timeoutMs
       })
@@ -130,6 +142,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       agent,
       client,
       commandPending,
+      commandsWait,
       controller,
       enabled,
       onSendError,

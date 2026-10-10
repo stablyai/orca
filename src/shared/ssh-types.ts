@@ -283,7 +283,7 @@ export type SshManagedServerUpdateNote = {
   detail?: string
 }
 
-/** A managed server that is down and could not be started, with why (and orcad.log's tail). */
+/** A managed server that did not answer and was not proven serving, with why (and orcad.log's tail). */
 export type SshManagedServerServingNote = { state: 'unverifiable'; detail: string }
 
 export const SSH_MANAGED_SERVER_RELAY_REASONS = [
@@ -303,7 +303,7 @@ export type SshManagedServerStatus =
       kind: 'managed'
       environmentId: string
       update?: SshManagedServerUpdateNote
-      /** Set when the server was not running and could not be started; never a terminal verdict. */
+      /** Set when the server did not answer and no start brought it up; never a terminal verdict. */
       serving?: SshManagedServerServingNote
     }
   | { kind: 'setting-up'; phase: (typeof SSH_MANAGED_SERVER_PHASES)[number] }
@@ -356,6 +356,15 @@ export type SshRemotePtyLease = {
   /** The host listed this ptyId under a different PTY incarnation, so the id no longer routes to
    *  this lease's shell. Written only by the pending-stop replay's `relay-id-recycled` retirement. */
   relayIdRecycled?: true
+}
+
+/**
+ * A lease that still claims a running terminal: a client holds it (`attached`) or let it run
+ * (`detached`). `expired` lost its owner without an exit record and `terminated` ended; neither is
+ * a claim, though only `terminated` is evidence the terminal exited.
+ */
+export function isLiveSshPtyLease(lease: Pick<SshRemotePtyLease, 'state'>): boolean {
+  return lease.state === 'attached' || lease.state === 'detached'
 }
 
 /**

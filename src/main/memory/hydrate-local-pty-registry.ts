@@ -6,9 +6,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId, worktreeIdComparisonKey } from '../../shared/worktree/id'
 import { getDaemonProvider } from '../daemon/daemon-init'
-import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import type { DaemonPtyRouter } from '../daemon/daemon-pty-router'
-import type { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
+import { getAllDaemonAdapters, type DaemonProvider } from '../daemon/daemon-provider-routing'
 import type { SessionInfo } from '../daemon/types'
 import { isFolderWorkspaceIdForRepo } from '../ipc/worktrees/folder-workspace-model'
 import type { Store } from '../persistence'
@@ -17,6 +15,7 @@ import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-option
 import { listLocalRepoWorktreesStrict } from '../repo-worktrees'
 import { listRegisteredPtys, registerPty } from './pty-registry'
 import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'
+import { errorMessage } from '../../shared/error-message'
 
 type HydrationStore = Store
 
@@ -60,10 +59,7 @@ export function hydrateLocalPtyRegistryAtBoot(store: HydrationStore): Promise<vo
       }
     })
     .catch((error) => {
-      console.warn(
-        '[memory] Boot-time pty-registry hydration failed:',
-        error instanceof Error ? error.message : String(error)
-      )
+      console.warn('[memory] Boot-time pty-registry hydration failed:', errorMessage(error))
     })
     .finally(() => {
       clearTimeout(deadline)
@@ -141,7 +137,7 @@ async function hydrateLocalPtyRegistry(
         complete = false
         console.warn(
           '[memory] Worktree enumeration failed during pty-registry hydration:',
-          result.reason instanceof Error ? result.reason.message : String(result.reason)
+          errorMessage(result.reason)
         )
         continue
       }
@@ -245,15 +241,11 @@ function getVerifiedFolderWorktreeIds(
 }
 
 async function collectSessionInfos(
-  provider: DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider,
+  provider: DaemonProvider,
   signal: AbortSignal
 ): Promise<DaemonInventory> {
-  const adapters =
-    'getAllAdapters' in provider && typeof provider.getAllAdapters === 'function'
-      ? provider.getAllAdapters()
-      : [provider]
   const results = await Promise.all(
-    adapters.map(async (adapter) => {
+    getAllDaemonAdapters(provider).map(async (adapter) => {
       try {
         throwIfSignalAborted(signal)
         const sessions = await waitForPromiseWithSignal<SessionInfo[]>(
@@ -266,7 +258,7 @@ async function collectSessionInfos(
         throwIfSignalAborted(signal)
         console.warn(
           '[memory] listSessions failed for one adapter during hydration:',
-          error instanceof Error ? error.message : String(error)
+          errorMessage(error)
         )
         return { complete: false, sessions: [] }
       }

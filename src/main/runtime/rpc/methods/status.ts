@@ -1,5 +1,6 @@
 import { defineMethod } from '../core'
 import { getRemoteServerUpdaterSnapshot } from '../../remote-server-updater'
+import { getPublishedHostDescriptor } from '../../host-descriptor'
 
 export const STATUS_METHODS = [
   defineMethod({
@@ -11,8 +12,10 @@ export const STATUS_METHODS = [
       // hostname; the wait is capped below the CLI's status probe so a slow lookup never reads as down.
       await runtime.machineNameReady()
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
+      const hostDescriptor = getPublishedHostDescriptor(runtime.getRuntimeId())
       return {
         ...runtime.getStatus(),
+        ...(hostDescriptor ? { hostDescriptor } : {}),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
         remoteUpdateSupport: snapshot.support

@@ -10,7 +10,9 @@ import {
 } from './relay-bundled-ripgrep'
 
 // These tests isolate PATH safety; effective-environment coverage lives in the cache suite.
-vi.mock('./relay-command-env', () => ({ buildRelayCommandEnv: () => ({ ...process.env }) }))
+vi.mock('../wsl-guest/relay-command-env', () => ({
+  buildRelayCommandEnv: () => ({ ...process.env })
+}))
 
 const originalPlatform = process.platform
 const originalPath = process.env.PATH

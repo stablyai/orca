@@ -21,7 +21,7 @@
     "src/renderer/src/**/*.worker.ts",
     "src/cli/index.ts",
     "src/relay/relay.ts",
-    "src/relay/wsl-agent-hook-relay.ts",
+    "src/wsl-guest/wsl-agent-hook-relay.ts",
     "config/scripts/**/*.{mjs,cjs,js,ts}",
     "config/build-plugins/**/*.ts",
     "electron.vite.config.ts",

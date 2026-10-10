@@ -464,9 +464,18 @@ describe('OrcaRuntimeService', () => {
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
-    await runtime.sendTerminal(handle, { text: 'continue', enter: true }, { inputKind: 'driving' })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+    try {
+      await Promise.all([
+        runtime.sendTerminal(handle, { text: 'continue', enter: true }, { inputKind: 'driving' }),
+        vi.runAllTimersAsync()
+      ])
 
-    expect(writes).toEqual(['continue', '\r'])
+      expect(writes).toEqual(['continue', '\r'])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('sends agent prompts as bracketed paste before submit', async () => {

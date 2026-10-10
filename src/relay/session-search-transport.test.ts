@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { AiVaultHandler } from './ai-vault-handler'
 import { SshChannelMultiplexer } from '../main/ssh/ssh-channel-multiplexer'
 import { createSessionSearchClient } from '../shared/ai-vault-search-client'
@@ -59,7 +59,7 @@ describe('session search over real relay frames', () => {
         limit: 20,
         filters: {
           agents: AI_VAULT_AGENTS.filter(
-            (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+            (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'kiro'].includes(agent)
           )
         }
       },

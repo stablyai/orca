@@ -6,12 +6,16 @@ type TerminalPastePtyWriter = Pick<PtyTransport, 'sendInput' | 'sendInputAccepte
 export function writeTerminalPastePtyInput(
   transport: TerminalPastePtyWriter | undefined,
   data: string,
-  inputKind: TerminalInputKind
+  inputKind: TerminalInputKind,
+  signal?: AbortSignal
 ): boolean | Promise<boolean> {
   if (!transport) {
     return false
   }
   // Why: paste chunking must respect PTY backpressure. sendInput only queues
   // local writes, while sendInputAccepted resolves after the PTY accepts them.
-  return transport.sendInputAccepted?.(data, inputKind) ?? transport.sendInput(data, inputKind)
+  const accepted = signal
+    ? transport.sendInputAccepted?.(data, inputKind, { signal })
+    : transport.sendInputAccepted?.(data, inputKind)
+  return accepted ?? transport.sendInput(data, inputKind)
 }

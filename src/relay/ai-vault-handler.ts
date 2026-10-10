@@ -20,7 +20,7 @@ import {
 import { getRemoteHostPlatform, type RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
 import { relayLogLine } from './relay-diagnostic-log'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { AiVaultScanCoordinator } from '../main/ai-vault/ai-vault-scan-coordinator'
 import type { RelayAiVaultServiceApi } from './ai-vault-service-client-state'
 

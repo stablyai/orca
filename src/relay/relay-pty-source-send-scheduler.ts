@@ -4,7 +4,7 @@ import type {
 } from '../shared/pty-source-credit-contract'
 import type { PtySourceRecoveryCheckpoint } from '../shared/pty-source-recovery-contract'
 import type { PtySourceReceivingActivation } from '../shared/pty-source-receiving-activation'
-import type { RelayDispatcher, SinkWriteSettlement } from './dispatcher'
+import type { RelayDispatcher, SinkWriteSettlement } from '../wsl-guest/dispatcher'
 import {
   PTY_SOURCE_SCHEDULER_MAX_FRAMES,
   PTY_SOURCE_SCHEDULER_MAX_SU

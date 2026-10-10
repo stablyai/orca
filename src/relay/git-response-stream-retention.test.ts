@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { GitResponseStreamRegistry } from './git-response-stream'
 
 async function collect(): Promise<void> {

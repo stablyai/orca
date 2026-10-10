@@ -23,12 +23,6 @@ import {
 } from '../host-env/fresh-spawn-routing'
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import {
-  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
-  hasClaudeAuthEnvConflict
-} from '../../../claude-accounts/environment'
 import {
   isSafePtySessionId,
   mintPtySessionId,
@@ -38,12 +32,16 @@ import { resolveWslSessionContext } from '../../../daemon/wsl-session-context'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { resolveLocalWindowsTerminalRuntimeOptions } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+import { resolveManagedSshHostLoginShell } from '../../../pty/managed-ssh-host-login-shell'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
+import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -56,7 +54,7 @@ export async function prepareRuntimePtySpawn(
     }
   }
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
-  ctx.provider = getProvider(args.connectionId)
+  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(
@@ -70,9 +68,6 @@ export async function prepareRuntimePtySpawn(
   }
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
   // `args.shellOverride` is the per-request pick (`terminal create --shell`), read here the way
   // the renderer twin (ipc/spawn-preflight.ts) reads a tab's override. Without it a runtime create
@@ -85,7 +80,8 @@ export async function prepareRuntimePtySpawn(
           requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
-          fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+          fallbackHostShell: process.env.COMSPEC || 'powershell.exe',
+          sshLoginShell: resolveManagedSshHostLoginShell()
         })
       : {
           shellOverride:
@@ -151,12 +147,6 @@ export async function prepareRuntimePtySpawn(
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
-  if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
-    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
-  }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {
@@ -295,6 +285,10 @@ export async function prepareRuntimePtySpawn(
         ctx.env,
         ctx.deps.runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null
+      )
+      stampRuntimeSourceEnv(
+        ctx.env,
+        getRuntimeSourceStamp(ctx.deps.runtime, getAppEnvironment().getPath('userData'))
       )
       promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
     } catch (error) {

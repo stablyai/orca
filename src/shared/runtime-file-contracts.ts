@@ -51,6 +51,10 @@ export type RuntimeNativeChatFileContext = {
   sessionId: string
 }
 
+// Why: older hosts ignore crossWorkspace, so their refusal is no proof that no host workspace holds the path.
+export const TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY =
+  'files.resolve-terminal-path.cross-workspace.v1' as const
+
 export type RuntimeTerminalPathResolution = {
   worktree: string
   relativePath: string | null

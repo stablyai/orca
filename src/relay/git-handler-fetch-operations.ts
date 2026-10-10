@@ -1,4 +1,4 @@
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { assertValidGitPushTarget } from '../shared/git-push-target-validation'
 import type { GitPushTarget } from '../shared/worktree/types'

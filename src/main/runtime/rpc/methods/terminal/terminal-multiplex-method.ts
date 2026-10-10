@@ -2,8 +2,8 @@ import { defineStreamingMethod } from '../../core'
 import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
 import { TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
 import { TerminalSourceRangeRegistry } from '../../terminal-source-range-registry'
-import { TerminalMultiplex } from './stream-schemas'
-import type { TerminalMultiplexConnectionBase } from './terminal-multiplex-connection'
+import { TerminalMultiplex } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { installMultiplexFrameDelivery } from './terminal-multiplex-frame-delivery'
 import { installMultiplexFlowControl } from './terminal-multiplex-flow-control'
@@ -29,7 +29,8 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         resolveMultiplex = resolve
       })
       // Installers only close over this per-connection state; none of it is module-global.
-      const state: TerminalMultiplexConnectionBase = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installers below fill every method synchronously, and no frame can arrive before the control handler is registered after them.
+      const state = {
         runtime,
         connectionId,
         sendBinary,
@@ -47,7 +48,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         resolveMultiplex,
         multiplexClosed,
         unregisterControlHandler: () => {}
-      }
+      } as TerminalMultiplexConnection
 
       installMultiplexFrameDelivery(state)
       installMultiplexFlowControl(state)

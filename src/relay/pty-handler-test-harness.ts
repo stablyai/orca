@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import { PtyHandler } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 export const TEST_PTY_ID_MINT_EPOCH = 'test-mint-epoch'
 

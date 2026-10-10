@@ -10,7 +10,10 @@ import type { AgentSessionRefusalReference } from '../../../../shared/agent-sess
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
-import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import type {
+  NativeChatLaunchSeed,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
@@ -22,23 +25,11 @@ import type {
   SessionOptionSetResult,
   SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
+import { absent, nullable, widened } from './native-chat-mock-slot-types.test-support'
 
 type StopBackgroundTaskSpy = (sessionId: string, taskId?: string) => unknown
 
-function nullable<T>(): T | null {
-  return null
-}
-
-function widened<T>(value: T): T {
-  return value
-}
-
-function absent<T>(): T | undefined {
-  return undefined
-}
-
-/** Stands in for the transcript: renders only each message's delivery notice, or the row's quiet
- *  "Sending…" while nothing has confirmed it. */
+/** Stands in for the transcript: renders each message's delivery notice or quiet "Sending…". */
 export function DeliveryNoticesMock({
   notices
 }: {
@@ -142,7 +133,7 @@ export function createStructuredSessionMocks() {
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown> & {
         queueResume?: QueueResumeMock
-        onError?: (text: string | null, errorText?: string) => void
+        onError?: NativeChatStructuredComposerTransport['onError']
       }
       isWorking?: boolean
       isStopping?: boolean
@@ -242,6 +233,13 @@ export function createStructuredSessionMocks() {
               supportsStopAll: mocks.supportsBackgroundTaskStopAll
             },
             turnId: mocks.turnId,
+            commandRefusalCauses: {
+              working: mocks.turnId !== null || mocks.isWorking,
+              prompt: mocks.promptItems.length > 0,
+              background: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
+              sending: false,
+              retry: false
+            },
             epoch: 'epoch-1',
             rewind: { surface: undefined },
             canStop: mocks.canStop ?? mocks.turnId !== null,
@@ -337,7 +335,10 @@ export function createStructuredSessionMocks() {
     nativeChatMessageList: () => ({
       NativeChatMessageList: (props: typeof mocks.messageListProps) => {
         mocks.messageListProps = props
-        useImperativeHandle(props?.ref, () => ({ revealLatest: mocks.revealLatest }))
+        useImperativeHandle(props?.ref, () => ({
+          revealLatest: mocks.revealLatest,
+          revealFindMatch: () => {}
+        }))
         return <DeliveryNoticesMock notices={props?.deliveryNotices} />
       }
     }),

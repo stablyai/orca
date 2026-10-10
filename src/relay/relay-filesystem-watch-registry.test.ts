@@ -9,7 +9,7 @@ import type {
   WatcherProcessHooks,
   WatcherProcessSubscription
 } from '../main/ipc/parcel-watcher-process-subscription'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import { createRelayWatcherProcessPool } from './relay-watcher-process-pool'
 

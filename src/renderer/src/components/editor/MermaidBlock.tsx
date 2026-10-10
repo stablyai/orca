@@ -22,6 +22,8 @@ type MermaidBlockProps = {
   content: string
   isDark: boolean
   htmlLabels?: boolean
+  className?: string
+  pendingContent?: React.ReactNode
 }
 
 // Why: mermaid.render() manipulates global DOM state (element IDs, internal
@@ -53,7 +55,9 @@ function enqueueRender(fn: () => Promise<void>): void {
 export default function MermaidBlock({
   content,
   isDark,
-  htmlLabels = false
+  htmlLabels = false,
+  className,
+  pendingContent
 }: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
   const [result, setResult] = useState<{ svg: string } | { error: string } | null>(null)
@@ -100,8 +104,12 @@ export default function MermaidBlock({
     }
   }, [content, htmlLabels, isDark, id])
 
-  if (result && 'error' in result) {
-    return (
+  if (result === null && pendingContent !== undefined) {
+    return <>{pendingContent}</>
+  }
+
+  const diagram =
+    result && 'error' in result ? (
       <div className="mermaid-block">
         <div className="mermaid-error">
           {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')}{' '}
@@ -111,13 +119,11 @@ export default function MermaidBlock({
           <code>{content}</code>
         </pre>
       </div>
+    ) : (
+      <div
+        className="mermaid-block"
+        dangerouslySetInnerHTML={result ? { __html: result.svg } : undefined}
+      />
     )
-  }
-
-  return (
-    <div
-      className="mermaid-block"
-      dangerouslySetInnerHTML={result ? { __html: result.svg } : undefined}
-    />
-  )
+  return className ? <div className={className}>{diagram}</div> : diagram
 }

@@ -1,9 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
   natives: number
   /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
@@ -15,7 +14,6 @@ type RouteDependencies = {
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   routes: [],
   natives: 0,
   lifecycle: [],
@@ -24,16 +22,10 @@ const dependencies = vi.hoisted((): RouteDependencies => ({
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
@@ -107,14 +99,16 @@ function paneKeysSeen(): string[] {
 }
 
 beforeEach(() => {
-  dependencies.storage.clear()
   dependencies.routes.length = 0
   dependencies.lifecycle.length = 0
   dependencies.clears.length = 0
   dependencies.natives = 0
   dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-  Object.assign(globalThis, { __DEV__: true })
-  dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('the native session route that hands off to the shell', () => {
@@ -123,15 +117,6 @@ describe('the native session route that hands off to the shell', () => {
     expect(dependencies.routes).toEqual([
       { pathname: '/h/host-1/session/wt-1', params: { name: 'my worktree' } }
     ])
-  })
-
-  it('renders the native screen while the flag read is still settling', async () => {
-    // The element is built on every render and mounted only by `fallback`, so the count below is
-    // what a settling read costs: one native screen, before the switch has an answer.
-    dependencies.storage.delete('orca:mobileWebShellEnabled')
-    await renderSession()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.natives).toBeGreaterThan(0)
   })
 
   /**
@@ -179,8 +164,8 @@ describe('the native session route that hands off to the shell', () => {
     }
   })
 
-  it('renders the native screen with the flag off, which is every store build', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'false')
+  it('renders the native screen in a build without the shell, which is every store build', async () => {
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
     await renderSession()
     expect(dependencies.routes).toEqual([])
     expect(dependencies.natives).toBeGreaterThan(0)

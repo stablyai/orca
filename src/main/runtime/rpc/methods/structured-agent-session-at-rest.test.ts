@@ -471,7 +471,7 @@ describe('every close withdraws what is queued (P2-29)', () => {
     await restingChat()
     // The delivery loop has not reached its first start yet.
     const { loop } = rig.host.collaboratorsForTests().conversationDelivery
-    vi.spyOn(loop, 'wake').mockImplementation(() => undefined)
+    vi.spyOn(loop, 'wake').mockImplementation(() => Promise.resolve())
     const reader: unknown[] = []
     await rig.host.subscribe({
       id: 'reader',

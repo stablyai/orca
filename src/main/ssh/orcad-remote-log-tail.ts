@@ -9,8 +9,7 @@ import { ORCAD_LOG_FILENAME } from './orcad-remote-host-support'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import {
-  orcadWindowsBaseDir,
-  orcadWindowsHostOpCommand,
+  orcadWindowsSlotOpCommand,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_LOG_TAIL_MARKER } from './orcad-windows-host-script'
@@ -24,7 +23,7 @@ const ORCAD_LOG_TAIL_TIMEOUT_MS = 10_000
 export function orcadLogTailCommand(host: RemoteHostPlatform, slotDir: string): string {
   const log = joinRemotePath(host, slotDir, ORCAD_LOG_FILENAME)
   if (isWindowsRemoteHost(host)) {
-    return orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, slotDir), 'log-tail', [
+    return orcadWindowsSlotOpCommand(host, slotDir, 'log-tail', [
       log,
       String(ORCAD_LOG_TAIL_MAX_BYTES)
     ])

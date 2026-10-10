@@ -119,9 +119,6 @@ export function relayRuntimeStorePins(
   return [...new Set(targets.map((pin) => pinnedNodeRuntimeAsset(pin).executableSha256))]
 }
 
-/** Why a rung could not run; the refusal classes plus reasons found before anything ran. */
-export type RelayRuntimeStepReason = RelayRuntimeFallbackReason
-
 /**
  * The invariant: no host does worse than the pre-ladder default. A, B and C are tried first
  * (no host compile where Orca's runtime works); any refusal past them falls back to exactly
@@ -132,7 +129,7 @@ export type RelayRuntimeStepReason = RelayRuntimeFallbackReason
 export function relayRuntimeStepAfterRefusal(
   ladder: readonly RelayRuntimeStep[],
   current: RelayRuntimeStep,
-  reason: RelayRuntimeStepReason,
+  reason: RelayRuntimeFallbackReason,
   remembered: boolean
 ): RelayRuntimeStep {
   // Why noexec skips B and C: they load addons from the same tree; only the fallback can disprove it.
@@ -183,9 +180,9 @@ const HOST_NODE_FALLBACK_FAILED_MESSAGE =
   'disk space and its Node.js and npm setup, then reconnect.'
 
 export type RemoteRuntimeUnavailableState = {
-  firstRefusal: RelayRuntimeStepReason | null
+  firstRefusal: RelayRuntimeFallbackReason | null
   /** D is reached only from the host-Node fallback, so 'host_node_missing' or 'install_failed'. */
-  hostNodeRefusal: RelayRuntimeStepReason | null
+  hostNodeRefusal: RelayRuntimeFallbackReason | null
   /** A noexec seen anywhere in the pass rules out advising a host Node. */
   noexec: 'remembered' | 'proved' | null
   hostOs: RemoteOperatingSystem | null

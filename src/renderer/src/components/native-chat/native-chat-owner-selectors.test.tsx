@@ -29,7 +29,8 @@ vi.mock('@/store', async () => {
       worktreesByRepo: {},
       tabsByWorktree: {},
       unifiedTabsByWorktree: {},
-      getKnownWorktreeById: () => undefined
+      detectedWorktreesByRepo: {},
+      floatingWorkspacePath: null
     }))
   }
 })
@@ -96,7 +97,8 @@ function contextState(overrides: Partial<ContextState> = {}): ContextState {
     worktreesByRepo: {},
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
-    getKnownWorktreeById: () => undefined,
+    detectedWorktreesByRepo: {},
+    floatingWorkspacePath: null,
     ...overrides
   }
 }
@@ -117,7 +119,7 @@ describe('native chat ownership selectors', () => {
         ])
       ),
       unifiedTabsByWorktree: { 'chat-owner': [counted(structured('chat'))] },
-      getKnownWorktreeById: (owner) => worktree(owner)
+      worktreesByRepo: { repo: [worktree('chat-owner')] }
     })
     useAppStore.setState(state)
     const { result } = renderHook(() => ({
@@ -139,7 +141,9 @@ describe('native chat ownership selectors', () => {
   it('refreshes both hooks when the queried tab changes, moves, closes, or returns', () => {
     const state = contextState({
       unifiedTabsByWorktree: { first: [structured('one')], second: [structured('two')] },
-      getKnownWorktreeById: (owner) => worktree(owner, `/${owner}`)
+      worktreesByRepo: {
+        repo: ['first', 'second', 'returned'].map((owner) => worktree(owner, `/${owner}`))
+      }
     })
     useAppStore.setState(state)
     const { result, rerender, unmount } = renderHook(
@@ -187,20 +191,17 @@ describe('native chat ownership selectors', () => {
   })
 
   it('updates directory and runtime projections without replacing the ownership maps', () => {
-    let path = '/before'
     const initial = contextState({
       unifiedTabsByWorktree: { 'chat-owner': [structured('chat')] },
-      getKnownWorktreeById: (owner) => worktree(owner, path),
-      worktreesByRepo: { repo: [worktree('chat-owner')] }
+      worktreesByRepo: { repo: [worktree('chat-owner', '/before')] }
     })
     const select = createNativeChatFileLinkContextSelector('chat')
     expect(select(initial)?.worktreePath).toBe('/before')
-    path = '/after'
     const current = {
       ...initial,
       settings: { ...getDefaultSettings('/home/test'), activeRuntimeEnvironmentId: 'focused' },
       worktreesByRepo: {
-        repo: [{ ...worktree('chat-owner'), runtimeOwnerEnvironmentId: 'owning-runtime' }]
+        repo: [{ ...worktree('chat-owner', '/after'), runtimeOwnerEnvironmentId: 'owning-runtime' }]
       }
     }
     expect(select(current)).toEqual(resolveNativeChatFileLinkContext(current, 'chat'))
@@ -209,6 +210,8 @@ describe('native chat ownership selectors', () => {
       worktreePath: '/after',
       runtimeEnvironmentId: 'owning-runtime'
     })
+    useAppStore.setState(current)
+    expect(select(initial)?.worktreePath).toBe('/before')
   })
 
   it('waits for a floating chat pin and follows pin changes without an ownership change', () => {

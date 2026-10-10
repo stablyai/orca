@@ -22,7 +22,8 @@ import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalCont
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { editorTabFileAccess } from '@/lib/local-file-access'
+import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -96,10 +97,13 @@ export function useEditorPanelFileContentLoader({
           activeSettings,
           restoredOpenFile?.runtimeEnvironmentId
         )
-        // Why: liveTail tabs are AI Vault logs discovered on this client, so the
-        // worktree's SSH owner must never be inferred for them (a stamp still routes).
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
+        // Why: these tabs name a file on this client, so the worktree's SSH or runtime owner must
+        // never be inferred for them (a stamp still routes).
+        const isClientLocalTab = restoredOpenFile
+          ? isClientLocalReadOnlyTab(restoredOpenFile)
+          : false
         readConnectionId = connectionId
         let readWorktreeId = worktreeId
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
@@ -124,7 +128,7 @@ export function useEditorPanelFileContentLoader({
           })
         }
         const workspaceRuntimeOwner =
-          restoredOpenFile && !isLiveTailLogTab
+          restoredOpenFile && !isClientLocalTab
             ? findRestoredEditorWorkspaceRuntimeOwner(
                 useAppStore.getState(),
                 restoredOpenFile,
@@ -139,6 +143,7 @@ export function useEditorPanelFileContentLoader({
           return
         }
         if (
+          !isClientLocalTab &&
           resolvedConnectionId === undefined &&
           !readSettings?.activeRuntimeEnvironmentId?.trim() &&
           !isWorktreeConnectionResolved(worktreeId ?? null)
@@ -154,11 +159,11 @@ export function useEditorPanelFileContentLoader({
           // (or was opened outside) the terminal-link path that stamps the target id.
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
-            (isLiveTailLogTab ? undefined : connectionId)
-          const runtimeEnvironmentId = isLiveTailLogTab
+            (isClientLocalTab ? undefined : connectionId)
+          const runtimeEnvironmentId = isClientLocalTab
             ? undefined
             : readSettings?.activeRuntimeEnvironmentId?.trim()
-          if (isLiveTailLogTab) {
+          if (isClientLocalTab) {
             readConnectionId = undefined
           } else {
             const currentState = useAppStore.getState()
@@ -167,7 +172,10 @@ export function useEditorPanelFileContentLoader({
               : runtimeEnvironmentId
                 ? toRuntimeExecutionHostId(runtimeEnvironmentId)
                 : LOCAL_EXECUTION_HOST_ID
-            const route = findWorkspaceFileRoute(currentState, executionHostId, filePath)
+            // Floating files stay in their panel even when a project also contains the path.
+            const route = isFloatingWorkspaceId(worktreeId)
+              ? null
+              : findWorkspaceFileRoute(currentState, executionHostId, filePath)
             if (route && route.worktreeId !== worktreeId) {
               await reownRestoredFile(route, runtimeEnvironmentId ?? null)
               return

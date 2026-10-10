@@ -242,10 +242,6 @@ export class RemoteRuntimeUnavailableError extends Error {
   }
 }
 
-export function remoteRuntimeUnavailableError(run: RelayRuntimeLadderRun): Error {
-  return new RemoteRuntimeUnavailableError(run)
-}
-
 export function sshTargetRelayRuntimeDecisionStore(registry: {
   getTarget: (id: string) => SshTarget | undefined
   updateTarget: (id: string, updates: Partial<Omit<SshTarget, 'id'>>) => unknown

@@ -1,104 +1,66 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
-  isOauthTokenExpiring,
-  refreshClaudeOauthCredentials
-} from '../claude-accounts/oauth-refresh'
-import {
-  readClaudeManagedCredentialsJson,
-  resolveClaudeManagedCredentialsLocation,
-  writeClaudeManagedCredentialsJson,
-  type InactiveClaudeAccount
-} from './claude-managed-account-credentials'
-import { fetchClaudeManagedUsagePanelSupplement } from './claude-managed-usage-panel'
-import { parseClaudeOAuthCredentialsJson } from './claude-oauth-credentials'
-import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
+  getClaudeProfileRouter,
+  getClaudeWslProfileRouter
+} from '../claude-accounts/claude-profile-installed-router'
+import { toWindowsWslPath } from '../../shared/wsl-paths'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
-import {
-  abortedClaudeRateLimitResult,
-  canSupplementClaudeOAuthUsage,
-  mergeClaudeUsageWindows,
-  warnClaudeUsageFetchFailure
-} from './claude-usage-result'
+import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'
+import { claudeUsageUnavailable, makeClaudeUsageResult } from './claude-usage-result'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 
-function noClaudeManagedCredentialsResult(): ProviderRateLimits {
-  return {
-    provider: 'claude',
-    session: null,
-    weekly: null,
-    updatedAt: Date.now(),
-    error: 'No credentials',
-    status: 'error'
-  }
+/** Usage reads the account's own folder; a host account's comes from its id, never a stored path. */
+export type InactiveClaudeAccount = {
+  id: string
+  managedAuthRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  wslLinuxAuthPath?: string | null
 }
 
 export async function fetchInactiveClaudeAccountUsage(
   account: InactiveClaudeAccount,
   options: ClaudeManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
-  if (options.signal?.aborted) {
-    return abortedClaudeRateLimitResult()
+  if (account.managedAuthRuntime !== 'wsl') {
+    // Why the router: a covered account's usage is System default's, as its launches are.
+    const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
+    return authPreparation
+      ? fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
+      : signInAgain()
   }
-  const location = resolveClaudeManagedCredentialsLocation(account)
-  let credentialsJson = location ? await readClaudeManagedCredentialsJson(location) : null
-  if (options.signal?.aborted) {
-    return abortedClaudeRateLimitResult()
+  const distro = account.wslDistro
+  const router = getClaudeWslProfileRouter()
+  if (!distro || !router) {
+    return signInAgain()
   }
-  if (!location || !credentialsJson) {
-    return noClaudeManagedCredentialsResult()
-  }
-
-  let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
-  if (isOauthTokenExpiring(credentialsJson)) {
-    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
-    if (options.signal?.aborted) {
-      return abortedClaudeRateLimitResult()
-    }
-    if (refreshed) {
-      try {
-        await writeClaudeManagedCredentialsJson(location, refreshed)
-      } catch {
-        // Keep the refreshed token for this fetch; a later poll can persist it.
-      }
-      credentialsJson = refreshed
-      token = parseClaudeOAuthCredentialsJson(refreshed, 'credentials-file').token
-    }
-  }
-
-  if (!token) {
-    return noClaudeManagedCredentialsResult()
-  }
-  const oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
-  if (options.signal?.aborted) {
-    return abortedClaudeRateLimitResult()
-  }
+  // Why: a stopped distro parks a UNC read for minutes, and the inactive loop is sequential.
+  const guestRoot = toWindowsWslPath('/', distro)
   if (
-    !canSupplementClaudeOAuthUsage({
-      oauthLimits,
-      authPreparation: undefined,
-      allowUsagePanelSupplement: options.allowUsagePanelSupplement === true
-    })
+    (await filterPathsToRunningWslDistrosAsync([guestRoot], { requireConfirmed: true })).length ===
+    0
   ) {
-    return oauthLimits
+    return claudeUsageUnavailable()
   }
-
-  try {
-    return mergeClaudeUsageWindows(
-      oauthLimits,
-      await fetchClaudeManagedUsagePanelSupplement({
-        account,
-        location,
-        credentialsJson,
-        oauthLimits,
-        networkProxySettings: options.networkProxySettings,
-        signal: options.signal
-      })
+  const timeout = AbortSignal.timeout(INACTIVE_WSL_READ_TIMEOUT_MS)
+  const read = router
+    .accountUsagePreparation(distro, account.id)
+    .then((authPreparation) =>
+      fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
     )
-  } catch (error) {
-    warnClaudeUsageFetchFailure(
-      undefined,
-      parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file'),
-      error
+    .catch(() => claudeUsageUnavailable())
+  return Promise.race([
+    read,
+    new Promise<ProviderRateLimits>((resolve) =>
+      timeout.addEventListener('abort', () => resolve(claudeUsageUnavailable()), { once: true })
     )
-    return oauthLimits
-  }
+  ])
 }
+
+function signInAgain(): ProviderRateLimits {
+  return makeClaudeUsageResult('error', 'Sign in again to use this account.', {
+    failureKind: 'missing-credentials',
+    attemptedSources: []
+  })
+}
+
+const INACTIVE_WSL_READ_TIMEOUT_MS = 10_000

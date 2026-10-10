@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mermaid = vi.hoisted(() => ({ initialize: vi.fn(), render: vi.fn() }))
@@ -38,6 +38,24 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('native chat Mermaid fences', () => {
+  it('preserves the source block geometry while the completed diagram renders', async () => {
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    const { container, rerender } = render(reply(complete, true))
+    const source = container.querySelector('[data-code-language="mermaid"]')
+    expect(source).not.toBeNull()
+    const markup = source?.outerHTML
+
+    rerender(reply(complete, false))
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    expect(container.querySelector('[data-code-language="mermaid"]')?.outerHTML).toBe(markup)
+    expect(container.querySelector('.mermaid-block')).toBeNull()
+
+    await act(async () => pending.resolve({ svg: '<svg><text>Finished</text></svg>' }))
+    expect(container.querySelector('svg')).toHaveTextContent('Finished')
+    expect(container.querySelector('[data-code-language="mermaid"]')).toBeNull()
+  })
+
   it('shows partial source while streaming and renders the diagram when the reply finishes', async () => {
     const { container, rerender } = render(reply(partial, true))
     expect(container.querySelector('[data-native-chat-code-content]')?.textContent).toContain(

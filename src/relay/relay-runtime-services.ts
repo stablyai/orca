@@ -5,13 +5,13 @@ import { parseUnameToRelayPlatform, RELAY_REMOTE_DIR } from '../main/ssh/relay-p
 import { DEFAULT_AI_VAULT_SEARCH_SETTINGS } from '../shared/ai-vault-search-settings'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { installInProcessSessionSearchService } from '../main/ai-vault-search/session-search-in-process-service'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { RelayContext, expandTilde } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { GitResponseStreamRegistry } from './git-response-stream'
-import { PreflightHandler } from './preflight-handler'
+import { PreflightHandler } from '../wsl-guest/preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
@@ -24,6 +24,7 @@ import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SkillInstallHandler } from './skill-install-handler'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import { errorMessage } from '../shared/error-message'
 
 export class RelayRuntimeServices {
   readonly ptyHandler: PtyHandler
@@ -36,7 +37,6 @@ export class RelayRuntimeServices {
   private readonly responseStreams: GitResponseStreamRegistry
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
   private readonly sessionSearch: { dispose(): void } | null
-  private readonly registeredHandlers: readonly unknown[]
 
   constructor(
     readonly dispatcher: RelayDispatcher,
@@ -76,12 +76,12 @@ export class RelayRuntimeServices {
       this.ptyHandler.shutdownForWorktreePath(rootPath)
     )
     this.gitHandler = new GitHandler(dispatcher, context, watchRegistry, responseStreams)
-    const preflightHandler = new PreflightHandler(dispatcher)
+    new PreflightHandler(dispatcher)
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
-    const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
-    const portScanHandler = new PortScanHandler(dispatcher)
+    new ExternalAutomationsHandler(dispatcher)
+    new PortScanHandler(dispatcher)
     this.agentExecHandler = new AgentExecHandler(dispatcher)
-    const workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
+    new WorkspaceSessionHandler(dispatcher)
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
     this.aiVaultService = hostPlatform ? createRelayAiVaultService(homedir(), hostPlatform) : null
@@ -96,23 +96,9 @@ export class RelayRuntimeServices {
       dataRoot: join(homedir(), RELAY_REMOTE_DIR),
       roots: { executionHostId: LOCAL_EXECUTION_HOST_ID },
       settings: DEFAULT_AI_VAULT_SEARCH_SETTINGS,
-      onError: (error) =>
-        relayLogLine(
-          `[relay] session search: ${error instanceof Error ? error.message : String(error)}`
-        )
+      onError: (error) => relayLogLine(`[relay] session search: ${errorMessage(error)}`)
     })
-    this.registeredHandlers = [
-      preflightHandler,
-      this.skillInstallHandler,
-      externalAutomationsHandler,
-      portScanHandler,
-      this.agentExecHandler,
-      workspaceSessionHandler,
-      new AiVaultHandler(dispatcher, {
-        hostPlatform,
-        service: this.aiVaultService ?? undefined
-      })
-    ]
+    new AiVaultHandler(dispatcher, { hostPlatform, service: this.aiVaultService ?? undefined })
 
     registerRelayPluginHostCallHandlers(
       dispatcher,
@@ -146,14 +132,10 @@ export class RelayRuntimeServices {
    */
   async disposeExitOnlyServices(): Promise<void> {
     await this.skillInstallHandler.dispose().catch((error) => {
-      relayLogLine(
-        `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
-      )
+      relayLogLine(`[relay] Skill upload cleanup failed: ${errorMessage(error)}`)
     })
     await this.aiVaultService?.dispose().catch((error) => {
-      relayLogLine(
-        `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
-      )
+      relayLogLine(`[relay] AI Vault sidecar shutdown failed: ${errorMessage(error)}`)
     })
   }
 
@@ -167,26 +149,25 @@ export class RelayRuntimeServices {
     this.sessionSearch?.dispose()
     this.fsHandler.dispose()
     this.gitHandler.dispose()
-    void this.registeredHandlers
   }
 
   private registerSessionHandlers(context: RelayContext): void {
-    this.dispatcher.onNotification('session.registerRoot', (params) => {
-      const rootPath = params.rootPath as string
-      if (rootPath) {
-        context.registerRoot(rootPath)
+    const registerRoot = (params: Record<string, unknown>): void => {
+      if (typeof params.rootPath === 'string' && params.rootPath) {
+        context.registerRoot(params.rootPath)
       }
-    })
+    }
+    this.dispatcher.onNotification('session.registerRoot', (params) => registerRoot(params))
     this.dispatcher.onRequest('session.registerRoot', async (params) => {
-      const rootPath = params.rootPath as string
-      if (rootPath) {
-        context.registerRoot(rootPath)
-      }
+      registerRoot(params)
       return { ok: true }
     })
-    this.dispatcher.onRequest('session.resolveHome', async (params) => ({
-      resolvedPath: expandTilde(params.path as string)
-    }))
+    this.dispatcher.onRequest('session.resolveHome', async (params) => {
+      if (typeof params.path !== 'string') {
+        throw new Error('session.resolveHome: path must be a string')
+      }
+      return { resolvedPath: expandTilde(params.path) }
+    })
   }
 
   private registerRemoteCliRoutes(): void {

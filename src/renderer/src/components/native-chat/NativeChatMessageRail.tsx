@@ -194,9 +194,10 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                 <span
                   aria-hidden
                   className={cn(
-                    'h-[3px] rounded-full transition-[width,background-color] duration-150',
+                    'h-[3px] rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none',
                     lit ? 'w-5 bg-foreground' : 'w-3 bg-foreground/50',
-                    item.id === pendingId && 'animate-pulse'
+                    item.id === pendingId &&
+                      'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
                   )}
                 />
               </button>

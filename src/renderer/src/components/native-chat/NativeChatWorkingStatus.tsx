@@ -73,7 +73,10 @@ export function NativeChatWorkingStatus({
   const caret =
     workedSeconds != null && onToggleExpanded ? (
       <ChevronRight
-        className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
+        className={cn(
+          'size-3.5 transition-transform motion-reduce:transition-none',
+          expanded && 'rotate-90'
+        )}
         aria-hidden="true"
       />
     ) : null

@@ -100,6 +100,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
+  'extra-agent-args':
+    '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
   'value-stdin': '--value-stdin         Read set-value payload from stdin',

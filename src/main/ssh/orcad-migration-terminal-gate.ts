@@ -3,8 +3,7 @@
  * prove that every terminal it ever leased on the target has exited. Loss of contact is never
  * exit: an unanswered relay, or a lease the relay cannot account for, blocks as `unverifiable`.
  */
-import { isLiveSshPtyLease } from '../../shared/ssh-pty-lease-liveness'
-import type { SshRemotePtyLease } from '../../shared/ssh-types'
+import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 
 export type OrcadMigrationTerminalVerdict =

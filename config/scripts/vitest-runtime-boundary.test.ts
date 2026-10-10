@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { access } from 'node:fs/promises'
 import { NODE_RUNTIME_INCLUDE } from './vitest-node-runtime-files.mjs'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
 it('uses Bun for ordinary suites when the Bun project is selected', () => {
   expect(Boolean(process.versions.bun)).toBe(process.env.ORCA_VITEST_RUNTIME === 'bun')

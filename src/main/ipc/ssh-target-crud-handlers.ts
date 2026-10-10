@@ -87,12 +87,12 @@ function assertNotRuntimeOwned(targetId: string, action: string): void {
   }
 }
 
-/** Removing a managed host would strand its server; Stop removes both and proves the exit. */
+/** Removing a managed host would strand its server; Stop proves the exit, Forget skips a dead host. */
 export function assertNotManagedServerHost(targetId: string): void {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (target && isManagedOrcadSshTarget(target)) {
     throw new Error(
-      'This host runs a managed Orca server. Use Stop… under Settings › Managed servers to stop the server and remove it first.'
+      'This host runs a managed Orca server. Use Stop… under Settings › Managed servers to stop the server and remove it first, or Forget… there if the host is gone.'
     )
   }
 }

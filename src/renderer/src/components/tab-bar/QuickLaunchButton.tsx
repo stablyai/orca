@@ -117,7 +117,8 @@ function QuickLaunchAgentMenuItemsInner({
   // instead of the remote server's. Use the same ssh/runtime/local owner
   // resolution as the rest of the tab bar.
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
+  const { detectedIds, detectionFailed, needsServerUpdate } =
+    useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
@@ -148,7 +149,8 @@ function QuickLaunchAgentMenuItemsInner({
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
         // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
-        ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {})
+        ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {}),
+        freshNewTab: true
       })
       if (!result) {
         toast.error(
@@ -229,12 +231,25 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          {detectedIds && detectedIds.length > 0
-            ? translate('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
-            : translate(
-                'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                'No agents detected'
-              )}
+          {needsServerUpdate
+            ? translate(
+                'auto.components.tab.bar.QuickLaunchButton.needsServerUpdate',
+                'Update Orca on this server to list this workspace’s agents'
+              )
+            : detectionFailed
+              ? translate(
+                  'auto.components.tab.bar.QuickLaunchButton.hostUnreachable',
+                  'Can’t reach this workspace’s host to list its agents'
+                )
+              : detectedIds && detectedIds.length > 0
+                ? translate(
+                    'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
+                    'No enabled agents'
+                  )
+                : translate(
+                    'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
+                    'No agents detected'
+                  )}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {

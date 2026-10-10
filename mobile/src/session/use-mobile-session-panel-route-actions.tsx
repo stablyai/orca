@@ -37,6 +37,13 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     sendDiffNotesToNewAgent,
     handleCreateTerminal
   } = scope
+  const otherRuntimeAgentRow = {
+    label: 'Agents on Another Server',
+    hint: 'Pair that server directly',
+    icon: Bot,
+    disabled: true,
+    onPress: () => {}
+  }
   const createTabAgentActions =
     createTabAgentLoadState === 'loading'
       ? [
@@ -66,17 +73,19 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 onPress: () => {}
               }
             ]
-          : createTabAgentLoadState === 'error'
-            ? [
-                {
-                  label: 'Agent Presets Unavailable',
-                  hint: 'Check the host connection',
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              ]
-            : []
+          : createTabAgentLoadState === 'other-runtime'
+            ? [otherRuntimeAgentRow]
+            : createTabAgentLoadState === 'error'
+              ? [
+                  {
+                    label: 'Agent Presets Unavailable',
+                    hint: 'Check the host connection',
+                    icon: Bot,
+                    disabled: true,
+                    onPress: () => {}
+                  }
+                ]
+              : []
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
@@ -118,17 +127,19 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                   onPress: () => {}
                 }
               ]
-            : createTabAgentLoadState === 'error'
-              ? [
-                  {
-                    label: 'Agent Presets Unavailable',
-                    hint: 'Copy notes instead',
-                    icon: Bot,
-                    disabled: true,
-                    onPress: () => {}
-                  }
-                ]
-              : []
+            : createTabAgentLoadState === 'other-runtime'
+              ? [otherRuntimeAgentRow]
+              : createTabAgentLoadState === 'error'
+                ? [
+                    {
+                      label: 'Agent Presets Unavailable',
+                      hint: 'Copy notes instead',
+                      icon: Bot,
+                      disabled: true,
+                      onPress: () => {}
+                    }
+                  ]
+                : []
 
   // Panel-icon taps route through the dock-vs-push decision (U1): dock-capable rows dock, constrained rows push.
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {

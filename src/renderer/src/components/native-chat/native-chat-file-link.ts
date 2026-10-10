@@ -20,10 +20,11 @@ export type NativeChatResolvedFileLink = {
   column: number | null
 }
 
-type NativeChatFileLinkState = Pick<
+export type NativeChatFileLinkState = Pick<
   AppState,
+  | 'detectedWorktreesByRepo'
   | 'folderWorkspaces'
-  | 'getKnownWorktreeById'
+  | 'floatingWorkspacePath'
   | 'projectGroups'
   | 'repos'
   | 'settings'
@@ -31,7 +32,6 @@ type NativeChatFileLinkState = Pick<
   | 'worktreesByRepo'
 > & {
   unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
-  floatingWorkspacePath?: AppState['floatingWorkspacePath']
   structuredSessionLaunchDirectoryByTabId?: AppState['structuredSessionLaunchDirectoryByTabId']
 }
 

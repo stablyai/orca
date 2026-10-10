@@ -4,34 +4,20 @@ import {
   createIncrementalNdjsonFramer,
   encodeNdjson
 } from '../../shared/main-process-ndjson-framer'
-import {
-  AcpAgentError,
-  AcpConnectionClosedError,
-  AcpInvalidResponseError,
-  AcpRequestTimeoutError
-} from './acp-errors'
+import { AcpConnectionClosedError, AcpRequestTimeoutError } from './acp-errors'
 import { AcpIncomingRequests } from './acp-incoming-requests'
 import { requestTimeout, resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
 export type { AcpPeerOptions } from './acp-peer-limits'
 import { settleOversizedAcpLine } from './acp-oversized-lines'
 import { AcpWriteQueue } from './acp-write-queue'
 import { detachAcpStreamErrorHandler } from './acp-stdio-error-boundary'
-
-const idSchema = z.union([z.string(), z.number(), z.null()])
-const errorSchema = z.object({
-  code: z.number().int(),
-  message: z.string(),
-  data: z.unknown().optional()
-})
-const envelopeSchema = z.looseObject({
-  jsonrpc: z.literal('2.0'),
-  id: idSchema.optional(),
-  method: z.string().optional(),
-  params: z.unknown().optional(),
-  result: z.unknown().optional(),
-  error: z.unknown().optional()
-})
-export type AcpJsonRpcMessage = z.infer<typeof envelopeSchema>
+import {
+  acpRpcEnvelopeSchema,
+  invalidAcpResponseEnvelope,
+  settleAcpResponse,
+  type AcpJsonRpcMessage
+} from './acp-rpc-envelope'
+export type { AcpJsonRpcMessage } from './acp-rpc-envelope'
 export type AcpRequestContext = { id: string | number | null; signal: AbortSignal }
 export type AcpPeerHandlers = {
   // Void means handled; unsupported methods must throw AcpRpcError(-32601). The handler owns its
@@ -55,6 +41,7 @@ export class AcpJsonRpcPeer {
   private readonly framer: ReturnType<typeof createIncrementalNdjsonFramer>
   private nextId = 1
   private terminalError?: Error
+  private drainingNotifications = false
   private readonly maxLineBytes: number
   private readonly maxPending: number
   private readonly maxIncoming: number
@@ -171,18 +158,33 @@ export class AcpJsonRpcPeer {
   }
 
   close(error: Error = new AcpConnectionClosedError()): void {
+    this.shutdown(error, false)
+  }
+
+  /** Reject calls immediately; the process owner bounds how long final notifications can arrive. */
+  drainNotifications(error: Error = new AcpConnectionClosedError()): void {
+    this.shutdown(error, true)
+  }
+
+  private shutdown(error: Error, drainNotifications: boolean): void {
+    if (this.terminalError && (!this.drainingNotifications || drainNotifications)) {
+      return
+    }
+    this.drainingNotifications = drainNotifications
+    if (!drainNotifications) {
+      this.input.removeListener('data', this.onData)
+      this.input.removeListener('end', this.onInputEnd)
+      this.input.removeListener('close', this.onInputEnd)
+      detachAcpStreamErrorHandler(this.input, this.onError)
+      this.framer.reset()
+    }
     if (this.terminalError) {
       return
     }
-    this.terminalError = error
-    this.input.removeListener('data', this.onData)
-    this.input.removeListener('end', this.onInputEnd)
-    this.input.removeListener('close', this.onInputEnd)
-    detachAcpStreamErrorHandler(this.input, this.onError)
     this.output.removeListener('close', this.onEnd)
     this.output.removeListener('finish', this.onEnd)
     detachAcpStreamErrorHandler(this.output, this.onError)
-    this.framer.reset()
+    this.terminalError = error
     this.writer.close(error)
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer)
@@ -240,21 +242,24 @@ export class AcpJsonRpcPeer {
   }
 
   private dispatch(record: unknown): void {
-    if (this.closed) {
+    if (this.closed && !this.drainingNotifications) {
       return
     }
-    const parsed = envelopeSchema.safeParse(record)
+    const parsed = acpRpcEnvelopeSchema.safeParse(record)
     if (!parsed.success) {
       this.diagnose('Ignored invalid ACP JSON-RPC envelope')
       const response = z
         .object({ id: z.number(), method: z.undefined().optional() })
         .safeParse(record)
       if (response.success) {
-        this.rejectPending(response.data.id, invalidEnvelope(record))
+        this.rejectPending(response.data.id, invalidAcpResponseEnvelope(record))
       }
       return
     }
     const frame = parsed.data
+    if (this.drainingNotifications && (frame.id !== undefined || frame.method === undefined)) {
+      return
+    }
     if (frame.method !== undefined) {
       if ('result' in frame || 'error' in frame) {
         this.diagnose('Ignored invalid ACP request')
@@ -274,7 +279,7 @@ export class AcpJsonRpcPeer {
     if ('result' in frame === 'error' in frame) {
       this.diagnose('Ignored invalid ACP response')
       if (typeof frame.id === 'number') {
-        this.rejectPending(frame.id, invalidEnvelope(record))
+        this.rejectPending(frame.id, invalidAcpResponseEnvelope(record))
       }
       return
     }
@@ -287,21 +292,6 @@ export class AcpJsonRpcPeer {
     }
     this.pending.delete(frame.id)
     clearTimeout(pending.timer)
-    if ('error' in frame) {
-      const parsedError = errorSchema.safeParse(frame.error)
-      if (!parsedError.success) {
-        this.diagnose('Invalid ACP error response')
-        pending.reject(new AcpInvalidResponseError('Invalid ACP error response', frame.error))
-      } else {
-        const error = parsedError.data
-        pending.reject(new AcpAgentError(error.code, error.message, error.data))
-      }
-    } else {
-      pending.resolve(frame.result)
-    }
+    settleAcpResponse(frame, pending, (message) => this.diagnose(message))
   }
-}
-
-function invalidEnvelope(raw: unknown): () => Error {
-  return () => new AcpInvalidResponseError('Invalid ACP response envelope', raw)
 }

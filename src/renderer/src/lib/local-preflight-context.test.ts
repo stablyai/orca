@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
@@ -375,18 +375,25 @@ describe('local preflight context', () => {
     expect(localPreflightContextKey(context)).toBe('local-project:wsl:Ubuntu')
   })
 
-  it('does not use the global runtime default for active SSH projects', () => {
-    const state = {
+  // Why (#18837): the Windows host is neither this machine's default nor the SSH host's context.
+  it('uses the global runtime default for this machine while an SSH project is active', () => {
+    const state: AppState = {
       ...makeState({
         repoPath: '/home/alice/repo',
+        worktreePath: '/home/alice/repo',
         repo: { connectionId: 'builder', executionHostId: 'ssh:builder' }
       }),
       settings: {
+        ...getDefaultSettings('/home/alice'),
         localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
       }
-    } as unknown as AppState
+    }
+    const noProjectState = { ...state, activeRepoId: null, activeWorktreeId: null }
 
-    expect(getLocalAgentPreflightContext(state, 'win32')).toBeUndefined()
+    const context = getLocalAgentPreflightContext(state, 'win32')
+
+    expect(localPreflightContextKey(context)).toBe('local-project:wsl:Ubuntu')
+    expect(context).toEqual(getLocalAgentPreflightContext(noProjectState, 'win32'))
   })
 
   it('uses the project override over legacy agent location for local agent checks', () => {

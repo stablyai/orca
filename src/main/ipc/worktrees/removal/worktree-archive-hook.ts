@@ -17,7 +17,7 @@ import {
  *
  * A failed read is answered as "no hook", which is a known limitation rather than a judgement: a
  * missing `orca.yaml` is indistinguishable from an unreachable one here, because the relay rewrites
- * a non-numeric error code to `-32000` (`src/relay/dispatcher-rpc-routing.ts`), so nothing survives
+ * a non-numeric error code to `-32000` (`src/wsl-guest/dispatcher-rpc-routing.ts`), so nothing survives
  * to tell ENOENT from a transport failure. Reporting it as unreadable fired on every SSH repo that
  * simply has no orca.yaml; blocking on it would refuse those deletes outright. Distinguishing the
  * two needs a provider contract that reports absence as a successful outcome — tracked in #20196.
@@ -52,7 +52,7 @@ export async function getArchiveHooksForRemoval(
     return getEffectiveHooksFromConfig(repo, yamlHooks)
   } catch (error) {
     // Indistinguishable from "there is no orca.yaml": the relay rewrites a non-numeric error code
-    // to -32000 (src/relay/dispatcher-rpc-routing.ts), so nothing survives to tell ENOENT from a
+    // to -32000 (src/wsl-guest/dispatcher-rpc-routing.ts), so nothing survives to tell ENOENT from a
     // transport failure. Logged so an operator can see it; not surfaced, because reporting it as
     // unreadable fired on every SSH repo that simply has none. Distinguishing them needs a provider
     // contract that returns absence as a successful outcome — #20196.

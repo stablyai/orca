@@ -17,7 +17,6 @@ import { translate } from '@/i18n/i18n'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
-  | 'activeConnectionId'
   | 'activeWorktreeId'
   | 'branch'
   | 'claimedCommentResolutionRef'
@@ -25,7 +24,6 @@ type ChecksPanelCommentResolutionInput = Pick<
   | 'commentsLoading'
   | 'detectedAgentIds'
   | 'pendingCommentResolutionRef'
-  | 'remoteDetectedAgentIds'
   | 'repo'
   | 'resolveReviewThread'
   | 'setAgentComposerState'
@@ -42,7 +40,6 @@ type ChecksPanelCommentResolutionInput = Pick<
 
 export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolutionInput) {
   const {
-    activeConnectionId,
     activeGitLabReview,
     activeReview,
     activeWorktreeId,
@@ -56,7 +53,6 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     pr,
     prCacheKey,
     prNumber,
-    remoteDetectedAgentIds,
     repo,
     resolveReviewThread,
     setAgentComposerState,
@@ -152,13 +148,11 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const commentsDisabledReason = canTargetPRComments
     ? undefined
     : 'Commenting requires a GitHub PR repository target.'
-  const detectedAgentsForAI =
-    typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
   const noEnabledAgentKnown =
-    detectedAgentsForAI != null &&
+    detectedAgentIds != null &&
     pickDefaultSourceControlAgent(
       settings?.defaultTuiAgent,
-      detectedAgentsForAI,
+      detectedAgentIds,
       settings?.disabledTuiAgents
     ) == null
   const aiActionDisabledReason = !activeWorktreeId
@@ -200,7 +194,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     handleResolve,
     canTargetPRComments,
     commentsDisabledReason,
-    detectedAgentsForAI,
+    detectedAgentsForAI: detectedAgentIds,
     noEnabledAgentKnown,
     aiActionDisabledReason,
     resolveCommentsWithAIDisabledReason

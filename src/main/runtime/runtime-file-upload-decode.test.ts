@@ -32,6 +32,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 import { RuntimeFileCommandsWithWriteFileExplorerFile } from './runtime-file-commands-write-file-explorer-file'
+import { createLocalFilesystemProvider } from '../providers/local-filesystem-provider'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 
 function unexpectedHostCall(): never {
@@ -66,7 +67,12 @@ beforeEach(() => {
   vi.resetAllMocks()
   remote = false
   mocks.resolvePath.mockResolvedValue(target)
-  mocks.provider.mockReturnValue(null)
+  mocks.provider.mockImplementation((_target, host) =>
+    createLocalFilesystemProvider({
+      requireStore: () => host.requireStore(),
+      resolveAuthorizedPath: mocks.authorize
+    })
+  )
   mocks.authorize.mockResolvedValue(destination)
   mocks.requireStore.mockReturnValue({})
   mocks.mkdir.mockResolvedValue(undefined)
@@ -127,7 +133,7 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
         decode.mock.calls.filter((args) => args.at(0) === base64 && args.at(1) === 'base64')
       ).toHaveLength(1)
       expect(mocks.expectation).toHaveBeenCalledWith('local', 'local', undefined, undefined)
-      expect(mocks.provider).toHaveBeenCalledWith(target)
+      expect(mocks.provider).toHaveBeenCalledWith(target, expect.anything())
       expect(mocks.authorize).toHaveBeenCalledWith(
         destination,
         mocks.requireStore.mock.results[0].value
@@ -169,7 +175,7 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
     }
   )
 
-  it('avoids a second decoded slice for a full upload chunk', async () => {
+  it('forwards every full upload byte with one matching base64 Buffer decode', async () => {
     mocks.provider.mockReturnValue(sshProvider())
     const bytes = Buffer.alloc(384 * 1024, 0xb7)
     const base64 = bytes.toString('base64')
@@ -178,7 +184,9 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
     expect(
       decode.mock.calls.filter((args) => args.at(0) === base64 && args.at(1) === 'base64')
     ).toHaveLength(1)
-    expect(mocks.writeBuffer.mock.calls[0][1]).toEqual(bytes)
+    expect(Buffer.isBuffer(mocks.writeBuffer.mock.calls[0][1])).toBe(true)
+    expect(mocks.writeBuffer.mock.calls[0][1]).toHaveLength(bytes.length)
+    expect(Buffer.prototype.equals.call(mocks.writeBuffer.mock.calls[0][1], bytes)).toBe(true)
   })
 
   it.each(['resolve', 'expectation', 'provider'] as const)(

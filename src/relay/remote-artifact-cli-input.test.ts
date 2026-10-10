@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../shared/artifacts'
 import { prepareRemoteArtifactCliInput } from './remote-artifact-cli-input'
-import { DISPATCHER_CONTROL_QUEUE_MAX_BYTES } from './dispatcher-writer-admission'
+import { DISPATCHER_CONTROL_QUEUE_MAX_BYTES } from '../wsl-guest/dispatcher-writer-admission'
 import {
   assertRemoteArtifactCliForwardingFits,
   remoteArtifactCliForwardingFrameBytes,

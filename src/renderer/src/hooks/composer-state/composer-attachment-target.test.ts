@@ -16,6 +16,7 @@ const group: ProjectGroup = {
 }
 const selected = {
   selectedProjectGroup: null,
+  selectedRepo: { id: 'repo-1' },
   selectedRepoPath: '/repo',
   selectedRepoExecutionHostId: 'local' as const,
   selectedRepoSettings: { activeRuntimeEnvironmentId: 'focused-runtime' },
@@ -26,6 +27,7 @@ describe('composer attachment destination', () => {
     expect(resolveComposerAttachmentTarget(selected)).toEqual({
       hostId: 'local',
       path: '/repo',
+      worktreeId: 'repo-1::/repo',
       connectionId: null,
       settings: { activeRuntimeEnvironmentId: null }
     })
@@ -48,6 +50,7 @@ describe('composer attachment destination', () => {
     ).toEqual({
       hostId: 'ssh:ssh-a',
       path: '/folder',
+      worktreeId: null,
       connectionId: 'ssh-a',
       settings: { activeRuntimeEnvironmentId: null }
     })
@@ -62,6 +65,7 @@ describe('composer attachment destination', () => {
     ).toEqual({
       hostId: 'runtime:folder-host',
       path: '/folder',
+      worktreeId: null,
       connectionId: null,
       settings: { activeRuntimeEnvironmentId: 'folder-host' }
     })

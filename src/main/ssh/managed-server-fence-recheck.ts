@@ -5,7 +5,7 @@
  */
 import type { SshTarget } from '../../shared/ssh-types'
 import { checkManagedServerUpdate } from './managed-server-update-check'
-import { MANAGED_ORCAD_FENCED_DETAIL } from './orcad-managed-serving'
+import { managedResultAfterUpdate, unservedManagedResult } from './managed-server-serving-gate'
 import type {
   HostServerOnConnectDeps,
   HostServerOnConnectResult
@@ -25,21 +25,12 @@ export async function recheckFencedManagedServer(
     Parameters<typeof checkManagedServerUpdate>[2]
 ): Promise<ManagedResult> {
   const serving = await deps.ensureServing(environmentId)
-  if (serving.state === 'unverifiable') {
-    return {
-      route: 'managed',
-      environmentId,
-      serving,
-      ...(serving.detail === MANAGED_ORCAD_FENCED_DETAIL ? { fenceHeld: true as const } : {})
-    }
+  const unserved = unservedManagedResult(environmentId, serving)
+  if (unserved) {
+    return unserved
   }
-  const { note, fenceBusy } = await checkManagedServerUpdate(target, environmentId, deps, () => {})
-  return {
-    route: 'managed',
-    environmentId,
-    ...(note ? { update: note } : {}),
-    ...(fenceBusy ? { fenceHeld: true as const } : {})
-  }
+  const update = await checkManagedServerUpdate(target, environmentId, deps, () => {})
+  return managedResultAfterUpdate(environmentId, serving, update)
 }
 
 export type FenceRecheckLoop = {
@@ -92,8 +83,4 @@ export function scheduleManagedServerFenceRecheck(targetId: string, loop: FenceR
     timer = setTimeout(() => void tick(attempt + 1), loop.intervalMs ?? FENCE_RECHECK_INTERVAL_MS)
   }
   timer = setTimeout(() => void tick(0), loop.intervalMs ?? FENCE_RECHECK_INTERVAL_MS)
-}
-
-export function cancelManagedServerFenceRecheck(targetId: string): void {
-  loops.get(targetId)?.()
 }

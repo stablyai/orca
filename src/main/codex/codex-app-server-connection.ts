@@ -1,4 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
@@ -43,11 +44,12 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 export async function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: typeof spawnProcess = spawnProcess
+  spawnImpl: PipedProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
     spawnImpl,
-    site: 'codex-app-server-teardown'
+    site: 'codex-app-server-teardown',
+    ...(handlers.onOutput ? { onOutput: handlers.onOutput } : {})
   })
   const { child, terminateTree: terminateProcessTree } = managed
 

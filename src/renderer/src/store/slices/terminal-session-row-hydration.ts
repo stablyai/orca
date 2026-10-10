@@ -209,7 +209,8 @@ function restoreCanonicalMetadata(
     ...(aiVaultTitle ? { aiVaultTitle } : {}),
     sortOrder: index,
     // Why: suppress restored mounts so only real activity updates Recent.
-    pendingActivationSpawn: true
+    pendingActivationSpawn: true,
+    restoredFromSession: true
   }
 }
 

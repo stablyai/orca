@@ -1,6 +1,6 @@
 import { SshChannelMultiplexer } from '../main/ssh/ssh-channel-multiplexer'
 import { RelayContext } from './context'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { FsHandler } from './fs-handler'
 
 export function createRelayFileListingRequestHarness() {

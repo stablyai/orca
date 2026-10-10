@@ -52,17 +52,3 @@ export const ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES = 512 * 1024
 export function antigravityCommandName(): string {
   return TUI_AGENT_CONFIG.antigravity.detectCmd
 }
-
-/**
- * Why the args are never appended to a configured launch command: a user's Antigravity launch
- * command may carry its own flags, a wrapper script, or a shell pipeline, and appending `-p /usage`
- * to that either runs the wrong program or feeds the slash command to the wrong argv slot. The quota
- * read resolves the plain executable itself instead.
- */
-export function isPlainAntigravityExecutable(command: string): boolean {
-  const trimmed = command.trim()
-  if (trimmed.length === 0) {
-    return false
-  }
-  return !/[\s"'|&;<>$`()]/.test(trimmed)
-}

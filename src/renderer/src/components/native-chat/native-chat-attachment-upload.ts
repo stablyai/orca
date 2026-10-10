@@ -9,9 +9,9 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
+  getConnectionExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -75,6 +75,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'settings'
   | 'sshConnectionStates'
   | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
 >
 
@@ -105,9 +106,7 @@ export function resolveNativeChatAttachmentHost(
   }
   const hostId = runtimeId
     ? toRuntimeExecutionHostId(runtimeId)
-    : connectionId
-      ? toSshExecutionHostId(connectionId)
-      : 'local'
+    : getConnectionExecutionHostId(connectionId)
   return findKnownWorktreeById(state, worktreeId, hostId) ? hostId : null
 }
 

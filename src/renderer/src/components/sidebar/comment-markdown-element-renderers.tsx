@@ -1,7 +1,10 @@
 import React from 'react'
 import type { Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
-import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
+import {
+  CommentMarkdownDocumentCode,
+  CommentMarkdownDocumentPre
+} from './comment-markdown-code-renderers'
 import {
   GitHubUserAttachmentImage,
   GitHubUserAttachmentVideo,
@@ -21,14 +24,6 @@ export type DocumentCodeBlockRenderer = (props: {
   children?: React.ReactNode
   language?: string
 }) => React.JSX.Element
-
-function extractCodeFenceLanguage(children: React.ReactNode): string | undefined {
-  const child = React.Children.toArray(children)[0]
-  if (!React.isValidElement<{ className?: string }>(child)) {
-    return undefined
-  }
-  return child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
-}
 
 export function isTrustedCompactImageSrc(src: string | undefined): src is string {
   if (!src) {
@@ -250,8 +245,7 @@ export function createCompactCommentMarkdownComponents(
 
 export function createDocumentCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
-  renderCodeBlock?: DocumentCodeBlockRenderer,
-  renderMermaid = true
+  renderCodeBlock?: DocumentCodeBlockRenderer
 ): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
@@ -272,28 +266,12 @@ export function createDocumentCommentMarkdownComponents(
           {children}
         </a>
       ),
-    code: ({ className, children }) =>
-      renderMermaid && isMermaidFence(className) ? (
-        renderMermaidFence(
-          children,
-          'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
-        )
-      ) : (
-        <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
-          {children}
-        </code>
-      ),
-    // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
-    pre: ({ children }) =>
-      renderMermaid && isMermaidPre(children) ? (
-        <>{children}</>
-      ) : renderCodeBlock ? (
-        renderCodeBlock({ children, language: extractCodeFenceLanguage(children) })
-      ) : (
-        <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
-          {children}
-        </pre>
-      ),
+    code: CommentMarkdownDocumentCode,
+    pre: ({ children }) => (
+      <CommentMarkdownDocumentPre renderCodeBlock={renderCodeBlock}>
+        {children}
+      </CommentMarkdownDocumentPre>
+    ),
     ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
     ol: ({ children, start }) => (
       <ol start={start} className="my-2 ml-5 list-decimal space-y-1">
@@ -378,3 +356,24 @@ export function createDocumentCommentMarkdownComponents(
 export const compactCommentMarkdownComponents: Components = createCompactCommentMarkdownComponents()
 export const documentCommentMarkdownComponents: Components =
   createDocumentCommentMarkdownComponents()
+
+export function selectCommentMarkdownComponents({
+  variant,
+  onLinkClick,
+  renderCodeBlock,
+  expandImages
+}: {
+  variant: 'compact' | 'document'
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  renderCodeBlock?: DocumentCodeBlockRenderer
+  expandImages: boolean
+}): Components {
+  if (variant === 'document') {
+    return onLinkClick || renderCodeBlock
+      ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
+      : documentCommentMarkdownComponents
+  }
+  return onLinkClick || expandImages
+    ? createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+    : compactCommentMarkdownComponents
+}

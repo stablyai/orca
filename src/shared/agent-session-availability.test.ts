@@ -35,6 +35,11 @@ describe("the host's sign-in and CLI verdict", () => {
     expect(agentSessionSignInCopyId(provider, account)).toBe(key)
     expect(
       agentSessionFailureSentence({ kind: 'notSignedIn', account }, 'rejection', { provider })
-    ).toBe(AGENT_SESSION_FAILURE_COPY[key])
+    ).toBe(
+      AGENT_SESSION_FAILURE_COPY[key].replace(
+        '{{loginCommand}}',
+        provider === 'claude' ? 'claude auth login' : 'codex login'
+      )
+    )
   })
 })

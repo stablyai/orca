@@ -3,12 +3,13 @@ import { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
 import { RelayAgentProcessLifetime } from './relay-agent-process-lifetime'
 import { resolveLoginShellEnvironment } from '../main/startup/login-shell-environment'
+import { errorMessage } from '../shared/error-message'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -234,7 +235,7 @@ export class AgentExecHandler {
           stderr: '',
           exitCode: null,
           timedOut: false,
-          spawnError: error instanceof Error ? error.message : String(error)
+          spawnError: errorMessage(error)
         })
         return
       }

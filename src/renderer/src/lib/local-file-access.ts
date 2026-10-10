@@ -45,6 +45,13 @@ type EditorTabAccessFile = Pick<
   | 'liveTail'
 >
 
+/** A read-only tab named by absolute path is this computer's file: an AI Vault log or a client-local link. */
+export function isClientLocalReadOnlyTab(
+  file: Pick<OpenFile, 'filePath' | 'relativePath' | 'readOnly' | 'liveTail'>
+): boolean {
+  return file.readOnly === true && (file.liveTail === true || file.relativePath === file.filePath)
+}
+
 /**
  * The file access a persisted editor tab reads and saves with. A tab the user opened outside its owner's
  * root (a floating-workspace tab, or one stored with an absolute path) is user-named, so it reads
@@ -54,8 +61,8 @@ export function editorTabFileAccess(
   state: Pick<AppState, 'settings'>,
   file: EditorTabAccessFile
 ): LocalFileAccess | undefined {
-  // Why: AI Vault logs are client-local files the user opened, whatever the worktree's host.
-  if (file.readOnly === true && file.liveTail === true) {
+  // Why: these are client-local files the user opened, whatever the worktree's host.
+  if (isClientLocalReadOnlyTab(file)) {
     return USER_FILE_ACCESS
   }
   const runtimeOwner = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)

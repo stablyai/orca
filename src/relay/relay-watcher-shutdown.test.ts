@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 
 function fixture() {

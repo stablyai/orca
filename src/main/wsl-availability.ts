@@ -1,5 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { runProcess, runProcessSync, type ProcessSpec } from '../shared/child-process/run-process'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 

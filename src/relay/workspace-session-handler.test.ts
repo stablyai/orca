@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
-import { encodeJsonRpcFrame, MessageType, type JsonRpcRequest } from './protocol'
+import { encodeJsonRpcFrame, MessageType, type JsonRpcRequest } from '../wsl-guest/protocol'
 
 function decodeJsonFrames(written: Buffer[]): unknown[] {
   return written

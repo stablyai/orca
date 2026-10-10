@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
-import type { AcpDialect } from './acp-dialect'
+import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
 
 // OMP sends a tool's result as `rawOutput: {content: [{type: 'text', text}], details}`, with a
 // command's non-zero exit at `details.exitCode`, and repeats the text as content behind a
@@ -8,6 +8,9 @@ import type { AcpDialect } from './acp-dialect'
 // A zero exit is left out; completed foreground results carry wall time, while service and
 // background launch results do not establish a process exit.
 const textBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
+const promptErrorDataSchema = z.looseObject({ details: z.string() })
+// OMP's prompt check: no usable model (nothing signed in), or the selected model's provider has no key.
+const SIGNED_OUT_DETAIL_PREFIXES = ['No model selected.\n\nUse /login', 'No API key found for ']
 const toolResultSchema = z.looseObject({
   content: z.array(z.unknown()),
   details: z
@@ -91,4 +94,30 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
-export const OMP_ACP_DIALECT: AcpDialect = { normalizeToolUpdate }
+// OMP ends a `/compact` it could not do as a normal turn whose reply says `Compaction failed`;
+// "Nothing to compact" and "Already compacted" are its no-ops (its RPC errors say the same).
+const COMPACTION_FAILED = /\bcompaction failed\b/i
+const COMPACTION_NOOP = /\b(?:nothing to compact|already compacted)\b/i
+
+function compactionReply(text: string): AcpCompactionReply | undefined {
+  const reply = text.trim()
+  if (!COMPACTION_FAILED.test(reply)) {
+    return undefined
+  }
+  return COMPACTION_NOOP.test(reply)
+    ? { outcome: 'skipped', detail: reply.replace(/^compaction failed:\s*/i, '') }
+    : { outcome: 'failed', detail: reply }
+}
+
+export const OMP_ACP_DIALECT: AcpDialect = {
+  normalizeToolUpdate,
+  compactionReply,
+  authenticationRequired: (error) => {
+    const details = promptErrorDataSchema.safeParse(error.data).data?.details
+    return (
+      error.code === -32603 &&
+      details !== undefined &&
+      SIGNED_OUT_DETAIL_PREFIXES.some((prefix) => details.startsWith(prefix))
+    )
+  }
+}

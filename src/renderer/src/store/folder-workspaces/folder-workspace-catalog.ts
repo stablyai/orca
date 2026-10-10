@@ -21,6 +21,7 @@ import {
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
 
 export type FetchedFolderWorkspaceCatalog = {
@@ -184,20 +185,6 @@ export function clearRestoredFolderWorkspaceSessionOwners(
   return next
 }
 
-export function folderWorkspaceWithFetchedOwner(
-  workspace: FolderWorkspace,
-  target: RuntimeClientTarget,
-  projectGroups: readonly ProjectGroup[]
-): FolderWorkspace {
-  return {
-    ...workspace,
-    executionHostId:
-      target.kind === 'environment'
-        ? getRuntimeTargetHostId(target)
-        : getFolderWorkspaceHostId(workspace, projectGroups)
-  }
-}
-
 export async function fetchFolderWorkspaceCatalogForTarget(
   target: RuntimeClientTarget,
   projectGroups: readonly ProjectGroup[]
@@ -213,18 +200,10 @@ export async function fetchFolderWorkspaceCatalogForTarget(
             { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
           )
         ).folderWorkspaces
-  let ownedFolderWorkspaces: FolderWorkspace[]
-  if (target.kind === 'local') {
-    const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
-    ownedFolderWorkspaces = fetchedFolderWorkspaces.map((workspace) => ({
-      ...workspace,
-      executionHostId: resolveHostId(workspace)
-    }))
-  } else {
-    ownedFolderWorkspaces = fetchedFolderWorkspaces.map((workspace) =>
-      folderWorkspaceWithFetchedOwner(workspace, target, projectGroups)
-    )
-  }
+  const resolveOwnHostId = createFolderWorkspaceHostResolver(projectGroups)
+  const ownedFolderWorkspaces = fetchedFolderWorkspaces.map((row) =>
+    adoptFromEndpoint(target, { kind: 'folderWorkspace', row, resolveOwnHostId })
+  )
   return {
     folderWorkspaces: ownedFolderWorkspaces,
     hostId: getRuntimeTargetHostId(target)

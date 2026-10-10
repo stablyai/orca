@@ -85,11 +85,15 @@ describe('account-aware Send fixes', () => {
     '%s includes the same fixes for Send and post-send failures',
     (_locale, catalog) => {
       const words = catalog.components['native-chat'].failureWords
-      expect(words.claudeSystemNotSignedIn).toContain('`claude`')
-      expect(words.claudeSystemNotSignedIn).toContain('/login')
-      expect(words.codexSystemNotSignedIn).toContain('`codex login`')
+      expect(words.claudeSystemNotSignedIn).toContain('`{{loginCommand}}`')
+      expect(words.codexSystemNotSignedIn).toContain('`{{loginCommand}}`')
       expect(words.claudeManagedNotSignedIn).not.toContain('/login')
       expect(words.codexManagedNotSignedIn).not.toContain('`codex login`')
+      expect(words.claudeManagedNotSignedIn).not.toContain('{{loginCommand}}')
+      expect(words.codexManagedNotSignedIn).not.toContain('{{loginCommand}}')
+      expect(words.agentCommandNotSignedIn).toContain('{{agent}}')
+      expect(words.agentCommandNotSignedIn).toContain('`{{loginCommand}}`')
+      expect(words.interactiveAgentNotSignedIn).toContain('`{{slashCommand}}`')
       expect(words.cliMissing).toContain('{{agent}}')
       for (const key of ['claudeManagedNotSignedIn', 'codexManagedNotSignedIn'] as const) {
         expect(words[key].trim()).not.toBe('')

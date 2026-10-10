@@ -2,10 +2,11 @@ import { vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import type { RendererPublicationThrottleTarget } from '../window/renderer-publication-throttle'
 
-// The part of the authoritative window a browser stream touches: its renderer's throttle.
+// The part of the authoritative window a browser stream touches: its renderer's throttle lease target.
 export type AuthoritativeWindowDouble = {
-  webContents: { isDestroyed: () => boolean; setBackgroundThrottling: (allowed: boolean) => void }
+  webContents: RendererPublicationThrottleTarget
 }
 
 /** A browser command host whose worktree `wt-1` has one registered page, `page-1`. */

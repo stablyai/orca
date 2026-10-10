@@ -1,4 +1,4 @@
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { listFilesWithRg } from './fs-handler-utils'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
@@ -8,7 +8,7 @@ import {
 } from '../shared/file-listing-cancellation'
 import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
 import { buildInstallRgMessage, buildRipgrepRequiredMessage } from '../shared/quick-open-install-rg'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayCommandEnv } from '../wsl-guest/relay-command-env'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { QuickOpenPathRanker } from '../shared/quick-open-path-search'
 

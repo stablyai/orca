@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MethodHandler, RequestContext } from './dispatcher'
+import type { MethodHandler, RequestContext } from '../wsl-guest/dispatcher'
 
 const { readFileMock, readdirMock, readlinkMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
@@ -299,6 +299,36 @@ describe('PortScanHandler Linux cancellation', () => {
     ).resolves.toEqual({
       ports: [{ host: '127.0.0.1', port: 3000, pid: PID_BASE, processName: 'node' }],
       platform: 'linux'
+    })
+  })
+
+  it('fails instead of answering "no listeners" when the socket table is unreadable', async () => {
+    mockLinuxProcScan({ pidCount: 1, fdCount: 1 })
+    const scanTable = readFileMock.getMockImplementation()
+    readFileMock.mockImplementation(async (path: string) => {
+      if (path === '/proc/net/tcp') {
+        throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
+      }
+      return scanTable?.(path)
+    })
+
+    await expect(capturePortDetectHandler()({}, requestContext())).rejects.toThrow(
+      /Could not read \/proc\/net\/tcp/
+    )
+  })
+
+  it('reads a host with IPv6 off, where tcp6 is absent', async () => {
+    mockLinuxProcScan({ pidCount: 1, fdCount: 1 })
+    const scanTable = readFileMock.getMockImplementation()
+    readFileMock.mockImplementation(async (path: string) => {
+      if (path === '/proc/net/tcp6') {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return scanTable?.(path)
+    })
+
+    await expect(capturePortDetectHandler()({}, requestContext())).resolves.toMatchObject({
+      ports: [{ port: 3000 }]
     })
   })
 })

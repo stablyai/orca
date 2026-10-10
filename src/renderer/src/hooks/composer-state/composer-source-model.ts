@@ -69,6 +69,7 @@ export type ComposerSourceModel = {
     targetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
     targetConnectionId?: string | null,
     targetRepoPath?: string | null,
+    targetWorktreeId?: string | null,
     canReportFailure?: () => boolean
   ) => Promise<{ filePaths: string[]; folderPaths: string[] } | null>
 }

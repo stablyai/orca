@@ -5,6 +5,7 @@ import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
+import { REFERENCE_METHODS } from './reference'
 import { TERMINAL_METHODS } from './terminal'
 import { TERMINAL_ORPHAN_METHODS } from './terminal-orphan'
 import { BROWSER_CORE_METHODS } from './browser-core'
@@ -55,6 +56,7 @@ import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-agent-sess
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
+import { WORKSPACE_LAYOUT_METHODS } from './workspace-layout'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -69,6 +71,7 @@ export const ALL_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS,
@@ -93,6 +96,7 @@ export const ALL_RPC_METHODS = [
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,
+  ...WORKSPACE_LAYOUT_METHODS,
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
   ...GIT_METHODS,

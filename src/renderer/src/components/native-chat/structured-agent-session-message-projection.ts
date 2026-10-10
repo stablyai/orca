@@ -1,3 +1,4 @@
+import { agentSessionCurrentContextRows } from '../../../../shared/agent-session-context-clear'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -29,7 +30,7 @@ export type StructuredPromptItem = AgentJournalRenderItem & {
 export function pendingStructuredSessionPrompts(
   items: AgentJournalRenderItem[]
 ): StructuredPromptItem[] {
-  return items.filter(
+  return agentSessionCurrentContextRows(items).items.filter(
     (item): item is StructuredPromptItem =>
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending'

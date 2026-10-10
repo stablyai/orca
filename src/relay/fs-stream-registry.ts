@@ -1,16 +1,9 @@
 import type { FileHandle } from 'node:fs/promises'
 import { settlesWithin } from './settles-within'
-import { MAX_CONCURRENT_STREAMS, RelayErrorCode, STREAM_ACK_STALL_RECHECK_MS } from './protocol'
+import { MAX_CONCURRENT_STREAMS, RelayErrorCode } from '../wsl-guest/protocol'
+import { RelayStreamAckWindow } from './relay-stream-ack-window'
 
-type StreamEntry = {
-  handle: FileHandle
-  aborted: boolean
-  /** Highest chunk seq the client acknowledged (in-order; -1 = none yet). */
-  ackedThroughSeq: number
-  /** Pumps parked on the ack credit window. Woken by acks, abort, release,
-   * and a periodic stall recheck so a vanished client cannot strand a pump. */
-  ackWaiters: Set<() => void>
-}
+type StreamEntry = { handle: FileHandle; ack: RelayStreamAckWindow }
 
 // Why: a stalled but connected client can hold a terminal-frame slot open indefinitely.
 const OPERATION_SETTLE_DEADLINE_MS = 10_000
@@ -29,6 +22,11 @@ export class RelayStreamRegistry {
   private closing = new Map<number, Promise<void>>()
   private closeFailures = new Map<number, unknown>()
   private operations = new Set<Promise<void>>()
+  // Why: terminal frames ride the non-dropping control lane, which destroys the link at 256 frames / 1 MB.
+  // Holding a per-client slot until the frame settles caps queued terminal frames at
+  // MAX_CONCURRENT_STREAMS per client (the control queue is per client); each slot is a
+  // registry operation, so shutdown waits for undelivered terminal frames too.
+  private pendingTerminalFramesByClient = new Map<number, number>()
 
   constructor(private readonly operationDeadlineMs = OPERATION_SETTLE_DEADLINE_MS) {}
 
@@ -49,6 +47,31 @@ export class RelayStreamRegistry {
     }
   }
 
+  /** Holds a per-client slot until a stream's terminal frame settles; see comment. */
+  reserveTerminalFrameSlot(clientId: number): () => void {
+    const pending = this.pendingTerminalFramesByClient.get(clientId) ?? 0
+    if (pending >= MAX_CONCURRENT_STREAMS) {
+      throw new TooManyStreamsError()
+    }
+    const finish = this.beginOperation()
+    this.pendingTerminalFramesByClient.set(clientId, pending + 1)
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      finish()
+      const remaining = (this.pendingTerminalFramesByClient.get(clientId) ?? 1) - 1
+      // Drop the entry at zero so a long-lived registry cannot accumulate one per detached client.
+      if (remaining <= 0) {
+        this.pendingTerminalFramesByClient.delete(clientId)
+        return
+      }
+      this.pendingTerminalFramesByClient.set(clientId, remaining)
+    }
+  }
+
   register(handle: FileHandle): number {
     if (this.disposed) {
       throw new Error('relay_file_stream_shutdown_fenced')
@@ -66,25 +89,16 @@ export class RelayStreamRegistry {
 
   private retainHandle(handle: FileHandle): number {
     const streamId = this.nextId++
-    this.streams.set(streamId, {
-      handle,
-      aborted: false,
-      ackedThroughSeq: -1,
-      ackWaiters: new Set()
-    })
+    this.streams.set(streamId, { handle, ack: new RelayStreamAckWindow() })
     return streamId
   }
 
   abort(streamId: number): void {
-    const entry = this.streams.get(streamId)
-    if (entry) {
-      entry.aborted = true
-      this.wakeAckWaiters(entry)
-    }
+    this.streams.get(streamId)?.ack.abort()
   }
 
   isAborted(streamId: number): boolean {
-    return this.streams.get(streamId)?.aborted ?? true
+    return this.streams.get(streamId)?.ack.aborted ?? true
   }
 
   get(streamId: number): StreamEntry | undefined {
@@ -92,55 +106,24 @@ export class RelayStreamRegistry {
   }
 
   recordAck(streamId: number, seq: number): void {
-    const entry = this.streams.get(streamId)
-    if (!entry || typeof seq !== 'number' || !Number.isFinite(seq)) {
-      return
-    }
-    if (seq > entry.ackedThroughSeq) {
-      entry.ackedThroughSeq = seq
-    }
-    this.wakeAckWaiters(entry)
+    this.streams.get(streamId)?.ack.recordAck(seq)
   }
 
   ackedThroughSeq(streamId: number): number {
-    return this.streams.get(streamId)?.ackedThroughSeq ?? Number.MAX_SAFE_INTEGER
+    return this.streams.get(streamId)?.ack.ackedThroughSeq ?? Number.MAX_SAFE_INTEGER
   }
 
   /** Resolves on the next ack/abort/release for this stream, or after the
    * stall-recheck interval so callers can re-evaluate staleness. */
   waitForAck(streamId: number): Promise<void> {
-    const entry = this.streams.get(streamId)
-    if (!entry || entry.aborted) {
-      return Promise.resolve()
-    }
-    return new Promise<void>((resolve) => {
-      let settled = false
-      const timer = setTimeout(() => finish(), STREAM_ACK_STALL_RECHECK_MS)
-      timer.unref?.()
-      const finish = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timer)
-        entry.ackWaiters.delete(finish)
-        resolve()
-      }
-      entry.ackWaiters.add(finish)
-    })
+    return this.streams.get(streamId)?.ack.wait() ?? Promise.resolve()
   }
 
   /** Wake every parked pump (all streams) so it re-checks staleness — used
    * when a client detaches and its acks will never arrive. */
   wakeAllAckWaiters(): void {
     for (const entry of this.streams.values()) {
-      this.wakeAckWaiters(entry)
-    }
-  }
-
-  private wakeAckWaiters(entry: StreamEntry): void {
-    for (const waiter of Array.from(entry.ackWaiters)) {
-      waiter()
+      entry.ack.wake()
     }
   }
 

@@ -15,6 +15,71 @@ const NATIVE_IME_HARNESS =
 
 export const PR_E2E_SOURCE_ROUTES = [
   {
+    id: 'ssh.orcad-editor-ownership',
+    specs: ['tests/e2e/ssh-orcad-editor-ownership.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/runtime\/(?:web-session-existing-tab-index|web-session-tabs-sync\/(?:mirrored-editor-file-identity|tab-builders|apply-preparation-browser|state-equality-files|terminal-surfaces))\.ts$/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-markdown-conversion',
+    specs: ['tests/e2e/ssh-orcad-markdown-conversion.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/components\/editor\/(?:useMarkdownDocuments|restored-editor-workspace-runtime-owner|migrate-restored-editor-file-owner)\.ts$/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-markdown-link-refresh',
+    specs: ['tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/components\/editor\/(?:rich-markdown-doc-link|useRichMarkdownProgrammaticSync)\.ts$/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-markdown-live-documents',
+    specs: ['tests/e2e/ssh-orcad-markdown-live-documents.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/components\/editor\/(?:useMarkdownDocuments|use-markdown-document-watch-refresh|markdown-document-list-request)\.ts$/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-explorer-watch-recovery',
+    specs: ['tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      (file === 'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts' ||
+        file === 'src/renderer/src/hooks/worktree-file-change-event.ts')
+  },
+  {
+    id: 'ssh.orcad-editor-watch-recovery',
+    specs: ['tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/hooks\/(?:useEditorExternalWatch|editor-runtime-file-watch)\.ts$/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-explorer-selected-host',
+    specs: ['tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      (file === 'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts' ||
+        file === 'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts' ||
+        file === 'src/renderer/src/components/right-sidebar/FileExplorer.tsx' ||
+        file === 'src/renderer/src/hooks/editor-external-watch-targets.ts' ||
+        file === 'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts' ||
+        file === 'src/renderer/src/components/right-sidebar/use-file-explorer-tree-load-effects.ts')
+  },
+  {
     id: 'serve.orcad-mode-switch',
     specs: ['tests/e2e/orcad-serve-mode-switch.spec.ts'],
     matches: (file) =>
@@ -47,12 +112,75 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    id: 'ssh.orcad-browser-capabilities',
+    specs: ['tests/e2e/ssh-orcad-browser-capabilities.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/main\/(?:runtime\/(?:runtime-browser-commands-factory|orca-runtime-get-status)|host\/electron-browser-commands|orcad\/orcad-browser-)/.test(
+        file
+      )
+  },
+  {
+    id: 'browser.orcad-service-status',
+    specs: ['tests/e2e/ssh-orcad-browser-service-status.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/components\/browser-pane\/stream-remote\/remote-browser-stream-(?:errors|status|lifecycle|restart-attempt)\.ts$/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-browser-routing',
+    specs: ['tests/e2e/ssh-orcad-browser-routing.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/(?:main\/browser\/local-ssh-browser|main\/ipc\/browser\.ts$|renderer\/src\/(?:lib\/(?:ssh-workspace-browser-route-eligibility|worktree-host-connection-phase)|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
+        file
+      )
+  },
+  {
+    id: 'ssh.orcad-browser-drop-owner',
+    specs: ['tests/e2e/ssh-orcad-browser-drop-owner.spec.ts'],
+    matches: (file) =>
+      /^tests\/e2e\/helpers\/(?:orcad-convert-(?:flow|host)|orcad-upgrade-profile|docker-ssh-relay-target|browser-split-(?:guest-probes|page-server))\.ts$/.test(
+        file
+      ) ||
+      (isProductSource(file) &&
+        /^src\/renderer\/src\/(?:lib\/(?:file-preview|workspace-file-drag|worktree-runtime-owner|connection-context)\.ts|components\/(?:right-sidebar\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
+          file
+        ))
+  },
+  {
+    id: 'ssh.orcad-open-in-owner',
+    specs: ['tests/e2e/ssh-orcad-open-in-owner.spec.ts'],
+    matches: (file) =>
+      /^tests\/e2e\/helpers\/(?:orcad-convert-(?:flow|host)|orcad-upgrade-profile|docker-ssh-relay-target)\.ts$/.test(
+        file
+      ) ||
+      (isProductSource(file) &&
+        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/(?:WorktreeOpenInMenu|WorktreeContextMenuView)\.tsx|right-sidebar\/(?:FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
+          file
+        ))
+  },
+  {
+    id: 'ssh.orcad-terminal-root-owner',
+    specs: ['tests/e2e/ssh-orcad-terminal-root-owner.spec.ts'],
+    matches: (file) =>
+      /^tests\/e2e\/helpers\/(?:terminal-workspace-root-link|orcad-convert-(?:flow|host)|orcad-upgrade-profile|docker-ssh-relay-target)\.ts$/.test(
+        file
+      ) ||
+      (isProductSource(file) &&
+        /^src\/renderer\/src\/(?:components\/terminal-pane\/terminal-(?:worktree-path-link|file-link-actions|file-link-hit-testing|file-open-routing|link-handlers)\.ts|lib\/(?:workspace-file-host-routing|worktree-owner-route|worktree-operation-route|worktree-operation-catalog-route)\.ts)$/.test(
+          file
+        ))
+  },
+  {
     id: 'ssh.orcad-idle-exit',
     specs: ['tests/e2e/ssh-orcad-idle-exit.spec.ts'],
     matches: (file) =>
       /^tests\/e2e\/helpers\/orcad-convert-(?:flow|host)\.ts$/.test(file) ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:orcad\/orcad-(?:idle-|managed-idle-)|ssh\/orcad-(?:managed-wake|managed-tunnel|recovery-slot|remote-launch))|shared\/orcad-idle-exit)/.test(
+        /^src\/(?:main\/(?:orcad\/orcad-(?:idle-|managed-idle-)|ssh\/orcad-(?:managed-serving|managed-wake|managed-tunnel|recovery-slot|remote-launch|remote-runtime-control))|shared\/orcad-idle-exit)/.test(
           file
         ))
   },
@@ -61,7 +189,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-localhost.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:relay\/(?:agent-hook|relay-agent-hook-runtime|plugin-overlay)|main\/(?:agent-hooks\/|ssh\/ssh-relay-session\.ts$)|shared\/agent-hook)/.test(
+      /^src\/(?:relay\/(?:agent-hook|relay-agent-hook-runtime|plugin-overlay)|wsl-guest\/(?:agent-hook|plugin-overlay)|main\/(?:agent-hooks\/|ssh\/ssh-relay-session\.ts$)|shared\/agent-hook)/.test(
         file
       )
   },
@@ -128,7 +256,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     // admission that decide whether a pane rebinds live in the renderer store.
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/main\/runtime\/(?:public-ssh-state|ssh-file-explorer-chunk-read)\.ts|src\/relay\/|src\/shared\/(?:ssh-|skill-ssh-relay-contract)|src\/renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts|src\/renderer\/src\/store\/slices\/(?:ssh|direct-ssh-)|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
+      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/main\/runtime\/(?:public-ssh-state|ssh-file-explorer-chunk-read)\.ts|src\/relay\/|src\/wsl-guest\/|src\/shared\/(?:ssh-|skill-ssh-relay-contract)|src\/renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts|src\/renderer\/src\/store\/slices\/(?:ssh|direct-ssh-)|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
         file
       )
   },

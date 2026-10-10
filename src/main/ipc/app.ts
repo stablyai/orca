@@ -6,7 +6,7 @@ import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp } from '../app-relaunch'
+import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
 import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
@@ -185,18 +185,4 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
-}
-
-async function runBeforeRelaunchCleanup(
-  onBeforeRelaunch?: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await onBeforeRelaunch?.()
-  } catch (error) {
-    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
-    console.warn(
-      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
-      error instanceof Error ? error.name : typeof error
-    )
-  }
 }

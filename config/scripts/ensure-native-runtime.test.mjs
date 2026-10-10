@@ -9,13 +9,12 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { isAbsolute, join, parse } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_MAX_OUTPUT_BYTES,
-  runProcessSync
-} from '../../src/shared/child-process/run-process.ts'
+import { runProcessSync } from '@orca/process-host'
+import { DEFAULT_MAX_OUTPUT_BYTES } from '@orca/process-host/process-spec'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
@@ -277,11 +276,16 @@ function mkTempProject() {
   // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
   // missing it fails every case with a module-resolution error instead of the defect under test.
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
+  const processPackage = join(projectDir, 'node_modules', '@orca', 'process-host')
+  mkdirSync(processPackage, { recursive: true })
   writeFileSync(
-    join(projectDir, 'config', 'scripts', 'script-child-process.mjs'),
+    join(processPackage, 'package.json'),
+    JSON.stringify({ name: '@orca/process-host', type: 'module', exports: './index.mjs' })
+  )
+  writeFileSync(
+    join(processPackage, 'index.mjs'),
     `import { appendFileSync } from 'node:fs'
-import { describeProcessFailure, runProcessSync as run } from ${JSON.stringify(new URL('./script-child-process.mjs', import.meta.url).href)}
-export { describeProcessFailure }
+import { runProcessSync as run } from ${JSON.stringify(pathToFileURL(createRequire(import.meta.url).resolve('@orca/process-host')).href)}
 export function runProcessSync(options) {
   appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-gyp timeout=\${options.timeoutMs}\\n\`)
   return run(options)

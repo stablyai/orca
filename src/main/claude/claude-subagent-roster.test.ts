@@ -367,13 +367,13 @@ describe('ClaudeSubagentRoster', () => {
   })
 
   describe('groups that no later event can reach', () => {
-    it('loses contact with a group evicted past the bound', () => {
+    it('retains live groups past the settled-history bound', () => {
       const { roster, rolesIn, setGroupKey } = harness('turn-0')
       for (let index = 0; index < 33; index += 1) {
         setGroupKey(`turn-${index}`)
         roster.observeSystemFrame(started({ task_id: `task-${index}`, description: 'Audit' }))
       }
-      expect(rolesIn('turn-0')).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+      expect(rolesIn('turn-0')).toEqual([expect.objectContaining({ state: 'working' })])
       expect(rolesIn('turn-32')).toEqual([expect.objectContaining({ state: 'working' })])
     })
 

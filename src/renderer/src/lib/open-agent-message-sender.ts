@@ -12,7 +12,6 @@ import type {
 import { useAppStore } from '@/store'
 import {
   callRuntimeRpc,
-  getActiveRuntimeTarget,
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
@@ -26,7 +25,13 @@ import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import {
+  executionHostIdForStructuredTarget,
+  resolveStructuredAgentSessionOwner,
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 
 type Sender = AgentMessageSource['senders'][number]
 /** `older-host`: the chat's host predates the lookup. `update`: one side is too old, either one.
@@ -49,14 +54,27 @@ const opensInFlight = new Map<string, Promise<void>>()
 export function openAgentMessageSender(
   source: AgentMessageSource,
   sender: Sender,
-  chatWorktreeId: string
+  chatWorktreeId: string,
+  target?: RuntimeClientTarget
 ): Promise<void> {
-  const key = `${chatWorktreeId}\0${sender.party.address}`
+  const state = useAppStore.getState()
+  const host =
+    target ??
+    (getKnownExecutionHostIdForWorktree(state, chatWorktreeId)
+      ? structuredAgentSessionTargetForHost(
+          resolveStructuredAgentSessionOwner(state, chatWorktreeId)
+        )
+      : null)
+  if (!host) {
+    showLookupFailure('unreachable')
+    return Promise.resolve()
+  }
+  const key = `${executionHostIdForStructuredTarget(host)}\0${chatWorktreeId}\0${sender.party.address}`
   const inFlight = opensInFlight.get(key)
   if (inFlight) {
     return inFlight
   }
-  const opening = openSender(source, sender, chatWorktreeId)
+  const opening = openSender(source, sender, host)
     .catch((error: unknown) => {
       // Every answer above shows its own words; one that threw showed none.
       console.warn('[agent-message-sender] opening the sender failed', error)
@@ -70,20 +88,16 @@ export function openAgentMessageSender(
 async function openSender(
   source: AgentMessageSource,
   { party }: Sender,
-  chatWorktreeId: string
+  host: RuntimeClientTarget
 ): Promise<void> {
-  const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), chatWorktreeId)
+  const environmentId = host.kind === 'environment' ? host.environmentId : null
   // The mail it carried from this sender, whose pane outlives a handle from an earlier run. A task
   // carries no mail, so its coordinator is found by address alone.
   const mail = source.orchestration?.message === 'mail-notice' ? source.orchestration.messages : []
   const messageIds = mail
     .filter((message) => message.from === party.address)
     .map((message) => message.messageId)
-  const found = await lookUpSender(
-    party,
-    messageIds,
-    getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId })
-  )
+  const found = await lookUpSender(party, messageIds, host)
   if (typeof found === 'string') {
     showLookupFailure(found)
     return
@@ -101,9 +115,10 @@ async function openSender(
     return
   }
   if (location.kind === 'chat') {
-    await activateAiVaultStructuredSession({
+    const session = {
       structuredSession: { workspaceId: location.worktreeId, sessionId: location.sessionId }
-    })
+    }
+    await activateAiVaultStructuredSession(session, undefined, host)
     return
   }
   if (location.kind !== 'terminal') {
@@ -142,7 +157,7 @@ async function lookUpSender(
     )
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return lookUpOnOlderHost(party)
+      return lookUpOnOlderHost(party, host)
     }
     return isRuntimeCompatBlockError(error) ? 'update' : 'unreachable'
   }
@@ -150,12 +165,21 @@ async function lookUpSender(
 
 /** A host before the lookup: a chat open here under its root id, as one never `/clear`ed is, or a
  *  terminal by its handle; anything else needs that host updated. */
-function lookUpOnOlderHost(party: Sender['party']): Lookup {
+function lookUpOnOlderHost(party: Sender['party'], host: RuntimeClientTarget): Lookup {
   const sessionId = party.orcaSessionId
   if (sessionId) {
-    const tabsByWorktree = useAppStore.getState().unifiedTabsByWorktree
+    const state = useAppStore.getState()
+    const tabsByWorktree = state.unifiedTabsByWorktree
     for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-      if (tabs.some((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)) {
+      if (
+        tabs.some(
+          (tab) =>
+            tab.contentType === 'agent-session' &&
+            tab.entityId === sessionId &&
+            structuredAgentSessionOwnerForTab(state, tab) ===
+              executionHostIdForStructuredTarget(host)
+        )
+      ) {
         return located({ kind: 'chat', sessionId, worktreeId })
       }
     }

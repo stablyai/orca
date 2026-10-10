@@ -1,5 +1,6 @@
-// A Claude CLI that never answers initialize still takes the chat's message at once, and the
-// chat's Stop still ends it. On the shipping adapter and host, against a CLI that echoes nothing.
+// A Claude CLI that never answers initialize is handed nothing: the host accepts the chat's message
+// at once and holds it until the start proves itself, and the chat's Stop still ends the start. On
+// the shipping adapter and host, against a CLI that echoes nothing.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -130,7 +131,15 @@ async function readsWorking(): Promise<boolean> {
   )
 }
 
-it('writes the message to a start that never answers, and a Stop ends it: stopped, nothing working', async () => {
+/** Whether the CLI was written `hello`, once the delivery loop has settled what it does with it. */
+async function helloWritten(): Promise<boolean> {
+  await vi.waitFor(() =>
+    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
+  )
+  return claude.connections[0]!.sent.some((message) => JSON.stringify(message).includes('hello'))
+}
+
+it('holds the message from a start that never answers, and a Stop ends it: stopped, nothing working', async () => {
   expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
   const body = hostTestMessage('hello')
   const sent = await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
@@ -140,10 +149,8 @@ it('writes the message to a start that never answers, and a Stop ends it: stoppe
   const id = sent.value.clientMessageId
   const [connection] = claude.connections
 
-  // Handed over and written while initialize is still unanswered.
-  await vi.waitFor(() =>
-    expect(connection!.sent.some((message) => JSON.stringify(message).includes('hello'))).toBe(true)
-  )
+  // Accepted, and held while initialize is still unanswered.
+  expect(await helloWritten()).toBe(false)
   expect(connection!.calls).toEqual([{ subtype: 'initialize' }])
   expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
   expect(await readsWorking()).toBe(true)
@@ -153,7 +160,7 @@ it('writes the message to a start that never answers, and a Stop ends it: stoppe
   expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
   await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
   expect(connection!.closeCount).toBeGreaterThan(0)
-  // Stopped, not in doubt: the child it was written to is gone and never echoed it.
+  // Withdrawn, not in doubt: it was never handed over.
   await vi.waitFor(async () =>
     expect(
       (await host.journalSnapshot(SESSION)).submissions.find(
@@ -164,7 +171,7 @@ it('writes the message to a start that never answers, and a Stop ends it: stoppe
   expect(await readsWorking()).toBe(false)
 })
 
-async function sendHello(): Promise<string> {
+async function sendHello(written: boolean): Promise<string> {
   const body = hostTestMessage('hello')
   // A person's send, which a close keeps as a held card.
   const sent = await host.send(CALLER, {
@@ -175,11 +182,7 @@ async function sendHello(): Promise<string> {
   if (!sent.ok) {
     throw new Error('send refused')
   }
-  await vi.waitFor(() =>
-    expect(
-      claude.connections[0]!.sent.some((message) => JSON.stringify(message).includes('hello'))
-    ).toBe(true)
-  )
+  await vi.waitFor(async () => expect(await helloWritten()).toBe(written))
   return sent.value.clientMessageId
 }
 
@@ -189,12 +192,12 @@ async function submission(id: string) {
   )
 }
 
-// A CLI that never answered initialize ran nothing it was handed: a close settles it as it does a
-// queued send, keeping the person's words as a held card.
+// A CLI that never answered initialize was handed nothing: a close settles the held message as it
+// does any queued send, keeping the person's words as a held card.
 it.each(['user-close', 'evict'] as const)(
-  'keeps a message written to a start that never answered as a held card when a %s ends it',
+  'keeps a message held behind a start that never answered as a held card when a %s ends it',
   async (cause) => {
-    const id = await sendHello()
+    const id = await sendHello(false)
 
     await host.close(SESSION, cause)
 
@@ -213,7 +216,7 @@ it.each(['user-close', 'evict'] as const)(
 it('leaves a message in doubt when the start answered and the chat closes before the echo', async () => {
   answerInitialize()
   await adapter['sessions'].get(SESSION)?.startup.settled
-  const id = await sendHello()
+  const id = await sendHello(true)
 
   await host.close(SESSION, 'user-close')
 
