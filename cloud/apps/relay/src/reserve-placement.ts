@@ -169,17 +169,6 @@ export class ReservePlacer {
     return total === 0 ? 0 : reserveFree / total
   }
 
-  // A poll answered: the cell's own count now includes the bookings made before it.
-  observePoll(cell: PlacementCell): void {
-    const estimate = this.refill(cell, this.now())
-    // Never above what the cell has left; one token while it has one, so a slow cell is used.
-    const cellTokens = cell.intakeTokens >= 1 ? Math.max(1, cell.intakeTokens / this.share) : 0
-    estimate.tokens = Math.min(estimate.tokens, cellTokens)
-    if (cell.polledAt !== null) {
-      estimate.ownBookings = estimate.ownBookings.filter((at) => at >= cell.polledAt!)
-    }
-  }
-
   private ratePerSec(cell: PlacementCell): number {
     return cell.intakePerSec / this.share
   }
