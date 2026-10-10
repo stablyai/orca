@@ -104,6 +104,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
         this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
       } else if (verdict === 'exited' && !recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        this.failActiveDispatchOnAgentExit(ptyId)
       } else if (verdict === 'live') {
         this.restoreDisprovedAgentExit(ptyId)
       } else {
@@ -211,6 +212,10 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       if (!keepOnSilence || answered) {
         if (!recoverCompletedHook) {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+          // Why only when answered: a silent read is not proof the agent is gone.
+          if (answered) {
+            this.failActiveDispatchOnAgentExit(ptyId)
+          }
         }
       } else {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()

@@ -61,6 +61,59 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     exitCode: number,
     cause: TerminalExitCause
   ): void {
+    this.failActiveWorkerDispatch(handle, paneKey, {
+      errorContext: describeTerminalExitCause(cause),
+      terminationReason: cause.kind,
+      settlesOwnStop: true,
+      escalate: !isDeliberateTerminalExit(cause),
+      payload: { exitCode, exitCause: cause }
+    })
+  }
+
+  // Why: an agent can die while its shell keeps the PTY open, so no PTY exit ever
+  // arrives and the Dispatch read `dispatched` forever (#21644). Called only once the
+  // agent exit is confirmed (hook verdict or an answered foreground read).
+  protected failActiveDispatchOnAgentExit(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!this._orchestrationDb || !pty?.connected) {
+      return
+    }
+    const surfaces = new Map<string, string | null>()
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const leafHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (leafHandle) {
+        surfaces.set(leafHandle, `${leaf.tabId}:${leaf.leafId}`)
+      }
+    }
+    const ptyHandle = this.handleByPtyId.get(ptyId)
+    if (ptyHandle && !surfaces.has(ptyHandle)) {
+      surfaces.set(ptyHandle, pty.paneKey ?? null)
+    }
+    for (const [handle, paneKey] of surfaces) {
+      this.failActiveWorkerDispatch(handle, paneKey, {
+        errorContext: 'Agent process exited; shell still running',
+        // Why `unknown`: no host vouched for the agent's status, and the terminal is
+        // still alive, so this must not read as a certified terminal exit.
+        terminationReason: 'unknown',
+        // Why: the shell outlives the agent, so the stop still owns its PTY exit.
+        settlesOwnStop: false,
+        escalate: true,
+        payload: { shellStillRunning: true }
+      })
+    }
+  }
+
+  private failActiveWorkerDispatch(
+    handle: string,
+    paneKey: string | null,
+    exit: {
+      errorContext: string
+      terminationReason: TerminalExitCause['kind']
+      settlesOwnStop: boolean
+      escalate: boolean
+      payload: Record<string, unknown>
+    }
+  ): void {
     if (!this._orchestrationDb) {
       return
     }
@@ -80,16 +133,18 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     // killed process would otherwise absorb a much later crash as a clean stop.
     const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      this._orchestrationDb.settleWorkerStop(dispatch.id)
+      if (exit.settlesOwnStop) {
+        this._orchestrationDb.settleWorkerStop(dispatch.id)
+      }
       return
     }
 
-    const errorContext = describeTerminalExitCause(cause)
+    const { errorContext } = exit
     const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
       workerProcessExited: true,
-      terminationReason: cause.kind
+      terminationReason: exit.terminationReason
     })
-    if (isDeliberateTerminalExit(cause)) {
+    if (!exit.escalate) {
       return
     }
 
@@ -130,8 +185,7 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
         payload: JSON.stringify({
           taskId: dispatch.task_id,
           dispatchId: dispatch.id,
-          exitCode,
-          exitCause: cause,
+          ...exit.payload,
           handle
         }),
         runId: dispatch.run_id
