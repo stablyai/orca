@@ -58,7 +58,7 @@ test('the flip-back alerts count the lines the cell writes, per cell', () => {
 
 test('the director alert counts its placement-off line on the director service', () => {
   const event = 'orca_relay_reserve_placement_off_with_reserve_cells'
-  assert.ok(server.includes(`JSON.stringify({ event: '${event}', cells })`))
+  assert.match(server, new RegExp(`event: '${event}',\\s*cells,`))
   const metric = block('google_logging_metric', 'relay_reserve_placement_off_with_reserve_cells')
   assert.ok(
     metric.includes(
