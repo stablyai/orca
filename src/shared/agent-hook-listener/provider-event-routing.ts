@@ -90,7 +90,12 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       return eventName === 'turn_start'
     case 'kiro':
       // Why: agentSpawn opens a fresh session in the pane, so stale tool/prompt caches go too.
-      return eventName === 'agentSpawn' || eventName === 'userPromptSubmit'
+      // V3's SessionStart is not a boundary: it fires lazily, right before the first prompt.
+      return (
+        eventName === 'agentSpawn' ||
+        eventName === 'userPromptSubmit' ||
+        eventName === 'UserPromptSubmit'
+      )
   }
 }
 

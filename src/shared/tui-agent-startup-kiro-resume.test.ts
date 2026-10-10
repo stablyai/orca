@@ -32,4 +32,16 @@ describe('Kiro cold restore', () => {
       "kiro-cli chat --tui --v2 --agent reviewer '--resume-id' 'session-1'"
     )
   })
+
+  it('resumes a V3 session through a command override that selects the V3 engine', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'kiro',
+      providerSession: { key: 'session_id', id: 'sess_008ffb85-0fc5-4805-9a83-f2e9c4f39567' },
+      cmdOverrides: { kiro: 'kiro-cli chat --tui --v3 --agent work' },
+      platform: 'linux'
+    })
+    expect(plan?.launchCommand).toBe(
+      "kiro-cli chat --tui --v3 --agent work '--resume-id' 'sess_008ffb85-0fc5-4805-9a83-f2e9c4f39567'"
+    )
+  })
 })

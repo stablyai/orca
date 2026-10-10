@@ -75,6 +75,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    // Why one argv for both engines: kiro-cli 2.27 reopens a session under the engine and agent
+    // it was created with, so a V3 `sess_` id comes back on V3 with its standalone hooks.
     case 'kiro':
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
   }
