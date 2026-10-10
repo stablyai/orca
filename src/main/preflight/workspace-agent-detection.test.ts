@@ -12,6 +12,10 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-sc
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/agent-detection-refusal'
 import {
+  PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from '../../shared/protocol-version'
+import {
   resolveWorkspaceAgentDetectionHost,
   type WorkspaceAgentDetectionStore
 } from './workspace-agent-detection'
@@ -329,5 +333,7 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
     })
     expect(detectInstalledMock).not.toHaveBeenCalled()
     expect(response).toMatchObject({ ok: false, error: { message: WORKSPACE_ON_OTHER_RUNTIME } })
+    // Clients let a host decide a shared repo id only when it advertises this refusal.
+    expect(RUNTIME_CAPABILITIES).toContain(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY)
   })
 })

@@ -36,14 +36,20 @@ export type MobileAgentLaunchContext = {
   repo: MobileRuntimeRepoSummary | null
 }
 
-export async function loadMobileAgentLaunchContext(args: {
+type MobileAgentLaunchContextArgs = {
   client: RpcClient
   worktreeId: string
-}): Promise<MobileAgentLaunchContext> {
+  /** Whether the host refuses, rather than answers for, a workspace another runtime owns. */
+  hostRefusesOtherRuntime?: boolean
+}
+
+export async function loadMobileAgentLaunchContext(
+  args: MobileAgentLaunchContextArgs
+): Promise<MobileAgentLaunchContext> {
   const { client, worktreeId } = args
   // Started before the settings read, not inside the array: the detection request goes on the wire
   // first, and the recorded sender order is what says so.
-  const detectedAgentsRequest = loadDetectedAgents(client, worktreeId)
+  const detectedAgentsRequest = loadDetectedAgents(client, worktreeId, args.hostRefusesOtherRuntime)
   const [settingsResponse, detectedAgents] = await Promise.all([
     newTabSettingsRead.request(client),
     detectedAgentsRequest
@@ -55,10 +61,9 @@ export async function loadMobileAgentLaunchContext(args: {
   return { settings: readSettings(), detectedAgents: detected, repo: detectedAgents.repo }
 }
 
-export async function loadMobileNewTabAgentOptions(args: {
-  client: RpcClient
-  worktreeId: string
-}): Promise<MobileNewTabAgentOption[]> {
+export async function loadMobileNewTabAgentOptions(
+  args: MobileAgentLaunchContextArgs
+): Promise<MobileNewTabAgentOption[]> {
   const context = await loadMobileAgentLaunchContext(args)
   return buildMobileNewTabAgentOptions(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
@@ -76,7 +81,8 @@ type DetectedAgentsReply = {
 
 async function loadDetectedAgents(
   client: RpcClient,
-  worktreeId: string
+  worktreeId: string,
+  hostRefusesOtherRuntime = false
 ): Promise<DetectedAgentsReply> {
   // Why: the floating workspace runs on the paired host, so it has no repo connection to resolve.
   if (isFloatingWorkspaceWorktreeId(worktreeId)) {
@@ -94,15 +100,20 @@ async function loadDetectedAgents(
   if (!repo) {
     throw new Error('worktree_repo_not_found')
   }
-  // Why every row: rows on several hosts can share a repo id, and then only the host can tell.
-  if (
-    repos.every(
-      (candidate) =>
-        candidate.id !== repoId ||
-        parseExecutionHostId(candidate.executionHostId)?.kind === 'runtime'
-    )
-  ) {
-    throw new MobileWorkspaceOnOtherRuntimeError()
+  const owners = repos
+    .filter((candidate) => candidate.id === repoId)
+    .map((candidate) => parseExecutionHostId(candidate.executionHostId)?.kind)
+  if (owners.includes('runtime')) {
+    // Why: rows on several hosts can share a repo id, and then only a host that refuses another
+    // runtime's workspace may decide; the first row's connection could name this host's SSH target.
+    if (!hostRefusesOtherRuntime || owners.every((kind) => kind === 'runtime')) {
+      throw new MobileWorkspaceOnOtherRuntimeError()
+    }
+    return {
+      reply: await preflightDetectAgentsRead.request(client, { worktreeId }),
+      interpret: preflightDetectAgentsRead.interpret,
+      repo
+    }
   }
   const connectionId = repo.connectionId?.trim() || null
   return connectionId

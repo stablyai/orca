@@ -6,6 +6,7 @@ import {
   launchAgentInExistingWorkspace,
   supportsMobileExistingAgentLaunch
 } from './mobile-existing-agent-launch'
+import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { loadMobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
 
@@ -38,7 +39,13 @@ export async function launchAgentWithPrompt(args: {
   let resolved
   try {
     resolved = resolveMobileSourceControlLaunchAgent(
-      await loadMobileAgentLaunchContext({ client: args.client, worktreeId: args.worktreeId }),
+      await loadMobileAgentLaunchContext({
+        client: args.client,
+        worktreeId: args.worktreeId,
+        hostRefusesOtherRuntime:
+          args.hostCapabilities?.includes(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY) ===
+          true
+      }),
       args.actionId
     )
   } catch (error) {

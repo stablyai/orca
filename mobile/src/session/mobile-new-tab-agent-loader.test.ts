@@ -100,34 +100,67 @@ describe('mobile new-tab agent loading', () => {
     ])
   })
 
-  it("#13752: reads the host's other-runtime refusal as the same answer", async () => {
-    const client = createClient(async (method) => {
+  // Rows on two hosts share the id; the SSH row first, so its connection would name this host's target.
+  function sharedRepoIdClient(detectAgents: () => unknown) {
+    return createClient(async (method, params) => {
       if (method === 'settings.get') {
         return { ok: true, result: { settings: {} } }
       }
       if (method === 'repo.list') {
-        // Rows on two hosts share the id, so only the host can tell which owns the worktree.
         return {
           ok: true,
           result: {
             repos: [
-              { id: 'repo-1', executionHostId: 'runtime:env-b' },
-              { id: 'repo-1', executionHostId: 'local' }
+              { id: 'repo-1', executionHostId: 'ssh:a-target', connectionId: 'a-target' },
+              { id: 'repo-1', executionHostId: 'runtime:env-b' }
             ]
           }
         }
       }
       if (method === 'preflight.detectAgents') {
-        return {
-          ok: false,
-          error: { code: 'runtime_error', message: WORKSPACE_ON_OTHER_RUNTIME }
-        }
+        expect(params).toEqual({ worktreeId: 'repo-1::/srv/worktree' })
+        return detectAgents()
       }
       throw new Error(`unexpected request: ${method}`)
     })
+  }
 
+  it('#13752: lets a refusing host decide a shared repo id, and reads its refusal', async () => {
+    const refused = sharedRepoIdClient(() => ({
+      ok: false,
+      error: { code: 'runtime_error', message: WORKSPACE_ON_OTHER_RUNTIME }
+    }))
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client: refused,
+        worktreeId: 'repo-1::/srv/worktree',
+        hostRefusesOtherRuntime: true
+      })
+    ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
+
+    const answered = sharedRepoIdClient(() => ({ ok: true, result: ['claude'] }))
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client: answered,
+        worktreeId: 'repo-1::/srv/worktree',
+        hostRefusesOtherRuntime: true
+      })
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    expect(answered.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'repo.list',
+      'settings.get',
+      'preflight.detectAgents'
+    ])
+  })
+
+  it('#13752: an older host cannot decide a shared repo id, so nothing is probed', async () => {
+    const client = sharedRepoIdClient(() => ({ ok: true, result: ['codex'] }))
     await expect(
       loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
     ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'repo.list',
+      'settings.get'
+    ])
   })
 })
