@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { parseRoutableExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   parseHostAuthorityKey,
   type HostAuthority,
@@ -12,6 +13,30 @@ export function getActiveRuntimeTarget(
 ): RuntimeClientTarget {
   const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
   return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
+}
+
+/** Transport to an owner's runtime environment; `null` is this app (local or direct SSH). */
+export function runtimeTargetForOwnerEnvironment(
+  environmentId: string | null
+): RuntimeClientTarget {
+  const ownerId = environmentId?.trim()
+  return ownerId ? { kind: 'environment', environmentId: ownerId } : { kind: 'local' }
+}
+
+/**
+ * Transport to the host that owns a row: a server's own runtime, or this app for local and direct
+ * SSH (which ride this app's IPC with a `connectionId`). `null` when the id names no routable host.
+ */
+export function runtimeTargetForOwnerHostId(
+  hostId: ExecutionHostId | null | undefined
+): RuntimeClientTarget | null {
+  const parsed = parseRoutableExecutionHostId(hostId)
+  if (!parsed) {
+    return null
+  }
+  return parsed.kind === 'runtime'
+    ? { kind: 'environment', environmentId: parsed.environmentId }
+    : { kind: 'local' }
 }
 
 /**

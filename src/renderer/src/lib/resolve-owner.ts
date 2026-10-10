@@ -26,6 +26,7 @@ import {
 } from './worktree-operation-route'
 import { getNestedSshTargetIdForFolderWorkspace } from './folder-workspace-runtime-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { hostRouteForAuthority, type RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 /** A worktree id, a `folder:` workspace key, or the floating workspace; `hostId` when the row names one. */
 export type WorkspaceOwnerRef = { workspaceId: string; hostId?: ExecutionHostId }
@@ -103,6 +104,15 @@ export function resolveOwner(
 ): ExecutionHostOwnerMatch<HostAuthority> {
   // Why: focus is the only settings field the route resolvers read; blanking it makes this focus-free.
   return resolveRoute({ ...state, settings: null }, ref)
+}
+
+/** Transport to the workspace's owner, or `null` when the rows name none or disagree. */
+export function runtimeTargetForWorkspaceOwner(
+  state: WorktreeOperationRouteState,
+  ref: WorkspaceOwnerRef
+): RuntimeClientTarget | null {
+  const match = resolveOwner(state, ref)
+  return match.kind === 'resolved' ? hostRouteForAuthority(match.owner).target : null
 }
 
 let legacyFocusFallbackCount = 0

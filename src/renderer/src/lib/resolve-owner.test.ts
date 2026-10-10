@@ -7,6 +7,7 @@ import {
   resetLegacyFocusFallbackCountForTest,
   resolveOwner,
   resolveOwnerWithLegacyFocus,
+  runtimeTargetForWorkspaceOwner,
   type WorkspaceOwnerRef
 } from './resolve-owner'
 import type {
@@ -239,5 +240,35 @@ describe('resolveOwner characterization', () => {
       expect(resolveOwnerWithLegacyFocus(state, row.ref)).toEqual(legacy ?? row.owner)
       expect(getLegacyFocusFallbackCount()).toBe(legacy ? 1 : 0)
     })
+  })
+})
+
+describe('runtimeTargetForWorkspaceOwner', () => {
+  const settings = { activeRuntimeEnvironmentId: 'env-other' }
+  it('dials the owner, not the focused server', () => {
+    const rows: WorktreeOperationRouteState = {
+      settings,
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-a' }],
+      worktreesByRepo: { 'repo-1': [worktree('runtime:env-a', 'env-a')] }
+    }
+    expect(runtimeTargetForWorkspaceOwner(rows, { workspaceId: WORKTREE_ID })).toEqual({
+      kind: 'environment',
+      environmentId: 'env-a'
+    })
+  })
+
+  it('rides this app for local and direct SSH owners', () => {
+    const sshRows: WorktreeOperationRouteState = {
+      settings,
+      repos: [{ id: 'repo-1', connectionId: 'box' }],
+      worktreesByRepo: { 'repo-1': [worktree('ssh:box')] }
+    }
+    expect(runtimeTargetForWorkspaceOwner(sshRows, { workspaceId: WORKTREE_ID })).toEqual({
+      kind: 'local'
+    })
+  })
+
+  it('has no transport when no row names the workspace', () => {
+    expect(runtimeTargetForWorkspaceOwner({ settings }, { workspaceId: WORKTREE_ID })).toBeNull()
   })
 })

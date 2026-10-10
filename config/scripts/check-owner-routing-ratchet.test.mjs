@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   countFocusRoutingCalls,
+  countFocusSettingReads,
   diffCounts,
   formatBaseline,
   hasFocusRoutingAlias,
   isScannedPath,
-  parseBaseline
+  parseBaseline,
+  parseBaselineNotes
 } from './check-owner-routing-ratchet.mjs'
 
 describe('countFocusRoutingCalls', () => {
@@ -39,6 +41,29 @@ describe('countFocusRoutingCalls', () => {
   })
 })
 
+describe('countFocusSettingReads', () => {
+  it('counts setting reads, the helpers and the creation default together', () => {
+    const src = [
+      "import { defaultCreationHost } from './default-creation-host'",
+      'const a = settings?.activeRuntimeEnvironmentId',
+      'const b = state.settings.activeRuntimeEnvironmentId',
+      'const c = getActiveRuntimeTarget(settings)',
+      'const d = defaultCreationHost(settings)',
+      'export function defaultCreationHost(settings) {}'
+    ].join('\n')
+    expect(countFocusSettingReads(src)).toBe(4)
+  })
+
+  it('does not count writes, keys or type positions', () => {
+    const src = [
+      'const owner = { activeRuntimeEnvironmentId: id }',
+      "type T = GlobalSettings['activeRuntimeEnvironmentId']",
+      'updateSettings({ activeRuntimeEnvironmentId: null })'
+    ].join('\n')
+    expect(countFocusSettingReads(src)).toBe(0)
+  })
+})
+
 describe('hasFocusRoutingAlias', () => {
   it('refuses an aliased import or re-export, which would hide its calls', () => {
     expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget as route } from './rpc'")).toBe(
@@ -47,6 +72,7 @@ describe('hasFocusRoutingAlias', () => {
     expect(
       hasFocusRoutingAlias("export {\n  settingsForRuntimeOwner as owner\n} from './target'")
     ).toBe(true)
+    expect(hasFocusRoutingAlias("import { defaultCreationHost as host } from './d'")).toBe(true)
     expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget } from './rpc'")).toBe(false)
   })
 })
@@ -73,6 +99,17 @@ describe('baseline', () => {
         ['src/b.ts', 2]
       ])
     )
+  })
+
+  it('keeps a row note through a prune', () => {
+    const text = formatBaseline(
+      new Map([['src/a.ts', 1]]),
+      ['# header'],
+      new Map([['src/a.ts', 'waits for V4b']])
+    )
+    expect(text).toBe('# header\n1 src/a.ts # waits for V4b\n')
+    expect(parseBaseline(text)).toEqual(new Map([['src/a.ts', 1]]))
+    expect(parseBaselineNotes(text)).toEqual(new Map([['src/a.ts', 'waits for V4b']]))
   })
 
   it('fails growth, including a new file, and asks to prune shrinkage', () => {
