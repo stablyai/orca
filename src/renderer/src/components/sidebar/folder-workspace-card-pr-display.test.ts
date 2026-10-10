@@ -119,6 +119,33 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toMatchObject({ number: 3, status: 'failure' })
   })
 
+  it('does not let a cold loading linked PR override a passing sibling', () => {
+    const loading = makeWorktree({ id: 'loading', linkedPR: 5 })
+    const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: {
+        [loading.id]: makeWorkspaceLineage(loading),
+        [passing.id]: makeWorkspaceLineage(passing)
+      },
+      worktreeLineageById: {},
+      worktreeMap: new Map([
+        [loading.id, loading],
+        [passing.id, passing]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      // Only the passing sibling has a cache entry; the linked 'loading'
+      // worktree renders as linkedDetailsUnavailable on cold start.
+      prCache: {
+        'repo-1::passing': makePrEntry(1, 'success')
+      }
+    })
+
+    expect(display).toMatchObject({ number: 1, status: 'success' })
+  })
+
   it('uses pending attached PR status ahead of passing PRs', () => {
     const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
     const pending = makeWorktree({ id: 'pending', linkedPR: 2 })
