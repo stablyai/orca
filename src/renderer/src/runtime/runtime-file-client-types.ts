@@ -28,6 +28,10 @@ export type RuntimeFileOperationArgs = {
   worktreePath: string | null | undefined
   connectionId?: string
   expectedExecutionHostId?: 'local' | `ssh:${string}`
+  /** True when a runtime execution host's files live in this machine's filesystem:
+   * a local host, or a runtime environment whose endpoint is loopback. Absent
+   * means unknown — callers must not assume the files are here. */
+  runtimeHostIsLocalMachine?: boolean
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
   expectedExternalSshTargetId?: string

@@ -117,6 +117,21 @@ export async function readRuntimeFilePreview(
   }
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
+      // The runtime lane owns the worktree but cannot express this path — it is
+      // outside it, e.g. a Codex worker's runtime home. The fallback reads the
+      // local filesystem, so it is only correct when the files are on this machine:
+      // an execution lane resolved as such (context.runtimeHostIsLocalMachine). An
+      // SSH host's or a remote runtime's file is not here — a remote runtime with
+      // the same path on the desktop must not show the desktop file instead. A
+      // connection is never local-lane material: the read would go over the link,
+      // where the access kind does not travel and the path may not exist.
+      if (context.runtimeHostIsLocalMachine === true && !context.connectionId && access) {
+        return window.api.fs.readFile({
+          filePath,
+          connectionId: context.connectionId,
+          ...localAccess(context.connectionId, access)
+        })
+      }
       throw new Error('Remote file is outside the owning runtime worktree')
     }
     return window.api.fs.readFile({

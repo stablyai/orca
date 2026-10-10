@@ -11,6 +11,7 @@ import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectat
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
+import { classifyRemotePairingHostname } from '../../../../shared/remote-pairing-address'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -142,7 +143,8 @@ export function resolveNativeChatImageRuntimeContext(
     settings: stableSettingsForRoute(state.settings, route.runtimeEnvironmentId),
     worktreeId: linkContext.worktreeId,
     worktreePath,
-    expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local'
+    expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local',
+    runtimeHostIsLocalMachine: runtimeFilesLiveOnThisMachine(state, host)
   }
   if (host.kind === 'ssh') {
     try {
@@ -162,6 +164,45 @@ export function resolveNativeChatImageRuntimeContext(
     }
   }
   return context
+}
+
+/**
+ * True when the execution host's files live in this machine's filesystem: a local
+ * host, or a runtime environment paired over a loopback endpoint. An ephemeral
+ * VM, an SSH-tunnel pairing and any non-loopback endpoint run somewhere else.
+ * The tunnel needs its own clause because its endpoint IS loopback — the near end
+ * of the tunnel is — while the files are the far end's, so reading them here
+ * would serve a same-path local file or nothing at all.
+ */
+function runtimeFilesLiveOnThisMachine(
+  state: OwnerState,
+  host:
+    | { kind: 'local' }
+    | { kind: 'ssh'; id: `ssh:${string}` }
+    | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
+): boolean {
+  if (host.kind !== 'runtime') {
+    return host.kind === 'local'
+  }
+  const environment = state.runtimeEnvironments.find((entry) => entry.id === host.environmentId)
+  if (
+    !environment ||
+    environment.source === 'ephemeral-vm' ||
+    environment.connectionDependency === 'ssh-tunnel'
+  ) {
+    return false
+  }
+  const endpoints = environment.endpoints ?? []
+  const preferred =
+    endpoints.find((entry) => entry.id === environment.preferredEndpointId) ?? endpoints[0]
+  if (!preferred) {
+    return false
+  }
+  try {
+    return classifyRemotePairingHostname(new URL(preferred.endpoint).hostname) === 'loopback'
+  } catch {
+    return false
+  }
 }
 
 export function useNativeChatImageRuntimeContext(tabId: string): NativeChatImageRuntimeContext {

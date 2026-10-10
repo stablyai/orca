@@ -234,7 +234,17 @@ export function loadLocalImageAbsolutePath(
       }
       return cacheLocalImageBlob(cacheKey, url, byteLength, readLeaseVersion) ? url : null
     })
-    .catch(() => null)
+    .catch((error) => {
+      // Why: every failed preview lane renders the same label — "path refused by
+      // the runtime lane" and "read failed" are indistinguishable without a log.
+      // Name the rejection so a single build log answers the question.
+      console.warn('local image preview unavailable', {
+        absolutePath,
+        connectionId: runtimeContext?.connectionId ?? connectionId ?? null,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return null
+    })
     .finally(() => {
       if (inFlightBlobUrlLoads.get(cacheKey) === loadPromise) {
         inFlightBlobUrlLoads.delete(cacheKey)

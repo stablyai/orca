@@ -7,6 +7,7 @@ import {
   getLocalImageCacheKey,
   getLocalImageSrcCacheKey,
   invalidateLocalImageSrcCacheForTests,
+  loadLocalImageAbsolutePath,
   loadLocalImageSrc,
   releaseLocalImageSrcByKey,
   resetLocalImageSrcStateForTests,
@@ -126,6 +127,22 @@ describe('getLocalImageCacheKey', () => {
 })
 
 describe('loadLocalImageSrc', () => {
+  it('names a failed preview read in the console so dead lanes are distinguishable', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    setReadFile(vi.fn().mockRejectedValue(new Error('ENOENT: no such file')))
+
+    await expect(loadLocalImageAbsolutePath('/repo/logo.png')).resolves.toBeNull()
+
+    expect(warn).toHaveBeenCalledWith(
+      'local image preview unavailable',
+      expect.objectContaining({
+        absolutePath: '/repo/logo.png',
+        connectionId: null,
+        error: 'ENOENT: no such file'
+      })
+    )
+  })
+
   it('shares one pending read and one blob URL for duplicate local image loads', async () => {
     const read = deferred<PreviewResult>()
     const readFile = vi.fn().mockReturnValue(read.promise)
