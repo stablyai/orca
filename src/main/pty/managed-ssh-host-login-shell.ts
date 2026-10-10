@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { win32 as pathWin32 } from 'node:path'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-idle-exit'
 import { readOpenSshDefaultShell } from '../../shared/openssh-default-shell'
 
@@ -15,5 +16,11 @@ export function resolveManagedSshHostLoginShell(
     return undefined
   }
   const shell = readDefaultShell()
-  return shell && existsPath(shell) ? shell : undefined
+  // Why PowerShell only: agent launch planners quote for the host setting's PowerShell default, so a
+  // cmd or bash login shell would receive commands quoted for the wrong family.
+  const name = pathWin32.basename(shell).toLowerCase()
+  if (name !== 'pwsh.exe' && name !== 'powershell.exe') {
+    return undefined
+  }
+  return existsPath(shell) ? shell : undefined
 }
