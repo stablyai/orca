@@ -1,4 +1,5 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import {
   getRemoteRuntimeTerminalMultiplexer,
   type RemoteRuntimeMultiplexedTerminal,
@@ -21,6 +22,8 @@ const FALLBACK_ROWS = 24
 const UNAVAILABLE: TerminalPreviewConnectResult = { snapshot: null, replay: [] }
 
 type SnapshotMeta = Parameters<RemoteRuntimeMultiplexedTerminalCallbacks['onSnapshot']>[1]
+type OutputMeta = Parameters<RemoteRuntimeMultiplexedTerminalCallbacks['onData']>[1]
+type HeldChunk = { data: string; meta: OutputMeta; release: () => void }
 
 type PreviewSession = {
   stream: RemoteRuntimeMultiplexedTerminal | null
@@ -30,7 +33,11 @@ type PreviewSession = {
   ended: boolean
   closed: boolean
   /** Live chunks held while a snapshot is in flight, so the boundary can drop covered bytes. */
-  gate: { data: string; seq?: number }[] | null
+  gate: HeldChunk[] | null
+  /** Output high-water of the applied snapshot; a tagged request still forwards covered chunks. */
+  snapshotSeq: number | undefined
+  /** Transport credit per emitted chunk, returned in order as the preview parses them. */
+  credits: (() => void)[]
   grid: { cols: number; rows: number } | null
 }
 
@@ -67,20 +74,59 @@ function snapshotResult(
   }
 }
 
-// Why: a requested snapshot flushes then buffers host output, so only chunks past its seq are new.
+/** The part of a chunk the snapshot at `snapshotSeq` does not already contain. */
+function outputAfterSnapshot(
+  data: string,
+  meta: OutputMeta,
+  snapshotSeq: number | undefined
+): string | null {
+  const seq = meta?.seq
+  const rawLength = meta?.rawLength ?? (meta?.transformed ? undefined : data.length)
+  if (snapshotSeq === undefined || seq === undefined || rawLength === undefined) {
+    return data
+  }
+  if (seq <= snapshotSeq) {
+    return null
+  }
+  const start = seq - rawLength
+  if (start >= snapshotSeq) {
+    return data
+  }
+  // A transformed span cannot be split by offset; the host drops it on the same boundary.
+  return meta?.transformed ? null : data.slice(snapshotSeq - start)
+}
+
+// Why: chunks flushed before a requested snapshot carry no proof of order without a seq.
 function releaseGate(session: PreviewSession, snapshotSeq: number | undefined) {
   const held = session.gate ?? []
   session.gate = null
-  if (snapshotSeq === undefined) {
-    return []
+  session.snapshotSeq = snapshotSeq
+  const replay: TerminalPreviewReplayChunk[] = []
+  for (const chunk of held) {
+    const data =
+      chunk.meta?.seq === undefined
+        ? null
+        : outputAfterSnapshot(chunk.data, chunk.meta, snapshotSeq)
+    if (data) {
+      replay.push({ data, mode: 'live' })
+    }
+    chunk.release()
   }
-  return held
-    .filter((chunk) => chunk.seq !== undefined && chunk.seq > snapshotSeq)
-    .map((chunk) => ({ data: chunk.data, mode: 'live' as const }))
+  return replay
+}
+
+function releaseCredits(session: PreviewSession): void {
+  for (const release of session.credits.splice(0)) {
+    release()
+  }
+  for (const chunk of session.gate?.splice(0) ?? []) {
+    chunk.release()
+  }
 }
 
 function closeSession(ptyId: string, session: PreviewSession): void {
   session.closed = true
+  releaseCredits(session)
   session.stream?.close()
   session.stream = null
   if (sessions.get(ptyId) === session) {
@@ -95,6 +141,8 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
     ended: false,
     closed: false,
     gate: [],
+    snapshotSeq: undefined,
+    credits: [],
     grid: null
   }
   sessions.set(ptyId, session)
@@ -136,11 +184,24 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
             finish(snapshotResult(session, data, meta, releaseGate(session, meta?.seq)))
           },
           onData: (data, meta) => {
-            if (session.gate) {
-              session.gate.push({ data, seq: meta?.seq })
+            if (session.closed) {
               return
             }
-            emit({ type: 'data', ptyId, data, bytes: data.length })
+            const noCredit = (): void => {}
+            if (session.gate) {
+              session.gate.push({
+                data,
+                meta,
+                release: takeCurrentTerminalDeliveryCredit() ?? noCredit
+              })
+              return
+            }
+            const uncovered = outputAfterSnapshot(data, meta, session.snapshotSeq)
+            if (uncovered) {
+              // Why: hold the host's credit until the preview parses the chunk, like a pane does.
+              session.credits.push(takeCurrentTerminalDeliveryCredit() ?? noCredit)
+              emit({ type: 'data', ptyId, data: uncovered, bytes: uncovered.length })
+            }
           },
           onFitOverrideChanged: (event) => {
             if (event.cols !== session.grid?.cols || event.rows !== session.grid?.rows) {
@@ -155,6 +216,7 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
               sessions.delete(ptyId)
             }
             session.stream = null
+            releaseCredits(session)
             finish(UNAVAILABLE)
             if (initialized && !session.closed) {
               emit({ type: 'resync', ptyId })
@@ -208,6 +270,9 @@ async function refreshSession(
     }
     await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_RETRY_DELAY_MS))
   }
+  for (const chunk of session.gate?.splice(0) ?? []) {
+    chunk.release()
+  }
   session.gate = null
   return UNAVAILABLE
 }
@@ -243,8 +308,11 @@ export const remoteRuntimeTerminalPreviewApi: TerminalPreviewApi = {
     const claimed = sessions.get(ptyId)?.stream?.claimViewport(cols, rows) ?? false
     return Promise.resolve(claimed ? { cols, rows } : null)
   },
-  // The multiplexer returns transport credit itself once a chunk is delivered.
-  ack: () => Promise.resolve(),
+  // Why in order: the preview acknowledges chunks as xterm parses them, which is emit order.
+  ack: (ptyId) => {
+    sessions.get(ptyId)?.credits.shift()?.()
+    return Promise.resolve()
+  },
   unsubscribe: (ptyId) => {
     const session = sessions.get(ptyId)
     if (session) {

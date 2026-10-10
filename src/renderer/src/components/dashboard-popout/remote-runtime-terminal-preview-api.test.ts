@@ -45,6 +45,7 @@ vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
   })
 }))
 
+import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import {
   remoteRuntimeTerminalPreviewApi as api,
   resetRemoteRuntimeTerminalPreviewSessionsForTests
@@ -112,6 +113,45 @@ describe('remoteRuntimeTerminalPreviewApi', () => {
     expect(sub.stream.serializeBufferOutcome).toHaveBeenCalledWith({ scrollbackRows: 24 })
     expect(harness.subscriptions).toHaveLength(1)
     expect(payloads).toEqual([])
+  })
+
+  it('drops covered output the host forwards after a requested snapshot and slices a straddler', async () => {
+    const { sub, payloads } = await openPreview()
+    sub.stream.serializeBufferOutcome.mockResolvedValue({
+      availability: { kind: 'snapshot' },
+      snapshot: { data: 'fresh', cols: 90, rows: 30, seq: 20 }
+    })
+    await expect(api.connect(PTY)).resolves.toMatchObject({ replay: [] })
+
+    // A tagged reply is followed by every chunk the host buffered, covered ones included.
+    sub.callbacks.onData('old', { seq: 18, rawLength: 3 })
+    sub.callbacks.onData('ABCDE', { seq: 23, rawLength: 5 })
+    sub.callbacks.onData('next', { seq: 27, rawLength: 4 })
+    expect(payloads).toEqual([
+      { type: 'data', ptyId: PTY, data: 'CDE', bytes: 3 },
+      { type: 'data', ptyId: PTY, data: 'next', bytes: 4 }
+    ])
+  })
+
+  it('returns transport credit only once the preview has parsed the chunk', async () => {
+    const { sub } = await openPreview()
+    const credit = vi.fn()
+    deliverTerminalDataWithDeferredCredit(credit, () =>
+      sub.callbacks.onData('live', { seq: 14, rawLength: 4 })
+    )
+    expect(credit).not.toHaveBeenCalled()
+
+    await api.ack(PTY, 4)
+    expect(credit).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns held credit when the preview closes', async () => {
+    const { sub } = await openPreview()
+    const credit = vi.fn()
+    deliverTerminalDataWithDeferredCredit(credit, () => sub.callbacks.onData('live', { seq: 14 }))
+
+    await api.unsubscribe(PTY)
+    expect(credit).toHaveBeenCalledTimes(1)
   })
 
   it('asks for a repaint when the grid changes, not when the same grid is re-announced', async () => {
