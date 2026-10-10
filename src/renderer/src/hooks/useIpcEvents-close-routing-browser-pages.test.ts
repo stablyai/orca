@@ -160,6 +160,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
+          onRequestGraphResync: () => () => {},
+          replyGraphResync: () => {},
           onRequestTabClose: (
             listener: (data: {
               requestId: string
@@ -388,6 +390,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
+          onRequestGraphResync: () => () => {},
+          replyGraphResync: () => {},
           onRequestTabClose: (
             listener: (data: {
               requestId: string
@@ -611,6 +615,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
+          onRequestGraphResync: () => () => {},
+          replyGraphResync: () => {},
           onRequestTabClose: (
             listener: (data: {
               requestId: string

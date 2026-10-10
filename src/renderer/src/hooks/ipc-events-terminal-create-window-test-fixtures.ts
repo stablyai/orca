@@ -129,6 +129,8 @@ export function buildTerminalCreateWindow(args: {
         onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
         replyTabCreate: () => {},
+        onRequestGraphResync: () => () => {},
+        replyGraphResync: () => {},
         onRequestTabClose: () => () => {},
         replyTabClose: vi.fn(),
         onRequestTabSetProfile: () => () => {},

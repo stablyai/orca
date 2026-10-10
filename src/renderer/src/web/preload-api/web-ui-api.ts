@@ -231,6 +231,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    onRequestGraphResync: () => noopUnsubscribe,
+    replyGraphResync: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
     replyTabSetProfile: () => {},
     onRequestTabClose: () => noopUnsubscribe,
