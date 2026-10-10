@@ -149,7 +149,60 @@ const FILENAME_LOWER_TO_LANGUAGE: Record<string, string> = Object.fromEntries(
   Object.entries(FILENAME_TO_LANGUAGE).map(([name, language]) => [name.toLowerCase(), language])
 )
 
-export function detectLanguage(filePath: string): string {
+const SHEBANG_INTERPRETER_TO_LANGUAGE: Record<string, string> = {
+  sh: 'shell',
+  bash: 'shell',
+  zsh: 'shell',
+  dash: 'shell',
+  ksh: 'shell',
+  ash: 'shell',
+  fish: 'shell',
+  python: 'python',
+  pypy: 'python',
+  node: 'javascript',
+  nodejs: 'javascript',
+  deno: 'javascript',
+  bun: 'javascript',
+  'ts-node': 'typescript',
+  tsx: 'typescript',
+  ruby: 'ruby',
+  perl: 'perl',
+  php: 'php',
+  lua: 'lua',
+  luajit: 'lua',
+  pwsh: 'powershell',
+  powershell: 'powershell'
+}
+
+/** Language named by a `#!` first line, or null when there is none or the interpreter is unknown. */
+export function detectShebangLanguage(content: string): string | null {
+  const firstLine = content.split(/\r?\n/, 1)[0]
+  if (!firstLine.startsWith('#!')) {
+    return null
+  }
+  const tokens = firstLine.slice(2).trim().split(/\s+/).filter(Boolean)
+  const first = tokens[0]
+  if (first === undefined) {
+    return null
+  }
+  let interpreter = first.slice(first.lastIndexOf('/') + 1)
+  if (interpreter === 'env') {
+    // Why: /usr/bin/env shebangs put options and VAR=value assignments before the real interpreter.
+    const target = tokens
+      .slice(1)
+      .find((t) => !t.startsWith('-') && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(t))
+    if (target === undefined) {
+      return null
+    }
+    interpreter = target.slice(target.lastIndexOf('/') + 1)
+  }
+  const base = interpreter.replace(/[\d.]+$/, '')
+  return Object.hasOwn(SHEBANG_INTERPRETER_TO_LANGUAGE, base)
+    ? SHEBANG_INTERPRETER_TO_LANGUAGE[base]
+    : null
+}
+
+export function detectLanguage(filePath: string, content?: string): string {
   // Check exact filename first
   const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1)!
@@ -165,9 +218,12 @@ export function detectLanguage(filePath: string): string {
   const ext = extname(filename).toLowerCase()
   const lowerName = filename.toLowerCase()
   // Scoped dotenv names fall back to INI only when no specific extension matches.
-  return (
+  const language =
     EXT_TO_LANGUAGE[ext] ??
     detectMonacoFilenameLanguage(filename) ??
     (lowerName === '.env' || lowerName.startsWith('.env.') ? 'ini' : 'plaintext')
-  )
+  if (language === 'plaintext' && content !== undefined) {
+    return detectShebangLanguage(content) ?? 'plaintext'
+  }
+  return language
 }
