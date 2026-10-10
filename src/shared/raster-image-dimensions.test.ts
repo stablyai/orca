@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { readRasterImageDimensions } from './raster-image-dimensions'
+import {
+  readRasterImageDimensions,
+  readRasterImageDimensionsForMimeType
+} from './raster-image-dimensions'
 
 function pngHeader(width: number, height: number): Buffer {
   const png = Buffer.alloc(24)
@@ -104,5 +107,32 @@ describe('readRasterImageDimensions', () => {
       width: 640,
       height: 480
     })
+  })
+
+  it('reads each MIME alias only with its own family parser', () => {
+    const cases: readonly { bytes: Buffer; mimeTypes: readonly string[] }[] = [
+      { bytes: pngHeader(64, 48), mimeTypes: ['image/png', 'image/apng'] },
+      {
+        bytes: jpegWithMetadata(0, 64, 48),
+        mimeTypes: ['image/jpeg', 'image/jpg', 'image/pjpeg']
+      },
+      { bytes: bmpHeader(64, 48), mimeTypes: ['image/bmp', 'image/x-bmp', 'image/x-ms-bmp'] },
+      {
+        bytes: icoWithPayload(pngHeader(64, 48)),
+        mimeTypes: ['image/ico', 'image/x-icon', 'image/vnd.microsoft.icon']
+      }
+    ]
+
+    for (const { bytes, mimeTypes } of cases) {
+      for (const mimeType of mimeTypes) {
+        expect(readRasterImageDimensionsForMimeType(bytes, mimeType), mimeType).toEqual({
+          width: 64,
+          height: 48
+        })
+      }
+    }
+    expect(readRasterImageDimensionsForMimeType(bmpHeader(64, 48), 'image/png')).toBeNull()
+    expect(readRasterImageDimensionsForMimeType(pngHeader(64, 48), 'image/gif')).toBeNull()
+    expect(readRasterImageDimensionsForMimeType(pngHeader(64, 48), 'image/tiff')).toBeNull()
   })
 })

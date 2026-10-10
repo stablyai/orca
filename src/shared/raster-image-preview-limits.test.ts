@@ -17,6 +17,12 @@ function pngHeader(width: number, height: number): Buffer {
   return bytes
 }
 
+// Real 1x1 images that a native decoder accepts, not header-only stubs.
+const PNG_1X1_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGP4DwABAQEAsTj2FAAAAABJRU5ErkJggg=='
+const JPEG_1X1_BASE64 =
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoKCgoKBggLDAsKDAkKCgr/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8Afx//2Q=='
+
 describe('raster image preview limits', () => {
   it('accepts ordinary 8K images and returns their dimensions', () => {
     expect(assertRasterImagePreviewWithinLimits(pngHeader(7680, 4320), 'image/png')).toEqual({
@@ -47,6 +53,31 @@ describe('raster image preview limits', () => {
     expect(
       assertRasterImagePreviewWithinLimits(new Uint8Array([1]), 'application/pdf')
     ).toBeUndefined()
+  })
+
+  it('rejects bytes whose encoding does not match the declared MIME family', () => {
+    const png = Buffer.from(PNG_1X1_BASE64, 'base64')
+    const jpeg = Buffer.from(JPEG_1X1_BASE64, 'base64')
+
+    expect(assertRasterImagePreviewWithinLimits(png, 'image/png')).toEqual({ width: 1, height: 1 })
+    expect(assertRasterImagePreviewWithinLimits(png, 'image/apng')).toEqual({ width: 1, height: 1 })
+    expect(assertRasterImagePreviewWithinLimits(jpeg, 'IMAGE/JPEG; charset=binary')).toEqual({
+      width: 1,
+      height: 1
+    })
+    expect(assertRasterImagePreviewWithinLimits(jpeg, 'image/pjpeg')).toEqual({
+      width: 1,
+      height: 1
+    })
+    expect(() => assertRasterImagePreviewWithinLimits(jpeg, 'image/png')).toThrow(
+      INVALID_RASTER_IMAGE_PREVIEW_ERROR
+    )
+    expect(() => assertRasterImagePreviewWithinLimits(png, 'image/jpeg')).toThrow(
+      INVALID_RASTER_IMAGE_PREVIEW_ERROR
+    )
+    expect(() => assertRasterImagePreviewWithinLimits(png, 'image/x-icon')).toThrow(
+      INVALID_RASTER_IMAGE_PREVIEW_ERROR
+    )
   })
 
   it('recognizes supported MIME aliases case-insensitively', () => {

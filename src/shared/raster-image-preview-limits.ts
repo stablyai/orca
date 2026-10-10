@@ -1,4 +1,8 @@
-import { readRasterImageDimensions, type RasterImageDimensions } from './raster-image-dimensions'
+import {
+  isRasterImageDimensionMimeType,
+  readRasterImageDimensionsForMimeType,
+  type RasterImageDimensions
+} from './raster-image-dimensions'
 
 export const MAX_RASTER_IMAGE_PREVIEW_DIMENSION_PX = 32_768
 export const MAX_RASTER_IMAGE_PREVIEW_PIXELS = 32 * 1024 * 1024
@@ -11,32 +15,19 @@ export const INVALID_RASTER_IMAGE_PREVIEW_ERROR =
 export const RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR =
   'Image dimensions exceed the preview safety limit'
 
-const RASTER_IMAGE_MIME_TYPES = new Set([
-  'image/apng',
-  'image/bmp',
-  'image/gif',
-  'image/ico',
-  'image/jpeg',
-  'image/jpg',
-  'image/pjpeg',
-  'image/png',
-  'image/vnd.microsoft.icon',
-  'image/webp',
-  'image/x-bmp',
-  'image/x-icon',
-  'image/x-ms-bmp'
-])
-
+/** Bare lowercase media type with parameters such as `; charset=` stripped, or null when empty. */
 function normalizeMimeType(mimeType: string | undefined): string | null {
   const normalized = mimeType?.split(';', 1)[0]?.trim().toLowerCase()
   return normalized || null
 }
 
+/** True when the declared type is a raster family this module can measure without decoding. */
 export function isKnownRasterImageMimeType(mimeType: string | undefined): boolean {
   const normalized = normalizeMimeType(mimeType)
-  return normalized !== null && RASTER_IMAGE_MIME_TYPES.has(normalized)
+  return normalized !== null && isRasterImageDimensionMimeType(normalized)
 }
 
+/** Checks unknown input against the per-side and total-pixel preview caps without overflowing. */
 export function isRasterImagePreviewDimensions(value: unknown): value is RasterImageDimensions {
   if (!value || typeof value !== 'object') {
     return false
@@ -58,10 +49,13 @@ export function assertRasterImagePreviewWithinLimits(
   bytes: Uint8Array,
   mimeType: string | undefined
 ): RasterImageDimensions | undefined {
-  if (!isKnownRasterImageMimeType(mimeType)) {
+  const normalized = normalizeMimeType(mimeType)
+  if (normalized === null || !isRasterImageDimensionMimeType(normalized)) {
     return undefined
   }
-  const dimensions = readRasterImageDimensions(bytes)
+  // Why: the caller forwards bytes under the declared type, so another raster family's bytes
+  // (JPEG labelled image/png) must not pass as valid.
+  const dimensions = readRasterImageDimensionsForMimeType(bytes, normalized)
   if (!dimensions) {
     throw new Error(INVALID_RASTER_IMAGE_PREVIEW_ERROR)
   }

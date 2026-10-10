@@ -248,3 +248,35 @@ export function readRasterImageDimensions(bytes: Uint8Array): RasterImageDimensi
     readIcoDimensions(bytes)
   )
 }
+
+type RasterImageDimensionReader = (bytes: Uint8Array) => RasterImageDimensions | null
+
+const RASTER_IMAGE_DIMENSION_READERS_BY_MIME_TYPE: ReadonlyMap<string, RasterImageDimensionReader> =
+  new Map([
+    ['image/apng', readPngDimensions],
+    ['image/bmp', readBmpDimensions],
+    ['image/gif', readGifDimensions],
+    ['image/ico', readIcoDimensions],
+    ['image/jpeg', readJpegDimensions],
+    ['image/jpg', readJpegDimensions],
+    ['image/pjpeg', readJpegDimensions],
+    ['image/png', readPngDimensions],
+    ['image/vnd.microsoft.icon', readIcoDimensions],
+    ['image/webp', readWebpDimensions],
+    ['image/x-bmp', readBmpDimensions],
+    ['image/x-icon', readIcoDimensions],
+    ['image/x-ms-bmp', readBmpDimensions]
+  ])
+
+/** True when a family-specific header reader exists for this already-normalized MIME type. */
+export function isRasterImageDimensionMimeType(normalizedMimeType: string): boolean {
+  return RASTER_IMAGE_DIMENSION_READERS_BY_MIME_TYPE.has(normalizedMimeType)
+}
+
+/** Like readRasterImageDimensions, but only accepts the encoding of the declared MIME family. */
+export function readRasterImageDimensionsForMimeType(
+  bytes: Uint8Array,
+  normalizedMimeType: string
+): RasterImageDimensions | null {
+  return RASTER_IMAGE_DIMENSION_READERS_BY_MIME_TYPE.get(normalizedMimeType)?.(bytes) ?? null
+}
