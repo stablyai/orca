@@ -24,6 +24,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       clearEngineError,
       engineError,
       handle,
+      probeWebReady,
       receive,
       reportNativeEngineError,
       resetReadiness
@@ -56,9 +57,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     )
 
     const handleReload = useCallback(() => {
+      // Why: onLoadStart is not guaranteed for a reload; the dead document's readiness and queue
+      // must not survive into the next one either way.
+      resetReadiness()
       clearEngineError()
       webViewRef.current?.reload()
-    }, [clearEngineError])
+    }, [clearEngineError, resetReadiness])
 
     const handleContentProcessDidTerminate = useCallback(() => {
       // Why: WKWebView content-process loss is recoverable; stale commands belong
@@ -85,6 +89,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
           textZoom={100}
           onLoadStart={resetReadiness}
+          // Why: web-ready is a one-shot bridge event that can land before the native message
+          // callback attaches; a post-load ping lets this document prove readiness again.
+          onLoadEnd={probeWebReady}
           onMessage={handleMessage}
           onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
           onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
