@@ -14,17 +14,23 @@ import type {
 export function routeForOwner(owner: {
   hostId?: ExecutionHostId
   runtimeOwnerEnvironmentId?: string
+  publisherHostId?: ExecutionHostId
 }): WorktreeOperationRoute | null {
   const runtimeOwnerEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
   if (!owner.hostId && !runtimeOwnerEnvironmentId) {
     return null
   }
   const parsedHost = parseExecutionHostId(owner.hostId)
+  const publisherHost = parseExecutionHostId(owner.publisherHostId)
   return {
     executionHostId: owner.hostId ?? null,
     runtimeEnvironmentId:
-      runtimeOwnerEnvironmentId ||
-      (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
+      owner.publisherHostId !== undefined
+        ? publisherHost?.kind === 'runtime'
+          ? publisherHost.environmentId
+          : null
+        : runtimeOwnerEnvironmentId ||
+          (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
   }
 }
 

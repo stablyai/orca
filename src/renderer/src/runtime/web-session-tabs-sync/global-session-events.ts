@@ -1,3 +1,4 @@
+import { admitsWebRuntimeSessionWorktreeSnapshot } from '../web-runtime-session-worktree-owner'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
@@ -83,6 +84,9 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   if (event.type !== 'snapshot' && event.type !== 'updated') {
     return
   }
+  if (!admitsWebRuntimeSessionWorktreeSnapshot(useAppStore.getState(), environmentId, event)) {
+    return
+  }
   const receivedFrame = recordReceivedWebSessionTabsSnapshot(
     environmentId,
     event,
@@ -113,7 +117,12 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       if (replayed) {
         acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
       }
-      const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
+      const decision = decideWebSessionTabsSnapshot(
+        recovered,
+        environmentId,
+        runtimeId,
+        useAppStore.getState()
+      )
       if (decision.apply) {
         settleHydration = applyWebSessionTabsStorePatch(
           (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),

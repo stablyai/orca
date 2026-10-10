@@ -20,11 +20,18 @@ import {
 } from '../../../../../../shared/workspace-scope'
 import {
   applyDetectedWorktreeUpdates,
-  findKnownWorktreeById
+  findKnownWorktreeById,
+  hasCatalogWorktreeById
 } from '../listing/detected-worktree-meta'
 import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import {
+  worktreeSelectionOwnerKey,
+  getActiveWorktreeOwner,
+  isCurrentWorktreeSelection,
+  withAvailableWorktreeSelectionInstance
+} from '@/lib/worktree-selection-owner'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -50,13 +57,28 @@ export function createSetActiveWorktree(
       markInputQuietSchedulerInput()
     }
 
-    if (get().activeWorktreeId !== worktreeId) {
-      moveFocusToRendererBeforeFocusedWebviewHidden()
-    }
+    let selectedOwner = options?.owner ?? getActiveWorktreeOwner(get(), worktreeId, executionHostId)
+    const selectedHostId = executionHostId ?? selectedOwner?.executionHostId ?? null
+    let accepted = false
     let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
     set((current) => {
+      const worktree = worktreeId
+        ? findKnownWorktreeById(current, worktreeId, executionHostId, selectedOwner)
+        : undefined
+      if (
+        worktreeId &&
+        !worktree &&
+        (selectedOwner || hasCatalogWorktreeById(current, worktreeId))
+      ) {
+        return current
+      }
+      selectedOwner = withAvailableWorktreeSelectionInstance(selectedOwner, worktree)
+      accepted = true
+      if (current.activeWorktreeId !== worktreeId) {
+        moveFocusToRendererBeforeFocusedWebviewHidden()
+      }
       const transitioned = stateTransition
         ? ({ ...current, ...stateTransition.patch } as AppState)
         : current
@@ -77,12 +99,12 @@ export function createSetActiveWorktree(
           activeWorktreeId: null,
           activeWorkspaceKey: null,
           activeWorkspaceExecutionHostId: null,
+          activeWorkspaceOwner: null,
           // Why: clearing/activating a worktree must dismiss the background-creation panel so the user isn't stranded on it.
           activePendingCreationId: null
         }
       }
 
-      const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
       shouldClearUnread = Boolean(worktree?.isUnread)
       const {
         restoredRightSidebarExplorerView,
@@ -166,7 +188,9 @@ export function createSetActiveWorktree(
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
-        s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
+        s.activeWorkspaceExecutionHostId !== selectedHostId ||
+        worktreeSelectionOwnerKey(s.activeWorkspaceOwner) !==
+          worktreeSelectionOwnerKey(selectedOwner) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
         s.activeFileId !== activeFileId ||
@@ -195,7 +219,8 @@ export function createSetActiveWorktree(
         activeWorkspaceKey: isWorkspaceKey(worktreeId)
           ? worktreeId
           : worktreeWorkspaceKey(worktreeId),
-        activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceExecutionHostId: selectedHostId,
+        activeWorkspaceOwner: selectedOwner ? { ...selectedOwner } : null,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -214,6 +239,9 @@ export function createSetActiveWorktree(
         ...tabsByWorktreeUpdate
       }
     })
+    if (!accepted) {
+      return false
+    }
 
     // Why: any activation is an explicit wake (null is the sleep flow clearing selection).
     // Cleared after the set() above so a pane still waiting on the marker connects once,
@@ -224,7 +252,7 @@ export function createSetActiveWorktree(
       const prepareTerminalTabs = (): void => {
         pendingActivationTerminalPrepCancels.delete(worktreeId)
         set((s) => {
-          if (s.activeWorktreeId !== worktreeId) {
+          if (!isCurrentWorktreeSelection(s, worktreeId, selectedOwner)) {
             return s
           }
           const tabs = s.tabsByWorktree[worktreeId] ?? []

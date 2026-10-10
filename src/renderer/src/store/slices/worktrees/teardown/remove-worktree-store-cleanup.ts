@@ -87,6 +87,7 @@ export function applyRemoveWorktreeSuccessState(
       activeWorkspaceExecutionHostId: removedActiveWorktree
         ? null
         : s.activeWorkspaceExecutionHostId,
+      activeWorkspaceOwner: removedActiveWorktree ? null : s.activeWorkspaceOwner,
       activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
       openFiles: nextOpenFiles,
       browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),

@@ -14,6 +14,11 @@ import {
 } from '../../../shared/execution-host'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { resolveEditorExternalWatchTargetRows } from './editor-external-watch-target-rows'
+import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import {
+  type WorktreeSelectionOwner,
+  worktreeSelectionOwnerKey
+} from '@/lib/worktree-selection-owner'
 
 export type EditorExternalWatchTarget = {
   worktreeId: string
@@ -38,7 +43,12 @@ export type EditorExternalWatchTargetState = Pick<
   | 'folderWorkspaces'
   | 'projectGroups'
 > &
-  Partial<Pick<AppState, 'activeWorkspaceExecutionHostId' | 'rightSidebarEffectiveTab'>>
+  Partial<
+    Pick<
+      AppState,
+      'activeWorkspaceExecutionHostId' | 'activeWorkspaceOwner' | 'rightSidebarEffectiveTab'
+    >
+  >
 
 type WatchedTargetsSnapshot = {
   targets: EditorExternalWatchTarget[]
@@ -50,6 +60,7 @@ let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
 let cachedActiveWorktreeId: string | null = null
 let cachedActiveWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId'] = null
+let cachedActiveWorkspaceOwner: AppState['activeWorkspaceOwner'] = null
 let cachedRuntimeEnvironmentId: string | undefined
 let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
@@ -80,7 +91,11 @@ export function getLocalWindowsWslAliasOption(
     : {}
 }
 
-type WatchConsumer = { owner: string | null; hostId: ExecutionHostId | null }
+type WatchConsumer = {
+  owner: string | null
+  hostId: ExecutionHostId | null
+  selectionOwner?: WorktreeSelectionOwner
+}
 
 /** The host an open file was opened on; never the current selection, which may name another host's same-id workspace. */
 function getOpenFileWatchConsumer(
@@ -103,9 +118,19 @@ function getOpenFileWatchConsumer(
 function getSidebarWatchConsumer(
   state: EditorExternalWatchTargetState,
   worktreeId: string
-): WatchConsumer {
+): WatchConsumer | null {
   // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
   const owner = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (state.activeWorkspaceOwner) {
+    if (resolveWorktreeOperationRouteResult(state, worktreeId).kind !== 'resolved') {
+      return null
+    }
+    return {
+      owner,
+      hostId: state.activeWorkspaceOwner.executionHostId,
+      selectionOwner: state.activeWorkspaceOwner
+    }
+  }
   if (owner) {
     return { owner, hostId: toRuntimeExecutionHostId(owner) }
   }
@@ -123,7 +148,10 @@ function addWatchConsumer(
     consumers = new Map()
     consumersByWorktreeId.set(worktreeId, consumers)
   }
-  consumers.set(`${consumer.owner ?? ''}::${consumer.hostId ?? ''}`, consumer)
+  consumers.set(
+    `${consumer.owner ?? ''}::${consumer.hostId ?? ''}::${worktreeSelectionOwnerKey(consumer.selectionOwner)}`,
+    consumer
+  )
 }
 
 function isLocalHostStamp(value: string | null | undefined): boolean {
@@ -172,6 +200,7 @@ export function selectEditorExternalWatchTargets(
     cachedRepos === state.repos &&
     cachedActiveWorktreeId === state.activeWorktreeId &&
     cachedActiveWorkspaceExecutionHostId === activeWorkspaceExecutionHostId &&
+    cachedActiveWorkspaceOwner === state.activeWorkspaceOwner &&
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
     cachedRightSidebarOpen === state.rightSidebarOpen &&
     cachedRightSidebarTab === state.rightSidebarTab &&
@@ -195,17 +224,30 @@ export function selectEditorExternalWatchTargets(
     addWatchConsumer(consumersByWorktreeId, file.worktreeId, getOpenFileWatchConsumer(file))
   }
   const activeWorktreeId = state.activeWorktreeId
-  const activeWorktree = activeWorktreeId
-    ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
-    : undefined
+  const selectedRows =
+    activeWorktreeId && state.activeWorkspaceOwner
+      ? resolveEditorExternalWatchTargetRows(
+          state,
+          activeWorktreeId,
+          state.activeWorkspaceOwner.executionHostId,
+          state.activeWorkspaceOwner
+        )
+      : null
+  const activeWorktree = state.activeWorkspaceOwner
+    ? selectedRows?.worktree
+    : activeWorktreeId
+      ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
+      : undefined
   const activeWorktreeHost = parseExecutionHostId(activeWorktree?.hostId)
-  const activeRepo = activeWorktree
-    ? activeWorktreeHost?.kind === 'local'
-      ? (findRepoForHost(state.repos, activeWorktree.repoId, {
-          hostId: activeWorktreeHost.id
-        }) ?? undefined)
-      : state.repos.find((repo) => repo.id === activeWorktree.repoId)
-    : undefined
+  const activeRepo = state.activeWorkspaceOwner
+    ? selectedRows?.repo
+    : activeWorktree
+      ? activeWorktreeHost?.kind === 'local'
+        ? (findRepoForHost(state.repos, activeWorktree.repoId, {
+            hostId: activeWorktreeHost.id
+          }) ?? undefined)
+        : state.repos.find((repo) => repo.id === activeWorktree.repoId)
+      : undefined
   const sourceControlCanConsumeWatch =
     !!activeWorktreeId &&
     !!activeRepo &&
@@ -221,18 +263,17 @@ export function selectEditorExternalWatchTargets(
     ((shownRightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
       (shownRightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
   if (activeWorktreeNeedsSidebarWatch) {
+    const consumer = getSidebarWatchConsumer(state, activeWorktreeId)
     // Why: this app-level watcher owns Explorer/Source-Control subscriptions so downstream consumers don't fight over watch/unwatch IPC.
-    addWatchConsumer(
-      consumersByWorktreeId,
-      activeWorktreeId,
-      getSidebarWatchConsumer(state, activeWorktreeId)
-    )
+    if (consumer) {
+      addWatchConsumer(consumersByWorktreeId, activeWorktreeId, consumer)
+    }
   }
 
   const targetsByKey = new Map<string, EditorExternalWatchTarget>()
   for (const [id, consumers] of consumersByWorktreeId) {
-    for (const { owner, hostId } of consumers.values()) {
-      const rows = resolveEditorExternalWatchTargetRows(state, id, hostId)
+    for (const { owner, hostId, selectionOwner } of consumers.values()) {
+      const rows = resolveEditorExternalWatchTargetRows(state, id, hostId, selectionOwner)
       if (!rows || (rows.connectionId === undefined && rows.folderWorkspace)) {
         continue
       }
@@ -269,6 +310,7 @@ export function selectEditorExternalWatchTargets(
   cachedRepos = state.repos
   cachedActiveWorktreeId = state.activeWorktreeId
   cachedActiveWorkspaceExecutionHostId = activeWorkspaceExecutionHostId
+  cachedActiveWorkspaceOwner = state.activeWorkspaceOwner
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab

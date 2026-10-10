@@ -10,7 +10,9 @@ export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationR
   const route =
     captured ??
     resolveWorktreeOperationRoute(
-      state.activeWorktreeId === file.worktreeId ? { ...state, activeWorktreeId: null } : state,
+      state.activeWorktreeId === file.worktreeId
+        ? { ...state, activeWorktreeId: null, activeWorkspaceOwner: null }
+        : state,
       file.worktreeId
     )
   const environmentId = captured

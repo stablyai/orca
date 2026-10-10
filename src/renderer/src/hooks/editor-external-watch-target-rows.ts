@@ -4,10 +4,16 @@ import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import {
   parseExecutionHostId,
+  getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  findWorktreeForSelectionOwner,
+  type WorktreeSelectionOwner
+} from '@/lib/worktree-selection-owner'
+import { getRepoCatalogOwnerHostId } from '@/store/projects/project-catalog-owner'
 
 type WatchTargetRowState = Pick<
   AppState,
@@ -38,17 +44,20 @@ function pickHostRow<T>(
 export function resolveEditorExternalWatchTargetRows(
   state: WatchTargetRowState,
   worktreeId: string,
-  hostId: ExecutionHostId | null
+  hostId: ExecutionHostId | null,
+  owner?: WorktreeSelectionOwner
 ): EditorExternalWatchTargetRows | null {
-  const worktree = pickHostRow(
-    getIndexedWorktreesById(state.worktreesByRepo, worktreeId),
-    hostId,
-    (row) =>
-      row.hostId ??
-      (row.runtimeOwnerEnvironmentId?.trim()
-        ? toRuntimeExecutionHostId(row.runtimeOwnerEnvironmentId.trim())
-        : null)
-  )
+  const worktree = owner
+    ? (findWorktreeForSelectionOwner(state, owner) ?? undefined)
+    : pickHostRow(
+        getIndexedWorktreesById(state.worktreesByRepo, worktreeId),
+        hostId,
+        (row) =>
+          row.hostId ??
+          (row.runtimeOwnerEnvironmentId?.trim()
+            ? toRuntimeExecutionHostId(row.runtimeOwnerEnvironmentId.trim())
+            : null)
+      )
   const workspaceScope = parseWorkspaceKey(worktreeId)
   const folderWorkspace =
     workspaceScope?.type === 'folder'
@@ -64,14 +73,29 @@ export function resolveEditorExternalWatchTargetRows(
     return null
   }
   const worktreeHost = parseExecutionHostId(worktree?.hostId)
-  const repo = worktree
-    ? worktreeHost
-      ? (findRepoForHost(state.repos, worktree.repoId, { hostId: worktreeHost.id }) ??
-        (worktreeHost.kind === 'local'
-          ? undefined
-          : state.repos.find((candidate) => candidate.id === worktree.repoId)))
-      : state.repos.find((candidate) => candidate.id === worktree.repoId)
-    : undefined
+  const matchingOwnerRepos =
+    owner && worktree
+      ? state.repos.filter(
+          (repo) =>
+            repo.id === worktree.repoId &&
+            getRepoCatalogOwnerHostId(repo) === owner.publisherHostId &&
+            (repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo)) ===
+              owner.executionHostId
+        )
+      : undefined
+  if (matchingOwnerRepos && matchingOwnerRepos.length !== 1) {
+    return null
+  }
+  const repo = matchingOwnerRepos
+    ? matchingOwnerRepos[0]
+    : worktree
+      ? worktreeHost
+        ? (findRepoForHost(state.repos, worktree.repoId, { hostId: worktreeHost.id }) ??
+          (worktreeHost.kind === 'local'
+            ? undefined
+            : state.repos.find((candidate) => candidate.id === worktree.repoId)))
+        : state.repos.find((candidate) => candidate.id === worktree.repoId)
+      : undefined
   const folderHost = parseExecutionHostId(folderWorkspace?.executionHostId)
   const projectGroup = folderWorkspace
     ? state.projectGroups.find(

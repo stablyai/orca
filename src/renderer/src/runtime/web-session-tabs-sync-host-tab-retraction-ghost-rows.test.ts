@@ -31,6 +31,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import { withRepoHostOwnership } from '../store/slices/worktrees/listing/worktree-host-ownership'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
@@ -239,9 +240,16 @@ function seedPairedClientStore(): TestStore {
   const store = createTestStore()
   seedStore(store, {
     settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
-    worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
+    worktreesByRepo: {
+      repo1: [
+        withRepoHostOwnership(
+          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+          `runtime:${ENV}`
+        )
+      ]
+    },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 

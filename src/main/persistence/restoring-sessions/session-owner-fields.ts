@@ -104,5 +104,6 @@ export function deleteOwnerKeyedSessionFields(
   }
   if (next.activeWorktreeId === ownerKey) {
     next.activeWorktreeId = null
+    next.activeWorkspaceOwner = null
   }
 }

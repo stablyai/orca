@@ -229,6 +229,10 @@ export type WebSessionTabsSyncState = Pick<
       AppState,
       | 'acknowledgedAgentsByPaneKey'
       | 'activityClearedAtByPaneKey'
+      | 'activeWorkspaceOwner'
+      | 'repos'
+      | 'worktreesByRepo'
+      | 'detectedWorktreesByRepo'
       | 'agentLaunchConfigByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
       // Why: a client draft is the evidence that a mirrored file's dirty flag is the client's

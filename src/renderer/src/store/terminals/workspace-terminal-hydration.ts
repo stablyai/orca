@@ -97,6 +97,13 @@ export function createWorkspaceTerminalHydrationActions(
           activeWorkspaceKey && session.activeWorkspaceExecutionHostId
             ? session.activeWorkspaceExecutionHostId
             : null
+        const sessionOwner = session.activeWorkspaceOwner
+        const activeWorkspaceOwner =
+          sessionOwner?.worktreeId === activeWorktreeId &&
+          (activeWorkspaceExecutionHostId === sessionOwner.publisherHostId ||
+            activeWorkspaceExecutionHostId === sessionOwner.executionHostId)
+            ? sessionOwner
+            : null
         // Why: follow a subsumed row to the canonical twin that inherited its PTY, else the app
         // restarts with no active terminal even though the same session is still mounted.
         const restoredActiveTabId = session.activeTabId
@@ -168,6 +175,7 @@ export function createWorkspaceTerminalHydrationActions(
           activeWorktreeId,
           activeWorkspaceKey,
           activeWorkspaceExecutionHostId,
+          activeWorkspaceOwner,
           activeTabId,
           activeTabIdByWorktree,
           restoredRuntimeHostIdByWorkspaceSessionKey:

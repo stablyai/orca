@@ -1,4 +1,5 @@
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
+import { worktreeSelectionOwnerKey } from '../lib/worktree-selection-owner'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
 import { createBrowserUuid } from '../lib/browser-uuid'
@@ -164,6 +165,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
   const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
   const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
   const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
+  const expectedOwnerKey = worktreeSelectionOwnerKey(initialFocusState?.activeWorkspaceOwner)
   context.expectedCurrentLocalTabId = initialFocusState
     ? resolveWebSessionVisibleTabId(initialFocusState, args.worktreeId)
     : null
@@ -187,6 +189,8 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
         state.activeTabTypeByWorktree === previousState.activeTabTypeByWorktree &&
         state.activeWorktreeId === previousState.activeWorktreeId &&
         state.activeWorkspaceExecutionHostId === previousState.activeWorkspaceExecutionHostId &&
+        worktreeSelectionOwnerKey(state.activeWorkspaceOwner) ===
+          worktreeSelectionOwnerKey(previousState.activeWorkspaceOwner) &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
         state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree
       ) {
@@ -195,6 +199,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       if (
         state.activeWorktreeId === expectedActiveWorktreeId &&
         state.activeWorkspaceExecutionHostId === expectedActiveWorkspaceExecutionHostId &&
+        worktreeSelectionOwnerKey(state.activeWorkspaceOwner) === expectedOwnerKey &&
         resolveWebSessionVisibleTabId(state, args.worktreeId) === context.expectedCurrentLocalTabId
       ) {
         return

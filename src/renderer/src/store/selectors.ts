@@ -18,6 +18,12 @@ import {
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
 import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
+import {
+  findWorktreeForSelectionOwner,
+  getActiveWorktreeOwner,
+  worktreeSelectionOwnerKey
+} from '@/lib/worktree-selection-owner'
+import { getRepoCatalogOwnerHostId } from './projects/project-catalog-owner'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -160,12 +166,28 @@ export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
 type ActiveWorkspaceRepoState = Pick<
   AppState,
   'repos' | 'activeRepoId' | 'activeWorkspaceExecutionHostId'
->
+> &
+  Partial<
+    Pick<
+      AppState,
+      'activeWorkspaceOwner' | 'activeWorktreeId' | 'worktreesByRepo' | 'detectedWorktreesByRepo'
+    >
+  >
 
 // Why: mirrors getIndexedRepoMap above — the host-scoped branch re-filtered every
 // repo on each store write even though its answer only moves when `repos` or the
 // active workspace host does.
-const activeWorkspaceRepoCache = new WeakMap<AppState['repos'], Map<string, Repo | null>>()
+const activeWorkspaceRepoCache = new WeakMap<
+  AppState['repos'],
+  Map<
+    string,
+    {
+      repo: Repo | null
+      worktrees: AppState['worktreesByRepo'] | undefined
+      detected: AppState['detectedWorktreesByRepo'] | undefined
+    }
+  >
+>()
 
 function resolveRepoOnActiveWorkspaceHost(
   state: ActiveWorkspaceRepoState,
@@ -173,6 +195,20 @@ function resolveRepoOnActiveWorkspaceHost(
   activeWorkspaceExecutionHostId: ExecutionHostId
 ): Repo | null {
   const repoCandidates = state.repos.filter((candidate) => candidate.id === repoId)
+  const owner = state.activeWorkspaceOwner
+  if (owner) {
+    const worktree = findWorktreeForSelectionOwner(state, owner)
+    if (!worktree || worktree.repoId !== repoId) {
+      return null
+    }
+    const candidates = repoCandidates.filter(
+      (repo) =>
+        getRepoCatalogOwnerHostId(repo) === owner.publisherHostId &&
+        (repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo)) ===
+          owner.executionHostId
+    )
+    return candidates.length === 1 ? candidates[0] : null
+  }
   const hostMatch = repoCandidates.find(
     (candidate) => getRepoExecutionHostId(candidate) === activeWorkspaceExecutionHostId
   )
@@ -199,7 +235,17 @@ export function selectRepoByIdForActiveWorkspace(
   }
   const repo = getCachedRepoMap(state.repos).get(repoId) ?? null
   const activeWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId
-  if (repoId !== state.activeRepoId || !activeWorkspaceExecutionHostId) {
+  if (
+    state.activeWorkspaceOwner &&
+    state.activeWorktreeId !== undefined &&
+    state.activeWorktreeId !== state.activeWorkspaceOwner.worktreeId
+  ) {
+    return null
+  }
+  if (
+    repoId !== state.activeRepoId ||
+    (!activeWorkspaceExecutionHostId && !state.activeWorkspaceOwner)
+  ) {
     return repo
   }
   // The branch below only fires for the active repo, so the host id fully keys it.
@@ -208,13 +254,25 @@ export function selectRepoByIdForActiveWorkspace(
     byHost = new Map()
     activeWorkspaceRepoCache.set(state.repos, byHost)
   }
-  const cacheKey = `${activeWorkspaceExecutionHostId}\u0000${repoId}`
+  const cacheKey = `${activeWorkspaceExecutionHostId}\u0000${repoId}\u0000${worktreeSelectionOwnerKey(state.activeWorkspaceOwner)}`
   const cached = byHost.get(cacheKey)
-  if (cached !== undefined) {
-    return cached
+  if (
+    cached &&
+    cached.worktrees === state.worktreesByRepo &&
+    cached.detected === state.detectedWorktreesByRepo
+  ) {
+    return cached.repo
   }
-  const resolved = resolveRepoOnActiveWorkspaceHost(state, repoId, activeWorkspaceExecutionHostId)
-  byHost.set(cacheKey, resolved)
+  const resolved = resolveRepoOnActiveWorkspaceHost(
+    state,
+    repoId,
+    activeWorkspaceExecutionHostId ?? state.activeWorkspaceOwner!.executionHostId
+  )
+  byHost.set(cacheKey, {
+    repo: resolved,
+    worktrees: state.worktreesByRepo,
+    detected: state.detectedWorktreesByRepo
+  })
   return resolved
 }
 
@@ -229,7 +287,10 @@ export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
 export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
-type WorktreeLookupHostState = Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
+type WorktreeLookupHostState = Pick<
+  AppState,
+  'activeWorktreeId' | 'activeWorkspaceExecutionHostId' | 'activeWorkspaceOwner'
+>
 
 // Why: worktree ids repeat across hosts, so the active id must resolve on the host the user selected.
 function getWorktreeLookupHostId(
@@ -255,7 +316,12 @@ export function selectKnownWorktreeById(
     ? (findKnownWorktreeById(
         state,
         worktreeId,
-        getWorktreeLookupHostId(state, worktreeId, executionHostId)
+        getWorktreeLookupHostId(state, worktreeId, executionHostId),
+        !executionHostId ||
+          executionHostId === state.activeWorkspaceOwner?.executionHostId ||
+          executionHostId === state.activeWorkspaceOwner?.publisherHostId
+          ? getActiveWorktreeOwner(state, worktreeId)
+          : undefined
       ) ?? null)
     : null
 }

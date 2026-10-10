@@ -23,6 +23,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeRepoId: 'none',
   activeWorkspaceKey: 'direct',
   activeWorkspaceExecutionHostId: 'none',
+  activeWorkspaceOwner: 'none',
   activeWorktreeId: 'direct',
   activeTabId: 'none',
   tabsByWorktree: 'owner-keyed-row-arrays',

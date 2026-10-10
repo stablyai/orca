@@ -1,4 +1,3 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -21,7 +20,10 @@ import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import {
+  ensureWorktreeHasInitialTerminal,
+  ensureFolderWorkspaceInitialTerminal
+} from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 import {
@@ -34,6 +36,11 @@ import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-r
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
+import {
+  worktreeSelectionOwnerKey,
+  getActiveWorktreeOwner,
+  withAvailableWorktreeSelectionInstance
+} from './worktree-selection-owner'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -44,32 +51,6 @@ export type ActivateAndRevealResult = {
   /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
   primaryTabId: string | null
-}
-
-function ensureFolderWorkspaceInitialTerminal(
-  folderWorkspace: FolderWorkspace,
-  startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean,
-  seedUserDefaultSurface?: boolean
-): string | null {
-  if (providesInitialSurface === true && startup === undefined) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
-    startup,
-    undefined,
-    undefined,
-    undefined,
-    {
-      reseedEmptiedWorkspace: providesInitialSurface !== true,
-      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
-    }
-  )
-  return primaryTabId
 }
 
 function canInspectAgentActivationInventory(): boolean {
@@ -198,10 +179,14 @@ export function activateAndRevealWorktree(
     revealFloatingWorkspacePanel(state)
     return { primaryTabId: null }
   }
-  const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
+  let selectedOwner =
+    opts?.owner ?? (!opts?.executionHostId ? getActiveWorktreeOwner(state, worktreeId) : undefined)
+  const selectedHostId = opts?.executionHostId ?? selectedOwner?.executionHostId
+  const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId, selectedOwner)
   if (!wt) {
     return false
   }
+  selectedOwner = withAvailableWorktreeSelectionInstance(selectedOwner, wt)
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
@@ -212,8 +197,20 @@ export function activateAndRevealWorktree(
     !hasActivationWork &&
     state.activeRepoId === wt.repoId &&
     state.activeWorktreeId === worktreeId &&
-    state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
+    state.activeWorkspaceExecutionHostId === (selectedHostId ?? null) &&
+    worktreeSelectionOwnerKey(state.activeWorkspaceOwner) ===
+      worktreeSelectionOwnerKey(selectedOwner) &&
     state.activeView === 'terminal'
+
+  if (
+    state.setActiveWorktree(
+      worktreeId,
+      selectedHostId,
+      selectedOwner ? { owner: selectedOwner } : undefined
+    ) === false
+  ) {
+    return false
+  }
 
   // 1. Set activeRepoId if crossing repos
   if (wt.repoId !== state.activeRepoId) {
@@ -226,14 +223,14 @@ export function activateAndRevealWorktree(
   }
 
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
-  state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
       worktreeId,
-      environmentId: ownerRuntimeEnvironmentId
+      environmentId: ownerRuntimeEnvironmentId,
+      ...(selectedOwner ? { owner: selectedOwner } : {})
     })
   }
 
@@ -268,6 +265,7 @@ export function activateAndRevealWorktree(
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
+      owner: postActivationState.activeWorkspaceOwner ?? undefined,
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }

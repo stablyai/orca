@@ -188,6 +188,7 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
     current.settings !== previous.settings ||
     current.activeWorktreeId !== previous.activeWorktreeId ||
     current.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId ||
+    current.activeWorkspaceOwner !== previous.activeWorkspaceOwner ||
     current.restoredRuntimeHostIdByWorkspaceSessionKey !==
       previous.restoredRuntimeHostIdByWorkspaceSessionKey ||
     current.runtimeEnvironments !== previous.runtimeEnvironments ||

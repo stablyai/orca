@@ -1,4 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorktreeSelectionOwner } from '../../../shared/worktree-selection-owner'
+import { worktreeSelectionOwnerKey } from '../lib/worktree-selection-owner'
 
 /**
  * Which runtime environment a web-runtime-session call targets.
@@ -25,13 +27,18 @@ export function resolveWebRuntimeSessionEnvironmentId(
 export type WebRuntimeSessionWorkspaceSelection = {
   worktreeId: string | null
   executionHostId: ExecutionHostId | null
+  owner?: WorktreeSelectionOwner | null
 }
 
 function selectionsMatch(
   a: WebRuntimeSessionWorkspaceSelection,
   b: WebRuntimeSessionWorkspaceSelection
 ): boolean {
-  return a.worktreeId === b.worktreeId && a.executionHostId === b.executionHostId
+  return (
+    a.worktreeId === b.worktreeId &&
+    a.executionHostId === b.executionHostId &&
+    worktreeSelectionOwnerKey(a.owner) === worktreeSelectionOwnerKey(b.owner)
+  )
 }
 
 /**

@@ -94,6 +94,7 @@ export function createPruneLastVisitedTimestamps(
         activeWorktreeId?: null
         activeWorkspaceKey?: null
         activeWorkspaceExecutionHostId?: null
+        activeWorkspaceOwner?: null
       } = {}
       if (changed) {
         patch.lastVisitedAtByWorktreeId = next
@@ -122,6 +123,7 @@ export function createPruneLastVisitedTimestamps(
             patch.activeWorkspaceKey = null
           }
           patch.activeWorkspaceExecutionHostId = null
+          patch.activeWorkspaceOwner = null
         }
       }
       return Object.keys(patch).length > 0 ? patch : s

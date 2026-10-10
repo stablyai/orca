@@ -12,6 +12,7 @@ export type WorkspaceHydrationPatch = Pick<
   | 'activeWorktreeId'
   | 'activeWorkspaceKey'
   | 'activeWorkspaceExecutionHostId'
+  | 'activeWorkspaceOwner'
   | 'activeTabId'
   | 'activeTabIdByWorktree'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
@@ -168,6 +169,9 @@ export function targetScopedWorkspaceHydrationPatch(
     activeWorkspaceExecutionHostId: activeOutsideScope
       ? state.activeWorkspaceExecutionHostId
       : hydrated.activeWorkspaceExecutionHostId,
+    activeWorkspaceOwner: activeOutsideScope
+      ? (state.activeWorkspaceOwner ?? null)
+      : (hydrated.activeWorkspaceOwner ?? null),
     activeTabId: activeOutsideScope ? state.activeTabId : hydrated.activeTabId,
     activeTabIdByWorktree: replaceHydratedRecordKeys(
       state.activeTabIdByWorktree,

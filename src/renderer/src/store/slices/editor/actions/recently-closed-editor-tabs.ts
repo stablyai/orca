@@ -193,6 +193,7 @@ export function createRecentlyClosedEditorTabs(
           activeFileId: null,
           // Why: closing every editor can leave no renderable surface; clear the active worktree so the renderer shows the landing page, not a blank workspace.
           activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
+          activeWorkspaceOwner: shouldDeactivateWorktree ? null : s.activeWorkspaceOwner,
           activeBrowserTabId: shouldDeactivateWorktree
             ? null
             : browserTabsForWorktree.length > 0

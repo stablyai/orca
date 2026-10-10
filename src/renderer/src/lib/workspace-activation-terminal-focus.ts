@@ -2,6 +2,7 @@ import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-hel
 import { useAppStore } from '@/store'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
+import { worktreeSelectionOwnerKey } from './worktree-selection-owner'
 
 let cancelPendingFocus: (() => void) | null = null
 
@@ -22,6 +23,7 @@ export function queueWorkspaceActivationTerminalFocus(
   }
   let tabId = activation.primaryTabId ?? initial.activeTabId
   const executionHostId = initial.activeWorkspaceExecutionHostId
+  const selectedOwnerKey = worktreeSelectionOwnerKey(initial.activeWorkspaceOwner)
   const initialFocus = document.activeElement
   const closingDialog = document.querySelector('[role="dialog"]')
   let frameId: number | null = null
@@ -49,6 +51,7 @@ export function queueWorkspaceActivationTerminalFocus(
     if (
       state.activeWorktreeId !== worktreeId ||
       state.activeWorkspaceExecutionHostId !== executionHostId ||
+      worktreeSelectionOwnerKey(state.activeWorkspaceOwner) !== selectedOwnerKey ||
       state.activeView !== 'terminal' ||
       state.activeTabType !== 'terminal' ||
       (tabId !== null && state.activeTabId !== tabId) ||

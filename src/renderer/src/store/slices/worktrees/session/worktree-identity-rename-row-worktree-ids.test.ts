@@ -37,6 +37,23 @@ function appState(overrides: Partial<AppState>): AppState {
 }
 
 describe('buildWorktreeRenameState value-owned worktree rows', () => {
+  it('preserves selected ownership while updating its renamed locator', () => {
+    const owner = {
+      worktreeId: OLD,
+      publisherHostId: 'runtime:hub-a' as const,
+      executionHostId: 'ssh:private-a' as const,
+      instanceId: 'same-instance'
+    }
+    const next = buildWorktreeRenameState(
+      appState({ activeWorktreeId: OLD, activeWorkspaceOwner: owner }),
+      OLD,
+      NEW
+    )
+
+    expect(next.activeWorktreeId).toBe(NEW)
+    expect(next.activeWorkspaceOwner).toEqual({ ...owner, worktreeId: NEW })
+  })
+
   it('re-points a closed-terminal-tab tombstone onto the new worktree id', () => {
     const next = buildWorktreeRenameState(
       appState({

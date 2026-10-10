@@ -58,6 +58,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'defaultTerminalTabsAppliedByWorktreeId'
 > & {
   activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
+  activeWorkspaceOwner?: AppState['activeWorkspaceOwner']
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
   clientHostedBrowserCloseIntentsByEnvironment?: AppState['clientHostedBrowserCloseIntentsByEnvironment']
   /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
@@ -70,6 +71,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'activeRepoId',
   'activeWorkspaceKey',
   'activeWorkspaceExecutionHostId',
+  'activeWorkspaceOwner',
   'activeWorktreeId',
   'activeTabId',
   'tabsByWorktree',
@@ -289,6 +291,7 @@ export function buildWorkspaceSessionPayload(
     activeRepoId: snapshot.activeRepoId,
     activeWorkspaceKey: snapshot.activeWorkspaceKey,
     activeWorkspaceExecutionHostId: snapshot.activeWorkspaceExecutionHostId,
+    activeWorkspaceOwner: snapshot.activeWorkspaceOwner,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),

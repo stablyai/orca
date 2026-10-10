@@ -4,18 +4,32 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { WorktreeSelectionOwner } from '../../../shared/worktree-selection-owner'
 
 export type WorktreeRuntimeOwnerState = {
-  repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
+  repos?: readonly Pick<
+    Repo,
+    | 'id'
+    | 'connectionId'
+    | 'executionHostId'
+    | 'catalogOwnerHostId'
+    | 'authoritativeExecutionHostId'
+  >[]
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<
     string,
-    readonly Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>[]
+    readonly Pick<
+      Worktree,
+      'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId' | 'identity' | 'instanceId'
+    >[]
   >
   detectedWorktreesByRepo?: Record<
     string,
     {
-      worktrees: readonly Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>[]
+      worktrees: readonly Pick<
+        Worktree,
+        'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId' | 'identity' | 'instanceId'
+      >[]
     }
   >
   folderWorkspaces?: readonly Pick<
@@ -26,6 +40,7 @@ export type WorktreeRuntimeOwnerState = {
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
   activeWorktreeId?: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
+  activeWorkspaceOwner?: WorktreeSelectionOwner | null
   runtimeEnvironments?: readonly { id: string }[]
   runtimeEnvironmentCatalogHydrated?: boolean
   removedRuntimeEnvironmentIds?: ReadonlySet<string>

@@ -7,7 +7,9 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
-import { resolveExactWorktreeRoute } from './worktree-owner-route'
+import { resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
+import { findWorktreeForSelectionOwner, getActiveWorktreeOwner } from './worktree-selection-owner'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   findIndexedDetectedWorktrees,
   hasIndexedDetectedWorktree,
@@ -46,11 +48,20 @@ export type WorktreeOperationOwnerRecord = {
   repoId: string
   hostId?: ExecutionHostId
   runtimeOwnerEnvironmentId?: string
+  identity?: Worktree['identity']
+  instanceId?: string
 }
 
 // settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
 export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
-  repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
+  repos?: readonly Pick<
+    AppState['repos'][number],
+    | 'id'
+    | 'connectionId'
+    | 'executionHostId'
+    | 'catalogOwnerHostId'
+    | 'authoritativeExecutionHostId'
+  >[]
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
   runtimeEnvironmentCatalogHydrated?: boolean
@@ -95,6 +106,13 @@ export function resolveActiveWorkspaceRoute(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRoute | null {
+  const owner = getActiveWorktreeOwner(state, worktreeId)
+  if (owner) {
+    if (!findWorktreeForSelectionOwner(state, owner)) {
+      return null
+    }
+    return routeForOwner({ hostId: owner.executionHostId, publisherHostId: owner.publisherHostId })
+  }
   const activeHost =
     state.activeWorktreeId === worktreeId
       ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
@@ -247,6 +265,11 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const owner = getActiveWorktreeOwner(state, worktreeId)
+  if (owner) {
+    const route = resolveActiveWorkspaceRoute(state, worktreeId)
+    return route ? { kind: 'resolved', route } : { kind: 'missing' }
+  }
   const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
   if (activeRoute) {
     return { kind: 'resolved', route: activeRoute }
