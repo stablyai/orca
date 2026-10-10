@@ -1,3 +1,4 @@
+import { generatedTitleNamesEndedSession } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -99,7 +100,14 @@ export function createTerminalTabPresentationActions(
         return
       }
       const existingGeneratedTitle = currentTab.generatedTitle?.trim()
-      if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
+      // Why: the title names the session that produced it; once that session is gone
+      // (`/clear`, resume) it labels a finished conversation and must not outrank the new one.
+      const namesEndedSession = generatedTitleNamesEndedSession(currentTab, options?.sessionId)
+      if (
+        existingGeneratedTitle &&
+        !namesEndedSession &&
+        options?.replaceExistingGeneratedTitle !== true
+      ) {
         return
       }
       set((latestState) => {

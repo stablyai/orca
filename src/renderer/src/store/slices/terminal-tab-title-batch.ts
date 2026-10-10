@@ -1,4 +1,7 @@
-import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
+import {
+  deriveGeneratedTabTitle,
+  generatedTitleNamesEndedSession
+} from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
@@ -14,7 +17,7 @@ export type TerminalTabTitleUpdate = { tabId: string; title: string }
 export type GeneratedTabTitleUpdate = {
   paneKey: string
   prompt: string
-  options?: { replaceExistingGeneratedTitle?: boolean }
+  options?: { replaceExistingGeneratedTitle?: boolean; sessionId?: string }
 }
 
 type TitleState = Pick<
@@ -230,14 +233,29 @@ export function applyGeneratedTabTitleUpdates(
       continue
     }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()
-    if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
+    // Why: the title names the session that produced it; once that session is gone
+    // (`/clear`, resume) it labels a finished conversation and must not outrank the new one.
+    const namesEndedSession = generatedTitleNamesEndedSession(currentTab, options?.sessionId)
+    if (
+      existingGeneratedTitle &&
+      !namesEndedSession &&
+      options?.replaceExistingGeneratedTitle !== true
+    ) {
       continue
     }
     const generatedTitle = deriveGeneratedTabTitle(prompt)
-    if (!generatedTitle || existingGeneratedTitle === generatedTitle) {
+    // Why: a new session whose first prompt derives the same text still has to re-stamp
+    // the owner, or every later turn keeps reading as stale and retitles the tab.
+    if (!generatedTitle || (existingGeneratedTitle === generatedTitle && !namesEndedSession)) {
       continue
     }
-    updateStageTabs(stage, tabIndexes, (tab) => ({ ...tab, generatedTitle }))
+    // Why: keep the known owner when this ping carried no session id — overwriting it
+    // with null would permanently disable staleness detection for the tab.
+    updateStageTabs(stage, tabIndexes, (tab) => ({
+      ...tab,
+      generatedTitle,
+      generatedTitleSessionId: options?.sessionId ?? tab.generatedTitleSessionId ?? null
+    }))
     updateStageUnifiedLabel(stage, tabId, 'generatedLabel', generatedTitle)
   }
   return finishTitleStages(state, stages)
