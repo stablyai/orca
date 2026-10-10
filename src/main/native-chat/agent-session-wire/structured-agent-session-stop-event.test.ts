@@ -87,12 +87,7 @@ describe("a Stop's event", () => {
         reason: 'user-stop',
         turnId: 'turn-named',
         caller: QUEUED_RIG_CALLER.callerKey,
-        at: expect.any(Number),
-        accepted: {
-          operationId,
-          cutoff: expect.any(Number),
-          child: { generation: expect.any(String), fence: 1 }
-        }
+        at: expect.any(Number)
       }
     ])
   })
@@ -125,7 +120,7 @@ describe("a Stop's event", () => {
       ok: false,
       refusal: {
         code: 'agent_session_operation_invalid',
-        details: { reason: 'journalWriteFailed' },
+        details: { reason: 'stopFailed' },
         message: expect.stringMatching(/^Couldn't stop .+\. Try again\.$/)
       }
     })
@@ -161,8 +156,7 @@ describe("a Stop's event", () => {
       {
         reason: 'user-stop',
         caller: QUEUED_RIG_CALLER.callerKey,
-        at: expect.any(Number),
-        accepted: expect.objectContaining({ cutoff: expect.any(Number) })
+        at: expect.any(Number)
       }
     ])
   })
@@ -184,8 +178,7 @@ describe("a Stop's event", () => {
       {
         reason: 'user-stop',
         caller: QUEUED_RIG_CALLER.callerKey,
-        at: expect.any(Number),
-        accepted: expect.objectContaining({ cutoff: expect.any(Number) })
+        at: expect.any(Number)
       }
     ])
   })
@@ -271,7 +264,9 @@ describe("a Stop's event", () => {
     expect(stopEvents()).toEqual([])
   })
 
-  it('names a turn that ended while the next card is sent but shows no turn yet: writes, and holds that card', async () => {
+  // The turn it names is in the journal and over: a late Stop, an accepted no-op, even while the
+  // next card is handed over and shows no turn yet.
+  it('names a turn that ended while the next card is sent but shows no turn yet: writes nothing, and the card runs', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
     await turnRow('turn-1', 'running')
@@ -281,15 +276,15 @@ describe("a Stop's event", () => {
     await eventually(async () => expect((await rig.handoff(next))?.handedOverAt).toBeDefined())
     expect(journal().activeTurnId()).toBeNull()
     const fields = { turnId: 'turn-1' }
-    await rig.host.cancel(QUEUED_RIG_CALLER, {
+    const stopped = await rig.host.cancel(QUEUED_RIG_CALLER, {
       envelope: rig.envelope(fields, 'agentSession.cancel', hostTestOperationId()),
       ...fields
     })
-    expect(stopEvents()).toHaveLength(1)
-    await withdraw(await rig.handoffId(next))
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    expect(await rig.drafts()).toEqual([{ messageId: next, state: 'waiting' }])
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(stopped).toMatchObject({ ok: true, value: { turnId: 'turn-1', cancelled: false } })
+    expect(stopEvents()).toEqual([])
+    expect(rig.cancelTurn).not.toHaveBeenCalled()
+    expect(await rig.queuePause()).toBeNull()
+    expect((await rig.handoff(next))?.dispatchState).toBe('pending')
   })
 
   it("holds a card when it lands between the queue's pick and its claim", async () => {

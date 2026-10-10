@@ -2,7 +2,11 @@ import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
-import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import type {
+  AgentSessionOperationReceipt,
+  AgentSessionTurnContext,
+  TurnOutcome
+} from './structured-agent-session-turns'
 
 /** Only thrown while the provider dispatch is still unreachable. */
 export class AgentSessionPreDispatchError extends Error {
@@ -28,6 +32,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   ) => input.store.recordOperationOutcome({ ...operation, outcome })
   const receipt = input.plan.settlesWithWrite
     ? observedReceipt(
+        input.store,
         input.plan.successReceipt?.() ??
           input.store.operationOutcomeReceipt({
             ...operation,
@@ -39,13 +44,13 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   let outcome: TurnOutcome<TValue> | undefined
   try {
     const ran = await input.plan.run(context)
-    if (receipt?.wasCommitted() && !ran.ok) {
+    if (receipt?.isCommitted() && !ran.ok) {
       // The row says accepted, so a refusal past it (a fold that failed after COMMIT) is a fault.
       throw new Error(
         `operation ${operation.operationId} was accepted, then refused: ${ran.refusal.code}`
       )
     }
-    if (receipt?.wasCommitted()) {
+    if (receipt?.isCommitted()) {
       return ran
     }
     outcome = ran
@@ -93,15 +98,22 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
 }
 
 function observedReceipt(
+  store: Pick<AgentSessionRecordStore, 'commitOperationReceipt'>,
   receipt: JournalOperationReceipt
-): JournalOperationReceipt & { wasCommitted: () => boolean } {
+): AgentSessionOperationReceipt {
   let committed = false
-  return {
+  const observed: AgentSessionOperationReceipt = {
     write: receipt.write,
     committed: () => {
       receipt.committed()
       committed = true
     },
-    wasCommitted: () => committed
+    isCommitted: () => committed,
+    commitAlone: async () => {
+      if (!committed) {
+        await store.commitOperationReceipt(observed)
+      }
+    }
   }
+  return observed
 }

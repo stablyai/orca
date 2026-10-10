@@ -1,8 +1,10 @@
 // A Stop accepts through its own command receipt BEFORE it acts: the receipt, and for the chat's
-// Stop its event and every send it holds, commit first, and only then does it interrupt or end
-// anything. A Stop whose acceptance cannot be saved acts on nothing and says so; a retry of its id
-// is answered from the receipt and never resolves a target again.
+// Stop its event and every send it settles, commit first, and only then does it interrupt or end
+// anything. A Stop whose acceptance cannot be saved acts on nothing and says so; one saved that
+// then cannot take effect says so too, and its receipt records that. A retry of its id is answered
+// from the receipt and never resolves a target again.
 
+import { agentSessionFailureSentence } from '../../../shared/agent-session-failure-words'
 import { refuse, type AgentSessionCancelResult } from '../../../shared/agent-session-wire'
 import {
   isAgentSessionRefusalError,
@@ -10,7 +12,6 @@ import {
 } from '../../../shared/agent-session-wire-refusals'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
-import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import {
   classifyJournalOpenFailure,
@@ -25,90 +26,87 @@ import {
   journalRowReceiptResult,
   type MutationCommandReceipt
 } from './structured-agent-session-mutation-plans'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import type {
+  AgentSessionOperationReceipt,
+  AgentSessionTurnContext
+} from './structured-agent-session-turns'
 
-/** What a Stop accepted with no Stop event of its own captured (`CommandReceiptResult` `stop`). */
-export type StructuredAgentSessionStopTarget = Omit<
-  Extract<CommandReceiptResult, { kind: 'stop' }>,
-  'kind'
->
-
-/** One Stop's acceptance: the target its receipt records when no Stop event of its own does, and
- *  whether it is saved, so a later step of the same Stop never saves it twice. */
-export type StructuredAgentSessionStopAcceptance = {
-  target?: StructuredAgentSessionStopTarget
-  saved?: true
+/** The receipt a Stop accepts with: the row it wrote (its Stop event, or a card's dismissal), else
+ *  that it was accepted. A Stop that acted on nothing records the no-op it answered; one that could
+ *  not take effect records its refusal. */
+export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {
+  result: (row) => (row ? journalRowReceiptResult(row, 'tombstone', 'item') : { kind: 'stop' }),
+  unwritten: (value) => ({
+    kind: 'no-op',
+    outcome: {
+      kind: 'cancel',
+      cancelled: false,
+      ...(value.turnId !== undefined ? { turnId: value.turnId } : {})
+    }
+  }),
+  refusedAfterAcceptance: (ctx) => stopFailedRefusal(ctx)
 }
 
-/** The receipt a Stop accepts with: its Stop event, else its captured target; a Stop that acted
- *  on nothing records the no-op it answered, before that answer goes out. */
-export function stopCommandReceipt(
-  acceptance: StructuredAgentSessionStopAcceptance
-): MutationCommandReceipt<AgentSessionCancelResult> {
-  return {
-    result: (row) => {
-      if (row) {
-        return journalRowReceiptResult(row, 'tombstone')
-      }
-      if (!acceptance.target) {
-        throw new Error('an accepted Stop requires its event or its target')
-      }
-      return { kind: 'stop', ...acceptance.target }
-    },
-    unwritten: (value) => ({
-      kind: 'no-op',
-      outcome: {
-        kind: 'cancel',
-        cancelled: false,
-        ...(value.turnId !== undefined ? { turnId: value.turnId } : {})
-      }
-    })
-  }
+/** What a Stop that did not take effect answers: plain words naming the agent, and to try again. */
+export function stopFailedRefusal(
+  ctx: Pick<AgentSessionTurnContext, 'agent'>
+): AgentSessionWireRefusal {
+  const agent = isTuiAgent(ctx.agent) ? ctx.agent : undefined
+  const words = agentSessionFailureSentence(
+    { kind: 'stopFailed' },
+    'row',
+    agent ? { agentName: TUI_AGENT_DISPLAY_NAMES[agent] } : {}
+  )
+  return refuse(
+    'agent_session_operation_invalid',
+    { reason: 'stopFailed', ...(agent ? { agent } : {}) },
+    `${words} Try again.`
+  )
 }
 
 type Accepted<T> = { ok: true; value: T } | { ok: false; refusal: AgentSessionWireRefusal }
 
-/** Commits the receipt alone, naming `target`, before a Stop that writes no Stop event acts. */
-export async function acceptStopTarget(
-  ctx: AgentSessionTurnContext,
-  acceptance: StructuredAgentSessionStopAcceptance,
-  target: StructuredAgentSessionStopTarget
-): Promise<Accepted<null>> {
-  const receipt = ctx.operationReceipt
-  if (acceptance.saved || !receipt) {
-    return { ok: true, value: null }
-  }
-  acceptance.target = target
+/** Commits the receipt alone, before a Stop that writes no row of its own acts. */
+export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Accepted<null>> {
+  const receipt = stopReceipt(ctx)
   try {
-    await ctx.journal.stops.commitReceipt(receipt)
-    acceptance.saved = true
+    await receipt.commitAlone()
     return { ok: true, value: null }
   } catch (error) {
-    return notAccepted(ctx, error)
+    return stopNotSaved(ctx, error)
   }
 }
 
-/** Commits the chat's Stop: the sends it holds, its event and its receipt, in one transaction. */
+/** Commits the chat's Stop: the sends it settles, its event and its receipt, in one transaction. */
 export async function acceptChatStop(
   ctx: AgentSessionTurnContext,
-  acceptance: StructuredAgentSessionStopAcceptance,
   input: JournalStopAcceptanceInput
 ): Promise<Accepted<JournalStopAcceptance>> {
+  const receipt = stopReceipt(ctx)
   try {
-    const accepted = await ctx.journal.stops.accept(
-      input,
-      acceptance.saved ? undefined : ctx.operationReceipt
-    )
-    acceptance.saved = true
-    return { ok: true, value: accepted }
+    return {
+      ok: true,
+      value: await ctx.journal.stops.accept(input, receipt.isCommitted() ? undefined : receipt)
+    }
   } catch (error) {
-    return notAccepted(ctx, error)
+    return stopNotSaved(ctx, error)
   }
+}
+
+/** Every Stop accepts through its command receipt; one without it is a plan wired wrong. */
+function stopReceipt(ctx: AgentSessionTurnContext): AgentSessionOperationReceipt {
+  if (!ctx.operationReceipt) {
+    throw new Error('a Stop is accepted only through its command receipt')
+  }
+  return ctx.operationReceipt
 }
 
 /** Nothing was saved, so nothing is interrupted: the agent keeps running and the person is told
  *  to try again. A receipt another call committed first answers this one instead. */
-function notAccepted(ctx: AgentSessionTurnContext, error: unknown): Accepted<never> {
+export function stopNotSaved(
+  ctx: Pick<AgentSessionTurnContext, 'agent' | 'logger' | 'sessionId'>,
+  error: unknown
+): Accepted<never> {
   if (error instanceof CommandReceiptExistsError) {
     throw error
   }
@@ -125,13 +123,5 @@ function notAccepted(ctx: AgentSessionTurnContext, error: unknown): Accepted<nev
   ) {
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
-  const agent = isTuiAgent(ctx.agent) ? TUI_AGENT_DISPLAY_NAMES[ctx.agent] : 'the agent'
-  return {
-    ok: false,
-    refusal: refuse(
-      'agent_session_operation_invalid',
-      { reason: 'journalWriteFailed' },
-      `Couldn't stop ${agent}. Try again.`
-    )
-  }
+  return { ok: false, refusal: stopFailedRefusal(ctx) }
 }

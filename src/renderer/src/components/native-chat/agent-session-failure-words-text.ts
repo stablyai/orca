@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/agent-session-failure-copy'
 import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
 import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
+import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
@@ -168,8 +169,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
     chatClosed: () => translate('components.native-chat.failureWords.chatClosed', COPY.chatClosed),
     hostRestarted: () =>
       translate('components.native-chat.failureWords.hostRestarted', COPY.hostRestarted),
-    returnedToQueue: () =>
-      translate('components.native-chat.failureWords.returnedToQueue', COPY.returnedToQueue),
+    returnedToQueue: (values) =>
+      translate(
+        'components.native-chat.failureWords.returnedToQueue',
+        COPY.returnedToQueue,
+        values
+      ),
     notDelivered: () =>
       translate('components.native-chat.failureWords.notDelivered', COPY.notDelivered),
     notDeliveredSendAgain: () =>
@@ -225,18 +230,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.compactionUnconfirmed',
         COPY.compactionUnconfirmed
       ),
-    cancelUnconfirmed: () =>
-      translate('components.native-chat.failureWords.cancelUnconfirmed', COPY.cancelUnconfirmed),
-    stopRefused: (values) =>
-      translate('components.native-chat.failureWords.stopRefused', COPY.stopRefused, values),
-    stopRefusedQuoted: (values) =>
-      translate(
-        'components.native-chat.failureWords.stopRefusedQuoted',
-        COPY.stopRefusedQuoted,
-        values
-      ),
-    noTurnToStop: (values) =>
-      translate('components.native-chat.failureWords.noTurnToStop', COPY.noTurnToStop, values),
+    ...STOP_FAILURE_PIECES,
     answerUnconfirmed: () =>
       translate('components.native-chat.failureWords.answerUnconfirmed', COPY.answerUnconfirmed),
     hostFault: () => translate('components.native-chat.failureWords.hostFault', COPY.hostFault),

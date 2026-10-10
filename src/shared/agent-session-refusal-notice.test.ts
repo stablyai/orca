@@ -466,8 +466,15 @@ describe('the notice for every reason a host names', () => {
           'compactAfterAnswer'
         ] as const
       ).some((sentence) => parts.includes(sentence))
+      // "Couldn't stop Codex." already says the Stop did not happen.
+      const stopFailed =
+        write === 'stop' &&
+        failure.code === 'agent_session_operation_invalid' &&
+        failure.details?.reason === 'stopFailed'
       expect(notDone, cell).toEqual(
-        answeredAway || unsupported || saysNotDone || clearWhileWorking ? [] : [NOT_DONE[write]]
+        answeredAway || unsupported || saysNotDone || clearWhileWorking || stopFailed
+          ? []
+          : [NOT_DONE[write]]
       )
     }
   })
@@ -549,6 +556,62 @@ describe('a refusal from a host that names no reason this build knows', () => {
       JSON.stringify({ code: 'agent_session_operation_invalid', message: HOST_TEXT, details })
     )
     expect(agentSessionRefusalNotice(refusal, 'command')).toBe("The command didn't run.")
+  })
+})
+
+describe('a Stop the host could not save or carry out', () => {
+  const stopFailed = (details: unknown) =>
+    agentSessionRefusalFailure(
+      JSON.parse(JSON.stringify({ code: 'agent_session_operation_invalid', details }))
+    )
+
+  it('names the agent and says to try again', () => {
+    expect(
+      agentSessionRefusalNotice(
+        {
+          code: 'agent_session_operation_invalid',
+          message: HOST_TEXT,
+          details: { reason: 'stopFailed', agent: 'codex' }
+        },
+        'stop'
+      )
+    ).toBe("Couldn't stop Codex. Try again.")
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(stopFailed({ reason: 'stopFailed' }), 'stop')
+      )
+    ).toBe("Couldn't stop the agent. Try again.")
+    // A newer host's agent reads as none.
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(
+          stopFailed({ reason: 'stopFailed', agent: 'fromTheFuture' }),
+          'stop'
+        )
+      )
+    ).toBe("Couldn't stop the agent. Try again.")
+  })
+
+  it('leaves out trying again beside a Retry, and keeps the code words on any other write', () => {
+    const failure = stopFailed({ reason: 'stopFailed', agent: 'claude' })
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(failure, 'stop', { retryControl: true })
+      )
+    ).toBe("Couldn't stop Claude.")
+    expect(agentSessionWriteNoticeParts(failure, 'stop-task')).toEqual(['notDoneStopTask'])
+  })
+
+  // A client from before the reason keeps only reasons it lists: it reads none, and the code's words.
+  it('reads on a client that predates it as the Stop that did not happen', () => {
+    const refusal = JSON.parse(
+      JSON.stringify({
+        code: 'agent_session_operation_invalid',
+        message: HOST_TEXT,
+        details: { reason: 'aReasonThisClientLacks', agent: 'codex' }
+      })
+    )
+    expect(agentSessionRefusalNotice(refusal, 'stop')).toBe("The agent wasn't stopped.")
   })
 })
 

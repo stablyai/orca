@@ -18,7 +18,6 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
-import { rejectJournalQueuedSubmissions } from './journal-pending-submission-recovery'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-start',
@@ -115,12 +114,14 @@ it('writes neither when the row cannot be written', async () => {
 // A Stop that reaches the lane first takes the message back; the failed start then failed no one.
 it('writes nothing when a Stop withdrew every queued message first', async () => {
   const journal = await openWithQueued('first')
-  const withdrawal = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
-    surface: 'rejection'
-  })
 
   await Promise.all([
-    rejectJournalQueuedSubmissions(journal, 0, withdrawal),
+    journal.stops.accept({
+      event: { reason: 'user-stop' },
+      fence: 0,
+      hostInstance: 'host-instance',
+      words: {}
+    }),
     journal.appendLifecycleBatch(startFailureBatch())
   ])
 

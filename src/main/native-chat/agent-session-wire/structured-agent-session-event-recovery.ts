@@ -2,6 +2,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
 import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
+import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type {
   StructuredAgentSessionHostDeps,
@@ -52,7 +53,15 @@ export class StructuredAgentSessionEventRecovery {
           await holdUnsentSends(journal, {
             fence,
             hostInstance: structuredAgentSessionHostInstance(),
-            hold: { cause },
+            hold:
+              cause === 'userStop'
+                ? {
+                    cause,
+                    words: structuredAgentSessionFailureWordsContext(
+                      deps.store.getRecord(sessionId)
+                    )
+                  }
+                : { cause },
             unrun: true
           })
         }

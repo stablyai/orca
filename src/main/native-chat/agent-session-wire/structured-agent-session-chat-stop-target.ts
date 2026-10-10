@@ -7,14 +7,18 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { stopReachesUnrecordedWork } from './structured-agent-session-queued-stop'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
-import { structuredAgentSessionStoppedTurnId } from './structured-agent-session-turn-stop-notes'
+import {
+  structuredAgentSessionStopNamesEndedTurn,
+  structuredAgentSessionStoppedTurnId
+} from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 /**
  * - `close`: joins the close an earlier stop began on the child, which takes no input.
- * - `starting`: ends a start that may never land; it takes no interrupt.
+ * - `starting`: ends a start that may never land, a child's or one the session's queue is still
+ *   waiting on (`child` null); it takes no interrupt.
  * - `interrupt`: interrupts what the child runs, ending it when the interrupt fails.
- * - `hold`: no agent to reach; it only holds what is queued.
+ * - `hold`: no agent to reach; it only settles what is queued.
  */
 export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'hold'
 
@@ -38,6 +42,8 @@ export function captureChatStopTarget(
     child: StructuredAgentSessionProviderChild | null
     turnId?: string
     endsSession: boolean
+    /** A start the session's queue is waiting on, which the Stop aborts once it is saved. */
+    acquiring?: boolean
   }
 ): ChatStopTarget | null {
   const { child, turnId } = input
@@ -58,7 +64,7 @@ export function captureChatStopTarget(
   if (child?.close) {
     return { ...target, reach: 'close', marks: queued }
   }
-  if (child?.phase === 'starting') {
+  if (child?.phase === 'starting' || (!child && input.acquiring)) {
     return { ...target, reach: 'starting', marks: true }
   }
   // A Stop naming no turn ends nothing more unless the session reads working, by the rule every
@@ -86,8 +92,11 @@ export function chatStopTargetStands(
   }
   const live = ctx.journal.activeTurnId()
   if (target.named) {
-    // As at acceptance: no turn published yet while the agent works, the named one may be opening.
-    return live === target.turnId || (live === null && isMainAgentWorking(ctx))
+    // As at acceptance: only a named turn with no row yet may still be opening.
+    return (
+      target.turnId !== null &&
+      !structuredAgentSessionStopNamesEndedTurn(ctx.journal, target.turnId, isMainAgentWorking(ctx))
+    )
   }
   return target.turnId === null ? isMainAgentWorking(ctx) : live === target.turnId
 }

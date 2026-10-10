@@ -12,7 +12,10 @@ import {
 } from '../agent-session-journal/queued-message-table'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
-import { structuredAgentSessionStopNamesTurnNotLive } from './structured-agent-session-turn-stop-notes'
+import {
+  structuredAgentSessionStopNamesEndedTurn,
+  structuredAgentSessionStopNamesTurnNotLive
+} from './structured-agent-session-turn-stop-notes'
 
 /** The one unsettled-card predicate /clear's carry and the published-bytes bound share:
  *  waiting or returned. Pending/unknown/accepted deliveries stay outside it. */
@@ -24,21 +27,18 @@ export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMes
  * What a Stop reaching a running agent stops: work no Stop event records yet (`unrecorded`), or
  * only what the Stop still in force already records, which it repeats with nothing sent since, on
  * the same turn or one that opened after a Stop pressed before any turn showed (`repeat`): a card
- * queued between the presses then sends normally, as after one Stop. `late`: it names a turn
- * already over, as a late Stop from a phone can.
+ * queued between the presses then sends normally, as after one Stop. `late`: it names a turn the
+ * journal shows already over, as a late Stop from a phone can, even while the next send is handed
+ * over; only a turn with no row yet may still be opening.
  */
 export function stopReachesUnrecordedWork(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>,
   namedTurnId: string | undefined
 ): 'unrecorded' | 'repeat' | 'late' {
-  const live = ctx.journal.activeTurnId()
-  // No turn published yet while the agent works: the named one may still be opening.
-  if (
-    structuredAgentSessionStopNamesTurnNotLive(namedTurnId, live) &&
-    (live !== null || !isMainAgentWorking(ctx))
-  ) {
+  if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, namedTurnId, isMainAgentWorking(ctx))) {
     return 'late'
   }
+  const live = ctx.journal.activeTurnId()
   const inForce = ctx.journal.queuedMessages.userStopInForce()
   if (inForce === null) {
     return 'unrecorded'

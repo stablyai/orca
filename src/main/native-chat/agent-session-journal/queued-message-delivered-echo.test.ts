@@ -18,7 +18,6 @@ import { JournalQueuedMessages } from './journal-queued-messages'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { rejectJournalQueuedSubmissions } from './journal-pending-submission-recovery'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
@@ -104,7 +103,13 @@ async function handOffAndReject(
       fence: 0
     })
   } else {
-    await rejectJournalQueuedSubmissions(journal, 0, STOP_WITHDRAWAL)
+    // A Stop withdraws the queued hand-off, which returns its card.
+    await journal.stops.accept({
+      event: { reason: 'user-stop' },
+      fence: 0,
+      hostInstance: 'p',
+      words: {}
+    })
   }
   expect(journal.queuedMessages.get('draft-1')).toMatchObject({
     state: 'waiting',

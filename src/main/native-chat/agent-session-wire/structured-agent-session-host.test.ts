@@ -266,14 +266,13 @@ describe('cancel', () => {
     expect(JSON.stringify(note?.body)).not.toContain('turn-1')
   })
 
-  it('reports an unconfirmed cancellation rather than failing the call', async () => {
+  it('ends the child when the turn runs on after an unanswered interrupt', async () => {
     await runningTurn()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
-    // The turn runs on after the unanswered interrupt, so the Stop ends the child instead.
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
   })
 
@@ -343,7 +342,7 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('answers a strict prompt interruption that throws from its receipt and never retries it', async () => {
+  it('refuses a strict prompt interruption that throws once saved, the same on a retry, and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
@@ -356,11 +355,19 @@ describe('cancel', () => {
       ...fields
     }
 
-    // Accepted before the interrupt, so the throw after it is answered from the receipt, and so is
-    // the retry: neither reaches the provider again.
-    const replayed = { ok: true, replayed: true, value: { turnId: 'turn-1', cancelled: false } }
-    expect(await host.cancel(CALLER, params)).toMatchObject(replayed)
-    expect(await host.cancel(CALLER, params)).toMatchObject(replayed)
+    // Saved before the interrupt, which then threw: the Stop did not take effect, its receipt says
+    // so, and the retry is answered from it without reaching the provider again.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const refused = {
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'stopFailed', agent: 'codex' },
+        message: "Couldn't stop Codex. Try again."
+      }
+    }
+    expect(await host.cancel(CALLER, params)).toMatchObject(refused)
+    expect(await host.cancel(CALLER, params)).toMatchObject(refused)
     expect(cancelTurn).toHaveBeenCalledTimes(1)
     expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
       ok: true,

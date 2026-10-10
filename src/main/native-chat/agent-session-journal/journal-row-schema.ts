@@ -119,20 +119,6 @@ export type JournalStopEvent = {
   at: number
   /** Who asked (`StructuredAgentSessionCaller.callerKey`). */
   caller?: string
-  /** What a Stop accepted through its receipt captured, so the row is the durable record of it.
-   *  Absent on rows earlier builds wrote and on stops no person asked for. */
-  accepted?: JournalStopAcceptedTarget
-}
-
-/** A Stop's target, captured as it was accepted. */
-export type JournalStopAcceptedTarget = {
-  operationId: string
-  /** The highest journal sequence when it was accepted: what it held was accepted at or below it. */
-  cutoff: number
-  /** The provider child it was accepted against; null when none ran. */
-  child: { generation: string | null; fence: number } | null
-  /** The prompt card whose Cancel it is, at the revision that Cancel named. */
-  prompt?: { itemId: string; revision: number }
 }
 
 /** A tombstone that carries a Stop event, a Resume or a reopen mark instead of removing an item. */

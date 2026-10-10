@@ -1,5 +1,9 @@
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalReference,
+  isAgentSessionRefusalError,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   commandReceiptScope,
@@ -10,6 +14,7 @@ import {
   buildCommandReceiptTransaction,
   CommandReceiptExistsError
 } from '../agent-session-journal/command-receipt-transaction'
+import { refuseAcceptedCommandReceipt } from '../agent-session-journal/command-receipt-table'
 import {
   composeJournalOperationReceipts,
   type JournalOperationReceipt
@@ -42,49 +47,54 @@ export async function runCommandReceiptMutation<TValue>(
   const { envelope, plan, context, commandReceipt, wakeDelivery } = input
   let acceptedReceipt: CommandReceipt | undefined
   let submissionWritten = false
-  const receipt = acceptanceReceipt(input, (row) => {
-    submissionWritten = row?.kind === 'submission'
-    acceptedReceipt = acceptedCommandReceipt(input, commandReceipt.result(row))
-    return acceptedReceipt
-  })
   let committed = false
+  const accepting = (result: (row?: JournalRow) => CommandReceiptResult) => {
+    const receipt = acceptanceReceipt(input, (row) => {
+      acceptedReceipt = acceptedCommandReceipt(input, result(row))
+      return acceptedReceipt
+    })
+    return {
+      write: receipt.write,
+      committed: () => {
+        committed = true
+        receipt.committed()
+      }
+    }
+  }
+  const receipt = accepting((row) => {
+    submissionWritten = row?.kind === 'submission'
+    return commandReceipt.result(row)
+  })
+  const commitAlone = async (alone: JournalOperationReceipt): Promise<void> => {
+    if (!committed) {
+      await input.store.commitOperationReceipt(alone)
+    }
+  }
   try {
     const ran = await plan.run({
       ...context,
       operationReceipt: {
-        write: receipt.write,
-        committed: () => {
-          committed = true
-          receipt.committed()
-        }
+        ...receipt,
+        isCommitted: () => committed,
+        commitAlone: () => commitAlone(receipt)
       }
     })
     if (!committed) {
       const unwritten = ran.ok ? commandReceipt.unwritten?.(ran.value, context) : null
       return unwritten &&
-        !(await commitNoOpReceipt(input, acceptedCommandReceipt(input, unwritten)))
+        !(await commitNoOpReceipt(input, () => commitAlone(accepting(() => unwritten))))
         ? unknownOutcome(input)
         : ran
     }
     if (ran.ok) {
       return ran
     }
-    context.logger.warn('publishing an accepted command failed; replaying its receipt', {
-      scope: 'command-receipt-publication',
-      sessionId: envelope.sessionId,
-      operationId: envelope.clientOperationId,
-      refusal: ran.refusal.code
-    })
+    return await failedAfterAcceptance(input, acceptedReceipt, { refusal: ran.refusal.code })
   } catch (error) {
     if (!committed) {
       throw error
     }
-    context.logger.warn('publishing an accepted command failed; replaying its receipt', {
-      scope: 'command-receipt-publication',
-      sessionId: envelope.sessionId,
-      operationId: envelope.clientOperationId,
-      error
-    })
+    return await failedAfterAcceptance(input, acceptedReceipt, { error })
   } finally {
     if (committed && submissionWritten) {
       try {
@@ -98,10 +108,77 @@ export async function runCommandReceiptMutation<TValue>(
       }
     }
   }
-  if (!acceptedReceipt) {
-    throw new Error('an accepted command requires its committed receipt')
+}
+
+/** Accepted, then failed: the plan's refusal, recorded in place of its acceptance so a retry of the
+ *  id answers the same; a plan with none is answered from its receipt. */
+async function failedAfterAcceptance<TValue>(
+  input: CommandReceiptIdentity & { commandReceipt: MutationCommandReceipt<TValue> },
+  acceptedReceipt: CommandReceipt | undefined,
+  failure: { refusal: string } | { error: unknown }
+): Promise<TurnOutcome<TValue> | { committedReceipt: CommandReceipt }> {
+  const { envelope, context } = input
+  const refusal = input.commandReceipt.refusedAfterAcceptance?.(context)
+  if (!refusal) {
+    context.logger.warn('publishing an accepted command failed; replaying its receipt', {
+      scope: 'command-receipt-publication',
+      sessionId: envelope.sessionId,
+      operationId: envelope.clientOperationId,
+      ...failure
+    })
+    if (!acceptedReceipt) {
+      throw new Error('an accepted command requires its committed receipt')
+    }
+    return { committedReceipt: acceptedReceipt }
   }
-  return { committedReceipt: acceptedReceipt }
+  context.logger.warn('an accepted command failed to take effect', {
+    scope: 'command-receipt-failed',
+    sessionId: envelope.sessionId,
+    operationId: envelope.clientOperationId,
+    ...failure
+  })
+  await recordRefusal(input, refusal)
+  return { ok: false, refusal }
+}
+
+/** A refusal replaces the receipt's acceptance; one that cannot be recorded is still answered, and
+ *  a retry of the id then replays the acceptance. */
+async function recordRefusal(
+  input: CommandReceiptIdentity,
+  refusal: AgentSessionWireRefusal
+): Promise<void> {
+  const { envelope, plan, operationCallerKey, fingerprint, context } = input
+  try {
+    await input.store.commitOperationReceipt({
+      write: (db) => {
+        refuseAcceptedCommandReceipt(
+          db,
+          commandReceiptScope(operationCallerKey, plan.operationIdScope),
+          {
+            operationId: envelope.clientOperationId,
+            sessionId: envelope.sessionId,
+            callerKey: operationCallerKey,
+            method: plan.method,
+            fingerprint,
+            status: 'rejected',
+            acceptedAt: context.now(),
+            rejection: {
+              reference: agentSessionRefusalReference(refusal),
+              message: refusal.message
+            }
+          }
+        )
+      },
+      committed: () => undefined
+    })
+  } catch (error) {
+    context.logger.warn('recording that an accepted command failed did not save', {
+      scope: 'command-receipt-failed',
+      sessionId: envelope.sessionId,
+      operationId: envelope.clientOperationId,
+      error
+    })
+  }
 }
 
 function acceptedCommandReceipt(
@@ -154,10 +231,10 @@ function unknownOutcome(input: CommandReceiptIdentity): TurnOutcome<never> {
  *  unknown, with nothing recorded, so a retry decides afresh. */
 async function commitNoOpReceipt(
   input: CommandReceiptIdentity,
-  receipt: CommandReceipt
+  commit: () => Promise<void>
 ): Promise<boolean> {
   try {
-    await input.store.commitOperationReceipt(acceptanceReceipt(input, () => receipt))
+    await commit()
     return true
   } catch (error) {
     if (error instanceof CommandReceiptExistsError || isAgentSessionRefusalError(error)) {

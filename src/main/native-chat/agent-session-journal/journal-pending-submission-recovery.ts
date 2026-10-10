@@ -1,5 +1,4 @@
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
 import type { JournalReducerState } from './journal-reducer'
@@ -64,32 +63,6 @@ export async function rejectJournalPendingSubmissions(
     })
   }
   return unwritten.map((entry) => entry.clientMessageId)
-}
-
-/** Rejects queued submissions — accepted, never handed over, so provably unwritten. */
-export async function rejectJournalQueuedSubmissions(
-  journal: AgentSessionJournal,
-  fence: number,
-  rejection: AgentJournalDispatchRejection,
-  which: (submission: AgentJournalSubmission) => boolean = () => true
-): Promise<string[]> {
-  const queued = journal
-    .submissions()
-    .filter((entry) => isQueuedAgentJournalSubmission(entry) && which(entry))
-  // Issued together, so the fold shows none of them queued once this call returns: a Stop decides
-  // whether anything is working from it without awaiting the withdrawal.
-  await Promise.all(
-    queued.map((entry) =>
-      journal.resolveDispatch({
-        clientMessageId: entry.clientMessageId,
-        state: 'rejected',
-        ...rejection,
-        fence,
-        recovered: true
-      })
-    )
-  )
-  return queued.map((entry) => entry.clientMessageId)
 }
 
 /** Rows rejecting every submission still queued, read from `state` when called: for an append

@@ -173,9 +173,9 @@ it("reads an older CLI's error end after a Stop pressed before the echo as inter
   expect(await lastTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
 })
 
-// A phone names the turn it last saw. The Stop ends the child, which ends whatever is in flight,
-// so its event names no ended turn: it binds the turn the follow-up's echo opens.
-it('reads a follow-up the child end cut as interrupted when the Stop named the turn before it', async () => {
+// A phone names the turn it last saw, which is over: a late Stop, an accepted no-op. The follow-up
+// handed over meanwhile runs, and its turn is the provider's own.
+it('leaves the follow-up running when the Stop named the turn before it', async () => {
   const connection = claude.connections[0]!
   await sendUnechoed(connection, 'Write a long reply.')
   frame(connection, { type: 'system', subtype: 'init', uuid: 'init-1', capabilities: CAPABILITIES })
@@ -192,19 +192,19 @@ it('reads a follow-up the child end cut as interrupted when the Stop named the t
     )
   )
   await sendUnechoed(connection, 'Follow up.')
-  // Claude takes the interrupt; the follow-up's echo opens its turn, which outlives the grace.
-  claude.routes.interrupt = () => {
-    setTimeout(() => echoLatest(connection), 5)
-    return { still_queued: [], cancelled: [] }
-  }
 
-  await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
   await laneDrained()
 
-  expect(connection.closed).toBe(true)
-  const cut = await lastTurn()
-  expect(cut?.turnId).not.toBe(ended)
-  expect(cut).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+  expect(connection.closed).toBe(false)
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  echoLatest(connection)
+  const followUp = await eventually(async () => {
+    const turn = await lastTurn()
+    expect(turn?.turnId).not.toBe(ended)
+    return turn
+  })
+  expect(followUp).toMatchObject({ state: 'running' })
 }, 15_000)
 
 // The Stop bound only the turn it stopped: a later turn's error end is the provider's own.

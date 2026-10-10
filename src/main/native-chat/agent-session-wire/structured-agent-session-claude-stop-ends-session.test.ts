@@ -650,53 +650,28 @@ it('still answers the Stop, with its row, when the child cannot be proven gone; 
   connection.close = close
 })
 
-it.each([
-  ['takes', undefined],
-  [
-    'fails',
-    () => {
-      throw new Error('control request lost')
-    }
-  ],
-  ['never answers', NEVER_ANSWERS]
-])(
-  'ends the child for a Stop naming the turn that just ended when Claude interrupts the follow-up and %s',
-  async (_answer, interrupt) => {
-    if (interrupt) {
-      claude.routes.interrupt = interrupt
-    }
-    const connection = claude.connections[0]!
-    const eventsAtClose = stopEventsAtClose(connection)
-    const ended = await openTurn(connection)
-    frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result-1' })
-    await eventually(async () =>
-      expect(
-        activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
-      ).toBeNull()
-    )
-    // Handed over but not yet echoed: no turn of its own for a client to name.
-    await send('Follow-up.')
-    await eventually(() => expect(wrote(connection, 'Follow-up.')).toBe(true))
+// The phone names the turn it last saw working, which is over: a late Stop, an accepted no-op that
+// neither interrupts nor ends the child while the follow-up is handed over.
+it('leaves the child and the follow-up alone for a Stop naming the turn that just ended', async () => {
+  const connection = claude.connections[0]!
+  const ended = await openTurn(connection)
+  frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result-1' })
+  await eventually(async () =>
+    expect(
+      activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
+    ).toBeNull()
+  )
+  // Handed over but not yet echoed: no turn of its own for a client to name.
+  await send('Follow-up.')
+  await eventually(() => expect(wrote(connection, 'Follow-up.')).toBe(true))
 
-    // As the phone sends it: the turn it last saw working.
-    await expect(
-      _answer === 'fails'
-        ? stop(ended)
-        : stopAcrossGrace(
-            connection,
-            interrupt === NEVER_ANSWERS ? 'interrupt' : 'request-end',
-            ended
-          )
-    ).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-    await laneDrained()
+  await expect(stop(ended)).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
+  await laneDrained()
 
-    expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(true)
-    expect(connection.closed).toBe(true)
-    expect(eventsAtClose()).toBe(1)
-    expect(await statusTexts()).toEqual(['Cancellation requested.'])
-  },
-  15_000
-)
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect(connection.closed).toBe(false)
+  expect(await statusTexts()).toEqual([])
+}, 15_000)
 
 it('keeps a second Stop pressed while the first ends the child quiet', async () => {
   const connection = claude.connections[0]!

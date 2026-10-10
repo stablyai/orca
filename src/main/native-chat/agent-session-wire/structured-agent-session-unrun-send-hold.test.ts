@@ -2,7 +2,7 @@
 // nothing until it proves its start. So when the chat ends then, the message is settled as a
 // queued one is for the same end (`journal-unsent-send-hold.ts`): a quit or a close keeps a
 // person's words as an ordinary card that waits for the chat's next turn, a person's Stop
-// withdraws it. Against the real host, store and journal, with an agent that stays starting.
+// withdraws it and holds those queued behind it. Against the real host, store and journal, with an agent that stays starting.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -15,7 +15,7 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
-const words = (kind: 'hostRestarted' | 'chatClosed' | 'returnedToQueue') =>
+const words = (kind: 'hostRestarted' | 'chatClosed' | 'cancelled') =>
   agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })
 /** A kept send: an ordinary waiting card, with no hold of its own. */
 const KEPT = { state: 'waiting' }
@@ -118,7 +118,7 @@ describe('a message held behind a start that never answered, then the chat ends'
     }
   )
 
-  it("is held by a person's Stop, as a queued one is, as a card the Stop pauses", async () => {
+  it("is withdrawn by a person's Stop, as the message it stops, and kept as no card", async () => {
     const id = await heldBehindHungStart('stopped')
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -126,11 +126,29 @@ describe('a message held behind a start that never answered, then the chat ends'
     await eventually(async () =>
       expect(await rig.submission(id)).toMatchObject({
         dispatchState: 'rejected',
-        ...words('returnedToQueue'),
-        keptAsQueuedMessageId: id
+        ...words('cancelled')
       })
     )
-    expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
+    expect(await rig.drafts()).toEqual([])
+  })
+
+  it('holds the messages queued behind it as cards the Stop pauses', async () => {
+    const id = await heldBehindHungStart('stopped')
+    const behind = rig.send('queued behind it')
+    await behind.result
+
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+
+    expect(await rig.submission(id)).toMatchObject({
+      dispatchState: 'rejected',
+      ...words('cancelled')
+    })
+    expect(await rig.submission(behind.id)).toMatchObject({
+      dispatchState: 'rejected',
+      rejection: { kind: 'returnedToQueue' },
+      keptAsQueuedMessageId: behind.id
+    })
+    expect(await rig.drafts()).toEqual([{ messageId: behind.id, ...KEPT }])
     expect(derivedPauses()).toEqual(['stopped'])
   })
 })

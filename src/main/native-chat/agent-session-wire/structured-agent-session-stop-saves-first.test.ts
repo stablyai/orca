@@ -79,7 +79,7 @@ const NOT_SAVED = {
   ok: false,
   refusal: {
     code: 'agent_session_operation_invalid',
-    details: { reason: 'journalWriteFailed' },
+    details: { reason: 'stopFailed' },
     message: expect.stringMatching(/^Couldn't stop .+\. Try again\.$/)
   }
 }
@@ -195,4 +195,24 @@ it('reports a Stop it could not save', async () => {
       fields: expect.objectContaining({ error: expect.objectContaining({ message: UNWRITABLE }) })
     })
   )
+})
+
+// Saved, then the interrupt goes unanswered while the turn ends on its own: no child end follows,
+// so the call answers and the chat says the Stop is unconfirmed.
+it('reports an unconfirmed cancellation rather than failing the call', async () => {
+  const journal = await runningTurn()
+  const events = acquire.mock.calls.at(-1)![0].events!
+  cancelTurn.mockImplementationOnce(async () => {
+    events.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+      { kind: 'turn', turnId: 'turn-1', state: 'completed' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await host.flushStreamedEvents(SESSION)
+    throw new Error('no answer')
+  })
+
+  expect(await stop({ turnId: 'turn-1' })).toMatchObject({ ok: true, value: { cancelled: false } })
+  const note = journal.snapshot().items.find((item) => item.body.kind === 'status')
+  expect(note?.body).toMatchObject({ kind: 'status', text: 'Cancellation was not confirmed.' })
 })

@@ -475,7 +475,7 @@ describe('a failed Stop', () => {
     try {
       expect(await rig.stop()).toMatchObject({
         ok: false,
-        refusal: { details: { reason: 'journalWriteFailed' } }
+        refusal: { details: { reason: 'stopFailed' } }
       })
     } finally {
       accept.mockRestore()
@@ -498,11 +498,16 @@ describe('a failed Stop', () => {
         }
         return append.apply(this, args)
       })
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      // Accepted before the interrupt, so the failure after it is answered from the receipt.
-      expect(await rig.stop()).toMatchObject({ ok: true, replayed: true })
+      // Saved before the interrupt; the failure after it says the Stop did not take effect.
+      expect(await rig.stop()).toMatchObject({
+        ok: false,
+        refusal: { details: { reason: 'stopFailed' } }
+      })
     } finally {
       failing.mockRestore()
+      warned.mockRestore()
     }
     await expectPaused(draftId)
   })

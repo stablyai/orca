@@ -19,7 +19,8 @@ import type {
   AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
-  AgentSessionSendResult
+  AgentSessionSendResult,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
@@ -45,10 +46,7 @@ import {
   type AgentSessionPromptRequest
 } from './structured-agent-session-turns-prompt'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
-import {
-  stopCommandReceipt,
-  type StructuredAgentSessionStopAcceptance
-} from './structured-agent-session-stop-acceptance'
+import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
@@ -97,15 +95,18 @@ export type MutationCommandReceipt<TValue> = {
   /** A run that wrote nothing: the receipt committed alone, before the answer goes out (a no-op's
    *  answer, or the earlier write it acknowledged), or null to record nothing. */
   unwritten?: (value: TValue, ctx: AgentSessionTurnContext) => CommandReceiptResult | null
+  /** A run that failed once its receipt committed answers this, recorded in place of the
+   *  acceptance so a retry of its id answers the same. Absent: the receipt answers. */
+  refusedAfterAcceptance?: (ctx: AgentSessionTurnContext) => AgentSessionWireRefusal
 }
 
-/** The journal row an accepted command wrote, which must be of the kind it accepts with. */
+/** The journal row an accepted command wrote, which must be of a kind it accepts with. */
 export function journalRowReceiptResult(
   row: JournalRow | undefined,
-  kind: JournalRow['kind']
+  ...kinds: JournalRow['kind'][]
 ): CommandReceiptResult {
-  if (row?.kind !== kind) {
-    throw new Error(`an accepted command requires its ${kind} row`)
+  if (!row || !kinds.includes(row.kind)) {
+    throw new Error(`an accepted command requires its ${kinds.join(' or ')} row`)
   }
   return { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
 }
@@ -274,11 +275,6 @@ export function conversationCommandPlan(params: {
   }
 }
 
-/** A Stop's plan, with the acceptance its run and its receipt share. */
-export type CancelPlan = MutationPlan<AgentSessionCancelResult> & {
-  acceptance: StructuredAgentSessionStopAcceptance
-}
-
 export function cancelPlan(params: {
   envelope: AgentSessionMutationEnvelope
   turnId?: string
@@ -287,16 +283,14 @@ export function cancelPlan(params: {
   prompt?: { itemId: string; expectedRevision: number }
   /** The session's child records, which name the tasks a background Stop reaches. */
   childWork?: () => readonly AgentChildWorkView[] | undefined
-}): CancelPlan {
-  const acceptance: StructuredAgentSessionStopAcceptance = {}
+}): MutationPlan<AgentSessionCancelResult> {
   const named = params.turnId !== undefined ? { turnId: params.turnId } : {}
   return {
     method: 'agentSession.cancel',
     // Stop is a conversation write; a prompt or background-task cancel needs the live child.
     ...(params.scope || params.prompt ? {} : { conversationWrite: true as const }),
-    acceptance,
     // Saved before it acts: a Stop whose acceptance cannot be saved interrupts nothing.
-    commandReceipt: stopCommandReceipt(acceptance),
+    commandReceipt: STOP_COMMAND_RECEIPT,
     fields: {
       ...named,
       ...(params.scope ? { scope: params.scope } : {}),
@@ -306,11 +300,7 @@ export function cancelPlan(params: {
     // The chat's own Stop runs through `mutateWithChatStop`; this is a background-task stop's and a
     // prompt card's interrupt.
     run: (ctx) =>
-      runTargetedCancel(
-        ctx,
-        { ...params, clientOperationId: params.envelope.clientOperationId },
-        acceptance
-      ),
+      runTargetedCancel(ctx, { ...params, clientOperationId: params.envelope.clientOperationId }),
     // A retry acknowledges the Stop it repeats and never stops anything again: interrupting twice
     // would stop a turn the client never asked to stop.
     replay: () => ({ ...named, cancelled: false })

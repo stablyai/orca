@@ -248,7 +248,7 @@ const FAILURE_SENTENCES = {
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
   chatClosed: (_context, _fact, _surface, say) => say('chatClosed'),
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
-  returnedToQueue: (_context, _fact, _surface, say) => say('returnedToQueue'),
+  returnedToQueue: (context, _fact, _surface, say) => say('returnedToQueue', agent(say, context)),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),
   commandRefused: (context, fact, _surface, say) =>
@@ -269,6 +269,9 @@ const FAILURE_SENTENCES = {
           agent(say, context)
         )
       : say('noTurnToStop', agent(say, context)),
+  // Mid-sentence, so an unnamed agent is not capitalized.
+  stopFailed: ({ agentName }, _fact, _surface, say) =>
+    agentName ? say('couldNotStop', { agent: agentName }) : say('couldNotStopTheAgent'),
   answerUnconfirmed: (_context, _fact, _surface, say) => say('answerUnconfirmed'),
   hostFault: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'hostFault' : 'hostFaultTryAgain'),

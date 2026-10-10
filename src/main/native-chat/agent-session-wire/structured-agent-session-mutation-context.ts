@@ -48,21 +48,23 @@ export type StructuredAgentSessionMutationContext = {
   wakeQueuedDrain?: (sessionId: string) => void
   /** The provider wait each session's serialize is on (a start, an option write), which a caller
    *  outside that serialize aborts. */
-  acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin'>
+  acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin' | 'inFlight'>
   /** Moved by every pick a running child takes, so a report it read before is never persisted. */
   optionRevisions: Pick<StructuredAgentSessionOptionRevisions, 'advance'>
   now: () => number
 }
 
-/** Admits the envelope and runs the plan inside the session's serialize. */
+/** Admits the envelope and runs the plan inside the session's serialize. `now`: outside it, for a
+ *  Stop that must not wait behind the start it ends; its plan queues what it does after that. */
 export function mutateStructuredAgentSession<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
   plan: MutationPlan<TValue>,
-  prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
+  prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession'],
+  lane: 'queued' | 'now' = 'queued'
 ): Promise<AgentSessionMutationResult<TValue>> {
-  return context.serialize(envelope.sessionId, () =>
+  const admit = () =>
     admitAndRunAgentSessionMutation({
       store: context.deps.store,
       adapter: context.deps.adapter,
@@ -77,5 +79,5 @@ export function mutateStructuredAgentSession<TValue>(
       wakeDelivery: (sessionId) => context.wakeDelivery(sessionId),
       now: () => context.now()
     })
-  )
+  return lane === 'now' ? admit() : context.serialize(envelope.sessionId, admit)
 }

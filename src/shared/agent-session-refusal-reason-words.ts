@@ -5,7 +5,7 @@ import type { AgentSessionFailureKind } from './agent-session-failure'
 import type { AgentSessionRefusalReason } from './agent-session-refusal-details'
 import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
-import type { AgentSessionWriteRefusal } from './agent-session-write-failure'
+import type { AgentSessionWriteKind, AgentSessionWriteRefusal } from './agent-session-write-failure'
 
 /** What the person can do about a refusal with this reason. */
 export type AgentSessionRefusalAction =
@@ -37,6 +37,13 @@ export type AgentSessionRefusalReasonWords =
     }
   /** A start that failed: the sentence that failure has everywhere, whose next step is a send. */
   | { fact: AgentSessionFailureKind; action: AgentSessionRefusalAction }
+  /** A failure's sentence, naming the agent, then `step`: the whole notice for `writes`. */
+  | {
+      fact: AgentSessionFailureKind
+      action: AgentSessionRefusalAction
+      step: AgentSessionWriteNoticeSentence
+      writes: readonly AgentSessionWriteKind[]
+    }
 
 function codeWords(action: AgentSessionRefusalAction): AgentSessionRefusalReasonWords {
   return { words: 'code', action }
@@ -66,6 +73,8 @@ const REASON_WORDS = {
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),
     journalWriteFailed: causeWords('recordFailed', 'retry'),
+    // Any other write reads the code's words, as a client before this reason does.
+    stopFailed: { fact: 'stopFailed', action: 'retry', step: 'tryAgain', writes: ['stop'] },
     attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',

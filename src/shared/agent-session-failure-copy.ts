@@ -96,7 +96,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   chatClosed: 'The chat closed before this message was sent.',
   hostRestarted: 'Orca restarted before this message was sent.',
   returnedToQueue:
-    'You pressed Stop before the agent read this message, so it went back to the queue.',
+    '{{agent}} was stopped before it read this message, so it went back to the queue.',
   notDelivered: 'This message was not delivered.',
   notDeliveredSendAgain: 'This message was not delivered. Send it again to continue.',
   commandRefused: "This command didn't run.",
@@ -115,6 +115,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
   cancelUnconfirmed: 'Cancellation was not confirmed.',
   stopRefused: "{{agent}} didn't stop.",
   stopRefusedQuoted: "{{agent}} didn't stop: {{detail}}.",
+  couldNotStop: "Couldn't stop {{agent}}.",
+  couldNotStopTheAgent: "Couldn't stop the agent.",
   noTurnToStop: '{{agent}} had no turn running to stop.',
   answerUnconfirmed: 'Your answer was recorded but the agent did not confirm it.',
   hostFault: "Orca ran into a problem, so this didn't go through.",

@@ -56,6 +56,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'cancelUnconfirmed',
   /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */
   'stopRefused',
+  /** A Stop Orca could not save, or saved and could not carry out: only a refusal says it. */
+  'stopFailed',
   'answerUnconfirmed',
   'hostFault',
   /** Orca stopped an agent whose start never finished. */
@@ -79,6 +81,7 @@ const STATUS_ROW_ONLY_FAILURE_KINDS = [
   'compactionUnconfirmed',
   'cancelUnconfirmed',
   'stopRefused',
+  'stopFailed',
   'answerUnconfirmed',
   'providerRetrying',
   'previousExitUnverifiable',

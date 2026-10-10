@@ -134,27 +134,21 @@ describe("Stop's event", () => {
     await expectHeld('stopped', first)
     const person = rig.send('the person asks for a turn')
     await person.result
-    // A later Stop supersedes: the send made before it, not yet handed over, is held as a card at
-    // the head of the queue, and lifts nothing.
+    // A later Stop supersedes. Nothing runs ahead of the send made before it, so that send is what
+    // this Stop stops: withdrawn, as on a Stop of the turn it would have opened, and lifting nothing.
     await rig.stop()
     expect(await rig.submission(person.id)).toMatchObject({
       dispatchState: 'rejected',
-      rejection: { kind: 'returnedToQueue' },
-      keptAsQueuedMessageId: person.id
+      rejection: { kind: 'cancelled' }
     })
-    expect(await rig.drafts()).toEqual([
-      { messageId: person.id, state: 'waiting' },
-      { messageId: first, state: 'waiting' }
-    ])
-    await expectHeld('stopped', person.id, first)
+    expect((await rig.submission(person.id))?.keptAsQueuedMessageId).toBeUndefined()
+    expect(await rig.drafts()).toEqual([{ messageId: first, state: 'waiting' }])
+    await expectHeld('stopped', first)
     // Orchestration mail sent after the second Stop: once accepted, the queue carries on.
     const mail = await mailTurn()
     // Not shown while the mail awaits the agent, and nothing sends yet.
-    await expectHeld(null, person.id, first)
+    await expectHeld(null, first)
     await rig.settleAccepted(mail, 'mail')
-    await eventually(async () => expect((await rig.handoff(person.id))?.handedOverAt).toBeDefined())
-    expect(await rig.handoff(first)).toBeUndefined()
-    await rig.settleAccepted(await rig.handoffId(person.id), 'person')
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
   })
 

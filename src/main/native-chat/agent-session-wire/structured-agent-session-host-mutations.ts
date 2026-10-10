@@ -34,14 +34,11 @@ import {
   cancelPlan,
   promptPlan,
   sendPlan,
-  setOptionPlan,
-  type MutationPlan
+  setOptionPlan
 } from './structured-agent-session-mutation-plans'
-import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
-import { acceptStopTarget } from './structured-agent-session-stop-acceptance'
 import { performSetOption } from './structured-agent-session-turns-options'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
@@ -114,55 +111,30 @@ export function cancelStructuredAgentSessionTurn(
   }
   const plan = cancelPlan(params)
   const { prompt } = params
-  if (!prompt && params.turnId === undefined) {
-    abortAcquireForStop(context, caller, params.envelope, plan)
-  }
+  const { sessionId } = params.envelope
   // A card's Cancel stops whatever the chat has in flight, as the Stop button does; it reaches the
   // Stop only for a card the live turn raised (`cancelStructuredAgentSessionPrompt`).
-  const stopped = prompt ? { envelope: params.envelope, prompt } : params
+  const stopped = prompt
+    ? { envelope: params.envelope }
+    : {
+        ...params,
+        // A Stop must not wait behind a start the provider may never answer: it is saved outside
+        // the lane, then stops that start. One naming a turn is about a child already gone.
+        ...(params.turnId === undefined &&
+        context.acquireAborts.inFlight(sessionId) &&
+        context.sessions.has(sessionId)
+          ? { acquiring: true as const }
+          : {})
+      }
   return mutateWithChatStop(context, caller, stopped, plan, (ctx, stop) =>
     prompt
       ? cancelStructuredAgentSessionPrompt(
           ctx,
           { ...(params.turnId !== undefined ? { turnId: params.turnId } : {}), prompt },
-          {
-            stop,
-            interrupt: () => plan.run(ctx),
-            // Saved before a card's own Cancel dismisses it: a retry never dismisses again.
-            accept: () =>
-              acceptStopTarget(ctx, plan.acceptance, {
-                ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
-                prompt: { itemId: prompt.itemId, revision: prompt.expectedRevision }
-              })
-          }
+          { stop, interrupt: () => plan.run(ctx) }
         )
       : stop().then(({ outcome }) => outcome)
   )
-}
-
-/** A Stop must not wait behind a start the provider may never answer: the start the session's
- *  queue is waiting on stops now, as a close's does, and the Stop's own step then finds no child.
- *  Only a Stop admission would run now; one naming a turn is about a child already gone, so it
- *  leaves a newer start alone. */
-function abortAcquireForStop(
-  context: StructuredAgentSessionMutationContext,
-  caller: StructuredAgentSessionCaller,
-  envelope: AgentSessionMutationEnvelope,
-  plan: MutationPlan<AgentSessionCancelResult>
-): void {
-  const { store } = context.deps
-  if (
-    !agentSessionMutationAdmitsNow({
-      store,
-      callerKey: caller.callerKey,
-      envelope,
-      plan,
-      now: context.now
-    })
-  ) {
-    return
-  }
-  context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }
 
 export function respondToStructuredAgentSessionPrompt(

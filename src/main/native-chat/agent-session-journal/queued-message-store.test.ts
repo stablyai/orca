@@ -28,7 +28,7 @@ import {
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { rejectJournalQueuedSubmissions } from './journal-pending-submission-recovery'
+import { holdUnsentSends } from './journal-unsent-send-hold'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-q',
@@ -51,12 +51,25 @@ function message(text: string): AgentJournalMessageItem {
 }
 
 const journals = createTrackedJournalOpener()
-const STOP_WITHDRAWAL = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
-  surface: 'rejection'
-})
-const HOST_RESTARTED = agentSessionFailureWords(agentSessionFailureFact('hostRestarted'), {
-  surface: 'rejection'
-})
+/** A person's Stop, accepted as the host accepts one: what it settles, by id. */
+async function stop(journal: AgentSessionJournal): Promise<string[]> {
+  const accepted = await journal.stops.accept({
+    event: { reason: 'user-stop' },
+    fence: 0,
+    hostInstance: 'proc-1',
+    words: {}
+  })
+  return accepted.settled
+}
+
+/** The delivery loop's settlement of what an earlier host process accepted. */
+function settleAfterRestart(journal: AgentSessionJournal): Promise<number | null> {
+  return holdUnsentSends(journal, {
+    fence: 0,
+    hostInstance: 'proc-1',
+    hold: { cause: 'hostRestarted' }
+  })
+}
 const PROVIDER_REFUSAL = agentSessionFailureFact('providerRejected', {
   detail: { text: 'Claude refused this payload', audience: 'person' }
 })
@@ -378,9 +391,7 @@ describe('returned transition (D1/N4)', () => {
     await queueDraft(journal, 'draft-1')
     await consumeDraft(journal, 'draft-1')
     // The Stop's own withdrawal path: the queued (not handed over) submission.
-    expect(await rejectJournalQueuedSubmissions(journal, 0, STOP_WITHDRAWAL)).toEqual([
-      'sub-draft-1'
-    ])
+    expect(await stop(journal)).toEqual(['sub-draft-1'])
     // Nothing failed: no refusal to show, its position kept, its spent id recorded.
     const requeued = {
       state: 'waiting',
@@ -402,7 +413,7 @@ describe('returned transition (D1/N4)', () => {
     const journal = await open()
     await queueDraft(journal, 'draft-1')
     await consumeDraft(journal, 'draft-1')
-    await rejectJournalQueuedSubmissions(journal, 0, STOP_WITHDRAWAL)
+    await stop(journal)
     // The spent id already names a rejected submission: one id, one delivery.
     await expect(consumeDraft(journal, 'draft-1')).rejects.toMatchObject({
       code: 'journal_submission_exists'
@@ -433,9 +444,7 @@ describe('returned transition (D1/N4)', () => {
       await journal.close()
       journal = await open()
       expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
-      await rejectJournalQueuedSubmissions(journal, 0, HOST_RESTARTED, (submission) =>
-        journal.wroteBeforeOpen(submission.acceptedSequence)
-      )
+      await settleAfterRestart(journal)
       // Whoever sent it, it waits with no hold of its own, under the reopen's pause.
       expect(journal.queuedMessages.get('draft-1')).toMatchObject({
         state: 'waiting',
@@ -608,11 +617,14 @@ describe('open-time repair and retention', () => {
       let journal = await open()
       await queueDraft(journal, 'draft-1')
       await consumeDraft(journal, 'draft-1', { origin })
-      await rejectJournalQueuedSubmissions(
-        journal,
-        0,
-        agentSessionFailureWords(agentSessionFailureFact(cause), { surface: 'rejection' })
-      )
+      // How the hand-off is settled for that cause, as `holdUnsentSends` writes it.
+      await journal.resolveDispatch({
+        clientMessageId: 'sub-draft-1',
+        state: 'rejected',
+        ...agentSessionFailureWords(agentSessionFailureFact(cause), { surface: 'rejection' }),
+        fence: 0,
+        recovered: true
+      })
       await journal.close()
       // The hook "was skipped": the draft is back to dispatched behind the stored rejection.
       const db = new Database(journalDatabasePath(root))
@@ -659,7 +671,7 @@ describe('open-time repair and retention', () => {
     let journal = await open()
     await queueDraft(journal, 'draft-1')
     await consumeDraft(journal, 'draft-1')
-    await rejectJournalQueuedSubmissions(journal, 0, STOP_WITHDRAWAL)
+    await stop(journal)
     await journal.close()
     const db = new Database(journalDatabasePath(root))
     db.prepare(
@@ -687,7 +699,7 @@ describe('open-time repair and retention', () => {
     journal = await open()
     expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
     // The delivery loop's leftover rejection now sends it back to waiting.
-    await rejectJournalQueuedSubmissions(journal, 0, HOST_RESTARTED)
+    await settleAfterRestart(journal)
     expect(journal.queuedMessages.get('draft-1')).toMatchObject({
       state: 'waiting',
       consumedAs: null

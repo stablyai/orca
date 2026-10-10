@@ -533,7 +533,7 @@ describe('Stop and Delete', () => {
     try {
       expect(await stop()).toMatchObject({
         ok: false,
-        refusal: { details: { reason: 'journalWriteFailed' } }
+        refusal: { details: { reason: 'stopFailed' } }
       })
       expect(rig.cancelTurn).not.toHaveBeenCalled()
       expect(warned).toHaveBeenCalledWith(

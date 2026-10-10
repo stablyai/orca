@@ -22,7 +22,6 @@ import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { rejectJournalQueuedSubmissions } from '../native-chat/agent-session-journal/journal-pending-submission-recovery'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -141,14 +140,17 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await rejectJournalQueuedSubmissions(
-      journal,
-      1,
-      agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
+    // As the delivery loop settles a send its start refused.
+    await journal.resolveDispatch({
+      clientMessageId: 'first',
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
         surface: 'rejection',
         agentName: 'Claude'
-      })
-    )
+      }),
+      fence: 1,
+      recovered: true
+    })
 
     const summary = publishedSummary(journal)
     expect(summary).toMatchObject({ status: 'idle', turnOutcome: 'failure', latestPrompt: 'hello' })
@@ -233,11 +235,13 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await rejectJournalQueuedSubmissions(
-      journal,
-      1,
-      agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
-    )
+    // The person's Stop withdraws it, as the host accepts one.
+    await journal.stops.accept({
+      event: { reason: 'user-stop' },
+      fence: 1,
+      hostInstance: 'host-instance',
+      words: {}
+    })
 
     expect(publishedSummary(journal)).toMatchObject({ status: null })
     expect(ingest(publishedSummary(journal)).ps).toBeUndefined()

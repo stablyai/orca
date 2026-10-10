@@ -17,7 +17,10 @@ import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-sourc
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type {
+  AgentJournalDispatchRejection,
+  AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { ResolveDispatchInput } from './journal-store-contracts'
@@ -29,6 +32,22 @@ export type UnsentSendHold =
   | { cause: 'hostRestarted' }
   /** A close of the chat; `which` narrows it to what a close that did not complete closed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
+  /** A person's Stop ended the start these were handed to; the first is the one it stopped, which
+   *  the child's end withdraws, so only those behind it are held. */
+  | { cause: 'userStop'; words: AgentSessionFailureWordsContext }
+
+/** A send a person's Stop settles: held as a card when one can carry it, else withdrawn. */
+export function userStopRejection(
+  kept: boolean,
+  words: AgentSessionFailureWordsContext
+): AgentJournalDispatchRejection {
+  return kept
+    ? agentSessionFailureWords(agentSessionFailureFact('returnedToQueue'), {
+        ...words,
+        surface: 'rejection'
+      })
+    : agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
+}
 
 /** The body an unsent send is kept with, or null when it is rejected instead:
  *  - a card's own hand-off: its rejection already returns the card (`rejectedDraftSettlement`);
@@ -92,7 +111,7 @@ export async function holdUnsentSends(
   }
 ): Promise<number | null> {
   const { hold } = input
-  const unsent = journal
+  const found = journal
     .submissions()
     .filter((entry) =>
       input.unrun
@@ -100,17 +119,22 @@ export async function holdUnsentSends(
         : isQueuedAgentJournalSubmission(entry) &&
           (hold.cause === 'hostRestarted'
             ? journal.wroteBeforeOpen(entry.acceptedSequence)
-            : (hold.which?.(entry) ?? true))
+            : hold.cause === 'chatClosed'
+              ? (hold.which?.(entry) ?? true)
+              : true)
     )
+    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+  const unsent = hold.cause === 'userStop' ? found.slice(1) : found
   if (unsent.length === 0) {
     return null
   }
-  const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
-    surface: 'rejection'
-  })
   const settlements = planUnsentSendSettlements(journal, unsent, {
     ...input,
-    rejection: () => rejection
+    rejection:
+      hold.cause === 'userStop'
+        ? (kept) => userStopRejection(kept, hold.words)
+        : () =>
+            agentSessionFailureWords(agentSessionFailureFact(hold.cause), { surface: 'rejection' })
   })
   const failures: unknown[] = []
   for (const { reject, kept, keep } of settlements) {

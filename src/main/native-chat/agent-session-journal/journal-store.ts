@@ -99,7 +99,7 @@ export class AgentSessionJournal {
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
-  /** A person's Stop accepted, and a receipt committed alone (`journal-stop-acceptance.ts`). */
+  /** A person's Stop accepted (`journal-stop-acceptance.ts`). */
   readonly stops: JournalStopAcceptor
   readonly context: JournalContextController
 

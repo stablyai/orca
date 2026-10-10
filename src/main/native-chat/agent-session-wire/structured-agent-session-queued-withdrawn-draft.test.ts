@@ -117,7 +117,7 @@ it('a Stop whose acceptance fails takes back no hand-off; the draft sends as it 
     release()
     expect(await stopped).toMatchObject({
       ok: false,
-      refusal: { details: { reason: 'journalWriteFailed' } }
+      refusal: { details: { reason: 'stopFailed' } }
     })
   } finally {
     failing.mockRestore()

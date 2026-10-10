@@ -1,6 +1,6 @@
 // A Stop accepts through its own command receipt, saved before it acts: its target is captured as
-// it is accepted, the sends queued by then are held as paused cards in the same transaction, and a
-// retry of its id is answered from the receipt without resolving a target again.
+// it is accepted, the sends queued behind what it stops are held as paused cards in the same
+// transaction, and a retry of its id is answered from the receipt without resolving a target again.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -150,16 +150,7 @@ describe('what a Stop captures as it is accepted', () => {
     const id = opId()
     expect(await rig.stop(id)).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(stopEvents()).toEqual([
-      expect.objectContaining({
-        event: expect.objectContaining({
-          turnId: 'turn-1',
-          accepted: {
-            operationId: id,
-            cutoff: expect.any(Number),
-            child: { generation: expect.any(String), fence: 1 }
-          }
-        })
-      })
+      expect.objectContaining({ event: expect.objectContaining({ turnId: 'turn-1' }) })
     ])
     await turnRow('turn-1', 'interrupted')
     await rig.settleAccepted(working, 'stopped')
@@ -218,9 +209,8 @@ describe('the sends a Stop holds', () => {
       rejection: { kind: 'returnedToQueue' },
       keptAsQueuedMessageId: queued
     })
-    expect(stopEvents()[0]?.event.accepted?.cutoff).toBeGreaterThanOrEqual(
-      kept?.acceptedSequence ?? 0
-    )
+    // Held in the Stop's own transaction, behind its event.
+    expect(stopEvents()[0]?.sequence).toBeGreaterThan(kept?.acceptedSequence ?? 0)
     expect(await rig.drafts()).toEqual([{ messageId: queued, state: 'waiting' }])
     await rig.settleAccepted(working, 'stopped')
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -262,7 +252,7 @@ describe('a Stop that cannot be saved', () => {
         ok: false,
         refusal: {
           code: 'agent_session_operation_invalid',
-          details: { reason: 'journalWriteFailed' },
+          details: { reason: 'stopFailed', agent: 'codex' },
           message: expect.stringMatching(/^Couldn't stop .+\. Try again\.$/)
         }
       })
@@ -332,14 +322,14 @@ describe('a Stop that writes no Stop event saves its target first', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(atStop).toMatchObject({
       verdict: 'readable',
-      receipt: { result: { kind: 'stop', turnId: 'background-tasks', taskIds: ['task-1'] } }
+      receipt: { result: { kind: 'stop' } }
     })
     expect(stopEvents()).toEqual([])
     expect(await stop()).toMatchObject({ ok: true, replayed: true })
     expect(stopBackgroundTasks).toHaveBeenCalledOnce()
   })
 
-  it("records a prompt card's own Cancel, at the revision it named, before it interrupts", async () => {
+  it("records a prompt card's own Cancel before it interrupts", async () => {
     await rig.workingSend()
     await turnRow('turn-1', 'running')
     const prompt = await journal().appendItem(
@@ -372,13 +362,7 @@ describe('a Stop that writes no Stop event saves its target first', () => {
     ).toMatchObject({ ok: true })
     expect(atInterrupt).toMatchObject({
       verdict: 'readable',
-      receipt: {
-        result: {
-          kind: 'stop',
-          turnId: 'turn-1',
-          prompt: { itemId: prompt.itemId, revision: prompt.revision }
-        }
-      }
+      receipt: { result: { kind: 'stop' } }
     })
     expect(rig.cancelTurn).toHaveBeenCalledOnce()
   })
