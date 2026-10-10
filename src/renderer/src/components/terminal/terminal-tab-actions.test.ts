@@ -82,6 +82,28 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
   })
 
+  it('keeps open browser tabs before the new terminal when no order is saved yet', () => {
+    const setTabBarOrder = vi.fn()
+    getStateMock
+      .mockReturnValueOnce({
+        settings: { activeRuntimeEnvironmentId: null },
+        createTab: vi.fn(() => ({ id: 'term-new' })),
+        setActiveTabType: vi.fn(),
+        setTabBarOrder
+      })
+      .mockReturnValueOnce({
+        tabsByWorktree: { 'wt-1': [{ id: 'term-a' }, { id: 'term-new' }] },
+        openFiles: [],
+        browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
+        tabBarOrderByWorktree: {},
+        setTabBarOrder
+      })
+
+    createNewTerminalTab('wt-1')
+
+    expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['term-a', 'browser-1', 'term-new'])
+  })
+
   it('delegates terminal creation to the host runtime in paired web clients', () => {
     const createTab = vi.fn(() => ({ id: 'tab-1' }))
     const setActiveTabType = vi.fn()

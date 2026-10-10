@@ -1,4 +1,5 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   createWebRuntimeSessionTerminal,
@@ -44,27 +45,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         }
         const newTab = store.createTab(worktreeId)
         store.setActiveTabType('terminal', worktreeId)
-        // Why: mirror Terminal.tsx handleNewTab so a new tab appends at the end, not index 0, when tabBarOrder is unset.
-        const freshStore = useAppStore.getState()
-        const currentTerminals = freshStore.tabsByWorktree[worktreeId] ?? []
-        const currentEditors = freshStore.openFiles.filter((f) => f.worktreeId === worktreeId)
-        const currentBrowsers = freshStore.browserTabsByWorktree[worktreeId] ?? []
-        const stored = freshStore.tabBarOrderByWorktree[worktreeId]
-        const termIds = currentTerminals.map((t) => t.id)
-        const editorIds = currentEditors.map((f) => f.id)
-        const browserIds = currentBrowsers.map((tab) => tab.id)
-        const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-        const base = (stored ?? []).filter((id) => validIds.has(id))
-        const inBase = new Set(base)
-        for (const id of [...termIds, ...editorIds, ...browserIds]) {
-          if (!inBase.has(id)) {
-            base.push(id)
-            inBase.add(id)
-          }
-        }
-        const order = base.filter((id) => id !== newTab.id)
-        order.push(newTab.id)
-        freshStore.setTabBarOrder(worktreeId, order)
+        persistAgentLaunchTabOrder(worktreeId, newTab.id)
         focusTerminalTabSurface(newTab.id)
       })()
     })
