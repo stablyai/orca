@@ -3,10 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  getWslCliRegistrationCandidates,
+  getWslCliRegistrationCandidateEntries,
   recordWslCliRegistrationObservations,
   recordWslCliRegistrationRemoved
 } from './wsl-cli-registration-registry'
+
+async function getWslCliRegistrationCandidates(
+  ...args: Parameters<typeof getWslCliRegistrationCandidateEntries>
+): Promise<string[]> {
+  return (await getWslCliRegistrationCandidateEntries(...args)).map((entry) => entry.distro)
+}
 
 describe('WSL CLI registration registry', () => {
   let userDataPath: string
