@@ -454,6 +454,31 @@ describe('claude structured launch resolution', () => {
     expect(launch.env?.SHELL_ONLY_MARKER).toBe('from-shell')
   })
 
+  it('drops the pane identity of the Orca terminal that launched this Orca', async () => {
+    const inherited = {
+      ORCA_PANE_KEY: 'tab-a:11111111-1111-4111-8111-111111111111',
+      ORCA_TAB_ID: 'tab-a',
+      ORCA_WORKTREE_ID: 'repo-a::/work/a',
+      ORCA_WORKSPACE_ID: 'repo-a::/work/a',
+      ORCA_AGENT_LAUNCH_TOKEN: 'launch-a',
+      ORCA_AGENT_PANE: 'tab-a:11111111-1111-4111-8111-111111111111',
+      ORCA_AGENT_LAUNCH: 'launch-a',
+      ORCA_TERMINAL_HANDLE: 'term_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    }
+    const launch = await createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
+      store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+      resolveInheritedEnv: async () => ({ PATH: '/shell/bin', ...inherited })
+    })({ identity: IDENTITY })
+
+    for (const key of Object.keys(inherited)) {
+      expect(launch.env?.[key], key).toBeUndefined()
+    }
+  })
+
   it('drops an inherited CLAUDE_CONFIG_DIR so the record stays the only Claude home the pin sees', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
       resolveLaunchArgs: () => [],

@@ -1,4 +1,8 @@
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session-caller-env'
+import {
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ORCA_SCRUB_SAFE_PANE_ENV
+} from '../../../../shared/agent-hook-scrub-safe-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
 
 export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
@@ -23,4 +27,15 @@ export const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
 export const ORCA_AGENT_SESSION_CALLER_ENV_KEYS = [
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_STRUCTURED_SESSION_ENV
+] as const
+
+// Why: these name the PTY pane a process belongs to, so an inherited value means a process started inside an Orca terminal, and any child that is not that pane would report its status there.
+export const INHERITED_PANE_IDENTITY_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_WORKSPACE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  ORCA_SCRUB_SAFE_PANE_ENV,
+  ORCA_SCRUB_SAFE_LAUNCH_ENV
 ] as const

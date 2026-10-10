@@ -35,6 +35,10 @@
  * PTY leaf. It would also open `selectExactWorkerProviderSession`, which is fail-closed today
  * precisely because a structured session emits no hook agent status.
  *
+ * An Orca started from one of its own terminals inherits that pane's identity, so it is removed
+ * here before the session's own values go on; providers that merge the app's env underneath the
+ * child's take `inheritedPaneIdentityEnvToDelete` for the same reason.
+ *
  * `ORCA_STRUCTURED_SESSION` stays beside the id for a CLI that predates it — one reached through a
  * global install when a shell rc resets PATH — which would otherwise guess a sibling's terminal;
  * such a CLI refuses on the marker. A current CLI checks the id first, so the marker never makes a
@@ -48,6 +52,7 @@ import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environme
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
+import { INHERITED_PANE_IDENTITY_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from './structured-worker-authority'
 
 export function structuredSessionChildIdentityEnv(
@@ -56,13 +61,32 @@ export function structuredSessionChildIdentityEnv(
 ): Record<string, string> {
   const identity = resolveStructuredWorkerIdentityForSession(sessionId, null)
   const env: Record<string, string> = {
-    ...childEnv,
+    ...withoutInheritedPaneIdentity(childEnv),
     ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
   applyThisAppCli(env)
   return env
+}
+
+const INHERITED_IDENTITY_ENV_KEYS: readonly string[] = [
+  ...INHERITED_PANE_IDENTITY_ENV_KEYS,
+  'ORCA_TERMINAL_HANDLE'
+]
+
+function withoutInheritedPaneIdentity(childEnv: Record<string, string>): Record<string, string> {
+  const env = { ...childEnv }
+  for (const key of INHERITED_IDENTITY_ENV_KEYS) {
+    delete env[key]
+  }
+  return env
+}
+
+/** Inherited identity keys to delete from the env a provider merges under `childEnv`, sparing any
+ *  the session set itself (a registered worker's handle). */
+export function inheritedPaneIdentityEnvToDelete(childEnv: Record<string, string>): string[] {
+  return INHERITED_IDENTITY_ENV_KEYS.filter((key) => !Object.hasOwn(childEnv, key))
 }
 
 /**

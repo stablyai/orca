@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { buildCodexStructuredChildEnvironment } from './codex-structured-child-environment'
+import {
+  buildCodexStructuredChildEnvironment,
+  codexStructuredChildEnvironment
+} from './codex-structured-child-environment'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -109,7 +112,10 @@ const ENV_REPORTING_APP_SERVER = String.raw`
           sessionId: process.env.ORCA_AGENT_SESSION_ID ?? null,
           cliCommand: process.env.ORCA_CLI_COMMAND ?? null,
           cliBinDir: process.env.ORCA_CLI_BIN_DIR ?? null,
-          path: process.env.PATH ?? process.env.Path ?? null
+          path: process.env.PATH ?? process.env.Path ?? null,
+          inheritedIdentity: Object.keys(process.env).filter((key) =>
+            /^ORCA_(PANE_KEY|TAB_ID|WORKTREE_ID|WORKSPACE_ID|AGENT_LAUNCH_TOKEN|AGENT_PANE|AGENT_LAUNCH|TERMINAL_HANDLE)$/.test(key)
+          )
         }
       })
     }
@@ -148,7 +154,47 @@ describe('the spawned Codex child', () => {
         sessionId,
         cliCommand: expect.stringMatching(DEV_CLI_LAUNCHER),
         cliBinDir: process.platform === 'win32' ? null : expect.stringMatching(DEV_CLI_BIN_DIR),
-        path: expect.stringMatching(DEV_CLI_BIN_FIRST)
+        path: expect.stringMatching(DEV_CLI_BIN_FIRST),
+        inheritedIdentity: expect.any(Array)
+      })
+    } finally {
+      await connection.close()
+    }
+  })
+
+  it('runs without the pane identity of the Orca terminal that launched this Orca', async () => {
+    const inherited = {
+      ORCA_PANE_KEY: 'tab-a:11111111-1111-4111-8111-111111111111',
+      ORCA_TAB_ID: 'tab-a',
+      ORCA_WORKTREE_ID: 'repo-a::/work/a',
+      ORCA_WORKSPACE_ID: 'repo-a::/work/a',
+      ORCA_AGENT_LAUNCH_TOKEN: 'launch-a',
+      ORCA_AGENT_PANE: 'tab-a:11111111-1111-4111-8111-111111111111',
+      ORCA_AGENT_LAUNCH: 'launch-a',
+      ORCA_TERMINAL_HANDLE: 'term_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    }
+    for (const [key, value] of Object.entries(inherited)) {
+      vi.stubEnv(key, value)
+    }
+    const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+    const launch = {
+      command: process.execPath,
+      args: ['-e', ENV_REPORTING_APP_SERVER],
+      cwd: process.cwd(),
+      codexHome: null,
+      resumeThreadId: null,
+      // The shell environment Codex launches with carries it too.
+      env: { ORCA_PANE_KEY: inherited.ORCA_PANE_KEY }
+    }
+    const connection = await openCodexAppServerConnection({
+      command: process.execPath,
+      args: ['-e', ENV_REPORTING_APP_SERVER],
+      ...codexStructuredChildEnvironment(launch, 'spawn-token', sessionId)
+    })
+    try {
+      await expect(connection.request('test/env')).resolves.toMatchObject({
+        sessionId,
+        inheritedIdentity: []
       })
     } finally {
       await connection.close()

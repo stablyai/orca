@@ -18,6 +18,17 @@ const SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
 const USER_DATA = '/data/orca'
 const RESOURCES = '/app/Resources'
 const SHIM_DIR = join(USER_DATA, 'linux-orca-cli-shim')
+// What an Orca started from one of its own terminals inherits from that pane.
+const INHERITED_PANE_IDENTITY = {
+  ORCA_PANE_KEY: 'tab-a:11111111-1111-4111-8111-111111111111',
+  ORCA_TAB_ID: 'tab-a',
+  ORCA_WORKTREE_ID: 'repo-a::/work/a',
+  ORCA_WORKSPACE_ID: 'repo-a::/work/a',
+  ORCA_AGENT_LAUNCH_TOKEN: 'launch-a',
+  ORCA_AGENT_PANE: 'tab-a:11111111-1111-4111-8111-111111111111',
+  ORCA_AGENT_LAUNCH: 'launch-a',
+  ORCA_TERMINAL_HANDLE: 'term_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+}
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
 const resourcesDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
@@ -187,6 +198,28 @@ describe('structuredSessionChildIdentityEnv', () => {
     const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(Object.keys(env).filter((key) => key.includes('PANE'))).toEqual([])
+  })
+
+  it('drops the pane identity inherited from the Orca terminal that launched this Orca', () => {
+    pinPlatform('linux')
+    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, {
+      ...INHERITED_PANE_IDENTITY,
+      PATH: '/usr/bin'
+    })
+    for (const key of Object.keys(INHERITED_PANE_IDENTITY)) {
+      expect(env[key], key).toBeUndefined()
+    }
+    expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
+  })
+
+  it("replaces an inherited terminal handle with a worker's own", () => {
+    pinPlatform('linux')
+    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+    const handle = registerWorker()
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, { ...INHERITED_PANE_IDENTITY })
+    expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
+    expect(env.ORCA_PANE_KEY).toBeUndefined()
   })
 
   it('never names the WSL-scoped launcher, because a structured worker cannot run in WSL', () => {

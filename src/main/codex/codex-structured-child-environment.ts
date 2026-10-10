@@ -1,6 +1,9 @@
 import type { CodexStructuredLaunch } from './codex-structured-session-state'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
-import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
+import {
+  inheritedPaneIdentityEnvToDelete,
+  structuredSessionChildIdentityEnv
+} from '../runtime/structured-session-child-identity-env'
 import {
   NATIVE_CHAT_VISUALS_DIR_ENV,
   withNativeChatVisualsEnv
@@ -27,15 +30,20 @@ export function buildCodexStructuredChildEnvironment(
   }
 }
 
-/** The child's env overlay, and the keys removed from what it inherits: without visuals, a folder
- *  Orca itself inherited (started from a chat) names another chat's folder. */
+/** The child's env overlay, and the keys removed from what it inherits: a pane identity Orca itself
+ *  inherited (started from a terminal) names another pane, and without visuals, a folder Orca
+ *  inherited (started from a chat) names another chat's folder. */
 export function codexStructuredChildEnvironment(
   launch: CodexStructuredLaunch,
   spawnToken: string,
   sessionId: string
 ): { env: Record<string, string>; envToDelete?: readonly string[] } {
+  const env = buildCodexStructuredChildEnvironment(launch, spawnToken, sessionId)
   return {
-    env: buildCodexStructuredChildEnvironment(launch, spawnToken, sessionId),
-    ...(launch.visuals ? {} : { envToDelete: [NATIVE_CHAT_VISUALS_DIR_ENV] })
+    env,
+    envToDelete: [
+      ...inheritedPaneIdentityEnvToDelete(env),
+      ...(launch.visuals ? [] : [NATIVE_CHAT_VISUALS_DIR_ENV])
+    ]
   }
 }

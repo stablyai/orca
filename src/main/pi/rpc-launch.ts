@@ -1,9 +1,6 @@
 import {
-  ORCA_SCRUB_SAFE_LAUNCH_ENV,
-  ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../shared/agent-hook-scrub-safe-env'
-import {
   AGENT_HOOK_RUNTIME_ENV_KEYS,
+  INHERITED_PANE_IDENTITY_ENV_KEYS,
   ORCA_AGENT_SESSION_CALLER_ENV_KEYS
 } from '../ipc/pty/host-env/spawn-env-keys'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
@@ -22,12 +19,7 @@ export type PiRpcLaunchOptions = {
 }
 
 const CHILD_ENV_TO_DELETE: readonly string[] = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  ORCA_SCRUB_SAFE_PANE_ENV,
-  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ...INHERITED_PANE_IDENTITY_ENV_KEYS,
   ...AGENT_HOOK_RUNTIME_ENV_KEYS
 ]
 const CALLER_ENV_TO_DELETE = [
