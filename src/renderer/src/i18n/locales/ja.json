@@ -12445,6 +12445,16 @@
           "description": "このホストはそのまま管理対象サーバーに戻ります。古いバージョンの Orca がここに追加または変更したものは移動されず、クリーンアップされるまでこのコンピュータの保存済み設定にのみ残ります。",
           "cancel": "キャンセル",
           "confirm": "サーバーのバージョンを保持"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS で通知が表示されませんでした",
+              "macFailureDescription": "システム設定で Orca の「通知を許可」をオンにしてください。",
+              "windowsFailureTitle": "Windows で通知が表示されませんでした",
+              "windowsFailureDescription": "Windows の設定で Orca の通知をオンにしてください。"
+            }
+          }
         }
       },
       "right": {
@@ -14970,6 +14980,9 @@
             "0d6efe9cf4": "プロジェクトやワークツリーが保護されたフォルダーにある場合、macOS で推奨されます。",
             "dac08ec03e": "開いています…",
             "6e3d62b816": "フルディスクアクセスを開く"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "ヘルプ > Orca を探索 からいつでも再度開けます。"
           }
         },
         "tips": {
@@ -15005,7 +15018,8 @@
             "53905bd076": "開発プレビュー: スキル設定ターミナルを開きます。",
             "1da82af45b": "Orca CLI には注意が必要です",
             "ce13a742d0": "orcaをPATHに登録しました。",
-            "d1a86c7eb5": "[設定] を開いて CLI セットアップを完了します。"
+            "d1a86c7eb5": "[設定] を開いて CLI セットアップを完了します。",
+            "cliInstallFailed": "Orca CLI をインストールできませんでした。"
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "ワークツリー「{{value0}}」を作成する",
@@ -15965,6 +15979,17 @@
           },
           "copy": {
             "copyFailed": "クラッシュレポートの詳細をコピーできませんでした。"
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "クラッシュを報告",
+            "uiErrorTitle": "Orca で回復可能な UI エラーが発生しました",
+            "closedTitle": "Orca が予期せず終了しました",
+            "reportDescription": "プライバシーに配慮したクラッシュレポートを送信します。利用可能な場合は、機密情報を除去した最近の診断ログが含まれます。",
+            "uiErrorDescription": "プライバシーに配慮した診断レポートを送信して、失敗した UI の把握にご協力ください。",
+            "closedDescription": "プライバシーに配慮した診断レポートを送信して、何が起きたかの把握にご協力ください。",
+            "reportNotesPlaceholder": "任意: 何が起きましたか？",
+            "uiErrorNotesPlaceholder": "任意: この UI エラーの前に何をしていましたか？",
+            "closedNotesPlaceholder": "任意: Orca が終了する前に何をしていましたか？"
           }
         }
       },

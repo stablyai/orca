@@ -12445,6 +12445,16 @@
           "description": "此主机将按原样恢复为使用其受管服务器。较旧版本的 Orca 在此处添加或更改的内容不会被迁移；它们只会保留在这台电脑保存的设置中，直到被清理。",
           "cancel": "取消",
           "confirm": "保留服务器的版本"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS 未显示通知",
+              "macFailureDescription": "请在系统设置中为 Orca 开启“允许通知”。",
+              "windowsFailureTitle": "Windows 未显示通知",
+              "windowsFailureDescription": "请在 Windows 设置中为 Orca 开启通知。"
+            }
+          }
         }
       },
       "right": {
@@ -14970,6 +14980,9 @@
             "0d6efe9cf4": "当项目或工作树位于受保护文件夹时，建议在 macOS 上开启。",
             "dac08ec03e": "正在打开...",
             "6e3d62b816": "打开完全磁盘访问权限"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "可随时从 帮助 > 探索 Orca 重新打开。"
           }
         },
         "tips": {
@@ -15005,7 +15018,8 @@
             "53905bd076": "开发预览：打开技能设置终端。",
             "1da82af45b": "Orca CLI 需要注意",
             "ce13a742d0": "在 PATH 中注册了 `orca`。",
-            "d1a86c7eb5": "打开“设置”以完成 CLI 设置。"
+            "d1a86c7eb5": "打开“设置”以完成 CLI 设置。",
+            "cliInstallFailed": "无法安装 Orca CLI。"
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "创建工作树“{{value0}}”",
@@ -15965,6 +15979,17 @@
           },
           "copy": {
             "copyFailed": "无法复制崩溃报告详细信息。"
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "报告崩溃",
+            "uiErrorTitle": "Orca 遇到了可恢复的界面错误",
+            "closedTitle": "Orca 意外关闭",
+            "reportDescription": "发送一份保护隐私的崩溃报告。如有可用，会附上最近经过脱敏的诊断日志。",
+            "uiErrorDescription": "发送一份保护隐私的诊断报告，帮助我们了解出错的界面部分。",
+            "closedDescription": "发送一份保护隐私的诊断报告，帮助我们了解发生了什么。",
+            "reportNotesPlaceholder": "可选：发生了什么？",
+            "uiErrorNotesPlaceholder": "可选：出现此界面错误前你在做什么？",
+            "closedNotesPlaceholder": "可选：Orca 关闭前你在做什么？"
           }
         }
       },

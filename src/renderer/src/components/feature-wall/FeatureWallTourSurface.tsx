@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
+import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
   FEATURE_WALL_WORKFLOWS,
@@ -54,7 +55,10 @@ export function FeatureWallTourSurface({
   className,
   panelClassName,
   doneLabel = 'Done',
-  footerText = 'Reopen any time from Help > Explore Orca.',
+  footerText = translate(
+    'auto.components.feature.wall.FeatureWallTourSurface.reopenHint',
+    'Reopen any time from Help > Explore Orca.'
+  ),
   enableKeyboardShortcut = true,
   compactRail = false,
   detachedFooter = false,

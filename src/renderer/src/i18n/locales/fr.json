@@ -12551,6 +12551,16 @@
           "description": "Cet hôte revient à son serveur géré tel quel. Ce que la version plus ancienne d'Orca a ajouté ou modifié ici n'est pas déplacé ; cela reste uniquement dans les paramètres enregistrés de cet ordinateur jusqu'à leur nettoyage.",
           "cancel": "Annuler",
           "confirm": "Conserver la version du serveur"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS n'a pas affiché la notification",
+              "macFailureDescription": "Activez Autoriser les notifications pour Orca dans Réglages Système.",
+              "windowsFailureTitle": "Windows n'a pas affiché la notification",
+              "windowsFailureDescription": "Activez les notifications pour Orca dans les Paramètres Windows."
+            }
+          }
         }
       },
       "right": {
@@ -15076,6 +15086,9 @@
             "0d6efe9cf4": "Recommandé sur macOS quand les projets ou les worktrees se trouvent dans des dossiers protégés.",
             "dac08ec03e": "Ouverture...",
             "6e3d62b816": "Ouvrir l'accès complet au disque"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Rouvrez-le à tout moment depuis Aide > Découvrir Orca."
           }
         },
         "tips": {
@@ -15111,7 +15124,8 @@
             "53905bd076": "Aperçu de développement : ouverture du terminal de configuration des skills.",
             "1da82af45b": "L'Orca CLI requiert votre attention",
             "ce13a742d0": "`orca` enregistré dans le PATH.",
-            "d1a86c7eb5": "Ouvrez les paramètres pour terminer la configuration du CLI."
+            "d1a86c7eb5": "Ouvrez les paramètres pour terminer la configuration du CLI.",
+            "cliInstallFailed": "Impossible d'installer le CLI Orca."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Créer le worktree « {{value0}} »",
@@ -16071,6 +16085,17 @@
           },
           "copy": {
             "copyFailed": "Impossible de copier les détails du rapport de plantage."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Signaler un plantage",
+            "uiErrorTitle": "Orca a rencontré une erreur d'interface récupérable",
+            "closedTitle": "Orca s'est fermé de manière inattendue",
+            "reportDescription": "Envoyez un rapport de plantage respectueux de la vie privée. Les journaux de diagnostic récents, expurgés, sont inclus lorsqu'ils sont disponibles.",
+            "uiErrorDescription": "Envoyez un rapport de diagnostic respectueux de la vie privée pour nous aider à comprendre la partie de l'interface qui a échoué.",
+            "closedDescription": "Envoyez un rapport de diagnostic respectueux de la vie privée pour nous aider à comprendre ce qui s'est passé.",
+            "reportNotesPlaceholder": "Facultatif : que s'est-il passé ?",
+            "uiErrorNotesPlaceholder": "Facultatif : que faisiez-vous avant cette erreur d'interface ?",
+            "closedNotesPlaceholder": "Facultatif : que faisiez-vous avant qu'Orca se ferme ?"
           }
         }
       },

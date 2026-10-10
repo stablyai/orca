@@ -12693,6 +12693,16 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS did not show the notification",
+              "macFailureDescription": "Enable Allow notifications for Orca in System Settings.",
+              "windowsFailureTitle": "Windows did not show the notification",
+              "windowsFailureDescription": "Enable notifications for Orca in Windows Settings."
+            }
+          }
         }
       },
       "right": {
@@ -15222,6 +15232,9 @@
             "0d6efe9cf4": "Recommended on macOS when projects or worktrees live in protected folders.",
             "dac08ec03e": "Opening...",
             "6e3d62b816": "Open Full Disk Access"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Reopen any time from Help > Explore Orca."
           }
         },
         "tips": {
@@ -15257,7 +15270,8 @@
             "53905bd076": "Development preview: opening skills setup terminal.",
             "1da82af45b": "Orca CLI needs attention",
             "ce13a742d0": "Registered `orca` in PATH.",
-            "d1a86c7eb5": "Open Settings to finish CLI setup."
+            "d1a86c7eb5": "Open Settings to finish CLI setup.",
+            "cliInstallFailed": "Failed to install Orca CLI."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Create worktree \"{{value0}}\"",
@@ -16217,6 +16231,17 @@
           },
           "copy": {
             "copyFailed": "Crash report details could not be copied."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Report a crash",
+            "uiErrorTitle": "Orca hit a recoverable UI error",
+            "closedTitle": "Orca closed unexpectedly",
+            "reportDescription": "Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.",
+            "uiErrorDescription": "Send a privacy-safe diagnostic report to help us understand the failed UI surface.",
+            "closedDescription": "Send a privacy-safe diagnostic report to help us understand what happened.",
+            "reportNotesPlaceholder": "Optional: what happened?",
+            "uiErrorNotesPlaceholder": "Optional: what were you doing before this UI error?",
+            "closedNotesPlaceholder": "Optional: what were you doing before Orca closed?"
           }
         }
       },

@@ -12445,6 +12445,16 @@
           "description": "Este host vuelve a su servidor gestionado tal como está. Lo que la versión anterior de Orca agregó o cambió aquí no se mueve; permanece solo en los ajustes guardados de esta computadora hasta que se limpien.",
           "cancel": "Cancelar",
           "confirm": "Conservar la versión del servidor"
+        },
+        "notification": {
+          "settings": {
+            "copy": {
+              "macFailureTitle": "macOS no mostró la notificación",
+              "macFailureDescription": "Activa Permitir notificaciones para Orca en Ajustes del Sistema.",
+              "windowsFailureTitle": "Windows no mostró la notificación",
+              "windowsFailureDescription": "Activa las notificaciones para Orca en Configuración de Windows."
+            }
+          }
         }
       },
       "right": {
@@ -14970,6 +14980,9 @@
             "0d6efe9cf4": "Recomendado en macOS cuando los proyectos o worktrees están en carpetas protegidas.",
             "dac08ec03e": "Abriendo...",
             "6e3d62b816": "Abrir Acceso total al disco"
+          },
+          "FeatureWallTourSurface": {
+            "reopenHint": "Vuelve a abrirlo cuando quieras desde Ayuda > Explorar Orca."
           }
         },
         "tips": {
@@ -15005,7 +15018,8 @@
             "53905bd076": "Vista previa de desarrollo: abriendo la terminal de configuración de skills.",
             "1da82af45b": "Orca CLI necesita atención",
             "ce13a742d0": "`orca` registrado en PATH.",
-            "d1a86c7eb5": "Abre Configuración para finalizar la configuración de la CLI."
+            "d1a86c7eb5": "Abre Configuración para finalizar la configuración de la CLI.",
+            "cliInstallFailed": "No se pudo instalar la CLI de Orca."
           },
           "CmdJPaletteFeatureTipVisual": {
             "ab94e16d44": "Crear worktree \"{{value0}}\"",
@@ -15965,6 +15979,17 @@
           },
           "copy": {
             "copyFailed": "No se pudieron copiar los detalles del informe de fallo."
+          },
+          "CrashReportDialogSurface": {
+            "reportTitle": "Informar de un fallo",
+            "uiErrorTitle": "Orca encontró un error de interfaz recuperable",
+            "closedTitle": "Orca se cerró inesperadamente",
+            "reportDescription": "Envía un informe de fallo que protege tu privacidad. Cuando están disponibles, se incluyen registros de diagnóstico recientes sin datos sensibles.",
+            "uiErrorDescription": "Envía un informe de diagnóstico que protege tu privacidad para ayudarnos a entender la parte de la interfaz que falló.",
+            "closedDescription": "Envía un informe de diagnóstico que protege tu privacidad para ayudarnos a entender qué pasó.",
+            "reportNotesPlaceholder": "Opcional: ¿qué pasó?",
+            "uiErrorNotesPlaceholder": "Opcional: ¿qué estabas haciendo antes de este error de interfaz?",
+            "closedNotesPlaceholder": "Opcional: ¿qué estabas haciendo antes de que Orca se cerrara?"
           }
         }
       },

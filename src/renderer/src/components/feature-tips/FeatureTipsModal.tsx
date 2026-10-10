@@ -230,7 +230,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
           closeModal()
           openCliSettings()
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to install Orca CLI.'
+          const message =
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.feature.tips.FeatureTipsModal.cliInstallFailed',
+                  'Failed to install Orca CLI.'
+                )
           if (
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')
