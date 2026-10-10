@@ -33,7 +33,8 @@ export function ConversationCommentGroup({
   mentionOptions,
   resolvedReplyingTo,
   onToggleReply,
-  onSubmitReply
+  onSubmitReply,
+  onJumpToFile
 }: {
   group: PRCommentGroup
   repoPath: string | null
@@ -49,6 +50,7 @@ export function ConversationCommentGroup({
   resolvedReplyingTo: number | null
   onToggleReply: (commentId: number) => void
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
+  onJumpToFile?: (path: string) => void
 }): React.JSX.Element {
   const cardProps = {
     repoPath,
@@ -63,7 +65,8 @@ export function ConversationCommentGroup({
     mentionOptions,
     resolvedReplyingTo,
     onToggleReply,
-    onSubmitReply
+    onSubmitReply,
+    onJumpToFile
   }
   const cards =
     group.kind === 'thread'
