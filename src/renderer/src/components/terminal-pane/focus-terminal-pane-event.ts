@@ -15,6 +15,7 @@ type FocusTerminalPaneEventDeps = {
   acknowledgeAgents: (paneKeys: string[]) => void
   surfaceStaleAgentRow: (tabId: string, leafId: string) => void
   scrollToBottomIfOutputSinceLastView?: (paneId: number) => void
+  collapseExpandedPane?: () => void
 }
 
 export function handleFocusTerminalPaneDetail(
@@ -24,7 +25,8 @@ export function handleFocusTerminalPaneDetail(
     manager,
     acknowledgeAgents,
     surfaceStaleAgentRow,
-    scrollToBottomIfOutputSinceLastView
+    scrollToBottomIfOutputSinceLastView,
+    collapseExpandedPane
   }: FocusTerminalPaneEventDeps
 ): void {
   if (!detail?.tabId || detail.tabId !== tabId) {
@@ -45,6 +47,9 @@ export function handleFocusTerminalPaneDetail(
       surfaceStaleAgentRow(tabId, resolution.leafId)
     }
     return
+  }
+  if (detail.collapseExpandedPane) {
+    collapseExpandedPane?.()
   }
   manager.setActivePane(resolution.numericPaneId, { focus: true })
   if (detail.scrollToBottomIfOutputSinceLastView) {

@@ -110,6 +110,8 @@ export type KeybindingActionId =
   | 'terminal.clear'
   | 'terminal.focusNextPane'
   | 'terminal.focusPreviousPane'
+  | 'terminal.focusNextPaneAcrossTabs'
+  | 'terminal.focusPreviousPaneAcrossTabs'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
   | 'terminal.setTitle'

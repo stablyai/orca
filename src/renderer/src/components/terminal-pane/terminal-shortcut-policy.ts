@@ -52,6 +52,7 @@ export type TerminalShortcutAction =
   | { type: 'toggleSearch' }
   | { type: 'clearActivePane' }
   | { type: 'focusPane'; direction: 'next' | 'previous' }
+  | { type: 'focusPaneAcrossTabs'; direction: 'next' | 'previous' }
   | { type: 'equalizePaneSizes' }
   | { type: 'toggleExpandActivePane' }
   | { type: 'setTitle' }
@@ -121,6 +122,14 @@ export function resolveTerminalShortcutAction(
 
     if (matches('terminal.clear')) {
       return { type: 'clearActivePane' }
+    }
+
+    if (matches('terminal.focusPreviousPaneAcrossTabs')) {
+      return { type: 'focusPaneAcrossTabs', direction: 'previous' }
+    }
+
+    if (matches('terminal.focusNextPaneAcrossTabs')) {
+      return { type: 'focusPaneAcrossTabs', direction: 'next' }
     }
 
     if (matches('terminal.focusPreviousPane')) {

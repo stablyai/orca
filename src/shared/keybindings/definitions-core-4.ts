@@ -3,6 +3,23 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'terminal.focusNextPaneAcrossTabs',
+    title: 'Focus next pane across terminal tabs',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'next', 'tabs', 'cycle'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.focusPreviousPaneAcrossTabs',
+    title: 'Focus previous pane across terminal tabs',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'previous', 'tabs', 'cycle'],
+    defaultBindings: platformBindings([])
+  },
+
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',

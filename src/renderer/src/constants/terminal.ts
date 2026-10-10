@@ -39,6 +39,8 @@ export type FocusTerminalPaneDetail = {
   flashFocusedPane?: boolean
   /** Follow live agent output when activation is explicitly about that agent. */
   scrollToBottomIfOutputSinceLastView?: boolean
+  /** Reveal sibling leaves before focusing a pane selected by cross-tab navigation. */
+  collapseExpandedPane?: boolean
 }
 
 export type PasteTerminalTextDetail = {
