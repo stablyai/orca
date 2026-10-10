@@ -16,7 +16,6 @@ export function useBrowserPageKeyboardShortcuts({
   markupIsActive,
   webviewRef,
   paneZoomLevelRef,
-  setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
   reloadWebviewOrRecoverGuest,
   startGrabIntent,
@@ -31,7 +30,6 @@ export function useBrowserPageKeyboardShortcuts({
   markupIsActive: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   paneZoomLevelRef: MutableRefObject<number>
-  setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
   startGrabIntent: (intent: GrabIntent) => void
@@ -48,7 +46,6 @@ export function useBrowserPageKeyboardShortcuts({
     isActiveRef,
     webviewRef,
     paneZoomLevelRef,
-    setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest
   })

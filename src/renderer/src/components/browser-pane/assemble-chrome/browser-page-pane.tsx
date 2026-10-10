@@ -284,7 +284,6 @@ export function BrowserPagePane({
     markupIsActive: markup.isActive,
     webviewRef,
     paneZoomLevelRef: zoom.paneZoomLevelRef,
-    setBrowserDefaultZoomLevel: zoom.setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
     startGrabIntent: grabAnnotations.startGrabIntent,

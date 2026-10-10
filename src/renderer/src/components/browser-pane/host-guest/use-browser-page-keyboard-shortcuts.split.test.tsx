@@ -70,7 +70,6 @@ function PaneHarness({
     markupIsActive,
     webviewRef,
     paneZoomLevelRef,
-    setBrowserDefaultZoomLevel: vi.fn(),
     showBrowserZoomFeedback: vi.fn(),
     reloadWebviewOrRecoverGuest: spies.reload,
     startGrabIntent: spies.startGrabIntent,
@@ -291,5 +290,14 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(floating.webview.goBack).not.toHaveBeenCalled()
     expect(floating.reload).not.toHaveBeenCalled()
     expect(floating.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('zooms only the targeted pane and does not overwrite default zoom for other tabs', () => {
+    const { a, b } = renderSplit('focused', 'inactive')
+
+    act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
+
+    expect(b.webview.setZoomLevel).toHaveBeenCalledTimes(1)
+    expect(a.webview.setZoomLevel).not.toHaveBeenCalled()
   })
 })
