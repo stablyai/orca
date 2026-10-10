@@ -160,7 +160,7 @@ export function TaskPageGitHubList({
                 <span>
                   {translate('auto.components.TaskPage.0c0de0fc0e', "Couldn't load issues from")}{' '}
                   <span className="font-mono">
-                    {err.source.owner}/{err.source.repo}
+                    {err.source ? `${err.source.owner}/${err.source.repo}` : s.repoPath}
                   </span>{' '}
                   — {err.message}
                 </span>
