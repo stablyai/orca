@@ -185,7 +185,8 @@ export type TerminalSurfaceCloseCommit = {
   requestedSession: WorkspaceSessionState | null | undefined
   /** The tab's owner identity still matches the one the close was asked against. */
   ownerMatches: () => boolean
-  hostId: () => ExecutionHostId
+  /** The partitions holding the tab, routed partition first; empty when unroutable. */
+  hostIds: () => readonly ExecutionHostId[]
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
   setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
   onClosed: (ptyIdsToKill: string[]) => void
@@ -207,28 +208,41 @@ export function terminalSurfaceCloseMutation(
     if (!commit.ownerMatches()) {
       return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
-    const hostId = commit.hostId()
-    const session = commit.getSession(hostId)
-    if (!session) {
-      return { value: new Error('workspace_session_unavailable'), persist: false }
+    const results: {
+      hostId: ExecutionHostId
+      session: WorkspaceSessionState
+      result: TerminalSurfaceCloseResult
+    }[] = []
+    for (const hostId of commit.hostIds()) {
+      const session = commit.getSession(hostId)
+      if (!session) {
+        return { value: new Error('workspace_session_unavailable'), persist: false }
+      }
+      const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
+        force: commit.options.force,
+        paneIncarnationId,
+        reason: commit.options.reason ?? 'user'
+      })
+      if (result.pinned) {
+        return { value: new Error('terminal_tab_pinned'), persist: false }
+      }
+      results.push({ hostId, session, result })
     }
-    const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
-      force: commit.options.force,
-      paneIncarnationId,
-      reason: commit.options.reason ?? 'user'
-    })
-    if (result.pinned) {
-      return { value: new Error('terminal_tab_pinned'), persist: false }
-    }
-    if (!result.closed) {
-      // Why: a tab this session never listed still records its close, so its late spawn is refused;
-      // an existing record (an echo of that close) needs no second write.
+    const closed = results.filter(({ result }) => result.closed)
+    if (closed.length === 0) {
+      const routed = results[0]
+      if (!routed) {
+        // An unroutable workspace (its folder record is gone) has nothing to close.
+        return { value: undefined, persist: false }
+      }
+      // Why: a tab no session listed still records its close in the routed partition, so its late
+      // spawn is refused; an existing record (an echo of that close) needs no second write.
       if (
         commit.options.allowMissing &&
         target.kind === 'tab' &&
-        !hasClosedTerminalTabRecord(session.closedTerminalTabTombstonesByTabId, target.tabId)
+        !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
       ) {
-        commit.setSession(result.session, hostId)
+        commit.setSession(routed.result.session, routed.hostId)
         return { value: undefined }
       }
       return {
@@ -236,8 +250,11 @@ export function terminalSurfaceCloseMutation(
         persist: false
       }
     }
-    commit.setSession(result.session, hostId)
-    commit.onClosed(result.ptyIdsToKill)
+    // Why every holder: a legacy relay reattach can leave one tab in two partitions.
+    for (const { hostId, result } of closed) {
+      commit.setSession(result.session, hostId)
+    }
+    commit.onClosed([...new Set(closed.flatMap(({ result }) => result.ptyIdsToKill))])
     // Why no rollback: bookkeeping must not undo a user's close or skip its kill; a failed write
     // keeps the removal dirty in memory, so the next write persists it.
     return { value: undefined }

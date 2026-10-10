@@ -93,9 +93,9 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   }
 
   protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
-    const originalHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    const originalHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
     return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
-      const resolvedHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const resolvedHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
       const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
       // Emptying the last tab may reroute the worktree to its catalog host.
       const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
@@ -130,15 +130,18 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         : null
     let ptyIdsToKill: string[] = []
     let refusal: Error | undefined
+    // Why by tab: one worktree's tabs can be split across local and runtime partitions (#18202).
+    const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
+    const [requestedHostId] = hostIds()
     try {
       refusal = await store.runDurableMutation(
         closeLeafOrTab({
           worktreeId,
           target,
           options,
-          requestedSession: this.getWorkspaceSessionForWorktree(worktreeId),
+          requestedSession: requestedHostId ? store.getWorkspaceSession(requestedHostId) : null,
           ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
-          hostId: () => this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+          hostIds,
           getSession: (hostId) => store.getWorkspaceSession(hostId),
           setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
           onClosed: (closedPtyIds) => {
