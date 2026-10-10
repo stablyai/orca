@@ -153,6 +153,30 @@ describe('scripts', () => {
     expect(spec.args).toContain('ssh -T git@github.com || true\npnpm install')
   })
 
+  it('kills the whole tree on timeout, not just the wsl.exe root', async () => {
+    // The regression this pins: `terminate()` on the non-barrier path is a bare
+    // `child.kill()`, so a timeout reaped the wsl.exe client and left what it
+    // started behind -- on Windows the console host outlives it. Against a wedged
+    // distro (`wsl --list` reports Running while every `--exec` hangs) that is one
+    // orphaned conhost per probe: measured 8,731 orphans / 9,073 processes / 1.38M
+    // handles over two days, at which point process creation itself cost tens of
+    // seconds. The git runner already passes this flag; the WSL runner did not.
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    await runWslProcess({ loginPath: 'preferred', shell: 'bash', script: 'true' })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.terminationBarrier).toBe(true)
+  })
+
+  it('kills the tree on the shell-free lane too, where the probe never resolved', async () => {
+    // Why a second case: the degraded lane (`loginPath: 'none'`) is the one a
+    // wedged distro actually takes, since the environment probe is what fails
+    // first. A barrier wired only into the happy path would miss every real
+    // occurrence of the leak.
+    await runWslProcess({ loginPath: 'none', shell: 'bash', script: 'true' })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.terminationBarrier).toBe(true)
+  })
+
   it('falls back to stdin for a script too large for a command line', async () => {
     // A user hook is the one unbounded script here (`run-both` concatenates two
     // orca.yaml scripts, and a vendored installer is ~15KB). Windows caps the
