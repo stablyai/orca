@@ -18256,7 +18256,8 @@
         "showTerminal": "Afficher le terminal"
       },
       "resumeInNewChat": {
-        "unavailable": "Impossible de reprendre cette session dans un chat natif pour le moment. Réessayez après la réponse de l'agent."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
+        "cannotResume": "Cette conversation {{agent}} ne peut pas être reprise dans un chat natif."
       },
       "state": {
         "loading": {

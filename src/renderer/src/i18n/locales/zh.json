@@ -18154,7 +18154,8 @@
         "showTerminal": "显示终端"
       },
       "resumeInNewChat": {
-        "unavailable": "此会话暂时无法在本机聊天中恢复。请在代理回复后重试。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
+        "cannotResume": "此 {{agent}} 对话无法在本机聊天中恢复。"
       },
       "state": {
         "loading": {

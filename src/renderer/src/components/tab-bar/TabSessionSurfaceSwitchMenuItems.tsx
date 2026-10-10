@@ -1,15 +1,32 @@
 import { useEffect, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '../../store'
+import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
-import { resolveTabSessionHistorySubject } from './tab-session-history-switch'
+import { useAiVaultSessionLaunchActions } from '../right-sidebar/ai-vault-session-launch-actions'
 import {
-  lookupTabSessionSwitch,
-  useTabSessionLaunchActions,
-  type ResolvedTabSessionSwitch
-} from './tab-session-switch-actions'
+  lookupTabSessionHistoryRow,
+  resolveTabSessionHistorySubject,
+  resolveTabSessionSwitch,
+  type TabSessionHistorySubject,
+  type TabSessionSwitch
+} from './tab-session-history-switch'
+
+type ResolvedTabSessionSwitch = {
+  session: AiVaultSession
+  move: TabSessionSwitch
+}
+
+function resolveMove(
+  session: AiVaultSession | null,
+  subject: TabSessionHistorySubject
+): ResolvedTabSessionSwitch | null {
+  const move = session ? resolveTabSessionSwitch(useAppStore.getState(), session, subject) : null
+  return session && move ? { session, move } : null
+}
 
 // Mounted only while the menu is open, so the history lookup runs per right-click, not per tab.
 function useTabSessionSwitch(
@@ -30,15 +47,13 @@ function useTabSessionSwitch(
     }
     let cancelled = false
     const requestToken = createBrowserUuid()
-    void lookupTabSessionSwitch(
-      subject,
-      () => useAppStore.getState(),
-      (args) => window.api.aiVault.listSessions(args),
-      { requestToken, isCancelled: () => cancelled }
-    )
-      .then((next) => {
-        if (!cancelled && next !== undefined) {
-          setResolved(next)
+    void lookupTabSessionHistoryRow(subject, (args) => window.api.aiVault.listSessions(args), {
+      requestToken,
+      isCancelled: () => cancelled
+    })
+      .then((session) => {
+        if (!cancelled && session !== undefined) {
+          setResolved(resolveMove(session, subject))
         }
       })
       // A failed lookup only means the move is not offered; the rest of the menu is unaffected.
@@ -63,7 +78,22 @@ export function TabSessionSurfaceSwitchMenuItems({
   leadingSeparator: boolean
 }): React.JSX.Element | null {
   const resolved = useTabSessionSwitch(tab, structuredSessionId)
-  const launchActions = useTabSessionLaunchActions(tab.worktreeId)
+  const targetState = useAppStore(
+    useShallow((state) => ({
+      projects: state.projects,
+      settings: state.settings,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo
+    }))
+  )
+  const launchActions = useAiVaultSessionLaunchActions({
+    activeWorktree: null,
+    activeWorktreeId: tab.worktreeId,
+    targetState,
+    agentCmdOverrides: targetState.settings?.agentCmdOverrides
+  })
   if (!resolved) {
     return null
   }

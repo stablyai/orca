@@ -18189,7 +18189,8 @@
         "showTerminal": "ターミナルを表示"
       },
       "resumeInNewChat": {
-        "unavailable": "このセッションはまだネイティブチャットで再開できません。Agent が応答してから再度お試しください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
+        "cannotResume": "この {{agent}} の会話はネイティブチャットで再開できません。"
       },
       "state": {
         "loading": {

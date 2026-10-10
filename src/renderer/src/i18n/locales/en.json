@@ -18493,7 +18493,8 @@
         "showTerminal": "Show terminal"
       },
       "resumeInNewChat": {
-        "unavailable": "This session can't be resumed in a native chat yet. Try again after the agent replies."
+        "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
+        "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
       },
       "state": {
         "loading": {

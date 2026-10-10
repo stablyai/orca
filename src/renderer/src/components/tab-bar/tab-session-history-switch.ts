@@ -3,7 +3,10 @@
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
+import {
+  collectAiVaultTitleRequests,
+  resolvePaneAiVaultTitleRequest
+} from '@/lib/ai-vault-tab-title-requests'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,
@@ -66,17 +69,21 @@ function canHostOfferTabSessionMove(
   return kind === 'chat' && parseExecutionHostId(hostScope)?.kind === 'runtime'
 }
 
-/** The host half of the gate without building the list request, for surfaces that stay rendered. */
-export function canWorkspaceOfferTabSessionMove(
+/** Whether a pane has a conversation the move could act on, without building the list request,
+ *  for a surface that stays rendered. The history lookup still decides on click. */
+export function canPaneOfferResumeInNewChat(
   state: AppState,
-  workspaceId: string,
-  kind: TabSessionHistorySubject['kind']
+  pane: { worktreeId: string; paneKey: string }
 ): boolean {
+  const titleRequest = resolvePaneAiVaultTitleRequest(state, pane)
+  if (!titleRequest) {
+    return false
+  }
   const hostScope = resolveAiVaultHostScopeDefaults(
-    getAiVaultResumeWorkspaceExecutionHostId(state, workspaceId),
-    workspaceId
+    getAiVaultResumeWorkspaceExecutionHostId(state, titleRequest.worktreeId),
+    titleRequest.worktreeId
   ).defaultExecutionHostScope
-  return canHostOfferTabSessionMove(kind, hostScope)
+  return canHostOfferTabSessionMove('cli', hostScope)
 }
 
 export function resolveTabSessionHistorySubject(
@@ -85,6 +92,8 @@ export function resolveTabSessionHistorySubject(
     tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'launchAgent'>
     /** Set only for a native chat tab: the chat session it shows. */
     structuredSessionId?: string
+    /** Narrows a terminal tab to one pane's own conversation instead of the tab's best one. */
+    paneKey?: string
   }
 ): TabSessionHistorySubject | null {
   const workspace = (workspaceId: string, kind: TabSessionHistorySubject['kind']) => {
@@ -104,9 +113,13 @@ export function resolveTabSessionHistorySubject(
     return target ? { ...target, kind: 'chat', sessionId: args.structuredSessionId } : null
   }
   // The same pane-to-conversation mapping tab titles use: live agent, then sleeping, then retained.
-  const titleRequest = collectAiVaultTitleRequests(state).find(
-    (candidate) => candidate.tabId === args.tab.id
-  )
+  const titleRequest = args.paneKey
+    ? resolvePaneAiVaultTitleRequest(state, {
+        worktreeId: args.tab.worktreeId,
+        paneKey: args.paneKey
+      })
+    : (collectAiVaultTitleRequests(state).find((candidate) => candidate.tabId === args.tab.id) ??
+      null)
   const target = titleRequest ? workspace(titleRequest.worktreeId, 'cli') : null
   return titleRequest && target
     ? {
@@ -130,11 +143,8 @@ export function findTabSessionHistoryRow(
       if (subject.kind === 'chat') {
         return session.structuredSession?.sessionId === subject.sessionId
       }
-      return (
-        !session.structuredSession &&
-        session.agent === subject.agent &&
-        session.sessionId === subject.providerSessionId
-      )
+      // A chat-owned row still matches: the move's gate refuses it, and the caller can open that chat.
+      return session.agent === subject.agent && session.sessionId === subject.providerSessionId
     }) ?? null
   )
 }
@@ -185,7 +195,12 @@ export function resolveTabSessionSwitch(
 export async function lookupTabSessionHistoryRow(
   subject: TabSessionHistorySubject,
   listSessions: (args: AiVaultListArgs) => Promise<AiVaultListResult>,
-  options: { requestToken: string; isCancelled: () => boolean }
+  options: {
+    requestToken: string
+    isCancelled: () => boolean
+    /** A click made for this lookup alone may force a scan the way the panel's Refresh does. */
+    userRequested?: boolean
+  }
 ): Promise<AiVaultSession | null | undefined> {
   const { request } = subject
   const { requestToken } = options
@@ -203,7 +218,7 @@ export async function lookupTabSessionHistoryRow(
   if (
     options.isCancelled() ||
     request.executionHostScope !== LOCAL_EXECUTION_HOST_ID ||
-    !claimAiVaultForcedRescan()
+    !claimAiVaultForcedRescan(options.userRequested === true)
   ) {
     return row
   }

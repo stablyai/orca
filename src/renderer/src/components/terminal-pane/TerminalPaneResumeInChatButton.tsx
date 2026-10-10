@@ -5,55 +5,102 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { useAppStore } from '@/store'
-import { resolveTabSessionHistorySubject } from '../tab-bar/tab-session-history-switch'
+import { isAiVaultSessionResumableContent } from '../../../../shared/ai-vault-types'
+import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { resumeAiVaultSessionInNewChat } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
 import {
-  lookupTabSessionSwitch,
-  useTabSessionLaunchActions
-} from '../tab-bar/tab-session-switch-actions'
+  lookupTabSessionHistoryRow,
+  resolveTabSessionHistorySubject,
+  resolveTabSessionSwitch
+} from '../tab-bar/tab-session-history-switch'
 
-function notifyResumeUnavailable(): void {
+function notifyResumeFailed(): void {
   toast.error(
     translate(
-      'components.native-chat.resumeInNewChat.unavailable',
-      "This session can't be resumed in a native chat yet. Try again after the agent replies."
+      'auto.components.right.sidebar.AiVaultPanel.resumeInChatFailed',
+      'Could not resume this session in a new chat.'
     )
   )
 }
 
-/** The tab menu's "Resume in New Native Chat" in the pane header. The history lookup runs on click,
- *  not per render, so a header that stays on screen never scans in the background. */
+/** The tab menu's "Resume in New Native Chat" for this pane's own conversation. The history lookup
+ *  runs on click, not per render, so a header that stays on screen never scans in the background. */
 export function TerminalPaneResumeInChatButton({
   tabId,
-  worktreeId
+  worktreeId,
+  paneKey
 }: {
   tabId: string
   worktreeId: string
+  paneKey: string
 }): React.JSX.Element {
   const [pending, setPending] = useState(false)
-  const launchActions = useTabSessionLaunchActions(worktreeId)
   const label = translate(
     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
     'Resume in New Native Chat'
   )
 
   const resume = async (): Promise<void> => {
+    const tabIsOpen = (): boolean =>
+      useAppStore.getState().tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) ?? false
     const subject = resolveTabSessionHistorySubject(useAppStore.getState(), {
-      tab: { id: tabId, worktreeId }
+      tab: { id: tabId, worktreeId },
+      paneKey
     })
-    const resolved = subject
-      ? await lookupTabSessionSwitch(
-          subject,
-          () => useAppStore.getState(),
-          (args) => window.api.aiVault.listSessions(args),
-          { requestToken: createBrowserUuid(), isCancelled: () => false }
-        )
-      : null
-    if (resolved?.move.action === 'resume-in-new-chat') {
-      launchActions.handleResumeInNewChat(resolved.session, resolved.move.worktreeId)
+    if (subject?.kind !== 'cli') {
+      notifyResumeFailed()
       return
     }
-    notifyResumeUnavailable()
+    const row = await lookupTabSessionHistoryRow(
+      subject,
+      (args) => window.api.aiVault.listSessions(args),
+      { requestToken: createBrowserUuid(), isCancelled: () => !tabIsOpen(), userRequested: true }
+    )
+    // Closing the tab mid-lookup abandons the click rather than opening a chat for it.
+    if (!tabIsOpen()) {
+      return
+    }
+    if (row === undefined) {
+      notifyResumeFailed()
+      return
+    }
+    // Already resumed in a chat: open that chat, as the Session History row's Resume does.
+    if (row?.structuredSession) {
+      await activateAiVaultStructuredSession(row)
+      return
+    }
+    const agent = agentLabel(subject.agent)
+    if (!row || !isAiVaultSessionResumableContent(row)) {
+      toast.error(
+        translate(
+          'components.native-chat.resumeInNewChat.notSavedYet',
+          "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
+          { agent }
+        )
+      )
+      return
+    }
+    const move = resolveTabSessionSwitch(useAppStore.getState(), row, subject)
+    if (move?.action === 'resume-in-new-chat' && isAgentSessionHandleProvider(row.agent)) {
+      await resumeAiVaultSessionInNewChat(
+        row,
+        row.agent,
+        move.worktreeId,
+        newAgentLaunchRequestId()
+      )
+      return
+    }
+    toast.error(
+      translate(
+        'components.native-chat.resumeInNewChat.cannotResume',
+        "This {{agent}} conversation can't be resumed in a native chat.",
+        { agent }
+      )
+    )
   }
 
   return (
@@ -71,7 +118,7 @@ export function TerminalPaneResumeInChatButton({
             event.stopPropagation()
             setPending(true)
             void resume()
-              .catch(notifyResumeUnavailable)
+              .catch(notifyResumeFailed)
               .finally(() => setPending(false))
           }}
         >

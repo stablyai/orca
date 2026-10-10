@@ -18154,7 +18154,8 @@
         "showTerminal": "Mostrar terminal"
       },
       "resumeInNewChat": {
-        "unavailable": "Esta sesión aún no se puede reanudar en un chat nativo. Inténtalo de nuevo cuando el agente responda."
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
+        "cannotResume": "Esta conversación de {{agent}} no se puede reanudar en un chat nativo."
       },
       "state": {
         "loading": {

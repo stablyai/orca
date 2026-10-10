@@ -44,7 +44,7 @@ type TerminalPaneHeaderOverlayProps = {
   canShowTerminal?: boolean
   /** Flip the active pane from the native chat view back to the terminal. */
   onShowTerminal?: () => void
-  /** Offers the tab menu's "Resume in New Native Chat" on the active pane. */
+  /** Offers the tab menu's "Resume in New Native Chat" for the active pane's own conversation. */
   canResumeInNewNativeChat?: boolean
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
@@ -272,7 +272,11 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : canResumeInNewNativeChat && isActivePane ? (
-                    <TerminalPaneResumeInChatButton tabId={tabId} worktreeId={worktreeId} />
+                    <TerminalPaneResumeInChatButton
+                      tabId={tabId}
+                      worktreeId={worktreeId}
+                      paneKey={makePaneKey(tabId, pane.leafId)}
+                    />
                   ) : null}
                   {showAlwaysOnHeaders && showSplitButton ? (
                     <Tooltip>
