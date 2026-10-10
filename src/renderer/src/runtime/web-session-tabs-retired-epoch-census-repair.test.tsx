@@ -59,7 +59,11 @@ let census: RuntimeCallResult = {
   result: { snapshots: [] },
   _meta: { runtimeId: 'runtime-a' }
 }
-const runtimeCall = vi.fn(async () => census)
+let censusGate: Promise<void> = Promise.resolve()
+const runtimeCall = vi.fn(async () => {
+  await censusGate
+  return census
+})
 const runtimeSubscribe = vi.fn<RuntimeSubscribe>(async (request, callbacks) => {
   if (request.method === 'session.tabs.subscribeAll') {
     streams.push(callbacks)
@@ -123,6 +127,7 @@ describe('a renderer publisher returning after a headless epoch', () => {
     vi.useFakeTimers()
     streams.length = 0
     runtimeCall.mockClear()
+    censusGate = Promise.resolve()
     census = {
       id: 'list-all',
       ok: true,
@@ -210,6 +215,37 @@ describe('a renderer publisher returning after a headless epoch', () => {
     await publish({ ...returning, type: 'snapshot' })
     await act(async () => {
       vi.advanceTimersByTime(300)
+      await settle()
+    })
+
+    expect(mirroredTabIds()).not.toContain(toWebTerminalSurfaceTabId('host-tab-b'))
+  })
+
+  it('does not let a census outrank a stream frame that arrived while it was in flight', async () => {
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    await publish({ ...frame(RENDERER_EPOCH, 3, [terminal('a')]), type: 'snapshot' })
+    await publish({ ...frame(HEADLESS_EPOCH, 1, [terminal('a')]), type: 'snapshot' })
+    const returning = frame(RENDERER_EPOCH, 5, [terminal('a'), terminal('b')])
+    census = {
+      id: 'list-all',
+      ok: true,
+      result: { snapshots: [returning], authoritative: true },
+      _meta: { runtimeId: 'runtime-a' }
+    }
+    let openGate = (): void => {}
+    censusGate = new Promise((resolve) => {
+      openGate = resolve
+    })
+    await publish({ ...returning, type: 'snapshot' })
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      await settle()
+    })
+    await publish({ ...frame(HEADLESS_EPOCH, 2, [terminal('a')]), type: 'snapshot' })
+    await act(async () => {
+      openGate()
       await settle()
     })
 

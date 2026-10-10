@@ -7,7 +7,11 @@ import {
   sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
 import { createSessionTabsAuthorityRepairLane } from './session-tabs-authority-repair'
-import { sessionTabsPublicationEpochHistoryByWorktree } from './state'
+import {
+  latestReceivedSessionTabsSnapshotByWorktree,
+  nextReceivedSessionTabsFrame,
+  sessionTabsPublicationEpochHistoryByWorktree
+} from './state'
 import { isSessionTabsListAllResult, sessionTabsFreshnessKey } from './tracking'
 
 // Why no generation fence here: each census re-checks its own subscription before applying.
@@ -45,6 +49,7 @@ async function runCensus(
   key: string,
   worktreeId: string
 ): Promise<void> {
+  const requestFrame = nextReceivedSessionTabsFrame()
   const response = await window.api.runtimeEnvironments.call({
     selector: args.environmentId,
     method: 'session.tabs.listAll',
@@ -58,7 +63,9 @@ async function runCensus(
     !response.ok ||
     !isSessionTabsListAllResult(response.result) ||
     // Why: an older host's unlabeled census may be partial, so it cannot revive anything.
-    response.result.authoritative !== true
+    response.result.authoritative !== true ||
+    // Why: a stream frame received after the request began is fresher; it re-schedules if dropped.
+    (latestReceivedSessionTabsSnapshotByWorktree.get(key)?.receivedFrame ?? 0) > requestFrame
   ) {
     return
   }
