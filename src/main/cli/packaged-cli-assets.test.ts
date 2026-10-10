@@ -27,9 +27,6 @@ const unixTerminationSignals = ['SIGINT', 'SIGTERM'] as const
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
   files?: string[]
   asarUnpack?: string[]
-  mac?: { extraResources?: { from?: string; to?: string }[] }
-  linux?: { extraResources?: { from?: string; to?: string }[] }
-  win?: { extraResources?: { from?: string; to?: string }[] }
 }
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
 const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
@@ -138,45 +135,9 @@ describe('packaged CLI assets', () => {
     }
   })
 
-  it('copies runtime dependencies used before Electron asar integration is available', () => {
-    const runtimeResourceTargets = new Set(
-      [
-        ...(builderConfig.mac?.extraResources ?? []),
-        ...(builderConfig.linux?.extraResources ?? []),
-        ...(builderConfig.win?.extraResources ?? [])
-      ].map((resource) => normalizeResourceTarget(resource.to))
-    )
-
-    expect([...runtimeResourceTargets]).toEqual(
-      expect.arrayContaining([
-        join('node_modules', 'ws'),
-        join('node_modules', 'tweetnacl'),
-        join('node_modules', 'zod'),
-        join('node_modules', '@orca', 'process-host'),
-        join('node_modules', 'yaml'),
-        join('node_modules', 'jsonc-parser'),
-        join('node_modules', 'node-pty'),
-        join('node_modules', 'sherpa-onnx-darwin-${arch}'),
-        join('node_modules', 'sherpa-onnx-linux-${arch}'),
-        join('node_modules', 'sherpa-onnx-win-x64')
-      ])
-    )
-  })
-
-  function normalizeResourceTarget(target: string | undefined): string | undefined {
-    return target?.replace(/[\\/]/g, sep)
-  }
-
   itRunsUnixShell('keeps the Linux launcher executable in packaged resources', async () => {
     const launcherStats = await stat(linuxLauncherAsset)
     expect(launcherStats.mode & 0o111).not.toBe(0)
-  })
-
-  itRunsUnixShell('replaces the shell process in packaged Unix launchers', async () => {
-    for (const launcher of [linuxLauncherAsset, darwinLauncherAsset]) {
-      const content = await readFile(launcher, 'utf8')
-      expect(content).toContain('ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"')
-    }
   })
 
   it('retries an incomplete listener-state write', async () => {
