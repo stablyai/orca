@@ -14,6 +14,7 @@ import type {
 } from './drop-commit-context'
 import type { WorktreeSidebarStatusDropTarget } from '../../worktree-sidebar-drop-preview'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET, type WorktreePointerDrag } from './row-state'
+import { isFolderWorkspaceDragGroupKey } from './folder-workspace-drag-groups'
 
 type PointerDropCommitArgs = {
   event: PointerEvent
@@ -48,11 +49,37 @@ function commitStatusOrPinDrop(
   })
 }
 
+// Folder workspaces only reorder among their own run; any other target is a no-op.
+function commitFolderWorkspaceReorder(
+  drag: WorktreePointerDrag,
+  ctx: PointerDropCommitArgs['ctx'],
+  pointerY: number
+): void {
+  const group = ctx.folderWorkspaceDragGroups.find(
+    (candidate) => candidate.key === drag.sourceGroupKey
+  )
+  const drop = group ? ctx.computeWorktreeDrop(pointerY) : null
+  if (!group || !drop) {
+    return
+  }
+  ctx.onReorderWorktrees({
+    groups: [group],
+    sourceGroupKey: group.key,
+    draggedIds: drag.reorderUnitDraggedIds,
+    dropIndex: drop.dropIndex
+  })
+}
+
 // Resolve where a released pointer drag lands: workspace board lane, lineage parent,
 // status/pin section, or a reorder slot inside the source group.
 export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   const { event, drag, ctx } = args
   if (!ctx.refreshWorktreeDragSession()) {
+    ctx.clearWorktreeDrag()
+    return
+  }
+  if (isFolderWorkspaceDragGroupKey(drag.sourceGroupKey)) {
+    commitFolderWorkspaceReorder(drag, ctx, event.clientY)
     ctx.clearWorktreeDrag()
     return
   }

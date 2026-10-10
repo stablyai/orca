@@ -19,6 +19,7 @@ import {
   type WorktreeRowDragState,
   type WorktreeSidebarLineageDropTarget
 } from './row-state'
+import { isFolderWorkspaceDragGroupKey } from './folder-workspace-drag-groups'
 
 const REORDER_INTENT_DELAY_MS = 160
 
@@ -98,6 +99,11 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     ctx.clearWorktreeDrag()
     return
   }
+  // Why: folder workspaces only reorder, so board, nesting, status and pin targets never apply.
+  if (isFolderWorkspaceDragGroupKey(drag.sourceGroupKey)) {
+    showReorderSlot(args, NO_WORKTREE_SIDEBAR_DROP_TARGET)
+    return
+  }
   // Why: show the board preview as soon as a card drag begins so the drop target is visible up front, not only at the sidebar edge.
   if (
     !drag.workspaceBoardDragPreviewRequested &&
@@ -174,10 +180,19 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     return
   }
 
+  showReorderSlot(args, preferredStatusTarget)
+}
+
+// Show the insertion line for a reorder slot inside the source group.
+function showReorderSlot(
+  args: WorktreePointerDragFrameArgs,
+  fallbackTarget: WorktreeSidebarLineageDropTarget
+): void {
+  const { drag, ctx } = args
   const drop = ctx.computeWorktreeDrop(drag.currentY)
   if (!drop) {
     drag.reorderIntent = null
-    showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
+    showStatusHoverWithoutInsertionLine(args, fallbackTarget)
     return
   }
   // Let the pointer cross a reorder gutter into the card before moving its target.

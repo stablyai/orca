@@ -19,6 +19,26 @@ import type { SortBy } from '../../smart-sort'
 import { switchSortToManualAfterDrop } from '../../manual-sort-switch-toast'
 import type { WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getCatalogOwnerHostId } from '@/lib/worktree-runtime-owner-index'
+
+// Folder workspaces are not in worktreeMap; resolve the owner the folder update index keys on.
+function getFolderWorkspaceOwnerHostId(folderWorkspaceId: string): ExecutionHostId | undefined {
+  let hostId: ExecutionHostId | undefined
+  for (const workspace of useAppStore.getState().folderWorkspaces) {
+    if (workspace.id !== folderWorkspaceId) {
+      continue
+    }
+    const candidate = getCatalogOwnerHostId(workspace)
+    if (hostId !== undefined && hostId !== candidate) {
+      // Ambiguous across hosts: let the store's owner routing decide.
+      return undefined
+    }
+    hostId = candidate
+  }
+  return hostId
+}
 
 // Every write a sidebar drop can make: status changes, pin, manual order, and the board lane drop.
 export function useWorktreeStatusMutations(args: {
@@ -30,6 +50,7 @@ export function useWorktreeStatusMutations(args: {
   const { manualOrderCatalog, worktreeMap, workspaceStatuses, sortBy } = args
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
+  const updateFolderWorkspace = useAppStore((s) => s.updateFolderWorkspace)
   const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
 
   const moveWorktreeToStatus = useCallback(
@@ -148,15 +169,30 @@ export function useWorktreeStatusMutations(args: {
       if (result.changed) {
         switchSortToManualAfterDrop()
       }
-      void updateWorktreesMeta(
-        [...result.updates].map(([worktreeId, updates]) => ({
-          worktreeId,
+      const worktreeUpdates: WorktreeMetaBatchUpdate[] = []
+      for (const [worktreeId, updates] of result.updates) {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type !== 'folder') {
+          worktreeUpdates.push({
+            worktreeId,
+            updates,
+            executionHostId: worktreeMap.get(worktreeId)?.hostId ?? 'local'
+          })
+          continue
+        }
+        // Why: the batch path drops the host for folder rows, so route each one to its owner.
+        const executionHostId = getFolderWorkspaceOwnerHostId(scope.folderWorkspaceId)
+        void updateFolderWorkspace(
+          scope.folderWorkspaceId,
           updates,
-          executionHostId: worktreeMap.get(worktreeId)?.hostId ?? 'local'
-        }))
-      )
+          executionHostId ? { executionHostId } : undefined
+        )
+      }
+      if (worktreeUpdates.length > 0) {
+        void updateWorktreesMeta(worktreeUpdates)
+      }
     },
-    [manualOrderCatalog, updateWorktreesMeta, worktreeMap]
+    [manualOrderCatalog, updateFolderWorkspace, updateWorktreesMeta, worktreeMap]
   )
 
   const shouldShowWorkspaceBoardDropIndicator = useCallback(
