@@ -1,11 +1,9 @@
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent,
   AgentSessionTurnCompletionEvent
 } from '../../../shared/agent-session-wire'
-import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session-conversation-outline'
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session-conversation-command'
 import {
@@ -27,7 +25,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from './local-runtime-capabilities'
-import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
+import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
  *  proved it understands it. */
@@ -139,26 +137,12 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   onError: (error: unknown) => void,
   onClose: () => void
 ): Promise<{ unsubscribe: () => void }> {
-  const onResponse = (response: RuntimeRpcResponse<unknown>): void => {
-    if (!response.ok) {
-      onError(response.error)
-      return
-    }
-    onEvent(response.result as TEvent)
-  }
-  if (target.kind === 'local') {
-    return window.api.runtime.subscribe({ method, params }, onResponse)
-  }
-  return subscribeRuntimeEnvironment(
-    {
-      selector: target.environmentId,
-      method,
-      params,
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(target.environmentId)
-    },
-    { onResponse, onError, onClose }
-  )
+  return subscribeRuntimeRpc(target, method, params, {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the method whose frames are TEvent; unchecked as before.
+    onEvent: (result) => onEvent(result as TEvent),
+    onError,
+    onClose
+  })
 }
 
 export function subscribeStructuredAgentSession(

@@ -86,6 +86,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.mobileRelayPairingProvider = provider
   }
 
+  setMobileRelayPairingProviderInstaller(install: (() => Promise<unknown>) | null): void {
+    this.mobileRelayPairingProviderInstaller = install
+  }
+
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
     if (device?.scope !== 'mobile') {

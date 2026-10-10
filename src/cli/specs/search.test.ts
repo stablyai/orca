@@ -46,11 +46,12 @@ describe('orca search command spec', () => {
     ])
   })
 
-  it('declares --agent and --path repeatable for this command only', () => {
+  it('keeps --agent and --path repeatability scoped to search', () => {
     expect(searchSpec.repeatableFlags).toEqual(['agent', 'path'])
     for (const spec of COMMAND_SPECS) {
       if (spec !== searchSpec) {
-        expect(spec.repeatableFlags).toBeUndefined()
+        expect(spec.repeatableFlags ?? []).not.toContain('agent')
+        expect(spec.repeatableFlags ?? []).not.toContain('path')
       }
     }
   })

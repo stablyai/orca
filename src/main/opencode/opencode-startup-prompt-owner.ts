@@ -2,6 +2,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../providers/types'
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   OPENCODE_STARTUP_PROMPT_NONCE_ENV,
@@ -94,7 +95,7 @@ export function bindOpenCodeStartupPromptOwner(options: {
       nonce,
       () => {
         if (
-          ptyOwnership.get(result.id) !== null ||
+          ptyOwnership.get(result.id) !== LOCAL_EXECUTION_HOST_ID ||
           ptyIncarnationById.get(result.id) !== incarnation ||
           provider.hasPty?.(result.id) !== true ||
           runtime.isPtyStopRequested(result.id)

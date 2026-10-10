@@ -190,11 +190,7 @@ function acceptStructuredConversationCommand(
         if (blocked) {
           return blocked
         }
-        const accepted = await plan.run(ctx)
-        if (accepted.ok) {
-          context.wakeDelivery(ctx.sessionId)
-        }
-        return accepted
+        return plan.run(ctx)
       }
     },
     sendPreparation(context, params.envelope, arrival)

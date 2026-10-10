@@ -30,7 +30,7 @@ vi.mock('node:fs', () => ({
   readFileSync: fixture.read,
   realpathSync: fixture.realpath
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: fixture.spawn }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: fixture.spawn }))
 
 class RuntimeChild extends EventEmitter {
   kill = vi.fn()

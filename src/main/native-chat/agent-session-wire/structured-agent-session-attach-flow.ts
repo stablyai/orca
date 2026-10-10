@@ -51,6 +51,7 @@ import type { StructuredAgentSessionStartupAttempt } from './structured-agent-se
 import type { StructuredAgentSessionStartupProgress } from './structured-agent-session-startup-attempt'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
@@ -70,6 +71,8 @@ export type AttachFlowInput = {
   onStartupAttempt?: (
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
+  /** A `ready` child's start listing, handed over once its owner is proven. */
+  onStartCatalogListing?: (listing: AgentModelCatalogLiveListing) => void
   /** The conversation's option revision, which the child's reports are stamped with. */
   optionRevision: () => number
   /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is

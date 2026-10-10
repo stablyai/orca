@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { relayWindowsProcessTreeAddonDefect } from './windows-process-tree-gyp-rebuild.mjs'
 
 const root = join(import.meta.dirname, '../..')

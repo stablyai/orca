@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { getSystemCliInstallDirectories } from '../../shared/system-cli-install-dirs'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   beginLocalCommandSelection,
   isCommandOnLocalPath,

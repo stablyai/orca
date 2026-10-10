@@ -7,7 +7,11 @@ import { withTimeoutResult } from './runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from './orca-runtime-postlude'
 import { inferWorktreeIdFromPtyId } from './runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -69,7 +73,9 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       throw new Error('runtime_unavailable')
     }
     const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(connectionId),
+      this.ptyController.listProcesses(
+        connectionId === undefined ? undefined : getConnectionExecutionHostId(connectionId)
+      ),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!listed.ok) {

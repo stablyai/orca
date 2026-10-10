@@ -1,4 +1,4 @@
-import type { SpawnedProcess } from '../../shared/child-process/run-process'
+import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict

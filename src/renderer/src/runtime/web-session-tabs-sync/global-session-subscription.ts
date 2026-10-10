@@ -19,7 +19,7 @@ import type {
   MirroredRuntimeEnvironment,
   SessionTabsSnapshotHandler
 } from './visibility-resume-types'
-import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
+import { isSessionTabsStreamEnd, WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
 import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
@@ -124,7 +124,7 @@ export function installGlobalSessionTabsSubscriptions({
     const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
     environmentIdBySpec.push(environmentId)
     subscriptionSpecs.push({
-      subscribe: (isCurrent, { visibilityGeneration }) => {
+      subscribe: (isCurrent, { visibilityGeneration, ended }) => {
         const awaitingVisibilityResumeInventory = { value: visibilityGeneration > 0 }
         if (!requestedInitialLoad) {
           requestedInitialLoad = true
@@ -152,6 +152,10 @@ export function installGlobalSessionTabsSubscriptions({
               ) {
                 return
               }
+              // Why: an end frame never reaches onClose, and an error response leaves the stream dead.
+              if (!response.ok || isSessionTabsStreamEnd(response.result)) {
+                ended()
+              }
               handleGlobalSessionEvent({
                 environmentId,
                 expectedEnvironmentConnectionGeneration,
@@ -170,6 +174,11 @@ export function installGlobalSessionTabsSubscriptions({
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+              }
+            },
+            onClose: () => {
+              if (isCurrent()) {
+                ended()
               }
             }
           }

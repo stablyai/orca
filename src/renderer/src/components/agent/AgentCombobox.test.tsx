@@ -210,6 +210,13 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('<img')
   })
 
+  it('uses the bundled DeepSeek whale for observed DeepSeek Build sessions without adding it to the launch catalog', () => {
+    const markup = renderToStaticMarkup(<AgentIcon agent="dsb" />)
+
+    expect(markup).toContain(AGENT_FAVICON_ASSETS.dsh)
+    expect(AGENT_CATALOG.map((agent) => agent.id)).not.toContain('dsb')
+  })
+
   it('renders bundled favicons for favicon-domain agents instead of the remote Google service', () => {
     // Why: previously loaded from Google's favicon service (#8451). Iterate the
     // full asset map so missing files/key mismatches fail the test.

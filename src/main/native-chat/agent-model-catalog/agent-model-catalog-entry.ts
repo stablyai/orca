@@ -12,7 +12,6 @@ export type AgentModelCatalogSource = 'discovery' | 'live'
 export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: ReadonlyMap<string, string>
   origin: 'live-session' | 'probe'
   /** A row only this session's launch added (its own `--model`): kept only once the account's
    *  catalog already lists that model. */
@@ -25,8 +24,6 @@ export type AgentModelCatalogSuccess = {
 export type AgentModelCatalogListing = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  /** Provider-advertised Fast tier per model id. */
-  fastModeTierByModel: Record<string, string>
   origin: 'live-session' | 'probe'
   at: number
 }
@@ -119,7 +116,6 @@ export type AgentModelCatalogEntry = {
   // The merged view every reader uses, derived from the two listings above.
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: Record<string, string>
   origin: 'live-session' | 'probe'
   fetchedAt: number
 }
@@ -144,12 +140,11 @@ function mergedModels(
     const configuredEffort = runsConfigured ? configured?.effort : undefined
     const offersConfigured = (menu: AgentSessionModelOption['efforts']): boolean =>
       menu.some((choice) => choice.value === configuredEffort)
-    // A coarser newer menu (Pi's listing stops at high) must not drop the effort a chat ran.
-    const efforts =
-      model.efforts.length > 0 &&
-      (offersConfigured(model.efforts) || !offersConfigured(olderEfforts))
-        ? model.efforts
-        : olderEfforts
+    // A coarser newer probe menu (Pi's stops at high) must not drop the effort a chat ran; only the
+    // chat's own menu is trusted over it, never an older probe's.
+    const keepsChatMenu =
+      older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
+    const efforts = model.efforts.length > 0 && !keepsChatMenu ? model.efforts : olderEfforts
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )
@@ -189,10 +184,6 @@ export function agentModelCatalogEntry(
     configured,
     models: mergedModels(discovered, live, configured),
     ...(fastModeSupport ? { fastModeSupport } : {}),
-    fastModeTierByModel: {
-      ...live?.fastModeTierByModel,
-      ...discovered?.fastModeTierByModel
-    },
     origin: newer.origin,
     fetchedAt: newer.at
   }
@@ -218,7 +209,6 @@ export function agentModelCatalogEntryWithSuccess(
   const listing: AgentModelCatalogListing = {
     models: models.map((model) => ({ ...model })),
     ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
-    fastModeTierByModel: Object.fromEntries(success.fastModeTierByModel.entries()),
     origin: success.origin,
     at
   }
@@ -273,12 +263,7 @@ export function entryWithConfiguredDefault(
 /** What a saved entry says, without its clocks: an unchanged key needs no write to disk. */
 export function agentModelCatalogListingKey(entry: AgentModelCatalogEntry): string {
   const facts = (listing: AgentModelCatalogListing | null): unknown =>
-    listing && [
-      listing.origin,
-      listing.models,
-      listing.fastModeSupport ?? null,
-      listing.fastModeTierByModel
-    ]
+    listing && [listing.origin, listing.models, listing.fastModeSupport ?? null]
   return JSON.stringify([
     facts(entry.discovered),
     facts(entry.live),

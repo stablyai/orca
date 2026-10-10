@@ -19,7 +19,8 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
 import { cgroupPathFromProcLine, userManagerOutlivesCaller } from './daemon-user-manager-lifetime'
 

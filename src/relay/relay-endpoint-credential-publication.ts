@@ -10,7 +10,7 @@
  */
 import { randomBytes } from 'node:crypto'
 import { chmodSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { relayLogLine } from './relay-diagnostic-log'
 
 const ENDPOINT_CREDENTIAL_PATTERN = /^[A-Za-z0-9_-]{32,256}$/

@@ -1,8 +1,5 @@
-import {
-  spawnProcess,
-  type ProcessSpec,
-  type SpawnedProcess
-} from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { ProcessSpec, SpawnedProcess } from '@orca/process-host/process-spec'
 import { daemonScopeUnitName, detectOwnCgroupScopeUnit } from './daemon-cgroup-scope'
 
 // The pipe closes even on SIGKILL; a live/reused owner PID always vetoes cleanup.

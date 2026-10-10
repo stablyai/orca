@@ -14,7 +14,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { getDaemonPidPath } from '../../src/main/daemon/daemon-spawner'
 import { readDaemonPidRecord } from '../../src/main/daemon/daemon-endpoint-incarnation'
 import { resolveBundledOrcadRuntime } from '../../src/main/orcad/orcad-bundled-runtime'

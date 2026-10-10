@@ -33,10 +33,7 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
-import {
-  claimableStructuredLaunchAttempt,
-  getJoinableStructuredLaunchState
-} from './structured-agent-session-launch-holders'
+import { getJoinableStructuredLaunchState } from './structured-agent-session-launch-holders'
 import {
   prepareStructuredLaunchCreateMessage,
   publishStructuredLaunchCreateOptions
@@ -49,11 +46,7 @@ import {
   trackStructuredLaunchPromptOutcome,
   trackStructuredLaunchConfirmationDeadline
 } from './structured-agent-session-launch-prompt-outcome'
-import {
-  repeatedStructuredLaunchAttempt,
-  structuredLaunchRequest,
-  type StructuredLaunchRequest
-} from './structured-agent-session-launch-request'
+import { repeatedStructuredLaunchAttempt } from './structured-agent-session-launch-request'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 export {
@@ -161,18 +154,12 @@ function promptOwner(options: StructuredAgentLaunchOptions): { callerKeepsText?:
 function joinStructuredLaunchState(
   existing: StructuredLaunchState,
   agent: TuiAgent,
-  options: StructuredAgentLaunchOptions,
-  request: StructuredLaunchRequest
+  options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult | undefined {
-  // A re-delivery of the same action (a double click) shares the text it staged, so it is sent once.
-  const repeat = repeatedStructuredLaunchAttempt(existing.callers.attempt, request.id)
-  // An empty chat takes the first text sent to it, delivered the way that request asked.
-  const claim = repeat ? undefined : claimableStructuredLaunchAttempt(existing, request)
+  // A re-delivery of the same action shares the text it staged, so it is sent once.
+  const repeat = repeatedStructuredLaunchAttempt(existing.callers.attempt, options.requestId)
   const retrying = existing.visibilityUnknown
-  const joined = joinLaunchDelivery(
-    options,
-    claim ? options.promptDelivery : existing.promptDelivery
-  )
+  const joined = joinLaunchDelivery(options, existing.promptDelivery)
   // Why: an unconfirmed launch keeps its draft or staged text, so a recheck must not stage it twice.
   const text = retrying || repeat ? '' : launchPromptText(joined)
   const stagedPrompt = text
@@ -180,10 +167,6 @@ function joinStructuredLaunchState(
     : (repeat?.stagedPrompt ?? null)
   if (retrying) {
     restartStructuredLaunchState(existing)
-  }
-  if (claim) {
-    existing.promptDelivery = options.promptDelivery
-    Object.assign(claim, { requestId: request.id, blank: false, stagedPrompt })
   }
   if (!retrying && !repeat) {
     launchDraft.seedStructuredAgentLaunchDraft(existing.intent.sessionId, agent, joined)
@@ -208,9 +191,8 @@ function structuredAgentLaunchState(
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
   const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
-  const request = structuredLaunchRequest(options)
-  const existing = getJoinableStructuredLaunchState(identity, request)
-  const joined = existing && joinStructuredLaunchState(existing, agent, options, request)
+  const existing = getJoinableStructuredLaunchState(identity, options.requestId)
+  const joined = existing && joinStructuredLaunchState(existing, agent, options)
   if (joined) {
     return joined
   }
@@ -229,8 +211,7 @@ function structuredAgentLaunchState(
   launchDraft.seedStructuredAgentLaunchDraft(intent.sessionId, agent, options)
   const callers = createStructuredLaunchCallerGroup({
     kind: 'first',
-    requestId: request.id,
-    blank: !request.hasText,
+    requestId: options.requestId,
     stagedPrompt
   })
   const state: StructuredLaunchState = {

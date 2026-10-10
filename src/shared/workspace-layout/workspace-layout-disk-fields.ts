@@ -123,9 +123,11 @@ const ROW = {
   startupCwd: own('tab.terminal', 'startupCwd'),
   launchAgent: own('tab.terminal', 'launchAgent'),
   agentLaunchPane: own('tab.terminal', 'agentLaunchPane'),
-  // Runtime-only; today's writers never persist them either.
+  // Transient handoffs, never restored; the window strips them, but main's minimal row mint
+  // stores `pendingActivationSpawn`, so the Loader drops it.
   pendingActivationSpawn: 'unwritten',
-  recovery: 'unwritten'
+  recovery: 'unwritten',
+  restoredFromSession: 'unwritten'
 } as const satisfies Record<keyof TerminalTab, DiskFieldWritten>
 
 const ENTRY_FIELDS = {

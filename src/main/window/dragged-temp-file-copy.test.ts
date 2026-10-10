@@ -16,7 +16,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type * as RuntimeImportLimits from '../ipc/runtime-import-limits'
 
 const fsFaults: {

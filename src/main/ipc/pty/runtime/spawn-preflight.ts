@@ -32,12 +32,14 @@ import { resolveWslSessionContext } from '../../../daemon/wsl-session-context'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { resolveLocalWindowsTerminalRuntimeOptions } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+import { resolveManagedSshHostLoginShell } from '../../../pty/managed-ssh-host-login-shell'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -50,7 +52,7 @@ export async function prepareRuntimePtySpawn(
     }
   }
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
-  ctx.provider = getProvider(args.connectionId)
+  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(
@@ -76,7 +78,8 @@ export async function prepareRuntimePtySpawn(
           requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
-          fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+          fallbackHostShell: process.env.COMSPEC || 'powershell.exe',
+          sshLoginShell: resolveManagedSshHostLoginShell()
         })
       : {
           shellOverride:

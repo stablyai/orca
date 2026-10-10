@@ -1,7 +1,5 @@
-import { app, powerMonitor, type BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
@@ -13,8 +11,8 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
-import { getDesktopRelayStatus, publishDesktopRelayStatus } from './main-process-relay-status'
-import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import { getDesktopRelayStatus } from './main-process-relay-status'
+import { startDesktopRelayService } from './main-process-relay-startup'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
@@ -249,42 +247,16 @@ async function launchDesktopMode(
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
   }
+  // Why before the proxy await: a mint in that window must wait for the installer, not fail
+  // provider_missing; the installer itself holds its first request until the proxy lands.
+  startDesktopRelayService(runtimeRpc)
   // Why after the window and not before it: the default-session request guard already holds every
   // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself
-  // ordered ahead of the relay — it must not gate the renderer.
+  // ordered ahead of the push gateway — it must not gate the renderer.
   await state.initialProxyApplicationReady
   // Why after the proxy await: the push gateway client is an app-owned fetcher, so it must not
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
-  const cloudAuth = getOrcaCloudAuthConfig()
-  if (cloudAuth.configured) {
-    try {
-      const relayService = new DesktopRelayService({
-        authConfig: cloudAuth.config,
-        userDataPath: getProfileUserDataPath(),
-        appVersion: app.getVersion(),
-        runtimeRpc,
-        onStatus: publishDesktopRelayStatus
-      })
-      state.desktopRelayService = relayService
-      runtimeRpc.setMobileRelayPairingProvider({
-        createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
-        onDeviceRevokeQueued: (item) => relayService.onDeviceRevokeQueued(item),
-        onDemandStateChanged: () => relayService.demandStateChanged(),
-        getEndpoints: (context, params) => relayService.getEndpoints(context, params),
-        provisionRelay: (context, params) => relayService.provisionRelay(context, params)
-      })
-      relayService.start()
-      // Why: sleeping past relay-token expiry kills the broker with no retry
-      // timer; resume is the moment that state becomes recoverable.
-      powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-    } catch (error) {
-      console.warn(
-        '[relay] Desktop relay startup unavailable:',
-        error instanceof Error ? error.message : String(error)
-      )
-    }
-  }
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
     // Why: store can be null if init failed earlier; bail rather than throw inside an Electron event listener.

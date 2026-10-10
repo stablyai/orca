@@ -142,9 +142,7 @@ export function renderTabBarItems({
         viewModeTabId={viewModeTabId}
         canDuplicate={item.type === 'browser' && managedBrowserCreationEnabled}
         gitStatus={
-          item.type === 'editor'
-            ? resolveEditorTabGitStatus(item.data, statusByRelativePath)
-            : null
+          item.type === 'editor' ? resolveEditorTabGitStatus(item.data, statusByRelativePath) : null
         }
       />
     )

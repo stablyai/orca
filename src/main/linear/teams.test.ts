@@ -32,6 +32,7 @@ type LabelNode = {
   id: string
   name: string
   color: string
+  isGroup: boolean
 }
 
 type MemberNode = {
@@ -55,7 +56,7 @@ function team(id: string, name = id, key = id.toUpperCase()): TeamNode {
 }
 
 function makeLabel(id: string, name = id): LabelNode {
-  return { id, name, color: '#ff0000' }
+  return { id, name, color: '#ff0000', isGroup: false }
 }
 
 function makeMember(id: string, displayName = id): MemberNode {
@@ -222,6 +223,73 @@ describe('Linear teams', () => {
 
     expect(entry.client.team).toHaveBeenCalledWith('team-1')
     expect(labels).toHaveBeenCalledWith({ first: 100 })
+  })
+
+  it.each(['getTeamLabels', 'getTeamLabelsOrThrow'] as const)(
+    '%s excludes groups across pages while keeping child and standalone labels',
+    async (reader) => {
+      const connection = makeConnection([
+        [{ ...makeLabel('group-1', 'Type'), isGroup: true }],
+        [
+          makeLabel('label-1', 'Urgent'),
+          { ...makeLabel('label-2', 'Bug'), parent: { id: 'group-1' } }
+        ],
+        [{ ...makeLabel('group-2', 'Area'), isGroup: true }],
+        [{ ...makeLabel('label-3', 'Backend'), parent: { id: 'group-2' } }]
+      ])
+      const labels = vi.fn().mockResolvedValue(connection)
+      const entry = makeTeamLookupEntry('workspace-1', 'Workspace', { labels })
+      getClients.mockReturnValue([entry])
+      const readers = await import('./teams')
+
+      await expect(readers[reader]('team-1', 'workspace-1')).resolves.toEqual([
+        { id: 'label-1', name: 'Urgent', color: '#ff0000' },
+        { id: 'label-2', name: 'Bug', color: '#ff0000' },
+        { id: 'label-3', name: 'Backend', color: '#ff0000' }
+      ])
+      expect(connection.fetchNext).toHaveBeenCalledTimes(3)
+      expect(getClients).toHaveBeenCalledWith('workspace-1')
+      expect(entry.client.team).toHaveBeenCalledWith('team-1')
+      expect(labels).toHaveBeenCalledWith({ first: 100 })
+    }
+  )
+
+  it.each(['getTeamLabels', 'getTeamLabelsOrThrow'] as const)(
+    '%s finishes pagination when only groups are available',
+    async (reader) => {
+      const connection = makeConnection([
+        [{ ...makeLabel('group-1'), isGroup: true }],
+        [{ ...makeLabel('group-2'), isGroup: true }]
+      ])
+      getClients.mockReturnValue([
+        makeTeamLookupEntry('workspace-1', 'Workspace', {
+          labels: vi.fn().mockResolvedValue(connection)
+        })
+      ])
+      const readers = await import('./teams')
+
+      await expect(readers[reader]('team-1', 'workspace-1')).resolves.toEqual([])
+      expect(connection.fetchNext).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('preserves error handling when a later label page fails', async () => {
+    const error = new Error('later label page failed')
+    const connection = makeConnection([[makeLabel('label-1')], [makeLabel('label-2')]])
+    connection.fetchNext.mockRejectedValue(error)
+    getClients.mockReturnValue([
+      makeTeamLookupEntry('workspace-1', 'Workspace', {
+        labels: vi.fn().mockResolvedValue(connection)
+      })
+    ])
+    const { getTeamLabels, getTeamLabelsOrThrow } = await import('./teams')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(getTeamLabels('team-1', 'workspace-1')).resolves.toEqual([])
+    await expect(getTeamLabelsOrThrow('team-1', 'workspace-1')).rejects.toBe(error)
+    expect(warn).toHaveBeenCalledWith('[linear] getTeamLabels failed:', error)
+    expect(release).toHaveBeenCalledTimes(2)
+    warn.mockRestore()
   })
 
   it('fetches every page of team states', async () => {

@@ -132,7 +132,8 @@ export const sshFilesystemDispatchMock = {
 
 export const sshGitDispatchMock = {
   getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE,
+  sshGitProviderMissingError: () => new Error(PROVIDER_UNAVAILABLE_MESSAGE)
 }
 
 export const textGenerationModuleMock = {

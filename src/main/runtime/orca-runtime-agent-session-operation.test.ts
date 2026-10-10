@@ -441,7 +441,7 @@ describe('agent-session create operation ledger', () => {
       disposition: 'replayed',
       terminal: { handle: orphanHandle, ptyId: 'ssh-1:pty2:e:1', worktreeId: 'worktree-1' }
     })
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
     expect(createTerminal).toHaveBeenCalledOnce()
     expect(failure.message).toBe('execution_owner_unavailable')
   })
@@ -455,7 +455,7 @@ describe('agent-session create operation ledger', () => {
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
       failure.message
     )
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 

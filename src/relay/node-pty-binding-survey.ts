@@ -24,7 +24,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { release } from 'node:os'
 import process from 'node:process'
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   buildToolchainProbeCommand,
   parseBuildToolchainProbe,

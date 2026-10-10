@@ -8,7 +8,6 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from '../../runtime/mobile-session-terminal-persistence-retirement'
-import { projectTerminalTopologySlice } from '../../runtime/terminal-topology-projection'
 import type { Store } from '../loading-store/store'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
@@ -106,13 +105,12 @@ function expectLayoutRules(
   expect(layoutViolations(session, previous), context).toEqual([])
 }
 
-/** Main's projected slices, reduced to what the model states. */
+/** Main's persisted topology per worktree, reduced to what the model states. */
 function projectedTopology(session: WorkspaceSessionState) {
   return Object.fromEntries(
     WORKTREES.map((worktreeId) => {
-      const slice = projectTerminalTopologySlice(session, LOCAL_EXECUTION_HOST_ID, worktreeId)
-      const tabs = slice.tabs.map((tab) => {
-        const layout = slice.layouts[tab.id]
+      const tabs = (session.tabsByWorktree?.[worktreeId] ?? []).map((tab) => {
+        const layout = session.terminalLayoutsByTabId?.[tab.id]
         return {
           tabId: tab.id,
           leaves: Object.fromEntries(
@@ -120,7 +118,11 @@ function projectedTopology(session: WorkspaceSessionState) {
           )
         }
       })
-      return [worktreeId, { tabs, sleeping: Object.keys(slice.sleeping).sort() }]
+      const sleeping = Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})
+        .filter(([, record]) => record.worktreeId === worktreeId)
+        .map(([paneKey]) => paneKey)
+        .sort()
+      return [worktreeId, { tabs, sleeping }]
     })
   )
 }
@@ -302,7 +304,7 @@ async function runSeed(seed: number): Promise<string[]> {
       options,
       requestedSession: store.getWorkspaceSession(),
       ownerMatches: () => true,
-      hostId: () => LOCAL_EXECUTION_HOST_ID,
+      hostIds: () => [LOCAL_EXECUTION_HOST_ID],
       getSession: (hostId) => store.getWorkspaceSession(hostId),
       setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
       onClosed: () => {}

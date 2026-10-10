@@ -90,7 +90,7 @@ function service(
   )
   const probes: Record<string, AgentModelCatalogProbe> = {}
   for (const [agent, models] of Object.entries(listings)) {
-    probes[agent] = async () => ({ models, fastModeTierByModel: new Map(), origin: 'probe' })
+    probes[agent] = async () => ({ models, origin: 'probe' })
   }
   return createAgentModelCatalogService({
     store,
@@ -210,7 +210,6 @@ describe('a running chat’s listing, saved for the next chat', () => {
       'opencode',
       {
         models: listed,
-        fastModeTierByModel: new Map(),
         origin: 'probe'
       },
       'discovery'

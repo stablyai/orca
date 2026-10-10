@@ -17,7 +17,7 @@ import type * as Fs from 'node:fs'
 const runProcessMock = vi.hoisted(() => vi.fn())
 const existsSyncMock = vi.hoisted(() => vi.fn(() => false))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
   return {

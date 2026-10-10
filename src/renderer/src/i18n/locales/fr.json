@@ -3531,7 +3531,8 @@
             "ec2adf093e": "Lancer {{value0}} dans un nouveau terminal",
             "465e432ef1": "Impossible de construire la commande de lancement pour {{value0}}.",
             "e518f544b1": "Aucun agent détecté",
-            "8dea9b5cdf": "Aucun agent activé"
+            "8dea9b5cdf": "Aucun agent activé",
+            "needsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de cet espace de travail"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
@@ -4089,7 +4090,12 @@
           },
           "usagePercentageLabel": {
             "used": "{{value0}} % utilisé",
-            "remaining": "{{value0}} % restants"
+            "remaining": "{{value0}} % restants",
+            "bare": "{{value0}} %"
+          },
+          "usageUnitLabel": {
+            "used": "Utilisé",
+            "remaining": "Restant"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "L’affichage de l’utilisation est désormais compact",
@@ -5433,7 +5439,9 @@
           "b79b39d865": "Retirer le projet",
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
-          "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés."
+          "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "openTerminalWarningOne": "1 terminal ouvert dans ce projet sera fermé.",
+          "openTerminalWarningMany": "{{count}} terminaux ouverts dans ce projet seront fermés."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Révéler l'espace de travail actif"
@@ -11535,7 +11543,6 @@
           "pathGroup": "Comment le téléphone joint cet ordinateur",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Le téléphone peut être en données mobiles ou sur n'importe quel Wi‑Fi. Connexion requise uniquement pour Relay.",
-          "signInRequired": "Relay uniquement — le LAN n'a pas besoin de compte.",
           "relayUnavailable": "Orca Relay n'est pas disponible dans ce build. Utilisez le LAN.",
           "signIn": "Se connecter pour Relay",
           "signInAgain": "Se reconnecter pour Relay",
@@ -18091,6 +18098,7 @@
         "model": "Modèle",
         "effort": "Effort",
         "fastMode": "Mode rapide",
+        "speed": "Vitesse",
         "thinking": "Réflexion",
         "options": "Options",
         "sessionOptions": "Options de session",
@@ -18111,7 +18119,8 @@
           "high": "Haute",
           "xhigh": "Extra élevé",
           "max": "Max",
-          "ultra": "Ultra"
+          "ultra": "Ultra",
+          "standard": "Standard"
         },
         "imageSaving": "Enregistrement de l'image collée…",
         "pendingAttachmentLimit": "Trop de pièces jointes sont en attente. Terminez de composer avant d’en attacher davantage.",
@@ -18348,6 +18357,7 @@
         "orcaStopUpdate": "Orca sur {{machine}} a redémarré pour une mise à jour pendant que cette réponse était en cours.",
         "orcaStopQuit": "Orca sur {{machine}} a été fermé pendant que cette réponse était en cours.",
         "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
+        "orcaStopRemote": "Orca sur {{machine}} s'est arrêté pendant que cette réponse était en cours.",
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation."
       },
       "providerFrame": {
@@ -18484,10 +18494,8 @@
       },
       "queuedMessages": {
         "alreadySent": "Ce message a déjà été envoyé.",
-        "editAlreadySent": "Déjà envoyé — votre texte reste dans la zone de saisie.",
         "listLabel": "Messages en file d'attente",
         "behindReturnedHold": "En attente — un message précédent nécessite votre attention",
-        "awaitingAnswerHold": "En attente de votre réponse",
         "steer": "Envoyer maintenant",
         "send": "Envoyer",
         "steerHint": "Envoyer sans interrompre le modèle",
@@ -18511,7 +18519,15 @@
         "sendConfirmClear": "Vider la file d'attente",
         "sendConfirmSend": "Envoyer le message",
         "fromSender": "De",
-        "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer."
+        "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer.",
+        "save": "Enregistrer",
+        "editingMessage": "Modification du message",
+        "cancelEditing": "Annuler la modification",
+        "editChanged": "Ce message a changé pendant que vous le modifiiez. Votre modification se trouve dans le champ de discussion.",
+        "editChangedPrompt": "Ce message a changé pendant que vous le modifiiez. Votre modification sera dans le champ de discussion une fois que vous aurez répondu à l'agent.",
+        "editFailed": "Ce message ne peut pas être modifié.",
+        "editGone": "Ce message a déjà été envoyé ou supprimé. Votre modification se trouve dans le champ de discussion.",
+        "editGonePrompt": "Ce message a déjà été envoyé ou supprimé. Votre modification sera dans le champ de discussion une fois que vous aurez répondu à l'agent."
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
@@ -19062,6 +19078,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "Nouveau",
       "title": "Le chat natif évolue",
+      "chatModeNote": "Les nouveaux onglets d'agent s'ouvrent toujours dans le terminal, comme avant.",
+      "chatModeLabel": "Activer le mode chat",
+      "chatModeHint": "Les nouveaux onglets d'agent s'ouvrent en chat.",
       "intro": "Les nouveaux chats des agents compatibles utilisent la vue améliorée. Pour alterner entre chat et CLI, ouvrez {{panel}} (barre latérale droite) :",
       "resumeInNativeChat": "{{action}} ouvre une conversation CLI compatible dans le chat natif.",
       "resumeInCli": "{{action}} copie un chat Claude/Codex dans une CLI neuve ; l'original reste intact.",
@@ -19233,6 +19252,7 @@
       "sortResultsAriaLabel": "Trier les résultats : {{value0}}",
       "consent": "Activer la recherche en texte intégral ? Orca crée un index sur cet ordinateur à partir des transcriptions des agents locaux, comprenant des conversations complètes et jusqu'à 3 072 caractères par sortie d'outil. Le contenu n'est pas expurgé. Les clients couplés authentifiés peuvent le rechercher.",
       "remoteDisabled": "La recherche est désactivée sur cet ordinateur. Activez l’indexation des transcriptions sur cet ordinateur pour rechercher ses sessions.",
+      "titleOnly": "La recherche en texte intégral est désactivée sur cet ordinateur ; seuls les titres des sessions sont pris en compte.",
       "notReady": "L'index de recherche n'est pas encore prêt. Réessayez sous peu.",
       "noService": "La recherche n'est pas disponible sur cet ordinateur. Il peut nécessiter une mise à jour Orca ou un runtime avec prise en charge de la recherche.",
       "failed": "Impossible de rechercher cet ordinateur. Vérifiez sa connexion et réessayez.",

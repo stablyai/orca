@@ -285,6 +285,11 @@ describe('native chat workspace file drops', () => {
       '$review @/repo/src @"/repo/My File.ts"  tail'
     )
     expect(editor().querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
+    expect(
+      [...editor().querySelectorAll('[data-native-chat-file-reference]')].map(
+        (pill) => pill.textContent
+      )
+    ).toEqual(['src', 'My File.ts'])
     expect(editor().textContent).not.toContain('must not be inserted')
     expect(bubbledDrop).not.toHaveBeenCalled()
   })

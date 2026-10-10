@@ -16,9 +16,10 @@ import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
+import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -50,13 +51,14 @@ export function EditorPanelHeaderPath({
   const canCopyHeaderPath = headerCopyState.copyText !== null
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
   const isVirtualEditorTab = isVirtualEditorFile(activeFile)
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, activeFile.worktreeId, {
       connectionId:
         activeFile.externalSshTargetId ?? getConnectionIdFromState(s, activeFile.worktreeId),
       runtimeEnvironmentId: activeFile.runtimeEnvironmentId
     })
   )
+  const revealBlocked = isLocalPathOpenBlocked(revealOwner)
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
     canRename,
@@ -215,7 +217,7 @@ export function EditorPanelHeaderPath({
           {!isVirtualEditorTab && (
             <DropdownMenuItem
               disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(activeFile.filePath)}
+              onSelect={() => void revealInFileManager(activeFile.filePath, revealOwner)}
             >
               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
               {getRevealInFileManagerLabel()}
