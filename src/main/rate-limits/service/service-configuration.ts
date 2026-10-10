@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { expireClaudeUsageWindows } from '../claude-usage-window-expiry'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
@@ -124,6 +125,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
     this.inactiveCodexFetching.clear()
+    this.clearInactiveClaudeExpiryPush()
     this.resolveAndClearFetchIdleWaiters()
     this.stopTimer()
     this.clearDeferredStartupRefresh()
@@ -146,9 +148,11 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       cursorAuthConfigured: this.cursorAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
+      // Why: a last-known window is only shown while it has not reset yet (#14833).
       inactiveClaudeAccounts: this.buildInactiveArray(
         this.inactiveClaudeCache,
-        this.inactiveClaudeFetching
+        this.inactiveClaudeFetching,
+        expireClaudeUsageWindows
       ),
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
