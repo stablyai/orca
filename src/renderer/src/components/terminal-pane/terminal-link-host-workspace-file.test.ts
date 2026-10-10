@@ -78,6 +78,28 @@ describe('a paired-server link outside its own workspace', () => {
     )
   })
 
+  it("opens the host's spelling of the path so the tab stays a workspace file", async () => {
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: 'src/index.ts',
+      absolutePath: '/repo/src/index.ts',
+      exists: true,
+      isDirectory: false
+    })
+
+    openDetectedFilePath('/repo/lib/../src/index.ts', null, null, featureWorktree)
+    await flushDoubleRaf()
+
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/src/index.ts',
+        relativePath: 'src/index.ts',
+        worktreeId: 'wt-main'
+      }),
+      { forceContentReload: true }
+    )
+  })
+
   it('says the host has no workspace for a path outside all of them', async () => {
     hostAnswers({
       worktree: 'wt-feat',

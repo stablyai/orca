@@ -111,7 +111,7 @@ export function openDetectedFilePath(
 ): void {
   const { openWithSystemDefault = false, runtimeEnvironmentId } = deps
   let { worktreeId, worktreePath } = deps
-  const mappedFilePath = mapTerminalFilePath(
+  let mappedFilePath = mapTerminalFilePath(
     filePath,
     worktreePath,
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
@@ -160,7 +160,7 @@ export function openDetectedFilePath(
       hostWorkspaceFile = await resolveHostWorkspaceFile(fileContext, mappedFilePath)
       if (hostWorkspaceFile) {
         // Why: the host already stat'ed the path inside the workspace that holds it; open it there.
-        ;({ worktreeId, worktreePath } = hostWorkspaceFile)
+        ;({ worktreeId, worktreePath, absolutePath: mappedFilePath } = hostWorkspaceFile)
         fileContext = { ...fileContext, worktreeId, worktreePath }
         statResult = { isDirectory: hostWorkspaceFile.isDirectory, escapesWorktree: false }
       } else {

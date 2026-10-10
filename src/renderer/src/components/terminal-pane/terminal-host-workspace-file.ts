@@ -7,6 +7,8 @@ import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shar
 import type { RuntimeTerminalPathResolution } from '../../../../shared/runtime-file-contracts'
 
 export type HostWorkspaceFile = {
+  /** The host's spelling of the path, so the tab's relative path agrees with it. */
+  absolutePath: string
   worktreeId: string
   worktreePath: string
   executionHostId: ExecutionHostId
@@ -63,6 +65,7 @@ export async function resolveHostWorkspaceFile(
     throw new Error(`The host answered an unexpected path for ${absolutePath}`)
   }
   return {
+    absolutePath: resolved.absolutePath,
     worktreeId: resolved.worktree,
     worktreePath,
     executionHostId: toRuntimeExecutionHostId(environmentId),
