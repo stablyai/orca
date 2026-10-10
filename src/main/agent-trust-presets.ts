@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
-import { upsertProjectTrustLevel } from './codex/config-toml-trust'
+import { upsertOrcaCreatedProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
 import type { TuiAgentConfig } from '../shared/tui-agent-config'
 
@@ -178,7 +178,7 @@ export function markCodexProjectTrusted(
     (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
     async () => {
       for (const configFile of configFiles) {
-        upsertProjectTrustLevel(configFile, absPath, 'trusted')
+        upsertOrcaCreatedProjectTrustLevel(configFile, absPath, 'trusted')
       }
     }
   )

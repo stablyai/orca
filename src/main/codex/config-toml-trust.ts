@@ -22,7 +22,19 @@ import {
   upsertHookTrustContent
 } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
-import { upsertProjectTrustContent } from './config-toml-project-trust'
+import {
+  findProjectTrustRemovedBytes,
+  hasProjectTrustEntry,
+  removeProjectTrustContent,
+  upsertProjectTrustContent
+} from './config-toml-project-trust'
+import {
+  forgetOrcaCreatedProjectTrust,
+  getOrcaCreatedProjectTrustTable,
+  listOrcaCreatedProjectTrustConfigFiles,
+  recordOrcaCreatedProjectTrust
+} from './codex-project-trust-ownership'
+import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
 import { observe } from './codex-path-observation'
 
@@ -241,6 +253,89 @@ export function upsertProjectTrustLevelInContent(
   options?: { alreadyCanonical?: boolean }
 ): string {
   return upsertProjectTrustContent(existingContent, projectPath, trustLevel, options)
+}
+
+/**
+ * Grants project trust and records the tables this grant created, so a removed
+ * worktree's entry can be deleted later without touching a table that existed
+ * at the path before Orca first wrote it.
+ */
+export function upsertOrcaCreatedProjectTrustLevel(
+  configPath: string,
+  projectPath: string,
+  trustLevel: CodexProjectTrustLevel
+): void {
+  const existing = readTomlForMutation(configPath)
+  const created = !hasProjectTrustEntry(existing, projectPath)
+  const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  if (updated !== existing) {
+    writeConfigAtomically(configPath, updated)
+  }
+  if (!created) {
+    return
+  }
+  try {
+    recordOrcaCreatedProjectTrust(
+      configPath,
+      projectPath,
+      findProjectTrustRemovedBytes(updated, projectPath) ?? ''
+    )
+  } catch (error) {
+    // Why: the grant already landed; an unrecorded entry only loses cleanup, never safety.
+    console.warn('[codex-config] Failed to record the created project trust entry:', error)
+  }
+}
+
+/**
+ * Removes every Orca-created project trust entry for `projectPath`, wherever
+ * recorded. Never throws: removal rides the worktree-removal path, which must
+ * not fail over a config file it cannot read — the record is kept so a later
+ * pass retries. Resolves once every touched file has been written.
+ */
+export async function removeOrcaCreatedProjectTrustEntries(projectPath: string): Promise<void> {
+  for (const configPath of listOrcaCreatedProjectTrustConfigFiles(projectPath)) {
+    await runExclusivelyForCodexTrustConfig(configPath, async () => {
+      try {
+        removeOrcaCreatedProjectTrustEntry(configPath, projectPath)
+      } catch (error) {
+        console.warn('[codex-config] Failed to remove an Orca-created project trust entry:', error)
+      }
+    })
+  }
+}
+
+// Why: the separator below a table belongs to what follows it, not to the table Orca wrote.
+function withoutTrailingSeparator(bytes: string): string {
+  return bytes.replace(/[\r\n]+$/, '')
+}
+
+function removeOrcaCreatedProjectTrustEntry(configPath: string, projectPath: string): void {
+  // Why: same lane as the grant writers (#16441), so a queued writer cannot rewrite the entry back.
+  const observation = observe(() => readTomlFile(configPath))
+  if (observation.kind === 'indeterminate') {
+    return
+  }
+  if (observation.kind === 'absent') {
+    forgetOrcaCreatedProjectTrust(configPath, projectPath)
+    return
+  }
+  const ownedTable = getOrcaCreatedProjectTrustTable(configPath, projectPath)
+  const currentTable = findProjectTrustRemovedBytes(observation.value, projectPath)
+  if (
+    ownedTable === null ||
+    currentTable === null ||
+    withoutTrailingSeparator(currentTable) !== withoutTrailingSeparator(ownedTable)
+  ) {
+    // Why: the bytes at the path are no longer what Orca wrote, so the record no longer vouches
+    // for the table — dropping it keeps a later pass from deleting someone else's replacement.
+    forgetOrcaCreatedProjectTrust(configPath, projectPath)
+    return
+  }
+  const updated = removeProjectTrustContent(observation.value, projectPath)
+  if (updated !== observation.value) {
+    writeConfigAtomically(configPath, updated)
+  }
+  forgetOrcaCreatedProjectTrust(configPath, projectPath)
 }
 
 export function escapeTomlString(value: string): string {

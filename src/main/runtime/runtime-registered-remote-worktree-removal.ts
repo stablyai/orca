@@ -34,7 +34,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
     result: RemoveWorktreeResult | undefined,
     fallbackHead: string | undefined
   ) => RemoveWorktreeResult
-  finishRemoval: (result: RemoveWorktreeResult) => void
+  finishRemoval: (result: RemoveWorktreeResult) => void | Promise<void>
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, target, registeredWorktree, provider, connectionId } = args
   // Precondition, before anything is stopped or deleted: no archive hook runs here, so a removal
@@ -70,7 +70,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
     args.store
   )
   await args.deleteHistory()
-  args.finishRemoval(result)
+  await args.finishRemoval(result)
   return {
     ...result,
     ...(hookGate.override ? { archiveHookOverride: hookGate.override } : {}),

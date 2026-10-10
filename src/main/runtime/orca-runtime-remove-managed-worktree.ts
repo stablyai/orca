@@ -95,7 +95,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
         }
         const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
         const removalHostId = repo ? (cleanupHostId ?? getRepoExecutionHostId(repo)) : cleanupHostId
-        const purgeRemovedWorktree = (): void =>
+        const purgeRemovedWorktree = (): Promise<void> =>
           this.purgeRemovedWorktree(store, removalTarget.id, removalTarget.repoId, removalHostId)
         const orphanOrFolderResult = await removeOrphanOrFolderWorktree({
           runtime: this,
@@ -157,9 +157,9 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
                 route.kind === 'ssh' ? this.getSshProviderFn?.(route.connectionId) : undefined,
                 removalTarget.id
               ),
-            finishRemoval: () => {
+            finishRemoval: async () => {
               this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
-              purgeRemovedWorktree()
+              await purgeRemovedWorktree()
               this.notifyWorktreesChanged(repo.id)
             }
           })
@@ -206,7 +206,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             registeredWorktree.head,
             removedPushTarget
           )
-          purgeRemovedWorktree()
+          await purgeRemovedWorktree()
           this.notifyWorktreesChanged(repo.id)
           return removalResult ?? {}
         }
@@ -237,7 +237,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
               ),
             preserveBranchHead: (result, fallbackHead) =>
               this.preservedBranchCleanup.preserveHead(result, fallbackHead),
-            finishRemoval: (result) => {
+            finishRemoval: async (result) => {
               this.preservedBranchCleanup.remember(
                 removalTarget.id,
                 cleanupHostId,
@@ -245,7 +245,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
                 registeredWorktree.head,
                 removedPushTarget
               )
-              purgeRemovedWorktree()
+              await purgeRemovedWorktree()
               this.notifyWorktreesChanged(repo.id)
             }
           })
@@ -271,7 +271,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
           preserveBranchHead: (result, fallbackHead) =>
             this.preservedBranchCleanup.preserveHead(result, fallbackHead),
-          finishRemoval: (result, rememberBranch, fallbackHead) => {
+          finishRemoval: async (result, rememberBranch, fallbackHead) => {
             if (rememberBranch) {
               this.preservedBranchCleanup.remember(
                 removalTarget.id,
@@ -283,7 +283,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             } else {
               this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
             }
-            purgeRemovedWorktree()
+            await purgeRemovedWorktree()
           },
           onRemoved: emitRemoved,
           publish: () => this.publishWorktreeRemovalChange(repo.id)

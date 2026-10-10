@@ -316,7 +316,18 @@ export async function flushPendingWorktreeHistoryDeletions(): Promise<void> {
 /** Delete the history directory for a removed worktree. Non-fatal; never blocks on recursive rm. */
 export function deleteWorktreeHistoryDir(worktreeId: string): void {
   const worktreeHash = hashWorktreeId(worktreeId)
-  const historyRoot = getHistoryRoot()
+  let historyRoot: string
+  try {
+    historyRoot = getHistoryRoot()
+  } catch (err) {
+    // Why its own guard: callers run on removal purge paths whose failures
+    // must degrade, so an uninitialized app path only skips the delete
+    // instead of rejecting the purge.
+    console.warn(
+      `[pty:history] Failed to resolve history root: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return
+  }
   try {
     if (scheduleWorktreeHistoryTreeDeletion(join(historyRoot, worktreeHash), historyRoot)) {
       console.log(`[pty:history] Scheduled history delete for worktree ${worktreeId}`)

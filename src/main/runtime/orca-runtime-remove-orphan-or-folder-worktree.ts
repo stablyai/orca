@@ -73,7 +73,7 @@ export async function removeOrphanOrFolderWorktree({
     }
     await deleteRemoteWorktreeHistory(sshPtyProvider, removalTarget.id)
     runtime.clearOptimisticReconcileToken(removalTarget.id)
-    runtime.removeWorktreeMetadataAndHistory(
+    await runtime.removeWorktreeMetadataAndHistory(
       store,
       removalTarget.id,
       cleanupHostId ?? orphanHost?.id
@@ -113,7 +113,7 @@ export async function removeOrphanOrFolderWorktree({
     folderConnectionId
   )
   await deleteRemoteWorktreeHistory(folderSshPtyProvider, removalTarget.id)
-  runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
+  await runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
   runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
   runtime.invalidateResolvedWorktreeCache()
   runtime.notifyWorktreesChanged(repo.id)

@@ -23,7 +23,7 @@ type RuntimeProjectGroupDependencies = {
   notifyReposChanged: () => void
   resolveFolderConnectionId: (workspace: FolderWorkspace) => string | null
   teardownFolderWorkspacePtys: (worktreeId: string, connectionId: string | null) => Promise<void>
-  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void
+  cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
 }
 
 type FolderWorkspaceUpdates = Partial<
@@ -226,6 +226,7 @@ export class RuntimeProjectGroupController {
       throw new Error('runtime_unavailable')
     }
     const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
+    let cleanupState: void | Promise<void> = undefined
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
       // Why: a mixed-host group has no single PTY target; forgetting the
@@ -239,12 +240,17 @@ export class RuntimeProjectGroupController {
       if (connectionId !== undefined) {
         await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
       }
-      this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
+      // Fired here (timing unchanged) but awaited at the end: the delete may
+      // only resolve after the purge has landed. `folder:<uuid>` ids parse to
+      // no filesystem path, so the pretrust drop inside the purge skips here —
+      // safe: the folder itself stays and sibling workspaces may share its path.
+      cleanupState = this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
     }
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {
       this.deps.notifyReposChanged()
     }
+    await cleanupState
     return { deleted }
   }
 }
