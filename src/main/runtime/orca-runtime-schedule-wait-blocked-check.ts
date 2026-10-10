@@ -13,7 +13,9 @@ import {
   type WaitBlockedCheckState
 } from './wait-blocked-check-state'
 import {
+  clearMirroredLeafWaitStamps,
   computeTerminalTailWaitState,
+  resolveWaitBlockedAt,
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
 import { ownRetainedString } from '../../shared/own-retained-string'
@@ -62,23 +64,37 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     const nextWaitState = computeTerminalTailWaitState(
       pty.tailBuffer,
       pty.tailPartialLine,
-      pty.preview
+      pty.preview,
+      pty.waitBlockedAt !== null
     )
     const previousWaitState = state.lastWaitState ?? {
       waitText: '',
       signal: null,
       fromTail: false
     }
-    if (
-      tailGainedNewerBlockedReason(
-        previousWaitState,
-        nextWaitState,
-        readWaitBlockedCarry(state.appended)
-      )
-    ) {
-      pty.waitBlockedAt = at
+    const gainedNewerBlockedReason = tailGainedNewerBlockedReason(
+      previousWaitState,
+      nextWaitState,
+      readWaitBlockedCarry(state.appended)
+    )
+    if (gainedNewerBlockedReason) {
       this.recordAgentPromptPermissionObservation(ptyId)
     }
+    const nextBlockedAt = resolveWaitBlockedAt(
+      pty.waitBlockedAt,
+      gainedNewerBlockedReason,
+      nextWaitState,
+      at
+    )
+    // Why: the mirror copy in onPtyData already ran when this check was deferred,
+    // so a quiet pane would keep the leaf stamp after the pty one is cleared.
+    clearMirroredLeafWaitStamps(
+      pty.waitBlockedAt,
+      nextBlockedAt,
+      pty.tailBuffer,
+      this.getLeavesForPty(ptyId)
+    )
+    pty.waitBlockedAt = nextBlockedAt
     state.lastAt = at
     state.lastWaitState = nextWaitState
     resetWaitBlockedCarry(state.appended)

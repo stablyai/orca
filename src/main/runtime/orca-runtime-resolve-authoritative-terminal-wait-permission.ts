@@ -45,7 +45,9 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     explicitStatus: { status: AgentStatus; updatedAt: number } | null,
     lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
   ): RuntimeTerminalWaitBlockedReason | null {
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+    const blockedByWaitText = detectTerminalWaitBlockedReason(
+      terminal.liveScreenText ?? terminal.waitText
+    )
     if (!blockedByWaitText) {
       return null
     }

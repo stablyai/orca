@@ -156,6 +156,43 @@ describe('agent prompt submission runtime', () => {
     expect(writes).toEqual([])
   })
 
+  it('does not refuse a ready live screen because the retained tail has an old blocked prompt', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (runtime, data) => {
+        if (data.includes('\r')) {
+          runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+        }
+      },
+      'codex'
+    )
+    runtime.onPtyData(
+      'pty-prompt',
+      'Hooks need review\nPress enter to confirm\n',
+      Date.now()
+    )
+    const internals = runtime as unknown as {
+      headlessTerminals: Map<string, { writeChain: Promise<void> }>
+      readLiveTerminalScreenLines: (ptyId: string) => string[] | null
+    }
+    await internals.headlessTerminals.get('pty-prompt')?.writeChain
+    vi.spyOn(internals, 'readLiveTerminalScreenLines').mockReturnValue([
+      '╭───╮',
+      '│ >_ openai codex (v0.157.0) │',
+      '│ model: gpt-5 │',
+      '│ directory: ~/repo │',
+      '╰───╯'
+    ])
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      inputKind: 'driving'
+    })
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(writes.some((data) => data.includes('review this'))).toBe(true)
+  })
+
   it('does not paste into a coalesced live permission title', async () => {
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     runtime.onPtyData(
