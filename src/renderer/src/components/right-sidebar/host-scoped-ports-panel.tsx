@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -30,12 +30,11 @@ export function HostScopedPortsPanel({
   host,
   isVisible
 }: {
+  /** Must keep its identity while the host is unchanged; each new identity starts a scan. */
   host: HostScopedPortHost
   isVisible: boolean
 }): React.JSX.Element {
   const hostKey = hostScopedPortHostKey(host)
-  const hostRef = useRef(host)
-  hostRef.current = host
   // Why keyed: a scan that lands after the workspace switched hosts must never show as this host's.
   const [scanned, setScanned] = useState<{ key: string; scan: WorkspacePortHostScanResult } | null>(
     null
@@ -46,18 +45,16 @@ export function HostScopedPortsPanel({
   const scan = scanned?.key === hostKey ? scanned.scan : null
 
   const refresh = useCallback(async () => {
-    const current = hostRef.current
-    const key = hostScopedPortHostKey(current)
     setRefreshing(true)
     try {
-      const next = await scanWorkspacePortsOnExecutionHost(current)
-      setScanned({ key, scan: next })
+      const next = await scanWorkspacePortsOnExecutionHost(host)
+      setScanned({ key: hostKey, scan: next })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setScanned({
-        key,
+        key: hostKey,
         scan: {
-          executionHostId: current.executionHostId,
+          executionHostId: host.executionHostId,
           platform: 'unknown',
           scannedAt: Date.now(),
           ports: [],
@@ -67,7 +64,7 @@ export function HostScopedPortsPanel({
     } finally {
       setRefreshing(false)
     }
-  }, [])
+  }, [host, hostKey])
 
   useEffect(() => {
     if (!isVisible) {
@@ -77,7 +74,7 @@ export function HostScopedPortsPanel({
       run: () => void refresh(),
       intervalMs: HOST_SCOPED_PORT_SCAN_INTERVAL_MS
     })
-  }, [hostKey, isVisible, refresh])
+  }, [isVisible, refresh])
 
   const handleStopPort = useCallback(
     async (port: WorkspacePort) => {

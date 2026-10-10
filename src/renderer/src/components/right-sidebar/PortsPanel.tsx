@@ -20,26 +20,26 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
   const workspaceId = activeWorktree?.id ?? null
   const ownerKey = useAppStore((state) => getPortsPanelOwnerKey(state, workspaceId))
   const host = useMemo(() => portsPanelHostForOwnerKey(ownerKey), [ownerKey])
+  const scopedHost = useMemo(
+    () =>
+      host.kind === 'host-scoped' && workspaceId
+        ? { route: host.route, executionHostId: host.executionHostId, worktreeId: workspaceId }
+        : null,
+    [host, workspaceId]
+  )
 
   if (!workspaceId) {
     return <LocalWorkspacePortsPanel isVisible={isVisible} runtimeTarget={null} />
   }
+  if (scopedHost) {
+    return <HostScopedPortsPanel host={scopedHost} isVisible={isVisible} />
+  }
   switch (host.kind) {
     case 'direct-ssh':
       return <SshPortsPanel key={host.connectionId} activeConnectionId={host.connectionId} />
-    case 'host-scoped':
-      return (
-        <HostScopedPortsPanel
-          host={{
-            route: host.route,
-            executionHostId: host.executionHostId,
-            worktreeId: workspaceId
-          }}
-          isVisible={isVisible}
-        />
-      )
     case 'endpoint':
       return <LocalWorkspacePortsPanel isVisible={isVisible} runtimeTarget={host.target} />
+    case 'host-scoped':
     case 'unknown':
       return (
         <div className="flex flex-col items-center justify-center h-full px-4 text-center text-muted-foreground">
