@@ -69,12 +69,22 @@ export function isSessionHistoryBinary(
   })
 }
 
-/** The resume a marker flag asks for: the token after it, unless that is another option. */
+/** The resume a marker flag asks for: the token after it, unless that is another option. Flags
+ *  match in any case. */
 export function resumeInvocationAfterMarker(
   args: readonly string[],
   markers: readonly string[]
 ): StructuredAgentResumeInvocation | null {
-  const markerIndex = args.findIndex((token) => markers.includes(token.toLowerCase()))
+  return invocationAfter(
+    args,
+    args.findIndex((token) => markers.includes(token.toLowerCase()))
+  )
+}
+
+function invocationAfter(
+  args: readonly string[],
+  markerIndex: number
+): StructuredAgentResumeInvocation | null {
   if (markerIndex === -1) {
     return null
   }
@@ -91,33 +101,36 @@ export function ownCommandArgs(args: readonly string[]): readonly string[] {
   return end === -1 ? args : args.slice(0, end)
 }
 
-/** Whether the command's own options include one of `flags`; after `--` a flag is prompt text. */
+/** Whether the command's own options include one of `flags`, matched exactly as a case-sensitive
+ *  CLI reads them; after `--` a flag is prompt text. */
 export function ownOptionsInclude(args: readonly string[], flags: readonly string[]): boolean {
   const own = ownCommandArgs(args)
   const terminator = own.indexOf('--')
-  return (terminator === -1 ? own : own.slice(0, terminator)).some((token) =>
-    flags.includes(token.toLowerCase())
-  )
+  return (terminator === -1 ? own : own.slice(0, terminator)).some((token) => flags.includes(token))
 }
 
-/** The resume a command's own options ask for: a target-less flag may pick any conversation, a
- *  marker resumes its value (`--marker=value` too). */
+/** The resume a command's own options ask for, matched exactly as a case-sensitive CLI reads them
+ *  (`rg x src/pi -C 3` is no `pi -c`): a target-less flag may pick any conversation, a marker
+ *  resumes its value (`--marker=value` too). */
 export function resumeInvocationFromOptions(
   args: readonly string[],
   options: { targetless: readonly string[]; markers: readonly string[] }
 ): StructuredAgentResumeInvocation | null {
   const own = ownCommandArgs(args)
-  if (own.some((token) => options.targetless.includes(token.toLowerCase()))) {
+  if (own.some((token) => options.targetless.includes(token))) {
     return { target: null }
   }
   const inline = own.find((token) =>
-    options.markers.some((marker) => token.toLowerCase().startsWith(`${marker}=`))
+    options.markers.some((marker) => token.startsWith(`${marker}=`))
   )
   if (inline !== undefined) {
     const target = inline.slice(inline.indexOf('=') + 1)
     return { target: target.length > 0 ? target : null }
   }
-  return resumeInvocationAfterMarker(own, options.markers)
+  return invocationAfter(
+    own,
+    own.findIndex((token) => options.markers.includes(token))
+  )
 }
 
 /** For a CLI that resumes a session file by its id, any prefix of it, or the file's path: the

@@ -5,6 +5,7 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
+  OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import { installOwnership, listResult } from './structured-session-ownership.test-support'
@@ -38,7 +39,7 @@ const refused = (command: string) =>
 function ownedRow(agent: AiVaultAgent, sessionId: string, filePath: string) {
   const result = listResult()
   result.sessions = [{ ...result.sessions[0]!, agent, sessionId, filePath, title: 'First prompt' }]
-  return projectStructuredAiVaultSessions(result, true).sessions[0]
+  return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
 }
 
 afterEach(() => setStructuredAgentSessionHost(null))
@@ -225,6 +226,25 @@ describe('terminal resumes of a conversation a Pi chat owns', () => {
   ])('allows %s', async (command) => {
     installOwnership({ handle: PI_HANDLE })
     await allowed(command)
+  })
+})
+
+// Their CLIs read flags case-sensitively, unlike Claude's and Codex's folded flags.
+describe('flags in another case', () => {
+  it.each([
+    { handle: PI_HANDLE, command: `rg foo src/main/pi -C 3` },
+    { handle: PI_HANDLE, command: `pi --SESSION ${PI_ID}` },
+    { handle: acp('opencode', OPENCODE_ID), command: `opencode -C` },
+    { handle: acp('grok', GROK_ID), command: `grok -R ${GROK_ID}` },
+    { handle: acp('omp', OMP_ID), command: `omp --Continue` }
+  ])("are not the agent's resume flags: $command", async ({ handle, command }) => {
+    installOwnership({ handle })
+    await allowed(command)
+  })
+
+  it('still fold for Claude', async () => {
+    installOwnership({ provider: 'claude', providerSessionId: PI_ID })
+    await refused(`claude -C`)
   })
 })
 

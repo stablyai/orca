@@ -16,9 +16,15 @@ import {
 } from '../native-chat/structured-agent-cli-conversations'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 
+/** Whether the client a projection answers opens a chat of this agent from its history row. A row
+ *  owned by a chat it cannot open is hidden from it: resuming that row in a terminal is refused. */
+export type StructuredChatOpener = (agent: StructuredAgentId) => boolean
+
+export const OPENS_EVERY_STRUCTURED_CHAT: StructuredChatOpener = () => true
+
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
-  structuredSupported: boolean
+  opensChat: StructuredChatOpener
 ): AiVaultListResult {
   const owner = ownershipLookup()
   if (!owner) {
@@ -29,7 +35,7 @@ export function projectStructuredAiVaultSessions(
     if (!ownership) {
       return [session]
     }
-    if (!structuredSupported) {
+    if (!opensChat(ownership.provider)) {
       return []
     }
     return [{ ...session, ...ownedTitle(ownership) }]
@@ -40,9 +46,11 @@ export function projectStructuredAiVaultSessions(
     : { ...result, sessions }
 }
 
-/** Indexed hits name and own a native chat exactly as list rows do; only this host's index can. */
+/** Indexed hits name and own a native chat exactly as list rows do; only this host's index can.
+ *  An owned hit opens its chat, so it carries no terminal resume command. */
 export function projectStructuredAiVaultSearchResponse(
-  response: AiVaultSearchResponse
+  response: AiVaultSearchResponse,
+  opensChat: StructuredChatOpener
 ): AiVaultSearchResponse {
   const owner = response.kind === 'results' ? ownershipLookup() : null
   if (!owner || response.kind !== 'results') {
@@ -50,9 +58,16 @@ export function projectStructuredAiVaultSearchResponse(
   }
   return {
     ...response,
-    hits: response.hits.map((hit) => {
+    hits: response.hits.flatMap((hit) => {
       const ownership = owner(hit)
-      return ownership ? { ...hit, ...ownedTitle(ownership) } : hit
+      if (!ownership) {
+        return [hit]
+      }
+      if (!opensChat(ownership.provider)) {
+        return []
+      }
+      const { resumeCommand: _resumeCommand, ...owned } = hit
+      return [{ ...owned, ...ownedTitle(ownership) }]
     })
   }
 }
@@ -61,8 +76,9 @@ export function projectStructuredAiVaultSearchResponse(
  *  naming them must never cost the user the search. */
 export async function searchWithStructuredOwners(
   search: Promise<AiVaultSearchResponse>,
-  ensureHost?: () => Promise<unknown>
+  options: { ensureHost?: (() => Promise<unknown>) | undefined; opensChat: StructuredChatOpener }
 ): Promise<AiVaultSearchResponse> {
+  const { ensureHost } = options
   const hostReady = ensureHost
     ? ensureStructuredAgentSessionHostUnlessRefused(ensureHost).then(
         () => true,
@@ -73,7 +89,9 @@ export async function searchWithStructuredOwners(
       )
     : true
   const response = await search
-  return (await hostReady) ? projectStructuredAiVaultSearchResponse(response) : response
+  return (await hostReady)
+    ? projectStructuredAiVaultSearchResponse(response, options.opensChat)
+    : response
 }
 
 function ownedTitle(ownership: StructuredProviderSessionOwnership) {
