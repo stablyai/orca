@@ -10,6 +10,7 @@ import {
 } from '../../../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
+import { resolveTaskTerminalProvenance } from '../task-provenance'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
@@ -97,6 +98,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           task
         )
       }
+      const provenance = await resolveTaskTerminalProvenance(runtime, to)
 
       const dispatchAuthority = chatAssignee ? null : runtime.getOrchestrationDispatchAuthority(to)
       const assigneePaneKey = chatAssignee
@@ -160,6 +162,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
+      db.updateTaskProvenance(task.id, provenance)
 
       // Why: built after ctx so dispatchId is the real ctx.id, letting heartbeats attribute liveness to a specific dispatch context, not just a task.
       const preamble = buildDispatchPreamble({
