@@ -80,6 +80,33 @@ function endpointForDisplay(endpoint: string): string {
   }
 }
 
+/** Matched by the Tailscale hint, which would otherwise blame the network for a trust failure. */
+export const REMOTE_RUNTIME_TLS_REJECTED_PHRASE = "the host's TLS certificate was rejected"
+
+// Why: Node's trust store is not the OS keychain, so a CA that curl and the browser accept can
+// still fail here. Allowlisted so only fixed Node codes ever reach the message.
+const TLS_UNTRUSTED_ISSUER_CODES: ReadonlySet<string> = new Set([
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'CERT_UNTRUSTED'
+])
+const TLS_REJECTED_CODES: ReadonlySet<string> = new Set([
+  ...TLS_UNTRUSTED_ISSUER_CODES,
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'ERR_TLS_CERT_ALTNAME_INVALID'
+])
+
+function rejectedTlsCertificateCode(error: unknown): string | null {
+  if (!(error instanceof Error) || !('code' in error) || typeof error.code !== 'string') {
+    return null
+  }
+  return TLS_REJECTED_CODES.has(error.code) ? error.code : null
+}
+
 export function isRemoteRuntimeConnectTimeout(error: unknown): boolean {
   return error instanceof Error && error.message === WS_HANDSHAKE_TIMEOUT_MESSAGE
 }
@@ -90,6 +117,16 @@ export function isRemoteRuntimeConnectTimeout(error: unknown): boolean {
  * and stops there — it must not imply the host's terminals are gone.
  */
 export function remoteRuntimeConnectFailureMessage(error: unknown, endpoint: string): string {
+  const tlsCode = rejectedTlsCertificateCode(error)
+  if (tlsCode) {
+    const caHint = TLS_UNTRUSTED_ISSUER_CODES.has(tlsCode)
+      ? ' If it uses a private CA, set NODE_EXTRA_CA_CERTS to that CA certificate file and restart Orca.'
+      : ''
+    return (
+      `${REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE} at ${endpointForDisplay(endpoint)}: ` +
+      `${REMOTE_RUNTIME_TLS_REJECTED_PHRASE} (${tlsCode}).${caHint}`
+    )
+  }
   if (!isRemoteRuntimeConnectTimeout(error)) {
     return `${REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE}.`
   }

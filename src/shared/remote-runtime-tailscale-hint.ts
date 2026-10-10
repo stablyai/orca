@@ -1,11 +1,13 @@
 /**
  * Appends an actionable Tailscale recommendation to remote-runtime connection
- * failures, mirroring `withMacTailscaleDnsHint`. Lives in `shared` as a pure,
- * dependency-free function so both the main process (desktop transport) and the
- * renderer (web client) can route their user-facing errors through it without
- * leaking presentation copy into the shared error constructors (which the CLI,
- * logs, and mobile typecheck also consume).
+ * failures, mirroring `withMacTailscaleDnsHint`. Lives in `shared` as a pure
+ * function with no runtime imports outside `shared`, so both the main process
+ * (desktop transport) and the renderer (web client) can route their user-facing
+ * errors through it without leaking presentation copy into the shared error
+ * constructors (which the CLI, logs, and mobile typecheck also consume).
  */
+
+import { REMOTE_RUNTIME_TLS_REJECTED_PHRASE } from './remote-runtime-connect-bound'
 
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
@@ -71,7 +73,12 @@ export function withRemoteRuntimeTailscaleHint(
   message: string,
   endpoint: string | null | undefined
 ): string {
-  if (!REMOTE_RUNTIME_UNREACHABLE_RE.test(message)) {
+  // Why: a TLS rejection means the host answered and failed certificate checks, so a network
+  // remedy would mislead.
+  if (
+    !REMOTE_RUNTIME_UNREACHABLE_RE.test(message) ||
+    message.includes(REMOTE_RUNTIME_TLS_REJECTED_PHRASE)
+  ) {
     return message
   }
   // Why: keep the hint idempotent so a message routed through this helper twice (e.g. a
