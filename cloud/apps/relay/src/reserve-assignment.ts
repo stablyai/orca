@@ -86,6 +86,9 @@ export class ReserveAssignment {
       client: CellReserveClient
       // One primary-key read of the host's row: only for a host the map has never seen.
       readRow: (identity: Identity) => Promise<{ cellId: string; assignmentEpoch: number } | null>
+      // True while the pool has waiters: the optional WRONG_CELL read is skipped, so timed-out
+      // reads cannot stack up behind a stall.
+      databaseBusy?: () => boolean
       now?: () => number
       random?: () => number
       log?: (line: string) => void
@@ -164,7 +167,8 @@ export class ReserveAssignment {
     // A seat closed with WRONG_CELL was demoted (or failed to re-register) because its row is
     // ahead, which every director sees in that cell's feed: read the row, so the re-assign mints
     // above it on any director, not just the one that demoted it.
-    const leftWrongCell = left?.closeCode === RELAY_CLOSE_CODE.WRONG_CELL
+    const leftWrongCell =
+      left?.closeCode === RELAY_CLOSE_CODE.WRONG_CELL && !(this.input.databaseBusy?.() ?? false)
     if (known.length === 0 || leftWrongCell) {
       try {
         // Only the never-seen host needs the row; for the WRONG_CELL one it is an optimisation,

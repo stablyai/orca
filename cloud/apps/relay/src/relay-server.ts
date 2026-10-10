@@ -214,6 +214,7 @@ export function createRelayServer(
             )
           }),
           readRow: async (identity) => await assignments.hostWhereabouts(identity),
+          databaseBusy: () => readRelayDatabasePoolPressure(database).databasePoolWaiting > 0,
           now: options.now,
           random: options.random
         })
