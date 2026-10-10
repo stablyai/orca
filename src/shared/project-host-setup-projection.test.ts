@@ -4,6 +4,7 @@ import {
   getProjectHostSetupsForProject,
   isGitHubBackedRepo,
   getProjectIdForProviderIdentity,
+  requireMatchingProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
 import { getProjectHostSetupWorktreeMeta } from './project-host-setup-lookup'
@@ -593,6 +594,30 @@ describe('getProjectIdForProviderIdentity', () => {
         host: 'GITHUB.ACME.TEST:8443'
       })
     ).toBe('github:github.acme.test:8443/acme/orca')
+  })
+})
+
+describe('requireMatchingProviderIdentity', () => {
+  it('returns the identity when the derived id matches', () => {
+    const identity = { provider: 'github', owner: 'acme', repo: 'orca' } as const
+    expect(requireMatchingProviderIdentity(identity, 'github:acme/orca')).toBe(identity)
+  })
+
+  it('names the derived and requested ids plus the runnable --project flag', () => {
+    expect(() =>
+      requireMatchingProviderIdentity(
+        { provider: 'github', owner: 'acme', repo: 'orca' },
+        'my-project'
+      )
+    ).toThrow(
+      'Imported folder resolves to project "github:acme/orca" which does not match "my-project". Pass --project "github:acme/orca"'
+    )
+  })
+
+  it('names the missing identity and the expected shape when there is none', () => {
+    expect(() => requireMatchingProviderIdentity(undefined, 'github:acme/orca')).toThrow(
+      'Imported folder carries no provider identity to match project "github:acme/orca"'
+    )
   })
 })
 

@@ -341,7 +341,7 @@ describe('repos:add + repos:clone', () => {
         path: '/tmp/mismatched-project',
         kind: 'git'
       })
-    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+    ).rejects.toThrow('which does not match')
 
     expect(mockStore.removeProjectForHost).toHaveBeenCalledWith(added[0]?.id, 'local')
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
