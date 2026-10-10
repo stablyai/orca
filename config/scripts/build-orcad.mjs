@@ -9,6 +9,7 @@ import {
   externalNativeAddons,
   ORCAD_EXTERNAL_MODULES,
   ORCAD_CHILD_ENTRY_POINTS,
+  ORCAD_COMMONJS_MODULE_OPTIONS,
   orcadChildOutputFilename
 } from './orcad-entry-build.mjs'
 import { createRequire } from 'node:module'
@@ -51,6 +52,8 @@ import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
 import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
@@ -98,6 +101,7 @@ async function stageParcelWatcher(target) {
   const wrapperSource = requireFromWatcher.resolve('@parcel/watcher/wrapper.js')
   mkdirSync(WATCHER_MODULE_DIR, { recursive: true })
   await build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
     stdin: {
       contents:
         `const {createWrapper}=require(${JSON.stringify(wrapperSource)});` +
@@ -195,6 +199,7 @@ cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-cha
  *  their runtime resolvers look for them. */
 function buildForkedChild(entryPoint, outfile) {
   return build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
     entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
@@ -207,6 +212,7 @@ function buildForkedChild(entryPoint, outfile) {
     minify: true,
     sourcemap: false,
     define: {
+      ...ORCAD_COMMONJS_MODULE_OPTIONS.define,
       'process.env.NODE_ENV': '"production"'
     },
     logLevel: 'error'
@@ -307,6 +313,17 @@ if (graphErrors.length > 0) {
         `Expected a clean load-check exit, got status=${smoke.status ?? 'none'} ` +
         `signal=${smoke.signal ?? 'none'} ` +
         `error=${smoke.error?.message ?? 'none'}\n${smokeOutput.slice(0, 2000)}`
+    )
+    process.exitCode = 1
+  }
+  const providerSmoke = runProcessSync({
+    program: process.execPath,
+    args: [SERVER_OUT_FILE, '--orcad-structured-provider-load-check'],
+    timeoutMs: 60_000
+  })
+  if (providerSmoke.code !== 0 || providerSmoke.timedOut || providerSmoke.outputTruncated) {
+    console.error(
+      `[build-orcad] the packaged structured provider failed to load.\n${describeProcessFailure(providerSmoke)}`
     )
     process.exitCode = 1
   }
