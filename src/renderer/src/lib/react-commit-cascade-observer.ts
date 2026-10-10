@@ -6,14 +6,20 @@
  * fires per render of its OWN component, not per commit — measured, a root
  * effect saw 1 of 11 commits a leaf drove. react-dom calls onCommitFiberRoot
  * once per commit per root in both bundles, inside its own try/catch, and hands
- * us the FiberRoot whose `pendingLanes` drive the reset rule.
+ * us the FiberRoot whose `pendingLanes` drive the reset rule. onPostCommitFiberRoot
+ * is observed too: after a sync commit react-dom flushes useEffect between the
+ * two callbacks, and only the second sees the lanes a passive store write adds.
  *
- * Ordering: this module only WRAPS `onCommitFiberRoot`, which react-dom re-reads
+ * Ordering: this module only WRAPS the two commit callbacks, which react-dom re-reads
  * at every commit, so it may be imported anywhere. The deadline belongs to
  * react-devtools-commit-hook-shim, which must merely exist before react-dom's
  * module evaluation and is therefore the entries' first import.
  */
-import { observeReactCommit } from '@/lib/react-commit-cascade-telemetry'
+import {
+  observeReactCommit,
+  observeReactPassiveFlush,
+  settleReactCommit
+} from '@/lib/react-commit-cascade-telemetry'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   ensureReactDevtoolsCommitHook,
@@ -30,6 +36,26 @@ type FiberRootLike = { pendingLanes?: unknown }
 let installed = false
 let commitsSeen = 0
 let installCheckTimer: ReturnType<typeof setTimeout> | undefined
+let settleQueued = false
+
+// Hoisted so a quiet commit queues at most one microtask and allocates no closure.
+function runQueuedSettle(): void {
+  settleQueued = false
+  try {
+    settleReactCommit()
+  } catch {
+    // Best-effort crash evidence only.
+  }
+}
+
+function readPendingLanes(root: unknown): number {
+  const pendingLanes = (root as FiberRootLike | null)?.pendingLanes
+  // Why 0 and not a skip: a React shape change that hides pendingLanes must
+  // end the cascade, not freeze a stale depth that later commits push over
+  // the limit. 0 is the lane value that means "nothing pending", so it
+  // takes the same reset path and this fails safe to no crumb.
+  return typeof pendingLanes === 'number' ? pendingLanes : 0
+}
 
 /**
  * A reshuffled import or a bundler hoist would disable the diagnostic with no
@@ -69,6 +95,7 @@ export function installReactCommitCascadeObserver(): void {
 
 function installObserverOnHook(hook: ReactDevtoolsCommitHook): void {
   const previous = hook.onCommitFiberRoot
+  const previousPostCommit = hook.onPostCommitFiberRoot
   // Fixed arity, not rest args: this runs on every commit and must not allocate.
   hook.onCommitFiberRoot = (rendererId, root, priorityLevel, didError) => {
     // Why our own try/catch when react-dom already has one: theirs would
@@ -76,22 +103,32 @@ function installObserverOnHook(hook: ReactDevtoolsCommitHook): void {
     // Fast Refresh from the chain below.
     try {
       commitsSeen += 1
-      const pendingLanes = (root as FiberRootLike | null)?.pendingLanes
-      // Why 0 and not a skip: a React shape change that hides pendingLanes must
-      // end the cascade, not freeze a stale depth that later commits push over
-      // the limit. 0 is the lane value that means "nothing pending", so it
-      // takes the same reset path and this fails safe to no crumb.
-      observeReactCommit(root, typeof pendingLanes === 'number' ? pendingLanes : 0)
+      // Why a microtask: a sync passive flush runs inside the commit's own call
+      // stack, while an async one runs in a later scheduler task after React
+      // already reset its counter, so the window must close in between.
+      if (observeReactCommit(root, readPendingLanes(root)) && !settleQueued) {
+        queueMicrotask(runQueuedSettle)
+        settleQueued = true
+      }
     } catch {
       // Best-effort crash evidence only.
     }
     previous?.call(hook, rendererId, root, priorityLevel, didError)
+  }
+  hook.onPostCommitFiberRoot = (rendererId, root) => {
+    try {
+      observeReactPassiveFlush(root, readPendingLanes(root))
+    } catch {
+      // Best-effort crash evidence only.
+    }
+    previousPostCommit?.call(hook, rendererId, root)
   }
 }
 
 export function resetReactCommitCascadeObserverForTests(): void {
   installed = false
   commitsSeen = 0
+  settleQueued = false
   if (installCheckTimer !== undefined) {
     clearTimeout(installCheckTimer)
     installCheckTimer = undefined
