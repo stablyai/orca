@@ -16,11 +16,7 @@ export class SessionNewestFiles {
       this.files.push(file)
       return
     }
-    if (this.limit <= 0) {
-      return
-    }
-    const last = this.files.at(-1)
-    if (this.files.length >= this.limit && last && file.mtimeMs <= last.mtimeMs) {
+    if (!this.wouldRetain(file.mtimeMs)) {
       return
     }
     let low = 0
@@ -37,6 +33,14 @@ export class SessionNewestFiles {
     if (this.files.length > this.limit) {
       this.files.pop()
     }
+  }
+
+  wouldRetain(mtimeMs: number): boolean {
+    if (this.limit <= 0) {
+      return false
+    }
+    const last = this.files.at(-1)
+    return !(this.files.length >= this.limit && last && mtimeMs <= last.mtimeMs)
   }
 
   get size(): number {
