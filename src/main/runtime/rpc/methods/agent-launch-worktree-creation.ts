@@ -35,7 +35,9 @@ const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
-  agent: TuiAgent
+  agent: TuiAgent,
+  /** The launch's own id, absent for an unrecorded launch. */
+  operationId?: string
 ): AgentLaunchWorkspaceFactory {
   return {
     createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
@@ -98,6 +100,10 @@ export function agentLaunchWorkspaceFactory(
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
           createdWithAgent: agent,
+          // Only the desktop's own launch opens the workspace in its window as that launch's.
+          ...(operationId && context.caller?.kind === 'desktop' && params.activate === true
+            ? { launchActivation: { operationId } }
+            : {}),
           // Structured sessions have no startup command to sequence behind setup. Provision the
           // setup terminal synchronously and attach a completion token so the launch can wait
           // before creating the chat surface.

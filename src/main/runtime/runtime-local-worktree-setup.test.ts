@@ -13,7 +13,10 @@ vi.mock('../hooks', () => ({
   runHook: mocks.runHook
 }))
 
-import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
+import {
+  buildRuntimeLocalWorktreeSetupReceipt,
+  prepareRuntimeLocalWorktreeSetup
+} from './runtime-local-worktree-setup'
 
 const askRepo: Repo = {
   id: 'repo-1',
@@ -49,6 +52,18 @@ describe('runtime create setup for a hook the new branch added', () => {
     expect(result.shouldRunSetup).toBe(false)
     expect(result.warning).toContain('pass --setup run to run it')
     expect(mocks.runHook).not.toHaveBeenCalled()
+    expect(
+      buildRuntimeLocalWorktreeSetupReceipt({
+        ...result,
+        didSpawnSetup: false,
+        setupTerminalHandle: null
+      })
+    ).toEqual({
+      requested: 'inherit',
+      hookFound: true,
+      startupPolicy: 'start-immediately',
+      state: 'skipped'
+    })
   })
 
   it('still runs setup when the caller decided to', async () => {
@@ -56,5 +71,78 @@ describe('runtime create setup for a hook the new branch added', () => {
 
     expect(result.shouldRunSetup).toBe(true)
     expect(mocks.runHook).toHaveBeenCalledOnce()
+    expect(
+      buildRuntimeLocalWorktreeSetupReceipt({
+        ...result,
+        didSpawnSetup: false,
+        setupTerminalHandle: null
+      })
+    ).toEqual({
+      requested: 'run',
+      hookFound: true,
+      startupPolicy: 'start-immediately',
+      state: 'running'
+    })
+  })
+
+  it('reports an absent hook without requiring a terminal', async () => {
+    mocks.effectiveHooks.mockReturnValue(null)
+    const result = await prepare({ setupDecision: 'run' })
+
+    expect(
+      buildRuntimeLocalWorktreeSetupReceipt({
+        ...result,
+        didSpawnSetup: false,
+        setupTerminalHandle: null
+      })
+    ).toEqual({
+      requested: 'run',
+      hookFound: false,
+      startupPolicy: 'start-immediately',
+      state: 'not_configured'
+    })
+  })
+
+  it('reports a failed runner spawn when no in-process hook is running', () => {
+    expect(
+      buildRuntimeLocalWorktreeSetupReceipt({
+        effectiveDecision: 'run',
+        hookFound: true,
+        shouldRunSetup: true,
+        didSpawnSetup: false,
+        didStartInProcessSetupHook: false,
+        setupTerminalHandle: null
+      })
+    ).toEqual({
+      requested: 'run',
+      hookFound: true,
+      startupPolicy: 'start-immediately',
+      state: 'spawn_failed'
+    })
+  })
+
+  it('reports the spawned setup terminal and its agent wait policy', () => {
+    expect(
+      buildRuntimeLocalWorktreeSetupReceipt({
+        effectiveDecision: 'run',
+        hookFound: true,
+        setup: {
+          command: 'setup-runner',
+          runnerScriptPath: '/worktrees/app/setup.sh',
+          envVars: {},
+          waitForAgentStartup: true
+        },
+        shouldRunSetup: true,
+        didSpawnSetup: true,
+        didStartInProcessSetupHook: false,
+        setupTerminalHandle: 'setup-terminal'
+      })
+    ).toEqual({
+      requested: 'run',
+      hookFound: true,
+      startupPolicy: 'wait-for-setup',
+      state: 'running',
+      terminalHandle: 'setup-terminal'
+    })
   })
 })

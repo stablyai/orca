@@ -48,6 +48,9 @@ export type RuntimeClientEvent =
       defaultTabs?: WorktreeDefaultTabsLaunch
       /** Absent on older hosts; clients must not infer navigation intent from a broadcast. */
       navigation?: RuntimeNavigationTarget
+      /** Absent on older hosts and on every other activation; a client that ignores it opens the
+       *  workspace as it does for a CLI create. */
+      launch?: RuntimeActivatedLaunch
     }
 
 export type RuntimeClientEventStreamMessage =
@@ -59,6 +62,10 @@ export type RuntimeClientEventStreamMessage =
     })
   | RuntimeClientEvent
   | { type: 'end' }
+
+/** The desktop's own `agent.launch` that created this workspace. The launch brings the workspace's
+ *  first tab itself, and the window that started it finds its launch by this id. */
+export type RuntimeActivatedLaunch = { operationId: string }
 
 export type RuntimeActivateWorktreeEvent = Extract<RuntimeClientEvent, { type: 'activateWorktree' }>
 
@@ -75,13 +82,15 @@ export function toRuntimeActivateWorktreeEvent(
   setup?: CreateWorktreeResult['setup'],
   startup?: WorktreeStartupLaunch,
   defaultTabs?: CreateWorktreeResult['defaultTabs'],
-  navigation?: RuntimeNavigationTarget
+  navigation?: RuntimeNavigationTarget,
+  launch?: RuntimeActivatedLaunch
 ): RuntimeActivateWorktreeEvent {
   return {
     type: 'activateWorktree',
     repoId,
     worktreeId,
     ...(navigation ? { navigation } : {}),
+    ...(launch ? { launch } : {}),
     ...(setup ? { setup } : {}),
     ...(startup ? { startup } : {}),
     ...(defaultTabs ? { defaultTabs } : {})

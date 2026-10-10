@@ -257,6 +257,54 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('names the desktop launch that created the worktree on its activation', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const activateWorktree = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-launch')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-launch')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/runtime-launch',
+        head: 'def',
+        branch: 'runtime-launch',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-launch',
+      activate: true,
+      launchActivation: { operationId: 'op-1' }
+    })
+
+    expect(activateWorktree).toHaveBeenCalledWith(
+      'repo-1',
+      expect.any(String),
+      undefined,
+      undefined,
+      undefined,
+      { operationId: 'op-1' }
+    )
+  })
+
   it('stamps createdAt alongside lastActivityAt so CLI-created worktrees get the Recent-sort grace window', async () => {
     // Why: without createdAt, ambient PTY bumps in other worktrees can push the new one below them in Recent sort.
     const runtime = new OrcaRuntimeService(store)

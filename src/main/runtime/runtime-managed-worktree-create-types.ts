@@ -14,6 +14,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { WorktreeStartupDraftPaste } from './runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type { RuntimeActivatedLaunch } from '../../shared/runtime-client-events'
 
 export type RuntimeManagedWorktreeCreateArgs = {
   repoSelector: string
@@ -56,6 +57,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself, so the text
    *  rides only a typed line that can carry it; reports whether it did. */
   onStartupPromptCarry?: (carried: boolean) => void
+  /** Main-internal: the desktop's own `agent.launch` this create belongs to, named on the activation
+   *  so its window binds the workspace to that launch and opens no tab of its own. */
+  launchActivation?: RuntimeActivatedLaunch
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */

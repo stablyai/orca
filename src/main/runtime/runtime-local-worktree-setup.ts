@@ -14,6 +14,31 @@ export function resolveRuntimeSetupDecision(
   return request.runHooks ? 'run' : (request.setupDecision ?? 'inherit')
 }
 
+export function buildRuntimeLocalWorktreeSetupReceipt(args: {
+  effectiveDecision: SetupDecision
+  hookFound: boolean
+  setup?: CreateWorktreeResult['setup']
+  shouldRunSetup: boolean
+  didSpawnSetup: boolean
+  didStartInProcessSetupHook: boolean
+  setupTerminalHandle: string | null
+}): NonNullable<CreateWorktreeResult['setupReceipt']> {
+  return {
+    requested: args.effectiveDecision,
+    hookFound: args.hookFound,
+    startupPolicy: args.setup?.waitForAgentStartup ? 'wait-for-setup' : 'start-immediately',
+    state: !args.hookFound
+      ? 'not_configured'
+      : args.effectiveDecision === 'skip' || !args.shouldRunSetup
+        ? 'skipped'
+        : // An in-process hook is already running; spawn_failed would trigger needless retries.
+          args.didSpawnSetup || args.didStartInProcessSetupHook
+          ? 'running'
+          : 'spawn_failed',
+    ...(args.setupTerminalHandle ? { terminalHandle: args.setupTerminalHandle } : {})
+  }
+}
+
 export async function prepareRuntimeLocalWorktreeSetup(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo

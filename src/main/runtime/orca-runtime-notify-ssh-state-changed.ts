@@ -7,7 +7,10 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
-import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
+import {
+  toRuntimeActivateWorktreeEvent,
+  type RuntimeActivatedLaunch
+} from '../../shared/runtime-client-events'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
@@ -163,11 +166,12 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
     defaultTabs?: CreateWorktreeResult['defaultTabs'],
-    navigationTarget?: RuntimeNavigationTarget
+    navigationTarget?: RuntimeNavigationTarget,
+    launch?: RuntimeActivatedLaunch
   ): void {
     const navigation = navigationTarget ?? 'host'
     if (navigationTargetsHost(navigation)) {
-      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs, launch)
     }
     if (navigationTargetsClients(navigation)) {
       this.notifyClientsActivateWorktree(
@@ -176,7 +180,8 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
         setup,
         startup,
         defaultTabs,
-        navigation
+        navigation,
+        launch
       )
     }
   }
@@ -186,9 +191,18 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     worktreeId: string,
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    defaultTabs?: CreateWorktreeResult['defaultTabs'],
+    launch?: RuntimeActivatedLaunch
   ): void {
-    this.notifier?.activateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    // Every other activation keeps its call exactly as before.
+    this.notifier?.activateWorktree(
+      repoId,
+      worktreeId,
+      setup,
+      startup,
+      defaultTabs,
+      ...(launch ? [launch] : [])
+    )
   }
 
   protected notifyClientsActivateWorktree(
@@ -197,10 +211,19 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
     defaultTabs?: CreateWorktreeResult['defaultTabs'],
-    navigation: RuntimeNavigationTarget = 'clients'
+    navigation: RuntimeNavigationTarget = 'clients',
+    launch?: RuntimeActivatedLaunch
   ): void {
     this.emitClientEvent(
-      toRuntimeActivateWorktreeEvent(repoId, worktreeId, setup, startup, defaultTabs, navigation)
+      toRuntimeActivateWorktreeEvent(
+        repoId,
+        worktreeId,
+        setup,
+        startup,
+        defaultTabs,
+        navigation,
+        launch
+      )
     )
   }
 

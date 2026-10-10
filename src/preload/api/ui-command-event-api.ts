@@ -7,6 +7,7 @@ import type {
 } from '../../shared/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type { RuntimeActivatedLaunch } from '../../shared/runtime-client-events'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -151,6 +152,7 @@ export type UiCommandEventApi = {
       setup?: WorktreeSetupLaunch
       startup?: WorktreeStartupLaunch
       defaultTabs?: WorktreeDefaultTabsLaunch
+      launch?: RuntimeActivatedLaunch
     }) => void
   ) => () => void
   onCreateTerminal: (

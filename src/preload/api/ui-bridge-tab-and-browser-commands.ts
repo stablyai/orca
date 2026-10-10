@@ -12,6 +12,7 @@ import type {
 } from '../../shared/worktree/launch-types'
 import { browserFindSubscriptions } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
+import type { RuntimeActivatedLaunch } from '../../shared/runtime-client-events'
 
 export const uiTabAndBrowserCommandsApi = {
   onRequestTabSetProfile: (
@@ -198,6 +199,7 @@ export const uiTabAndBrowserCommandsApi = {
       setup?: WorktreeSetupLaunch
       startup?: { command: string; env?: Record<string, string> }
       defaultTabs?: WorktreeDefaultTabsLaunch
+      launch?: RuntimeActivatedLaunch
     }) => void
   ): (() => void) => {
     const listener = (
@@ -208,6 +210,7 @@ export const uiTabAndBrowserCommandsApi = {
         setup?: WorktreeSetupLaunch
         startup?: { command: string; env?: Record<string, string> }
         defaultTabs?: WorktreeDefaultTabsLaunch
+        launch?: RuntimeActivatedLaunch
       }
     ) => callback(data)
     ipcRenderer.on('ui:activateWorktree', listener)

@@ -14,6 +14,7 @@ import type {
   WorktreeRemoteBranchConflictEvent
 } from '../../shared/worktree/base-ref-drift-types'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { RuntimeActivatedLaunch } from '../../shared/runtime-client-events'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
@@ -40,7 +41,8 @@ export type RuntimeNotifier = {
     worktreeId: string,
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    defaultTabs?: CreateWorktreeResult['defaultTabs'],
+    launch?: RuntimeActivatedLaunch
   ): void
   createTerminal(
     worktreeId: string,

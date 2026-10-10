@@ -40,7 +40,8 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
           setup,
           startup,
           defaultTabs,
-          args.navigation
+          args.navigation,
+          args.launchActivation
         ),
       invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
       invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),

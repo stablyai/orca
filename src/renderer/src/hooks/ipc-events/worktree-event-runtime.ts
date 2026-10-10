@@ -1,4 +1,5 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { takeAgentLaunchWorkspaceActivation } from '@/lib/agent-launch-workspace-activation'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
@@ -144,7 +145,8 @@ export function createWorktreeEventRuntime(
       worktreeId,
       setup,
       startup,
-      defaultTabs
+      defaultTabs,
+      launch
     }: Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
     options: WorktreeEventActivationOptions
   ): Promise<void> => {
@@ -170,10 +172,15 @@ export function createWorktreeEventRuntime(
       useAppStore.getState().getKnownWorktreeById(worktreeId, options.executionHostId)
     )
     // Why: use the canonical activation path so the CLI switch records a back/forward visit, or the nav buttons ignore it.
+    if (launch && takeAgentLaunchWorkspaceActivation(launch.operationId, worktreeId)) {
+      return
+    }
     activateAndRevealWorktree(worktreeId, {
       ...(setup ? { setup } : {}),
       ...(startup ? { startup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
+      // The launch that created this workspace brings its first tab; a bare shell beside it is noise.
+      ...(launch ? { providesInitialSurface: true } : {}),
       ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
       // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
       notifyHostRuntime: false,

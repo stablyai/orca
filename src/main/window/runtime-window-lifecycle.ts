@@ -4,6 +4,7 @@ import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import type { RuntimeActivatedLaunch } from '../../shared/runtime-client-events'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
@@ -51,14 +52,16 @@ export function registerRuntimeWindowLifecycle(
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
       startup?: WorktreeStartupLaunch,
-      defaultTabs?: CreateWorktreeResult['defaultTabs']
+      defaultTabs?: CreateWorktreeResult['defaultTabs'],
+      launch?: RuntimeActivatedLaunch
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
         ...(startup ? { startup } : {}),
-        ...(defaultTabs ? { defaultTabs } : {})
+        ...(defaultTabs ? { defaultTabs } : {}),
+        ...(launch ? { launch } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>

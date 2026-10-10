@@ -9,7 +9,10 @@ import { ExecutionHostNotDispatchableError } from '../providers/execution-host-p
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
-import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
+import {
+  buildRuntimeLocalWorktreeSetupReceipt,
+  prepareRuntimeLocalWorktreeSetup
+} from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../ipc/filesystem-auth'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../workspace-create-telemetry'
@@ -111,7 +114,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
               setup,
               startup,
               undefined,
-              args.navigation
+              args.navigation,
+              args.launchActivation
             )
         }
       })
@@ -255,7 +259,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             activationSetup,
             startup,
             activationDefaultTabs,
-            args.navigation
+            args.navigation,
+            args.launchActivation
           )
       }
     })
@@ -279,23 +284,15 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
-            setupReceipt: {
-              requested: effectiveDecision,
+            setupReceipt: buildRuntimeLocalWorktreeSetupReceipt({
+              effectiveDecision,
               hookFound,
-              startupPolicy: setup?.waitForAgentStartup
-                ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
-              state: !hookFound
-                ? ('not_configured' as const)
-                : effectiveDecision === 'skip' || !shouldRunSetup
-                  ? ('skipped' as const)
-                  : // Why: the in-process hook is already executing, so reporting
-                    // spawn_failed would strand callers that retry on it.
-                    didSpawnSetup || didStartInProcessSetupHook
-                    ? ('running' as const)
-                    : ('spawn_failed' as const),
-              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-            }
+              setup,
+              shouldRunSetup,
+              didSpawnSetup,
+              didStartInProcessSetupHook,
+              setupTerminalHandle
+            })
           }
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),

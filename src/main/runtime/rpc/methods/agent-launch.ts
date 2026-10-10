@@ -103,6 +103,7 @@ function callerRendersLaunchedChat(
 
 /** What a launch admitted under an operation id carries into its execution. */
 type ReplaySafeLaunch = {
+  operationId: string
   attachOperationId: string
   callerKey: string
   terminalSpawn: TerminalSpawnDispatch
@@ -130,7 +131,7 @@ async function runAgentLaunch(
       replaySafe?.terminalSpawn,
       view.early
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent, replaySafe?.operationId),
     ...(callerRendersLaunchedChat(context, intent.agent) ? {} : { callerRendersStructured: false }),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: (surface) => {
@@ -252,6 +253,7 @@ async function executeAdmittedAgentLaunch(
   let result: AgentLaunchResult
   try {
     result = await runAgentLaunch(intent, context, view, {
+      operationId: params.operationId,
       attachOperationId: admission.attachOperationId,
       callerKey: admission.callerKey,
       terminalSpawn,
