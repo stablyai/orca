@@ -14,6 +14,10 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { applyHostRename, getHostDisplayLabelOverride } from './host-rename-remove'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 
 type HostRenameDialogProps = {
   open: boolean
@@ -23,6 +27,7 @@ type HostRenameDialogProps = {
   derivedLabel: string
 }
 
+/** Renames a host's display label via a settings override; an empty value restores the derived label. */
 export function HostRenameDialog({
   open,
   onOpenChange,
@@ -33,6 +38,7 @@ export function HostRenameDialog({
   const updateSettings = useAppStore((s) => s.updateSettings)
   const currentOverride = getHostDisplayLabelOverride(settings, hostId)
   const [value, setValue] = useState(currentOverride ?? '')
+  const imeEnter = useImeEnterGestureOwnership()
 
   // Why: reseed the field from the persisted override each time the dialog opens
   // so a prior cancelled edit doesn't leak into the next open.
@@ -77,7 +83,14 @@ export function HostRenameDialog({
             value={value}
             placeholder={derivedLabel}
             onChange={(e) => setValue(e.target.value)}
+            onCompositionStart={() => imeEnter.setComposing(true)}
+            onCompositionEnd={() => imeEnter.setComposing(false)}
+            onKeyUp={imeEnter.onKeyUp}
+            onBlur={imeEnter.reset}
             onKeyDown={(e) => {
+              if (imeEnter.ownsKeyDown(e) || isImeCompositionKeyDown(e)) {
+                return
+              }
               if (e.key === 'Enter') {
                 e.preventDefault()
                 submit()

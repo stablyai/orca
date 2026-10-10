@@ -15,6 +15,10 @@ import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/type
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 import { translate } from '@/i18n/i18n'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 
 type WorkspaceKanbanSettingsMenuProps = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -28,6 +32,7 @@ type WorkspaceKanbanSettingsMenuProps = {
   onAddStatus: () => void
 }
 
+/** Board settings dropdown for renaming, reordering, adding and removing workspace statuses. */
 export default function WorkspaceKanbanSettingsMenu({
   workspaceStatuses,
   syncTaskStatusFromWorkspaceBoard,
@@ -39,6 +44,7 @@ export default function WorkspaceKanbanSettingsMenu({
   onRemoveStatus,
   onAddStatus
 }: WorkspaceKanbanSettingsMenuProps): React.JSX.Element {
+  const imeEnter = useImeEnterGestureOwnership()
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -123,9 +129,18 @@ export default function WorkspaceKanbanSettingsMenu({
                   <meta.icon className={cn('size-3.5 shrink-0', meta.tone)} />
                   <ImeInput
                     defaultValue={status.label}
-                    onBlur={(event) => onRenameStatus(status.id, event.target.value)}
+                    onCompositionStart={() => imeEnter.setComposing(true)}
+                    onCompositionEnd={() => imeEnter.setComposing(false)}
+                    onKeyUp={imeEnter.onKeyUp}
+                    onBlur={(event) => {
+                      imeEnter.reset()
+                      onRenameStatus(status.id, event.target.value)
+                    }}
                     onKeyDown={(event) => {
                       event.stopPropagation()
+                      if (imeEnter.ownsKeyDown(event) || isImeCompositionKeyDown(event)) {
+                        return
+                      }
                       if (event.key === 'Enter') {
                         event.currentTarget.blur()
                       }

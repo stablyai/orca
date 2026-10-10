@@ -2,6 +2,7 @@
 import { createRoot, type Root } from 'react-dom/client'
 import { act, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireImeConfirmEnter, firePlainEnter } from '@/lib/ime-enter-confirm-test-fixture'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 
 const statuses: WorkspaceStatusDefinition[] = [{ id: 'todo', label: 'Todo' }]
@@ -81,6 +82,19 @@ describe('WorkspaceKanbanSettingsMenu', () => {
     })
 
     expect(onChange).toHaveBeenCalledWith(true)
+  })
+
+  it('keeps renaming through the Enter that confirms an IME composition', () => {
+    renderMenu()
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Rename Todo"]')
+    expect(input).not.toBeNull()
+    act(() => input?.focus())
+
+    act(() => fireImeConfirmEnter(input!))
+    expect(document.activeElement).toBe(input)
+
+    act(() => firePlainEnter(input!))
+    expect(document.activeElement).not.toBe(input)
   })
 
   it('keeps adding available for workflows above the former board limit', () => {

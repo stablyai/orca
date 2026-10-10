@@ -24,6 +24,10 @@ import {
 } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 
 type OpenInMenuSettingProps = {
   applications: OpenInApplication[] | undefined
@@ -75,6 +79,7 @@ export function shouldCommitOpenInApplicationsDraft(applications: OpenInApplicat
   })
 }
 
+/** One Open In app row with inline label/command editing that commits on blur or a non-IME Enter. */
 function OpenInMenuRow({
   application,
   editing,
@@ -91,6 +96,7 @@ function OpenInMenuRow({
   onCommit: () => void
 }): React.JSX.Element {
   const preset = getOpenInAppPreset(application)
+  const imeEnter = useImeEnterGestureOwnership()
   const isPreset =
     preset !== null &&
     (application.id === preset.id ||
@@ -184,8 +190,17 @@ function OpenInMenuRow({
                 onChange={(event) =>
                   onChange({ label: event.target.value, command: application.command })
                 }
-                onBlur={onCommit}
+                onCompositionStart={() => imeEnter.setComposing(true)}
+                onCompositionEnd={() => imeEnter.setComposing(false)}
+                onKeyUp={imeEnter.onKeyUp}
+                onBlur={() => {
+                  imeEnter.reset()
+                  onCommit()
+                }}
                 onKeyDown={(event) => {
+                  if (imeEnter.ownsKeyDown(event) || isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     onCommit()
                     event.currentTarget.blur()
@@ -212,8 +227,17 @@ function OpenInMenuRow({
               onChange={(event) =>
                 onChange({ label: application.label, command: event.target.value })
               }
-              onBlur={onCommit}
+              onCompositionStart={() => imeEnter.setComposing(true)}
+              onCompositionEnd={() => imeEnter.setComposing(false)}
+              onKeyUp={imeEnter.onKeyUp}
+              onBlur={() => {
+                imeEnter.reset()
+                onCommit()
+              }}
               onKeyDown={(event) => {
+                if (imeEnter.ownsKeyDown(event) || isImeCompositionKeyDown(event)) {
+                  return
+                }
                 if (event.key === 'Enter') {
                   onCommit()
                   event.currentTarget.blur()

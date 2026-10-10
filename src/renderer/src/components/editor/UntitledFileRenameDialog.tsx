@@ -13,6 +13,10 @@ import {
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -24,6 +28,7 @@ type UntitledFileRenameDialogProps = {
   onConfirm: (newRelativePath: string) => void
 }
 
+/** Prompts for a name and folder to save an untitled file under, reseeding the drafts on each open. */
 export function UntitledFileRenameDialog({
   open,
   currentName,
@@ -37,6 +42,7 @@ export function UntitledFileRenameDialog({
   const [name, setName] = useState(baseName)
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
+  const imeEnter = useImeEnterGestureOwnership()
   const nameInputRef = useRef<HTMLInputElement>(null)
   const focusFrameRef = useRef<number | null>(null)
   const seededOpenStateRef = useRef({ open: false, baseName, worktreePath })
@@ -156,7 +162,14 @@ export function UntitledFileRenameDialog({
                   setName(e.target.value)
                   setError(null)
                 }}
+                onCompositionStart={() => imeEnter.setComposing(true)}
+                onCompositionEnd={() => imeEnter.setComposing(false)}
+                onKeyUp={imeEnter.onKeyUp}
+                onBlur={imeEnter.reset}
                 onKeyDown={(e) => {
+                  if (imeEnter.ownsKeyDown(e) || isImeCompositionKeyDown(e)) {
+                    return
+                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleSubmit()
@@ -185,7 +198,14 @@ export function UntitledFileRenameDialog({
                   setDir(e.target.value)
                   setError(null)
                 }}
+                onCompositionStart={() => imeEnter.setComposing(true)}
+                onCompositionEnd={() => imeEnter.setComposing(false)}
+                onKeyUp={imeEnter.onKeyUp}
+                onBlur={imeEnter.reset}
                 onKeyDown={(e) => {
+                  if (imeEnter.ownsKeyDown(e) || isImeCompositionKeyDown(e)) {
+                    return
+                  }
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleSubmit()
