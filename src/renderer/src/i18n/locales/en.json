@@ -3145,7 +3145,6 @@
             "efb3843e75": "Filter and sort workspaces",
             "93b7381d50": "Filters",
             "a615e24679": "Sort",
-            "4cc5b73efe": "Finding workspaces...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
             "searchPlaceholder": "Search workspaces",
             "ageFilter": "Age",
@@ -3157,7 +3156,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "7b7bde5181": "Checked workspaces so far: {{value0}}",
             "deletingCount": "Deleting workspaces: {{value0}}",
             "deleteCount": "Delete workspaces: {{value0}}?",
             "selectedForDeletionCount": "Selected for deletion: {{value0}}",
@@ -3640,7 +3638,8 @@
             "ec2adf093e": "Launch {{value0}} in a new terminal",
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
-            "8dea9b5cdf": "No enabled agents"
+            "8dea9b5cdf": "No enabled agents",
+            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -5568,7 +5567,9 @@
           "b79b39d865": "Remove Project",
           "removeDescriptionSsh": "This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.",
           "removeDescriptionLocal": "This only removes {{name}} from Orca. It is still on your disk.",
-          "removeDescriptionVmRecipe": "This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted."
+          "removeDescriptionVmRecipe": "This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.",
+          "openTerminalWarningOne": "1 open terminal in this project will be closed.",
+          "openTerminalWarningMany": "{{count}} open terminals in this project will be closed."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Reveal active workspace"
@@ -11682,14 +11683,14 @@
           "pathGroup": "How the phone reaches this computer",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.",
-          "signInRequired": "Relay only — LAN does not need an account.",
           "relayUnavailable": "Orca Relay isn’t available in this build. Use LAN.",
           "signIn": "Sign in for Relay",
           "signInAgain": "Sign in again for Relay",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
-          "relayCell": "Relay cell"
+          "relayCell": "Relay cell",
+          "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account."
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
@@ -11805,7 +11806,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Terminal URL clicks",
-          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal.",
           "descriptionV2": "Control clicks on detected URLs printed in terminal panes and chat transcripts.",
           "plainClickLabel": "Plain click",
           "plainClickDescription": "Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly.",
@@ -14741,7 +14741,9 @@
           "retry": "Retry Relay",
           "copyDiagnostics": "Copy diagnostics",
           "reconnectTitle": "Your Orca account session expired.",
-          "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi."
+          "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "notEntitledTitle": "Orca Relay isn’t included with this Orca account.",
+          "rateLimitedBody": "Orca Relay is busy. Wait a minute and retry, or use LAN to pair over Tailscale or the same Wi‑Fi."
         }
       },
       "gitlab": {
@@ -17861,6 +17863,10 @@
         "preloadApi": {
           "cursorAccounts": {
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
+          },
+          "accounts": {
+            "signInHostOnly": "Adding or re-signing an account is only available in the desktop app on the computer running Orca.",
+            "claudeWslDefaultUnavailable": "Switching a WSL lane back to the system default is only available in the desktop app."
           }
         }
       },
@@ -18727,6 +18733,11 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others",
           "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "CopyTabIdMenuItem": {
+          "copied": "Tab ID copied",
+          "failed": "Could not copy tab ID",
+          "copy": "Copy Tab ID"
         }
       }
     },
@@ -19325,6 +19336,7 @@
       "sortResultsAriaLabel": "Sort results: {{value0}}",
       "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
+      "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
       "noService": "Search is unavailable on this computer. It may need an Orca update or a runtime with search support.",
       "unsupportedAgent": "This computer does not support history search for the selected agent. Update Orca on that computer or select another agent.",

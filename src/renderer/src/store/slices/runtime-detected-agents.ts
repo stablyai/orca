@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   callRuntimeRpc,
+  getRuntimeEnvironmentStatus,
   RuntimeRpcCallError,
   runtimeEnvironmentSupportsCapability
 } from '@/runtime/runtime-rpc-client'
@@ -21,6 +22,8 @@ export type RuntimeDetectedAgentsSlice = {
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRuntimeAgents: Record<string, boolean>
   isRefreshingRuntimeAgents: Record<string, boolean>
+  /** Keys whose host is too old to list that workspace's agents; their list is empty. */
+  runtimeAgentDetectionNeedsServerUpdate: Record<string, boolean>
   ensureRuntimeDetectedAgents: (
     environmentId: string,
     worktreeId?: string | null
@@ -48,10 +51,17 @@ function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
 }
 
+export class RuntimeAgentDetectionNeedsServerUpdateError extends Error {
+  constructor() {
+    super("Update Orca on this server to list this workspace's agents.")
+    this.name = 'RuntimeAgentDetectionNeedsServerUpdateError'
+  }
+}
+
 /**
  * Sends `preflight.detectAgents` / `refreshAgents` scoped to a workspace. A host without the
- * workspace-scoped capability would discard the params and answer with its own default, so it is
- * asked for exactly that. The host default goes out synchronously, as it always has.
+ * workspace-scoped capability can only answer its own default, which is the workspace's list only
+ * on a known non-Windows host. The host default goes out synchronously, as it always has.
  */
 export function callRuntimeAgentDetection<T>(
   environmentId: string,
@@ -61,10 +71,22 @@ export function callRuntimeAgentDetection<T>(
   if (!worktreeId) {
     return call(undefined)
   }
-  return runtimeEnvironmentSupportsCapability(
-    environmentId,
-    PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
-  ).then((supported) => call(supported ? { worktreeId } : undefined))
+  const capability = PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
+  return runtimeEnvironmentSupportsCapability(environmentId, capability).then(async (supported) => {
+    if (supported) {
+      return call({ worktreeId })
+    }
+    // Why: a fresh status both reports the platform and catches an in-place upgrade.
+    const status = await getRuntimeEnvironmentStatus(environmentId)
+    if (status.capabilities?.includes(capability)) {
+      return call({ worktreeId })
+    }
+    // Why: an old Windows host's default omits a WSL workspace's agents; an absent platform may be one.
+    if (!status.hostPlatform || status.hostPlatform === 'win32') {
+      throw new RuntimeAgentDetectionNeedsServerUpdateError()
+    }
+    return call(undefined)
+  })
 }
 
 export function _getRuntimeDetectPromiseCountForTest(): number {
@@ -104,18 +126,41 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
       const isRefreshingRuntimeAgents = withoutKeys(s.isRefreshingRuntimeAgents, dropKey)
+      const runtimeAgentDetectionNeedsServerUpdate = withoutKeys(
+        s.runtimeAgentDetectionNeedsServerUpdate,
+        dropKey
+      )
       return runtimeDetectedAgentIds === s.runtimeDetectedAgentIds &&
         isDetectingRuntimeAgents === s.isDetectingRuntimeAgents &&
-        isRefreshingRuntimeAgents === s.isRefreshingRuntimeAgents
+        isRefreshingRuntimeAgents === s.isRefreshingRuntimeAgents &&
+        runtimeAgentDetectionNeedsServerUpdate === s.runtimeAgentDetectionNeedsServerUpdate
         ? s
-        : { runtimeDetectedAgentIds, isDetectingRuntimeAgents, isRefreshingRuntimeAgents }
+        : {
+            runtimeDetectedAgentIds,
+            isDetectingRuntimeAgents,
+            isRefreshingRuntimeAgents,
+            runtimeAgentDetectionNeedsServerUpdate
+          }
     })
+  }
+
+  // Commits a settled detection; an old host commits an empty list, never its default.
+  const commitDetection = (key: string, agents: TuiAgent[], needsServerUpdate: boolean): void => {
+    set((s) => ({
+      runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: agents },
+      isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
+      isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: false },
+      runtimeAgentDetectionNeedsServerUpdate: needsServerUpdate
+        ? { ...s.runtimeAgentDetectionNeedsServerUpdate, [key]: true }
+        : withoutKeys(s.runtimeAgentDetectionNeedsServerUpdate, (k) => k === key)
+    }))
   }
 
   return {
     runtimeDetectedAgentIds: {},
     isDetectingRuntimeAgents: {},
     isRefreshingRuntimeAgents: {},
+    runtimeAgentDetectionNeedsServerUpdate: {},
 
     ensureRuntimeDetectedAgents: (environmentId: string, worktreeId?: string | null) => {
       const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
@@ -148,18 +193,20 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
           // while the detect was in flight — otherwise it re-adds a stale entry
           // that retainRuntimeDetectedAgents just pruned.
           if (runtimeDetectPromises.get(key) === pending) {
-            set((s) => ({
-              runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: typed },
-              isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false }
-            }))
+            commitDetection(key, typed, false)
           }
           return typed
         })
-        .catch((): TuiAgent[] => {
+        .catch((error: unknown): TuiAgent[] => {
           // Why: a remote runtime may be disconnected or version-incompatible.
           // Keep the menu retryable instead of pinning a failed probe forever.
           // Same in-flight guard as the .then() above.
-          if (runtimeDetectPromises.get(key) === pending) {
+          if (runtimeDetectPromises.get(key) !== pending) {
+            return []
+          }
+          if (error instanceof RuntimeAgentDetectionNeedsServerUpdateError) {
+            commitDetection(key, [], true)
+          } else {
             set((s) => ({
               isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false }
             }))
@@ -207,15 +254,18 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
           // Why: same guard as ensureRuntimeDetectedAgents — if the environment
           // was retained out mid-refresh, don't re-add a pruned entry.
           if (runtimeRefreshPromises.get(key) === pending) {
-            set((s) => ({
-              runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: typed },
-              isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
-              isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: false }
-            }))
+            commitDetection(key, typed, false)
           }
           return typed
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          if (
+            error instanceof RuntimeAgentDetectionNeedsServerUpdateError &&
+            runtimeRefreshPromises.get(key) === pending
+          ) {
+            commitDetection(key, [], true)
+            return []
+          }
           // Why: a disconnected runtime must keep Refresh retryable and must not
           // wipe the last known agent list.
           if (runtimeRefreshPromises.get(key) === pending) {

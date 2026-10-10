@@ -33,9 +33,15 @@ afterEach(() => {
   }
 })
 
-function fixture() {
-  const packageDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-process-host-build-')))
-  temporaryRoots.push(packageDir)
+function fixture(onTestFinished) {
+  const root = mkdtempSync(join(tmpdir(), 'orca-process-host-build-'))
+  if (onTestFinished) {
+    onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+  }
+  const packageDir = realpathSync(root)
+  if (!onTestFinished) {
+    temporaryRoots.push(packageDir)
+  }
   mkdirSync(join(packageDir, 'src'))
   mkdirSync(join(packageDir, 'node_modules'))
   symlinkSync(realCompilerDir, join(packageDir, 'node_modules', 'typescript'), 'junction')
@@ -93,9 +99,9 @@ setTimeout(() => {}, 17_000)
   )
 }
 
-async function build(packageDir) {
+async function build(packageDir, expectResult = expect) {
   const result = await runBuild(packageDir)
-  expect(result).toMatchObject({ code: 0, stderr: '' })
+  expectResult(result).toMatchObject({ code: 0, stderr: '' })
   return result
 }
 
@@ -276,29 +282,31 @@ while (!existsSync(${JSON.stringify(finished)}) || reads === 0) {
     expect(readFileSync(join(packageDir, 'dist', 'internal.js'), 'utf8')).toContain('value = 9')
   })
 
-  it.each([
+  it.concurrent.for([
     ['taken over by another build', true],
     ['removed', false]
   ])(
     'fails without publishing when the held build lock is %s',
-    async (_label, recreateLock) => {
-      const packageDir = fixture()
-      await build(packageDir)
+    { timeout: 30_000 },
+    async ([_label, recreateLock], { expect: expectResult, onTestFinished }) => {
+      const packageDir = fixture(onTestFinished)
+      await build(packageDir, expectResult)
       const before = distSnapshot(packageDir)
       const entry = readFileSync(join(packageDir, 'dist', 'entry.js'), 'utf8')
       installLockStealingCompiler(packageDir, { recreateLock })
 
       const result = await runBuild(packageDir)
 
-      expect(result.code).toBe(1)
-      expect(result.stderr).toContain('build lock was compromised')
-      expect(distSnapshot(packageDir)).toEqual(before)
-      expect(readFileSync(join(packageDir, 'dist', 'entry.js'), 'utf8')).toBe(entry)
+      expectResult(result.code).toBe(1)
+      expectResult(result.stderr).toContain('build lock was compromised')
+      expectResult(distSnapshot(packageDir)).toEqual(before)
+      expectResult(readFileSync(join(packageDir, 'dist', 'entry.js'), 'utf8')).toBe(entry)
       // The other build's lock is left in place.
-      expect(existsSync(join(packageDir, '.dist-build.lock'))).toBe(recreateLock)
-      expect(leftovers(packageDir).filter((name) => name.startsWith('.dist-staging-'))).toEqual([])
-    },
-    30_000
+      expectResult(existsSync(join(packageDir, '.dist-build.lock'))).toBe(recreateLock)
+      expectResult(
+        leftovers(packageDir).filter((name) => name.startsWith('.dist-staging-'))
+      ).toEqual([])
+    }
   )
 
   it('reclaims staging directories abandoned by a killed build', async () => {

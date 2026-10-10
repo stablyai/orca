@@ -2931,7 +2931,6 @@
             "efb3843e75": "Filtrar y ordenar espacios de trabajo",
             "93b7381d50": "Filtros",
             "a615e24679": "Ordenar",
-            "4cc5b73efe": "Buscando espacios de trabajo inactivos...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} escaneados",
             "searchPlaceholder": "Buscar espacios de trabajo",
             "ageFilter": "Edad",
@@ -2943,7 +2942,6 @@
             "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
             "4c2990886e": "{{value0}}/{{value1}} eliminados",
             "86ba852118": "{{value0}}, {{value1}} fallidos",
-            "7b7bde5181": "Espacios de trabajo comprobados hasta ahora: {{value0}}",
             "deletingCount": "Eliminando espacios de trabajo: {{value0}}",
             "deleteCount": "¿Eliminar espacios de trabajo: {{value0}}?",
             "selectedForDeletionCount": "Seleccionados para eliminar: {{value0}}",
@@ -3426,7 +3424,8 @@
             "ec2adf093e": "Iniciar {{value0}} en un nuevo terminal",
             "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
             "e518f544b1": "No se detectaron agentes",
-            "8dea9b5cdf": "No hay agentes habilitados"
+            "8dea9b5cdf": "No hay agentes habilitados",
+            "needsServerUpdate": "Actualiza Orca en este servidor para ver los agentes de este espacio de trabajo"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -5317,7 +5316,9 @@
           "b79b39d865": "Quitar proyecto",
           "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
           "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco.",
-          "removeDescriptionVmRecipe": "Esto elimina {{name}} de Orca. Su receta de VM determina si el entorno y sus archivos se eliminan permanentemente."
+          "removeDescriptionVmRecipe": "Esto elimina {{name}} de Orca. Su receta de VM determina si el entorno y sus archivos se eliminan permanentemente.",
+          "openTerminalWarningOne": "Se cerrará 1 terminal abierto en este proyecto.",
+          "openTerminalWarningMany": "Se cerrarán {{count}} terminales abiertos en este proyecto."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Mostrar espacio de trabajo activo"
@@ -11458,7 +11459,6 @@
           "pathGroup": "Cómo llega el teléfono a este ordenador",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. El inicio de sesión solo es necesario para Relay.",
-          "signInRequired": "Solo Relay — LAN no necesita una cuenta.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN",
@@ -12252,7 +12252,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Clics en la URL del terminal",
-          "description": "Muestra las acciones disponibles al hacer clic en un enlace en la terminal o en una transcripción de chat. Desactive esto para requerir {{modifier}}-hacer clic en la terminal.",
           "descriptionV2": "Controle los clics en las URL detectadas impresas en paneles de terminales y transcripciones de chat.",
           "plainClickLabel": "clic simple",
           "plainClickDescription": "Elija si un clic izquierdo muestra acciones, abre la URL o la deja en el terminal. Cmd/Ctrl-clic siempre se abre directamente.",
@@ -19337,6 +19336,7 @@
       "sortResultsAriaLabel": "Ordenar resultados: {{value0}}",
       "consent": "¿Activar la búsqueda de texto completo? Orca crea un índice en esta computadora a partir de las transcripciones locales de los agentes, incluidas conversaciones completas y hasta 3.072 caracteres por salida de herramienta. El contenido no se censura. Los clientes emparejados autenticados pueden buscarlo.",
       "remoteDisabled": "La búsqueda está desactivada en esta computadora. Activa la indexación de transcripciones en esa computadora para buscar sus sesiones.",
+      "titleOnly": "La búsqueda de texto completo está desactivada en esta computadora, así que solo se buscan los títulos de las sesiones.",
       "notReady": "El índice de búsqueda aún no está listo. Reintenta en un momento.",
       "noService": "La búsqueda no está disponible en esta computadora. Puede que necesite una actualización de Orca o un entorno de ejecución compatible con la búsqueda.",
       "unsupportedAgent": "Esta computadora no admite la búsqueda en el historial del agente seleccionado. Actualiza Orca en esa computadora o selecciona otro agente.",

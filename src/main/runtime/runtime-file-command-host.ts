@@ -173,17 +173,3 @@ export function isMobileBinaryPath(relativePath: string): boolean {
   }
   return MOBILE_BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
 }
-
-export function isRuntimeDirectoryEntry(entry: {
-  isDirectory(): boolean
-  isSymbolicLink(): boolean
-}): boolean {
-  // Why: listings are passive UI reads; don't stat symlink targets here (explicit open/expand resolves them).
-  if (entry.isSymbolicLink()) {
-    return false
-  }
-  if (entry.isDirectory()) {
-    return true
-  }
-  return false
-}

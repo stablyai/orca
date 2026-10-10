@@ -32,8 +32,17 @@ export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: str
   return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
 }
 
+type HostScopedWorktreeRef = { id: string; hostId?: string }
+
+type RepoWorktreeCatalog = {
+  worktreesByRepo: Readonly<Record<string, readonly HostScopedWorktreeRef[] | undefined>>
+  detectedWorktreesByRepo: Readonly<
+    Record<string, { worktrees: readonly HostScopedWorktreeRef[] } | undefined>
+  >
+}
+
 export function getKnownRepoWorktreeIds(
-  state: AppState,
+  state: RepoWorktreeCatalog,
   projectId: string,
   hostId?: string
 ): string[] {
@@ -49,6 +58,26 @@ export function getKnownRepoWorktreeIds(
     }
   }
   return [...ids]
+}
+
+/** Terminal tabs that removing this project's host row will close. */
+export function countOpenRepoTerminalTabs(
+  state: RepoWorktreeCatalog & {
+    tabsByWorktree: Readonly<Record<string, readonly { id: string }[] | undefined>>
+    ptyIdsByTabId: Readonly<Record<string, readonly string[] | undefined>>
+  },
+  projectId: string,
+  hostId: string
+): number {
+  let count = 0
+  for (const worktreeId of getKnownRepoWorktreeIds(state, projectId, hostId)) {
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      if ((state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0) {
+        count += 1
+      }
+    }
+  }
+  return count
 }
 
 export function createRepoRemovalActions(

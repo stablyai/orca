@@ -17,11 +17,6 @@ export function unnamedSenderLabel(): string {
   return translate('components.native-chat.agentMessage.unnamedSender', 'an agent')
 }
 
-/** The name recorded on the message. */
-export function agentMessageSenderLabel(sender: AgentMessageSender): string {
-  return sender.name ?? unnamedSenderLabel()
-}
-
 function findChatTab(
   state: AppState,
   sessionId: string,

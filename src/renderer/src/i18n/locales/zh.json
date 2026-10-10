@@ -2931,7 +2931,6 @@
             "efb3843e75": "筛选并排序工作区",
             "93b7381d50": "筛选",
             "a615e24679": "排序",
-            "4cc5b73efe": "正在查找非活动工作区...",
             "5bf2e88480": "已扫描 {{value0}}/{{value1}} 个{{value2}}",
             "searchPlaceholder": "搜索工作区",
             "ageFilter": "时间",
@@ -2943,7 +2942,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "7b7bde5181": "到目前为止已检查工作区：{{value0}}",
             "deletingCount": "正在删除工作区：{{value0}}",
             "deleteCount": "删除工作区：{{value0}}？",
             "selectedForDeletionCount": "已选择删除：{{value0}}",
@@ -3426,7 +3424,8 @@
             "ec2adf093e": "在新终端中启动 {{value0}}",
             "465e432ef1": "无法为 {{value0}} 构建启动命令。",
             "e518f544b1": "未检测到智能体",
-            "8dea9b5cdf": "没有启用智能体"
+            "8dea9b5cdf": "没有启用智能体",
+            "needsServerUpdate": "请更新此服务器上的 Orca 以列出此工作区的智能体"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -5298,7 +5297,9 @@
           "b79b39d865": "删除项目",
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复。",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在您的磁盘上。",
-          "removeDescriptionVmRecipe": "这会从 Orca 中删除 {{name}}。其VM配方决定是否永久删除环境及其文件。"
+          "removeDescriptionVmRecipe": "这会从 Orca 中删除 {{name}}。其VM配方决定是否永久删除环境及其文件。",
+          "openTerminalWarningOne": "此项目中 1 个打开的终端将被关闭。",
+          "openTerminalWarningMany": "此项目中 {{count}} 个打开的终端将被关闭。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "显示活动工作区"
@@ -11458,7 +11459,6 @@
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。仅 Relay 需要登录。",
-          "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
           "signInAgain": "重新登录以使用 Relay",
           "localTitle": "局域网",
@@ -11968,7 +11968,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "终端 URL 点击次数",
-          "description": "单击终端或聊天记录中的链接时显示可用的操作。关闭此功能需要在终端中单击 {{modifier}}。",
           "descriptionV2": "控制点击终端窗格和聊天记录中打印的已检测的 URL。",
           "plainClickLabel": "简单的点击",
           "plainClickDescription": "选择左键单击是显示操作、打开 URL 还是将其留给终端。 Cmd/Ctrl-单击始终直接打开。",
@@ -19250,6 +19249,7 @@
       "sortResultsAriaLabel": "排序结果：{{value0}}",
       "consent": "启用全文搜索吗？ Orca 根据本地智能体记录在此计算机上构建索引，包括完整对话和每个工具输出最多 3,072 个字符。内容未经过编辑。经过身份验证的配对客户端可以搜索它。",
       "remoteDisabled": "此计算机上已禁用搜索。在该计算机上启用转录索引以搜索其会话。",
+      "titleOnly": "此计算机上的全文搜索已关闭，因此仅匹配会话标题。",
       "notReady": "搜索索引尚未准备好。稍后再试。",
       "noService": "在此计算机上无法进行搜索。它可能需要 Orca 更新或具有搜索支持的运行时。",
       "failed": "无法搜索这台计算机。检查其连接并重试。",

@@ -1,11 +1,6 @@
 import { resolve as resolvePath } from 'node:path'
-import type {
-  ComputerAppQuery,
-  RuntimeWorktreeListResult,
-  RuntimeWorktreeRecord
-} from '../shared/runtime-types'
+import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
 import {
-  isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
 } from '../shared/cross-platform-path'
@@ -13,6 +8,11 @@ import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import {
+  getCallerExecutionHostId,
+  resolveCallerPaneWorktreeSelector,
+  selectEnclosingWorktreeOnHost
+} from './caller-host-worktree-selection'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -107,36 +107,25 @@ export async function resolveCurrentWorktreeSelector(
 ): Promise<string> {
   assertLocalCwdWorktreeSelector('current', client)
 
-  const currentPath = resolvePath(cwd)
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
-  let enclosingWorktree: RuntimeWorktreeRecord | undefined
-  let enclosingPathLength = -1
-  for (const worktree of worktrees.result.worktrees) {
-    const worktreePath = resolvePath(worktree.path)
-    if (
-      !isPathInsideOrEqual(worktreePath, currentPath) ||
-      worktreePath.length <= enclosingPathLength
-    ) {
-      continue
-    }
-    enclosingWorktree = worktree
-    enclosingPathLength = worktreePath.length
-  }
-
-  if (!enclosingWorktree) {
-    throw new RuntimeClientError(
-      'selector_not_found',
-      `No Orca-managed worktree contains the current directory: ${currentPath}`
-    )
-  }
-
   // Why: users expect "active/current" to mean the enclosing managed worktree
-  // even from nested subdirectories. Resolve to the concrete runtime id here:
+  // even from nested subdirectories. Resolve to the concrete runtime row here:
   // duplicate repo registrations can expose the same Git worktree path, and a
   // path selector would throw selector_ambiguous after losing the repo id.
-  return `id:${enclosingWorktree.id}`
+  const selector = selectEnclosingWorktreeOnHost(
+    worktrees.result.worktrees,
+    cwd,
+    getCallerExecutionHostId()
+  )
+  if (!selector) {
+    throw new RuntimeClientError(
+      'selector_not_found',
+      `No Orca-managed worktree contains the current directory: ${resolvePath(cwd)}`
+    )
+  }
+  return selector
 }
 
 export async function getOptionalWorktreeSelector(
@@ -301,7 +290,10 @@ export async function getEmulatorWorktreeSelector(
   }
   const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
   if (terminalWorktreeId?.trim()) {
-    return terminalWorktreeId
+    const scoped = await resolveCallerPaneWorktreeSelector(terminalWorktreeId, client)
+    if (scoped) {
+      return scoped
+    }
   }
   const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
   if (folderWorkspaceId?.startsWith('folder:')) {
@@ -323,7 +315,11 @@ export async function getEmulatorCommandTarget(
   const emulator = getOptionalStringFlag(flags, 'emulator')
   const worktree = await getEmulatorWorktreeSelector(flags, cwd, client)
   if (device || emulator) {
-    return { device: device || undefined, emulator: emulator || undefined, worktree }
+    return {
+      device: device || undefined,
+      emulator: emulator || undefined,
+      worktree
+    }
   }
   return { worktree }
 }

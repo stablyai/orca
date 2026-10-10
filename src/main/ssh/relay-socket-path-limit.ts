@@ -30,10 +30,6 @@ export function remoteSocketPathFitsLimit(host: RemoteHostPlatform, sockPath: st
 /** Fixed-length, per-uid base. `/tmp` is the only POSIX directory whose length is not user-dependent. */
 export const SHORT_RELAY_SOCKET_DIR_PREFIX = '/tmp/.orca-relay-'
 
-export function shortRelaySocketDirForUid(uid: string): string {
-  return `${SHORT_RELAY_SOCKET_DIR_PREFIX}${uid}`
-}
-
 /**
  * The version segment the relocated socket lives under, named to match the version
  * directories in `$HOME/.orca-remote` so one sweep pattern covers both bases.

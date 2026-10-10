@@ -40,11 +40,8 @@ import {
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
-import {
-  codexBackgroundTaskStops,
-  startCodexTerminalStopProbe,
-  stopCodexBackgroundCommands
-} from './codex-background-terminals'
+import { startCodexTerminalStopProbe } from './codex-background-terminals'
+import { codexBackgroundTaskStops, stopCodexBackgroundTasks } from './codex-background-task-stops'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
@@ -194,7 +191,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
-  ) => stopCodexBackgroundCommands(this.sessions, input, this.deps.requestTimeoutMs)
+  ) => stopCodexBackgroundTasks(this.sessions, input, this.deps.requestTimeoutMs)
 
   bindPromptItemId = (
     sessionId: string,

@@ -339,7 +339,7 @@ describe('fetchReposForAllHosts generation', () => {
     expect(store.getState().folderWorkspacePathStatuses).toEqual({})
   })
 
-  it('applies a targeted repo catalog that started before a reconnect', async () => {
+  it('drops a targeted repo catalog that started before a reconnect', async () => {
     const { promise: repoList, resolve: resolveRepoList } = Promise.withResolvers<unknown>()
     const { promise: repoListStarted, resolve: markRepoListStarted } = Promise.withResolvers<void>()
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -375,11 +375,10 @@ describe('fetchReposForAllHosts generation', () => {
     })
     await pending
 
-    // Current contract: targeted fetchRepos has only catalog-generation fencing.
-    expect(store.getState().repos[0]?.path).toBe(staleRemoteRepo.path)
+    expect(store.getState().repos[0]?.path).toBe(freshRemoteRepo.path)
   })
 
-  it('applies an all-host repo result that started before a reconnect', async () => {
+  it('drops an all-host repo result that started before a reconnect (#20811)', async () => {
     const { promise: repoList, resolve: resolveRepoList } = Promise.withResolvers<unknown>()
     const { promise: repoListStarted, resolve: markRepoListStarted } = Promise.withResolvers<void>()
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -415,10 +414,9 @@ describe('fetchReposForAllHosts generation', () => {
     })
     await pending
 
-    // Current contract: all-host remote legs do not carry the reconnect fence.
     expect(
       store.getState().repos.find((repo) => repo.executionHostId === 'runtime:env-1')?.path
-    ).toBe(staleRemoteRepo.path)
+    ).toBe(freshRemoteRepo.path)
   })
 
   it('drops a Connect-flow catalog and visibility defaults from before a reconnect', async () => {

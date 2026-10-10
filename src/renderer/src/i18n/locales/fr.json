@@ -3036,7 +3036,6 @@
             "efb3843e75": "Filtrer et trier les espaces de travail",
             "93b7381d50": "Filtres",
             "a615e24679": "Trier",
-            "4cc5b73efe": "Recherche des espaces de travail...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} analysés",
             "searchPlaceholder": "Rechercher des espaces de travail",
             "ageFilter": "Âge",
@@ -3048,7 +3047,6 @@
             "1d3503357d": "Vous pouvez fermer cette fenêtre et revenir pendant que la suppression continue.",
             "4c2990886e": "{{value0}}/{{value1}} supprimés",
             "86ba852118": "{{value0}}, {{value1}} en échec",
-            "7b7bde5181": "Espaces de travail vérifiés jusqu'à présent : {{value0}}",
             "deletingCount": "Suppression des espaces de travail : {{value0}}",
             "deleteCount": "Supprimer les espaces de travail : {{value0}} ?",
             "selectedForDeletionCount": "Sélectionnés pour suppression : {{value0}}",
@@ -3531,7 +3529,8 @@
             "ec2adf093e": "Lancer {{value0}} dans un nouveau terminal",
             "465e432ef1": "Impossible de construire la commande de lancement pour {{value0}}.",
             "e518f544b1": "Aucun agent détecté",
-            "8dea9b5cdf": "Aucun agent activé"
+            "8dea9b5cdf": "Aucun agent activé",
+            "needsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de cet espace de travail"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
@@ -5438,7 +5437,9 @@
           "b79b39d865": "Retirer le projet",
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
-          "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés."
+          "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "openTerminalWarningOne": "1 terminal ouvert dans ce projet sera fermé.",
+          "openTerminalWarningMany": "{{count}} terminaux ouverts dans ce projet seront fermés."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Révéler l'espace de travail actif"
@@ -11540,7 +11541,6 @@
           "pathGroup": "Comment le téléphone joint cet ordinateur",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Le téléphone peut être en données mobiles ou sur n'importe quel Wi‑Fi. Connexion requise uniquement pour Relay.",
-          "signInRequired": "Relay uniquement — le LAN n'a pas besoin de compte.",
           "relayUnavailable": "Orca Relay n'est pas disponible dans ce build. Utilisez le LAN.",
           "signIn": "Se connecter pour Relay",
           "signInAgain": "Se reconnecter pour Relay",
@@ -11663,7 +11663,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Afficher les actions de lien du terminal",
-          "description": "Affiche les actions disponibles quand vous cliquez sur un lien du terminal. Désactivez pour exiger un {{modifier}}+clic.",
           "descriptionV2": "Contrôlez les clics sur les URL détectées imprimées dans les volets du terminal et les transcriptions de discussion.",
           "plainClickLabel": "Clic simple",
           "plainClickDescription": "Choisissez si un clic gauche affiche les actions, ouvre l'URL ou la laisse au terminal. Cmd/Ctrl-clic s'ouvre toujours directement.",
@@ -19251,6 +19250,7 @@
       "sortResultsAriaLabel": "Trier les résultats : {{value0}}",
       "consent": "Activer la recherche en texte intégral ? Orca crée un index sur cet ordinateur à partir des transcriptions des agents locaux, comprenant des conversations complètes et jusqu'à 3 072 caractères par sortie d'outil. Le contenu n'est pas expurgé. Les clients couplés authentifiés peuvent le rechercher.",
       "remoteDisabled": "La recherche est désactivée sur cet ordinateur. Activez l’indexation des transcriptions sur cet ordinateur pour rechercher ses sessions.",
+      "titleOnly": "La recherche en texte intégral est désactivée sur cet ordinateur ; seuls les titres des sessions sont pris en compte.",
       "notReady": "L'index de recherche n'est pas encore prêt. Réessayez sous peu.",
       "noService": "La recherche n'est pas disponible sur cet ordinateur. Il peut nécessiter une mise à jour Orca ou un runtime avec prise en charge de la recherche.",
       "failed": "Impossible de rechercher cet ordinateur. Vérifiez sa connexion et réessayez.",

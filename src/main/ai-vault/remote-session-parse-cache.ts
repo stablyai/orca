@@ -22,10 +22,6 @@ const cache = new Map<string, RemoteSessionParseCacheEntry>()
 
 export type RemoteSessionParseStats = { reused: number; parsed: number }
 
-export function createRemoteSessionParseStats(): RemoteSessionParseStats {
-  return { reused: 0, parsed: 0 }
-}
-
 export function resetRemoteSessionParseCacheForTests(): void {
   cache.clear()
 }

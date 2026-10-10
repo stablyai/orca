@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
-import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import {
   beginHugeRepoWarningProbe,
   hasDismissedHugeRepoWarning,
@@ -47,9 +47,13 @@ export function useSourceControlStatusRefresh({
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
-  const localIgnoreBlocked = isLocalPathOpenBlocked(activeRepoSettings, {
-    connectionId: activeConnectionId
-  })
+  // Why: activeRepoSettings is pinned to the repo owner's runtime.
+  const localIgnoreBlocked = isLocalPathOpenBlocked(
+    getLocalPathOpenOwnerForRoute({
+      runtimeEnvironmentId: activeRepoSettings?.activeRuntimeEnvironmentId,
+      connectionId: activeConnectionId
+    })
+  )
   const refreshActiveGitStatus = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       if (!activeWorktreeId || !worktreePath || isFolder) {

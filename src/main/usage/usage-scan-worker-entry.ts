@@ -5,7 +5,11 @@ import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import { scanMuseUsageFiles } from '../muse-usage/scanner'
 import { normalizeMuseUsagePersistedFiles } from '../muse-usage/persisted-file-normalization'
 import { normalizeOpenCodeUsagePersistedDatabases } from '../opencode-usage/persisted-database-normalization'
-import type { ClaudeUsagePersistedFile } from '../claude-usage/types'
+import {
+  readClaudeUsageSourceCache,
+  splitClaudeUsageCacheFile,
+  persistClaudeUsageSourceCache
+} from '../claude-usage/persisted-source-cache'
 import type { CodexUsagePersistedFile } from '../codex-usage/types'
 import type { OpenCodeUsagePersistedDatabase } from '../opencode-usage/types'
 import type { MuseUsagePersistedFile } from '../muse-usage/types'
@@ -73,7 +77,12 @@ async function runRequest(
   onFilesScanned: (count: number) => void
 ): Promise<UsageScanWorkerValue> {
   if (request.operation === 'splitCacheFile') {
-    return { operation: 'splitCacheFile', ...(await splitUsageCacheFile(request)) }
+    return {
+      operation: 'splitCacheFile',
+      ...(await (request.providerId === 'claude'
+        ? splitClaudeUsageCacheFile(request)
+        : splitUsageCacheFile(request)))
+    }
   }
   return runScan(request, onFilesScanned)
 }
@@ -86,13 +95,19 @@ async function runScan(
   // provider's own record type, so nothing here needs a type assertion.
   switch (request.providerId) {
     case 'claude': {
+      const previous = await readClaudeUsageSourceCache(request.sourceCache)
       const result = await scanClaudeUsageFiles(
         request.worktrees,
-        await readUsageSourceCache<ClaudeUsagePersistedFile>(request.sourceCache),
+        previous.sources,
         onFilesScanned,
-        request.profileDirs
+        request.profileDirs,
+        previous.verifiedSources
       )
-      await persistSourceCache(request.sourceCache, result.processedFiles)
+      try {
+        await persistClaudeUsageSourceCache(request.sourceCache, result.processedFiles, previous)
+      } catch (error) {
+        console.warn('[usage-scan] Could not persist the per-source usage cache:', error)
+      }
       return {
         operation: 'scan',
         providerId: 'claude',

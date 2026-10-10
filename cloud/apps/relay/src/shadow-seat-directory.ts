@@ -1,7 +1,7 @@
 import type { RelayRegion } from '@orca-cloud/relay-contract'
 import { z } from 'zod'
 import type { RelayConfig } from './config.js'
-import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
+import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
 
 // Step 3: each director polls every cell's seat feed and keeps who is seated
 // where in memory. It decides nothing; readers only compare and report.
@@ -30,6 +30,15 @@ const SeatChangeSchema = z.object({
   generation: z.number().int(),
   state: z.string().optional(),
   closeCode: z.number().int().optional(),
+  // Step 5: on `reserve`, and on the join a booking admitted.
+  reservedBy: z.string().optional(),
+  at: z.number()
+})
+const RecentlyLeftSchema = z.object({
+  userId: z.string(),
+  relayHostId: z.string(),
+  epoch: z.number().int(),
+  closeCode: z.number().int().optional(),
   at: z.number()
 })
 const SeatSchema = z.object({
@@ -52,17 +61,29 @@ const SeatFeedSchema = z.object({
       // Seats in the cell's own log, under the same generation rule: equals the map exactly.
       seats: z.number().int().nonnegative(),
       // Drops at the start of a close handshake, up to ~30 s before the leave lands.
-      controls: z.number().int().nonnegative()
+      controls: z.number().int().nonnegative(),
+      // Step 5: live bookings, every unit the cell's ledger counts, and its placement ceiling.
+      bookings: z.number().int().nonnegative(),
+      units: z.number().int().nonnegative(),
+      ceiling: z.number().int().nonnegative()
     })
     .partial()
+    .optional(),
+  intake: z
+    .object({ perSec: z.number().nonnegative(), burst: z.number(), tokens: z.number() })
     .optional(),
   flagsApplied: z
     .object({ generation: z.union([z.string(), z.number()]), flags: z.record(z.unknown()) })
     .optional(),
+  // What the cell acts on: reserve also while a flip back is still leasing its controls, or
+  // db once its dead-man has flipped it back. Absent from older images.
+  admitModeEffective: z.enum(['db', 'reserve']).optional(),
   changes: z.array(SeatChangeSchema).optional(),
   // The cell cut the page (2,000 changes); poll again at once.
   more: z.boolean().optional(),
-  full: z.array(SeatSchema).optional()
+  full: z.array(SeatSchema).optional(),
+  // Step 5, with `full`: the cell's leavers of the last 10 minutes.
+  recentlyLeft: z.array(RecentlyLeftSchema).optional()
 })
 export type SeatFeedResponse = z.infer<typeof SeatFeedSchema>
 
@@ -74,6 +95,8 @@ export type SeatFeedCell = {
   heartbeatExpiresAt: number | null
   // Live, with capacity, and not roll-isolated: completeness waits only on these.
   requiredForComplete: boolean
+  // Admission state general and not roll-isolated: step 5 places only on these.
+  general?: boolean
 }
 
 export type ShadowSeat = {
@@ -84,12 +107,15 @@ export type ShadowSeat = {
   state: string
   joinedAt: number
   observedAt: number
+  // The cell incarnation that reported it: a restart since means the cell forgot it.
+  incarnation?: string
 }
 
 export type RecentlyLeftSeat = {
   cellId: string
   epoch: number
   generation: number
+  incarnation?: string
   closeCode?: number
   // A full resync dropped the seat, so no close code was seen.
   resync?: true
@@ -111,6 +137,24 @@ export type SeatFeedCellState = {
   reportedSeats?: number
   reportedControls?: number
   flagsApplied?: SeatFeedResponse['flagsApplied']
+  admitModeEffective?: 'db' | 'reserve'
+  // Step 5: when the answered poll was sent, and the cell's own reserve numbers.
+  polledAt?: number
+  bookings?: number
+  units?: number
+  ceiling?: number
+  intake?: SeatFeedResponse['intake']
+}
+
+// A join a booking admitted, for the director that booked it (its after-the-fact row).
+export type BookedJoin = {
+  cellId: string
+  userId: string
+  relayHostId: string
+  epoch: number
+  generation: number
+  joinedAt: number
+  reservedBy: string
 }
 
 type CellCursor = SeatFeedCellState & { seats: Map<string, ShadowSeat> }
@@ -131,6 +175,9 @@ export class ShadowSeatDirectory {
   private heartbeats: HeartbeatSnapshot | undefined
   // Per host, the newest database epoch seen and when: stands in for the grant time.
   private readonly databaseEpochs = new Map<string, { epoch: number; firstSeenAt: number }>()
+  // Per host, the newest booking any cell reported (step 5 epoch mint). Age-ordered.
+  private readonly bookings = new Map<string, { cellId: string; epoch: number; at: number }>()
+  onBookedJoin?: (join: BookedJoin) => void
 
   // Cells no longer listed are forgotten with their seats; new ones start pending.
   // `required` defaults to every listed cell.
@@ -161,7 +208,8 @@ export class ShadowSeatDirectory {
     return `${cursor.incarnation}:${cursor.seq}`
   }
 
-  apply(cellId: string, response: SeatFeedResponse, now: number): void {
+  // `polledAt` is when the request left; the reply holds every change before it.
+  apply(cellId: string, response: SeatFeedResponse, now: number, polledAt = now): void {
     const cursor = this.cells.get(cellId)
     if (!cursor) return
     if (response.cellId !== cellId) {
@@ -170,7 +218,19 @@ export class ShadowSeatDirectory {
     }
     let seq: number | null = response.seq
     if (response.full) {
-      this.replaceSeats(cursor, response.full, now)
+      this.replaceSeats(cursor, response.full, now, response.incarnation)
+      for (const left of response.recentlyLeft ?? []) {
+        const key = hostKey(left.userId, left.relayHostId)
+        if (cursor.seats.has(key)) continue
+        this.rememberLeft(key, {
+          cellId,
+          epoch: left.epoch,
+          generation: 0,
+          incarnation: response.incarnation,
+          ...(left.closeCode === undefined ? {} : { closeCode: left.closeCode }),
+          at: left.at
+        })
+      }
     } else {
       seq =
         cursor.incarnation === response.incarnation
@@ -195,7 +255,30 @@ export class ShadowSeatDirectory {
     cursor.reportedSeats = response.counts?.seats
     cursor.reportedControls = response.counts?.controls
     cursor.flagsApplied = response.flagsApplied
+    cursor.admitModeEffective = response.admitModeEffective
+    cursor.polledAt = polledAt
+    cursor.bookings = response.counts?.bookings
+    cursor.units = response.counts?.units
+    cursor.ceiling = response.counts?.ceiling
+    cursor.intake = response.intake
   }
+
+  // The newest booking any cell reported for this host since this director started.
+  bookingOf(userId: string, relayHostId: string): { cellId: string; epoch: number } | undefined {
+    return this.bookings.get(hostKey(userId, relayHostId))
+  }
+
+  // Applied state only: what the cell last said its switch is, never the desired object.
+  admitModeOf(cellId: string): 'db' | 'reserve' {
+    const cursor = this.cells.get(cellId)
+    if (cursor?.admitModeEffective) return cursor.admitModeEffective
+    return cursor?.flagsApplied?.flags.admitMode === 'reserve' ? 'reserve' : 'db'
+  }
+
+  cellIds(): string[] {
+    return [...this.cells.keys()]
+  }
+
 
   // An old cell (404) has no feed; its last known seats stay, marked by status.
   markNoFeed(cellId: string, now: number): void {
@@ -205,6 +288,12 @@ export class ShadowSeatDirectory {
     cursor.lastAnsweredAt = now
     cursor.incarnation = undefined
     cursor.seq = undefined
+    // An image without the feed takes no booking. Its reserve switch is #27058's to keep.
+    cursor.polledAt = undefined
+    cursor.bookings = undefined
+    cursor.units = undefined
+    cursor.ceiling = undefined
+    cursor.intake = undefined
   }
 
   fail(cellId: string, reason: string): void {
@@ -332,6 +421,11 @@ export class ShadowSeatDirectory {
       if (change.seq !== seq + 1) return null
       seq = change.seq
       const key = hostKey(change.userId, change.relayHostId)
+      // A booking is not a seat and carries no generation.
+      if (change.kind === 'reserve') {
+        this.rememberBooking(key, cursor.cellId, change.epoch, change.at)
+        continue
+      }
       const seat = cursor.seats.get(key)
       // A superseded generation's leave can arrive after its successor's join.
       if (seat && change.generation < seat.generation) continue
@@ -342,8 +436,20 @@ export class ShadowSeatDirectory {
           generation: change.generation,
           state: change.state ?? 'active',
           joinedAt: change.at,
-          observedAt: now
+          observedAt: now,
+          incarnation: cursor.incarnation
         })
+        if (change.reservedBy !== undefined) {
+          this.onBookedJoin?.({
+            cellId: cursor.cellId,
+            userId: change.userId,
+            relayHostId: change.relayHostId,
+            epoch: change.epoch,
+            generation: change.generation,
+            joinedAt: change.at,
+            reservedBy: change.reservedBy
+          })
+        }
       } else if (change.kind === 'leave') {
         if (seat) {
           this.unseat(cursor, key)
@@ -351,6 +457,7 @@ export class ShadowSeatDirectory {
             cellId: cursor.cellId,
             epoch: change.epoch,
             generation: change.generation,
+            incarnation: cursor.incarnation,
             closeCode: change.closeCode,
             at: change.at
           })
@@ -366,7 +473,12 @@ export class ShadowSeatDirectory {
     return seq
   }
 
-  private replaceSeats(cursor: CellCursor, full: SeatFeedResponse['full'] & object, now: number) {
+  private replaceSeats(
+    cursor: CellCursor,
+    full: SeatFeedResponse['full'] & object,
+    now: number,
+    incarnation: string
+  ) {
     const next = new Map<string, ShadowSeat>()
     for (const seat of full) {
       next.set(hostKey(seat.userId, seat.relayHostId), {
@@ -375,7 +487,8 @@ export class ShadowSeatDirectory {
         generation: seat.generation,
         state: seat.state,
         joinedAt: seat.joinedAt,
-        observedAt: now
+        observedAt: now,
+        incarnation
       })
     }
     for (const [key, seat] of cursor.seats) {
@@ -385,6 +498,7 @@ export class ShadowSeatDirectory {
         cellId: cursor.cellId,
         epoch: seat.epoch,
         generation: seat.generation,
+        ...(seat.incarnation === undefined ? {} : { incarnation: seat.incarnation }),
         resync: true,
         at: now
       })
@@ -414,6 +528,17 @@ export class ShadowSeatDirectory {
     if (seats.size === 0) this.hosts.delete(key)
   }
 
+  private rememberBooking(key: string, cellId: string, epoch: number, at: number): void {
+    const known = this.bookings.get(key)
+    if (known && known.epoch > epoch) return
+    this.bookings.delete(key)
+    this.bookings.set(key, { cellId, epoch, at })
+    if (this.bookings.size > SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS) {
+      const oldest = this.bookings.keys().next().value
+      if (oldest !== undefined) this.bookings.delete(oldest)
+    }
+  }
+
   private rememberLeft(key: string, entry: RecentlyLeftSeat): void {
     const entries = this.recentlyLeft.get(key) ?? []
     this.recentlyLeft.delete(key)
@@ -439,10 +564,16 @@ export type ShadowSeatPollerOptions = {
   now?: () => number
   pollMs?: number
   log?: (line: string) => void
+  // True while this director places on reserve cells (ORCA_RELAY_RESERVE_PLACEMENT=on).
+  reserver?: () => boolean
 }
 
 export type ShadowSeatPoller = {
   directory: ShadowSeatDirectory
+  // The cell list as last read: url, region, liveness and admission.
+  cells: () => readonly SeatFeedCell[]
+  // When the poller started, for the startup gate.
+  startedAt: number
   // One round: refreshes the cell list when due, then polls every idle cell.
   tick: () => Promise<void>
   stop: () => void
@@ -470,28 +601,17 @@ export function startShadowSeatPoller(
     options.identityToken ??
     ((tokenAudience: string) => googleMetadataIdentityToken(tokenAudience, fetchImpl))
   const directory = new ShadowSeatDirectory()
+  const startedAt = now()
   const inFlight = new Set<string>()
   let cells: SeatFeedCell[] = []
   let cellsReadAt: number | undefined
   let cellListInFlight = false
   let cellListFailures = 0
   let cellListRetryAt = 0
-  let token: { value: Promise<string>; at: number } | undefined
   let lastSummaryAt = now()
   let stopped = false
 
-  const identity = (): Promise<string> => {
-    const at = now()
-    if (!token || at - token.at > IDENTITY_TOKEN_REUSE_MS) {
-      const value = tokenProvider(audience)
-      token = { value, at }
-      // A failed fetch must not be reused for ten minutes.
-      value.catch(() => {
-        if (token?.value === value) token = undefined
-      })
-    }
-    return token.value
-  }
+  const identity = reusedIdentityToken(() => tokenProvider(audience), now, IDENTITY_TOKEN_REUSE_MS)
 
   const refreshCells = async (): Promise<void> => {
     if (cellListInFlight) return
@@ -538,8 +658,11 @@ export function startShadowSeatPoller(
   // Returns true when the cell cut the page and the next one should follow at once.
   const fetchPage = async (cell: SeatFeedCell): Promise<boolean> => {
     const url = new URL('/v1/admin/cell-seats', cell.cellUrl)
+    const polledAt = now()
     const since = directory.since(cell.cellId)
     if (since !== undefined) url.searchParams.set('since', since)
+    // Placing on reserve cells: keeps each cell's dead-man from flipping it back to db.
+    if (options.reserver?.()) url.searchParams.set('reserver', '1')
     const response = await fetchImpl(url, {
       headers: { authorization: `Bearer ${await identity()}` },
       signal: AbortSignal.timeout(SHADOW_SEAT_POLL_TIMEOUT_MS)
@@ -560,7 +683,7 @@ export function startShadowSeatPoller(
       directory.fail(cell.cellId, 'malformed')
       return false
     }
-    directory.apply(cell.cellId, body.data, now())
+    directory.apply(cell.cellId, body.data, now(), polledAt)
     return body.data.more === true && directory.cellState(cell.cellId)?.status === 'live'
   }
 
@@ -605,6 +728,8 @@ export function startShadowSeatPoller(
   timer.unref()
   return {
     directory,
+    cells: () => cells,
+    startedAt,
     tick: () => round(true),
     stop: () => {
       stopped = true

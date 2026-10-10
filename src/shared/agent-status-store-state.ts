@@ -78,18 +78,6 @@ export function createEmptyAgentStatusStoreState(epoch: string): AgentStatusStor
   }
 }
 
-export function cloneAgentStatusStoreState(state: AgentStatusStoreState): AgentStatusStoreState {
-  return {
-    epoch: state.epoch,
-    revision: state.revision,
-    parents: new Map(state.parents),
-    children: new Map(state.children),
-    aliases: new Map(state.aliases),
-    facts: new Map(state.facts),
-    tombstones: new Map(state.tombstones)
-  }
-}
-
 function snapshotCandidateFromAgentStatusStoreState(state: AgentStatusStoreState) {
   return {
     version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,

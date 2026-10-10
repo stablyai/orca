@@ -203,6 +203,17 @@ jobs:
         with:
           bun-version-file: config/.bun-version
 
+      - name: Check process-host imports
+        if: '!cancelled()'
+        id: process-host-imports
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm run check:process-host-imports
+
       # Keep each check in its own log while sharing this runner.
       - name: Lint
         if: '!cancelled()'
@@ -268,9 +279,7 @@ jobs:
 
       - name: Check reliability gate manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: |
-          pnpm run check:reliability-gates
-          pnpm run check:process-host-imports
+        run: pnpm run check:reliability-gates
 
       - name: Enforce dead design-system classes
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -442,6 +451,8 @@ jobs:
 
       - run: pnpm run typecheck
         if: needs.code_paths.outputs.typecheck == 'true'
+
+      - wait: process-host-imports
 
       - wait: unit-plan
 

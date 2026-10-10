@@ -118,6 +118,30 @@ describe('static module specifiers', () => {
     ).toHaveLength(1)
   })
 
+  it('resolves escaped loader names and literals after parsing', () => {
+    expect(
+      specifiers(String.raw`
+        const load = \u0072equire
+        const CHILD_PROCESS = '\u0063hild_process'
+        load(CHILD_PROCESS)
+        process['get\u0042uiltinModule']('node:\u0063hild_process')
+      `)
+    ).toEqual(['child_process', 'node:child_process'])
+  })
+
+  it('preserves const binding order across nested declaration lists', () => {
+    expect(
+      specifiers(`
+        const nested = (() => { const NAME = 'first'; return NAME })(), NAME = 'second'
+        require(NAME)
+      `)
+    ).toEqual(['first', 'second'])
+  })
+
+  it('rejects invalid syntax even without imports or loader names', () => {
+    expect(() => specifiers('const broken = (')).toThrow('Cannot parse file.ts')
+  })
+
   it('ignores unrelated objects, computed property values, and non-constant specifiers', () => {
     expect(
       specifiers(
