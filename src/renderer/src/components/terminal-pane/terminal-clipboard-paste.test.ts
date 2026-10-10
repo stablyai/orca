@@ -389,3 +389,153 @@ describe('terminal clipboard paste', () => {
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
 })
+
+describe('terminal clipboard file paste', () => {
+  it('pastes the full paths of a file copied in the OS file manager, not its display name', async () => {
+    const pasteText = vi.fn()
+    const pasteFilePaths = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('App.tsx'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue(['/Users/me/project/src/App.tsx']),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(pasteFilePaths).toHaveBeenCalledWith(['/Users/me/project/src/App.tsx'])
+    expect(pasteText).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'pasted', kind: 'file-path' })
+  })
+
+  it('pastes every path of a multi-file copy', async () => {
+    const pasteFilePaths = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('App.tsx\nspec.md'),
+      readClipboardFilePaths: vi
+        .fn()
+        .mockResolvedValue(['/Users/me/project/App.tsx', '/Users/me/notes/spec.md']),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText: vi.fn()
+    })
+
+    expect(pasteFilePaths).toHaveBeenCalledWith([
+      '/Users/me/project/App.tsx',
+      '/Users/me/notes/spec.md'
+    ])
+  })
+
+  it('keeps path-shaped text pastes off the clipboard file probe', async () => {
+    const readClipboardFilePaths = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('cd /Users/me/project && pnpm test'),
+      readClipboardFilePaths,
+      pasteFilePaths: vi.fn(),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(readClipboardFilePaths).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('cd /Users/me/project && pnpm test')
+  })
+
+  it('pastes text when the file probe answers without a path list', async () => {
+    const pasteFilePaths = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('git status'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue(undefined),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(pasteFilePaths).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('git status')
+  })
+
+  it('keeps copied text that only looks like a file name', async () => {
+    const pasteFilePaths = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('README.md'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue([]),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(pasteFilePaths).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('README.md')
+  })
+
+  it('keeps the text when the clipboard carries files plus unrelated text', async () => {
+    const pasteFilePaths = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('deploy now'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue(['/Users/me/project/App.tsx']),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(pasteFilePaths).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('deploy now')
+  })
+
+  it('falls back to the clipboard image path when the file probe fails', async () => {
+    const pasteText = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: vi.fn().mockRejectedValue(new Error('clipboard busy')),
+      pasteFilePaths: vi.fn(),
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/orca-paste-1-id.png'),
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+    expect(result).toEqual({ status: 'pasted', kind: 'image-path' })
+  })
+
+  it('reports a rejected file paste instead of silently pasting the display name', async () => {
+    const pasteText = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('App.tsx'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue(['/Users/me/project/App.tsx']),
+      pasteFilePaths: vi.fn().mockResolvedValue(false),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(pasteText).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'skipped', reason: 'file-paste-rejected' })
+  })
+
+  it('leaves paste unchanged when the file-path route is not wired', async () => {
+    const readClipboardFilePaths = vi.fn()
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('App.tsx'),
+      readClipboardFilePaths,
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(readClipboardFilePaths).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('App.tsx')
+  })
+})

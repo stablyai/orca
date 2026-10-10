@@ -177,6 +177,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
     restoreNativeChatPastes: async () => [],
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
+    // The browser clipboard exposes no OS file entries, so paste stays text-only.
+    readClipboardFilePaths: () => Promise.resolve([]),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>

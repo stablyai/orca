@@ -24,6 +24,7 @@ export type UiWindowApi = {
     paths: string[]
   ) => Promise<{ path: string; kept: boolean; exists: boolean }[]>
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
+  readClipboardFilePaths: () => Promise<string[]>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>
   writeSelectionClipboardText: (text: string) => Promise<void>

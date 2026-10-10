@@ -3,6 +3,10 @@ import {
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
 import {
+  clipboardTextIsCopiedFileNames,
+  couldClipboardTextBeCopiedFileNames
+} from '../../../../shared/clipboard-file-paths'
+import {
   TERMINAL_PASTE_MAX_BYTES,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
@@ -14,6 +18,8 @@ type SaveClipboardImageAsTempFile = (args?: {
 
 type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  readClipboardFilePaths?: () => Promise<string[]>
+  pasteFilePaths?: (paths: string[]) => Promise<boolean | void> | boolean | void
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   pasteText: (
     text: string,
@@ -28,11 +34,12 @@ type PasteTerminalClipboardDeps = {
 }
 
 export type TerminalClipboardPasteResult =
-  | { status: 'pasted'; kind: 'image-path' | 'text' }
+  | { status: 'pasted'; kind: 'file-path' | 'image-path' | 'text' }
   | {
       status: 'skipped'
       reason:
         | 'empty'
+        | 'file-paste-rejected'
         | 'image-paste-failed'
         | 'image-paste-rejected'
         | 'text-paste-failed'
@@ -40,8 +47,35 @@ export type TerminalClipboardPasteResult =
         | 'text-too-large'
     }
 
+/**
+ * Resolve the files an OS file manager copied, but only for clipboard text that
+ * could be their display names — every other paste skips the extra IPC round
+ * trip. Returns an empty list when the clipboard carries real text or no files.
+ */
+async function readCopiedFilePathsForPaste(
+  text: string,
+  readClipboardFilePaths: (() => Promise<string[]>) | undefined
+): Promise<string[]> {
+  if (!readClipboardFilePaths || !couldClipboardTextBeCopiedFileNames(text)) {
+    return []
+  }
+  let paths: string[]
+  try {
+    paths = await readClipboardFilePaths()
+  } catch {
+    return []
+  }
+  // Why: an older paired host or web client may answer without a path list.
+  if (!Array.isArray(paths) || paths.length === 0 || !clipboardTextIsCopiedFileNames(text, paths)) {
+    return []
+  }
+  return paths
+}
+
 export async function pasteTerminalClipboard({
   readClipboardText,
+  readClipboardFilePaths,
+  pasteFilePaths,
   saveClipboardImageAsTempFile,
   pasteText,
   connectionId,
@@ -62,6 +96,20 @@ export async function pasteTerminalClipboard({
     // Why: browser clipboard text reads can fail for image-only clipboards.
     // Still try the image path so Cmd/Ctrl+V works for screenshots.
   }
+  // Why: a Finder/Explorer file copy reaches the text flavor as the display
+  // name only, so the file flavors decide the paste before the text does —
+  // matching the drop pipeline, which resolves and shell-escapes full paths.
+  if (pasteFilePaths) {
+    const filePaths = await readCopiedFilePathsForPaste(text, readClipboardFilePaths)
+    if (filePaths.length > 0) {
+      const result = await pasteFilePaths(filePaths)
+      if (result === false) {
+        return { status: 'skipped', reason: 'file-paste-rejected' }
+      }
+      return { status: 'pasted', kind: 'file-path' }
+    }
+  }
+
   if (text) {
     try {
       const textOptions =
