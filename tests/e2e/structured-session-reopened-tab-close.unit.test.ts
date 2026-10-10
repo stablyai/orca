@@ -18,6 +18,7 @@ import { resetLocalStructuredSessionVersionForTests } from '../../src/renderer/s
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync'
 import { registerSessionTabIpcBridge } from '../../src/renderer/src/hooks/ipc-events/session-tab-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from '../../src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge'
+import { resetWebSessionCloseIntentForTests } from '../../src/renderer/src/runtime/web-session-close-intent'
 
 const WORKTREE = 'repo-1::/tmp/wt-reopen'
 const CURRENT_SESSION = 'clear-x'
@@ -29,7 +30,7 @@ type CloseRequest = { requestId: string; tabId: string; worktreeId: string; expi
 type Listener<T> = (payload: T) => void
 
 type ProcessBoundary = {
-  runtime: Pick<OrcaRuntimeService, 'closeMobileSessionTab'> | null
+  runtime: Pick<OrcaRuntimeService, 'closeMobileSessionTab' | 'listMobileSessionTabs'> | null
   rendererSessionCloses: string[]
 }
 
@@ -47,6 +48,10 @@ vi.mock('../../src/renderer/src/runtime/runtime-rpc-client', async (importOrigin
       method: string,
       params: { worktree: string; tabId: string; reason?: 'user' }
     ) => {
+      // The window's re-read of the worktree after its close settled.
+      if (method === 'session.tabs.list') {
+        return bridge.runtime!.listMobileSessionTabs(params.worktree)
+      }
       if (method !== 'session.tabs.close') {
         throw new Error(`unexpected rpc ${method}`)
       }
@@ -172,6 +177,8 @@ afterEach(() => {
   useAppStore.setState(initialStoreState, true)
   resetLocalStructuredSessionVersionForTests()
   resetWebSessionTabsSnapshotFreshnessForTests()
+  // A close's follow-up re-read can outlive its test, which tears the host down under it.
+  resetWebSessionCloseIntentForTests()
   vi.unstubAllGlobals()
 })
 

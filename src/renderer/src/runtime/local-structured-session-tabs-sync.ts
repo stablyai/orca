@@ -10,6 +10,7 @@ export {
 } from './local-structured-session-tabs-sync/inventory-generation-fence'
 export {
   refreshLocalStructuredSessionTabs,
+  refreshLocalStructuredSessionWorktreeTabs,
   restoreLocalStructuredSessionTabsOnce
 } from './local-structured-session-tabs-sync/inventory-refresh'
 export {
