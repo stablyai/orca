@@ -74,8 +74,8 @@ export function captureChatStopTarget(
   return { ...target, reach: 'interrupt', marks: queued || reached === 'unrecorded' }
 }
 
-/** After the acceptance: whether the captured target still stands. A newer child, or a turn other
- *  than the captured one, is not this Stop's to interrupt. */
+/** After the acceptance: whether the captured target still stands. A newer child is not this
+ *  Stop's to interrupt, nor, for a Stop naming a turn, a turn other than that one. */
 export function chatStopTargetStands(
   ctx: AgentSessionTurnContext,
   target: ChatStopTarget,
@@ -87,7 +87,6 @@ export function chatStopTargetStands(
   if (target.reach !== 'interrupt') {
     return true
   }
-  const live = ctx.journal.activeTurnId()
   if (target.named) {
     // As at acceptance: only a named turn with no row yet may still be opening.
     return (
@@ -95,5 +94,7 @@ export function chatStopTargetStands(
       !structuredAgentSessionStopNamesEndedTurn(ctx.journal, target.turnId, isMainAgentWorking(ctx))
     )
   }
-  return target.turnId === null ? isMainAgentWorking(ctx) : live === target.turnId
+  // A Stop naming no turn stops whatever runs: hand-over runs only on the lane this Stop holds, so
+  // a turn that opened after it was captured is from a send made before it.
+  return isMainAgentWorking(ctx)
 }

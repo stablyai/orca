@@ -64,7 +64,7 @@ describe('a Stop the host could not save or carry out', () => {
         },
         'stop'
       )
-    ).toBe("This question or approval wasn't cancelled.")
+    ).toBe("Couldn't cancel this question or approval. Try again.")
   })
 
   // A client from before the reason keeps only reasons it lists: it reads none, and the code's words.

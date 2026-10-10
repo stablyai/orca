@@ -3025,7 +3025,7 @@
         "answerFirst": "Answer the question or approval first.",
         "attachmentExpired": "This attachment expired.",
         "backgroundTasksRunning": "Background tasks are still running.",
-        "cancelNotSaved": "This question or approval wasn't cancelled.",
+        "cancelNotSaved": "Couldn't cancel this question or approval.",
         "cannotRunHere": "Orca can't run this agent in a chat here.",
         "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "chatNotFound": "Orca can't find this chat.",

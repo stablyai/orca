@@ -330,6 +330,15 @@ async function cancelAndNote(
     (stoppedTurn !== undefined
       ? structuredAgentSessionNamedTurnScope(ctx.journal, stoppedTurn)
       : null) ?? turnScope
-  await ctx.journal.appendItem(noteIdentity, note, { fence: ctx.fence, turnScope: noteScope })
+  // Bookkeeping: what the Stop did stands whether or not its note is written.
+  await ctx.journal
+    .appendItem(noteIdentity, note, { fence: ctx.fence, turnScope: noteScope })
+    .catch((error: unknown) =>
+      ctx.logger.warn("writing a Stop's note failed", {
+        scope: 'stop-note',
+        sessionId: ctx.sessionId,
+        error
+      })
+    )
   return { ok: true, value }
 }

@@ -1,12 +1,13 @@
-// A Stop saved, then unable to take effect, is answered from its receipt, never rewritten: the
-// failure is logged and the chat says the cancellation was not confirmed. "Couldn't stop" is only
-// for a Stop that could not be saved. A card's own Cancel saves its receipt with the dismissal row,
-// in one transaction, and one that cannot be saved says so about the card.
+// A Stop saved, then failing, is answered from its receipt, never rewritten: the failure is logged,
+// and the chat says the cancellation was not confirmed only when it was not. "Couldn't stop" is
+// only for a Stop that could not be saved. A card's own Cancel saves its receipt with the dismissal
+// row, in one transaction, and one that cannot be saved says so about the card.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
@@ -72,7 +73,7 @@ function failNotes(times = 1): () => void {
   return () => failing.mockRestore()
 }
 
-it('answers a saved Stop from its receipt, notes it unconfirmed, and answers a retry the same', async () => {
+it('answers an interrupt that worked as stopped when only its note fails to write, and says nothing more', async () => {
   await rig.workingSend()
   const id = opId()
   const restore = failNotes()
@@ -82,32 +83,36 @@ it('answers a saved Stop from its receipt, notes it unconfirmed, and answers a r
   } finally {
     restore()
   }
-  expect(answered).toMatchObject({ ok: true })
-  expect(statusTexts()).toContain('Cancellation was not confirmed.')
+  expect(answered).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(statusTexts()).not.toContain('Cancellation was not confirmed.')
   expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
   expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
-    expect.arrayContaining([expect.stringContaining('a saved Stop failed to take effect')])
+    expect.arrayContaining([expect.stringContaining("writing a Stop's note failed")])
   )
 
   expect(await rig.stop(id)).toMatchObject({ ok: true, replayed: true })
   expect(rig.cancelTurn).toHaveBeenCalledOnce()
 })
 
-it('still answers from its receipt when the note cannot be written either, and logs both', async () => {
+// The fold after COMMIT can throw: the Stop is saved, so it acts, and never reads as not saved.
+it('interrupts and answers from its receipt when its write throws after the commit', async () => {
   await rig.workingSend()
   const id = opId()
-  const restore = failNotes(2)
-  try {
-    expect(await rig.stop(id)).toMatchObject({ ok: true })
-  } finally {
-    restore()
-  }
-  expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
-    expect.arrayContaining([expect.stringContaining("writing a failed Stop's note failed")])
-  )
-  expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
-  expect(await rig.stop(id)).toMatchObject({ ok: true, replayed: true })
+  const accept = JournalStopAcceptor.prototype.accept
+  vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockImplementationOnce(async function (
+    this: JournalStopAcceptor,
+    ...args
+  ) {
+    await accept.apply(this, args)
+    throw new Error('fold failed after commit')
+  })
+
+  expect(await rig.stop(id)).toMatchObject({ ok: true })
   expect(rig.cancelTurn).toHaveBeenCalledOnce()
+  expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
+  expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
+    expect.arrayContaining([expect.stringContaining('a Stop was saved, then its write failed')])
+  )
 })
 
 describe("a card's own Cancel", () => {
@@ -184,7 +189,7 @@ describe("a card's own Cancel", () => {
         refusal: {
           code: 'agent_session_operation_invalid',
           details: { reason: 'cancelNotSaved' },
-          message: "This question or approval wasn't cancelled."
+          message: "Couldn't cancel this question or approval. Try again."
         }
       })
     } finally {

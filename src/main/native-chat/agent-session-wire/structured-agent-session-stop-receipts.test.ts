@@ -8,6 +8,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
+import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
@@ -144,6 +145,32 @@ describe('a retry of the same id', () => {
 })
 
 describe('what a Stop captures as it is accepted', () => {
+  // Hand-over runs only on the session's lane, which the Stop holds: a turn that opens while its
+  // save waits is from a send made before the Stop, and the Stop stops it.
+  it('a target-less Stop interrupts the turn that opened while its save waited', async () => {
+    await rig.workingSend()
+    await turnRow('turn-1', 'running')
+    const saving = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    const accept = JournalStopAcceptor.prototype.accept
+    vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockImplementation(async function (
+      this: JournalStopAcceptor,
+      ...args
+    ) {
+      entered.resolve()
+      await saving.promise
+      return accept.apply(this, args)
+    })
+    const stopping = rig.stop()
+    await entered.promise
+    await turnRow('turn-1', 'interrupted')
+    await turnRow('turn-2', 'running')
+    saving.resolve()
+
+    expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(rig.cancelTurn).toHaveBeenCalledOnce()
+  })
+
   it('a target-less Stop names the live turn, and its retry after a new turn does nothing', async () => {
     const working = await rig.workingSend()
     await turnRow('turn-1', 'running')

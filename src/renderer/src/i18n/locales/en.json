@@ -18103,7 +18103,7 @@
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "questionChanged": "This question was already answered or has changed.",
-        "cancelNotSaved": "This question or approval wasn't cancelled.",
+        "cancelNotSaved": "Couldn't cancel this question or approval.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",

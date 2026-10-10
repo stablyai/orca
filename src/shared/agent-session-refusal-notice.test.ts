@@ -393,7 +393,10 @@ describe('the notice for every reason a host names', () => {
             words.action === 'goElsewhere' ||
             words.action === 'updateOrca'
         )
-        expect(retryNow, cell).toBe(words.cause === 'historyUnavailable')
+        // A card's Cancel that was not saved names its step: its notice has no Retry beside it.
+        expect(retryNow, cell).toBe(
+          words.cause === 'historyUnavailable' || words.cause === 'cancelNotSaved'
+        )
       }
     }
   })

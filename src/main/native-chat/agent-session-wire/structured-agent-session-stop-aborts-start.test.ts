@@ -174,6 +174,44 @@ it('says the Stop failed when it cannot be saved after ending the start, and the
   expect(stopEvents()).toBe(0)
   expect((await rig.submission(first.id))?.rejection).toBeUndefined()
   vi.mocked(JournalStopAcceptor.prototype.accept).mockRestore()
-  await rig.send('nudge').result
+  // Nothing else is sent: the next start is the one the message itself asks for.
   await untilHandedOver(first.id)
+})
+
+// The round-2 repro: a Stop at a start whose save is slow, while the person picks an option. The
+// Stop never says it stopped an agent that runs on, and the pick never fails with the start's abort.
+it('answers truthfully when the save is slow and an option pick waits behind it', async () => {
+  let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
+  const saving = Promise.withResolvers<void>()
+  const accept = JournalStopAcceptor.prototype.accept
+  vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockImplementation(async function (
+    this: JournalStopAcceptor,
+    ...args
+  ) {
+    await saving.promise
+    return accept.apply(this, args)
+  })
+  await duringStart(() => {
+    stopping = rig.stop()
+  })
+  const first = rig.send('hello')
+  await first.result
+  await eventually(() => expect(stopping).toBeDefined())
+  const fields = { key: 'model', value: 'gpt-next' }
+  const picked = rig.host.setOption(CALLER, {
+    envelope: rig.envelope(fields, 'agentSession.setOption', hostTestOperationId()),
+    ...fields
+  })
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  saving.resolve()
+
+  // The start ended on the Stop's arrival, so it never landed: what it was for never runs.
+  expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
+  expect(rig.dispatch).not.toHaveBeenCalled()
+  expect(await rig.submission(first.id)).toMatchObject({ rejection: { kind: 'cancelled' } })
+  // With no agent running, the pick is kept for the next start.
+  const pick = await picked
+  expect(JSON.stringify(pick)).not.toContain('stopped while starting')
+  expect(pick).toMatchObject({ ok: true })
 })

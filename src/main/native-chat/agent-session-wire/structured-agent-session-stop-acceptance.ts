@@ -18,10 +18,7 @@ import {
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
-import type {
-  JournalStopAcceptance,
-  JournalStopAcceptanceInput
-} from '../agent-session-journal/journal-stop-acceptance'
+import type { JournalStopAcceptanceInput } from '../agent-session-journal/journal-stop-acceptance'
 import {
   journalRowReceiptResult,
   type MutationCommandReceipt
@@ -70,26 +67,50 @@ export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Ac
   const receipt = stopReceipt(ctx)
   try {
     await receipt.commitAlone()
-    return { ok: true, value: null }
   } catch (error) {
-    return stopNotSaved(ctx, error)
+    if (!savedAnyway(ctx, receipt, error)) {
+      return stopNotSaved(ctx, error)
+    }
   }
+  return { ok: true, value: null }
 }
 
-/** Commits the chat's Stop: the sends it settles, its event and its receipt, in one transaction. */
+/** Commits the chat's Stop: the sends it withdraws, its event and its receipt, in one transaction.
+ *  `withdrewAny`: whether it withdrew a queued send, false when that went unread. */
 export async function acceptChatStop(
   ctx: AgentSessionTurnContext,
   input: JournalStopAcceptanceInput
-): Promise<Accepted<JournalStopAcceptance>> {
+): Promise<Accepted<{ withdrewAny: boolean }>> {
   const receipt = stopReceipt(ctx)
   try {
-    return {
-      ok: true,
-      value: await ctx.journal.stops.accept(input, receipt.isCommitted() ? undefined : receipt)
-    }
+    const accepted = await ctx.journal.stops.accept(
+      input,
+      receipt.isCommitted() ? undefined : receipt
+    )
+    return { ok: true, value: { withdrewAny: accepted.withdrawn.length > 0 } }
   } catch (error) {
-    return stopNotSaved(ctx, error)
+    return savedAnyway(ctx, receipt, error)
+      ? { ok: true, value: { withdrewAny: false } }
+      : stopNotSaved(ctx, error)
   }
+}
+
+/** A throw once the receipt committed (the fold after COMMIT) leaves the Stop accepted: it acts on
+ *  what it saved, and is never answered as not saved. */
+function savedAnyway(
+  ctx: AgentSessionTurnContext,
+  receipt: AgentSessionOperationReceipt,
+  error: unknown
+): boolean {
+  if (!receipt.isCommitted()) {
+    return false
+  }
+  ctx.logger.warn('a Stop was saved, then its write failed; it acts on what it saved', {
+    scope: 'stop-acceptance',
+    sessionId: ctx.sessionId,
+    error
+  })
+  return true
 }
 
 /** Every Stop accepts through its command receipt; one without it is a plan wired wrong. */
@@ -105,7 +126,7 @@ export function cardCancelNotSavedRefusal(): AgentSessionWireRefusal {
   return refuse(
     'agent_session_operation_invalid',
     { reason: 'cancelNotSaved' },
-    AGENT_SESSION_WRITE_NOTICE_COPY.cancelNotSaved
+    `${AGENT_SESSION_WRITE_NOTICE_COPY.cancelNotSaved} ${AGENT_SESSION_WRITE_NOTICE_COPY.tryAgain}`
   )
 }
 
@@ -114,12 +135,15 @@ export function cardCancelNotSavedRefusal(): AgentSessionWireRefusal {
 export function stopNotSaved(
   ctx: Pick<AgentSessionTurnContext, 'agent' | 'logger' | 'sessionId'>,
   error: unknown,
-  refusal: () => AgentSessionWireRefusal = () => stopFailedRefusal(ctx)
+  notSaved: { log: string; refusal: () => AgentSessionWireRefusal } = {
+    log: 'saving a Stop failed; the agent was not interrupted',
+    refusal: () => stopFailedRefusal(ctx)
+  }
 ): Accepted<never> {
   if (error instanceof CommandReceiptExistsError) {
     throw error
   }
-  ctx.logger.warn('saving a Stop failed; the agent was not interrupted', {
+  ctx.logger.warn(notSaved.log, {
     scope: 'stop-acceptance',
     sessionId: ctx.sessionId,
     error
@@ -132,5 +156,5 @@ export function stopNotSaved(
   ) {
     return { ok: false, refusal: journalOpenRefusal(error) }
   }
-  return { ok: false, refusal: refusal() }
+  return { ok: false, refusal: notSaved.refusal() }
 }

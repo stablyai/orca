@@ -17882,7 +17882,7 @@
         "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
         "sendOutcomeLost": "Orca 无法确认你的消息已送达智能体。请查看聊天，如有需要请重新发送。",
         "questionChanged": "此问题已被回答或已更改。",
-        "cancelNotSaved": "此问题或审批未被取消。",
+        "cancelNotSaved": "无法取消此问题或审批。",
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
         "historyUnusable": "无法加载此聊天。",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录。",

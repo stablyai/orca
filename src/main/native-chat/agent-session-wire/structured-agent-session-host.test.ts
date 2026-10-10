@@ -356,24 +356,19 @@ describe('cancel', () => {
     }
 
     // Saved before the interrupt, which then threw: the answer is its receipt, never rewritten, and
-    // the retry is answered from it without reaching the provider again. The card stays pending.
+    // the retry is answered from it without reaching the provider again. The card stays pending,
+    // and its turn says the cancellation was not confirmed.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const answered = await host.cancel(CALLER, params)
     expect(answered).toMatchObject({ ok: true })
     expect(await host.cancel(CALLER, params)).toEqual({ ...answered, replayed: true })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
-    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
-      ok: true,
-      page: {
-        items: [
-          expect.objectContaining({
-            body: expect.objectContaining({
-              resolution: expect.objectContaining({ state: 'pending' })
-            })
-          })
-        ]
-      }
-    })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    const bodies = page.ok ? page.page.items.map((item) => item.body) : []
+    expect(bodies).toEqual([
+      expect.objectContaining({ resolution: expect.objectContaining({ state: 'pending' }) }),
+      expect.objectContaining({ kind: 'status', text: 'Cancellation was not confirmed.' })
+    ])
   })
 })
 

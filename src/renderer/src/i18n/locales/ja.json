@@ -17917,7 +17917,7 @@
         "outcomeUnknown": "Orca は何が起きたかを確認できませんでした。チャットを確認してください。",
         "sendOutcomeLost": "Orca はメッセージが Agent に届いたことを確認できませんでした。チャットを確認し、必要であればもう一度送信してください。",
         "questionChanged": "この質問はすでに回答済みか、変更されています。",
-        "cancelNotSaved": "この質問または承認はキャンセルされませんでした。",
+        "cancelNotSaved": "この質問または承認をキャンセルできませんでした。",
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "historyUnusable": "このチャットを読み込めません。",
         "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",

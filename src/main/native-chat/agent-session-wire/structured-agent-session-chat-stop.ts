@@ -19,18 +19,17 @@ import {
 } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
-import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 import {
   captureChatStopTarget,
   chatStopTargetStands,
   type ChatStopTarget
 } from './structured-agent-session-chat-stop-target'
-import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import {
   openForWrite,
   structuredAgentSessionFailureWordsContext
 } from './structured-agent-session-send-preparation'
 import { acceptChatStop, acceptStopTarget } from './structured-agent-session-stop-acceptance'
+import { noteStructuredAgentSessionStopUnconfirmed } from './structured-agent-session-stop-unconfirmed-note'
 import {
   endStoppedStructuredAgentSession,
   type StructuredAgentSessionStopWindDown
@@ -89,9 +88,7 @@ export function mutateWithChatStop<TValue>(
         surface: 'rejection'
       })
     })
-    return accepted.ok
-      ? { ok: true, value: { settled: accepted.value.withdrawn.length > 0 } }
-      : accepted
+    return accepted.ok ? { ok: true, value: { settled: accepted.value.withdrewAny } } : accepted
   }
   /** After the acceptance commits: only while what it captured still stands. */
   const act = async (
@@ -137,42 +134,6 @@ export function mutateWithChatStop<TValue>(
       }
     )
   }
-  /** Saved, then failed: noted on the chat, then thrown so the answer is the Stop's receipt. */
-  const unconfirmed = async (
-    ctx: AgentSessionTurnContext,
-    target: ChatStopTarget,
-    error: unknown
-  ): Promise<never> => {
-    context.deps.logger.warn('a saved Stop failed to take effect', {
-      scope: 'chat-stop',
-      sessionId,
-      error
-    })
-    const note = agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
-      surface: 'row'
-    })
-    await ctx.journal
-      .appendItem(
-        // Keyed as the Stop's own note, so it replaces whatever that note said.
-        structuredAgentSessionStopNoteIdentity(target.turnId ?? envelope.clientOperationId),
-        { kind: 'status', ...note },
-        {
-          fence: ctx.fence,
-          turnScope:
-            (target.turnId !== null
-              ? structuredAgentSessionNamedTurnScope(ctx.journal, target.turnId)
-              : null) ?? ctx.journal.liveTurnScope()
-        }
-      )
-      .catch((noteError: unknown) =>
-        context.deps.logger.warn("writing a failed Stop's note failed", {
-          scope: 'chat-stop',
-          sessionId,
-          error: noteError
-        })
-      )
-    throw error
-  }
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
     const target = captureChatStopTarget(ctx, {
       child: context.sessions.get(ctx.sessionId)?.child ?? null,
@@ -190,7 +151,13 @@ export function mutateWithChatStop<TValue>(
     try {
       return await act(ctx, target, accepted.value.settled)
     } catch (error) {
-      return unconfirmed(ctx, target, error)
+      // Saved, then failed: noted on the chat, then thrown so the answer is the Stop's receipt.
+      await noteStructuredAgentSessionStopUnconfirmed(
+        ctx,
+        { turnId: target.turnId, operationId: envelope.clientOperationId },
+        error
+      )
+      throw error
     }
   }
   const result = mutateStructuredAgentSession(

@@ -17882,7 +17882,7 @@
         "outcomeUnknown": "Orca no pudo confirmar qué pasó. Revise el chat.",
         "sendOutcomeLost": "Orca no pudo confirmar que su mensaje llegó al agente. Revise el chat y vuelva a enviarlo si es necesario.",
         "questionChanged": "Esta pregunta ya se respondió o ha cambiado.",
-        "cancelNotSaved": "Esta pregunta o aprobación no se canceló.",
+        "cancelNotSaved": "No se pudo cancelar esta pregunta o aprobación.",
         "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
         "historyUnusable": "No se puede cargar este chat.",
         "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",

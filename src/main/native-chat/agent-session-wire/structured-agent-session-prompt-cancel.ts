@@ -149,5 +149,8 @@ function dismissalNotSaved(ctx: AgentSessionTurnContext, error: unknown): TurnOu
   if (ctx.operationReceipt?.isCommitted()) {
     throw error
   }
-  return stopNotSaved(ctx, error, cardCancelNotSavedRefusal)
+  return stopNotSaved(ctx, error, {
+    log: "saving a card's Cancel failed; the card was not dismissed",
+    refusal: cardCancelNotSavedRefusal
+  })
 }
