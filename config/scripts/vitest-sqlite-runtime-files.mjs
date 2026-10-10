@@ -218,6 +218,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/methods/structured-agent-session-at-rest.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-create-message.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-hold.test.ts',
+  'src/main/runtime/rpc/methods/structured-agent-session-options-workspace-scope.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-restart-unregistered-agent.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-unsubscribe.test.ts',
   'src/main/runtime/rpc/methods/structured-chat-tab-table.test.ts',
