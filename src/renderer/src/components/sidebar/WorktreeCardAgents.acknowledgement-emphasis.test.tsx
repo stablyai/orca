@@ -15,6 +15,7 @@ const WORKSPACE = 'acknowledgement-workspace'
 const PANE_A = makePaneKey('tab-a', '11111111-1111-4111-8111-111111111111')
 const PANE_B = makePaneKey('tab-b', '22222222-2222-4222-8222-222222222222')
 let acknowledgements: Record<string, number> = {}
+let unreadCompletions: Record<string, 'agent-completion'> = {}
 let focusedPaneKey: string | null = null
 
 vi.mock('@/store', () => ({
@@ -22,6 +23,8 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: 'compact',
       acknowledgedAgentsByPaneKey: acknowledgements,
+      unreadAgentCompletionPanes: unreadCompletions,
+      manuallyUnreadTurnsByPaneKey: {},
       agentSendPopoverTargetMode: null,
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
@@ -100,6 +103,7 @@ function expectEmphasis(label: HTMLElement | undefined, unvisited: boolean): voi
 
 beforeEach(() => {
   acknowledgements = { [PANE_B]: 2000 }
+  unreadCompletions = { [PANE_A]: 'agent-completion', [PANE_B]: 'agent-completion' }
   focusedPaneKey = null
   clearWorktreeAgentExpansionStateForTests()
   seedWorktreeAgentExpansionStateForTests(WORKSPACE, {
@@ -109,6 +113,24 @@ beforeEach(() => {
 })
 
 describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
+  it('shows completion immediately, but waits for confirmed unread emphasis', () => {
+    unreadCompletions = {}
+    const agents = [agentRow(PANE_A)]
+    expectEmphasis(renderLabels(agents)[0], false)
+    const pending = renderToStaticMarkup(
+      <TooltipProvider>
+        <WorktreeCardAgents worktreeId={WORKSPACE} agents={agents} />
+      </TooltipProvider>
+    )
+    expect(pending).toContain('lucide-circle-check')
+
+    unreadCompletions = { [PANE_A]: 'agent-completion' }
+    expectEmphasis(renderLabels(agents)[0], true)
+    acknowledgements = { [PANE_A]: 2000 }
+    unreadCompletions = {}
+    expectEmphasis(renderLabels(agents)[0], false)
+  })
+
   it('changes only A when its acknowledgement covers its current turn', () => {
     const agents = [agentRow(PANE_A), agentRow(PANE_B)]
     const [aBefore, bBefore] = renderLabels(agents)
@@ -133,7 +155,7 @@ describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
   })
 
   it.each(['working', 'blocked', 'waiting', 'done', 'idle', 'unverifiable'] as const)(
-    'uses the same age rule for %s rows',
+    'uses the same acknowledgement rule for confirmed %s rows',
     (state) => {
       const row = agentRow(PANE_A, state)
       expectEmphasis(renderLabels([row])[0], true)
@@ -165,8 +187,9 @@ describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
     expect(label?.nextElementSibling?.textContent).toContain('Interrupted by user')
   })
 
-  it('does not treat same-state output as a new turn, but admits a newer timestamp', () => {
+  it('does not treat same-state output as a new turn, and waits for new completion confirmation', () => {
     acknowledgements = { [PANE_A]: 2000 }
+    unreadCompletions = {}
     expectEmphasis(renderLabels([agentRow(PANE_A)])[0], false)
     expectEmphasis(
       renderLabels([
@@ -174,6 +197,9 @@ describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
       ])[0],
       false
     )
-    expectEmphasis(renderLabels([agentRow(PANE_A, 'done', { stateStartedAt: 3000 })])[0], true)
+    const nextTurn = agentRow(PANE_A, 'done', { stateStartedAt: 3000 })
+    expectEmphasis(renderLabels([nextTurn])[0], false)
+    unreadCompletions = { [PANE_A]: 'agent-completion' }
+    expectEmphasis(renderLabels([nextTurn])[0], true)
   })
 })
