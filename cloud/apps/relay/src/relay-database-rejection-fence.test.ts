@@ -87,6 +87,15 @@ describe('database rejection fence', () => {
     expect(error).not.toHaveBeenCalled()
   })
 
+  it('keeps every rejection fatal while the cell switch has the fence off', async () => {
+    const duplicate = await rejectionFrom(() =>
+      databaseFailingWith(serverError('23505', 'duplicate key')).query('SELECT 1')
+    )
+    expect(() => handleRelayUnhandledRejection(duplicate, false)).toThrow()
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(() => handleRelayUnhandledRejection(duplicate, true)).not.toThrow()
+  })
+
   // A whole-VM stall of 6-7 s outlasts the 5 s idle-in-transaction limit for any backend caught
   // idle mid-transaction, and the server ends that session with FATAL 25P03 on resume.
   it('fences an idle-in-transaction timeout but keeps the rest of class 25 fatal', async () => {
