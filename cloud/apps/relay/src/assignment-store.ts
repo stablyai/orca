@@ -152,6 +152,9 @@ export class RelayCellInReserveModeError extends Error {
 // and reader skips reserve cells, and does nothing while the set is unknown.
 const RESERVE_MODE_CACHE_MS = 5_000
 const RESERVE_MODE_STALE_MS = 60_000
+// After a failed read, the last good one answers this long without a query: during a stall
+// every assign would otherwise spend a read's timeout before its own transaction.
+const RESERVE_MODE_FAILURE_BACKOFF_MS = 5_000
 // A cell refreshes its admit-effective row every 15 s; three missed refreshes and it counts for nothing.
 export const CELL_ADMIT_EFFECTIVE_FRESH_MS = 45_000
 const RESERVE_MODE_FAILURE_LOG_MS = 60_000
@@ -620,6 +623,11 @@ export class RelayAssignmentStore {
     readAt: number
   } | null = null
   private reserveModeFailureLoggedAt = Number.NEGATIVE_INFINITY
+  private reserveModeFailedAt = Number.NEGATIVE_INFINITY
+  // One read at a time: concurrent callers share it.
+  private reserveModeInFlight: Promise<void> | null = null
+  // Bumped by an admit-mode write, so a read begun before it cannot land after it.
+  private reserveModeGeneration = 0
   private readonly placementLoadBand?: PlacementLoadBand
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
@@ -661,9 +669,27 @@ export class RelayAssignmentStore {
   ): Promise<ReadonlySet<string> | null> {
     const at = performance.now()
     const cached = this.reserveModeRead
-    if (database !== this.database || (cached && at - cached.readAt < RESERVE_MODE_CACHE_MS)) {
-      return cached && at - cached.readAt <= RESERVE_MODE_STALE_MS ? cached.cells : null
+    const answer = (): ReadonlySet<string> | null => {
+      const read = this.reserveModeRead
+      return read && performance.now() - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
     }
+    if (
+      database !== this.database ||
+      (cached && at - cached.readAt < RESERVE_MODE_CACHE_MS) ||
+      at - this.reserveModeFailedAt < RESERVE_MODE_FAILURE_BACKOFF_MS
+    ) {
+      return answer()
+    }
+    this.reserveModeInFlight ??= this.readReserveModes(database).finally(() => {
+      this.reserveModeInFlight = null
+    })
+    await this.reserveModeInFlight
+    return answer()
+  }
+
+  private async readReserveModes(database: Pick<RelayDatabase, 'query'>): Promise<void> {
+    const at = performance.now()
+    const generation = this.reserveModeGeneration
     try {
       // With each reserve cell, whether its own current process says it admits through the
       // database (a tripped dead-man): the one read the database path may place on it by.
@@ -679,12 +705,14 @@ export class RelayAssignmentStore {
          WHERE m.admit_mode <> 'db'`,
         [this.now() - CELL_ADMIT_EFFECTIVE_FRESH_MS]
       )
+      if (generation !== this.reserveModeGeneration) return
       this.reserveModeRead = {
         cells: new Set(rows.map((row) => text(row, 'cell_id'))),
         admitsDatabase: new Set(rows.filter((row) => row.admits_database != null).map((row) => text(row, 'cell_id'))),
         readAt: at
       }
     } catch (error) {
+      this.reserveModeFailedAt = performance.now()
       // Keep the last read until it is stale. Logged at most once a minute: while it fails,
       // sweeps soon stop and admin operations are refused, so the cause must be on the record.
       if (at - this.reserveModeFailureLoggedAt >= RESERVE_MODE_FAILURE_LOG_MS) {
@@ -698,8 +726,6 @@ export class RelayAssignmentStore {
         )
       }
     }
-    const read = this.reserveModeRead
-    return read && at - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
   }
 
   // Only from a recent read: a cell re-armed since may be booking from memory again.
@@ -821,6 +847,8 @@ export class RelayAssignmentStore {
       )
     })
     this.reserveModeRead = null
+    this.reserveModeFailedAt = Number.NEGATIVE_INFINITY
+    this.reserveModeGeneration += 1
   }
 
   async reconcileCells(cells: RelayCellConfig[], disableMissing = true): Promise<void> {

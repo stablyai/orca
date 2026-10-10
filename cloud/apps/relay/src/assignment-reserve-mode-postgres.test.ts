@@ -203,4 +203,49 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
       await holder.close()
     }
   }, 20_000)
+
+  // A stall must not double connection demand: concurrent assigns share one reserve-set read,
+  // and after it fails the last answer stands for the backoff without another query.
+  it('reads the reserve set once for concurrent assigns during a stall, and not again in the backoff', async () => {
+    const timed = await openRelayDatabase({ databaseUrl, dataDir: '/tmp', statementTimeoutMs: 300 })
+    const holder = await openRelayDatabase({ databaseUrl, dataDir: '/tmp' })
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let held!: () => void
+    const holding = new Promise<void>((resolve) => (held = resolve))
+    const lock = holder.transaction(async (transaction) => {
+      await transaction.query(`LOCK TABLE relay_cell_admit_modes IN ACCESS EXCLUSIVE MODE`)
+      held()
+      await released
+    })
+    try {
+      await holding
+      const store = new RelayAssignmentStore(timed, () => 500_000)
+      await store.reconcileCells([cellA, cellB], false)
+      await heartbeat(store, cellA)
+      await heartbeat(store, cellB)
+      const query = timed.query.bind(timed)
+      let reads = 0
+      timed.query = async (sql, params) => {
+        if (sql.includes('FROM relay_cell_admit_modes m')) reads += 1
+        return await query(sql, params)
+      }
+      const placed = await Promise.all(
+        Array.from({ length: 6 }, async (_, index) =>
+          await store.assign({ userId: USER, relayHostId: `hoststall0000${String(index).padStart(3, '0')}` })
+        )
+      )
+      expect(placed).toHaveLength(6)
+      expect(reads).toBe(1)
+      await store.assign({ userId: USER, relayHostId: 'hoststall0000100' })
+      expect(await store.reserveModeCells()).toBeNull()
+      expect(reads).toBe(1)
+    } finally {
+      release()
+      await lock
+      await timed.close()
+      await holder.close()
+    }
+  }, 20_000)
 })
+
