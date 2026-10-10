@@ -15,10 +15,12 @@ vi.mock('@orca/process-host', () => ({
   runProcessSync: runProcessSyncMock
 }))
 
+import { posixBusyboxTtyName } from './posix-process-groups-on-terminal'
 import {
   forceKillPosixPtyProcessGroups,
   getPosixPtyProcessGroups,
   isPosixPtyRootStopped,
+  readPosixProcessGroupsOnTerminal,
   readPosixPtyProcessTable,
   resetPosixPtyProcessTableDialectForTests,
   signalPosixPtyProcessGroups
@@ -441,5 +443,84 @@ describe('POSIX PTY group-sweep breadcrumbs', () => {
     })
 
     expect(recordSelfInitiatedTreeKillMock.mock.calls.map(([kill]) => kill.pid)).toEqual([101, 100])
+  })
+})
+
+describe('readPosixProcessGroupsOnTerminal', () => {
+  it('returns the groups still printed for that terminal', () => {
+    expect(
+      readPosixProcessGroupsOnTerminal('/dev/ttys001', {
+        readProcessTable: () => ' 4242\n4242\n4243\n'
+      })
+    ).toEqual([4242, 4243])
+  })
+
+  it('returns an empty list when the terminal has no processes', () => {
+    expect(
+      readPosixProcessGroupsOnTerminal('/dev/ttys001', {
+        readProcessTable: () => '\n'
+      })
+    ).toEqual([])
+  })
+
+  it('uses the full process table when ps rejects -t', () => {
+    runProcessSyncMock
+      .mockReturnValueOnce(unsupportedSelection('ps: unrecognized option: t\n'))
+      .mockReturnValueOnce({
+        code: 0,
+        signal: null,
+        stdout: '100 4242 ttys001\n200 4243 ttys002\n',
+        stderr: '',
+        timedOut: false
+      })
+
+    expect(readPosixProcessGroupsOnTerminal('/dev/ttys001')).toEqual([4242])
+    expect(runProcessSyncMock.mock.calls[1]?.[0]?.args).toEqual(ALL_PROCESS_ARGS)
+  })
+
+  it('matches the pts/N form Linux ps prints when -t is rejected', () => {
+    runProcessSyncMock
+      .mockReturnValueOnce(unsupportedSelection('ps: unrecognized option: t\n'))
+      .mockReturnValueOnce({
+        code: 0,
+        signal: null,
+        stdout: '100 4242 pts/100\n200 4243 pts/101\n',
+        stderr: '',
+        timedOut: false
+      })
+
+    expect(readPosixProcessGroupsOnTerminal('/dev/pts/100')).toEqual([4242])
+  })
+
+  it('matches the major,minor form BusyBox prints when -t is rejected', () => {
+    expect(posixBusyboxTtyName(0x8864)).toBe('136,100')
+    expect(posixBusyboxTtyName(0x108864)).toBe('136,356')
+    runProcessSyncMock
+      .mockReturnValueOnce(unsupportedSelection('ps: unrecognized option: t\n'))
+      .mockReturnValueOnce({
+        code: 0,
+        signal: null,
+        stdout: '100 4242 136,100\n200 4243 136,10\n',
+        stderr: '',
+        timedOut: false
+      })
+
+    expect(
+      readPosixProcessGroupsOnTerminal('/dev/pts/100', {
+        characterDeviceNumber: () => 0x8864
+      })
+    ).toEqual([4242])
+  })
+
+  it('returns null for an unsafe terminal name or an unreadable table', () => {
+    expect(readPosixProcessGroupsOnTerminal('-t')).toBeNull()
+    expect(readPosixProcessGroupsOnTerminal('/dev/ttys001 ../x')).toBeNull()
+    expect(
+      readPosixProcessGroupsOnTerminal('/dev/ttys001', {
+        readProcessTable: () => {
+          throw new Error('ps failed')
+        }
+      })
+    ).toBeNull()
   })
 })

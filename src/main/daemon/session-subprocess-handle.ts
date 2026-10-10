@@ -36,6 +36,11 @@ export type SubprocessHandle = {
   kill(): void
   forceKill(): void
   /**
+   * Signal every process group on this PTY. Optional so older doubles keep the
+   * direct force-kill. Windows implements it as a no-op.
+   */
+  signalProcessGroups?(signal: NodeJS.Signals): void
+  /**
    * Terminate this pty's job object, covering descendants that detached or
    * reparented. `unavailable` when the pty has no job -- never a false
    * `terminated`, so callers must fall back rather than assume the tree is gone.

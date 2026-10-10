@@ -56,7 +56,10 @@ export class TerminalSessionTeardown {
       if (pending.rootSignalled && pending.session.isAlive) {
         // Why: the snapshot callback may have already sent the graceful root
         // signal in this turn; an immediate join must still escalate and wait.
-        pending.rootCompletion = pending.session.forceKillAndWaitForExit()
+        // A login root does not forward SIGHUP to an agent foreground group.
+        pending.rootCompletion = pending.session.launchAgent
+          ? pending.session.signalGroupsThenForceKillWithinBudget()
+          : pending.session.forceKillAndWaitForExit()
       }
     }
     if (!pending) {
@@ -145,7 +148,7 @@ export class TerminalSessionTeardown {
       // A completed graceful sweep can leave the root alive during its grace
       // window. Immediate teardown may safely escalate once no scan is pending.
       if (immediate && session.isAlive && session.isTerminating) {
-        return session.forceKillAndWaitForExit()
+        return session.signalGroupsThenForceKillWithinBudget()
       }
       return
     }
@@ -165,7 +168,7 @@ export class TerminalSessionTeardown {
             }
             entry.rootSignalled = true
             if (entry.immediate) {
-              entry.rootCompletion = session.forceKillAndWaitForExit()
+              entry.rootCompletion = session.signalGroupsThenForceKillWithinBudget()
             } else {
               session.signalTerminationRoot()
             }

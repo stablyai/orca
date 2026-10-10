@@ -196,6 +196,10 @@ export class Session {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
+  async signalGroupsThenForceKillWithinBudget(timeoutMs?: number): Promise<void> {
+    await this.termination.signalGroupsThenForceKillWithinBudget(timeoutMs)
+  }
+
   signal(sig: string): void {
     this.termination.signal(sig)
   }

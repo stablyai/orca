@@ -47,6 +47,9 @@ export function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
+    // Present so agent closes take the group-signal path. It must not exit the
+    // child; the forceKill stub still owns that.
+    signalProcessGroups: vi.fn(),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb

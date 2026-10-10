@@ -1,18 +1,17 @@
 import { hasControllingTty } from '../../shared/posix-controlling-terminal'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import {
+  POSIX_PS_ALL_PROCESS_ARGS,
+  posixProcessTableSpec,
+  readPosixProcessTableOutput,
+  rejectedPosixPsSelector,
+  resetPosixTerminalSelectionForTests
+} from './posix-process-groups-on-terminal'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { runProcess, runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
-const PROCESS_TABLE_TIMEOUT_MS = 1_000
-const PROCESS_TABLE_MAX_BYTES = 1024 * 1024
 const SELECTED_COLUMNS = 'pid=,pgid=,tty=,stat='
-// Explicit widths prevent BusyBox from truncating device numbers into another terminal's identity.
-const ALL_PROCESS_ARGS = [
-  '-e',
-  '-o',
-  'pid=PROCESS_ID,pgid=PROCESS_GID,tty=TERMINAL_DEVICE_NUMBER,stat=PROCESS_STATE'
-]
 let psDialect: 'selected' | 'all' | undefined
 let dialectProbe: Promise<void> | undefined
 
@@ -21,6 +20,7 @@ class UnsupportedPsSelectionError extends Error {}
 export function resetPosixPtyProcessTableDialectForTests(): void {
   psDialect = undefined
   dialectProbe = undefined
+  resetPosixTerminalSelectionForTests()
 }
 
 type ProcessRow = {
@@ -37,29 +37,11 @@ export type PosixPtyProcessGroupTerminationDeps = {
   signalProcessGroup?: (pgid: number) => void
 }
 
-function readProcessTableResult(result: ProcessResult): string {
-  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-    throw new Error('PTY process table is unavailable')
-  }
-  return result.stdout
-}
-
 function readSelectionResult(result: ProcessResult, option: 'p' | 't'): string {
-  const rejectedOption =
-    /^ps: (?:invalid|illegal|unrecognized) option(?: -- |: | )['"]?-?([pt])['"]?\s*$/m.exec(
-      result.stderr ?? ''
-    )?.[1]
-  if (
-    result.code !== null &&
-    result.code !== 0 &&
-    !result.signal &&
-    !result.timedOut &&
-    !result.outputTruncated &&
-    rejectedOption === option
-  ) {
+  if (rejectedPosixPsSelector(result) === option) {
     throw new UnsupportedPsSelectionError()
   }
-  const output = readProcessTableResult(result)
+  const output = readPosixProcessTableOutput(result)
   if (psDialect === 'all') {
     throw new UnsupportedPsSelectionError()
   }
@@ -84,24 +66,14 @@ function* processTableQueries(rootPid: number): Generator<string[], string, Proc
       psDialect = 'all'
     }
   }
-  return readProcessTableResult(yield ALL_PROCESS_ARGS)
-}
-
-function processTableSpec(args: string[]) {
-  return {
-    program: 'ps',
-    args,
-    env: { ...process.env, LC_ALL: 'C' },
-    timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
-    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
-  }
+  return readPosixProcessTableOutput(yield POSIX_PS_ALL_PROCESS_ARGS)
 }
 
 function readPtyProcessTable(rootPid: number): string {
   const queries = processTableQueries(rootPid)
   let next = queries.next()
   while (!next.done) {
-    next = queries.next(runProcessSync(processTableSpec(next.value)))
+    next = queries.next(runProcessSync(posixProcessTableSpec(next.value)))
   }
   return next.value
 }
@@ -125,7 +97,7 @@ export async function readPosixPtyProcessTable(
     let next = queries.next()
     while (!next.done) {
       signal?.throwIfAborted()
-      const result = await runProcess({ ...processTableSpec(next.value), signal })
+      const result = await runProcess({ ...posixProcessTableSpec(next.value), signal })
       signal?.throwIfAborted()
       next = queries.next(result)
     }
@@ -191,6 +163,8 @@ export function getPosixPtyProcessGroups(
     return left - right
   })
 }
+
+export { readPosixProcessGroupsOnTerminal } from './posix-process-groups-on-terminal'
 
 function isProcessAlreadyGone(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'ESRCH'
