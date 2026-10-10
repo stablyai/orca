@@ -161,7 +161,10 @@ export function rebaseWorkspaceSessionTerminalMembership(
       terminalTopologyRevisionByRepoId[repoId] ?? 0
     )
   }
-  const tabsByWorktree = { ...incoming.tabsByWorktree }
+  // A host slice with no tabs reaches here without tabsByWorktree.
+  const incomingTabsByWorktree = incoming.tabsByWorktree ?? {}
+  const priorTabsByWorktree = prior.tabsByWorktree ?? {}
+  const tabsByWorktree = { ...incomingTabsByWorktree }
   const incomingTerminalLayoutsByTabId = incoming.terminalLayoutsByTabId ?? {}
   const priorTerminalLayoutsByTabId = prior.terminalLayoutsByTabId ?? {}
   const terminalLayoutsByTabId = { ...incomingTerminalLayoutsByTabId }
@@ -174,8 +177,8 @@ export function rebaseWorkspaceSessionTerminalMembership(
   let includeTabGroupLayouts = incoming.tabGroupLayouts !== undefined
   let rebasedMembership = false
   const worktreeIds = new Set([
-    ...Object.keys(prior.tabsByWorktree),
-    ...Object.keys(incoming.tabsByWorktree)
+    ...Object.keys(priorTabsByWorktree),
+    ...Object.keys(incomingTabsByWorktree)
   ])
   for (const worktreeId of worktreeIds) {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
@@ -186,16 +189,16 @@ export function rebaseWorkspaceSessionTerminalMembership(
       continue
     }
     rebasedMembership = true
-    const currentTabs = prior.tabsByWorktree[worktreeId] ?? []
+    const currentTabs = priorTabsByWorktree[worktreeId] ?? []
     const candidateTabsById = new Map(
-      (incoming.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+      (incomingTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
     const terminalTabIds = new Set(currentTabs.map((tab) => tab.id))
     const tabs = currentTabs.map((current) => {
       const candidate = candidateTabsById.get(current.id)
       return candidate ? { ...candidate, ptyId: current.ptyId } : current
     })
-    for (const candidate of incoming.tabsByWorktree[worktreeId] ?? []) {
+    for (const candidate of incomingTabsByWorktree[worktreeId] ?? []) {
       if (!terminalTabIds.has(candidate.id)) {
         delete terminalLayoutsByTabId[candidate.id]
       }
