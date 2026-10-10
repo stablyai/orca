@@ -15,8 +15,7 @@ vi.mock('./worktree-removal-ownership', () => ({
   stopPtysForDestructiveWorktreeRemoval: vi.fn(async () => {})
 }))
 vi.mock('./worktree-removal-filesystem', () => ({
-  isAlreadyRemovedWorktreePath: vi.fn(async () => false),
-  isLocalGitRepository: vi.fn(async () => false)
+  isAlreadyRemovedWorktreePath: vi.fn(async () => false)
 }))
 
 const { removeUnregisteredWorktree } = await import('./remove-unregistered-worktree')

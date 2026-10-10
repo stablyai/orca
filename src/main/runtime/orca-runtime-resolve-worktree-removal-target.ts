@@ -31,7 +31,7 @@ import {
   waitForPendingWorktreeRemoval
 } from '../worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
-import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
+import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { resolveQoderTerminalCommandForWorkspace } from './qoder-terminal-command-resolution'
 import { buildRuntimeAgentTerminalStartupOptions } from './runtime-agent-terminal-startup'
@@ -71,15 +71,16 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
   }
 
   /**
-   * Delete on the leftover of a local delete that failed after Git dropped the registration, while
-   * Git's listing still does not register the path: runs that removal again. True when it did.
+   * Delete on a local delete that failed after Git dropped the registration, while Git's listing
+   * still does not register the path: refuses while the folder is there, else finishes that removal.
+   * True when it did.
    */
-  protected retryFailedLocalRemoval(
+  protected async retryFailedRemoval(
     route: { kind: string },
     target: { id: string; path: string },
     registeredWorktrees: readonly GitWorktreeInfo[],
     options: RemoveManagedWorktreeOptions
-  ): boolean {
+  ): Promise<boolean> {
     const store = this.store
     if (route.kind !== 'local' || !store) {
       return false

@@ -131,7 +131,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           registeredWorktrees,
           removalHome
         )
-        if (this.retryFailedLocalRemoval(route, removalTarget, registeredWorktrees, options)) {
+        if (await this.retryFailedRemoval(route, removalTarget, registeredWorktrees, options)) {
           return { removing: true }
         }
         if (!registeredWorktree) {

@@ -3,7 +3,6 @@ import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
-import { gitExecFileAsync } from '../git/runner'
 import { isENOENT } from '../ipc/filesystem-auth'
 import {
   getLocalWorktreePathAccess,
@@ -23,7 +22,6 @@ import {
   mergeRuntimeFolderWorkspace
 } from './runtime-folder-workspace'
 import type { RuntimeStore } from './runtime-store-contract'
-import { gitStatusErrorMeansNotRepository } from './runtime-worktree-selection'
 
 // Takes the resolved host rather than the repo: reading `repo.connectionId` answered "stat this on
 // the client" for a row that names its owner only as `executionHostId: 'ssh:<target>'`, which is
@@ -46,21 +44,6 @@ export async function isRuntimeWorktreePathMissing(
   }
   const fsProvider = route.provider
   return fsProvider ? isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path)) : false
-}
-
-export async function isLocalRuntimeGitRepository(
-  runtimeWorktreePath: string,
-  localWorktreeGitOptions: { wslDistro?: string } = {}
-): Promise<boolean> {
-  try {
-    await gitExecFileAsync(['status', '--short'], {
-      cwd: runtimeWorktreePath,
-      ...localWorktreeGitOptions
-    })
-    return true
-  } catch (error) {
-    return !gitStatusErrorMeansNotRepository(error)
-  }
 }
 
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {

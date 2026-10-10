@@ -1,5 +1,4 @@
 import { lstat, readFile } from 'node:fs/promises'
-import type { Repo } from '../shared/repo-types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../shared/worktree/nested-removal'
@@ -117,7 +116,7 @@ export function findRegisteredDeletableWorktree(
 
 export function assertWorktreeDoesNotContainRegisteredWorktree(
   worktreePath: string,
-  worktrees: readonly GitWorktreeInfo[]
+  worktrees: readonly Pick<GitWorktreeInfo, 'path'>[]
 ): void {
   const nestedWorktree = worktrees.find((item) => {
     if (areWorktreePathsEqual(item.path, worktreePath)) {
@@ -180,58 +179,6 @@ export function canCleanupUnregisteredOrcaWorktreeDirectory(args: {
   return false
 }
 
-export async function canCleanupUnregisteredOrcaLeftoverDirectory(args: {
-  meta: UnregisteredOrcaCleanupMeta | null | undefined
-  worktreePath: string
-  runtimeWorktreePath: string
-  repo: Pick<Repo, 'path'>
-  runtimeRepoPath: string
-  registeredWorktrees: readonly GitWorktreeInfo[]
-  statPath: StatPath
-  home: WorktreeRemovalHomeAuthority
-  isGitRepository: (runtimeWorktreePath: string) => Promise<boolean>
-}): Promise<boolean> {
-  // Why: this recovery state has already lost the worktree .git marker, so the
-  // existing .git-file orphan proof cannot establish ownership.
-  // Why: without a surviving .git file, path shape alone is too weak to prove
-  // ownership for recursive deletion; require persisted Orca-created evidence.
-  if (!hasCurrentOrcaCreationProvenance(args.meta) && !hasLegacyOrcaCreationEvidence(args.meta)) {
-    return false
-  }
-
-  // Why: same recursive delete, same rule — no home answer from the executing host, no delete.
-  if (!isRemovalHomeAuthorityResolved(args.home)) {
-    return false
-  }
-
-  if (
-    isDangerousWorktreeRemovalPath(args.worktreePath, args.repo.path, args.home) ||
-    isDangerousWorktreeRemovalPath(args.runtimeWorktreePath, args.runtimeRepoPath, args.home)
-  ) {
-    return false
-  }
-
-  assertWorktreeDoesNotContainRegisteredWorktree(args.worktreePath, args.registeredWorktrees)
-
-  const targetEntry = await args.statPath(args.runtimeWorktreePath).catch(() => null)
-  if (!isDirectoryStat(targetEntry)) {
-    return false
-  }
-
-  const pathOps = getPathOps(args.runtimeWorktreePath, args.runtimeRepoPath)
-  const gitMarkerPath = pathOps.join(args.runtimeWorktreePath, '.git')
-  try {
-    await args.statPath(gitMarkerPath)
-    return false
-  } catch (error) {
-    if (!isMissingPathError(error)) {
-      return false
-    }
-  }
-
-  return !(await args.isGitRepository(args.runtimeWorktreePath))
-}
-
 function hasCurrentOrcaCreationProvenance(
   meta: Pick<WorktreeMeta, 'orcaCreatedAt' | 'orcaCreationSource'> | null | undefined
 ): boolean {
@@ -285,20 +232,6 @@ function isMissingPathError(error: unknown): boolean {
   return /\b(ENOENT|ENOTDIR)\b|no such file or directory|cannot find (?:the )?(?:file|path)|(?:file|path) not found/i.test(
     message
   )
-}
-
-function isDirectoryStat(stat: unknown): boolean {
-  const entry =
-    stat && typeof stat === 'object'
-      ? (stat as { isDirectory?: () => boolean; isSymbolicLink?: () => boolean; type?: unknown })
-      : null
-  if (!entry) {
-    return false
-  }
-  if (entry.isSymbolicLink?.() === true || entry.type === 'symlink') {
-    return false
-  }
-  return entry.isDirectory?.() === true || entry.type === 'directory'
 }
 
 export async function isWorktreePathMissing(
