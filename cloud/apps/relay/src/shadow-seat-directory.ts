@@ -205,6 +205,8 @@ export class ShadowSeatDirectory {
     cursor.lastAnsweredAt = now
     cursor.incarnation = undefined
     cursor.seq = undefined
+    // An image without the feed has no switch file either, whatever a newer image reported.
+    cursor.flagsApplied = undefined
   }
 
   fail(cellId: string, reason: string): void {

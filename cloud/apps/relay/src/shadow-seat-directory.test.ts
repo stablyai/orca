@@ -362,6 +362,31 @@ describe('startShadowSeatPoller', () => {
     expect(cell.directory.isComplete()).toBe(true)
   })
 
+  it('forgets the switches a cell reported once its image no longer has the feed', async () => {
+    let rolledBack = false
+    const cell = poller({
+      'cell-a': () => json(feed({ seq: 1, full: [] })),
+      'cell-b': () =>
+        rolledBack
+          ? new Response('Not Found', { status: 404 })
+          : json(
+              feed({
+                cellId: 'cell-b',
+                seq: 1,
+                full: [],
+                flagsApplied: { generation: 3, flags: { readinessLocal: true } }
+              })
+            )
+    })
+    await cell.tick()
+    expect(cell.directory.cellState('cell-b')?.flagsApplied?.generation).toBe(3)
+    rolledBack = true
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'no-feed' })
+    expect(cell.directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
+  })
+
   it('completes without a cell that is dead, empty or isolated', async () => {
     const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, 'all', async () => [
       CELLS[0]!,
