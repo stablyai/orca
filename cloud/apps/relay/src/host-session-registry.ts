@@ -28,8 +28,11 @@ import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
+import type { AssignmentLeaseClass } from './assignment-lease.js'
 import type { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
+import type { CellAdmitMode, CellReserveBook } from './cell-reserve-book.js'
+import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
 import { CellSeatLog, type CellSeatChange, type CellSeatFeedPage } from './cell-seat-log.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
 import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
@@ -205,6 +208,30 @@ const ACTIVATION_QUEUE_WAIT_MS = 30_000
 export const CONTROL_LEASE_MS = 6 * 60 * 60 * 1000
 export const CONTROL_LEASE_JITTER_MS = 30 * 60 * 1000
 
+// Step 5 on a cell: what the per-cell switch says, and the booking book it admits from.
+export type CellReserveAdmission = {
+  mode: () => CellAdmitMode
+  ticketEnforce: () => boolean
+  dryRunEnabled: () => boolean
+  // The pool-pressure shed's condition: a hello memory cannot admit is shed, not queued.
+  databaseShedding: () => boolean
+  book: CellReserveBook
+  verifyLease: (input: {
+    lease: string | undefined
+    userId: string
+    relayHostId: string
+    helloEpoch: number
+  }) => Promise<AssignmentLeaseClass>
+}
+
+// A leaver that closed for these reasons was moved off this cell; it may not rejoin from memory.
+const NO_REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([
+  RELAY_CLOSE_CODE.DRAINING,
+  RELAY_CLOSE_CODE.WRONG_CELL
+])
+// A demoted duplicate keeps its splices this long, then closes so the desktop re-assigns.
+export const DEMOTION_CLOSE_MS = 60_000
+
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
@@ -218,7 +245,10 @@ export class HostSessionRegistry {
   // Hosts whose drain has been sent. Paced sends land minutes apart, so "this cell is
   // draining" is not the same question as "this host has been told to leave".
   private readonly drainSentHosts = new Set<string>()
-  private readonly seatLog = new CellSeatLog()
+  private readonly seatLog: CellSeatLog
+  // Seat key -> the demoted control socket. Its own set, not drainSentHosts: it ends with
+  // that socket (close, rebind or a new join), so a later booking here is a fresh seat.
+  private readonly demotedSeats = new Map<string, WebSocket>()
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -345,8 +375,115 @@ export class HostSessionRegistry {
     private readonly now: () => number = Date.now,
     private readonly random: () => number = Math.random,
     private readonly cellIncarnation?: string,
-    private readonly assignmentLeaseShadow?: AssignmentLeaseShadow
-  ) {}
+    private readonly assignmentLeaseShadow?: AssignmentLeaseShadow,
+    private readonly reserveAdmission?: CellReserveAdmission
+  ) {
+    this.seatLog = new CellSeatLog(undefined, now)
+  }
+
+  // Reserve mode is only ever a cell's, and only while its applied switch says so.
+  private reserveMode(): boolean {
+    return this.config.role === 'cell' && this.reserveAdmission?.mode() === 'reserve'
+  }
+
+  inReserveMode(): boolean {
+    return this.reserveMode()
+  }
+
+  reserveCounts(): { bookings: number; intake: { perSec: number; burst: number; tokens: number } } | null {
+    const book = this.reserveAdmission?.book
+    return book ? { bookings: book.count(), intake: book.intakeSnapshot() } : null
+  }
+
+  reserve(request: ReserveRequest): ReserveOutcome[] {
+    const admission = this.reserveAdmission
+    if (this.config.role !== 'cell' || !admission || (request.dryRun && !admission.dryRunEnabled())) {
+      return request.items.map(() => ({ outcome: 'off' }))
+    }
+    const context = {
+      mode: admission.mode(),
+      draining: this.draining,
+      seatedEpoch: (userId: string, relayHostId: string) => {
+        const seat = this.seatLog.seatOf(userId, relayHostId)
+        return seat && !this.demotedSeats.has(this.key(userId, relayHostId)) ? seat.epoch : undefined
+      }
+    }
+    return request.items.map((item) => {
+      const outcome = admission.book.reserve(request.directorId, item, context, request.dryRun)
+      if (outcome.outcome === 'ok' && !request.dryRun) {
+        this.seatLog.append({
+          kind: 'reserve',
+          userId: item.userId,
+          relayHostId: item.relayHostId,
+          epoch: item.epoch,
+          generation: 0,
+          reservedBy: request.directorId,
+          at: this.now()
+        })
+      }
+      return outcome
+    })
+  }
+
+  // The upgrade's view: a booked host claims its unit up to the hard cap, and neither a booked
+  // nor a recently seated host needs the database, so the pool-pressure shed skips them.
+  reserveAdmissionFor(identity: RelayIdentityKey): 'booked' | 'seated' | null {
+    if (!this.reserveMode()) return null
+    if (this.reserveAdmission!.book.has(identity.userId, identity.relayHostId)) return 'booked'
+    const seat = this.seatLog.seatOf(identity.userId, identity.relayHostId)
+    const left = this.seatLog.recentlyLeftOf(identity.userId, identity.relayHostId)
+    return seat || (left && !NO_REJOIN_CLOSE_CODES.has(left.closeCode ?? 0)) ? 'seated' : null
+  }
+
+  // Rule 2: seated here at this epoch, or left here at it within 10 minutes for a reason that
+  // did not move the host away.
+  private seatedHereAt(userId: string, relayHostId: string, epoch: number): boolean {
+    if (this.drainSentHosts.has(relayHostId)) return false
+    if (this.demotedSeats.has(this.key(userId, relayHostId))) return false
+    const seat = this.seatLog.seatOf(userId, relayHostId)
+    if (seat) return seat.epoch === epoch
+    const left = this.seatLog.recentlyLeftOf(userId, relayHostId)
+    return left !== undefined && left.epoch === epoch && !NO_REJOIN_CLOSE_CODES.has(left.closeCode ?? 0)
+  }
+
+  // A director names this seat the loser of a duplicate: stop taking phones for it now, and
+  // close it once its splices have had time to finish. Repeats are one demotion.
+  demote(request: DemoteRequest): 'demoted' | 'already-demoted' | 'not-seated' | 'off' {
+    // Only a reserve-mode cell takes demotions, so flipping admitMode back reverts the route.
+    if (!this.reserveMode()) return 'off'
+    const session = this.get(request)
+    const key = this.key(request.userId, request.relayHostId)
+    // The seat the director saw: the same host rejoining here later is a different seat.
+    const seat = this.seatLog.seatOf(request.userId, request.relayHostId)
+    if (
+      !session ||
+      session.state === 'closed' ||
+      !session.socket ||
+      session.assignmentEpoch !== request.epoch ||
+      seat?.joinedAt !== request.joinedAt
+    ) {
+      return 'not-seated'
+    }
+    const socket = session.socket
+    if (this.demotedSeats.get(key) === socket) return 'already-demoted'
+    this.demotedSeats.set(key, socket)
+    this.markSeatDrainOnly(session)
+    const timer = setTimeout(() => {
+      if (this.demotedSeats.get(key) === socket) {
+        socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'seated on a newer cell')
+      }
+    }, DEMOTION_CLOSE_MS)
+    timer.unref?.()
+    console.warn(
+      JSON.stringify({
+        event: 'orca_relay_cell_seat_demoted',
+        ...this.logIdentity(),
+        relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+        assignmentEpoch: request.epoch
+      })
+    )
+    return 'demoted'
+  }
 
   // Renewals leave the heartbeat as an enqueue: one statement per cell per
   // window replaces one write transaction per host, which is what keeps the
@@ -456,6 +593,12 @@ export class HostSessionRegistry {
     markStage('credential')
     const sessionKey = this.key(reservation.userId, hostId)
     const session = this.sessions.get(sessionKey)
+    if (session?.socket && this.demotedSeats.get(sessionKey) === session.socket) {
+      capacityReservation?.release()
+      await this.store.failReservation(reservation)
+      this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
+      return
+    }
     if (
       !session ||
       session.state !== 'active' ||
@@ -906,6 +1049,8 @@ export class HostSessionRegistry {
 
   drain(graceMs: number, options: { paceWindowMs?: number } = {}): void {
     this.draining = true
+    // A draining cell admits no booking, so the units they hold go back now.
+    this.reserveAdmission?.book.clear()
     // A later drain (an emergency one, or shutdown) owns every session again, so nothing
     // queued by an earlier paced drain may still fire: it would re-send and, worse, keep
     // the event loop alive for the rest of a window the operator just cut short.
@@ -1016,19 +1161,50 @@ export class HostSessionRegistry {
         relayHostId: identity.relayHostId,
         helloEpoch: hello.data.assignmentEpoch
       }) ?? null
+    // Reserve mode admits, in order, a booking, a seat this cell remembers, and (dark) a valid
+    // lease; anything else falls to today's database check. The mode is read once per hello.
+    const reserveMode = this.reserveMode()
+    let reservedBy: string | undefined
+    let admittedFromMemory = false
+    if (reserveMode) {
+      const booking = this.reserveAdmission!.book.take(
+        identity.sub,
+        identity.relayHostId,
+        hello.data.assignmentEpoch
+      )
+      reservedBy = booking?.directorId
+      admittedFromMemory =
+        booking !== null ||
+        this.seatedHereAt(identity.sub, identity.relayHostId, hello.data.assignmentEpoch) ||
+        (this.reserveAdmission!.ticketEnforce() &&
+          (await this.reserveAdmission!.verifyLease({
+            lease: assignmentLease,
+            userId: identity.sub,
+            relayHostId: identity.relayHostId,
+            helloEpoch: hello.data.assignmentEpoch
+          })) === 'valid')
+    }
+    if (reserveMode && !admittedFromMemory && this.reserveAdmission!.databaseShedding()) {
+      // Memory cannot admit it (e.g. seated here, but at another epoch), and the wedged pool
+      // would only time out its database check: shed it now, as the upgrade shed does.
+      this.observer.recordAuth(false)
+      socket.close(RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'relay temporarily unavailable')
+      return
+    }
     const assignmentReadStartedAt = performance.now()
     // Combined is staging-only compatibility; stamped cells require the durable director epoch.
     const assignmentValid =
-      this.config.role === 'combined'
+      admittedFromMemory ||
+      (this.config.role === 'combined'
         ? hello.data.assignmentEpoch === 1
         : await this.assignments.verifyCellAssignment({
             userId: identity.sub,
             relayHostId: identity.relayHostId,
             cellId: this.config.cellId,
             assignmentEpoch: hello.data.assignmentEpoch
-          })
+          }))
     // The database answer decides; the lease is only compared with it.
-    if (leaseShadow && leaseCheck) {
+    if (leaseShadow && leaseCheck && !admittedFromMemory) {
       leaseShadow.record(
         leaseCheck,
         assignmentValid,
@@ -1112,7 +1288,8 @@ export class HostSessionRegistry {
             rebind,
             hello.data.assignmentEpoch,
             hello.data.appVersion,
-            connectionInclusionWatermark
+            connectionInclusionWatermark,
+            admittedFromMemory ? { reservedBy } : undefined
           ),
         socket,
         'host activation'
@@ -1128,7 +1305,9 @@ export class HostSessionRegistry {
     rebind: boolean,
     assignmentEpoch: number,
     appVersion: string,
-    connectionInclusionWatermark?: number
+    connectionInclusionWatermark?: number,
+    // Present when the hello was admitted from memory: no database registration.
+    reserved?: { reservedBy?: string }
   ): Promise<void> {
     const release = this.beginIdleWork(identity.relayHostId)
     if (!release) {
@@ -1162,7 +1341,8 @@ export class HostSessionRegistry {
           rebind,
           assignmentEpoch,
           appVersion,
-          connectionInclusionWatermark
+          connectionInclusionWatermark,
+          reserved
         )
       })
     this.activationQueues.set(key, activation)
@@ -1182,10 +1362,11 @@ export class HostSessionRegistry {
     rebind: boolean,
     assignmentEpoch: number,
     appVersion: string,
-    connectionInclusionWatermark?: number
+    connectionInclusionWatermark?: number,
+    reserved?: { reservedBy?: string }
   ): Promise<void> {
     let controlActivityId: string | null = null
-    if (this.config.role === 'cell') {
+    if (this.config.role === 'cell' && !reserved) {
       try {
         controlActivityId = await this.assignments.activateControl(
           { userId: identity.sub, relayHostId: identity.relayHostId },
@@ -1245,7 +1426,8 @@ export class HostSessionRegistry {
       existing.activityRenewalDueAt = this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
       this.wireActiveControl(existing)
       this.sendHelloAck(existing)
-      this.appendSeatChange(existing, 'join')
+      this.demotedSeats.delete(this.key(identity.sub, identity.relayHostId))
+      this.appendSeatChange(existing, 'join', undefined, reserved?.reservedBy)
       if (existing.regionalDrainAttemptId) this.reassertRegionalDrain(existing)
       previousSocket?.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'control rebound')
       return
@@ -1315,9 +1497,10 @@ export class HostSessionRegistry {
     // A host that proved itself again is not signed out, whatever it said last.
     this.hostCloseReasons.forget(sessionKey)
     this.sessions.set(sessionKey, session)
+    this.demotedSeats.delete(sessionKey)
     this.wireActiveControl(session)
     this.sendHelloAck(session)
-    this.appendSeatChange(session, 'join')
+    this.appendSeatChange(session, 'join', undefined, reserved?.reservedBy)
   }
 
   seatFeed(sinceSeq: number | null): CellSeatFeedPage {
@@ -1327,7 +1510,8 @@ export class HostSessionRegistry {
   private appendSeatChange(
     session: HostSession,
     kind: CellSeatChange['kind'],
-    closeCode?: number
+    closeCode?: number,
+    reservedBy?: string
   ): void {
     this.seatLog.append({
       kind,
@@ -1339,6 +1523,7 @@ export class HostSessionRegistry {
         ? { state: session.state }
         : {}),
       ...(closeCode === undefined ? {} : { closeCode }),
+      ...(reservedBy === undefined ? {} : { reservedBy }),
       at: this.now()
     })
   }
@@ -1376,8 +1561,12 @@ export class HostSessionRegistry {
       // Guarded on identity: a predecessor retired by a rebind must not stamp a
       // cause onto the live session that replaced it.
       if (session.socket === socket) {
-        this.hostCloseReasons.record(this.key(session.identity.sub, session.relayHostId), reason)
-        this.appendSeatChange(session, 'leave', code)
+        const seatKey = this.key(session.identity.sub, session.relayHostId)
+        this.hostCloseReasons.record(seatKey, reason)
+        // However it closed, a demoted seat was moved: it may not rejoin here from memory.
+        const demoted = this.demotedSeats.get(seatKey) === socket
+        if (demoted) this.demotedSeats.delete(seatKey)
+        this.appendSeatChange(session, 'leave', demoted ? RELAY_CLOSE_CODE.WRONG_CELL : code)
       }
       // One line per control close makes reconnect churners attributable by
       // host digest without exposing the raw relay host id.

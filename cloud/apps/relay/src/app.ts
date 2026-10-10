@@ -39,6 +39,8 @@ import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment-le
 import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
+import { registerCellReserveRoutes } from './cell-reserve-routes.js'
+import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
 import type { CellSeatFeedPage } from './cell-seat-log.js'
 import { type CellFlags, supportedCellFlags } from './cell-flags.js'
 import type { AppliedControlFlags } from './relay-control-flag-channel.js'
@@ -126,6 +128,13 @@ export function createRelayApp(
     cellIncarnation?: string
     cellSeatFeed?: (sinceSeq: number | null) => CellSeatFeedPage
     cellFlags?: () => AppliedControlFlags<CellFlags>
+    cellReserve?: (request: ReserveRequest) => ReserveOutcome[]
+    cellDemote?: (request: DemoteRequest) => string
+    cellReserveCounts?: () => {
+      bookings: number
+      intake: { perSec: number; burst: number; tokens: number }
+    } | null
+    cellPlacementCeiling?: number
     isDraining?: () => boolean
     regionalRehomeSafetySnapshot?: () => RegionalRehomeSafetySnapshot
     runtimeCounts?: () => RelayRuntimeCounts
@@ -333,7 +342,14 @@ export function createRelayApp(
     seatFeed: operations.cellSeatFeed,
     isDraining: operations.isDraining,
     runtimeCounts: operations.runtimeCounts,
-    cellFlags: operations.cellFlags
+    cellFlags: operations.cellFlags,
+    reserveCounts: operations.cellReserveCounts,
+    placementCeiling: operations.cellPlacementCeiling
+  })
+  registerCellReserveRoutes(app, config, {
+    verifyRegionalRehomeToken,
+    reserve: operations.cellReserve,
+    demote: operations.cellDemote
   })
 
   // Not /healthz: Google Front End reserves that path before the container.

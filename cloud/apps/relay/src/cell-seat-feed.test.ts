@@ -69,8 +69,10 @@ const SeatFeedReplySchema = z.object({
       generation: z.number(),
       flags: z.object({
         readinessLocal: z.boolean(),
-        ticketCheck: z.enum(['off', 'shadow']),
-        rejectionFence: z.boolean()
+        ticketCheck: z.enum(['off', 'shadow', 'enforce']),
+        rejectionFence: z.boolean(),
+        admitMode: z.enum(['db', 'reserve']),
+        reserveDryRun: z.boolean()
       }),
       ignoredKeys: z.array(z.string()).optional()
     })
@@ -352,7 +354,10 @@ describe('cell seat feed', () => {
         readinessLocal: { type: 'boolean' },
         ticketCheck: { type: 'enum', values: ['off', 'shadow'] },
         rejectionFence: { type: 'boolean' },
-        readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true }
+        readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true },
+        admitMode: { type: 'enum', values: ['db', 'reserve'] },
+        intakePerSec: { type: 'number', max: 1_000 },
+        reserveDryRun: { type: 'boolean' }
       }
     })
   })

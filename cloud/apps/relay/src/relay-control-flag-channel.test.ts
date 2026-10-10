@@ -134,6 +134,20 @@ describe('control flag channel', () => {
     expect(output).not.toContain(ACCESS_TOKEN)
   })
 
+  it('applies the step-5 switches: admit mode, intake rate and enforced tickets', async () => {
+    const google = fakeGoogle(
+      cellObject(5, { admitMode: 'reserve', intakePerSec: 3.5, ticketCheck: 'enforce' })
+    )
+    const channel = cellChannel(google.fetchImpl)
+    await channel.poll()
+    expect(channel.applied().flags).toEqual({
+      ...CELL_FLAG_DEFAULTS,
+      admitMode: 'reserve',
+      intakePerSec: 3.5,
+      ticketCheck: 'enforce'
+    })
+  })
+
   it('applies the fence and read-timeout switches within their bounds', async () => {
     const google = fakeGoogle(cellObject(5, { rejectionFence: false, readTimeoutMarginMs: 4_000 }))
     const channel = cellChannel(google.fetchImpl)
@@ -157,22 +171,24 @@ describe('control flag channel', () => {
   })
 
   it('ignores unknown keys but voids the object on a bad known value or another cell', async () => {
-    const google = fakeGoogle(cellObject(5, { readinessLocal: true, admitMode: 'memory' }))
+    const google = fakeGoogle(cellObject(5, { readinessLocal: true, placer: 'memory' }))
     const channel = cellChannel(google.fetchImpl)
     await channel.poll()
     expect(channel.applied()).toEqual({
       generation: 5,
       flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true },
-      ignoredKeys: ['admitMode']
+      ignoredKeys: ['placer']
     })
-    expect(appliedLines().at(-1)).toMatchObject({ ignoredKeys: ['admitMode'] })
+    expect(appliedLines().at(-1)).toMatchObject({ ignoredKeys: ['placer'] })
     for (const [generation, object] of [
-      [6, cellObject(6, { readinessLocal: false, ticketCheck: 'enforce' })],
-      [7, cellObject(7, { readinessLocal: 'no' })],
-      [8, cellObject(8, { readTimeoutMarginMs: 500 })],
-      [9, cellObject(9, { readTimeoutMarginMs: 61_000 })],
-      [10, cellObject(10, { rejectionFence: 'off' })],
-      [11, cellObject(11, { readinessLocal: false }, 'production-gce-c8')]
+      [6, cellObject(6, { readinessLocal: false, ticketCheck: 'strict' })],
+      [7, cellObject(7, { readinessLocal: false, admitMode: 'memory' })],
+      [8, cellObject(8, { readinessLocal: false, intakePerSec: -1 })],
+      [9, cellObject(9, { readinessLocal: 'no' })],
+      [10, cellObject(10, { readTimeoutMarginMs: 500 })],
+      [11, cellObject(11, { readTimeoutMarginMs: 61_000 })],
+      [12, cellObject(12, { rejectionFence: 'off' })],
+      [13, cellObject(13, { readinessLocal: false }, 'production-gce-c8')]
     ] as const) {
       google.state.object = object
       await channel.poll()
