@@ -3,7 +3,7 @@ import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { RichMarkdownTrailingParagraph } from './rich-markdown-trailing-paragraph'
 import Link from '@tiptap/extension-link'
-import { Code } from '@tiptap/extension-code'
+import { RichMarkdownCode } from './rich-markdown-code'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
@@ -47,12 +47,6 @@ import { documentResourceAccess } from '@/lib/local-file-access'
 import { resolveRichMarkdownImageUrl } from './rich-markdown-image-context'
 
 const lowlight = createCachedLowlight(createLowlight(common))
-
-const RichMarkdownCode = Code.extend({
-  // Why: Markdown supports linked code labels, so code cannot exclude the link
-  // mark even though it should still stay exclusive with emphasis marks.
-  excludes: 'code bold italic strike underline'
-})
 
 export function createRichMarkdownExtensions({
   codec,
