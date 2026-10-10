@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   BadgeCheck,
   FileText,
+  Info,
   Loader2,
   MoreHorizontal,
   RotateCcw,
@@ -11,6 +12,7 @@ import type { PluginHostListEntry, PluginHostLogLine } from '../../../../preload
 import { translate } from '@/i18n/i18n'
 import { PluginCatalogAvatar } from '../plugin-catalog/PluginCatalogAvatar'
 import { invalidPluginErrorMessage } from './plugin-error-presentation'
+import { pluginPlatformLabels } from './plugin-platform-presentation'
 import { cn } from '@/lib/utils'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -51,6 +53,12 @@ function statusPresentation(plugin: PluginHostListEntry): { label: string; class
     return {
       label: translate('auto.components.settings.PluginSettingsRow.needsReview', 'Needs review'),
       className: 'border-foreground/20 bg-foreground/8 text-foreground'
+    }
+  }
+  if (plugin.unsupportedPlatform) {
+    return {
+      label: translate('auto.components.settings.PluginSettingsRow.unavailable', 'Unavailable'),
+      className: 'border-border bg-muted/40 text-muted-foreground'
     }
   }
   if (plugin.status === 'restarting') {
@@ -242,7 +250,18 @@ export function PluginSettingsRow({
               </span>
             </p>
           ) : null}
-          {plugin.error ? (
+          {plugin.unsupportedPlatform ? (
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-5 text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {translate(
+                  'auto.components.settings.PluginSettingsRow.platformUnsupported',
+                  'Available only on {{value0}}. It stays off on this computer.',
+                  { value0: pluginPlatformLabels(plugin.unsupportedPlatform.platforms) }
+                )}
+              </span>
+            </p>
+          ) : plugin.error ? (
             <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-5 text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>

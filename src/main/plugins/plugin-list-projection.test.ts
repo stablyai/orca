@@ -3,7 +3,11 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { emptyPluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
-import type { InvalidDiscoveredPlugin, ValidDiscoveredPlugin } from './plugin-discovery'
+import type {
+  DiscoveredPlugin,
+  InvalidDiscoveredPlugin,
+  ValidDiscoveredPlugin
+} from './plugin-discovery'
 import { buildPluginList } from './plugin-list-projection'
 import type { PluginService } from './plugin-service'
 
@@ -20,7 +24,7 @@ const manifest = pluginManifestSchema.parse({
 })
 
 function serviceWith(
-  discovered: ValidDiscoveredPlugin,
+  discovered: DiscoveredPlugin,
   options: {
     activation?: ReturnType<PluginService['activationState']>
     worker?: ReturnType<PluginService['workerState']>
@@ -127,6 +131,35 @@ describe('buildPluginList consent identity', () => {
     expect(projected.pluginKey).toBe('invalid-development-plugin-1')
     expect(projected.name).toBe('invalid-development-plugin-1')
     expect(JSON.stringify(projected)).not.toContain(invalid.rootDir)
+  })
+
+  it('projects a plugin for another OS as an inert, explained entry', async () => {
+    const unsupported: InvalidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.mac-tool',
+      rootDir: join(tmpdir(), 'plugins', 'mac-tool'),
+      error: 'not available on this platform: supports darwin (this is win32)',
+      isDev: false,
+      unsupportedPlatform: {
+        platforms: ['darwin'],
+        manifest: { name: 'Mac Tool', version: '2.1.0', publisher: 'orca-samples' }
+      }
+    }
+
+    const projected = (await buildPluginList(serviceWith(unsupported), emptyPluginLockfile()))[0]
+    expect(projected).toMatchObject({
+      pluginKey: 'orca-samples.mac-tool',
+      name: 'Mac Tool',
+      version: '2.1.0',
+      publisher: 'orca-samples',
+      status: 'invalid',
+      needsReconsent: false,
+      consentFingerprint: null,
+      unsupportedPlatform: { platforms: ['darwin'] },
+      capabilities: [],
+      panels: [],
+      commands: [],
+      hasWorker: false
+    })
   })
 
   it('projects exact VM lifecycle commands for instructional consent', async () => {

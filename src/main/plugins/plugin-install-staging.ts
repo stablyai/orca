@@ -9,6 +9,10 @@ import {
   type PluginManifest
 } from '../../shared/plugins/plugin-manifest'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
+import {
+  isPluginPlatformSupported,
+  unsupportedPluginPlatformError
+} from '../../shared/plugins/plugin-platforms'
 import type {
   PluginInstallSource,
   PluginLockEntry
@@ -43,7 +47,7 @@ export type PluginInstallInspection =
       contentHash: string
       consentFingerprint: string
     }
-  | { ok: false; error: string }
+  | { ok: false; error: string; unsupportedPlatform?: true }
 
 async function validatePluginInstallTree(
   rootDir: string,
@@ -56,7 +60,9 @@ async function validatePluginInstallTree(
 async function readInstallManifest(
   rootDir: string,
   hostVersion: string
-): Promise<{ ok: true; manifest: PluginManifest } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; manifest: PluginManifest } | { ok: false; error: string; unsupportedPlatform?: true }
+> {
   let raw: unknown
   try {
     raw = JSON.parse(await readPluginManifestText(rootDir))
@@ -74,6 +80,16 @@ async function readInstallManifest(
     return {
       ok: false,
       error: `plugin requires Orca ${parsed.manifest.engines.orca} (this is ${hostVersion})`
+    }
+  }
+  // Why every install path: local, Git, marketplace, and bundled installs all
+  // read the manifest here, and plugins always run on this computer.
+  const platforms = parsed.manifest.platforms
+  if (platforms && !isPluginPlatformSupported(platforms, process.platform)) {
+    return {
+      ok: false,
+      error: `plugin is ${unsupportedPluginPlatformError(platforms, process.platform)}`,
+      unsupportedPlatform: true
     }
   }
   return { ok: true, manifest: parsed.manifest }

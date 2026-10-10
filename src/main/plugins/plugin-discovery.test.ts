@@ -127,3 +127,69 @@ describe('instructional plugin discovery identity', () => {
     expect(second.consentFingerprint).not.toBe(first.consentFingerprint)
   })
 })
+
+describe('plugin platform gate', () => {
+  async function writeDevPlugin(platforms: string[] | undefined): Promise<string> {
+    const root = await tempPluginsDir()
+    await writeFile(join(root, 'main.mjs'), 'export default function activate() {}')
+    await writeFile(
+      join(root, 'orca-plugin.json'),
+      JSON.stringify({
+        manifestVersion: 1,
+        id: 'mac-tool',
+        publisher: 'orca-samples',
+        name: 'Mac Tool',
+        version: '2.1.0',
+        description: 'Talks to a macOS-only API.',
+        engines: { orca: '>=1.0.0' },
+        pluginApi: 1,
+        ...(platforms ? { platforms } : {}),
+        main: 'main.mjs',
+        contributes: { commands: [{ id: 'run', title: 'Run' }] },
+        capabilities: []
+      })
+    )
+    return root
+  }
+
+  it('reports a plugin for another OS as unavailable without reading its artifacts', async () => {
+    const devPath = await writeDevPlugin(['darwin'])
+    await rm(join(devPath, 'main.mjs'))
+
+    const [plugin] = await discoverPlugins({
+      pluginsDir: await tempPluginsDir(),
+      devPluginPaths: [devPath],
+      hostVersion: '1.4.0',
+      hostPlatform: 'win32'
+    })
+
+    expect(plugin && isInvalidDiscoveredPlugin(plugin)).toBe(true)
+    expect(plugin).toMatchObject({
+      pluginKey: 'orca-samples.mac-tool',
+      error: 'not available on this platform: supports darwin (this is win32)',
+      unsupportedPlatform: {
+        platforms: ['darwin'],
+        manifest: {
+          name: 'Mac Tool',
+          version: '2.1.0',
+          publisher: 'orca-samples',
+          description: 'Talks to a macOS-only API.'
+        }
+      }
+    })
+  })
+
+  it.each([
+    [['darwin', 'linux'], 'linux'],
+    [undefined, 'win32']
+  ])('discovers %j plugins normally on %s', async (platforms, hostPlatform) => {
+    const [plugin] = await discoverPlugins({
+      pluginsDir: await tempPluginsDir(),
+      devPluginPaths: [await writeDevPlugin(platforms)],
+      hostVersion: '1.4.0',
+      hostPlatform
+    })
+
+    expect(plugin && isInvalidDiscoveredPlugin(plugin)).toBe(false)
+  })
+})

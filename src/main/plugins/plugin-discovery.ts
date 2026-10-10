@@ -14,6 +14,11 @@ import {
   fingerprintPluginConsent,
   hasInstructionalPluginContributions
 } from '../../shared/plugins/plugin-consent-fingerprint'
+import {
+  isPluginPlatformSupported,
+  unsupportedPluginPlatformError,
+  type PluginPlatform
+} from '../../shared/plugins/plugin-platforms'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
@@ -54,9 +59,17 @@ export type InvalidDiscoveredPlugin = {
   rootDir: string
   error: string
   isDev: boolean
+  /** Set when a valid manifest excludes this host's platform, so clients can
+   *  show the plugin as unavailable instead of broken. */
+  unsupportedPlatform?: {
+    platforms: PluginPlatform[]
+    manifest: Pick<PluginManifest, 'name' | 'version' | 'publisher' | 'description'>
+  }
 }
 
 export type DiscoveredPlugin = ValidDiscoveredPlugin | InvalidDiscoveredPlugin
+
+type DiscoveryHost = { hostVersion: string; hostPlatform: string }
 
 export function isInvalidDiscoveredPlugin(
   plugin: DiscoveredPlugin
@@ -74,10 +87,11 @@ export function getPluginsDataDir(userDataPath: string): string {
 
 async function readManifestDir(
   rootDir: string,
-  hostVersion: string,
+  host: DiscoveryHost,
   isDev: boolean,
   installedContentHash?: string
 ): Promise<DiscoveredPlugin> {
+  const { hostVersion, hostPlatform } = host
   let rawText: string
   try {
     rawText = await readPluginManifestText(rootDir)
@@ -115,6 +129,25 @@ async function readManifestDir(
       isDev
     }
   }
+  // Why before artifact checks: a plugin for another OS is unavailable here,
+  // not broken, and none of its files or contributions should be touched.
+  if (manifest.platforms && !isPluginPlatformSupported(manifest.platforms, hostPlatform)) {
+    return {
+      pluginKey,
+      rootDir,
+      error: unsupportedPluginPlatformError(manifest.platforms, hostPlatform),
+      isDev,
+      unsupportedPlatform: {
+        platforms: manifest.platforms,
+        manifest: {
+          name: manifest.name,
+          version: manifest.version,
+          publisher: manifest.publisher,
+          ...(manifest.description ? { description: manifest.description } : {})
+        }
+      }
+    }
+  }
   const artifacts = await validateDeclaredPluginArtifacts(rootDir, manifest)
   if (!artifacts.ok) {
     return {
@@ -149,7 +182,7 @@ async function readManifestDir(
 async function readInstalledPlugin(
   pluginDir: string,
   dirName: string,
-  hostVersion: string
+  host: DiscoveryHost
 ): Promise<DiscoveredPlugin> {
   let contentHash: string
   try {
@@ -173,7 +206,7 @@ async function readInstalledPlugin(
     }
   }
   const versionDir = join(pluginDir, contentHash)
-  const discovered = await readManifestDir(versionDir, hostVersion, false, contentHash)
+  const discovered = await readManifestDir(versionDir, host, false, contentHash)
   if (isInvalidDiscoveredPlugin(discovered)) {
     return { ...discovered, pluginKey: dirName }
   }
@@ -193,7 +226,7 @@ async function readInstalledPlugin(
 async function readInstalledPlugins(
   pluginsDir: string,
   entries: readonly Dirent[],
-  hostVersion: string
+  host: DiscoveryHost
 ): Promise<DiscoveredPlugin[]> {
   const results = Array.from({ length: entries.length }) as DiscoveredPlugin[]
   let nextIndex = 0
@@ -203,11 +236,7 @@ async function readInstalledPlugins(
       while (nextIndex < entries.length) {
         const index = nextIndex++
         const entry = entries[index]!
-        results[index] = await readInstalledPlugin(
-          join(pluginsDir, entry.name),
-          entry.name,
-          hostVersion
-        )
+        results[index] = await readInstalledPlugin(join(pluginsDir, entry.name), entry.name, host)
       }
     }
   )
@@ -219,7 +248,13 @@ export async function discoverPlugins(options: {
   pluginsDir: string
   devPluginPaths: readonly string[]
   hostVersion: string
+  /** Defaults to this process: plugins always run on the local Orca host. */
+  hostPlatform?: string
 }): Promise<DiscoveredPlugin[]> {
+  const host = {
+    hostVersion: options.hostVersion,
+    hostPlatform: options.hostPlatform ?? process.platform
+  }
   const discovered: DiscoveredPlugin[] = []
   let entries: Dirent[] = []
   try {
@@ -232,11 +267,9 @@ export async function discoverPlugins(options: {
   )
   // Installed manifests are independent immutable trees. Read them in
   // a bounded pool so startup latency stays low without exhausting handles.
-  discovered.push(
-    ...(await readInstalledPlugins(options.pluginsDir, installedEntries, options.hostVersion))
-  )
+  discovered.push(...(await readInstalledPlugins(options.pluginsDir, installedEntries, host)))
   for (const devPath of options.devPluginPaths) {
-    const plugin = await readManifestDir(devPath, options.hostVersion, true)
+    const plugin = await readManifestDir(devPath, host, true)
     // A dev path that duplicates an installed plugin's identity wins — that
     // is the point of dev mode — but two dev paths must not collide.
     if (!isInvalidDiscoveredPlugin(plugin)) {

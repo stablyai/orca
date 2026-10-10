@@ -1,12 +1,15 @@
 import { z } from 'zod'
 import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
 import { isQualifiedPluginKey } from './plugin-manifest'
+import {
+  OFFICIAL_PLUGIN_PUBLISHERS,
+  type OfficialPluginPublisher
+} from './plugin-official-publishers'
 
 export const PLUGIN_MARKETPLACE_FILENAME = 'orca-marketplace.json'
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
 export const PLUGIN_MARKETPLACE_CATEGORY_LIMIT = 16
 
-export const OFFICIAL_PLUGIN_PUBLISHER = 'stablyai'
 export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
@@ -134,22 +137,54 @@ export function splitQualifiedPluginKey(pluginKey: string): {
   }
 }
 
+export type OfficialPluginPolicy = {
+  /** Identities only an official publisher may use: its publisher slug or the `orca-` prefix. */
+  isReservedPluginIdentity(pluginKey: string): boolean
+  /** An official publisher's `orca-` plugin, eligible for bundling and the verified badge. */
+  isOfficialPluginIdentity(pluginKey: string): boolean
+  /** A GitHub repository owned by an official publisher's organization. */
+  isOfficialOrganizationGitSource(url: string): boolean
+}
+
+export function createOfficialPluginPolicy(
+  publishers: readonly OfficialPluginPublisher[]
+): OfficialPluginPolicy {
+  const publisherSlugs = new Set(publishers.map((entry) => entry.publisher))
+  const githubOwners = new Set(publishers.map((entry) => entry.githubOwner.toLowerCase()))
+  return {
+    isReservedPluginIdentity(pluginKey) {
+      const identity = splitQualifiedPluginKey(pluginKey)
+      return (
+        identity !== null &&
+        (publisherSlugs.has(identity.publisher) ||
+          identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
+      )
+    },
+    isOfficialPluginIdentity(pluginKey) {
+      const identity = splitQualifiedPluginKey(pluginKey)
+      return (
+        identity !== null &&
+        publisherSlugs.has(identity.publisher) &&
+        identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX)
+      )
+    },
+    isOfficialOrganizationGitSource(url) {
+      const source = parseGitRepositoryIdentity(url)
+      return source?.host === 'github.com' && githubOwners.has(source.owner.toLowerCase())
+    }
+  }
+}
+
+const officialPluginPolicy = createOfficialPluginPolicy(OFFICIAL_PLUGIN_PUBLISHERS)
+
+// Why wrappers instead of exported methods: callers pass these to zod
+// `.refine` and array helpers, which must never see a second argument.
 export function isReservedPluginIdentity(pluginKey: string): boolean {
-  const identity = splitQualifiedPluginKey(pluginKey)
-  return (
-    identity !== null &&
-    (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
-      identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
-  )
+  return officialPluginPolicy.isReservedPluginIdentity(pluginKey)
 }
 
 export function isOfficialPluginIdentity(pluginKey: string): boolean {
-  const identity = splitQualifiedPluginKey(pluginKey)
-  return (
-    identity !== null &&
-    identity.publisher === OFFICIAL_PLUGIN_PUBLISHER &&
-    identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX)
-  )
+  return officialPluginPolicy.isOfficialPluginIdentity(pluginKey)
 }
 
 type GitRepositoryIdentity = {
@@ -193,8 +228,7 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
 }
 
 export function isOfficialOrganizationGitSource(url: string): boolean {
-  const source = parseGitRepositoryIdentity(url)
-  return source?.host === 'github.com' && source.owner.toLowerCase() === OFFICIAL_PLUGIN_PUBLISHER
+  return officialPluginPolicy.isOfficialOrganizationGitSource(url)
 }
 
 export function isOfficialMarketplaceGitSource(url: string): boolean {

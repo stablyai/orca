@@ -4,6 +4,16 @@ function errorText(cause: unknown): string {
   return (cause instanceof Error ? cause.message : String(cause)).toLowerCase()
 }
 
+/** Install refusals for a manifest whose `platforms` exclude this computer. */
+export function pluginPlatformInstallErrorMessage(cause: unknown): string | null {
+  return errorText(cause).includes('not available on this platform')
+    ? translate(
+        'auto.components.settings.pluginError.installUnsupportedPlatform',
+        "This plugin doesn't support this computer's operating system and was not installed."
+      )
+    : null
+}
+
 export function pluginInstallErrorMessage(cause: unknown): string {
   const detail = errorText(cause)
   if (detail.includes('orca-plugin.json') && /(missing|unreadable|no )/.test(detail)) {
@@ -23,6 +33,10 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       'auto.components.settings.pluginError.incompatible',
       'This plugin requires a different Orca version.'
     )
+  }
+  const platformMessage = pluginPlatformInstallErrorMessage(cause)
+  if (platformMessage) {
+    return platformMessage
   }
   if (/(symlink|outside|absolute|path traversal|drive prefix)/.test(detail)) {
     return translate(

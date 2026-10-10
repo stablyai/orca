@@ -15,6 +15,7 @@ import {
   isOfficialPluginIdentity
 } from '../../shared/plugins/plugin-marketplace'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import type { PluginPlatform } from '../../shared/plugins/plugin-platforms'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -73,6 +74,8 @@ export type PluginListEntry = {
   }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** Present on `invalid` entries whose manifest excludes this host's OS. */
+  unsupportedPlatform?: { platforms: PluginPlatform[] }
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string
@@ -98,12 +101,19 @@ export async function buildPluginList(
         // Why: invalid dev paths can contain private absolute desktop paths;
         // never project those as identity over desktop/serve transports.
         const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+        const unsupported = plugin.unsupportedPlatform
         return {
           pluginKey: fallbackKey,
           consentFingerprint: null,
-          name: fallbackKey,
-          version: '0.0.0',
-          publisher: '',
+          name: unsupported?.manifest.name ?? fallbackKey,
+          version: unsupported?.manifest.version ?? '0.0.0',
+          publisher: unsupported?.manifest.publisher ?? '',
+          ...(unsupported?.manifest.description
+            ? { description: unsupported.manifest.description }
+            : {}),
+          // Why still `invalid`: older paired clients already treat it as
+          // inert; `unsupportedPlatform` lets newer ones explain it calmly.
+          ...(unsupported ? { unsupportedPlatform: { platforms: unsupported.platforms } } : {}),
           status: 'invalid' as const,
           needsReconsent: false,
           error: plugin.error,

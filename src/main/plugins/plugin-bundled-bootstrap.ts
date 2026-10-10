@@ -49,6 +49,8 @@ const bundledPluginIndexSchema = z
 export type PluginBundledBootstrapResult = {
   installed: string[]
   unchanged: string[]
+  /** Bundled for another operating system; not an error on this host. */
+  skipped: string[]
   errors: { pluginKey: string; error: string }[]
 }
 
@@ -107,7 +109,12 @@ export async function bootstrapBundledPlugins(options: {
   const index = await readBundledPluginIndex(options.root)
   const pluginsDir = getUserPluginsDir(options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
-  const result: PluginBundledBootstrapResult = { installed: [], unchanged: [], errors: [] }
+  const result: PluginBundledBootstrapResult = {
+    installed: [],
+    unchanged: [],
+    skipped: [],
+    errors: []
+  }
   for (const entry of index.plugins) {
     const locked = lock.plugins[entry.pluginKey]
     if (
@@ -126,6 +133,10 @@ export async function bootstrapBundledPlugins(options: {
         hostVersion: options.hostVersion,
         expectedPluginKey: entry.pluginKey
       })
+      if (!inspection.ok && inspection.unsupportedPlatform) {
+        result.skipped.push(entry.pluginKey)
+        continue
+      }
       if (!inspection.ok) {
         throw new Error(inspection.error)
       }
