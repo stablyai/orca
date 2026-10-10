@@ -3,7 +3,6 @@ import { ChevronRight, Plus, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { cn } from '@/lib/utils'
 import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-port-actions'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
@@ -35,11 +34,7 @@ export function SshPortsPanel({
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const activeWorktree = useActiveWorktree()
-  const connectionState = sshConnectionStates.get(activeConnectionId)
-  // Why: recipe VM targets never publish connection state; their relay's detected ports still arrive.
-  const isDisconnected = connectionState
-    ? connectionState.status !== 'connected'
-    : !isRuntimeOwnedSshTargetId(activeConnectionId)
+  const isDisconnected = sshConnectionStates.get(activeConnectionId)?.status !== 'connected'
 
   const allForwards = useMemo(
     () => portForwardsByConnection[activeConnectionId] ?? [],

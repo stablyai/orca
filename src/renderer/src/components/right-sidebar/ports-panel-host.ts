@@ -5,7 +5,7 @@ import {
   type HostRoute,
   type RuntimeClientTarget
 } from '@/runtime/runtime-client-target'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   authorityKey,
   parseHostAuthorityKey,
@@ -16,12 +16,12 @@ import {
 export type PortsPanelHost =
   /** No single owner; the panel says so instead of scanning some other host. */
   | { kind: 'unknown' }
-  /** An SSH target this client dials itself, recipe VMs included. */
+  /** A user SSH target this client dials itself; its view also manages forwards. */
   | { kind: 'direct-ssh'; connectionId: string }
   /** The machine an endpoint (this app or a paired server) runs on. */
   | { kind: 'endpoint'; target: RuntimeClientTarget }
-  /** An SSH target behind a paired server; scanned by that server, never by this client. */
-  | { kind: 'server-ssh'; route: HostRoute; environmentId: string; executionHostId: string }
+  /** An SSH host scanned by the endpoint that owns it, which reports whether it could look. */
+  | { kind: 'host-scoped'; route: HostRoute; executionHostId: string }
 
 /** The active workspace's owner as a stable string for store selectors; null when unknown. */
 export function getPortsPanelOwnerKey(
@@ -45,16 +45,14 @@ export function portsPanelHostForOwnerKey(key: HostAuthorityKey | null): PortsPa
   if (authority.at === 'local') {
     return { kind: 'endpoint', target: route.target }
   }
-  if (authority.endpoint.kind === 'self') {
-    const host = parseExecutionHostId(authority.at)
-    return host?.kind === 'ssh'
-      ? { kind: 'direct-ssh', connectionId: host.targetId }
-      : { kind: 'unknown' }
+  const host = parseExecutionHostId(authority.at)
+  if (host?.kind !== 'ssh') {
+    return { kind: 'unknown' }
   }
-  return {
-    kind: 'server-ssh',
-    route,
-    environmentId: authority.endpoint.environmentId,
-    executionHostId: authority.at
+  // Why recipe VMs go host-scoped: their targets publish no connection state to the renderer, so
+  // only this app's own scan can tell a reachable VM with no listeners from an unreachable one.
+  if (authority.endpoint.kind === 'self' && !isRuntimeOwnedSshTargetId(host.targetId)) {
+    return { kind: 'direct-ssh', connectionId: host.targetId }
   }
+  return { kind: 'host-scoped', route, executionHostId: authority.at }
 }

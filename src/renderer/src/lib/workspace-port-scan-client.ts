@@ -127,10 +127,9 @@ export async function runWorkspacePortScanForTarget(
   }
 }
 
-/** An SSH target behind a paired server, addressed as the panel resolved it. */
-export type ServerSshPortHost = {
+/** An SSH host scanned by the endpoint that owns it, addressed as the panel resolved it. */
+export type HostScopedPortHost = {
   route: HostRoute
-  environmentId: string
   executionHostId: string
   worktreeId: string
 }
@@ -150,15 +149,17 @@ function isMethodNotFound(error: unknown): boolean {
 }
 
 /**
- * Asks the server to scan the host the workspace runs on. An older server only knows how to scan
- * itself, so it is never asked: its answer would show the server's ports for the SSH workspace.
+ * Asks the owning endpoint to scan the host the workspace runs on. An older server only knows how to
+ * scan itself, so it is never asked: its answer would show the server's ports for the SSH workspace.
  */
-export async function scanWorkspacePortsOnServerHost(
-  host: ServerSshPortHost
+export async function scanWorkspacePortsOnExecutionHost(
+  host: HostScopedPortHost
 ): Promise<WorkspacePortHostScanResult> {
+  const { target } = host.route
   if (
+    target.kind === 'environment' &&
     !(await runtimeEnvironmentSupportsCapability(
-      host.environmentId,
+      target.environmentId,
       WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY
     ))
   ) {
@@ -192,8 +193,8 @@ export async function scanWorkspacePortsOnServerHost(
 }
 
 /** Stops a row on the host it was scanned on; the server refuses when the workspace moved. */
-export async function killWorkspacePortOnServerHost(
-  host: ServerSshPortHost,
+export async function killWorkspacePortOnExecutionHost(
+  host: HostScopedPortHost,
   row: { scannedHostId: string; pid: number; port: number }
 ): Promise<WorkspacePortKillResult> {
   try {

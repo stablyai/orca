@@ -12,16 +12,15 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import {
-  killWorkspacePortOnServerHost,
-  scanWorkspacePortsOnServerHost,
+  killWorkspacePortOnExecutionHost,
+  scanWorkspacePortsOnExecutionHost,
   WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON,
-  type ServerSshPortHost
+  type HostScopedPortHost
 } from './workspace-port-scan-client'
 import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
-const host: ServerSshPortHost = {
+const host: HostScopedPortHost = {
   route: { target: { kind: 'environment', environmentId: 'env-e' }, at: 'ssh:t' },
-  environmentId: 'env-e',
   executionHostId: 'ssh:t',
   worktreeId: 'repo-1::/srv/w'
 }
@@ -42,7 +41,7 @@ beforeEach(() => {
   supportsCapability.mockResolvedValue(true)
 })
 
-describe('scanWorkspacePortsOnServerHost', () => {
+describe('scanWorkspacePortsOnExecutionHost', () => {
   it('asks the server to scan the workspace host and keeps the host it names', async () => {
     callRuntimeRpc.mockResolvedValue({
       executionHostId: 'ssh:t',
@@ -51,7 +50,7 @@ describe('scanWorkspacePortsOnServerHost', () => {
       ports: [rowOnT]
     })
 
-    const scan = await scanWorkspacePortsOnServerHost(host)
+    const scan = await scanWorkspacePortsOnExecutionHost(host)
 
     expect(supportsCapability).toHaveBeenCalledWith(
       'env-e',
@@ -70,7 +69,7 @@ describe('scanWorkspacePortsOnServerHost', () => {
   it('never asks an older server, whose scan would show the server instead of its SSH host', async () => {
     supportsCapability.mockResolvedValue(false)
 
-    const scan = await scanWorkspacePortsOnServerHost(host)
+    const scan = await scanWorkspacePortsOnExecutionHost(host)
 
     expect(callRuntimeRpc).not.toHaveBeenCalled()
     expect(scan).toMatchObject({
@@ -90,10 +89,37 @@ describe('scanWorkspacePortsOnServerHost', () => {
       })
     )
 
-    await expect(scanWorkspacePortsOnServerHost(host)).resolves.toMatchObject({
+    await expect(scanWorkspacePortsOnExecutionHost(host)).resolves.toMatchObject({
       ports: [],
       unavailableReason: WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON
     })
+  })
+
+  it("scans a recipe VM through this app's own runtime without a capability probe", async () => {
+    const recipeVm: HostScopedPortHost = {
+      route: { target: { kind: 'local' }, at: 'ssh:runtime-ssh-vm1' },
+      executionHostId: 'ssh:runtime-ssh-vm1',
+      worktreeId: 'repo-1::/srv/w'
+    }
+    callRuntimeRpc.mockResolvedValue({
+      executionHostId: 'ssh:runtime-ssh-vm1',
+      platform: 'unknown',
+      scannedAt: 1,
+      ports: [],
+      unavailableReason: 'The SSH host is not connected.'
+    })
+
+    const scan = await scanWorkspacePortsOnExecutionHost(recipeVm)
+
+    expect(supportsCapability).not.toHaveBeenCalled()
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'workspacePorts.scanHost',
+      { worktree: 'id:repo-1::/srv/w' },
+      expect.anything()
+    )
+    // An unreachable VM stays "could not look", never an empty "no ports".
+    expect(scan.unavailableReason).toBe('The SSH host is not connected.')
   })
 
   it("drops rows the server scanned on a host other than the workspace's", async () => {
@@ -104,19 +130,19 @@ describe('scanWorkspacePortsOnServerHost', () => {
       ports: [rowOnT]
     })
 
-    const scan = await scanWorkspacePortsOnServerHost(host)
+    const scan = await scanWorkspacePortsOnExecutionHost(host)
 
     expect(scan.ports).toEqual([])
     expect(scan.unavailableReason).toMatch(/different host/)
   })
 })
 
-describe('killWorkspacePortOnServerHost', () => {
+describe('killWorkspacePortOnExecutionHost', () => {
   it('stops a row only through the server, naming the host the row was scanned on', async () => {
     callRuntimeRpc.mockResolvedValue({ ok: true })
 
     await expect(
-      killWorkspacePortOnServerHost(host, { scannedHostId: 'ssh:t', pid: 4242, port: 3020 })
+      killWorkspacePortOnExecutionHost(host, { scannedHostId: 'ssh:t', pid: 4242, port: 3020 })
     ).resolves.toEqual({ ok: true })
 
     // Same pid and port may be listening on the server itself; the old repo-scoped kill would
@@ -141,7 +167,7 @@ describe('killWorkspacePortOnServerHost', () => {
     )
 
     await expect(
-      killWorkspacePortOnServerHost(host, { scannedHostId: 'ssh:t', pid: 4242, port: 3020 })
+      killWorkspacePortOnExecutionHost(host, { scannedHostId: 'ssh:t', pid: 4242, port: 3020 })
     ).resolves.toEqual({ ok: false, reason: WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON })
     expect(callRuntimeRpc).toHaveBeenCalledOnce()
   })

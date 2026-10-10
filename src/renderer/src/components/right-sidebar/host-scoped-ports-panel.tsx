@@ -4,9 +4,9 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
-  killWorkspacePortOnServerHost,
-  scanWorkspacePortsOnServerHost,
-  type ServerSshPortHost
+  killWorkspacePortOnExecutionHost,
+  scanWorkspacePortsOnExecutionHost,
+  type HostScopedPortHost
 } from '@/lib/workspace-port-scan-client'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,24 +16,24 @@ import { translate } from '@/i18n/i18n'
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 
-const SERVER_SSH_PORT_SCAN_INTERVAL_MS = 30_000
+const HOST_SCOPED_PORT_SCAN_INTERVAL_MS = 30_000
 
-function serverSshPortHostKey(host: ServerSshPortHost): string {
-  return JSON.stringify([host.environmentId, host.executionHostId, host.worktreeId])
+function hostScopedPortHostKey(host: HostScopedPortHost): string {
+  return JSON.stringify([host.route.target, host.executionHostId, host.worktreeId])
 }
 
 /**
- * Ports on an SSH host behind a paired server. The server scans its own SSH host; this client has
- * no connection there, so rows only show and Stop only goes through that server.
+ * Ports on an SSH host, scanned and stopped only through the endpoint that owns it. No browser
+ * open: a URL opened here would reach this client's machine, not the SSH host.
  */
-export function ServerSshPortsPanel({
+export function HostScopedPortsPanel({
   host,
   isVisible
 }: {
-  host: ServerSshPortHost
+  host: HostScopedPortHost
   isVisible: boolean
 }): React.JSX.Element {
-  const hostKey = serverSshPortHostKey(host)
+  const hostKey = hostScopedPortHostKey(host)
   const hostRef = useRef(host)
   hostRef.current = host
   // Why keyed: a scan that lands after the workspace switched hosts must never show as this host's.
@@ -47,10 +47,10 @@ export function ServerSshPortsPanel({
 
   const refresh = useCallback(async () => {
     const current = hostRef.current
-    const key = serverSshPortHostKey(current)
+    const key = hostScopedPortHostKey(current)
     setRefreshing(true)
     try {
-      const next = await scanWorkspacePortsOnServerHost(current)
+      const next = await scanWorkspacePortsOnExecutionHost(current)
       setScanned({ key, scan: next })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -75,7 +75,7 @@ export function ServerSshPortsPanel({
     }
     return installWindowVisibilityInterval({
       run: () => void refresh(),
-      intervalMs: SERVER_SSH_PORT_SCAN_INTERVAL_MS
+      intervalMs: HOST_SCOPED_PORT_SCAN_INTERVAL_MS
     })
   }, [hostKey, isVisible, refresh])
 
@@ -84,7 +84,7 @@ export function ServerSshPortsPanel({
       if (!scan || !port.pid) {
         return
       }
-      const result = await killWorkspacePortOnServerHost(host, {
+      const result = await killWorkspacePortOnExecutionHost(host, {
         scannedHostId: scan.executionHostId,
         pid: port.pid,
         port: port.port

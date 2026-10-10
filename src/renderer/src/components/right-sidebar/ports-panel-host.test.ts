@@ -30,9 +30,8 @@ function folder(executionHostId: `runtime:${string}` | 'local', connectionId?: s
 }
 
 const serverSsh = (environmentId: string, targetId: string): PortsPanelHost => ({
-  kind: 'server-ssh',
+  kind: 'host-scoped',
   route: { target: { kind: 'environment', environmentId }, at: `ssh:${targetId}` },
-  environmentId,
   executionHostId: `ssh:${targetId}`
 })
 
@@ -56,13 +55,18 @@ const CASES: {
     host: { kind: 'direct-ssh', connectionId: 'box' }
   },
   {
-    // #24067: the repo row names no owner; only the workspace row names the VM.
+    // #24067: the repo row names no owner; only the workspace row names the VM. Recipe VM targets
+    // publish no connection state, so this app's own runtime scans them.
     name: 'recipe VM workspace whose repo row names no host',
     rows: {
       repos: [{ id: 'repo-1' }],
       worktreesByRepo: { 'repo-1': [worktree('ssh:runtime-ssh-vm1')] }
     },
-    host: { kind: 'direct-ssh', connectionId: 'runtime-ssh-vm1' }
+    host: {
+      kind: 'host-scoped',
+      route: { target: { kind: 'local' }, at: 'ssh:runtime-ssh-vm1' },
+      executionHostId: 'ssh:runtime-ssh-vm1'
+    }
   },
   {
     name: 'paired server',

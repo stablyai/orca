@@ -5,7 +5,7 @@ import { useActiveWorktree } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import { LocalWorkspacePortsPanel } from './local-workspace-ports-panel'
 import { SshPortsPanel } from './ssh-ports-panel'
-import { ServerSshPortsPanel } from './server-ssh-ports-panel'
+import { HostScopedPortsPanel } from './host-scoped-ports-panel'
 import { getPortsPanelOwnerKey, portsPanelHostForOwnerKey } from './ports-panel-host'
 
 export { getLocalWorkspacePortSections } from './local-workspace-port-sections'
@@ -27,12 +27,11 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
   switch (host.kind) {
     case 'direct-ssh':
       return <SshPortsPanel key={host.connectionId} activeConnectionId={host.connectionId} />
-    case 'server-ssh':
+    case 'host-scoped':
       return (
-        <ServerSshPortsPanel
+        <HostScopedPortsPanel
           host={{
             route: host.route,
-            environmentId: host.environmentId,
             executionHostId: host.executionHostId,
             worktreeId: workspaceId
           }}
