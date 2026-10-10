@@ -59,6 +59,8 @@ export {
 import type { RendererRemoveWorktreeResult } from './renderer-remove-worktree-result'
 
 export type WorktreeFetchOptions = {
+  /** Refresh cached presentation without reconciling terminals from the previous registration. */
+  presentationOnly?: boolean
   requireAuthoritative?: boolean
   executionHostId?: ExecutionHostId
   forceLocalOwner?: boolean

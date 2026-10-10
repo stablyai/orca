@@ -13,6 +13,7 @@ import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shar
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
+import type { RepoRegistrationContext } from './repo-registration-context'
 
 export type WorktreeSliceGet = Parameters<StateCreator<AppState>>[1]
 export type WorktreeSliceSet = Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0]
@@ -23,15 +24,9 @@ export type BackgroundRuntimeRefreshOptions = {
 
 export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   executionHostId: ExecutionHostId
+  registrationContext?: RepoRegistrationContext
   requireAuthoritative?: boolean
   directSshAuthority?: DirectSshAuthority
-  // Why (#10562): the caller's own view of what it is about to purge. Teardown is
-  // requested per caller, so this must never be shared with a coalesced scan.
-  connectionId?: string | null
-  knownWorktreeIds?: readonly string[]
-  // Why a callback: staleness is judged against the client's live applied version, which a
-  // create or remove reply can advance while the listing is in flight.
-  isStaleCatalogPublication?: (result: DetectedWorktreeListResult) => boolean
 }
 
 export type AdmittedDetectedWorktreeRefresh = {
@@ -39,6 +34,7 @@ export type AdmittedDetectedWorktreeRefresh = {
   result: DetectedWorktreeListResult
   providerResult?: HostQualifiedDetectedWorktreeResult
   executionHostId: ExecutionHostId
+  registrationContext?: RepoRegistrationContext
   directSshAuthority?: DirectSshAuthority
   runtimeAuthority?: {
     environmentId: string

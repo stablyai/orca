@@ -17,6 +17,7 @@ import type {
 import { isRuntimeMethodNotFoundError } from './runtime-worktree-rpc-errors'
 import { toLegacyDetectedWorktreeResult } from './worktree-host-ownership'
 import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
+import { repoRegistrationContextKey } from './repo-registration-context'
 
 export async function listDetectedWorktreesForRepo(
   settings: AppState['settings'],
@@ -67,6 +68,9 @@ export function detectedWorktreeRefreshKey(
     targetKey,
     options.requireAuthoritative === true ? 'authoritative' : 'best-effort'
   ]
+  if (options.registrationContext) {
+    parts.push(repoRegistrationContextKey(options.registrationContext))
+  }
   // Why: only remote targets run a compat preflight, so a foreground (reuse:false) refresh must re-probe not coalesce onto a stale-failure background scan; local targets have no preflight and stay coalesced.
   if (target.kind === 'environment') {
     parts.push(`connection:${getEnvironmentSshStateGeneration(target.environmentId)}`)
