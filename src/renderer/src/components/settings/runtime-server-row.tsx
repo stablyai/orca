@@ -137,7 +137,7 @@ export function RuntimeServerRow({
             : isActive
               ? translate(
                   'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
-                  'Active server for server-routed projects, terminals, and provider checks.'
+                  'Default host for new projects. Existing projects stay on their own host.'
                 )
               : getHostDetailsSummary(effectiveDetails)}
         </p>

@@ -80,7 +80,7 @@ export function RuntimeActiveServerSection({
               <Label id="runtime-active-server-label">
                 {translate(
                   'auto.components.settings.RuntimeEnvironmentsPane.64b6bea541',
-                  'Active Server'
+                  'Default host for new projects'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
