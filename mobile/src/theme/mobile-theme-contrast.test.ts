@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colors } from './mobile-theme'
+import { colors, trueBlackColors } from './mobile-theme'
 
 function channelLuminance(channel: number): number {
   const value = channel / 255
@@ -25,14 +25,27 @@ function contrastRatio(foreground: string, background: string): number {
 
 describe('mobile text contrast', () => {
   it('keeps muted text readable on every standard dark surface', () => {
-    for (const surface of [colors.bgBase, colors.bgPanel, colors.bgRaised]) {
-      expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
+    for (const palette of [colors, trueBlackColors]) {
+      for (const surface of [palette.bgBase, palette.bgPanel, palette.bgRaised]) {
+        expect(contrastRatio(palette.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
+      }
     }
   })
 
   it('keeps secondary text more prominent than muted text', () => {
-    expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThan(
-      contrastRatio(colors.textMuted, colors.bgPanel)
-    )
+    for (const palette of [colors, trueBlackColors]) {
+      expect(contrastRatio(palette.textSecondary, palette.bgPanel)).toBeGreaterThan(
+        contrastRatio(palette.textMuted, palette.bgPanel)
+      )
+    }
+  })
+
+  it('true black palette covers exactly the same keys as the default palette', () => {
+    expect(Object.keys(trueBlackColors).sort()).toEqual(Object.keys(colors).sort())
+    for (const key of Object.keys(colors)) {
+      expect(typeof trueBlackColors[key as keyof typeof colors]).toBe(
+        typeof colors[key as keyof typeof colors]
+      )
+    }
   })
 })

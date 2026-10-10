@@ -1,3 +1,4 @@
+import { isTrueBlackActive } from '../theme/mobile-theme'
 import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { TERMINAL_HTML_DOCUMENT_CLOSE } from './terminal-webview-html/document-close'
 import { TERMINAL_HTML_DOCUMENT_SHELL } from './terminal-webview-html/document-shell'
@@ -28,7 +29,8 @@ export const XTERM_HTML = [
 export function xtermWebViewSource(start: { textScale: number; shown: boolean }) {
   const startValues =
     `window.__orcaTerminalTextScale = ${JSON.stringify(start.textScale)};\n` +
-    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
+    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n` +
+    `window.__orcaTrueBlack = ${JSON.stringify(isTrueBlackActive)};\n`
   return {
     html: [
       TERMINAL_HTML_DOCUMENT_SHELL,

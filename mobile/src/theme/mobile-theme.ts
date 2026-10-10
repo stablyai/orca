@@ -1,7 +1,9 @@
 // Orca mobile design tokens — matches desktop graphite/dark palette.
 // All screen files should import from here instead of using inline hex values.
 
-export const colors = {
+import { trueBlackAtStartup } from './true-black-state'
+
+const defaultColors = {
   bgBase: '#111111',
   bgPanel: '#1a1a1a',
   bgRaised: '#242424',
@@ -47,7 +49,23 @@ export const colors = {
 
   // Terminal WebView background (Tokyonight) — separate from app chrome
   terminalBg: '#1a1b26'
-} as const
+}
+
+// Pure-black variant for OLED screens; only chrome surfaces change so text contrast is preserved.
+export const trueBlackColors = {
+  ...defaultColors,
+  bgBase: '#000000',
+  bgPanel: '#000000',
+  bgRaised: '#141414',
+  borderSubtle: '#1f1f1f',
+  editorSurface: '#000000',
+  terminalBg: '#000000'
+}
+
+// Styles are built at module load in ~250 files, so the palette choice is read once here.
+export const isTrueBlackActive: boolean = trueBlackAtStartup()
+
+export const colors: typeof defaultColors = isTrueBlackActive ? trueBlackColors : defaultColors
 
 export const spacing = {
   xs: 4,
