@@ -430,7 +430,7 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(() => process.kill(childPid, 0)).toThrow()
   })
 
-  it.concurrent.runIf(process.platform !== 'win32')(
+  it.runIf(process.platform !== 'win32').concurrent(
     'stops a server that ignores its stdin end and SIGTERM after the SIGTERM grace',
     async ({ expect, onTestFinished }) => {
       const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
