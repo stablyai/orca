@@ -36,8 +36,9 @@ import {
   provenUnverifiableTurnRevisions,
   provenUnverifiedToolCallRevisions,
   runningTurnLifecycleRevisions,
-  stopFoundTurnLiveAt,
+  lastProvenTurnLiveAt,
   turnVerdictFromDeathEvidence,
+  turnVerdictFromReplacedRuntime,
   watchedExitRevisions,
   type StructuredAgentSessionTurnVerdict,
   type StructuredAgentSessionWatchedExit
@@ -46,13 +47,18 @@ import {
   exitedRootTurnScope,
   settledRootTurnScope
 } from './structured-agent-session-exit-turn-scope'
-import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 import {
   hasUnfinishedStructuredAgentSessionWork,
   isInProgressStructuredAgentSessionItem,
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
 import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import {
+  isUnverifiableTurn,
+  staleStopRow,
+  type StaleCut
+} from './structured-agent-session-stale-stop-row'
 
 /** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
  *  same cap. */
@@ -177,11 +183,11 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
 
 /**
  * Settles whatever a generation with no child in this process left running: found when a new child
- * is acquired, or when a chat is reopened for reading. Derived from the journal and the lease's
- * death evidence each time, so nothing is owed in between. Proven death ends the turn interrupted,
- * and a proof written after an earlier settle revises what that settle left `unverifiable`, the
- * turn and the calls it closed alike. Must run before a new child's buffered events land, or a
- * live turn would be judged.
+ * is acquired, or when a chat is reopened for reading. Derived from the journal, the lease's death
+ * evidence and the runtimes this one replaced each time, so nothing is owed in between. Either proof
+ * ends the turn interrupted, and a proof written after an earlier settle revises what that settle
+ * left `unverifiable`, the turn and the calls it closed alike. Must run before a new child's
+ * buffered events land, or a live turn would be judged.
  */
 export async function settleStaleStructuredAgentSessionState(input: {
   journal: AgentSessionJournal
@@ -189,23 +195,35 @@ export async function settleStaleStructuredAgentSessionState(input: {
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
+  /** The runtimes this one replaced for this chat: every owner they held lost its pipes with them. */
+  replaced?: AgentSessionReplacedRuntime
   /** Who the exit row names. */
   failureTextContext?: AgentSessionFailureWordsContext
 }): Promise<number> {
-  const { journal } = input
+  const { journal, replaced } = input
   const items = journal.snapshot().items
   // Each turn is judged by the evidence only if it names that turn's owner.
-  const verdictFor = (item: AgentJournalRenderItem) =>
+  const deathVerdictFor = (item: AgentJournalRenderItem) =>
     turnVerdictFromDeathEvidence(
       input.deathEvidence,
       journal.itemFence(item.itemId),
-      stopFoundTurnLiveAt(journal, item)
+      lastProvenTurnLiveAt(journal, item)
     )
+  const replacedVerdictFor = (item: AgentJournalRenderItem) =>
+    turnVerdictFromReplacedRuntime(
+      replaced,
+      journal.itemFence(item.itemId),
+      lastProvenTurnLiveAt(journal, item)
+    )
+  const verdictFor = (item: AgentJournalRenderItem) => {
+    const byDeath = deathVerdictFor(item)
+    return byDeath.state === 'interrupted' ? byDeath : replacedVerdictFor(item)
+  }
   // A successful settlement leaves terminal items; a failed transaction leaves the same prefix.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:${input.fence}:${generation}`
   // Calls an earlier settle closed with no proof, revised once a proof names their owner.
-  const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal)
+  const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal, replaced)
   for (const item of items) {
     // A turn already settled (a person's Stop) ends its calls as it ended; only a turn still running
     // leaves them to the evidence.
@@ -220,34 +238,32 @@ export async function settleStaleStructuredAgentSessionState(input: {
       })
     }
   }
-  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
+  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal, replaced)
   const turnEnds = [
     ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
     ...proven
   ]
   mutations.push(...turnEnds)
-  const evidence = input.deathEvidence
-  if (
-    evidence &&
-    (proven.length > 0 ||
-      items.some(
-        (item) =>
-          isInProgressStructuredAgentSessionItem(item) && verdictFor(item).state === 'interrupted'
-      )) &&
-    !endedByPersonsStop(journal, turnEnds)
-  ) {
-    mutations.unshift({
-      kind: 'item',
-      // Named by the death it explains, so a retry after a partly written settle adds no second row.
-      identity: {
-        provider: 'orca',
-        clientMessageId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
-      },
-      // The death evidence is Orca's log text, never a sentence for a person: the row says only
-      // that the provider stopped, and how Orca ended when the provider died with it.
-      body: orcaStopRowBody(input.failureTextContext, evidence.runtimeEnd),
-      turnScope: settledRootTurnScope(items, turnEnds)
-    })
+  const stopRow = staleStopRow(input, items, (item): StaleCut => {
+    const unverifiable = isUnverifiableTurn(item)
+    if (!unverifiable && !isInProgressStructuredAgentSessionItem(item)) {
+      return null
+    }
+    const fence = journal.itemFence(item.itemId)
+    // An earlier settle's `unverifiable` turn is revised by a death naming its owner or by its replaced runtime.
+    if (
+      unverifiable
+        ? fence !== undefined && fence === input.deathEvidence?.ownerFence
+        : deathVerdictFor(item).state === 'interrupted'
+    ) {
+      return { by: 'death' }
+    }
+    return fence !== undefined && replacedVerdictFor(item).state === 'interrupted'
+      ? { by: 'replaced', fence }
+      : null
+  })
+  if (stopRow && !endedByPersonsStop(journal, turnEnds)) {
+    mutations.unshift({ ...stopRow, turnScope: settledRootTurnScope(items, turnEnds) })
   }
   if (mutations.length > 0) {
     await journal.appendLifecycleBatch({

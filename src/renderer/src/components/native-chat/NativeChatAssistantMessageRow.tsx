@@ -51,7 +51,9 @@ export function NativeChatAssistantMessageRow({
   // A thought heading a run reads inside it, so the row has no words of its own.
   const words = message.role === 'reasoning' ? '' : markdown
   // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
-  const showControls = !isSystem && words.length > 0 && !continuesTurn
+  // A working turn's last row is only its frontier: more can still land under it.
+  const showControls =
+    !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
 
   return (
     <div

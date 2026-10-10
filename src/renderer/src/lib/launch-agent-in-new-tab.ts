@@ -6,6 +6,8 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
 import {
+  freshNewTabLaunchesThroughHost,
+  launchFreshNewTabThroughHost,
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/launch-agent-new-tab-host-route'
@@ -71,6 +73,9 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   onPromptDeliveryUnconfirmed?: () => void
   /** Keep terminal launches in a floating workspace from taking global selection. */
   activate?: boolean
+  /** A plain new-tab pick ("+", Quick Launch, floating panel, dashboard): with no prompt it starts
+   *  through the host where that matches main's own launch. */
+  freshNewTab?: true
   /** The launch seeds a workspace being opened, so its PTY spawn must not reshuffle Recent. */
   pendingActivationSpawn?: boolean
   /** Lets a workspace reveal itself before the selected surface opens. */
@@ -266,6 +271,21 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       pasteDraftAfterLaunch: true,
       promptDeliveryResult: launched.promptDeliveryResult
     }
+  }
+  if (args.freshNewTab && freshNewTabLaunchesThroughHost(args, resolvedLaunchPlatform)) {
+    const tabId = launchFreshNewTabThroughHost({
+      agent,
+      worktreeId,
+      ...(groupId ? { groupId } : {}),
+      prompt: '',
+      ...(agentArgs !== undefined ? { agentArgs } : {}),
+      ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
+      launchSource: launchSource ?? 'tab_bar_quick_launch',
+      quickCommandLabel,
+      ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
+      ...(activate === false ? { activate: false } : {})
+    })
+    return { surface: { kind: 'local-terminal', tabId }, startupPlan, pasteDraftAfterLaunch: false }
   }
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   const tab = store.createTab(worktreeId, groupId, undefined, {

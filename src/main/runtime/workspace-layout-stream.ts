@@ -10,11 +10,8 @@ import {
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
 import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from './runtime-store-contract'
-
-export type WorkspaceLayoutEvent =
-  | { type: 'workspace'; key: string; layout: PublishedWorkspaceLayout }
-  | { type: 'removed'; key: string }
 
 type LayoutListener = (event: WorkspaceLayoutEvent) => void
 

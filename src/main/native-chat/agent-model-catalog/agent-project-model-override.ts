@@ -163,10 +163,11 @@ async function agentFolderMayPickModel(folder: string, recursive: boolean): Prom
   return found.some(Boolean)
 }
 
-/** A folder holding anything is extension code that may pick the model. */
+/** A folder holding anything but dotfiles (.DS_Store, .gitkeep) is extension code that may pick
+ *  the model. */
 async function codeFolderMayPickModel(folder: string): Promise<boolean> {
   try {
-    return (await readdir(folder)).length > 0
+    return (await readdir(folder)).some((name) => !name.startsWith('.'))
   } catch (error) {
     return !isMissing(error)
   }

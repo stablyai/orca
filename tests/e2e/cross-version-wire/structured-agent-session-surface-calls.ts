@@ -59,6 +59,18 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'queuedMessagesResume',
     result: { ok: true, replayed: false }
   },
+  // Editing a queued card in place. Clients call these only on a host advertising
+  // `agent-session.queued-message-edit.v1`; an older host answers `method_not_found`.
+  {
+    method: 'agentSession.queuedMessageUpdate',
+    hostMethod: 'queuedMessageUpdate',
+    result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageEditHold',
+    hostMethod: 'queuedMessageEditHold',
+    result: { status: 'held' }
+  },
   {
     method: REWIND_METHOD,
     hostMethod: 'rewind',

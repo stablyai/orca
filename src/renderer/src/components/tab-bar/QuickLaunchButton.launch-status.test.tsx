@@ -68,7 +68,6 @@ function registerLaunch(
   attempt: StructuredLaunchAttempt = {
     kind: 'first',
     requestId: `${agent}-pick`,
-    blank: true,
     stagedPrompt: null
   }
 ): void {

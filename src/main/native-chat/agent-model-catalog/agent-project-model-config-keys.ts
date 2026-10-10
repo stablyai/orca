@@ -186,9 +186,14 @@ const PI_MODEL_SETTINGS = [
 /** True when a Pi `.pi/settings.json`'s text could pick a model or thinking level; one Pi can't
  *  parse counts. */
 export function piSettingsMayPickModel(text: string): boolean {
+  // Pi drops a leading BOM and reads an empty file as no settings.
+  const body = text.replace(/^\uFEFF/, '').trim()
+  if (body === '') {
+    return false
+  }
   let settings: Record<string, unknown> | null
   try {
-    settings = record(JSON.parse(text.replace(/^﻿/, '')))
+    settings = record(JSON.parse(body))
   } catch {
     return true
   }
