@@ -13,12 +13,14 @@ the interview, use `references/ssh-host.md` instead.
 The base and auth excerpts each belong to one `set -euo pipefail` script. Include this function
 in both scripts and arm the trap before creating their temporary sandbox. Keep it armed through
 verification, snapshot creation, and writing state; cleanup failure must remain visible.
+`vercel_args` may be empty, so expand it as `${vercel_args[@]+"${vercel_args[@]}"}`: under
+`set -u`, macOS's stock `/bin/bash` (3.2) treats a bare empty `"${vercel_args[@]}"` as unbound.
 
 ```bash
 cleanup_snapshot() {
   snapshot_exit=$?
   trap - EXIT
-  if ! vercel sandbox remove "$1" "${vercel_args[@]}" >&2; then
+  if ! vercel sandbox remove "$1" ${vercel_args[@]+"${vercel_args[@]}"} >&2; then
     echo "Sandbox cleanup failed for $1; inspect and remove it before continuing" >&2
     snapshot_exit=1
   fi
@@ -36,14 +38,14 @@ Provision, install tools and clone, build headless, then snapshot.
 # provision a fresh build sandbox (retain a couple of snapshots)
 trap 'cleanup_snapshot "$base"' EXIT
 vercel sandbox create --name "$base" --runtime node24 --timeout 30m --vcpus 4 --publish-port "$port" \
-  --snapshot-expiration 30d --keep-last-snapshots 2 "${vercel_args[@]}" >&2
+  --snapshot-expiration 30d --keep-last-snapshots 2 ${vercel_args[@]+"${vercel_args[@]}"} >&2
 # remote build (long timeout): install pkgs+gh+pnpm+agent CLI, clone with GIT_ASKPASS (the helper's
 # \$1/\$GH_TOKEN escaping is load-bearing — see the guide's Credentials section — then
 # `rm -f /tmp/askpass.sh`), write the headless main-only build config (drop the renderer), dev setup,
 # build CLI + headless main, smoke-check
-vercel sandbox exec "$base" "${vercel_args[@]}" --timeout 25m --env "GH_TOKEN=$gh_token" … -- bash -lc '…build…' >&2
+vercel sandbox exec "$base" ${vercel_args[@]+"${vercel_args[@]}"} --timeout 25m --env "GH_TOKEN=$gh_token" … -- bash -lc '…build…' >&2
 # snapshot the STOPPED sandbox and parse the id from CLI output (fail if unparseable)
-out="$(vercel sandbox snapshot "$base" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
+out="$(vercel sandbox snapshot "$base" --stop --expiration 30d ${vercel_args[@]+"${vercel_args[@]}"} 2>&1)"; printf '%s\n' "$out" >&2
 snapshot_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' | tail -1)"
 [ -n "$snapshot_id" ] || { echo "snapshot id missing" >&2; exit 1; }
 # merge { baseName, snapshotId, scope, project, port, repoUrl, repoRef, projectRoot } into state; print state JSON
@@ -56,16 +58,16 @@ substitute the user's chosen agent's login and status verbs.
 
 ```bash
 trap 'cleanup_snapshot "$auth"' EXIT
-vercel sandbox create --name "$auth" --snapshot "$snapshot_id" --timeout 30m --publish-port "$port" "${vercel_args[@]}" >&2
+vercel sandbox create --name "$auth" --snapshot "$snapshot_id" --timeout 30m --publish-port "$port" ${vercel_args[@]+"${vercel_args[@]}"} >&2
 # The USER runs this in their own terminal and completes the URL/code on the HOST.
-vercel sandbox exec --interactive --tty "$auth" "${vercel_args[@]}" -- bash -lc 'codex login --device-auth'
+vercel sandbox exec --interactive --tty "$auth" ${vercel_args[@]+"${vercel_args[@]}"} -- bash -lc 'codex login --device-auth'
 ```
 
 Verify by exit code. The remote command prints a sentinel instead of relying on the exit code,
 because a provider CLI may not propagate remote exit codes:
 
 ```bash
-verdict="$(vercel sandbox exec "$auth" "${vercel_args[@]}" --timeout 30s \
+verdict="$(vercel sandbox exec "$auth" ${vercel_args[@]+"${vercel_args[@]}"} --timeout 30s \
   -- bash -lc 'if codex login status >/dev/null 2>&1; then echo ORCA_AGENT_LOGGED_IN; else echo ORCA_AGENT_LOGGED_OUT; fi')"
 case "$verdict" in
   *ORCA_AGENT_LOGGED_IN*) ;;
@@ -78,7 +80,7 @@ stderr folded in and match the agent's exact success line. Match a variable, not
 provider process cannot take SIGPIPE:
 
 ```bash
-status="$(vercel sandbox exec "$auth" "${vercel_args[@]}" --timeout 30s -- bash -lc 'codex login status 2>&1')"
+status="$(vercel sandbox exec "$auth" ${vercel_args[@]+"${vercel_args[@]}"} --timeout 30s -- bash -lc 'codex login status 2>&1')"
 grep -Eq 'Logged in using ChatGPT|Logged in via device' <<<"$status" \
   || { echo "agent not logged in; not snapshotting" >&2; exit 1; }
 ```
@@ -86,7 +88,7 @@ grep -Eq 'Logged in using ChatGPT|Logged in via device' <<<"$status" \
 Then re-snapshot and record the new id:
 
 ```bash
-out="$(vercel sandbox snapshot "$auth" --stop --expiration 30d "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$out" >&2
+out="$(vercel sandbox snapshot "$auth" --stop --expiration 30d ${vercel_args[@]+"${vercel_args[@]}"} 2>&1)"; printf '%s\n' "$out" >&2
 new_id="$(printf '%s\n' "$out" | sed -nE 's/.*(snap_[A-Za-z0-9]+).*/\1/p' | tail -1)"
 [ -n "$new_id" ] || { echo "authenticated snapshot id missing" >&2; exit 1; }
 # overwrite state.snapshotId = new_id, record authSourceSnapshotId = snapshot_id; remove the auth sandbox
@@ -109,19 +111,19 @@ max_recipe_id_length=$((128 - ${#instance_id} - 6))  # Preserve the unique insta
 name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"
 
 # Arm cleanup BEFORE create so a failing create can't leak a half-built paid sandbox.
-cleanup_on_error() { [ "$?" -ne 0 ] && vercel sandbox remove "$name" "${vercel_args[@]}" >/dev/null 2>&1 || true; }
+cleanup_on_error() { [ "$?" -ne 0 ] && vercel sandbox remove "$name" ${vercel_args[@]+"${vercel_args[@]}"} >/dev/null 2>&1 || true; }
 trap cleanup_on_error EXIT
 
 # 1. boot from the authenticated snapshot, publish the serve port
 create_output="$(vercel sandbox create --name "$name" --snapshot "$snapshot_id" \
-  --timeout 30m --publish-port "$port" "${vercel_args[@]}" 2>&1)"; printf '%s\n' "$create_output" >&2
+  --timeout 30m --publish-port "$port" ${vercel_args[@]+"${vercel_args[@]}"} 2>&1)"; printf '%s\n' "$create_output" >&2
 # Vercel prints the published https URL; derive the external wss:// pairing address from it
 public_url="$(printf '%s\n' "$create_output" | sed -nE 's#.*(https://[^[:space:]]+\.vercel\.run).*#\1#p' | head -1)"
 [ -n "$public_url" ] || { echo "no published URL in create output" >&2; exit 1; }
 pairing_ws="${public_url/https:\/\//wss://}"
 
 # 2. (remote) ensure the repo is at the right commit; rebuild only if the commit changed (cache marker)
-vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 20m \
+vercel sandbox exec "$name" ${vercel_args[@]+"${vercel_args[@]}"} --timeout 20m \
   --env "GH_TOKEN=$gh_token" --env "ORCA_PROJECT_ROOT=$project_root" \
   --env "ORCA_REPO_URL=$repo_url" --env "ORCA_REPO_REF=$repo_ref" \
   -- bash -lc 'set -euo pipefail; cd "$ORCA_PROJECT_ROOT"; \
@@ -139,7 +141,7 @@ vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 20m \
       printf "%s" "$c" > .orca-built; }' >&2
 
 # 3. (remote) start orca serve in the background, writing recipe JSON to a file; poll until it parses
-recipe_json="$(vercel sandbox exec "$name" "${vercel_args[@]}" --timeout 60s \
+recipe_json="$(vercel sandbox exec "$name" ${vercel_args[@]+"${vercel_args[@]}"} --timeout 60s \
   --env "ORCA_PORT=$port" --env "ORCA_PROJECT_ROOT=$project_root" --env "ORCA_PAIRING_ADDRESS=$pairing_ws" \
   -- bash -lc 'set -euo pipefail; cd "$ORCA_PROJECT_ROOT"; rm -f /tmp/orca-recipe.json /tmp/orca-serve.log; \
     nohup pnpm exec orca-dev serve --port "$ORCA_PORT" --project-root "$ORCA_PROJECT_ROOT" \

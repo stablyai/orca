@@ -1,10 +1,14 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 
 const run = promisify(execFile)
+// Why /bin/bash first: stock macOS ships bash 3.2 there, which users' recipes run under; a newer
+// bash earlier on PATH would hide its `set -u` handling of empty arrays.
+const bash = existsSync('/bin/bash') ? '/bin/bash' : 'bash'
 const referenceRoot = resolve(
   import.meta.dirname,
   '../../skill-guides/orca-per-workspace-env/references'
@@ -15,7 +19,7 @@ const cleanup = vercel.match(/```bash\n(cleanup_snapshot\(\) \{[\s\S]*?\n\})\n``
 
 async function runShell(script, env = {}) {
   try {
-    const output = await run('bash', ['-c', script], {
+    const output = await run(bash, ['-c', script], {
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...env }
     })
     return { ...output, code: 0 }
