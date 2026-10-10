@@ -448,6 +448,117 @@ describe('minidumpSignatureDetails', () => {
     })
   })
 
+  it('keeps the renderer heap-OOM JS stack without the install path', async () => {
+    // Shape Electron 43 records at the near-heap-limit safe point on Windows.
+    const asset =
+      'file:///C:/Users/PC/AppData/Local/Programs/orca/resources/app.asar/out/renderer/assets'
+    const { dump } = buildDump({
+      annotations: {
+        ptype: 'renderer',
+        'electron.v8-oom.stack': `    #0 appendChunk (${asset}/index-Ab12Cd.js:4821:17)\n    #1 (anonymous) (${asset}/index-Ab12Cd.js?v=1:902:5)\n`,
+        'electron.v8-oom.location': 'Ineffective mark-compacts near heap limit',
+        'v8-oom-stack': `<none> in ${asset}/index-Ab12Cd.js:4821:17`
+      }
+    })
+
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
+
+    expect(details.minidumpOomJsStack).toBe(
+      '#0 appendChunk (index-Ab12Cd.js:4821:17)\n#1 (anonymous) (index-Ab12Cd.js:902:5)'
+    )
+    expect(details.minidumpOomLocation).toBe('Ineffective mark-compacts near heap limit')
+    expect(JSON.stringify(details)).not.toMatch(/Users|PC|app\.asar|v8.oom/)
+  })
+
+  it('falls back to the V8 frames when Electron recorded no OOM stack', async () => {
+    const { dump } = buildDump({
+      annotations: {
+        'v8-oom-stack': '<none> in /home/neil/orca/out/renderer/assets/index-Zz.js:9:5\n$\n'
+      }
+    })
+
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
+
+    expect(details.minidumpOomJsStack).toBe('<none> (index-Zz.js:9:5)')
+  })
+
+  it('adds the V8 frames when the heap ran out before Electron captured its stack', async () => {
+    // Values from a real Electron 43.7.5 dump of a tight renderer allocation loop.
+    const { dump } = buildDump({
+      annotations: {
+        'electron.v8-oom.stack': 'Heap: used=117.4MB limit=192.0MB (stack pending)',
+        'v8-oom-stack':
+          'repeat\nappendChunk in file:///C:/Users/PC/orca/resources/app.asar/out/renderer/index.html\nrunaway in =\n$\n'
+      }
+    })
+
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
+
+    expect(details.minidumpOomJsStack).toBe(
+      'Heap: used=117.4MB limit=192.0MB (stack pending)\nrepeat\nappendChunk (index.html)\nrunaway (=)'
+    )
+    expect(JSON.stringify(details)).not.toMatch(/Users|PC|app\.asar|v8.oom/)
+  })
+
+  it('drops a preload path whose user directory holds a space', async () => {
+    // Sandboxed preload frames carry raw, unescaped absolute paths.
+    const preload =
+      'C:\\Users\\Jane Doe\\AppData\\Local\\Programs\\orca\\resources\\app.asar\\out\\preload\\index.js'
+    const { dump } = buildDump({
+      annotations: {
+        'electron.v8-oom.stack': `#0 onEvent (${preload}:12:3)`,
+        'v8-oom-stack': `onEvent in ${preload}\n$\n`
+      }
+    })
+
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
+
+    expect(details.minidumpOomJsStack).toBe('#0 onEvent (index.js:12:3)')
+    expect(JSON.stringify(details)).not.toMatch(/Jane|Doe|Users|app\.asar/)
+  })
+
+  it('reduces V8 frames whose raw path holds a space', async () => {
+    const { dump } = buildDump({
+      annotations: {
+        'electron.v8-oom.stack': 'Heap: used=117.4MB limit=192.0MB (stack pending)',
+        'v8-oom-stack': 'onEvent in /Users/Jane Doe/orca/out/preload/index.js\n$\n'
+      }
+    })
+
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
+
+    expect(details.minidumpOomJsStack).toBe(
+      'Heap: used=117.4MB limit=192.0MB (stack pending)\nonEvent (index.js)'
+    )
+  })
+
+  it('drops OOM frames that a capped annotation cut off mid-path', async () => {
+    // V8 truncates its value at 1024 bytes with no `$` filler; Electron's can end mid-frame too.
+    const asset = 'file:///C:/Users/Jane Doe/orca/resources/app.asar/out/renderer/assets'
+    const { dump } = buildDump({
+      annotations: {
+        'electron.v8-oom.stack': 'Heap: used=117.4MB limit=192.0MB (stack pending)',
+        'v8-oom-stack': `appendChunk in ${asset}/index-Ab.js:3:71\nflush in file:///C:/Users/Jane D`
+      }
+    })
+    const { dump: electronDump } = buildDump({
+      annotations: {
+        'electron.v8-oom.stack': `#0 appendChunk (${asset}/index-Ab.js:3:71)\n#1 flush (file:///C:/Users/Jane D`
+      }
+    })
+
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
+    const electronDetails = minidumpSignatureDetails(
+      (await parseMinidumpCrashSignature(electronDump))!
+    )
+
+    expect(details.minidumpOomJsStack).toBe(
+      'Heap: used=117.4MB limit=192.0MB (stack pending)\nappendChunk (index-Ab.js:3:71)'
+    )
+    expect(electronDetails.minidumpOomJsStack).toBe('#0 appendChunk (index-Ab.js:3:71)\n#1 flush')
+    expect(JSON.stringify([details, electronDetails])).not.toMatch(/Jane|Users|app\.asar/)
+  })
+
   it('does not duplicate the fatal line into an annotation key', async () => {
     const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
 
