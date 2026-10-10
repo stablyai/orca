@@ -71,6 +71,7 @@ export const StatusBarItem = z.enum([
   'grok',
   'cursor',
   'zcode',
+  'copilot',
   'ssh',
   'resource-usage',
   'ports'
@@ -191,6 +192,7 @@ export const UiUpdateFields = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+    _copilotStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),

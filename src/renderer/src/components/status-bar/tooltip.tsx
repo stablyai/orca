@@ -105,6 +105,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+  if (provider === 'copilot') {
+    return <AgentIcon agent="copilot" size={13} />
+  }
   if (provider === 'zcode') {
     return <AgentIcon agent="zcode" size={13} />
   }
@@ -200,7 +203,9 @@ export function getWindowSections(
       label:
         p.provider === 'zcode'
           ? translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
-          : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+          : p.provider === 'copilot'
+            ? translate('auto.components.status.bar.tooltip.copilot.premium', 'Premium requests')
+            : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
       window: p.monthly
     })
   }

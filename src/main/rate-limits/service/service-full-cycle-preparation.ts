@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchCopilotRateLimits } from '../copilot-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
@@ -51,6 +52,7 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  copilotResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
 }
 
@@ -166,7 +168,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      copilot: this.withFetchingStatus(previousState.copilot, 'copilot')
     })
 
     // Why its own promise: the keychain read and the desktop state.vscdb read
@@ -186,6 +189,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
         : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
     ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    // Why its own promise: the macOS Keychain fallback is async and may prompt;
+    // it must not delay other providers.
+    const copilotResultPromise = fetchCopilotRateLimits({ signal }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
@@ -309,6 +319,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      copilotResultPromise,
       antigravityResultPromise
     }
   }

@@ -26,6 +26,8 @@ export function getUsageProviderAccountsSectionId(
       return null
     case 'zcode':
       return 'accounts-zcode'
+    case 'copilot':
+      return 'accounts-copilot'
   }
 }
 
