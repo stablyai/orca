@@ -26,6 +26,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { closeTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
@@ -271,6 +272,7 @@ export async function createQueuedMessageTestRig(
 
   async function dispose(): Promise<void> {
     await host.flushAllStreamedEvents()
+    closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   }
 
