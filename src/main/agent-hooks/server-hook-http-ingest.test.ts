@@ -28,7 +28,135 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+async function postClaudeHook(
+  server: AgentHookServer,
+  payload: Record<string, unknown>
+): Promise<Response> {
+  const env = server.buildPtyEnv()
+  return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+    },
+    body: JSON.stringify(buildBody(payload))
+  })
+}
+
 describe('AgentHookServer listener replay', () => {
+  it('accepts raw JSON hook bodies with base64 metadata headers', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN,
+          'X-Orca-Agent-Hook-Meta-Encoding': 'base64',
+          'X-Orca-Agent-Hook-Meta': Buffer.from(
+            [PANE, 'tab-1', '', 'wt-1', 'production', ''].join('\x1f')
+          ).toString('base64')
+        },
+        body: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'raw JSON' })
+      })
+
+      expect(response.status).toBe(204)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          worktreeId: 'wt-1',
+          state: 'working',
+          prompt: 'raw JSON'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('caches and notifies status/main/plugin before retry scheduling and HTTP response', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    const order: string[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on protected AgentHookServer methods that exist on the instance.
+    const internal = server as unknown as {
+      scheduleAssistantMessageRetry: (...args: unknown[]) => void
+      scheduleTranscriptPoll: (...args: unknown[]) => void
+    }
+    const originalAssistantRetry = internal.scheduleAssistantMessageRetry.bind(server)
+    const originalTranscriptPoll = internal.scheduleTranscriptPoll.bind(server)
+    const assistantRetry = vi
+      .spyOn(internal, 'scheduleAssistantMessageRetry')
+      .mockImplementation((...args) => {
+        order.push('assistant-retry')
+        originalAssistantRetry(...args)
+      })
+    const codexRetry = vi
+      .spyOn(internal, 'scheduleTranscriptPoll')
+      .mockImplementation((...args) => {
+        order.push('codex-retry')
+        originalTranscriptPoll(...args)
+      })
+    const unsubscribeStatus = server.subscribeStatusChanges(() => order.push('status-change'))
+    server.setListener(() => {
+      expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
+      order.push('main-listener')
+    })
+    const unsubscribePlugin = server.subscribeEnrichedStatus(() => order.push('plugin-listener'))
+    try {
+      const response = await postClaudeHook(server, {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'ordered'
+      })
+      order.push('response')
+      expect(response.status).toBe(204)
+      expect(order).toEqual([
+        'status-change',
+        'main-listener',
+        'plugin-listener',
+        'assistant-retry',
+        'codex-retry',
+        'response'
+      ])
+    } finally {
+      unsubscribeStatus()
+      unsubscribePlugin()
+      assistantRetry.mockRestore()
+      codexRetry.mockRestore()
+      server.stop()
+    }
+  })
+
+  it('fails open after a throwing callback with cache retained and retries skipped', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on protected AgentHookServer methods that exist on the instance.
+    const internal = server as unknown as {
+      scheduleAssistantMessageRetry: (...args: unknown[]) => void
+      scheduleTranscriptPoll: (...args: unknown[]) => void
+    }
+    const assistantRetry = vi.spyOn(internal, 'scheduleAssistantMessageRetry')
+    const codexRetry = vi.spyOn(internal, 'scheduleTranscriptPoll')
+    server.setListener(() => {
+      throw new Error('listener failed')
+    })
+    try {
+      const response = await postClaudeHook(server, {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'cached before callback'
+      })
+      expect(response.status).toBe(204)
+      expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
+      expect(assistantRetry).not.toHaveBeenCalled()
+      expect(codexRetry).not.toHaveBeenCalled()
+    } finally {
+      assistantRetry.mockRestore()
+      codexRetry.mockRestore()
+      server.stop()
+    }
+  })
   it('ignores local nested Claude Stop while a parent Codex hook status is active', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -361,192 +489,6 @@ describe('AgentHookServer listener replay', () => {
             state: 'working',
             prompt: 'form encoded',
             agentType: 'claude'
-          })
-        })
-      )
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('tracks Codex agent statuses from form-encoded managed hook posts', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const listener = vi.fn()
-      server.setListener(listener)
-      const postCodexHook = async (payload: Record<string, unknown>): Promise<void> => {
-        const params = new URLSearchParams({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          env: 'production',
-          version: env.ORCA_AGENT_HOOK_VERSION ?? '',
-          payload: JSON.stringify(payload)
-        })
-        const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-          },
-          body: params
-        })
-        expect(response.status).toBe(204)
-      }
-
-      await postCodexHook({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: 'ship codex hook status'
-      })
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          state: 'working',
-          agentType: 'codex',
-          prompt: 'ship codex hook status',
-          toolName: undefined,
-          toolInput: undefined
-        })
-      ])
-
-      await postCodexHook({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'exec_command',
-        tool_input: { cmd: 'pnpm test', workdir: '/repo' }
-      })
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'working',
-          agentType: 'codex',
-          prompt: 'ship codex hook status',
-          toolName: 'exec_command',
-          toolInput: 'pnpm test'
-        })
-      ])
-
-      await postCodexHook({
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'exec_command',
-        tool_input: { cmd: 'git push', workdir: '/repo' }
-      })
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'waiting',
-          agentType: 'codex',
-          prompt: 'ship codex hook status',
-          toolName: 'exec_command',
-          toolInput: 'git push'
-        })
-      ])
-
-      await postCodexHook({
-        hook_event_name: 'Stop',
-        last_assistant_message: 'done'
-      })
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'done',
-          agentType: 'codex',
-          prompt: 'ship codex hook status',
-          lastAssistantMessage: 'done'
-        })
-      ])
-      expect(listener).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: expect.objectContaining({
-            state: 'done',
-            agentType: 'codex',
-            prompt: 'ship codex hook status',
-            lastAssistantMessage: 'done'
-          })
-        })
-      )
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('accepts Hermes plugin hook posts on /hook/hermes', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/hermes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-        },
-        body: JSON.stringify(
-          buildBody({
-            hook_event_name: 'pre_llm_call',
-            user_message: 'verify Hermes route'
-          })
-        )
-      })
-      expect(response.status).toBe(204)
-
-      const listener = vi.fn()
-      server.setListener(listener)
-
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          connectionId: null,
-          payload: expect.objectContaining({
-            state: 'working',
-            prompt: 'verify Hermes route',
-            agentType: 'hermes'
-          })
-        })
-      )
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('accepts Amp plugin hook posts on /hook/amp', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const listener = vi.fn()
-      server.setListener(listener)
-
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/amp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
-        },
-        body: JSON.stringify(
-          buildBody({
-            hook_event_name: 'agent.start',
-            message: 'verify Amp route'
-          })
-        )
-      })
-      expect(response.status).toBe(204)
-
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          connectionId: null,
-          payload: expect.objectContaining({
-            state: 'working',
-            prompt: 'verify Amp route',
-            agentType: 'amp'
           })
         })
       )

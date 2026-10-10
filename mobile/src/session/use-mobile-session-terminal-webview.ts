@@ -1,0 +1,139 @@
+import { pendingSelectionHandle, pendingSelectionWantsHandle } from './pending-session-selection'
+import { useEffect, useCallback } from 'react'
+import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
+import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
+
+export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitchingModel) {
+  const {
+    markdownDocs,
+    fileDocs,
+    terminalGestureInputBucketsRef,
+    terminalGestureInputQueuesRef,
+    terminalGestureInputInFlightRef,
+    terminalRefs,
+    terminalUnsubsRef,
+    initializedHandlesRef,
+    terminalDiagnosticsRef,
+    webReadyHandlesRef,
+    activeHandleRef,
+    pendingSelectionRef,
+    activeSessionTab,
+    unsubscribeTerminal,
+    subscribeToTerminal,
+    nativeChatStream,
+    readMarkdownTab,
+    readFileTab,
+    terminalFrameRef,
+    notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth
+  } = scope
+  // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
+  const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
+    terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
+    if (ref) {
+      terminalRefs.current.set(handle, ref)
+    } else {
+      terminalRefs.current.delete(handle)
+      terminalGestureInputBucketsRef.current.delete(handle)
+      const queued = terminalGestureInputQueuesRef.current.get(handle)
+      if (queued?.timer) {
+        clearTimeout(queued.timer)
+      }
+      terminalGestureInputQueuesRef.current.delete(handle)
+      terminalGestureInputInFlightRef.current.delete(handle)
+    }
+  }, [])
+
+  const handleTerminalWebReady = useCallback(
+    (handle: string) => {
+      const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
+      webReadyHandlesRef.current.add(handle)
+      nativeChatStream.notifyWebReady(handle, wasAlreadyReady)
+      terminalDiagnosticsRef.current.webViewReady(
+        handle,
+        wasAlreadyReady,
+        handle === activeHandleRef.current
+      )
+      if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
+        // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
+        unsubscribeTerminal(handle)
+        initializedHandlesRef.current.delete(handle)
+        if (handle === activeHandleRef.current) {
+          subscribeToTerminal(handle)
+        }
+        return
+      }
+      // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
+      const isIntendedActive =
+        handle === activeHandleRef.current ||
+        pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
+      // Why: web-ready carried the cell box xterm laid out, so subscribeToTerminal sizes this subscribe.
+      if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
+        subscribeToTerminal(handle)
+      }
+    },
+    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+  )
+
+  const subscribeIntendedActiveTerminal = useCallback(() => {
+    const handle = pendingSelectionHandle(pendingSelectionRef.current) ?? activeHandleRef.current
+    if (handle && !terminalUnsubsRef.current.has(handle)) {
+      subscribeToTerminal(handle)
+    }
+  }, [activeHandleRef, pendingSelectionRef, subscribeToTerminal, terminalUnsubsRef])
+
+  /** The terminal frame React Native laid out: kept in the one frame ref, then what it changed. */
+  const notifyTerminalFrame = useCallback(
+    (frame: TerminalFrame) => {
+      // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
+      notifyTerminalFrameHeight(Math.round(frame.height))
+      // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
+      if (frame.width <= 0) {
+        return
+      }
+      const previous = terminalFrameRef.current
+      terminalFrameRef.current = frame
+      if (!previous) {
+        // Why: a ready document held back for its frame subscribes on the first layout.
+        subscribeIntendedActiveTerminal()
+      } else if (frame.width !== previous.width) {
+        notifyTerminalFrameWidth()
+      }
+    },
+    [
+      notifyTerminalFrameHeight,
+      notifyTerminalFrameWidth,
+      subscribeIntendedActiveTerminal,
+      terminalFrameRef
+    ]
+  )
+
+  useEffect(() => {
+    if (activeSessionTab?.type !== 'markdown') {
+      return
+    }
+    const doc = markdownDocs.get(activeSessionTab.id)
+    if (!doc) {
+      void readMarkdownTab(activeSessionTab)
+    }
+  }, [activeSessionTab, markdownDocs, readMarkdownTab])
+
+  useEffect(() => {
+    if (activeSessionTab?.type !== 'file') {
+      return
+    }
+    const doc = fileDocs.get(activeSessionTab.id)
+    if (!doc) {
+      void readFileTab(activeSessionTab)
+    }
+  }, [activeSessionTab, fileDocs, readFileTab])
+  return {
+    setTerminalWebViewRef,
+    handleTerminalWebReady,
+    notifyTerminalFrame
+  }
+}
+
+export type MobileSessionTerminalWebviewModel = MobileSessionTabSwitchingModel &
+  ReturnType<typeof useMobileSessionTerminalWebview>

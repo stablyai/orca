@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /**
  * Attachment-leak regression: an attachment that outlives its transport leaves the session looking
  * viewed forever — producer pause/resume and any attachment-gated behavior then act on a client that
@@ -24,6 +25,7 @@ function fixtureSubprocess(): SubprocessHandle {
     kill: () => {
       setTimeout(() => onExitCb?.(0), 1)
     },
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => onExitCb?.(137),
     signal: () => {},
     onData: () => {},

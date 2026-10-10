@@ -254,6 +254,41 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('working')
   })
 
+  it('reports passive monitoring below active work and permission', () => {
+    const base = {
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasLiveDone: false,
+      hasRetainedDone: false
+    }
+
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: false,
+        hasLiveWorking: false,
+        hasLiveMonitoring: true
+      })
+    ).toBe('monitoring')
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: false,
+        hasLiveWorking: true,
+        hasLiveMonitoring: true
+      })
+    ).toBe('working')
+    expect(
+      resolveWorktreeStatus({
+        ...base,
+        hasPermission: true,
+        hasLiveWorking: true,
+        hasLiveMonitoring: true
+      })
+    ).toBe('permission')
+  })
+
   it('lets heuristic working beat hasLiveDone (newer in-progress signal wins)', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [working]' }],

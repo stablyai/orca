@@ -4,15 +4,19 @@ import type {
 } from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildPersistedBrowserPagesByWorkspace,
-  buildPersistedBrowserTabsByWorktree,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
+import {
+  buildPersistedBrowserPagesByWorkspace,
+  buildPersistedBrowserTabsByWorktree
+} from './workspace-session-browser-tabs'
+import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
@@ -26,25 +30,32 @@ function hasAnyChangedField(
   return fields.some((field) => changedFields.has(field))
 }
 
-function buildPrunedTerminalLayoutsByTabId(
+function buildPrunedTerminalScrollback(
   snapshot: WorkspaceSessionSnapshot
-): WorkspaceSessionState['terminalLayoutsByTabId'] {
-  return pruneLocalTerminalScrollbackBuffers(
+): Pick<WorkspaceSessionState, 'terminalLayoutsByTabId' | 'localOnlyScrollbackByTabId'> {
+  const pruned = pruneLocalTerminalScrollbackBuffers(
     {
       activeRepoId: snapshot.activeRepoId,
       activeWorktreeId: snapshot.activeWorktreeId,
       activeTabId: snapshot.activeTabId,
       tabsByWorktree: snapshot.tabsByWorktree,
-      terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId
+      terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
+      localOnlyScrollbackByTabId: snapshot.localOnlyScrollbackByTabId
     },
     snapshot.repos
-  ).terminalLayoutsByTabId
+  )
+  return {
+    terminalLayoutsByTabId: pruned.terminalLayoutsByTabId,
+    // Why `{}` and not undefined: a patch assigns the key, so an emptied map must be written as empty.
+    localOnlyScrollbackByTabId: pruned.localOnlyScrollbackByTabId ?? {}
+  }
 }
 
 export function buildWorkspaceSessionPatch(
-  snapshot: WorkspaceSessionSnapshot,
+  fullSnapshot: WorkspaceSessionSnapshot,
   changedFields: Iterable<SessionRelevantField>
 ): WorkspaceSessionPatch {
+  const snapshot = withoutStagedBrowserTabs(fullSnapshot)
   const changed = new Set(changedFields)
   const patch: WorkspaceSessionPatch = {}
 
@@ -54,14 +65,41 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
   }
+  // Why: without these the debounced writer kept the first focus's key and host forever.
+  if (changed.has('activeWorkspaceKey')) {
+    patch.activeWorkspaceKey = snapshot.activeWorkspaceKey
+  }
+  if (changed.has('activeWorkspaceExecutionHostId')) {
+    patch.activeWorkspaceExecutionHostId = snapshot.activeWorkspaceExecutionHostId ?? null
+  }
   if (changed.has('activeTabId')) {
     patch.activeTabId = snapshot.activeTabId
   }
   if (changed.has('tabsByWorktree')) {
     patch.tabsByWorktree = buildSanitizedTabsByWorktree(snapshot.tabsByWorktree)
   }
-  if (hasAnyChangedField(changed, ['terminalLayoutsByTabId', 'tabsByWorktree', 'repos'] as const)) {
-    patch.terminalLayoutsByTabId = buildPrunedTerminalLayoutsByTabId(snapshot)
+  const scrollbackHomesChanged = hasAnyChangedField(changed, [
+    'terminalLayoutsByTabId',
+    'localOnlyScrollbackByTabId',
+    'tabsByWorktree',
+    'repos'
+  ] as const)
+  if (scrollbackHomesChanged) {
+    const pruned = buildPrunedTerminalScrollback(snapshot)
+    if (
+      hasAnyChangedField(changed, ['terminalLayoutsByTabId', 'tabsByWorktree', 'repos'] as const)
+    ) {
+      patch.terminalLayoutsByTabId = pruned.terminalLayoutsByTabId
+    }
+    if (
+      hasAnyChangedField(changed, [
+        'localOnlyScrollbackByTabId',
+        'tabsByWorktree',
+        'repos'
+      ] as const)
+    ) {
+      patch.localOnlyScrollbackByTabId = pruned.localOnlyScrollbackByTabId
+    }
   }
   if (changed.has('activeTabIdByWorktree')) {
     patch.activeTabIdByWorktree = snapshot.activeTabIdByWorktree
@@ -71,6 +109,8 @@ export function buildWorkspaceSessionPatch(
       'tabsByWorktree',
       'ptyIdsByTabId',
       'lastKnownRelayPtyIdByTabId',
+      'pendingReconnectPtyIdByTabId',
+      'deferredSshSessionIdsByTabId',
       'repos',
       'worktreesByRepo'
     ] as const)
@@ -111,23 +151,35 @@ export function buildWorkspaceSessionPatch(
       )
     )
   }
-  if (changed.has('browserTabsByWorktree')) {
+  // Why: withoutStagedBrowserTabs hides rows based on the handle map, so clearing a staged flag
+  // changes which browser and tab rows persist even when the rows themselves are untouched.
+  const stagedVisibilityChanged = changed.has('remoteBrowserPageHandlesByPageId')
+  if (stagedVisibilityChanged || changed.has('browserTabsByWorktree')) {
     patch.browserTabsByWorktree = buildPersistedBrowserTabsByWorktree(
       snapshot.browserTabsByWorktree
     )
   }
-  if (changed.has('browserPagesByWorkspace')) {
+  if (stagedVisibilityChanged || changed.has('browserPagesByWorkspace')) {
     patch.browserPagesByWorkspace = buildPersistedBrowserPagesByWorkspace(
-      snapshot.browserPagesByWorkspace
+      snapshot.browserPagesByWorkspace,
+      snapshot.remoteBrowserPageHandlesByPageId
     )
   }
-  if (changed.has('activeBrowserTabIdByWorktree')) {
+  if (stagedVisibilityChanged || changed.has('activeBrowserTabIdByWorktree')) {
     patch.activeBrowserTabIdByWorktree = snapshot.activeBrowserTabIdByWorktree
   }
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
   }
+  if (changed.has('workspaceDocHistory')) {
+    patch.workspaceDocHistory = normalizeWorkspaceDocHistoryEntries(snapshot.workspaceDocHistory)
+  }
+  if (changed.has('clientHostedBrowserCloseIntentsByEnvironment')) {
+    patch.clientHostedBrowserCloseIntentsByEnvironment =
+      snapshot.clientHostedBrowserCloseIntentsByEnvironment
+  }
   if (
+    stagedVisibilityChanged ||
     hasAnyChangedField(changed, [
       'activeGroupIdByWorktree',
       'groupsByWorktree',

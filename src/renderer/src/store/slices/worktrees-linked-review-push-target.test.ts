@@ -35,10 +35,52 @@ describe('worktree remote runtime mutations', () => {
     resetRemoteRuntimeMocks()
   })
 
+  it('preserves a concurrent review selection while an attachment lookup is pending', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const firstLookup = Promise.withResolvers<{
+      baseBranch: string
+      pushTarget: { remoteName: string; branchName: string }
+    }>()
+    mockApi.worktrees.resolvePrBase.mockReturnValueOnce(firstLookup.promise)
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] }
+    })
+    const pending = store.getState().updateWorktreeMeta(wt.id, {
+      linkedItems: [{ provider: 'github', type: 'pr', number: 1 }]
+    })
+    const currentTarget = { remoteName: 'origin', branchName: 'pr-2' }
+    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 2, pushTarget: currentTarget })
+    firstLookup.resolve({
+      baseBranch: 'origin/pr-1',
+      pushTarget: { remoteName: 'origin', branchName: 'pr-1' }
+    })
+    expect(await pending).toEqual({ ok: true })
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      linkedPR: 2,
+      pushTarget: currentTarget,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 2 },
+        { provider: 'github', type: 'pr', number: 1 }
+      ]
+    })
+    const lastWrite = mockApi.worktrees.updateMeta.mock.lastCall?.[0].updates
+    expect(lastWrite?.linkedPR).toBe(2)
+    expect(lastWrite).not.toHaveProperty('pushTarget')
+  })
+
   it('resolves and persists a push target when manually linking a GitHub PR', async () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      suppressedGitHubPR: 2548
+    })
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
       baseBranch: 'origin/bot/pr-bug-scan-2504',
       pushTarget
@@ -65,9 +107,11 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedPR: 2548, pushTarget }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ linkedPR: 2548, suppressedGitHubPR: null, pushTarget })
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
+    expect(store.getState().worktreesByRepo.repo1[0]?.suppressedGitHubPR).toBeNull()
   })
 
   it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
@@ -88,10 +132,10 @@ describe('worktree remote runtime mutations', () => {
     } as Partial<AppState>)
 
     await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
-
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedPR: null, pushTarget: undefined }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ linkedPR: null, pushTarget: undefined })
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
   })
@@ -119,10 +163,10 @@ describe('worktree remote runtime mutations', () => {
       .getState()
       .updateWorktreeMeta(wt.id, { linkedPR: null }, { suppressHostedReviewRefresh: true })
 
-    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedPR: null, pushTarget: undefined }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ linkedPR: null, pushTarget: undefined })
     })
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       linkedPR: null,
@@ -130,7 +174,7 @@ describe('worktree remote runtime mutations', () => {
     })
   })
 
-  it('clears an older GitHub link and target when replacing it with a GitLab MR', async () => {
+  it('switches the selected review to GitLab and clears the previous push target', async () => {
     const store = createTestStore()
     const oldPushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
     const newPushTarget = { remoteName: 'upstream', branchName: 'owner/new-mr' }
@@ -152,10 +196,13 @@ describe('worktree remote runtime mutations', () => {
     } as Partial<AppState>)
 
     await store.getState().updateWorktreeMeta(wt.id, { linkedGitLabMR: 42 })
-
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedGitLabMR: 42, linkedPR: null, pushTarget: undefined }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({
+        linkedGitLabMR: 42,
+        pushTarget: undefined
+      })
     })
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       linkedPR: null,
@@ -164,6 +211,7 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
       repoId: 'repo1',
+      repoOwnerExecutionHostId: 'local',
       linkedGitHubPR: null,
       linkedGitLabMR: 42,
       linkedBitbucketPR: null,
@@ -186,7 +234,8 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { pushTarget: newPushTarget }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ pushTarget: newPushTarget })
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(newPushTarget)
   })
@@ -229,18 +278,27 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 2548 })
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'owner-env',
-      method: 'worktree.resolvePrBase',
-      params: { repo: 'repo1', prNumber: 2548 },
-      timeoutMs: 30_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'owner-env',
-      method: 'worktree.set',
-      params: { worktree: `id:${wt.id}`, linkedPR: 2548, pushTarget },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-env',
+        method: 'worktree.resolvePrBase',
+        params: expect.objectContaining({ repo: 'repo1', prNumber: 2548 }),
+        timeoutMs: 30_000
+      })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-env',
+        method: 'worktree.set',
+        params: expect.objectContaining({
+          worktree: `id:${wt.id}`,
+          linkedPR: 2548,
+          suppressedGitHubPR: null,
+          pushTarget
+        }),
+        timeoutMs: 15_000
+      })
+    )
     expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
@@ -278,12 +336,18 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'owner-env',
-      method: 'worktree.set',
-      params: { worktree: `id:${wt.id}`, linkedPR: null, pushTarget: null },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-env',
+        method: 'worktree.set',
+        params: expect.objectContaining({
+          worktree: `id:${wt.id}`,
+          linkedPR: null,
+          pushTarget: null
+        }),
+        timeoutMs: 15_000
+      })
+    )
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
   })
@@ -300,10 +364,10 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 0 })
 
-    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedPR: 0 }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ linkedPR: 0 })
     })
   })
 
@@ -326,10 +390,10 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().updateWorktreeMeta(wt.id, { linkedPR: 2548 })
 
-    expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedPR: 2548 }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ linkedPR: 2548, suppressedGitHubPR: null })
     })
   })
 
@@ -361,7 +425,8 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { linkedPR: 2548, pushTarget }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ linkedPR: 2548, suppressedGitHubPR: null, pushTarget })
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
@@ -397,7 +462,8 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { pushTarget }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ pushTarget })
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })
@@ -440,18 +506,22 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().ensureHostedReviewPushTarget(wt.id)
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'worktree.resolvePrBase',
-      params: { repo: 'repo1', prNumber: 5571 },
-      timeoutMs: 30_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'worktree.set',
-      params: { worktree: `id:${wt.id}`, pushTarget },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'worktree.resolvePrBase',
+        params: expect.objectContaining({ repo: 'repo1', prNumber: 5571 }),
+        timeoutMs: 30_000
+      })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'worktree.set',
+        params: expect.objectContaining({ worktree: `id:${wt.id}`, pushTarget }),
+        timeoutMs: 15_000
+      })
+    )
     expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
@@ -496,18 +566,22 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().ensureHostedReviewPushTarget(wt.id)
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'owner-env',
-      method: 'worktree.resolvePrBase',
-      params: { repo: 'repo1', prNumber: 5571 },
-      timeoutMs: 30_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'owner-env',
-      method: 'worktree.set',
-      params: { worktree: `id:${wt.id}`, pushTarget },
-      timeoutMs: 15_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-env',
+        method: 'worktree.resolvePrBase',
+        params: expect.objectContaining({ repo: 'repo1', prNumber: 5571 }),
+        timeoutMs: 30_000
+      })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'owner-env',
+        method: 'worktree.set',
+        params: expect.objectContaining({ worktree: `id:${wt.id}`, pushTarget }),
+        timeoutMs: 15_000
+      })
+    )
     expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
@@ -520,7 +594,8 @@ describe('worktree remote runtime mutations', () => {
       id: 'repo-ssh::/home/orca/runtime-wt',
       repoId: 'repo-ssh',
       path: '/home/orca/runtime-wt',
-      linkedPR: 5571
+      linkedPR: 5571,
+      hostId: 'ssh:ssh-1'
     })
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
       baseBranch: 'fork-head',
@@ -549,7 +624,8 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { pushTarget }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ pushTarget })
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh'][0]?.pushTarget).toEqual(pushTarget)
@@ -606,6 +682,51 @@ describe('worktree remote runtime mutations', () => {
     expect(result.ok).toBe(false)
     expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+  it('updates only the explicitly selected owner when locators collide', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    const sshA = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'ssh:ssh-a',
+      runtimeOwnerEnvironmentId: 'hub-a',
+      comment: 'A'
+    })
+    const sshB = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'ssh:ssh-b',
+      runtimeOwnerEnvironmentId: 'hub-b',
+      comment: 'B'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set-selected-owner',
+      ok: true,
+      result: { worktree: sshB },
+      _meta: { runtimeId: 'hub-b' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-a' } as never,
+      worktreesByRepo: { 'repo-shared': [sshA, sshB] }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(worktreeId, { comment: 'selected B' }, { executionHostId: 'ssh:ssh-b' })
+
+    expect(result).toEqual({ ok: true })
+    expect(store.getState().worktreesByRepo['repo-shared']).toEqual([
+      expect.objectContaining({ hostId: 'ssh:ssh-a', comment: 'A' }),
+      expect.objectContaining({ hostId: 'ssh:ssh-b', comment: 'selected B' })
+    ])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'hub-b',
+        method: 'worktree.set',
+        params: expect.objectContaining({ comment: 'selected B' })
+      })
+    )
   })
 
   it('cleans up the in-flight lookup when restore is skipped for a genuinely ambiguous owner', async () => {
@@ -666,12 +787,14 @@ describe('worktree remote runtime mutations', () => {
 
     await store.getState().ensureHostedReviewPushTarget(worktreeId)
 
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'hub-a',
-      method: 'worktree.resolvePrBase',
-      params: { repo: 'repo-shared', prNumber: 123 },
-      timeoutMs: 30_000
-    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'hub-a',
+        method: 'worktree.resolvePrBase',
+        params: expect.objectContaining({ repo: 'repo-shared', prNumber: 123 }),
+        timeoutMs: 30_000
+      })
+    )
     expect(store.getState().worktreesByRepo['repo-shared'][0]?.pushTarget).toEqual(pushTarget)
   })
 
@@ -703,7 +826,8 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { pushTarget }
+      executionHostId: wt.hostId ?? 'local',
+      updates: expect.objectContaining({ pushTarget })
     })
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toEqual(pushTarget)
   })

@@ -2,7 +2,7 @@ import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from '
 import { CircleDashed, LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
-import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel-content'
+import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/check-presentation'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -39,6 +39,9 @@ import {
 } from './checks-tab-actions'
 import { requestGitHubCheckDetails } from './checks-tab-request-details'
 import { ChecksTabActions, ChecksTabCompactHeader } from './checks-tab-header'
+
+/** Identity token for one checks context; compared by reference so a stale refresh is dropped. */
+type ChecksContextOwner = Record<string, never>
 
 export function ChecksTab({
   item,
@@ -111,7 +114,7 @@ export function ChecksTab({
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
-    async (expectedContextOwner?: object): Promise<PRCheckDetail[] | null> =>
+    async (expectedContextOwner?: ChecksContextOwner): Promise<PRCheckDetail[] | null> =>
       refreshGitHubChecksTab(
         {
           canUseChecksRepoContext,

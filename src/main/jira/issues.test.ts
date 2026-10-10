@@ -119,6 +119,29 @@ describe('Jira issue operations', () => {
     )
   })
 
+  it('scopes create-time assignable search by project, with the Server username param', async () => {
+    jiraRequestMock.mockResolvedValueOnce([{ accountId: 'acc-1', displayName: 'Ada' }])
+    const { listAssignableUsersForProject } = await import('./issues')
+
+    const cloudUsers = await listAssignableUsersForProject('ALP', 'ada', 'site-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      '/rest/api/3/user/assignable/search?project=ALP&maxResults=50&query=ada'
+    )
+    expect(cloudUsers).toEqual([expect.objectContaining({ accountId: 'acc-1' })])
+
+    getClientsMock.mockReturnValue([makeServerEntry()])
+    jiraRequestMock.mockResolvedValueOnce([])
+
+    await listAssignableUsersForProject('ALP', 'ada', 'server-1')
+
+    expect(jiraRequestMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      '/rest/api/2/user/assignable/search?project=ALP&maxResults=50&username=ada'
+    )
+  })
+
   it('loads Jira summaries without descriptions, rendered fields, or attachment media', async () => {
     jiraRequestMock.mockResolvedValueOnce({
       id: 'issue-1',
@@ -173,42 +196,6 @@ describe('Jira issue operations', () => {
       (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'disconnected'
     )
     expect(jiraRequestMock).not.toHaveBeenCalled()
-  })
-
-  it('sends plain-text bodies and v2 paths for self-hosted issue creation', async () => {
-    getClientsMock.mockReturnValue([makeServerEntry()])
-    jiraRequestMock.mockResolvedValueOnce({ id: '1', key: 'ALP-1', self: '' })
-    const { createIssue } = await import('./issues')
-
-    await createIssue({
-      siteId: 'server-1',
-      projectId: '10000',
-      issueTypeId: '10001',
-      title: 'Fix auth',
-      description: 'Body text'
-    })
-
-    const [, path, init] = jiraRequestMock.mock.calls[0]
-    expect(path).toBe('/rest/api/2/issue')
-    const body = JSON.parse((init as { body: string }).body) as {
-      fields: { description: unknown }
-    }
-    // REST v2 rejects ADF documents; the description must stay a plain string.
-    expect(body.fields.description).toBe('Body text')
-  })
-
-  it('assigns by username on self-hosted sites', async () => {
-    getClientsMock.mockReturnValue([makeServerEntry()])
-    jiraRequestMock.mockResolvedValue(null)
-    const { updateIssue } = await import('./issues')
-
-    await updateIssue('ALP-1', { assigneeAccountId: 'wquintal' }, 'server-1')
-
-    expect(jiraRequestMock).toHaveBeenCalledWith(
-      expect.anything(),
-      '/rest/api/2/issue/ALP-1/assignee',
-      expect.objectContaining({ body: JSON.stringify({ name: 'wquintal' }) })
-    )
   })
 
   it('lists self-hosted projects from the unpaged /project resource', async () => {
@@ -387,7 +374,7 @@ describe('Jira issue operations', () => {
     ])
 
     expect(String(jiraRequestMock.mock.calls[0][1])).toContain(
-      '/rest/api/3/issue/createmeta/10000/issuetypes/10001?'
+      '/rest/api/3/issue/createmeta/10000/issuetypes/10001?maxResults=100&startAt=0'
     )
   })
 

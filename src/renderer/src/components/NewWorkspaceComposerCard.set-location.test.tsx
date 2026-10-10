@@ -1,11 +1,8 @@
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
-import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import { renderCard } from './NewWorkspaceComposerCard.test-fixture'
 
 const storeMocks = vi.hoisted(() => ({
   closeModal: vi.fn(),
@@ -74,129 +71,30 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
 vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
   SetProjectLocationDialog: ({
     option,
-    projectName
+    projectName,
+    onClose,
+    onReady
   }: {
     option: { label: string } | null
     projectName: string
+    onClose: () => void
+    onReady: (setupId: string) => void
   }) =>
     option ? (
       <div
         data-testid="set-project-location-dialog"
         data-host={option.label}
         data-project={projectName}
-      />
+      >
+        <button type="button" onClick={onClose}>
+          Close location
+        </button>
+        <button type="button" onClick={() => onReady('setup-remote')}>
+          Complete location
+        </button>
+      </div>
     ) : null
 }))
-
-const projectOptions: NewWorkspaceProjectOption[] = [
-  {
-    kind: 'project-group',
-    id: 'project-group:platform',
-    projectGroupId: 'platform',
-    displayName: 'Platform',
-    badgeColor: 'var(--muted-foreground)',
-    detail: '/workspace/platform',
-    parentPath: '/workspace/platform',
-    connectionId: null
-  }
-]
-
-const hostOptions: ProjectHostSetupOption[] = [
-  {
-    kind: 'ready',
-    id: 'setup-local',
-    projectId: 'project-group:platform',
-    hostId: 'local',
-    repoId: 'repo-a',
-    label: 'Local Mac',
-    detail: 'Orca',
-    path: '/Users/alice/orca'
-  },
-  {
-    kind: 'needs-setup',
-    id: 'needs-setup:ssh:devbox',
-    projectId: 'project-group:platform',
-    hostId: 'ssh:devbox',
-    label: 'Devbox',
-    detail: 'Project location not set',
-    isAvailable: true,
-    attention: false,
-    canSetLocation: true
-  }
-]
-
-function renderCard(
-  overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
-): HTMLDivElement {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(
-      <NewWorkspaceComposerCard
-        quickAgent={null}
-        onQuickAgentChange={() => {}}
-        eligibleRepos={[]}
-        repoId="repo-a"
-        projectOptions={projectOptions}
-        selectedProjectId="project-group:platform"
-        selectedRepoIsGit
-        onRepoChange={() => {}}
-        onProjectChange={() => {}}
-        primaryActionLabel="Create workspace"
-        name=""
-        onNameValueChange={() => {}}
-        onSmartGitHubItemSelect={() => {}}
-        onSmartGitLabItemSelect={() => {}}
-        onSmartBranchSelect={() => {}}
-        onSmartLinearIssueSelect={() => {}}
-        smartNameSelection={null}
-        onClearSmartNameSelection={() => {}}
-        canReuseSelectedBranch={false}
-        reuseSelectedBranch={false}
-        onReuseSelectedBranchChange={() => {}}
-        forkPushWarning={null}
-        detectedAgentIds={null}
-        onOpenAgentSettings={() => {}}
-        advancedOpen={false}
-        onToggleAdvanced={() => {}}
-        createDisabled={false}
-        projectError={null}
-        creating={false}
-        onCreate={() => {}}
-        note=""
-        onNoteChange={() => {}}
-        setupConfig={null}
-        requiresExplicitSetupChoice={false}
-        setupDecision={null}
-        onSetupDecisionChange={() => {}}
-        setupAgentStartupPolicy="start-immediately"
-        onSetupAgentStartupPolicyChange={() => {}}
-        shouldWaitForSetupCheck={false}
-        resolvedSetupDecision={null}
-        createError={null}
-        selectedRepoConnectionId={null}
-        selectedRepoSshStatus={null}
-        selectedRepoRequiresConnection={false}
-        selectedRepoConnectInProgress={false}
-        onConnectSelectedRepo={async () => {}}
-        canUseSparseCheckout={false}
-        sparsePresets={[]}
-        sparseSelectedPresetId={null}
-        onSparseSelectPreset={() => {}}
-        branchNameOverride={undefined}
-        onBranchNameOverrideChange={() => {}}
-        branchesEnabled={false}
-        setupControlsEnabled={false}
-        sparseControlsEnabled={false}
-        projectHostSetupOptions={hostOptions}
-        selectedProjectHostSetupId="setup-local"
-        {...overrides}
-      />
-    )
-  })
-  return container
-}
 
 describe('NewWorkspaceComposerCard set location', () => {
   let container: HTMLDivElement | null = null
@@ -212,9 +110,10 @@ describe('NewWorkspaceComposerCard set location', () => {
     container = null
   })
 
-  it('opens set-location over the composer without leaving the create dialog', () => {
+  // Async because the dialog is a lazy chunk: the click mounts Suspense, the chunk resolves next tick.
+  it('opens set-location over the composer without leaving the create dialog', async () => {
     const nestedOpenChanges: boolean[] = []
-    container = renderCard({
+    container = await renderCard({
       onNestedDialogOpenChange: (open) => nestedOpenChanges.push(open)
     })
 
@@ -226,6 +125,7 @@ describe('NewWorkspaceComposerCard set location', () => {
     )
     expect(setLocation).toBeTruthy()
     act(() => setLocation?.click())
+    await act(async () => {})
 
     const dialog = document.body.querySelector('[data-testid="set-project-location-dialog"]')
     expect(dialog?.getAttribute('data-host')).toBe('Devbox')
@@ -234,5 +134,33 @@ describe('NewWorkspaceComposerCard set location', () => {
     expect(storeMocks.closeModal).not.toHaveBeenCalled()
     expect(storeMocks.openModal).not.toHaveBeenCalled()
     expect(storeMocks.openSettingsPage).not.toHaveBeenCalled()
+  })
+
+  // Async for the same reason: without the flush this only passes when an earlier
+  // test in this file already resolved the shared lazy chunk.
+  it('closes the nested dialog before publishing the ready run target', async () => {
+    const nestedOpenChanges: boolean[] = []
+    const setupChanges: string[] = []
+    container = await renderCard({
+      onNestedDialogOpenChange: (open) => nestedOpenChanges.push(open),
+      onProjectHostSetupChange: (setupId) => setupChanges.push(setupId)
+    })
+
+    act(() => {
+      container?.querySelector<HTMLElement>('div[data-run-target-combobox-root="true"]')?.click()
+    })
+    const setLocation = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Set project location')
+    )
+    act(() => setLocation?.click())
+    await act(async () => {})
+    const complete = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Complete location'
+    )
+    act(() => complete?.click())
+
+    expect(nestedOpenChanges).toEqual([true, false])
+    expect(setupChanges).toEqual(['setup-remote'])
+    expect(document.body.querySelector('[data-testid="set-project-location-dialog"]')).toBeNull()
   })
 })

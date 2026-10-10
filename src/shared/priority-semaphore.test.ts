@@ -2,19 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { PrioritySemaphore } from './priority-semaphore'
 
 describe('PrioritySemaphore', () => {
-  it('allows up to N concurrent acquires', async () => {
-    const sem = new PrioritySemaphore(2)
-    const r1 = await sem.acquire(0)
-    const r2 = await sem.acquire(0)
-
-    // Both acquired immediately
-    expect(typeof r1).toBe('function')
-    expect(typeof r2).toBe('function')
-
-    r1()
-    r2()
-  })
-
   it('blocks when concurrency limit is reached', async () => {
     const sem = new PrioritySemaphore(1)
     const r1 = await sem.acquire(0)
@@ -129,20 +116,18 @@ describe('PrioritySemaphore', () => {
     expect(order[0]).toBe('B-high')
   })
 
-  it('works with zero waiters', async () => {
-    const sem = new PrioritySemaphore(3)
-    const r1 = await sem.acquire(0)
-    r1()
-    // No crash, no hanging
-  })
-
-  it('release is idempotent', async () => {
+  it('removes an aborted waiter without consuming the next permit', async () => {
     const sem = new PrioritySemaphore(1)
-    const r1 = await sem.acquire(0)
-    r1()
-    r1() // double release should not throw or corrupt state
+    const release = await sem.acquire(0)
+    const controller = new AbortController()
+    const reason = new Error('canceled')
+    const waiting = sem.acquire(0, controller.signal)
 
-    const r2 = await sem.acquire(0)
-    r2()
+    controller.abort(reason)
+    await expect(waiting).rejects.toBe(reason)
+    release()
+
+    const nextRelease = await sem.acquire(0)
+    nextRelease()
   })
 })

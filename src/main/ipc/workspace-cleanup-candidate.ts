@@ -1,4 +1,3 @@
-import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import type { Worktree } from '../../shared/worktree/types'
@@ -17,17 +16,18 @@ import {
   readWorkspaceCleanupGitEvidence
 } from './workspace-cleanup-git-evidence'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
+import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
 export async function buildWorkspaceCleanupCandidate(args: {
   repo: Repo
   worktree: Worktree
   scannedAt: number
-  provider: IGitProvider | null
+  route: WorkspaceCleanupGitRoute
   skipGit: boolean
   forceGitCheck: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupCandidate> {
-  const { repo, worktree, scannedAt, provider, skipGit, forceGitCheck, signal } = args
+  const { repo, worktree, scannedAt, route, skipGit, forceGitCheck, signal } = args
   const blockers: WorkspaceCleanupBlocker[] = []
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(worktree, scannedAt)
   const repoIsFolder = isFolderRepo(repo)
@@ -53,7 +53,7 @@ export async function buildWorkspaceCleanupCandidate(args: {
 
   const gitEvidence = !shouldReadGit
     ? createEmptyWorkspaceCleanupGitEvidence()
-    : await readWorkspaceCleanupGitEvidence(worktree, repo, provider, signal)
+    : await readWorkspaceCleanupGitEvidence(worktree, repo, route, signal)
   appendWorkspaceCleanupItems(blockers, gitEvidence.blockers)
 
   const candidateWithoutFingerprint: WorkspaceCleanupCandidate = {
@@ -192,11 +192,16 @@ function shouldReadWorkspaceCleanupGitEvidence(args: {
   if ((skipGit && !forceGitCheck) || repoIsFolder || worktree.isMainWorktree) {
     return false
   }
-  if (
-    blockers.includes('pinned') ||
-    blockers.includes('main-worktree') ||
-    blockers.includes('folder-repo')
-  ) {
+  // Why pinned sits with the cost skips and not the refusals: a pinned workspace is
+  // still queueable (`pinned` is not a queue blocker), so it can reach removal -- and
+  // removal forces whenever git is unknown. Skipping its git read on a broad scan is a
+  // fair saving; skipping it on the confirm-time forced read meant deleting with no
+  // evidence ever obtained. main-worktree and folder-repo stay unconditional: those are
+  // refused before removal, so reading git for them is pure cost.
+  if (blockers.includes('pinned') && !forceGitCheck) {
+    return false
+  }
+  if (blockers.includes('main-worktree') || blockers.includes('folder-repo')) {
     return false
   }
 

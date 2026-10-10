@@ -29,7 +29,10 @@ export function getOrcaProfileAuthStatusFromProfile(
       state: 'unconfigured',
       persistence: session.status === 'found' ? session.persistence : 'none',
       cloud,
-      credentialError: session.status === 'decrypt-failed' ? session.error : undefined,
+      credentialError:
+        session.status === 'decrypt-failed' || session.status === 'unreadable'
+          ? session.error
+          : undefined,
       setupMessage: configState.setupMessage
     }
   }
@@ -51,6 +54,9 @@ export function getOrcaProfileAuthStatusFromProfile(
     state: 'reconnect-required',
     persistence: 'none',
     cloud,
-    credentialError: session.status === 'decrypt-failed' ? session.error : undefined
+    credentialError:
+      session.status === 'decrypt-failed' || session.status === 'unreadable'
+        ? session.error
+        : undefined
   }
 }

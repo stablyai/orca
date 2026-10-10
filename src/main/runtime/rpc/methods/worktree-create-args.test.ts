@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
-import { WorktreeCreate } from './worktree-schemas'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 const PROVENANCE = {
   automationProvenance: undefined,
@@ -25,5 +25,57 @@ describe('buildManagedWorktreeCreateArgs', () => {
     expect(build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: true })).toMatchObject({
       nameWasGenerated: true
     })
+  })
+
+  it('keeps the legacy CLI marker on a name-only create request', () => {
+    const args = buildManagedWorktreeCreateArgs(
+      WorktreeCreate.parse({ repo: 'id:repo-1', name: 'feature' }),
+      { ...PROVENANCE, cliProvenance: { kind: 'created-by-cli', createdAt: 1 } }
+    )
+
+    expect(args).toMatchObject({
+      name: 'feature',
+      cliProvenance: { kind: 'created-by-cli', createdAt: 1 }
+    })
+    expect(args.displayName).toBeUndefined()
+  })
+
+  it('carries the parent-pick provenance only when the client marked it manual', () => {
+    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
+    expect(
+      build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
+    ).not.toHaveProperty('parentWorkspaceOrigin')
+    expect(
+      build({
+        repo: 'id:repo-1',
+        name: 'child',
+        parentWorkspace: 'folder:f1',
+        parentWorkspaceOrigin: 'manual'
+      }).lineage
+    ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
+  })
+
+  it('lets a person-driven create fall back to a local base, but not an automation run', () => {
+    expect(build({ repo: 'id:repo-1', name: 'feature' })).toMatchObject({
+      allowLocalBaseFallback: true
+    })
+    const automationRun = buildManagedWorktreeCreateArgs(
+      WorktreeCreate.parse({ repo: 'id:repo-1', name: 'nightly' }),
+      {
+        ...PROVENANCE,
+        automationProvenance: {
+          kind: 'created-by-automation',
+          automationId: 'automation-1',
+          automationNameSnapshot: 'Nightly',
+          automationRunId: 'run-1',
+          automationRunTitleSnapshot: 'Nightly run',
+          createdAt: 1,
+          executionTargetType: 'local',
+          executionTargetId: 'local',
+          projectId: 'repo-1'
+        }
+      }
+    )
+    expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
   })
 })

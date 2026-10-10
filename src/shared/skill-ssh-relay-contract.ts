@@ -4,11 +4,15 @@ import {
   SkillInstallRequestSchema,
   SkillRemoveRequestSchema
 } from './skill-install-contract'
-import { SkillBundleInstallRequestSchema } from './skill-bundle-install-contract'
+import {
+  SkillBundleInstallPreviewRequestSchema,
+  SkillBundleInstallRequestSchema
+} from './skill-bundle-install-contract'
 
 export const SKILL_SSH_RELAY_INSTALL_METHOD = 'skills.install' as const
 export const SKILL_SSH_RELAY_INSTALL_BUNDLE_METHOD = 'skills.installBundle' as const
 export const SKILL_SSH_RELAY_PREVIEW_METHOD = 'skills.previewInstall' as const
+export const SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD = 'skills.previewBundleInstall' as const
 export const SKILL_SSH_RELAY_REMOVE_METHOD = 'skills.removeInstall' as const
 export const SKILL_SSH_RELAY_LIST_METHOD = 'skills.listManagedInstalls' as const
 export const SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD = 'skills.beginUpload' as const
@@ -49,6 +53,13 @@ export const SkillSshPreviewParamsSchema = z
   })
   .strict()
 
+export const SkillSshPreviewBundleParamsSchema = z
+  .object({
+    request: SkillBundleInstallPreviewRequestSchema,
+    workspace: SkillSshWorkspaceAuthoritySchema.optional()
+  })
+  .strict()
+
 export const SkillSshRemoveParamsSchema = z
   .object({
     request: SkillRemoveRequestSchema,
@@ -64,4 +75,5 @@ export type SkillSshWorkspaceAuthority = z.infer<typeof SkillSshWorkspaceAuthori
 export type SkillSshInstallParams = z.infer<typeof SkillSshInstallParamsSchema>
 export type SkillSshInstallBundleParams = z.infer<typeof SkillSshInstallBundleParamsSchema>
 export type SkillSshPreviewParams = z.infer<typeof SkillSshPreviewParamsSchema>
+export type SkillSshPreviewBundleParams = z.infer<typeof SkillSshPreviewBundleParamsSchema>
 export type SkillSshRemoveParams = z.infer<typeof SkillSshRemoveParamsSchema>

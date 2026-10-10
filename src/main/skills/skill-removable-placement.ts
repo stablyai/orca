@@ -1,22 +1,21 @@
 import { lstat, readlink } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import {
+  nativeSkillPathSemantics,
+  normalizedSkillPath,
+  skillPathInside
+} from '../../shared/skill-path-containment'
 import type { SkillPlacementResult } from '../../shared/skill-install-contract'
 import type { SkillInstallFilesystem } from './skill-install-filesystem'
 import type { SkillInstallReceiptV1 } from './skill-install-provenance'
 
+// Native-only call site: these placements are always the process's own paths.
 function normalizedPath(path: string): string {
-  const normalized = resolve(path)
-  return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
+  return normalizedSkillPath(path, nativeSkillPathSemantics())
 }
 
 function pathInside(root: string, path: string): boolean {
-  const child = relative(resolve(root), resolve(path))
-  return (
-    child !== '' &&
-    child !== '..' &&
-    !child.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) &&
-    !isAbsolute(child)
-  )
+  return skillPathInside(root, path, nativeSkillPathSemantics())
 }
 
 async function aliasTargetsCanonical(path: string, canonicalPath: string): Promise<boolean> {

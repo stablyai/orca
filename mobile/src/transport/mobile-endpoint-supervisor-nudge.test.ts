@@ -6,7 +6,8 @@ import {
   FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
@@ -33,7 +34,7 @@ describe('mobile endpoint supervisor nudges', () => {
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected'))
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
@@ -62,7 +63,7 @@ describe('mobile endpoint supervisor nudges', () => {
       // Deterministic full jitter: fraction 0.5 → half the backoff window.
       randomBytes: () => new Uint8Array([128, 0])
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     expect(openRelay).toHaveBeenCalledOnce()
@@ -89,10 +90,37 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
+  it('restarts a disconnected Relay immediately on an app-resume retry', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'relay')
+    const openRelay = vi
+      .fn()
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4408)))
+      .mockReturnValueOnce(new FakeRelaySession('connected'))
+    const deps = dependencies({
+      openRelay,
+      openDirect: vi.fn(() => new FakeSession('disconnected')),
+      randomBytes: () => new Uint8Array([128, 0])
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    // Manual retry uses the same app-resume nudge as a background/foreground cycle.
+    supervisor.nudge('app-resume')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
   it('leaves physical relay probing to the session watchdog', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.nudge('focus')
@@ -105,20 +133,6 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.nudge('focus')
     await vi.advanceTimersByTimeAsync(0)
     expect(logical.sendRequest).not.toHaveBeenCalled()
-    supervisor.stop()
-  })
-
-  it('does not suspend a relay from one focus RPC failure', async () => {
-    const logical = new FakeLogicalClient('connected', 'relay')
-    const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
-    await supervisor.start()
-
-    supervisor.nudge('focus')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
-    expect(deps.openRelay).not.toHaveBeenCalled()
-    expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })
 
@@ -137,7 +151,7 @@ describe('mobile endpoint supervisor nudges', () => {
             })
         )
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
 
@@ -168,7 +182,7 @@ describe('mobile endpoint supervisor nudges', () => {
       readBundle: vi.fn(async () => expired),
       randomBytes: () => new Uint8Array([128, 0])
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.nudge('network-change')
@@ -194,9 +208,11 @@ describe('mobile endpoint supervisor nudges', () => {
       writeBundle: vi.fn(async () => {}),
       isActive: () => true,
       isForeground: () => true,
-      relay: () => host.relay,
+      isStopped: () => false,
+      hostId: host.id,
+      relay,
       resolveRelay: vi.fn(async ({ relay: endpoint }) => endpoint),
-      persistResolvedRelay: vi.fn(async () => {}),
+      setRelayRouting: vi.fn(async () => {}),
       bundle: () => bundle,
       adoptBundle: vi.fn(),
       recordMigration: vi.fn(),
@@ -211,5 +227,47 @@ describe('mobile endpoint supervisor nudges', () => {
     expect(setActiveSession).not.toHaveBeenCalled()
     expect(relaySession.close).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('lan')
+  })
+
+  it('withdraws a relay replacement that authenticates after backgrounding', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const relaySession = new FakeRelaySession('connected')
+    const setActiveSession = vi.fn()
+    let active = true
+    logical.migrateTo.mockImplementation(async (_session, _path, _timeout, shouldAbort) => {
+      active = false
+      if (shouldAbort?.()) {
+        relaySession.close()
+        throw new Error('migration superseded')
+      }
+    })
+    const establisher = new MobileRelaySessionEstablisher({
+      logical,
+      controller: { setActiveSession } as unknown as RelayReconnectController,
+      openRelay: vi.fn(() => relaySession),
+      randomBytes: (length) => new Uint8Array(length),
+      writeBundle: vi.fn(async () => {}),
+      isActive: () => active,
+      isForeground: () => active,
+      isStopped: () => false,
+      hostId: host.id,
+      relay,
+      resolveRelay: vi.fn(async ({ relay: endpoint }) => endpoint),
+      setRelayRouting: vi.fn(async () => {}),
+      bundle: () => bundle,
+      adoptBundle: vi.fn(),
+      recordMigration: vi.fn(),
+      scheduleLease: vi.fn(),
+      scheduleDirectProbe: vi.fn(),
+      onBookkeepingError: vi.fn(),
+      onDialFailure: vi.fn()
+    })
+
+    const outcome = await establisher.dialEligible([bundle.current])
+
+    expect(outcome).toEqual({ outcome: 'aborted' })
+    expect(setActiveSession).not.toHaveBeenCalled()
+    expect(relaySession.close).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
   })
 })

@@ -205,6 +205,144 @@ describe('AgentHookServer listener replay', () => {
     expect(listener).toHaveBeenNthCalledWith(4, [])
   })
 
+  it('evicts only the matching persisted status identity', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSession: { key: 'session_id', id: 'resume-me' },
+        payload: { state: 'done', prompt: 'old run', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    const old = server.getStatusSnapshot()[0]
+    expect(old).toBeDefined()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'new run', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.dropPersistedStatusEntry({
+      paneKey: old!.paneKey,
+      receivedAt: old!.receivedAt,
+      stateStartedAt: old!.stateStartedAt
+    })
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', prompt: 'new run' })
+
+    // A matching eviction follows ordinary dismissal semantics, including
+    // preserving a resumable provider session for the still-live TUI.
+    const resumed = new AgentHookServer()
+    resumed.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSession: { key: 'session_id', id: 'resume-me' },
+        payload: { state: 'done', prompt: 'old run', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    const resumedIdentity = resumed.getStatusSnapshot()[0]!
+    expect(
+      resumed.dropPersistedStatusEntry({
+        paneKey: resumedIdentity.paneKey,
+        receivedAt: resumedIdentity.receivedAt,
+        stateStartedAt: resumedIdentity.stateStartedAt
+      })
+    ).toBe(true)
+    expect(resumed.getStatusSnapshot()[0]).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: { id: 'resume-me' }
+    })
+  })
+
+  it('evicts when the renderer identity was stamped after receipt but pins the same turn', () => {
+    // Runtime-sync and recovery entries stamp updatedAt with Date.now()/capturedAt, which is
+    // at or after main's receivedAt; the eviction must still land for those rows.
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'run', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    const entry = server.getStatusSnapshot()[0]!
+    expect(
+      server.dropPersistedStatusEntry({
+        paneKey: entry.paneKey,
+        receivedAt: entry.receivedAt + 5_000,
+        stateStartedAt: entry.stateStartedAt
+      })
+    ).toBe(true)
+
+    // A different turn never matches, whatever the receivedAt relationship.
+    const other = new AgentHookServer()
+    other.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: 'run', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    const otherEntry = other.getStatusSnapshot()[0]!
+    expect(
+      other.dropPersistedStatusEntry({
+        paneKey: otherEntry.paneKey,
+        receivedAt: otherEntry.receivedAt + 5_000,
+        stateStartedAt: otherEntry.stateStartedAt + 1
+      })
+    ).toBe(false)
+  })
+
+  it('evicts a batch of persisted identities with one status-change notification', () => {
+    const server = new AgentHookServer()
+    const otherPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+    for (const paneKey of [PANE, otherPane]) {
+      server.ingestRemote(
+        {
+          paneKey,
+          tabId: paneKey.split(':')[0]!,
+          worktreeId: 'wt-1',
+          payload: { state: 'done', prompt: 'run', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+    }
+    const listener = vi.fn()
+    server.subscribeStatusChanges(listener)
+    const dropped: string[] = []
+    server.subscribeStatusDrop((paneKey) => dropped.push(paneKey))
+    const identities = server.getStatusSnapshot().map((entry) => ({
+      paneKey: entry.paneKey,
+      receivedAt: entry.receivedAt,
+      stateStartedAt: entry.stateStartedAt
+    }))
+
+    const evicted = server.dropPersistedStatusEntries([
+      ...identities,
+      // A stale identity never matches and never blocks the rest of the batch.
+      { ...identities[0]!, stateStartedAt: identities[0]!.stateStartedAt + 1 }
+    ])
+
+    expect(evicted.sort()).toEqual([PANE, otherPane].sort())
+    expect(dropped.sort()).toEqual([PANE, otherPane].sort())
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
   it('notifies pane-status-clear listener when pane teardown evicts a cached status', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
@@ -224,6 +362,39 @@ describe('AgentHookServer listener replay', () => {
 
     expect(listener).toHaveBeenCalledTimes(1)
     expect(listener).toHaveBeenCalledWith({ paneKey: PANE })
+  })
+
+  it('fans out one pane clear per status evicted by tab teardown', () => {
+    const server = new AgentHookServer()
+    const siblingPane = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+    const otherTabPane = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
+    for (const paneKey of [PANE, siblingPane, otherTabPane]) {
+      server.ingestRemote(
+        {
+          paneKey,
+          payload: { state: 'working', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+    }
+    const clearListener = vi.fn()
+    const statusListener = vi.fn()
+    server.subscribePaneStatusClear(clearListener)
+    server.subscribeStatusChanges(statusListener)
+    const evidenceObservedAtByPaneKey = (
+      server as unknown as { evidenceObservedAtByPaneKey: Map<string, number> }
+    ).evidenceObservedAtByPaneKey
+    expect(evidenceObservedAtByPaneKey.size).toBe(3)
+
+    server.dropStatusEntriesByTabPrefix('tab-1')
+
+    expect(clearListener.mock.calls.map(([clear]) => clear)).toEqual([
+      { paneKey: PANE },
+      { paneKey: siblingPane }
+    ])
+    expect(statusListener).toHaveBeenCalledOnce()
+    expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ paneKey: otherTabPane })])
+    expect([...evidenceObservedAtByPaneKey.keys()]).toEqual([otherTabPane])
   })
 
   it('batches connection cleanup and retains sibling and local statuses', () => {

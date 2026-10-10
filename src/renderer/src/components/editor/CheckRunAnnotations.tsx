@@ -7,6 +7,8 @@ import {
   getOpenableAnnotationLine,
   openAnnotationLocation
 } from './check-annotation-open'
+import { formatAnnotationsForClipboard } from './check-run-clipboard-text'
+import { CheckRunCopyButton } from './CheckRunCopyButton'
 
 export function CheckRunAnnotations({
   annotations,
@@ -34,18 +36,29 @@ export function CheckRunAnnotations({
     [worktreeId]
   )
 
+  const annotationFallback = translate(
+    'auto.components.editor.CheckRunDetailsPanel.cdbfda4dec',
+    'Annotation'
+  )
+  const clipboardText = formatAnnotationsForClipboard(annotations, annotationFallback)
+
   return (
     <section className="rounded-md border border-border bg-background">
-      <div className="border-b border-border px-3 py-2 text-sm font-medium">
-        {translate('auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f', 'Annotations')}
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="text-sm font-medium">
+          {translate('auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f', 'Annotations')}
+        </div>
+        <CheckRunCopyButton
+          text={clipboardText}
+          label={translate('auto.components.editor.CheckRunAnnotations.copy', 'Copy annotations')}
+        />
       </div>
       <div className="divide-y divide-border/50">
         {annotations.map((annotation, index) => {
           const openable = worktreeId ? getOpenableAnnotationLine(annotation) : null
-          const locationLabel = `${
-            annotation.path ??
-            translate('auto.components.editor.CheckRunDetailsPanel.cdbfda4dec', 'Annotation')
-          }${annotation.startLine ? `:${annotation.startLine}` : ''}`
+          const locationLabel = `${annotation.path ?? annotationFallback}${
+            annotation.startLine ? `:${annotation.startLine}` : ''
+          }`
           return (
             <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
               <div className="flex min-w-0 flex-wrap items-center gap-2">

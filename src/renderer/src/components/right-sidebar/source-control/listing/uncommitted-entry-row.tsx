@@ -4,6 +4,7 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { ActionButton } from './action-button'
@@ -63,7 +64,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
-  onUnstage: (filePath: string) => Promise<void>
+  onUnstage: (filePath: string, oldPath?: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
   showPathHint?: boolean
@@ -91,6 +92,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
       relativePath={entry.path}
+      hasWorkingTreeFile={entry.status !== 'deleted'}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
@@ -122,6 +124,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           }
           const absolutePath = joinPath(worktreePath, entry.path)
           e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
+          writeWorkspaceFileDragSourceForWorkspace(e.dataTransfer, currentWorktreeId)
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={(e) => {
@@ -154,7 +157,10 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             )}
           />
         )}
-        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        {React.createElement(FileIcon, {
+          className: 'size-3.5 shrink-0',
+          style: { color: STATUS_COLORS[entry.status] }
+        })}
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
             <span className="text-foreground">{fileName}</span>
@@ -244,7 +250,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               title={translate('auto.components.right.sidebar.SourceControl.df5040e3c3', 'Unstage')}
               onClick={(event) => {
                 event.stopPropagation()
-                void onUnstage(entry.path)
+                void onUnstage(entry.path, entry.status === 'renamed' ? entry.oldPath : undefined)
               }}
             />
           )}

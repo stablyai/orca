@@ -174,6 +174,20 @@ describe('check-run-details-fix-with-ai', () => {
     })
   })
 
+  it('does not resolve a matching suppressed GitHub PR', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [
+        {
+          ...fixtures.worktree,
+          linkedPR: null,
+          suppressedGitHubPR: fixtures.pr.number
+        }
+      ]
+    }
+
+    expect(resolveHostedReviewForCheckRunDetailsFix(fixtures.worktree.id)).toBeNull()
+  })
+
   it('requires a hosted review before launching an AI fix', () => {
     storeState.prCache = {}
     expect(getCheckRunDetailsFixDisabledReason(fixtures.worktree.id)).toContain('PR or MR')

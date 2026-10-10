@@ -126,9 +126,11 @@ export function resetRemoteRuntimeMocks() {
   })
 }
 
+/** Supplies the worktree slice with the minimal UI and runtime state needed to exercise creation and teardown. */
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This slice fixture supplies the state read by worktree actions; unrelated slices are intentionally omitted.
       ({
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
@@ -166,7 +168,9 @@ export function createTestStore() {
         openFiles: [],
         editorDrafts: {},
         markdownViewMode: {},
+        markdownRichModeSizeOverride: {},
         editorViewMode: {},
+        explorerDisplayRootByWorktree: {},
         showDotfilesByWorktree: {},
         expandedDirs: {},
         gitStatusByWorktree: {},

@@ -1,11 +1,12 @@
 import { useCallback, type MutableRefObject } from 'react'
-import { useRouter } from 'expo-router'
+import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
+import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -28,7 +29,7 @@ type Params = {
   generatingMessage: boolean
   stageablePaths: string[]
   unstageablePaths: string[]
-  router: ReturnType<typeof useRouter>
+  router: RouteHandoff
   sendGitRequest: SendGitRequest
   sendCommitRequest: (message: string) => Promise<unknown>
   runGitSyncSteps: () => Promise<void>
@@ -164,12 +165,12 @@ export function useMobileSourceControlRunners(params: Params) {
     [runGitSyncSteps, runGitWorkflow]
   )
 
-  const stageAll = useCallback(async () => {
-    if (stageablePaths.length === 0) {
-      return
-    }
-    await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
-  }, [runGitAction, stageablePaths])
+  const stageAll = useMobileStageAllRunner({
+    status,
+    stageablePaths,
+    runGitWorkflow,
+    sendGitRequest
+  })
 
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {

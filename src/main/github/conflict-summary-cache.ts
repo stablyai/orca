@@ -1,4 +1,5 @@
 import type { PRConflictSummary } from '../../shared/github/pull-request-types'
+import { dedupeInFlightRun } from '../in-flight-run-dedupe'
 
 // Why 60s: the hottest coordinator cadences that re-derive a CONFLICTING PR
 // (10s mergeability-pending, 2.5s manual-pending) previously each ran a
@@ -102,30 +103,14 @@ export function dedupeBaseOidResolve(
   key: string,
   factory: () => Promise<FreshBaseTipResolution>
 ): Promise<FreshBaseTipResolution> {
-  return dedupeInFlight(inFlightBaseOidResolves, key, factory)
+  return dedupeInFlightRun(inFlightBaseOidResolves, key, factory)
 }
 
 export function dedupeSummaryDerivation(
   key: string,
   factory: () => Promise<PRConflictSummary | undefined>
 ): Promise<PRConflictSummary | undefined> {
-  return dedupeInFlight(inFlightSummaryDerivations, key, factory)
-}
-
-function dedupeInFlight<T>(
-  map: Map<string, Promise<T>>,
-  key: string,
-  factory: () => Promise<T>
-): Promise<T> {
-  const existing = map.get(key)
-  if (existing) {
-    return existing
-  }
-  const promise = factory().finally(() => {
-    map.delete(key)
-  })
-  map.set(key, promise)
-  return promise
+  return dedupeInFlightRun(inFlightSummaryDerivations, key, factory)
 }
 
 function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {

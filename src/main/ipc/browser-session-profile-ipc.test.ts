@@ -1,9 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, removeHandlerMock, createProfileMock } = vi.hoisted(() => ({
+const {
+  handleMock,
+  removeHandlerMock,
+  createProfileMock,
+  routeIdentityMock,
+  detectBrowsersMock,
+  setBrowserIdentityModeMock
+} = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
-  createProfileMock: vi.fn()
+  createProfileMock: vi.fn(),
+  routeIdentityMock: vi.fn(),
+  detectBrowsersMock: vi.fn(() => []),
+  setBrowserIdentityModeMock: vi.fn(async () => ({ ok: true }))
+}))
+
+vi.mock('../browser/browser-identity-mode-store', () => ({
+  setBrowserIdentityMode: setBrowserIdentityModeMock,
+  getBrowserIdentityModeStatus: vi.fn(() => ({ identity: {}, migrationNotice: null }))
 }))
 
 vi.mock('electron', () => ({
@@ -25,8 +40,12 @@ vi.mock('../browser/browser-session-registry', () => ({
   }
 }))
 
+vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
+  getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
+}))
+
 vi.mock('../browser/browser-cookie-import', () => ({
-  detectInstalledBrowsers: vi.fn(() => []),
+  detectInstalledBrowsers: detectBrowsersMock,
   importCookiesFromBrowser: vi.fn(),
   importCookiesFromFile: vi.fn(),
   pickCookieFile: vi.fn(),
@@ -41,25 +60,114 @@ describe('browser session profile IPC', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     createProfileMock.mockReset()
+    routeIdentityMock.mockReset()
+    detectBrowsersMock.mockReset()
+    detectBrowsersMock.mockReturnValue([])
+    setBrowserIdentityModeMock.mockReset()
+    setBrowserIdentityModeMock.mockResolvedValue({ ok: true })
     setTrustedBrowserRendererWebContentsId(null)
   })
 
-  it('forwards the user-agent mode from a trusted renderer', () => {
+  function trustedSender(): Electron.WebContents {
+    return {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+  }
+
+  function identitySetHandler(): (
+    event: { sender: Electron.WebContents },
+    mode: unknown
+  ) => Promise<unknown> {
+    registerBrowserHandlers()
+    return handleMock.mock.calls.find(([channel]) => channel === 'browser:identity:set')?.[1]
+  }
+
+  // Why reject rather than coerce: the RPC door validates mode against z.enum(['clean','native'])
+  // and rejects. Coercing an unrecognized value to 'clean' here made one concept answer an unknown
+  // value two different ways, and reported success for a mode that was quietly replaced.
+  it('refuses an unrecognized identity mode instead of silently selecting Cleaned', async () => {
+    setTrustedBrowserRendererWebContentsId(91)
+    const handler = identitySetHandler()
+
+    await expect(handler({ sender: trustedSender() }, 'rotating')).rejects.toThrow(/rotating/)
+    expect(setBrowserIdentityModeMock).not.toHaveBeenCalled()
+  })
+
+  it('commits a recognized identity mode unchanged', async () => {
+    setTrustedBrowserRendererWebContentsId(91)
+    const handler = identitySetHandler()
+
+    await expect(handler({ sender: trustedSender() }, 'native')).resolves.toEqual({ ok: true })
+    expect(setBrowserIdentityModeMock).toHaveBeenCalledWith('native')
+  })
+
+  function clientHostDetectHandler(): (
+    event: { sender: Electron.WebContents },
+    args: { environmentId: string }
+  ) => unknown {
+    registerBrowserHandlers()
+    return handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:detectBrowsersForClientHost'
+    )?.[1]
+  }
+
+  // Why: the import runs wherever the pages are hosted, so the picker must be sourced from the same
+  // machine — a remote-sourced list is either empty (headless) or names profiles this desktop lacks.
+  it('detects this desktop’s browsers only while the environment is client-hosted', () => {
+    detectBrowsersMock.mockReturnValue([
+      {
+        family: 'chrome',
+        label: 'Google Chrome',
+        cookiesPath: '/Users/someone/Library/.../Cookies',
+        keychainService: 'Chrome Safe Storage',
+        keychainAccount: 'Chrome',
+        profiles: [{ name: 'Person 1', directory: 'Default' }],
+        selectedProfile: 'Default'
+      }
+    ] as never)
+    routeIdentityMock.mockReturnValue({ orcaProfileId: 'profile-a' })
+
+    const handler = clientHostDetectHandler()
+
+    expect(handler({ sender: trustedSender() }, { environmentId: 'env-1' })).toEqual([
+      {
+        family: 'chrome',
+        label: 'Google Chrome',
+        profiles: [{ name: 'Person 1', directory: 'Default' }],
+        selectedProfile: 'Default'
+      }
+    ])
+    expect(routeIdentityMock).toHaveBeenCalledWith('env-1')
+  })
+
+  it('returns null so detection falls back to the server when nothing is client-hosted', () => {
+    routeIdentityMock.mockReturnValue(null)
+
+    const handler = clientHostDetectHandler()
+
+    expect(handler({ sender: trustedSender() }, { environmentId: 'env-1' })).toBeNull()
+    expect(detectBrowsersMock).not.toHaveBeenCalled()
+  })
+
+  it('creates a profile for a trusted renderer', async () => {
     const profile = {
       id: 'profile-google',
       scope: 'isolated',
       partition: 'persist:orca-browser-session-profile-google',
       label: 'Google',
-      source: null,
-      userAgentMode: 'native'
+      source: null
     }
     createProfileMock.mockReturnValue(profile)
     registerBrowserHandlers()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered test handler is selected by its exact channel and called with its declared boundary shape.
     const createHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:session:createProfile'
     )?.[1] as (
       event: { sender: Electron.WebContents },
-      args: { scope: 'isolated'; label: string; userAgentMode: 'native' }
+      args: { scope: 'isolated'; label: string }
     ) => unknown
     const sender = {
       id: 91,
@@ -68,11 +176,9 @@ describe('browser session profile IPC', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
 
-    expect(
-      createHandler({ sender }, { scope: 'isolated', label: 'Google', userAgentMode: 'native' })
-    ).toEqual(profile)
-    expect(createProfileMock).toHaveBeenCalledWith('isolated', 'Google', {
-      userAgentMode: 'native'
-    })
+    await expect(
+      createHandler({ sender }, { scope: 'isolated', label: 'Google' })
+    ).resolves.toEqual(profile)
+    expect(createProfileMock).toHaveBeenCalledWith('isolated', 'Google')
   })
 })

@@ -10,11 +10,9 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
-import {
-  findGithubPrWorkspaceAttachment,
-  getGithubPrWorkspaceAttachmentLabel
-} from '@/lib/github-work-item-workspace-attachment'
+import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,
   createGitHubLinkCopyState,
@@ -67,12 +65,17 @@ export default function PullRequestPage({
   const attachedWorkspace = useMemo(
     () =>
       workItem?.type === 'pr'
-        ? findGithubPrWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        ? findGithubPrWorkspaceAttachment(
+            allWorktrees,
+            effectiveRepoId,
+            workItem.number,
+            workItem.url
+          )
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
   const attachedWorkspaceLabel = attachedWorkspace
-    ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
+    ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
 
   // Why: key must include issue source preference so origin/upstream toggles for the same issue number don't read back the wrong repo's details.
@@ -127,14 +130,17 @@ export default function PullRequestPage({
     const currentAttached = findGithubPrWorkspaceAttachment(
       useAppStore.getState().allWorktrees(),
       targetRepoId,
-      workItem.number
+      workItem.number,
+      workItem.url
     )
     if (!currentAttached) {
       handleUseWorkItem()
       return
     }
 
-    const result = activateAndRevealWorktree(currentAttached.id)
+    const result = activateAndRevealWorktree(currentAttached.id, {
+      navigationIntent: 'user-open'
+    })
     if (result === false) {
       toast.error(
         translate(

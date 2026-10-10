@@ -3,16 +3,24 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
+import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import { defineMethod, type RpcMethod } from '../core'
+import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
+import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import {
   WorktreeCreate,
+  WorktreePrefetchCreateBase
+} from '../../../../shared/rpc-contract/worktree-create-params'
+import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
-  WorktreePrefetchCreateBase,
   WorktreeRemove,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
@@ -20,13 +28,15 @@ import {
   WorktreeSet,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
-} from './worktree-schemas'
+} from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
+import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 
-export const WORKTREE_METHODS: RpcMethod[] = [
+export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
+    permission: 'workspace',
     params: WorktreeTeardownMissingTerminalsParams,
     handler: async (params, { runtime }) =>
       runtime.teardownMissingManagedWorktreeTerminals(
@@ -37,6 +47,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.lineageList',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => ({
       lineage: await runtime.listWorktreeLineage(),
@@ -45,6 +56,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.show',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => ({
       worktree: await runtime.showManagedWorktree(params.worktree)
@@ -52,11 +64,13 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.sleep',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.sleepManagedWorktree(params.worktree)
   }),
   defineMethod({
     name: 'worktree.activate',
+    permission: 'workspace',
     params: WorktreeActivate,
     handler: async (params, { runtime, clientKind }) =>
       // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
@@ -67,12 +81,14 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         navigation: resolveRuntimeNavigationTarget({
           navigation: params.navigation,
           notifyClients: params.notifyClients,
-          clientKind
+          clientKind,
+          defaultTarget: 'host'
         })
       })
   }),
   defineMethod({
     name: 'worktree.create',
+    permission: 'workspace',
     params: WorktreeCreate,
     handler: async (params, context) =>
       // Why: a mobile create interrupted by a connection migration is retried with
@@ -90,22 +106,30 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         // Why: provenance tokens are reserved before creation so retries can recover,
         // but failed create attempts must release the reservation for a safe retry.
         try {
-          const result = await runtime.createManagedWorktree(
-            buildManagedWorktreeCreateArgs(params, {
-              automationProvenance,
-              cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
-                startupAgent: params.startupAgent ?? params.createdWithAgent,
-                createdAt: Date.now()
-              }),
-              creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
-            })
+          const result = await createWorktreeWithStartupAgent(
+            runtime,
+            buildManagedWorktreeCreateArgs(
+              params,
+              {
+                automationProvenance,
+                cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+                  startupAgent: params.startupAgent ?? params.createdWithAgent,
+                  createdAt: Date.now()
+                }),
+                creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+              },
+              context.clientKind ? { clientKind: context.clientKind } : {}
+            )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+          // Why stamped here: the create's change notification has bumped the generation, so this
+          // names the catalog that contains the new worktree.
+          const stamped = { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
           // Why: agent callers need a stable dispatch target without traversing
           // terminal-list layout duplicates after creating the worktree.
           return params.startupAgent && result.startupTerminal?.handle
-            ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
-            : result
+            ? { ...stamped, agentTerminalHandle: result.startupTerminal.handle }
+            : stamped
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
           throw error
@@ -114,6 +138,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.prefetchCreateBase',
+    permission: 'workspace',
     params: WorktreePrefetchCreateBase,
     handler: async (params, { runtime }) => {
       await runtime.prefetchManagedWorktreeCreateBase({
@@ -125,12 +150,17 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.set',
+    permission: 'workspace',
     params: WorktreeSet,
     handler: async (params, { runtime }) => ({
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
+        ...(params.displayName !== undefined
+          ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
+          : {}),
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
+        suppressedGitHubPR: params.suppressedGitHubPR,
         linkedLinearIssue: params.linkedLinearIssue,
         linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
@@ -140,6 +170,13 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
         linkedWorkItem: params.linkedWorkItem,
+        linkedItems: params.linkedItems,
+        ...(params.linkedItemsBase !== undefined
+          ? { linkedItemsBase: params.linkedItemsBase }
+          : {}),
+        ...(params.linkedItemsSelectionChanged !== undefined
+          ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
+          : {}),
         linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
         isArchived: params.isArchived,
@@ -164,17 +201,19 @@ export const WORKTREE_METHODS: RpcMethod[] = [
                 noParent: params.noParent === true
               }
             : undefined
-      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
+      })
     })
   }),
   defineMethod({
     name: 'worktree.persistSortOrder',
+    permission: 'workspace',
     params: WorktreeSortOrder,
     handler: async (params, { runtime }) =>
       runtime.persistManagedWorktreeSortOrder(params.orderedIds)
   }),
   defineMethod({
     name: 'worktree.resolvePrBase',
+    permission: 'workspace',
     params: WorktreeResolvePrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedPrBase({
@@ -187,6 +226,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.resolveMrBase',
+    permission: 'workspace',
     params: WorktreeResolveMrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedMrBase({
@@ -199,35 +239,78 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'worktree.rm',
+    permission: 'workspace',
     params: WorktreeRemove,
-    handler: async (params, { runtime }) => {
-      const removalArgs = [
+    handler: async (params, context) => {
+      const { runtime } = context
+      // Translate a paired client's runtime-local host spelling before host-qualified reads.
+      let resolvedHostId = resolvePairedCallerHostId(
+        () => runtime.listRepos(),
         params.worktree,
-        params.force === true,
-        params.runHooks === true,
-        params.allowUnverifiedPtyStop === true
-      ] as const
-      const result = params.hostId
-        ? await runtime.removeManagedWorktree(...removalArgs, params.hostId)
-        : await runtime.removeManagedWorktree(...removalArgs)
-      return { removed: true, ...result }
+        params.hostId
+      )
+      // Older mobile clients omit hostId, so resolve through the ambiguity gate
+      // before pinning removal. An ambiguous selector still fails closed: two
+      // hosts own the id and an unqualified client cannot say which it meant.
+      if (!resolvedHostId) {
+        try {
+          resolvedHostId = (await runtime.showManagedWorktree(params.worktree)).hostId
+          if (!resolvedHostId) {
+            throw new Error('worktree.rm could not resolve the workspace host')
+          }
+        } catch (error) {
+          // 'selector_not_found' is not a failure to attribute — Git simply no
+          // longer lists the path. A delete legitimately arrives in that state and
+          // `removeManagedWorktree` handles it, so a stale workspace stays
+          // deletable by a client that sends no host. Anything else propagates.
+          if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+            throw error
+          }
+        }
+      }
+      // Why parsed, not resolved: an `id:` selector (what clients send) names its repo, and a second
+      // resolution costs a scan and throws for an id two hosts share. Other selectors stay unstamped.
+      const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
+      const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
+      const result = await runtime.removeManagedWorktree(params.worktree, {
+        force: params.force === true,
+        runHooks: params.runHooks === true,
+        allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
+        allowFailedArchiveHook: params.allowFailedArchiveHook === true,
+        ...(resolvedHostId ? { hostId: resolvedHostId } : {}),
+        // Why: only a client that shows the `removing` marker can wait out Git's delete; older
+        // clients get the acceptance and never see the row again.
+        ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
+      })
+      return {
+        removed: true,
+        ...result,
+        ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
+      }
     }
   }),
   defineMethod({
     name: 'worktree.forceDeleteBranch',
+    permission: 'workspace',
     params: WorktreeForceDeleteBranch,
-    handler: async (params, { runtime }) =>
-      params.hostId
+    handler: async (params, { runtime }) => {
+      const hostId = resolvePairedCallerHostId(
+        () => runtime.listRepos(),
+        params.worktree,
+        params.hostId
+      )
+      return hostId
         ? runtime.forceDeletePreservedBranch(
             params.worktree,
             params.branchName,
             params.expectedHead,
-            params.hostId
+            hostId
           )
         : runtime.forceDeletePreservedBranch(
             params.worktree,
             params.branchName,
             params.expectedHead
           )
+    }
   })
 ]

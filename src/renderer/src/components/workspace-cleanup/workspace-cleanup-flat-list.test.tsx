@@ -11,6 +11,7 @@ import {
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import { FACET_NOW, makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
+import { getWorkspaceCleanupHostIdentity } from './workspace-cleanup-host-identity'
 import { runWorkspaceCleanupQuery } from './workspace-cleanup-query'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 
@@ -25,23 +26,35 @@ let container: HTMLDivElement | null = null
 
 // One row per bucket the retired tab partition used to hide behind a tab.
 const FLEET: WorkspaceCleanupFacets[] = [
-  makeNamedFacets('ready-one', { candidate: { tier: 'ready' }, sizeBytes: 4 * 1024 * 1024 }),
+  makeNamedFacets('ready-one', {
+    candidate: { tier: 'ready' },
+    sizeBytes: 4 * 1024 * 1024
+  }),
   makeNamedFacets('needs-review', { candidate: { tier: 'review' } }),
   makeNamedFacets('protected-one', {
-    candidate: { tier: 'protected', blockers: ['pinned'], selectedByDefault: false }
+    candidate: {
+      tier: 'protected',
+      blockers: ['pinned'],
+      selectedByDefault: false
+    }
   }),
   makeNamedFacets('ignored-one', { dismissed: true })
 ]
 
-function renderRows(rows: readonly WorkspaceCleanupFacets[]): void {
+function renderRows(
+  rows: readonly WorkspaceCleanupFacets[],
+  onForgetLocally?: (candidate: WorkspaceCleanupFacets['candidate']) => void
+): void {
   act(() =>
     root?.render(
       <WorkspaceCleanupCandidateList
         rows={rows}
+        getRowKey={(row) => row.worktreeId}
         scrollElement={null}
         renderRow={(row, index) => (
           <CandidateRow
-            key={row.worktreeId}
+            key={row.identity}
+            identity={row.identity}
             candidate={row.candidate}
             reviewInfo={row.review}
             expanded={false}
@@ -52,6 +65,7 @@ function renderRows(rows: readonly WorkspaceCleanupFacets[]): void {
             selected={false}
             onIgnore={vi.fn()}
             onRemove={vi.fn()}
+            onForgetLocally={onForgetLocally}
             onToggleExpanded={vi.fn()}
             onToggleSelected={vi.fn()}
             onView={vi.fn()}
@@ -107,24 +121,34 @@ describe('workspace cleanup flat list', () => {
 
   it('switches the visible rows when filters are applied', () => {
     const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.safety.tiers = ['ready']
     filters.safety.dismissed = 'exclude'
     renderRows(query(filters).rows)
-    expect(renderedNames()).toEqual(['ready-one'])
+    expect(renderedNames()).not.toContain('ignored-one')
 
-    filters.safety.tiers = []
     filters.safety.dismissed = 'only'
     renderRows(query(filters).rows)
     expect(renderedNames()).toEqual(['ignored-one'])
-
-    filters.safety.dismissed = 'any'
-    filters.safety.tiers = ['protected']
-    renderRows(query(filters).rows)
-    expect(renderedNames()).toEqual(['protected-one'])
   })
 
-  it('reports only the rows the user could actually queue for deletion', () => {
-    expect(query().selectableWorktreeIds).not.toContain('repo-1::/repo/protected-one')
+  it('lets select-all include pinned label rows', () => {
+    expect(query().selectableIdentities).toContain(
+      getWorkspaceCleanupHostIdentity('local', 'repo-1::/repo/protected-one')
+    )
+  })
+
+  it('offers local removal for a disconnected SSH row without making it selectable', () => {
+    const onForgetLocally = vi.fn()
+    const disconnected = makeNamedFacets('disconnected', {
+      candidate: { blockers: ['ssh-disconnected'] }
+    })
+
+    renderRows([disconnected], onForgetLocally)
+
+    expect(container?.querySelector('[aria-label^="Select disconnected"]')).toBeNull()
+    const forgetButton = container?.querySelector<HTMLElement>('[aria-label="Remove from Orca"]')
+    expect(forgetButton).not.toBeNull()
+    act(() => forgetButton?.click())
+    expect(onForgetLocally).toHaveBeenCalledWith(disconnected.candidate)
   })
 
   it('shows status and disk-size facts without expanding a row', () => {

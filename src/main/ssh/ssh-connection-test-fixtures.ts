@@ -26,6 +26,11 @@ export function createResolvedConfig(overrides?: Partial<SshResolvedConfig>): Ss
     proxyUseFdpass: true,
     controlMaster: 'no',
     controlPersist: 'no',
+    userKnownHostsFiles: [],
+    globalKnownHostsFiles: [],
+    strictHostKeyChecking: 'ask',
+    hashKnownHosts: false,
+    updateHostKeys: 'no',
     ...overrides
   }
 }
@@ -108,14 +113,6 @@ export function createSystemSshProcess(): MockSystemSshProcess {
   const proc = createPendingSystemSshProcess()
   queueMicrotask(() => {
     proc.stdout.emit('data', Buffer.from('ORCA-SYSTEM-SSH-READY'))
-  })
-  return proc
-}
-
-export function createFailingSystemSshProcess(code: number): MockSystemSshProcess {
-  const proc = createPendingSystemSshProcess()
-  proc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {
-    queueMicrotask(() => handler(code))
   })
   return proc
 }

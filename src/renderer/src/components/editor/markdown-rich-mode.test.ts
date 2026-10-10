@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+import * as roundTrip from './markdown-round-trip'
+import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
+import {
+  getMarkdownRichModeEligibility,
+  getMarkdownRichModeUnsupportedMessage
+} from './markdown-rich-mode'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -16,6 +21,53 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
 
   it('allows common raw html in markdown files', () => {
     expect(getMarkdownRichModeUnsupportedMessage('Before <span>hi</span> after\n')).toBeNull()
+  })
+
+  it.each(['', ' open', ' open="open"', " data-orca-toggle='heading-2' open"])(
+    'allows editable details blocks with attributes %s',
+    (attributes) => {
+      const content = `<details${attributes}>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+    }
+  )
+
+  it('allows nested plain details blocks', () => {
+    const inner = '<details>\n<summary>Inner</summary>\n\nBody\n\n</details>'
+    const content = `<details open>\n<summary>Outer</summary>\n\n${inner}\n\n</details>\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it('checks mixed editable and passthrough details blocks in source order', () => {
+    const content = [
+      '<details>\n<summary>Editable</summary>\n\nBody\n\n</details>',
+      '<details>\n<summary><span>Passthrough</span></summary>\n\nBody\n\n</details>',
+      '<details class="orca-details" open>\n<summary>Authored</summary>\n\nBody\n\n</details>'
+    ].join('\n\n')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it.each([' id="keep"', ' class="custom"', ' data-orca-toggle="heading-6"', ' open'])(
+    'rejects a details round trip that loses attributes %s',
+    (attributes) => {
+      const content = `<details${attributes}>\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+      vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput').mockReturnValue(
+        '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      )
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    }
+  )
+
+  it('still rejects unrelated HTML lost alongside a normalized details tag', () => {
+    const content = '<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n<span>Tail</span>'
+    vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput').mockReturnValue(
+      '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>\nTail'
+    )
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
   })
 
   it('allows markdown autolinks wrapped in angle brackets', () => {
@@ -44,6 +96,57 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(
       getMarkdownRichModeUnsupportedMessage('Use 1 < 2 and 3 > 2 in the example.\n')
     ).toBeNull()
+  })
+
+  it('allows bare lowercase placeholders in prose', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        'Use --host runtime:<id>, --output <path>, and --project <project-id>.\n'
+      )
+    ).toBeNull()
+  })
+
+  it('allows bare lowercase placeholders in large documents', () => {
+    const content = `${'a'.repeat(50_001)}\nUse --host runtime:<id> and --project <project-id>.\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it('allows large documents with source-preserving html without creating an editor', () => {
+    const prefix = 'a'.repeat(50_001)
+    const roundTripSpy = vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput')
+
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<span>text</span>\n`)).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<id>text</id>\n`)).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<Widget />\n`)).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<project-id value="1">\n`)).toBeNull()
+    expect(roundTripSpy).not.toHaveBeenCalled()
+  })
+
+  it('allows a large anchored document after its size limit is explicitly overridden', () => {
+    const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}\n\n<a id="section"></a>\n\n## Section\n`
+
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: false })).toEqual({
+      exceedsSizeLimit: true,
+      unsupportedMessage: null
+    })
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: true })).toEqual({
+      exceedsSizeLimit: false,
+      unsupportedMessage: null
+    })
+  })
+
+  it('still blocks large editable html that requires a round trip', () => {
+    const content = `${'a'.repeat(50_001)}\n\n<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n`
+    const roundTripSpy = vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    expect(roundTripSpy).not.toHaveBeenCalled()
+  })
+
+  it('falls back safely when large markup cannot be encoded', () => {
+    const content = `${'a'.repeat(50_001)}\n<span title="\ud800">text</span>`
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
   })
 
   it('allows block html and mdx-like tags by preserving them as passthrough nodes', () => {
@@ -89,5 +192,18 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
         pattern.source.startsWith('<!--[\\s\\S]*?-->')
     )
     expect(usedGlobalHtmlFragmentMatch).toBe(false)
+  })
+
+  it('keeps unsupported content blocked when it also exceeds the size limit', () => {
+    const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)}\n\n[ref]: https://example.com\n`
+
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: false })).toEqual({
+      exceedsSizeLimit: true,
+      unsupportedMessage: expect.any(String)
+    })
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: true })).toEqual({
+      exceedsSizeLimit: false,
+      unsupportedMessage: expect.any(String)
+    })
   })
 })

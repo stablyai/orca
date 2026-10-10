@@ -1,5 +1,10 @@
 import { lstat, readlink, rm } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import {
+  nativeSkillPathSemantics,
+  normalizedSkillPath,
+  skillPathInside
+} from '../../shared/skill-path-containment'
 import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import type { SkillPlacementResult } from '../../shared/skill-install-contract'
 import type { SkillInstallFilesystem } from './skill-install-filesystem'
@@ -47,19 +52,13 @@ function validBackup(move: RemovalMove): boolean {
   )
 }
 
+// Native-only call site: a journal's paths are always the process's own.
 function normalizedPath(path: string): string {
-  const normalized = resolve(path)
-  return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
+  return normalizedSkillPath(path, nativeSkillPathSemantics())
 }
 
 function pathInside(root: string, path: string): boolean {
-  const child = relative(resolve(root), resolve(path))
-  return (
-    child !== '' &&
-    child !== '..' &&
-    !child.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) &&
-    !isAbsolute(child)
-  )
+  return skillPathInside(root, path, nativeSkillPathSemantics())
 }
 
 function moveOwnedByJournal(journal: Partial<SkillRemovalJournalV1>, move: RemovalMove): boolean {

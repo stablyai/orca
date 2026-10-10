@@ -7,6 +7,7 @@ import {
   buildNativeChatSessionOptionSnapshot as buildSharedSnapshot,
   resolveEffectiveNativeChatModelId,
   withTrackedNativeChatModel,
+  type NativeChatLiveOptionTransport,
   type NativeChatSessionOptionMode
 } from '../../../../shared/native-chat-session-option-snapshot'
 import {
@@ -15,7 +16,7 @@ import {
 } from '../../../../shared/native-chat-session-option-state'
 import { translate } from '@/i18n/i18n'
 
-export type { NativeChatSessionOptionMode }
+export type { NativeChatLiveOptionTransport, NativeChatSessionOptionMode }
 export {
   flattenNativeChatSessionOptionRecord,
   resolveEffectiveNativeChatModelId,
@@ -27,6 +28,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   models: readonly CatalogModel[]
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
+  liveTransport: NativeChatLiveOptionTransport
 }): SessionOptionDescriptor[] {
   return buildSharedSnapshot({
     ...args,

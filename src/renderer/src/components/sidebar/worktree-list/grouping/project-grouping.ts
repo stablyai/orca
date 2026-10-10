@@ -1,6 +1,7 @@
 import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
 import {
@@ -20,6 +21,9 @@ export type WorktreeGroupEntry = {
   items: Worktree[]
   repo?: Repo
   repoIds: Set<string>
+  /** Folder workspaces bucketed into this lane under non-repo grouping. Carries
+   *  the owning group because FolderWorkspaceRow requires a non-optional one. */
+  folderWorkspaces?: RenderableFolderWorkspace[]
 }
 
 export type ProjectGroupingIndex = {
@@ -108,6 +112,17 @@ export function buildProjectGroupingIndex(
   return index
 }
 
+// Why: Settings splits projects by this same rule so it matches the sidebar headers.
+export function isCheckoutScopedProjectSetup(
+  setup: ProjectHostSetup,
+  projectIndex: ProjectGroupingIndex
+): boolean {
+  return (
+    projectIndex.surfaceKeysRequiringSetupGroups.has(getProjectSetupSurfaceKey(setup)) &&
+    isDistinctUserCheckout(setup)
+  )
+}
+
 export type ProjectHeaderRevealTarget = {
   key: string
   label: string
@@ -130,10 +145,7 @@ export function getProjectGroupingForRepo(
       repo
     }
   }
-  if (
-    projectIndex?.surfaceKeysRequiringSetupGroups.has(getProjectSetupSurfaceKey(setup)) &&
-    isDistinctUserCheckout(setup)
-  ) {
+  if (projectIndex && isCheckoutScopedProjectSetup(setup, projectIndex)) {
     // Why: only the ambiguous surface needs checkout-specific headers.
     return {
       key: `project:${project.id}::setup:${repoId}`,

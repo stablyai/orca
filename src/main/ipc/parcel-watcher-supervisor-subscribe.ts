@@ -9,6 +9,7 @@ import {
   resetPendingSubscribeAttempt
 } from './parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { rewriteWatcherEvents, resolveWatcherRootPaths } from './watcher-event-root-path-rewrite'
 import type {
   HostToWatcherMessage,
   WatcherProcessSubscribeOptions
@@ -60,7 +61,7 @@ export function sendWatcherSubscribe(
 
 export function subscribeThroughWatcherSupervisor({
   dir,
-  callback,
+  callback: rawCallback,
   opts,
   hooks,
   shutdownRequested,
@@ -96,10 +97,17 @@ export function subscribeThroughWatcherSupervisor({
       )
     )
   }
+  // Why: a symlinked or differently-cased root is unwatchable on Linux
+  // (IN_ONLYDIR) and misreported on macOS (FSEvents canonicalizes). Watch the
+  // resolved directory, then restore the caller's spelling on the way out --
+  // this is the one boundary every desktop, runtime, and relay watch passes.
+  const { watchRoot, rewriteEventPath } = resolveWatcherRootPaths(dir)
+  const callback: WatcherProcessCallback = (error, events) =>
+    rawCallback(error, rewriteWatcherEvents(events, rewriteEventPath))
   // Why: under Vitest we cannot fork a real watcher child, so exercise the
   // subscription path in-process (against mocked @parcel/watcher) instead.
   if (process.env.VITEST && useInProcessVitestFallback) {
-    return subscribeWithInProcessWatcher(dir, callback, opts, hooks)
+    return subscribeWithInProcessWatcher(watchRoot, callback, opts, hooks)
   }
   if (!existsSync(entryPath)) {
     return Promise.reject(
@@ -112,14 +120,14 @@ export function subscribeThroughWatcherSupervisor({
   }
   const record: WatcherProcessSubscriptionRecord = {
     id: allocateId(),
-    dir,
+    dir: watchRoot,
     opts,
     callback,
     hooks,
     interrupted: false,
     crawlStarted: false
   }
-  return new Promise((resolve, reject) => {
+  return new Promise<WatcherProcessSubscription>((resolve, reject) => {
     const child = ensureWatcherProcess(entryPath)
     if (!child) {
       reject(

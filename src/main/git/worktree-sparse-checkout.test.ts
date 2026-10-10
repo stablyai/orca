@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { listWorktrees, parseCoreSparseCheckoutFlag } from './worktree'
+import { listWorktrees, parseCoreSparseCheckoutFlag, removeWorktree } from './worktree'
 
 const tempRoots: string[] = []
 
@@ -106,6 +106,32 @@ describe('sparse-checkout detection', () => {
 
       expect(git(repoPath, ['config', '--get', 'core.sparseCheckout']).trim()).toBe('true')
       expect(mainWorktree(await listWorktrees(repoPath)).isSparse).toBe(true)
+    }
+  )
+})
+
+describe('sparse-checkout cache invalidation across the worktree lifecycle', () => {
+  it.skipIf(process.platform === 'win32')(
+    'does not leak a stale sparse badge onto a worktree created at a removed worktree`s path',
+    async () => {
+      const repoPath = await createRepoWithTwoDirs()
+      const linkedPath = path.join(path.dirname(repoPath), 'linked')
+
+      git(repoPath, ['worktree', 'add', '-b', 'sparse-branch', linkedPath])
+      git(linkedPath, ['sparse-checkout', 'set', 'keep'])
+
+      const beforeRemoval = await listWorktrees(repoPath)
+      const sparseRow = beforeRemoval.find((worktree) => worktree.branch.endsWith('sparse-branch'))
+      expect(sparseRow?.isSparse).toBe(true)
+
+      // Removing through Orca's own removeWorktree (not a raw `git worktree remove`) exercises the
+      // cache-invalidation hook this listing now relies on instead of a fresh stat every time.
+      await removeWorktree(repoPath, linkedPath, true)
+      git(repoPath, ['worktree', 'add', '-b', 'full-branch', linkedPath])
+
+      const afterRecreate = await listWorktrees(repoPath)
+      const fullRow = afterRecreate.find((worktree) => worktree.branch.endsWith('full-branch'))
+      expect(fullRow?.isSparse).toBeFalsy()
     }
   )
 })

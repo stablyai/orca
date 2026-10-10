@@ -10,10 +10,14 @@ export type EditorDraftState = {
   // Why: drafts live in the store (not a hidden mounted EditorPanel, #300) so the editor UI can unmount without losing edits.
   editorDrafts: Record<string, string>
   setEditorDraft: (fileId: string, content: string) => void
+  setCsvPreviewOnly: (fileId: string, enabled: boolean) => void
   clearEditorDraft: (fileId: string) => void
   clearEditorDrafts: (fileIds: string[]) => void
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+  // Why: per-file opt-in to open an oversized markdown file in the rich editor despite the size limit.
+  markdownRichModeSizeOverride: Record<string, boolean>
+  setMarkdownRichModeSizeOverride: (fileId: string, enabled: boolean) => void
   editorViewMode: Record<string, EditorViewMode>
   setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
   markdownFrontmatterVisible: Record<string, boolean>
@@ -29,11 +33,28 @@ export type EditorDraftState = {
 export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorDraftState {
   return {
     editorDrafts: {},
+    setCsvPreviewOnly: (fileId, enabled) =>
+      set((state) => {
+        const file = state.openFiles.find((candidate) => candidate.id === fileId)
+        if (!file || Boolean(file.csvPreviewOnly) === enabled) {
+          return state
+        }
+        return {
+          openFiles: state.openFiles.map((candidate) =>
+            candidate.id === fileId
+              ? { ...candidate, csvPreviewOnly: enabled || undefined }
+              : candidate
+          )
+        }
+      }),
     setEditorDraft: (fileId, content) =>
       set((s) => {
+        if (s.editorDrafts[fileId] === content) {
+          return s
+        }
         // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
         const file = s.openFiles.find((f) => f.id === fileId)
-        if (file?.readOnly === true) {
+        if (file?.readOnly === true || file?.csvPreviewOnly === true) {
           return s
         }
         return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
@@ -69,6 +90,24 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
+
+    // Rich-markdown size-limit override
+    markdownRichModeSizeOverride: {},
+    setMarkdownRichModeSizeOverride: (fileId, enabled) =>
+      set((s) => {
+        // Why: default is false — delete rather than store it so the record stays minimal.
+        if (!enabled) {
+          if (!(fileId in s.markdownRichModeSizeOverride)) {
+            return s
+          }
+          const next = { ...s.markdownRichModeSizeOverride }
+          delete next[fileId]
+          return { markdownRichModeSizeOverride: next }
+        }
+        return {
+          markdownRichModeSizeOverride: { ...s.markdownRichModeSizeOverride, [fileId]: true }
+        }
+      }),
 
     // Editor view mode (edit vs changes-diff). See EditorViewMode.
     editorViewMode: {},

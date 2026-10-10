@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // Why: git.diff, git.branchDiff and git.commitDiff all return a GitDiffResult, so capping only the
 // first would leave the other two able to kill a remote socket.
 import { describe, expect, it, vi } from 'vitest'
@@ -161,7 +162,7 @@ describe('remote git diff transport budget', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: { id: 'wt-1', path: '/remote/repo' } as unknown as ResolvedRuntimeGitWorktree,
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })

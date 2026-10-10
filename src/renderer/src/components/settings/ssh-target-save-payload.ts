@@ -1,4 +1,8 @@
-import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
+import {
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  type SshTargetCreateInput,
+  type SshTargetUpdateInput
+} from '../../../../shared/ssh-types'
 import {
   getSshTargetDraftConnectionFields,
   isRelayGracePeriodValid,
@@ -8,8 +12,8 @@ import {
 import { translate } from '../../i18n/i18n'
 
 type SshTargetSavePayload = {
-  target: Omit<SshTarget, 'id'>
-  updates: Partial<Omit<SshTarget, 'id'>>
+  target: SshTargetCreateInput
+  updates: SshTargetUpdateInput
 }
 
 type SshTargetSavePayloadResult =
@@ -54,8 +58,9 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
 
-  const target: Omit<SshTarget, 'id'> = {
+  const target: SshTargetCreateInput = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
     configHost,
     host,
@@ -66,7 +71,9 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(remoteRuntime ? { remoteRuntime } : {}),
+    ...(form.allowRemoteCliControl ? { allowRemoteCliControl: true } : {})
   }
 
   return {
@@ -82,6 +89,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
+        remoteRuntime,
+        allowRemoteCliControl: form.allowRemoteCliControl || undefined,
         source: 'manual'
       }
     }

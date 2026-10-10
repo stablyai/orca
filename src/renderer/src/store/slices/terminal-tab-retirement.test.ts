@@ -116,6 +116,17 @@ describe('terminal tab retirement planning', () => {
     expect(isTerminalTabPresent(state, 'tab-1')).toBe(true)
   })
 
+  it('recognizes a tab after it is rehomed into a new worktree bucket', () => {
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-old': [],
+        'wt-new': [makeTab('tab-rehomed', 'wt-new', null)]
+      }
+    })
+
+    expect(isTerminalTabPresent(state, 'tab-rehomed')).toBe(true)
+  })
+
   it('does not retire a PTY still referenced by another live surface', () => {
     const shared = 'pty-in-transfer'
     const state = makeState({

@@ -1,3 +1,4 @@
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
@@ -24,7 +25,6 @@ import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
 import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
 import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
@@ -39,12 +39,13 @@ import {
 } from './ui-selection-normalization'
 import {
   mergeContextualTourSeenIds,
+  mergeFeatureTipSeenIds,
   mergeFeatureInteractions,
   stripMainOwnedTelemetryMarkerFromUI
 } from './ui-interaction-merge'
 
 export type UIUpdateOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   removeRetainedBlob: (
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void
@@ -54,11 +55,14 @@ export type UIUpdateOperations = {
   notifyUIChanged: () => void
 }
 
+/** Applies a sanitized partial update while keeping active-view persistence separate from durable UI fields. */
 export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>
 ): void {
-  if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
+  const clearsProtectedSecret =
+    'browserKagiSessionLink' in updates && !updates.browserKagiSessionLink
+  if (clearsProtectedSecret) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
   }
   const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
@@ -153,6 +157,10 @@ export function updatePersistedUI(
       sanitizedUpdates.visibleWorkspaceHostIds !== undefined
         ? normalizeVisibleExecutionHostIds(sanitizedUpdates.visibleWorkspaceHostIds)
         : normalizeVisibleExecutionHostIds(operations.state.ui?.visibleWorkspaceHostIds),
+    agentsVisibleHostIds:
+      sanitizedUpdates.agentsVisibleHostIds !== undefined
+        ? normalizeVisibleExecutionHostIds(sanitizedUpdates.agentsVisibleHostIds)
+        : normalizeVisibleExecutionHostIds(operations.state.ui?.agentsVisibleHostIds),
     workspaceHostOrder:
       sanitizedUpdates.workspaceHostOrder !== undefined
         ? normalizeExecutionHostOrder(sanitizedUpdates.workspaceHostOrder)
@@ -164,13 +172,23 @@ export function updatePersistedUI(
     browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
       sanitizedUpdates.browserDefaultZoomLevel ?? operations.state.ui?.browserDefaultZoomLevel
     ),
+    explorerDisplayRootByWorktree:
+      sanitizedUpdates.explorerDisplayRootByWorktree !== undefined
+        ? normalizeExplorerDisplayRootByWorktree(sanitizedUpdates.explorerDisplayRootByWorktree)
+        : normalizeExplorerDisplayRootByWorktree(
+            operations.state.ui?.explorerDisplayRootByWorktree
+          ),
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    // Why: a stale renderer or paired client must not erase a dismissal, or a one-time tip replays.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
-        ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
+        ? mergeFeatureTipSeenIds(
+            operations.state.ui?.featureTipsSeenIds,
+            sanitizedUpdates.featureTipsSeenIds
+          )
         : normalizeFeatureTipIds(operations.state.ui?.featureTipsSeenIds),
     // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
     contextualToursSeenIds:
@@ -189,7 +207,8 @@ export function updatePersistedUI(
           )
         : normalizeFeatureInteractions(operations.state.ui?.featureInteractions)
   }
-  if (persistedUIValuesEqual(previousUI, nextUI)) {
+  // A sealed secret looks empty in memory; an explicit clear must still reach disk.
+  if (!clearsProtectedSecret && persistedUIValuesEqual(previousUI, nextUI)) {
     if (activeViewChanged) {
       operations.notifyUIChanged()
     }

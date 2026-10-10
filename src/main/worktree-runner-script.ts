@@ -13,6 +13,7 @@ import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { Repo } from '../shared/repo-types'
 import type { WorktreeSetupLaunch } from '../shared/worktree/launch-types'
+import type { SetupAgentStartupPolicy } from '../shared/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { SetupRunnerShell } from '../shared/setup-runner-command'
 
@@ -30,7 +31,8 @@ export function createSetupRunnerScript(
   worktreePath: string,
   script: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
-  setupShell?: SetupRunnerShell
+  setupShell?: SetupRunnerShell,
+  projectStartupPolicy?: SetupAgentStartupPolicy
 ): WorktreeSetupLaunch {
   return createWorktreeRunnerScript({
     repo,
@@ -39,7 +41,8 @@ export function createSetupRunnerScript(
     runnerBaseName: 'setup-runner',
     runtimeTarget: getHookRuntimeTarget(projectRuntime),
     waitForAgentStartup: shouldWaitForSetupBeforeAgentStartup(
-      repo.hookSettings?.setupAgentStartupPolicy
+      repo.hookSettings?.setupAgentStartupPolicy,
+      projectStartupPolicy
     ),
     setupShell
   })

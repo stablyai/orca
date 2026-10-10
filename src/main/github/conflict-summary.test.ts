@@ -298,6 +298,26 @@ describe('getPRConflictSummary caching', () => {
     ).toHaveLength(1)
   })
 
+  it('preserves background admission across the complete WSL derivation chain', async () => {
+    mockGitDispatch()
+
+    await getPRConflictSummary('/repo-root', 'main', 'github-base-oid', 'head-oid-1', {
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(5)
+    for (const [, options] of gitExecFileAsyncMock.mock.calls) {
+      expect(options).toEqual(
+        expect.objectContaining({
+          cwd: '/repo-root',
+          wslDistro: 'Ubuntu',
+          admissionTier: 'background'
+        })
+      )
+    }
+  })
+
   it('keeps identities distinct when paths or ref names contain a joiner character', async () => {
     mockGitDispatch()
 

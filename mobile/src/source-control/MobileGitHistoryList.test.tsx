@@ -1,6 +1,7 @@
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
@@ -25,13 +26,33 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({ ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight' }))
-vi.mock('../transport/client-context', () => ({ useForceReconnect: () => vi.fn() }))
+const transport = vi.hoisted(
+  (): { forceReconnect: ((hostId: string) => Promise<void>) | null } => ({
+    forceReconnect: () => Promise.resolve()
+  })
+)
+vi.mock('../transport/client-context', () => ({
+  useForceReconnect: () => transport.forceReconnect
+}))
+
+// Captured at module scope: the list renders rows against Date.now() a few ms later,
+// so a 3h offset stays inside the '3h' relative-time bucket.
+const RENDER_NOW = Date.now()
 
 function historyResponse(subject: string) {
   return {
     ok: true,
     result: {
-      items: [{ id: 'commit-1', displayId: 'c0mm1t1', subject, author: 'Ada', parentIds: [] }]
+      items: [
+        {
+          id: 'commit-1',
+          displayId: 'c0mm1t1',
+          subject,
+          author: 'Ada',
+          parentIds: [],
+          timestamp: RENDER_NOW - 3 * 3_600_000
+        }
+      ]
     }
   }
 }
@@ -92,6 +113,9 @@ describe('MobileGitHistoryList', () => {
 
     await render(client, 'connected')
     expect(tree()).toContain('first load')
+    // Rows format the RPC timestamp (epoch ms); a regression to seconds-scaling
+    // renders every commit as 'just now' instead.
+    expect(tree()).toContain('3h')
 
     await update(client, 'reconnecting')
     expect(tree()).toContain('first load')
@@ -160,5 +184,52 @@ describe('MobileGitHistoryList', () => {
       commitId: 'commit-1'
     })
     expect(tree()).toContain('src/app.ts')
+  })
+
+  describe('Retry while the host is unreachable', () => {
+    function retryControls() {
+      return (
+        renderer?.root.findAll(
+          (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Retry'
+        ) ?? []
+      )
+    }
+
+    async function renderUnreachable(): Promise<void> {
+      await act(async () => {
+        renderer = create(listElement(null, 'reconnecting'))
+        await Promise.resolve()
+      })
+    }
+
+    afterEach(() => {
+      transport.forceReconnect = () => Promise.resolve()
+    })
+
+    it('is absent on the page, where nothing can re-dial', async () => {
+      transport.forceReconnect = null
+      await renderUnreachable()
+      expect(tree()).toContain('Waiting for desktop...')
+      expect(retryControls()).toHaveLength(0)
+    })
+
+    it('still renders natively and re-dials this host', async () => {
+      const forceReconnect = vi.fn(() => Promise.resolve())
+      transport.forceReconnect = forceReconnect
+      await renderUnreachable()
+      await act(async () => {
+        retryControls()[0]?.props.onPress()
+      })
+      expect(forceReconnect.mock.calls).toEqual([['host-1']])
+    })
+
+    it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
+      transport.forceReconnect = null
+      await renderUnreachable()
+      expect(retryControls()).toHaveLength(0)
+      const client = createFakeRpcClient()
+      await update(client, 'connected')
+      expect(client.requests.map((request) => request.method)).toEqual(['git.history'])
+    })
   })
 })

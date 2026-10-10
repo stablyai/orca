@@ -6,8 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let terminalPaneRenderCount = 0
+let terminalPaneProps: { onPtyExit?: (ptyId: string, exitCode?: number) => void } | null = null
+const markUnverifiedPtyLoss = vi.fn()
 vi.mock('./TerminalPane', () => ({
-  default: () => {
+  default: (props: { onPtyExit?: (ptyId: string, exitCode?: number) => void }) => {
+    terminalPaneProps = props
     terminalPaneRenderCount += 1
     return null
   }
@@ -15,11 +18,12 @@ vi.mock('./TerminalPane', () => ({
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(() => undefined, {
-    getState: () => ({ pendingStartupByTabId: {} })
+    getState: () => ({ pendingStartupByTabId: {}, markUnverifiedPtyLoss })
   })
 }))
 
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
+import { registerTabGroupBody } from '../tab-group/tab-group-body-geometry'
 
 const GROUP_ID = 'group-react185'
 const TAB_ID = 'tab-react185'
@@ -49,6 +53,7 @@ let capturedResizeCallback: (() => void) | null = null
 let container: HTMLDivElement
 let bodyEl: HTMLDivElement
 let bodyRect: DOMRect
+let unregisterBody: () => void
 let root: Root
 
 class CapturingResizeObserver {
@@ -77,7 +82,7 @@ function renderSlot(): void {
         activityTerminalPortal={null}
         onFocusOwningGroup={vi.fn()}
         consumeSuppressedPtyExit={() => false}
-        leaveWorktreeIfEmpty={vi.fn()}
+        captureEmptiedReaction={() => vi.fn()}
       />
     )
   })
@@ -85,6 +90,8 @@ function renderSlot(): void {
 
 beforeEach(() => {
   terminalPaneRenderCount = 0
+  terminalPaneProps = null
+  markUnverifiedPtyLoss.mockReset()
   capturedResizeCallback = null
   ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
   vi.stubGlobal('ResizeObserver', CapturingResizeObserver)
@@ -98,12 +105,14 @@ beforeEach(() => {
   bodyRect = createRect({ top: 32, height: 568 })
   bodyEl.getBoundingClientRect = () => bodyRect
   document.body.appendChild(bodyEl)
+  unregisterBody = registerTabGroupBody(GROUP_ID, bodyEl)
 })
 
 afterEach(() => {
   act(() => {
     root?.unmount()
   })
+  unregisterBody()
   container?.remove()
   bodyEl?.remove()
   vi.unstubAllGlobals()
@@ -111,18 +120,14 @@ afterEach(() => {
 })
 
 describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', () => {
-  it('does not re-render on ResizeObserver ticks with an unchanged rect', () => {
+  it('keeps the tab when the host reports an unverified PTY loss', () => {
     renderSlot()
-    expect(capturedResizeCallback).toBeTypeOf('function')
 
-    const rendersAfterMount = terminalPaneRenderCount
-    for (let i = 0; i < 50; i += 1) {
-      act(() => {
-        capturedResizeCallback?.()
-      })
-    }
+    act(() => {
+      terminalPaneProps?.onPtyExit?.('pty-host-lost', -1)
+    })
 
-    expect(terminalPaneRenderCount - rendersAfterMount).toBe(0)
+    expect(markUnverifiedPtyLoss).toHaveBeenCalledWith(TAB_ID)
   })
 
   it('settles sub-pixel jitter across an integer boundary without losing precision', () => {
@@ -159,7 +164,8 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
       capturedResizeCallback?.()
     })
 
-    expect(terminalPaneRenderCount - rendersAfterMount).toBe(1)
+    // Geometry updates belong to the host and do not rerender terminal content.
+    expect(terminalPaneRenderCount - rendersAfterMount).toBe(0)
     expect(overlay?.style.top).toBe('34px')
     expect(overlay?.style.width).toBe('760px')
   })

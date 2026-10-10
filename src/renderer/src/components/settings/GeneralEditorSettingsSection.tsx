@@ -10,6 +10,7 @@ import { clampNumber } from '@/lib/terminal-theme'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
+import { CollapseUnchangedRegionsSetting } from './CollapseUnchangedRegionsSetting'
 import {
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
@@ -17,6 +18,7 @@ import {
 } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
+import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import {
@@ -232,6 +234,10 @@ export function GeneralEditorSettingsSection({
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 
+      <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
+
+      <CollapseUnchangedRegionsSetting settings={settings} updateSettings={updateSettings} />
+
       <SearchableSetting
         title={translate(
           'auto.components.settings.GeneralEditorSettingsSection.8f1afdfbd8',
@@ -372,7 +378,7 @@ export function GeneralEditorSettingsSection({
         )}
         description={translate(
           'auto.components.settings.GeneralEditorSettingsSection.5f02e6fb21',
-          'Show local markdown review note controls in rich editor mode.'
+          'Show local markdown review note controls in markdown files.'
         )}
         keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
       >
@@ -383,7 +389,7 @@ export function GeneralEditorSettingsSection({
           )}
           description={translate(
             'auto.components.settings.GeneralEditorSettingsSection.f80603d293',
-            'Show local markdown note controls in rich editor mode and agent handoff actions.'
+            'Show markdown note controls in every markdown view and include markdown notes in agent handoff actions.'
           )}
           checked={settings.markdownReviewToolsEnabled}
           onChange={() =>

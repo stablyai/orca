@@ -1,104 +1,26 @@
-import { z } from 'zod'
 import {
   JIRA_PAYLOAD_CHUNK_CHARS,
   JIRA_PAYLOAD_MAX_CHARS
 } from '../../../../shared/jira-payload-stream'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import {
-  OptionalFiniteNumber,
-  OptionalPlainString,
-  OptionalString,
-  requiredString
-} from '../schemas'
+  AssignableUsers,
+  Connect,
+  CreateIssue,
+  IssueComment,
+  IssueKey,
+  IssueUpdate,
+  ListIssues,
+  ProjectIssueTypeFields,
+  ProjectIssueTypes,
+  ProjectStatusOrder,
+  SearchIssues,
+  SelectSite,
+  SiteSelection,
+  UserSearch
+} from '../../../../shared/rpc-contract/jira-params'
 
-const VALID_FILTERS = ['assigned', 'reported', 'all', 'done'] as const
-
-const SiteSelection = z
-  .object({
-    siteId: OptionalString
-  })
-  .optional()
-
-const Connect = z.object({
-  siteUrl: requiredString('Site URL is required'),
-  // Self-hosted PAT auth needs no email; connect() enforces it for Cloud.
-  email: OptionalPlainString,
-  apiToken: requiredString('API token is required'),
-  authType: z.enum(['cloud', 'server']).optional()
-})
-
-const SelectSite = z.object({
-  siteId: requiredString('Site ID is required')
-})
-
-const SearchIssues = z.object({
-  jql: requiredString('Missing JQL'),
-  limit: OptionalFiniteNumber,
-  siteId: OptionalString
-})
-
-const ListIssues = z
-  .object({
-    filter: z.enum(VALID_FILTERS).optional(),
-    limit: OptionalFiniteNumber,
-    siteId: OptionalString
-  })
-  .optional()
-
-const IssueKey = z.object({
-  key: requiredString('Issue key is required'),
-  siteId: OptionalString
-})
-
-const CreateIssue = z.object({
-  siteId: OptionalString,
-  projectId: requiredString('Project is required'),
-  issueTypeId: requiredString('Issue type is required'),
-  title: requiredString('Title is required'),
-  description: OptionalPlainString,
-  customFields: z.record(z.string(), z.unknown()).optional()
-})
-
-const IssueUpdate = z.object({
-  key: requiredString('Issue key is required'),
-  siteId: OptionalString,
-  updates: z.object({
-    title: OptionalString,
-    labels: z.array(z.string()).optional(),
-    assigneeAccountId: z.union([z.string(), z.null()]).optional(),
-    priorityId: z.union([z.string(), z.null()]).optional(),
-    transitionId: OptionalString
-  })
-})
-
-const IssueComment = z.object({
-  key: requiredString('Issue key is required'),
-  body: requiredString('Comment body is required'),
-  siteId: OptionalString
-})
-
-const ProjectIssueTypes = z.object({
-  projectIdOrKey: requiredString('Project is required'),
-  siteId: OptionalString
-})
-
-const ProjectIssueTypeFields = z.object({
-  projectIdOrKey: requiredString('Project is required'),
-  issueTypeId: requiredString('Issue type is required'),
-  siteId: OptionalString
-})
-
-const AssignableUsers = z.object({
-  key: requiredString('Issue key is required'),
-  query: OptionalPlainString,
-  siteId: OptionalString
-})
-
-const ProjectStatusOrder = z.object({
-  projectKey: requiredString('Project key is required'),
-  siteId: OptionalString
-})
-
+/** Emits a Jira result over RPC, normalizing it to the shape clients decode. */
 function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void {
   const payload = JSON.stringify(value)
   if (payload.length > JIRA_PAYLOAD_MAX_CHARS) {
@@ -112,9 +34,10 @@ function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void 
   emit({ type: 'end' })
 }
 
-export const JIRA_METHODS: RpcAnyMethod[] = [
+export const JIRA_METHODS = [
   defineMethod({
     name: 'jira.connect',
+    permission: 'accounts-admin',
     params: Connect,
     handler: async (params, { runtime }) =>
       runtime.jiraConnect({
@@ -126,48 +49,57 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'jira.disconnect',
+    permission: 'accounts-admin',
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraDisconnect(params?.siteId)
   }),
   defineMethod({
     name: 'jira.selectSite',
+    permission: 'accounts-admin',
     params: SelectSite,
     handler: async (params, { runtime }) => runtime.jiraSelectSite(params.siteId.trim())
   }),
   defineMethod({
     name: 'jira.status',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => runtime.jiraStatus()
   }),
   defineMethod({
     name: 'jira.readStatus',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => runtime.jiraReadStatus()
   }),
   defineMethod({
     name: 'jira.testConnection',
+    permission: 'workspace',
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraTestConnection(params?.siteId)
   }),
   defineMethod({
     name: 'jira.searchIssues',
+    permission: 'workspace',
     params: SearchIssues,
     handler: async (params, { runtime, signal }) =>
       runtime.jiraSearchIssues(params.jql, params.limit, params.siteId, signal)
   }),
   defineMethod({
     name: 'jira.listIssues',
+    permission: 'workspace',
     params: ListIssues,
     handler: async (params, { runtime }) =>
       runtime.jiraListIssues(params?.filter, params?.limit, params?.siteId)
   }),
   defineMethod({
     name: 'jira.getIssue',
+    permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }) => runtime.jiraGetIssue(params.key.trim(), params.siteId)
   }),
   defineMethod({
     name: 'jira.lookupIssueSummary',
+    permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime, signal }) => {
       if (!params.siteId) {
@@ -178,6 +110,7 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
   }),
   defineStreamingMethod({
     name: 'jira.getIssueStream',
+    permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }, emit) => {
       emitJiraPayload(await runtime.jiraGetIssue(params.key.trim(), params.siteId), emit)
@@ -185,6 +118,7 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'jira.createIssue',
+    permission: 'workspace',
     params: CreateIssue,
     handler: async (params, { runtime }) =>
       runtime.jiraCreateIssue({
@@ -193,29 +127,34 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
         issueTypeId: params.issueTypeId.trim(),
         title: params.title.trim(),
         description: params.description?.trim() || undefined,
-        customFields: params.customFields
+        customFields: params.customFields,
+        userFieldKeys: params.userFieldKeys
       })
   }),
   defineMethod({
     name: 'jira.updateIssue',
+    permission: 'workspace',
     params: IssueUpdate,
     handler: async (params, { runtime }) =>
       runtime.jiraUpdateIssue(params.key.trim(), params.updates, params.siteId)
   }),
   defineMethod({
     name: 'jira.addIssueComment',
+    permission: 'workspace',
     params: IssueComment,
     handler: async (params, { runtime }) =>
       runtime.jiraAddIssueComment(params.key.trim(), params.body.trim(), params.siteId)
   }),
   defineMethod({
     name: 'jira.issueComments',
+    permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraIssueComments(params.key.trim(), params.siteId)
   }),
   defineStreamingMethod({
     name: 'jira.issueCommentsStream',
+    permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }, emit) => {
       emitJiraPayload(await runtime.jiraIssueComments(params.key.trim(), params.siteId), emit)
@@ -223,17 +162,20 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'jira.listProjects',
+    permission: 'workspace',
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraListProjects(params?.siteId)
   }),
   defineMethod({
     name: 'jira.listIssueTypes',
+    permission: 'workspace',
     params: ProjectIssueTypes,
     handler: async (params, { runtime }) =>
       runtime.jiraListIssueTypes(params.projectIdOrKey.trim(), params.siteId)
   }),
   defineMethod({
     name: 'jira.listCreateFields',
+    permission: 'workspace',
     params: ProjectIssueTypeFields,
     handler: async (params, { runtime }) =>
       runtime.jiraListCreateFields(
@@ -244,23 +186,33 @@ export const JIRA_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'jira.listPriorities',
+    permission: 'workspace',
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraListPriorities(params?.siteId)
   }),
   defineMethod({
     name: 'jira.listAssignableUsers',
+    permission: 'workspace',
     params: AssignableUsers,
     handler: async (params, { runtime }) =>
       runtime.jiraListAssignableUsers(params.key.trim(), params.query, params.siteId)
   }),
   defineMethod({
+    name: 'jira.searchUsers',
+    permission: 'workspace',
+    params: UserSearch,
+    handler: async (params, { runtime }) => runtime.jiraSearchUsers(params.query, params.siteId)
+  }),
+  defineMethod({
     name: 'jira.listTransitions',
+    permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraListTransitions(params.key.trim(), params.siteId)
   }),
   defineMethod({
     name: 'jira.getProjectStatusOrder',
+    permission: 'workspace',
     params: ProjectStatusOrder,
     handler: async (params, { runtime }) =>
       runtime.jiraGetProjectStatusOrder(params.projectKey.trim(), params.siteId)

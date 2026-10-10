@@ -139,10 +139,13 @@ export function FacetNumberField({
   return (
     <FacetField label={label}>
       <div className="flex items-center gap-1.5">
+        {/* Why text, not number: Chromium mutates a focused number input on every
+            wheel tick, which silently walked a threshold up inside the scrollable
+            facet panel. preventDefault would stop that but also stop the panel
+            scrolling, re-breaking #14629. */}
         <Input
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={0}
           aria-label={label}
           value={value === null ? '' : String(value)}
           placeholder={placeholder}

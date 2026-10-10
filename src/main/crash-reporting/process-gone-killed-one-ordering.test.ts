@@ -16,6 +16,7 @@ import {
 } from './expected-teardown-state'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
+import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
 
 const noMinidump = async () => null
 const attachDetails = async () => null
@@ -62,12 +63,14 @@ beforeEach(() => {
   now = 1_000
   resetExpectedTeardownStateForTest(() => now)
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
   resetExpectedTeardownStateForTest()
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 describe('recordProcessGoneCrash killed/1 ordering', () => {
@@ -85,17 +88,18 @@ describe('recordProcessGoneCrash killed/1 ordering', () => {
 
     recordProcessGoneCrash({ record } as never, gpuKill, dedupe)
     recordProcessGoneCrash({ record } as never, networkServiceKill, dedupe)
-    recordProcessGoneCrash(
-      { record, attachDetails } as never,
-      rendererKill,
-      dedupe,
-      noMinidump
-    )
+    recordProcessGoneCrash({ record, attachDetails } as never, rendererKill, dedupe, noMinidump)
 
     expect(record).toHaveBeenCalledOnce()
     // Timing proximity is evidence, not authority to discard an ambiguous report.
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
+        // Co-victims of one external tree kill: the label names the evidence
+        // (these died together), not a sibling that caused anything.
+        details: expect.objectContaining({
+          crashAttribution: 'concurrent-process-deaths',
+          siblingProcessDeathCount: 2
+        }),
         breadcrumbs: expect.arrayContaining([
           expect.objectContaining({
             name: 'process_gone_suppressed',

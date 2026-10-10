@@ -1,0 +1,140 @@
+{
+  "variant": "fixed",
+  "graph": "main",
+  "runtime": {
+    "node": "24.21.0",
+    "electron": "43.7.0"
+  },
+  "sources": {
+    "src/main/ssh/ssh-filesystem-stream-reader.ts": "333b0ba796edbd0a07b483cc65fb9f0c46f6f5488361bce08c488ea72543825a",
+    "src/main/ssh/ssh-channel-multiplexer.ts": "9ecd88963fec72901596bd25d2cb4c8666ef41d3c8a968242c6eef52095ee108",
+    "src/relay/fs-stream-registry.ts": "d723dd0b6419a7937225bdacbc572ef004c49d850cbc616e9168e48f5e63b8fd",
+    "src/relay/protocol.ts": "faebaded7e8c8b98f021c791b4519d78d58be3879937fe2ed2cef68b22404060",
+    "src/relay/fs-handler-file-read.ts": "2d70577839cb150ad0977981d54904b1a25bd8b5de7cfe19e018c08c36f41cd2",
+    "src/relay/dispatcher.ts": "6dca32ec33e410fa9226d6c0a4a548ed06fc5bbf1a65ccdbcae7cc43a9328d18",
+    "src/relay/relay-frame-decoder.ts": "7044cd142b21f847ee0dc4aee085fe18434b4bcb34ba1eb8bc1fb48a0ed7919e",
+    "src/main/ssh/ssh-file-stream-read-cap.ts": "83b714af0c87da4c855762ffb827f529302ebc426ab5cde59458206a64cb07b1",
+    "src/main/ssh/ssh-file-stream-inactivity-deadline.ts": "0554419b22356efa60065b15640d8bf0d8d166bf345e30b492b2305767ea603a",
+    "src/relay/fs-handler-utils.ts": "12c54b9647ddc9e4ae9924f65aadf0d00e9553050858beae232c02077a94d93a",
+    "src/main/ssh/relay-protocol.ts": "644aa6f2087b5867d41006bfdcec78ffba693157a2912feb8f82b120f5647b34",
+    "src/main/ssh/ssh-multiplexer-transport-writer.ts": "433a2cc400b5ed9743871ca03aac06d31a079ef23c42c2a2759f78967312d071",
+    "src/relay/dispatcher-notification-publication.ts": "d21c8575f5f4694a806b0e05cce4a1595f7116220f48d9068eba7c23aed7a546",
+    "src/shared/relay-frame-decoder-contract.ts": "f58279099fe4dbbdfde9e3e038a916ae077e71d8ac6aa871b59a64c6fbaeaad8",
+    "src/shared/relay-frame-decoder.ts": "88c0ecbc06b93efe6733094b8c9e4509ab1cbd139f8cb3257e9fb74a0ed39194",
+    "src/main/system-power-lifecycle.ts": "cdeb82463a530123be4d42374925a0b349446437c02bff2c287786864515de11",
+    "src/relay/dispatcher-pty-publication.ts": "2a91aeab16069e4d053c453947c5cd5d24c9e9ac4d36f19d23377689313cc851",
+    "src/relay/dispatcher-contract.ts": "7c397f9d51c0e3eca604e9075cddb6609a5e114284999009e8a86146e766c081",
+    "src/relay/fs-handler-list-files.ts": "cca88ec47512840837c84c63baf7ddfc7c216810cb2a5f63fa2babbeef3ff189",
+    "src/shared/text-search.ts": "c291574e05874440601a6a043b5d065ca172072f4146568d9c9818829abbc185",
+    "src/shared/image-file-extensions.ts": "8460080a80e2a09fd64466faee1b87df4d8e4803e33bc2f9dd8b3b031a54d536",
+    "src/shared/ripgrep-process-availability.ts": "2a8e21ae2c9af146f1f226bdfad1e45916cfb2671fb11aa4586d6a337b8cdec2",
+    "src/shared/search-subprocess-lines.ts": "b860de84a4081fb86515bb31910f0f1d4b0a6606370490c4f60aa9d2e9d5eee3",
+    "src/shared/pty-write-settlement.ts": "0726aba75f2ef127d41f47a0685fb42daab34fc139d5b9f727079aec88b702e6",
+    "src/main/ssh/ssh-multiplexer-writer-lane-scheduler.ts": "3e5fe7a1e3537505baf42869449193fc0448339d851254a49527ec2a1c7cbb50",
+    "src/shared/relay-frame-buffer.ts": "f89fcd33489894c34f79ba8fd5e5634487555a7c34fc8e7c054229ae1c20e0be",
+    "src/relay/dispatcher-producer-capacity.ts": "ae201a7e09acbcc013410b92868df1e964f95952f8ab3a462d177f488292965b",
+    "src/shared/text-search-paths.ts": "a977e1b1591b38d7f08652e3d0a64c95b9379e8339ab9d26d6325f7ec90fcda3",
+    "src/shared/text-search-glob-patterns.ts": "b34072078cf81813e37c37228b830c974dfadb5284ba608538deb56594d64a69",
+    "src/shared/string-utils.ts": "fdb48c18f2f7272ed25949eb74beca182c3336d32681191c4b0a4a077db02c22",
+    "src/shared/text-search-match-accumulator.ts": "1229c755abc94608e211c6e403d529905f577a991871eadfed5eb18821d6e88b",
+    "src/shared/json-text-structure-limit.ts": "29ded95f7e054d839dc82d118cb324d2144c70267f293d6b54f188159ada5eb9",
+    "src/shared/search-match-count.ts": "6fde43e886fe142c23aff2b80b3f1ebdf613a083051a11e19d7813363db88f62",
+    "src/shared/file-listing-cancellation.ts": "c9e1eed636fa2140071fbc2089ce02f738cce725de5069f04bf307fea611b63d",
+    "src/shared/quick-open-path-search.ts": "2556d6c34f50e573b2fe046f7c64f782362b3bda1241098772bd360975910a98",
+    "src/shared/quick-open-filter.ts": "9a09a02764d15622932083a3e550fc7215c066d30a2868f5d548b9105b780d81",
+    "src/relay/dispatcher-producer-transport.ts": "c48087ed5f330311fb438ae3df75ff03bf34df83156f3987b8905598e21780e5",
+    "src/shared/cross-platform-path.ts": "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3",
+    "src/shared/file-name-sort.ts": "5aafddf218c453276dcf1afdccf9cd7f82c50160f5df2dd6d1b2779ce0c0cc4a",
+    "src/shared/clipboard-text.ts": "50f3155063244d6d12ac1493c80029a75df256c031f986f76da64a94152d0c38",
+    "src/relay/dispatcher-rpc-routing.ts": "c11b3ff9096bd4877bba0ebc8a70a63092a00015fde3d8f81f3b8fb54087479b",
+    "src/relay/dispatcher-client-writer.ts": "9ed3ee7ad2758f2d10cd0a0ba06bf77dc3318317b8e24f0eaa6cfe235fd34be4",
+    "src/shared/utf8-byte-limits.ts": "01574b287b2d6ab0758112887e356c0d270b25db1b72651925ba8329eb4224e6",
+    "src/shared/event-loop-yield.ts": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf",
+    "src/shared/wsl-paths.ts": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a",
+    "src/relay/dispatcher-writer-sink.ts": "12931e899bd882347b72cd03f3690e8d0e94bf2aa1ce9a560112f52cfdc14405",
+    "src/relay/dispatcher-writer-drain-arm.ts": "c9f1582197d0bb9ea30793f0c792a176ada3f25fb79e03474a70d084920d0416",
+    "src/relay/dispatcher-writer-lane-scheduler.ts": "8b54b850f8aa88944160b796e3b357fbbc618c782590b4baf6444eda77bd5e5e",
+    "src/relay/dispatcher-writer-admission.ts": "12e05ba04de5687c0a0db1e44eddf342cb0c21b9653eef2aeff7b5ccd2039797",
+    "src/shared/timer-delay.ts": "7e529ed30d1b25521f5d72d7c2a6d05d16efe66faf2619b859d67b330cca767f",
+    "src/shared/skill-install-failure.ts": "571ffbaad47304bbdef294e6445d70d179db40495005fdd0ce385491666ec4eb",
+    "src/relay/dispatcher-frame-codec.ts": "2728b1e9e8465350c23cede5b64287db77a3d90488d8f8b1e5721bc69d7af7a9",
+    "src/shared/terminal-unavailable-cause.ts": "b6ce6d4b5b666ef72d8403883d2cc167f2998c524a17155638c261000c424e91",
+    "src/shared/runtime-capability-degradation.ts": "fc9a5d3814c390c1296ecf72d5ef317b8b8624ea2578e4ceb2b32ee642b13a3f",
+    "src/relay/dispatcher-capacity-signals.ts": "125a94f04f8b3102956231dc800281ed7ee9bb538b2b93f005825c2dd59e5c63",
+    "src/relay/dispatcher-client-lifecycle.ts": "6884223ddb2be888cfd437ca1490e14a4c95655c5c831e6812ce4a7876e9c18b",
+    "src/relay/dispatcher-client-state.ts": "8cdabcb8df6b16b7cc84d8a33f5171cca1807b6d9dea4b374e3c2bb4fc10bfdb",
+    "src/relay/legacy-relay-publication-ledger.ts": "153926b90d370669d91fd9a59d246f63ed0c01f2aec6e8b7a890a0d0ad7378ba",
+    "src/relay/client-request-aborts.ts": "a4f458ce767c5315aa01fa9cc8c0a3008dcb445481a401462f14ec3dbbd9e20c"
+  },
+  "observedReaderSha256": "333b0ba796edbd0a07b483cc65fb9f0c46f6f5488361bce08c488ea72543825a",
+  "controls": [
+    {
+      "name": "held-metadata-foreign-history",
+      "readers": 4,
+      "entries": [0, 0, 0, 0],
+      "wrappers": 0,
+      "uniqueParams": 0,
+      "logicalBase64BytesByUniqueParams": 0,
+      "sharedAcrossReaders": false,
+      "decodedTransferBytes": 33554432,
+      "peakRegisteredStreams": 1,
+      "maxConcurrentStreams": 16,
+      "ackWindow": 4,
+      "ackCount": 128,
+      "observedHeapDelta": 513692,
+      "released": true
+    },
+    {
+      "name": "ordinary-completion",
+      "passed": true
+    },
+    {
+      "name": "transport-disposal",
+      "passed": true
+    },
+    {
+      "name": "metadata-request-deadline",
+      "milliseconds": 30000,
+      "relayContextAborted": true,
+      "released": true
+    },
+    {
+      "name": "unpaced-relay",
+      "passed": true
+    },
+    {
+      "name": "real-pump-credit-window",
+      "chunksBeforeAck": 4,
+      "totalChunks": 6
+    },
+    {
+      "name": "actual-stream-capacity",
+      "slots": 16,
+      "rejectedSeventeenth": true,
+      "admittedAfterCompletion": true
+    },
+    {
+      "name": "saturated-writer-metadata-order",
+      "wireOrder": ["probe.prime", "response", "fs.streamChunk", "fs.streamChunk", "fs.streamEnd"]
+    },
+    {
+      "name": "same-turn-response-and-own-frames",
+      "passed": true
+    },
+    {
+      "name": "canonical-crlf-source-control",
+      "reads": 66,
+      "passed": true
+    }
+  ],
+  "artifactHashes": {
+    "sources.cjs": "790ef573e61fbb7f68741d1e1cfb0e4b4c79a2dde4292e7ec9dc8dcf1d94940f",
+    "relay-fixture.mjs": "9856e17d83b812fb6b6717cf8207ccc808165c517df8d5c76bc020e0e6f51079",
+    "scenario.test.mjs": "7a619c631403d0ab03610171fc6109a9b52cde2d23b9d022354c3d6bb1b154af",
+    "vitest.config.mjs": "4ef63c6eba6d8e443f18f787bceb0b1f40b90ee750d63a3b27239ed05bf5d849",
+    "before.config.mjs": "a0a8ec50388d194d60cdf7019bba18fffb2c4691404924c3675757d3b3984962",
+    "fix.patch": "9681d47063d4b76bc4f9567eacf5dddb3ec221b715ce0bedddfcb493e0558fc6",
+    "main-context.patch": "4ef0bf173e6575a548b1d217248432fedbcfd68bcb350980e73987df3aba81e9",
+    "source-versions.json": "7df5afb4523280364b1eecaf465131ac94822fbb868dc4aaddb42586dff9f21d"
+  }
+}

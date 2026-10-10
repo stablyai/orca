@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   existsSyncMock,
+  loginPreflightExecFileMock,
   spawnMock,
   openCodeClearPtyMock,
   piClearPtyMock
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import { registerPtyHandlers, setLocalPtyProvider, getLocalPtyProvider } from './pty'
+import { join } from 'node:path'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -86,8 +89,8 @@ describe('registerPtyHandlers', () => {
           env: expect.objectContaining({
             SHELL: '/bin/zsh',
             ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
-            ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+            ORCA_SHELL_FEATURES: 'overlay,history,markers',
+            ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh')
           })
         })
       )
@@ -159,9 +162,25 @@ describe('registerPtyHandlers', () => {
       rows: 24
     })) as { id: string }
 
+    let finishSnapshot: (() => void) | undefined
+    loginPreflightExecFileMock.mockImplementationOnce(
+      (
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string) => void
+      ) => {
+        finishSnapshot = () => callback(null, '')
+      }
+    )
     const killPromise = handlers.get('pty:kill')!(null, { id: spawnResult.id }) as Promise<void>
 
-    expect(killSpy).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(finishSnapshot).toBeTypeOf('function'))
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(onDataDisposable.dispose).not.toHaveBeenCalled()
+    expect(onExitDisposable.dispose).not.toHaveBeenCalled()
+    finishSnapshot?.()
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledTimes(1))
     expect(onDataDisposable.dispose).not.toHaveBeenCalled()
     expect(onExitDisposable.dispose).not.toHaveBeenCalled()
 
@@ -347,7 +366,6 @@ describe('registerPtyHandlers', () => {
     }
     spawnMock.mockReturnValue(proc)
     const isRecoveryReloadInFlight = vi.fn(() => true)
-    const markClaudePtyExitedSpy = vi.spyOn(livePtyGate, 'markClaudePtyExited')
 
     registerPtyHandlers(
       mainWindow as never,
@@ -376,11 +394,8 @@ describe('registerPtyHandlers', () => {
 
     expect(killSpy).not.toHaveBeenCalled()
     expect(runtime.onPtyExit).not.toHaveBeenCalled()
-    expect(markClaudePtyExitedSpy).not.toHaveBeenCalled()
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(true)
-
-    markClaudePtyExitedSpy.mockRestore()
   })
   // Why: guard against over-suppression — with no recovery reload in flight the sweep MUST still reclaim genuinely orphaned local PTYs.
   it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
@@ -436,7 +451,10 @@ describe('registerPtyHandlers', () => {
     await Promise.resolve()
 
     expect(killSpy).toHaveBeenCalled()
-    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1, spawnResult.incarnationId)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1, spawnResult.incarnationId, {
+      providerExitObserved: true,
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
   })

@@ -28,9 +28,12 @@ import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
   seedSessionParseCache,
+  snapshotSessionParseCacheForPersistence,
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import { getSessionParseCacheEntry } from './session-parse-cache-store'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
@@ -197,17 +200,26 @@ describe('session parse cache persistence', () => {
     expect(stats.reused).toBe(0)
   })
 
-  it('ignores a cache file written by a different app version', async () => {
+  it('reuses a schema-compatible cache written by a different app version', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
     const transcript = await writeTranscript(root)
+    const candidate = await claudeCandidate(transcript)
     await parseAndPersist(transcript)
 
     simulateRestart(cacheFile, '9.9.9-other')
-    const stats = await coldParseStats(transcript)
-    expect(stats.fullParses).toBe(1)
-    expect(stats.reused).toBe(0)
+    await ensureSessionParseCacheLoaded()
+
+    // Deleting the transcript proves the cross-version result comes entirely
+    // from the schema-compatible cache and performs no transcript read.
+    await rm(transcript)
+    const stats = createSessionParseStats()
+    const session = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    expect(session).not.toBeNull()
+    expect(stats.reused).toBe(1)
+    expect(stats.fullParses).toBe(0)
+    expect(stats.bytesRead).toBe(0)
   })
 
   it('seeding never clobbers a live in-memory entry', async () => {
@@ -266,7 +278,13 @@ describe('session parse cache persistence', () => {
     vi.clearAllMocks()
 
     await ensureSessionParseCacheLoaded()
-    scheduleSessionParseCachePersist({ reused: 0, incremental: 2, fullParses: 5, bytesRead: 10 })
+    scheduleSessionParseCachePersist({
+      reused: 0,
+      incremental: 2,
+      fullParses: 5,
+      earlyStopped: 0,
+      bytesRead: 10
+    })
     await flushSessionParseCachePersistForTests()
 
     expect(fsPromises.readFile).not.toHaveBeenCalled()
@@ -444,5 +462,40 @@ describe('session parse cache persistence', () => {
     expect(await readdir(root)).toEqual(expect.arrayContaining(['blocker']))
     expect((await readdir(root)).filter((name) => name.endsWith('.tmp'))).toEqual([])
     debugSpy.mockRestore()
+  })
+})
+
+describe('sidecar observations survive the round trip', () => {
+  const OBSERVATIONS: [string, SessionSidecarObservation | undefined][] = [
+    ['an object', { path: '/chats/a/meta.json', mtimeMs: 42, sizeBytes: 7 }],
+    ['none', 'none'],
+    ['unknown', 'unknown'],
+    ['absent', undefined]
+  ]
+
+  it.each(OBSERVATIONS)('restores %s exactly', async (_label, sidecar) => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    const path = await writeTranscript(root)
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    await ensureSessionParseCacheLoaded()
+
+    const stats = createSessionParseStats()
+    await parseAgentSessionFileCached(await claudeCandidate(path), process.platform, stats)
+    const seeded = snapshotSessionParseCacheForPersistence().map(
+      ([entryPath, entry]): [string, PersistedSessionParseCacheEntry] => [
+        entryPath,
+        sidecar === undefined ? entry : { ...entry, sidecar }
+      ]
+    )
+    resetSessionParseCacheForTests()
+    seedSessionParseCache(seeded)
+    scheduleSessionParseCachePersist(stats)
+    await flushSessionParseCachePersistForTests()
+
+    simulateRestart(cacheFile)
+    await ensureSessionParseCacheLoaded()
+
+    expect(getSessionParseCacheEntry(path)?.sidecar).toEqual(sidecar)
   })
 })

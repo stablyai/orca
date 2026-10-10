@@ -22,6 +22,7 @@ import {
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatch
 } from '../../../../shared/worktree/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
@@ -187,7 +188,8 @@ export default function WorktreeVisibilitySourceList({
     () =>
       createWorktreeVisibilitySourceMatcher(
         [...(repo ? [repo.path] : []), ...worktrees.map((worktree) => worktree.path)],
-        customSources
+        customSources,
+        resolveConfiguredWorktreeBasePaths(repo)
       ),
     [customSources, repo, worktrees]
   )

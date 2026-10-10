@@ -13,6 +13,12 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
+// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
@@ -61,11 +67,11 @@ describe('CodexRuntimeHomeService', () => {
       '',
       '[model_providers.codex-lb]',
       'base_url = "https://codex-lb.example.test/v1"',
-      'env_key = "CODEX_LB_API_KEY"',
+      'env_key = "EXAMPLE_GATEWAY_TOKEN"',
       ''
     ].join('\n')
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
-    const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
+    const store = createStore(createSettings({ realHomeRoutable: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 

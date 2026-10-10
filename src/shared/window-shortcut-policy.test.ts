@@ -40,14 +40,26 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'dictationKeyDown' })
   })
 
-  it('resolves the explicit window shortcut allowlist on macOS', () => {
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'Comma', key: ',', meta: true, control: false, alt: false, shift: false },
-        'darwin'
-      )
-    ).toEqual({ type: 'openSettings' })
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'leaves Cmd/Ctrl+, to terminal apps on %s unless explicitly rebound',
+    (platform) => {
+      const input = {
+        code: 'Comma',
+        key: ',',
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: false,
+        shift: false
+      }
+      expect(resolveWindowShortcutAction(input, platform)).toBeNull()
+      expect(resolveWindowShortcutAction(input, platform, { 'tab.close': ['Mod+W'] })).toBeNull()
+      expect(
+        resolveWindowShortcutAction(input, platform, { 'app.settings': ['Mod+Comma'] })
+      ).toEqual({ type: 'openSettings' })
+    }
+  )
 
+  it('resolves the explicit window shortcut allowlist on macOS', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyJ', key: 'j', meta: true, control: false, alt: false, shift: false },
@@ -377,7 +389,7 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'openTasks' })
   })
 
-  it('leaves workspace delete unbound by default but honors custom terminal-active bindings', () => {
+  it('resolves workspace delete by default and honors custom terminal-active bindings', () => {
     const input = {
       code: 'Backspace',
       key: 'Backspace',
@@ -387,17 +399,18 @@ describe('resolveWindowShortcutAction', () => {
       shift: true
     }
 
-    expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
+    expect(resolveWindowShortcutAction(input, 'linux')).toEqual({ type: 'deleteCurrentWorkspace' })
+    const customInput = { ...input, code: 'KeyX', key: 'x', alt: true, shift: false }
     expect(
-      resolveWindowShortcutAction(input, 'linux', {
-        'workspace.delete': ['Mod+Shift+Backspace']
+      resolveWindowShortcutAction(customInput, 'linux', {
+        'workspace.delete': ['Mod+Alt+X']
       })
     ).toEqual({ type: 'deleteCurrentWorkspace' })
     expect(
       resolveWindowShortcutAction(
-        input,
+        customInput,
         'linux',
-        { 'workspace.delete': ['Mod+Shift+Backspace'] },
+        { 'workspace.delete': ['Mod+Alt+X'] },
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toEqual({ type: 'deleteCurrentWorkspace' })

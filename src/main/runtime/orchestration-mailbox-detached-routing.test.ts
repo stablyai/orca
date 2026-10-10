@@ -16,6 +16,7 @@ import {
   temporaryDirectories,
   TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -32,7 +33,7 @@ describe('orchestration detached mailbox routing', () => {
     }
   })
 
-  it('routes active worker direct mail without injecting an unpinned Dispatch pointer', async () => {
+  it('routes active worker direct mail through a stable Dispatch pointer and Delivery', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-dispatch-')
     const harness = createRuntime(db)
@@ -43,7 +44,7 @@ describe('orchestration detached mailbox routing', () => {
         '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444'
     })
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, TERMINAL_HANDLE, PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     await driveToLiveIdle(harness.runtime)
     const message = db.insertMessage({
       from: 'term_coordinator',
@@ -57,14 +58,16 @@ describe('orchestration detached mailbox routing', () => {
     await vi.advanceTimersByTimeAsync(500)
     const checked = await checkBoundMailbox(harness.runtime)
 
-    expect(pointerCount(harness.write)).toBe(0)
+    expect(pointerCount(harness.write)).toBe(1)
     expect(checked).toMatchObject({ runId: run.id, dispatchId: dispatch.id, count: 1 })
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     expect(db.getMessageById(message.id)).toMatchObject({
       to_handle: `dispatch:${dispatch.id}`,
-      read: 1,
-      delivered_at: null
+      read: 0,
+      delivered_at: expect.any(String)
     })
+    await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
+    expect(db.getMessageById(message.id)?.read).toBe(1)
     db.close()
   })
 
@@ -118,7 +121,8 @@ describe('orchestration detached mailbox routing', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const task = db.createTask({ spec: 'Worker task', runId: workerRun.id })
-    const dispatch = db.createDispatchContext(
+    const dispatch = createRootDispatch(
+      db,
       task.id,
       'term_mailbox_before_remint',
       `99999999-9999-4999-8999-999999999999:${LEAF_ID}`
@@ -356,7 +360,7 @@ describe('orchestration detached mailbox routing', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const task = db.createTask({ spec: 'Reminted worker', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_before_remint', PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, 'term_before_remint', PANE_KEY)
     const waiting = harness.runtime.waitForMessage(`dispatch:${dispatch.id}`, {
       typeFilter: ['dispatch'],
       timeoutMs: 5_000
@@ -430,7 +434,7 @@ describe('orchestration detached mailbox routing', () => {
       coordinatorPaneKey: PANE_KEY
     })
     const task = db.createTask({ spec: 'Same-handle worker', runId: run.id })
-    db.createDispatchContext(task.id, TERMINAL_HANDLE, PANE_KEY)
+    createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     const message = db.insertMessage({
       from: 'term_sender',
       to: TERMINAL_HANDLE,
@@ -459,7 +463,7 @@ describe('orchestration detached mailbox routing', () => {
       coordinatorPaneKey: PANE_KEY
     })
     const task = db.createTask({ spec: 'Same-handle worker', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, TERMINAL_HANDLE, PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     const message = db.insertMessage({
       from: 'term_sender',
       to: TERMINAL_HANDLE,
@@ -501,7 +505,7 @@ describe('orchestration detached mailbox routing', () => {
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(TERMINAL_HANDLE, directMessage.id)
     const task = db.createTask({ spec: 'Dispatch migration', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_dispatch', PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, 'term_dispatch', PANE_KEY)
     db.insertMessage({
       from: 'term_sender',
       to: `dispatch:${dispatch.id}`,

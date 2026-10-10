@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   createHookListenerState,
-  normalizeHookPayload,
-  seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
+import { seedClaudeSubagentRosterFromSnapshots } from './agent-hook-listener/providers/claude-roster-state'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 

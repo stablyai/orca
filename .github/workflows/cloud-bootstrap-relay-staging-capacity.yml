@@ -1,0 +1,676 @@
+name: Bootstrap Relay Staging Capacity
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Enter BOOTSTRAP_STAGING_CAPACITY
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: relay-staging-mutation
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  bootstrap:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: staging
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      GCP_REGION: us-central1
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      CAPACITY_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+      LEGACY_C3_IMAGE_DIGEST: sha256:2d0f6e6db2b0eb9d6aba188698de8330f8c30b4e76badfcf0fac3f3eb9508a87
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: deploy-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: capacity-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require explicit bootstrap confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "${CONFIRMATION}" = "BOOTSTRAP_STAGING_CAPACITY"
+
+      - name: Read and verify reviewed 600/60 topology
+        shell: bash
+        run: |
+          node dev/scripts/infra.mjs init --env staging
+          terraform -chdir=infra/terraform output -json relay_gce_cell_deployments \
+            > "${RUNNER_TEMP}/relay-gce-state.json"
+          DESIRED_CELLS_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'local.relay_director_cells_json' | jq -r '.')"
+          DESIRED_IMAGES_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'jsonencode({ for cell_id, cell in var.relay_gce_cells : cell_id => cell.image })' \
+            | jq -r '.')"
+          DESIRED_ZONES_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'jsonencode({ for cell_id, cell in var.relay_gce_cells : cell_id => cell.zone })' \
+            | jq -r '.')"
+          DESIRED_TARGET_SIZES_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'jsonencode(local.relay_gce_cell_target_sizes)' | jq -r '.')"
+          jq -e \
+            --argjson images "${DESIRED_IMAGES_JSON}" \
+            --argjson target_sizes "${DESIRED_TARGET_SIZES_JSON}" \
+            '([.[] | select(.id == "staging-gce-c2")] | length == 1) and
+             ([.[] | select(.id == "staging-gce-c3")] | length == 1) and
+             (any(.[]; .id == "staging-gce-c2" and .connectionHardCap == 600 and .connectionUnobservedBound == 60)) and
+             (any(.[]; .id == "staging-gce-c3" and .connectionHardCap == 600 and .connectionUnobservedBound == 60)) and
+             ($images["staging-gce-c2"] == $images["staging-gce-c3"]) and
+             ($target_sizes["staging-gce-c2"] == 1) and
+             ($target_sizes["staging-gce-c3"] == 1)' \
+            <<< "${DESIRED_CELLS_JSON}" >/dev/null
+          jq \
+            --argjson desired "${DESIRED_CELLS_JSON}" \
+            --argjson images "${DESIRED_IMAGES_JSON}" \
+            --argjson zones "${DESIRED_ZONES_JSON}" \
+            '($desired | map({key: .id, value: .}) | from_entries) as $cells |
+             to_entries | map(. as $entry | {
+               key: $entry.key,
+               value: ($entry.value + {
+                 origin: $cells[$entry.key].url,
+                 image: $images[$entry.key],
+                 zone: $zones[$entry.key],
+                 connection_hard_cap: $cells[$entry.key].connectionHardCap,
+                 connection_unobserved_bound: $cells[$entry.key].connectionUnobservedBound
+               })
+             }) | from_entries' \
+            "${RUNNER_TEMP}/relay-gce-state.json" \
+            > "${RUNNER_TEMP}/relay-gce-topology.json"
+          ACTIVE_REVISION="$(gcloud run services describe orca-cloud-relay-staging \
+            --project "${GCP_PROJECT_ID}" \
+            --region us-central1 \
+            --format=json \
+            | jq -r '
+                [.status.traffic[] | select((.percent // 0) > 0)] |
+                if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test -n "${ACTIVE_REVISION}"
+          DESIRED_IMAGE="$(jq -r '.["staging-gce-c2"]' <<< "${DESIRED_IMAGES_JSON}")"
+          gcloud run revisions describe "${ACTIVE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region us-central1 \
+            --format=json \
+            | jq -e \
+                --arg image "${DESIRED_IMAGE}" \
+                --arg capacity_service_account "${CAPACITY_SERVICE_ACCOUNT}" \
+                '(.spec.containers[0].image == $image) and
+                 any(.spec.containers[0].env[]?;
+                   .name == "ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT" and
+                   .value == $capacity_service_account)' >/dev/null
+          CURRENT_CELLS_JSON="$(gcloud run revisions describe "${ACTIVE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format=json \
+            | jq -cer '
+                [.spec.containers[0].env[]? |
+                  select(.name == "ORCA_RELAY_CELLS_JSON") | .value] |
+                if length == 1 then .[0] | fromjson else error("missing director topology") end')"
+          jq -e --argjson desired "${DESIRED_CELLS_JSON}" '
+            def without_bootstrap_capacity:
+              map(if .id == "staging-gce-c2" or .id == "staging-gce-c3"
+                then del(.connectionHardCap, .connectionUnobservedBound)
+                else . end);
+            without_bootstrap_capacity == ($desired | without_bootstrap_capacity)
+          ' <<< "${CURRENT_CELLS_JSON}" >/dev/null
+
+      - name: Bootstrap C2 then C3
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          topology="${RUNNER_TEMP}/relay-gce-topology.json"
+
+          fixed_one_instance_name() {
+            local cell_id="$1"
+            local mig_name zone
+            mig_name="$(jq -r --arg cell "${cell_id}" '.[$cell].mig_name' "${topology}")"
+            zone="$(jq -r --arg cell "${cell_id}" '.[$cell].zone' "${topology}")"
+            gcloud compute instance-groups managed list-instances \
+              "${mig_name}" \
+              --project "${GCP_PROJECT_ID}" \
+              --zone "${zone}" \
+              --format=json \
+              | jq -er '
+                  if length == 1 and .[0].instanceStatus == "RUNNING" and
+                    .[0].currentAction == "NONE"
+                  then .[0].instance | split("/") | last
+                  else error("legacy cell does not have one stable running instance") end'
+          }
+
+          fixed_one_instance_id() {
+            local cell_id="$1"
+            local instance_name="$2"
+            local zone
+            zone="$(jq -r --arg cell "${cell_id}" '.[$cell].zone' "${topology}")"
+            gcloud compute instances describe "${instance_name}" \
+              --project "${GCP_PROJECT_ID}" \
+              --zone "${zone}" \
+              --format='value(id)'
+          }
+
+          write_legacy_metrics() {
+            local cell_id="$1"
+            local instance_id="$2"
+            local after="$3"
+            local output="$4"
+            gcloud logging read \
+              "resource.type=\"gce_instance\" AND
+               resource.labels.instance_id=\"${instance_id}\" AND
+               jsonPayload.event=\"orca_relay_runtime_metrics\" AND
+               jsonPayload.cellId=\"${cell_id}\" AND
+               timestamp>=\"${after}\"" \
+              --project "${GCP_PROJECT_ID}" \
+              --limit 10 \
+              --order desc \
+              --format json \
+              | jq '[.[] | {
+                  timestamp,
+                  cellId: .jsonPayload.cellId,
+                  metricVersion: .jsonPayload.metricVersion,
+                  totalConnections: .jsonPayload.totalConnections,
+                  preAuthConnections: .jsonPayload.preAuthConnections,
+                  controls: .jsonPayload.controls,
+                  splices: .jsonPayload.splices,
+                  pendingSplices: .jsonPayload.pendingSplices,
+                  queuedBytes: .jsonPayload.queuedBytes
+                }]' > "${output}"
+          }
+
+          verify_legacy_cell() {
+            local cell_id="$1"
+            local admission="$2"
+            local after="$3"
+            local expected_instance_id="$4"
+            local runtime_started_after="${5:-}"
+            local previous_incarnation_digest="${6:-}"
+            local hard_cap="${7:-}"
+            local unobserved_bound="${8:-}"
+            local capacity_state="${9:-}"
+            local current_instance current_instance_id metrics origin result
+            local runtime_start_args=() incarnation_args=() capacity_args=()
+            current_instance="$(fixed_one_instance_name "${cell_id}")"
+            current_instance_id="$(fixed_one_instance_id "${cell_id}" "${current_instance}")"
+            test "${current_instance_id}" = "${expected_instance_id}"
+            metrics="${RUNNER_TEMP}/${cell_id}-legacy-runtime-metrics.json"
+            origin="$(jq -r --arg cell "${cell_id}" '.[$cell].origin' "${topology}")"
+            if test -n "${runtime_started_after}"; then
+              runtime_start_args=(--runtime-started-after "${runtime_started_after}")
+            fi
+            if test -n "${previous_incarnation_digest}"; then
+              incarnation_args=(--previous-incarnation-digest "${previous_incarnation_digest}")
+            fi
+            if test -n "${hard_cap}"; then
+              capacity_args=(--hard-cap "${hard_cap}" --unobserved-bound "${unobserved_bound}")
+            fi
+            if test -n "${capacity_state}"; then
+              capacity_args+=(--capacity-state "${capacity_state}")
+            fi
+            for _attempt in $(seq 1 18); do
+              write_legacy_metrics \
+                "${cell_id}" "${current_instance_id}" "${after}" "${metrics}"
+              if result="$(node dev/scripts/verify-relay-legacy-bootstrap.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --cell-origin "${origin}" \
+                --cell-id "${cell_id}" \
+                --admission "${admission}" \
+                --expected-image-digest "${LEGACY_C3_IMAGE_DIGEST}" \
+                --metrics-after "${after}" \
+                --metrics-file "${metrics}" \
+                "${runtime_start_args[@]}" \
+                "${incarnation_args[@]}" \
+                "${capacity_args[@]}")"; then
+                echo "${result}"
+                return 0
+              fi
+              sleep 10
+            done
+            return 1
+          }
+
+          post_admin() {
+            local origin="$1"
+            local path="$2"
+            local body="$3"
+            curl --fail --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data "${body}" \
+              "${origin}${path}"
+          }
+
+          runtime_kind() {
+            local cell_id="$1"
+            local origin desired_digest digest
+            origin="$(jq -r --arg cell "${cell_id}" '.[$cell].origin' "${topology}")"
+            desired_digest="$(jq -r --arg cell "${cell_id}" \
+              '.[$cell].image | split("@") | last' "${topology}")"
+            digest="$(post_admin "${origin}" /v1/admin/runtime-status '{"v":1}' \
+              | jq -er '.imageDigest')"
+            if test "${digest}" = "${LEGACY_C3_IMAGE_DIGEST}"; then
+              echo legacy
+            elif test "${digest}" = "${desired_digest}"; then
+              echo modern
+            else
+              echo 'bootstrap cell image is neither legacy nor reviewed' >&2
+              return 1
+            fi
+          }
+
+          cell_admission() {
+            local cell_id="$1"
+            post_admin "${DIRECTOR_ORIGIN}" /v1/admin/cell-status \
+              "$(jq -cn --arg cell "${cell_id}" '{v:1, cellId:$cell}')" \
+              | jq -er '.status.admissionState |
+                  if . == "general" or . == "migration-only" then .
+                  else error("bootstrap admission is not recoverable") end'
+          }
+
+          verify_modern_cell() {
+            local cell_id="$1"
+            local admission="$2"
+            local origin
+            origin="$(jq -r --arg cell "${cell_id}" '.[$cell].origin' "${topology}")"
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${origin}" \
+              --cell-id "${cell_id}" \
+              --hard-cap 600 \
+              --unobserved-bound 60 \
+              --heartbeat fresh \
+              --admission "${admission}" \
+              --draining forbidden \
+              --activity allowed
+          }
+
+          ensure_modern_general() {
+            local cell_id="$1"
+            local admission="$2"
+            verify_modern_cell "${cell_id}" "${admission}"
+            node dev/scripts/prepare-relay-capacity-canary.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-id "${cell_id}" \
+              --mode restore \
+              --general-cell-ids "${cell_id}"
+            verify_modern_cell "${cell_id}" general
+          }
+
+          prepare_legacy_c3_fallback() {
+            legacy_c3_metrics_boundary="$(node -e \
+              'process.stdout.write(new Date(Date.now() - 120_000).toISOString())')"
+            legacy_c3_instance="$(fixed_one_instance_name staging-gce-c3)"
+            legacy_c3_instance_id="$(fixed_one_instance_id \
+              staging-gce-c3 "${legacy_c3_instance}")"
+            verify_legacy_cell \
+              staging-gce-c3 general \
+              "${legacy_c3_metrics_boundary}" "${legacy_c3_instance_id}"
+            node dev/scripts/probe-relay-legacy-admission.mjs \
+              --cell-origin https://c3.relay-staging.onorca.dev
+            legacy_c3_restart_started_after=
+            legacy_c3_old_incarnation=
+          }
+
+          normalize_legacy_c3() {
+          legacy_pre_boundary="$(node -e \
+            'process.stdout.write(new Date(Date.now() - 120_000).toISOString())')"
+          legacy_c2_instance="$(fixed_one_instance_name staging-gce-c2)"
+          legacy_c2_instance_id="$(fixed_one_instance_id \
+            staging-gce-c2 "${legacy_c2_instance}")"
+          verify_legacy_cell \
+            staging-gce-c2 general "${legacy_pre_boundary}" "${legacy_c2_instance_id}"
+          node dev/scripts/probe-relay-legacy-admission.mjs \
+            --cell-origin https://c2.relay-staging.onorca.dev
+
+          legacy_c3_isolated=false
+          restore_legacy_c3_fallback() {
+            if test "${legacy_c3_isolated}" = true; then
+              verify_legacy_cell \
+                staging-gce-c2 general "${legacy_pre_boundary}" "${legacy_c2_instance_id}"
+              node dev/scripts/prepare-relay-capacity-canary.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --cell-id staging-gce-c3 \
+                --mode restore-fallback \
+                --general-cell-ids staging-gce-c2
+            fi
+          }
+
+          trap restore_legacy_c3_fallback EXIT
+          legacy_c3_isolated=true
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin https://c3.relay-staging.onorca.dev \
+            --cell-id staging-gce-c3 \
+            --mode isolate
+          legacy_c3_drain_boundary="$(node -e \
+            'process.stdout.write(new Date().toISOString())')"
+          legacy_c3_instance="$(fixed_one_instance_name staging-gce-c3)"
+          legacy_c3_instance_id="$(fixed_one_instance_id \
+            staging-gce-c3 "${legacy_c3_instance}")"
+          legacy_c3_drained="$(verify_legacy_cell \
+            staging-gce-c3 migration-only \
+            "${legacy_c3_drain_boundary}" "${legacy_c3_instance_id}")"
+          echo "${legacy_c3_drained}"
+          legacy_c3_old_incarnation="$(jq -er '.incarnationDigest' \
+            <<< "${legacy_c3_drained}")"
+          legacy_c3_restart_started_after="$(node -e \
+            'process.stdout.write(new Date().toISOString())')"
+          gcloud compute instance-groups managed recreate-instances \
+            orca-cloud-staging-relay-gce-c3 \
+            --instances "${legacy_c3_instance}" \
+            --project "${GCP_PROJECT_ID}" \
+            --zone us-central1-a \
+            --quiet
+          gcloud compute instance-groups managed wait-until \
+            orca-cloud-staging-relay-gce-c3 \
+            --stable \
+            --project "${GCP_PROJECT_ID}" \
+            --zone us-central1-a \
+            --timeout 900
+          legacy_c3_instance="$(fixed_one_instance_name staging-gce-c3)"
+          legacy_c3_instance_id="$(fixed_one_instance_id \
+            staging-gce-c3 "${legacy_c3_instance}")"
+          legacy_c3_metrics_boundary="$(node -e \
+            'process.stdout.write(new Date().toISOString())')"
+          verify_legacy_cell \
+            staging-gce-c3 migration-only \
+            "${legacy_c3_metrics_boundary}" "${legacy_c3_instance_id}" \
+            "${legacy_c3_restart_started_after}" "${legacy_c3_old_incarnation}"
+          node dev/scripts/prepare-relay-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-id staging-gce-c3 \
+            --mode restore \
+            --general-cell-ids staging-gce-c2,staging-gce-c3
+          verify_legacy_cell \
+            staging-gce-c3 general \
+            "${legacy_c3_metrics_boundary}" "${legacy_c3_instance_id}" \
+            "${legacy_c3_restart_started_after}" "${legacy_c3_old_incarnation}"
+          legacy_c3_isolated=false
+          trap - EXIT
+          }
+
+          roll_cell() (
+            local cell_id="$1"
+            local fallback_cell_id="$2"
+            local target_kind="$3"
+            local fallback_kind="$4"
+            local active_revision cell_origin current_cells_json desired_bound desired_cap
+            local desired_cells_json director_result image mig_name plan
+            local fallback_origin plan_changes plan_result restored target_drain_boundary
+            local target_instance target_instance_id zone
+            cell_origin="$(jq -r --arg cell "${cell_id}" '.[$cell].origin' "${topology}")"
+            fallback_origin="$(jq -r --arg cell "${fallback_cell_id}" \
+              '.[$cell].origin' "${topology}")"
+            zone="$(jq -r --arg cell "${cell_id}" '.[$cell].zone' "${topology}")"
+            mig_name="$(jq -r --arg cell "${cell_id}" '.[$cell].mig_name' "${topology}")"
+            image="$(jq -r --arg cell "${cell_id}" '.[$cell].image' "${topology}")"
+            desired_cap="$(jq -r --arg cell "${cell_id}" \
+              '.[$cell].connection_hard_cap' "${topology}")"
+            desired_bound="$(jq -r --arg cell "${cell_id}" \
+              '.[$cell].connection_unobserved_bound' "${topology}")"
+            plan="${RUNNER_TEMP}/${cell_id}-capacity-bootstrap.tfplan"
+            restored=false
+
+            restore_fallback() {
+              if test "${restored}" = false; then
+                verify_fallback
+                node dev/scripts/prepare-relay-capacity-canary.mjs \
+                  --director-origin "${DIRECTOR_ORIGIN}" \
+                  --cell-id "${cell_id}" \
+                  --mode restore-fallback \
+                  --general-cell-ids "${fallback_cell_id}"
+              fi
+            }
+
+            verify_fallback() {
+              if test "${fallback_kind}" = legacy; then
+                verify_legacy_cell \
+                  "${fallback_cell_id}" general \
+                  "${legacy_c3_metrics_boundary}" "${legacy_c3_instance_id}" \
+                  "${legacy_c3_restart_started_after}" "${legacy_c3_old_incarnation}"
+                return
+              fi
+              node dev/scripts/verify-relay-capacity-transition.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --cell-origin "${fallback_origin}" \
+                --cell-id "${fallback_cell_id}" \
+                --hard-cap 600 \
+                --unobserved-bound 60 \
+                --heartbeat fresh \
+                --admission general \
+                --draining forbidden \
+                --activity allowed
+            }
+
+            verify_fallback
+            trap restore_fallback EXIT
+            node dev/scripts/prepare-relay-capacity-canary.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${cell_origin}" \
+              --cell-id "${cell_id}" \
+              --mode isolate
+            target_drain_boundary="$(node -e \
+              'process.stdout.write(new Date().toISOString())')"
+            if test "${target_kind}" = legacy; then
+              target_instance="$(fixed_one_instance_name "${cell_id}")"
+              target_instance_id="$(fixed_one_instance_id "${cell_id}" "${target_instance}")"
+              verify_legacy_cell \
+                "${cell_id}" migration-only \
+                "${target_drain_boundary}" "${target_instance_id}" \
+                '' '' "${desired_cap}" "${desired_bound}" absent-or-stale
+            else
+              node dev/scripts/verify-relay-capacity-transition.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --cell-origin "${cell_origin}" \
+                --cell-id "${cell_id}" \
+                --heartbeat either \
+                --admission migration-only \
+                --draining required \
+                --activity quiescent
+            fi
+
+            active_revision="$(gcloud run services describe orca-cloud-relay-staging \
+              --project "${GCP_PROJECT_ID}" \
+              --region "${GCP_REGION}" \
+              --format=json \
+              | jq -r '
+                  [.status.traffic[] | select((.percent // 0) > 0)] |
+                  if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+            test -n "${active_revision}"
+            current_cells_json="$(gcloud run revisions describe "${active_revision}" \
+              --project "${GCP_PROJECT_ID}" \
+              --region "${GCP_REGION}" \
+              --format=json \
+              | jq -cer '
+                  [.spec.containers[0].env[]? |
+                    select(.name == "ORCA_RELAY_CELLS_JSON") | .value] |
+                  if length == 1 then .[0] | fromjson else error("missing director topology") end')"
+            desired_cells_json="$(jq -ce \
+              --arg cell "${cell_id}" \
+              --argjson cap "${desired_cap}" \
+              --argjson bound "${desired_bound}" \
+              'map(if .id == $cell then . + {
+                connectionHardCap: $cap,
+                connectionUnobservedBound: $bound
+              } else . end)' <<< "${current_cells_json}")"
+            director_result="$(node dev/scripts/deploy-relay-blue-green.mjs \
+              --project "${GCP_PROJECT_ID}" \
+              --region "${GCP_REGION}" \
+              --service orca-cloud-relay-staging \
+              --image "${image}" \
+              --role director \
+              --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
+              --capacity-cell-id "${cell_id}" \
+              --director-cells-json "${desired_cells_json}" \
+              --min-instances 0 \
+              --prune-revisions true \
+              --release-id "bootstrap-${cell_id}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")"
+            echo "${director_result}"
+            if test "${target_kind}" = legacy; then
+              verify_legacy_cell \
+                "${cell_id}" migration-only \
+                "${target_drain_boundary}" "${target_instance_id}" \
+                '' '' "${desired_cap}" "${desired_bound}"
+            else
+              node dev/scripts/verify-relay-capacity-transition.mjs \
+                --director-origin "${DIRECTOR_ORIGIN}" \
+                --cell-origin "${cell_origin}" \
+                --cell-id "${cell_id}" \
+                --hard-cap "${desired_cap}" \
+                --unobserved-bound "${desired_bound}" \
+                --heartbeat either \
+                --admission migration-only \
+                --draining required \
+                --activity quiescent
+            fi
+
+            terraform -chdir=infra/terraform plan \
+              -var-file=environments/staging.tfvars \
+              "-target=google_compute_instance_template.relay_gce_cell[\"${cell_id}\"]" \
+              "-target=google_compute_instance_group_manager.relay_gce_cell[\"${cell_id}\"]" \
+              -out="${plan}"
+            plan_result="$(terraform -chdir=infra/terraform show -json "${plan}" \
+              | node dev/scripts/validate-relay-capacity-plan.mjs \
+                  --mode bootstrap-cell \
+                  --cell-id "${cell_id}" \
+                  --hard-cap 600 \
+                  --unobserved-bound 60 \
+                  --image "${image}" \
+                  --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}")"
+            echo "${plan_result}"
+            plan_changes="$(jq -r '.changes' <<< "${plan_result}")"
+            [[ "${plan_changes}" =~ ^(0|2)$ ]]
+            if test "${plan_changes}" = 2; then
+              terraform -chdir=infra/terraform apply -auto-approve "${plan}"
+            else
+              target_instance="$(fixed_one_instance_name "${cell_id}")"
+              gcloud compute instance-groups managed recreate-instances "${mig_name}" \
+                --instances "${target_instance}" \
+                --project "${GCP_PROJECT_ID}" \
+                --zone "${zone}" \
+                --quiet
+            fi
+            gcloud compute instance-groups managed wait-until "${mig_name}" \
+              --stable \
+              --project "${GCP_PROJECT_ID}" \
+              --zone "${zone}" \
+              --timeout 900
+
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${cell_origin}" \
+              --cell-id "${cell_id}" \
+              --hard-cap 600 \
+              --unobserved-bound 60 \
+              --heartbeat fresh \
+              --admission migration-only \
+              --draining forbidden \
+              --activity allowed
+            node dev/scripts/prepare-relay-capacity-canary.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-id "${cell_id}" \
+              --mode restore \
+              --general-cell-ids staging-gce-c2,staging-gce-c3
+            restored=true
+            trap - EXIT
+          )
+
+          c2_kind="$(runtime_kind staging-gce-c2)"
+          c3_kind="$(runtime_kind staging-gce-c3)"
+          c2_admission="$(cell_admission staging-gce-c2)"
+          c3_admission="$(cell_admission staging-gce-c3)"
+          bootstrap_phase="$(node dev/scripts/classify-relay-staging-bootstrap.mjs \
+            --c2-kind "${c2_kind}" \
+            --c2-admission "${c2_admission}" \
+            --c3-kind "${c3_kind}" \
+            --c3-admission "${c3_admission}")"
+          jq -cn --arg phase "${bootstrap_phase}" \
+            '{event:"relay_staging_bootstrap_phase", phase:$phase}'
+
+          case "${bootstrap_phase}" in
+            normalize-and-roll-both)
+              normalize_legacy_c3
+              roll_cell staging-gce-c2 staging-gce-c3 legacy legacy
+              roll_cell staging-gce-c3 staging-gce-c2 legacy modern
+              ;;
+            resume-c2-then-c3)
+              prepare_legacy_c3_fallback
+              roll_cell staging-gce-c2 staging-gce-c3 legacy legacy
+              roll_cell staging-gce-c3 staging-gce-c2 legacy modern
+              ;;
+            roll-c2)
+              ensure_modern_general staging-gce-c3 "${c3_admission}"
+              roll_cell staging-gce-c2 staging-gce-c3 legacy modern
+              ;;
+            roll-c3)
+              ensure_modern_general staging-gce-c2 "${c2_admission}"
+              roll_cell staging-gce-c3 staging-gce-c2 legacy modern
+              ;;
+            complete)
+              ensure_modern_general staging-gce-c2 "${c2_admission}"
+              ensure_modern_general staging-gce-c3 "${c3_admission}"
+              ;;
+            *)
+              echo 'unsupported staging bootstrap phase' >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Verify both bootstrapped cells
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          for number in 2 3; do
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "https://c${number}.relay-staging.onorca.dev" \
+              --cell-id "staging-gce-c${number}" \
+              --hard-cap 600 \
+              --unobserved-bound 60 \
+              --heartbeat fresh \
+              --admission general \
+              --draining forbidden \
+              --activity allowed
+          done

@@ -29,6 +29,19 @@ function item(
   }
 }
 
+function trackedItem(id: string, parentIds: string[], reads: { count: number }): GitHistoryItem {
+  const result = item(id, parentIds)
+  Object.defineProperty(result, 'id', {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      reads.count += 1
+      return id
+    }
+  })
+  return result
+}
+
 function branch(name: string, revision: string): GitHistoryItemRef {
   return {
     id: `refs/heads/${name}`,
@@ -78,6 +91,96 @@ describe('git history graph model', () => {
       { id: 'B', color: GIT_HISTORY_LANE_COLORS[0] }
     ])
     expect(getGitHistoryMergeParentLaneIndex(viewModels[0]!, 'B')).toBe(1)
+  })
+
+  it('keeps the first matching parent when history contains duplicate ids', () => {
+    const headRef = branch('head', 'merge')
+    const firstParentRef = branch('first', 'duplicate')
+    const laterParentRef = remote('later', 'duplicate')
+    const colorMap = buildDefaultGitHistoryColorMap({
+      currentRef: headRef,
+      remoteRef: firstParentRef,
+      baseRef: laterParentRef
+    })
+    const viewModels = buildGitHistoryViewModels(
+      [
+        item('merge', ['base', 'duplicate'], [headRef]),
+        item('base', []),
+        item('duplicate', [], [firstParentRef]),
+        item('duplicate', [], [laterParentRef])
+      ],
+      colorMap,
+      headRef
+    )
+
+    expect(viewModels[0]!.outputSwimlanes[1]!.color).toBe(GIT_HISTORY_REMOTE_REF_COLOR)
+  })
+
+  it.each([
+    ['A', 'V'],
+    ['V', 'A']
+  ])('keeps other lanes when parents are %s then %s', (...parents) => {
+    const rootRef = branch('unrelated', 'V')
+    const viewModels = buildGitHistoryViewModels(
+      [item('M', parents), item('V', [], [rootRef]), item('A', ['B']), item('B', [])],
+      new Map([[rootRef.id, undefined]])
+    )
+    const root = viewModels[1]!
+    const rootLane = root.inputSwimlanes.find((lane) => lane.id === 'V')!
+
+    expect(root.inputSwimlanes.map((lane) => lane.id)).toEqual(parents)
+    expect(root.outputSwimlanes.map((lane) => lane.id)).toEqual(['A'])
+    expect(root.historyItem.references?.[0]?.color).toBe(rootLane.color)
+    expect(viewModels[2]!.inputSwimlanes.map((lane) => lane.id)).toEqual(['A'])
+    expect(viewModels[2]!.outputSwimlanes.map((lane) => lane.id)).toEqual(['B'])
+    expect(viewModels[3]!.outputSwimlanes).toEqual([])
+  })
+
+  it('ends every converging root lane while retaining another history', () => {
+    const rootRef = branch('root', 'V')
+    const rows = buildGitHistoryViewModels(
+      [item('M', ['A', 'C', 'V']), item('A', ['V']), item('V', [], [rootRef]), item('C', [])],
+      new Map([[rootRef.id, undefined]])
+    )
+    const root = rows[2]!
+    const survivingLane = root.inputSwimlanes[1]!
+
+    expect(root.inputSwimlanes.map((lane) => lane.id)).toEqual(['V', 'C', 'V'])
+    expect(root.outputSwimlanes).toEqual([survivingLane])
+    expect(root.historyItem.references?.[0]?.color).toBe(root.inputSwimlanes[0]!.color)
+    expect(rows[3]!.inputSwimlanes).toEqual([survivingLane])
+    expect(rows[3]!.outputSwimlanes).toEqual([])
+  })
+
+  it('avoids building a parent index for linear history', () => {
+    const count = 64
+    const reads = { count: 0 }
+    const historyItems = Array.from({ length: count }, (_, index) =>
+      trackedItem(`commit-${index}`, index + 1 < count ? [`commit-${index + 1}`] : [], reads)
+    )
+
+    buildGitHistoryViewModels(historyItems)
+
+    // A linear graph reads each item while projecting; an eager index would add one read per row.
+    expect(reads.count).toBeLessThanOrEqual(count * 5)
+  })
+
+  it('indexes merge parents once instead of rescanning a large history', () => {
+    const mergeCount = 64
+    const targetId = `target-${mergeCount}`
+    const reads = { count: 0 }
+    const historyItems: GitHistoryItem[] = []
+    for (let index = 0; index < mergeCount; index += 1) {
+      historyItems.push(trackedItem(`merge-${index}`, [`missing-${index}`, targetId], reads))
+      // Roots retain other lanes; growing width must not add history-item reads.
+      historyItems.push(trackedItem(`leaf-${index}`, [], reads))
+    }
+    historyItems.push(trackedItem(targetId, [], reads))
+
+    buildGitHistoryViewModels(historyItems)
+
+    // Repeated Array#find scans grow with rows; one index build stays within a linear read budget.
+    expect(reads.count).toBeLessThan(historyItems.length * 8)
   })
 
   it('inserts incoming and outgoing boundary rows at the merge base', () => {

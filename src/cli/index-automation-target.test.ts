@@ -41,8 +41,15 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import {
+  buildWorktree,
+  localRepoDestinationFixtures,
+  okFixture,
+  queueFixtures,
+  workspaceDestinationFixtures,
+  worktreeListFixture
+} from './test-fixtures'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -58,6 +65,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
+      ...workspaceDestinationFixtures(),
       okFixture('req_automation_create', {
         automation: {
           id: 'auto-1',
@@ -105,9 +113,10 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
       limit: 10_000
     })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.create', {
+    expect(callMock).toHaveBeenNthCalledWith(4, 'automation.create', {
       name: 'Daily review',
       prompt: 'Review open changes',
+      precheck: undefined,
       agentId: 'codex',
       repo: undefined,
       workspace: 'id:repo-1::/tmp/repo/feature',
@@ -118,11 +127,13 @@ describe('orca cli worktree awareness', () => {
       enabled: undefined,
       missedRunGraceMinutes: undefined,
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: expect.any(Number)
+      dtstart: expect.any(Number),
+      destination: { selector: { kind: 'self' } }
     })
   })
 
   it('resolves project and host flags for automation create', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     queueFixtures(
       callMock,
       okFixture('req_project_setups', {
@@ -153,6 +164,7 @@ describe('orca cli worktree awareness', () => {
           }
         ]
       }),
+      ...localRepoDestinationFixtures('repo-gpu'),
       okFixture('req_automation_create', {
         automation: { id: 'auto-1', name: 'GPU review' }
       })
@@ -180,9 +192,10 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'automation.create',
       expect.objectContaining({
         repo: 'id:repo-gpu',
@@ -219,6 +232,8 @@ describe('orca cli worktree awareness', () => {
           }
         ]
       }),
+      okFixture('req_edit_owner', { automation: { id: 'auto-1', name: 'GPU review' } }),
+      ...localRepoDestinationFixtures('repo-gpu'),
       okFixture('req_edit', {
         automation: { id: 'auto-1', name: 'GPU review' }
       })
@@ -232,7 +247,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      4,
       'automation.update',
       expect.objectContaining({
         id: 'auto-1',
@@ -362,6 +377,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
+      ...workspaceDestinationFixtures(),
       okFixture('req_automation_create', {
         automation: { id: 'auto-1', name: 'Daily review' }
       })
@@ -390,9 +406,10 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
       limit: 10_000
     })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.create', {
+    expect(callMock).toHaveBeenNthCalledWith(4, 'automation.create', {
       name: 'Daily review',
       prompt: 'Review open changes',
+      precheck: undefined,
       agentId: 'codex',
       repo: undefined,
       workspace: 'id:repo-1::/tmp/repo/feature',
@@ -402,7 +419,9 @@ describe('orca cli worktree awareness', () => {
       enabled: undefined,
       missedRunGraceMinutes: undefined,
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: expect.any(Number)
+      dtstart: expect.any(Number),
+      reuseSession: undefined,
+      destination: { selector: { kind: 'self' } }
     })
   })
 
@@ -410,6 +429,8 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
+      okFixture('req_edit_owner', { automation: { id: 'auto-1', name: 'Daily review' } }),
+      ...workspaceDestinationFixtures(),
       okFixture('req_edit', {
         automation: { id: 'auto-1', name: 'Daily review' }
       })
@@ -424,11 +445,12 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', {
       limit: 10_000
     })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'automation.update', {
+    expect(callMock).toHaveBeenNthCalledWith(5, 'automation.update', {
       id: 'auto-1',
       updates: {
         name: undefined,
         prompt: undefined,
+        precheck: undefined,
         agentId: undefined,
         repo: undefined,
         workspace: 'id:repo-1::/tmp/repo/feature',
@@ -438,7 +460,8 @@ describe('orca cli worktree awareness', () => {
         timezone: undefined,
         enabled: true,
         missedRunGraceMinutes: undefined
-      }
+      },
+      destination: { selector: { kind: 'self' } }
     })
   })
 })

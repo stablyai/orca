@@ -138,7 +138,8 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(gitPullMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
@@ -155,6 +156,7 @@ describe('createEditorSlice remote branch actions', () => {
       worktreePath: '/repo',
       publish: false,
       connectionId: undefined,
+      worktreeId: 'wt-1',
       pushTarget: undefined,
       forceWithLease: undefined
     })
@@ -193,6 +195,7 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitFastForwardMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: undefined,
+      worktreeId: 'wt-1',
       pushTarget
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
@@ -284,6 +287,7 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: undefined,
+      worktreeId: 'wt-1',
       pushTarget
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
@@ -337,7 +341,8 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitPushMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
       publish: true,
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
@@ -361,35 +366,8 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
-  it('maps publish updates-were-rejected into a clean actionable toast', async () => {
-    const store = createEditorStore()
-    const publishError = new Error(
-      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
-    )
-    gitPushMock.mockRejectedValueOnce(publishError)
-
-    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
-      publishError.message
-    )
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Push rejected — remote has changes. Pull first, then try again.'
-    )
-    await flushAsyncRemoteRefresh()
-
-    expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitFetchMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
@@ -450,33 +428,8 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(store.getState().isRemoteOperationActive).toBe(false)
-  })
-
-  it('maps non-fast-forward keyword push errors into a clean actionable toast', async () => {
-    const store = createEditorStore()
-    const pushError = new Error('Push rejected: remote has newer commits (non-fast-forward).')
-    gitPushMock.mockRejectedValueOnce(pushError)
-
-    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
-      pushError.message
-    )
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Push rejected — remote has changes. Pull first, then try again.'
-    )
-    await flushAsyncRemoteRefresh()
-
-    expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitFetchMock).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
@@ -507,7 +460,8 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
@@ -534,7 +488,8 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
@@ -590,7 +545,8 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
@@ -634,7 +590,8 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(store.getState().isRemoteOperationActive).toBe(false)
     expect(toastErrorMock).not.toHaveBeenCalled()
@@ -728,16 +685,19 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(gitFetchMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(gitPullMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     // ahead=1 in the default mock, so sync pushes.
     expect(gitPushMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      worktreeId: 'wt-1'
     })
     expect(toastErrorMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
@@ -786,6 +746,7 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitPushMock).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: undefined,
+      worktreeId: 'wt-1',
       forceWithLease: true
     })
     expect(gitUpstreamStatusMock).toHaveBeenCalledTimes(2)

@@ -1,15 +1,17 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, Suspense } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
+  SkillDiscoverySource,
   SkillDiscoveryTarget
 } from '../../../shared/skills'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
@@ -27,6 +29,8 @@ let root: Root | null = null
 let container: HTMLDivElement | null = null
 let latestState: InstalledAgentSkillState | null = null
 const renderedStates: InstalledAgentSkillState[] = []
+/** When set, the next Probe render suspends on it, so React throws that render away. */
+let suspendNextProbeRender: Promise<void> | null = null
 
 function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -45,11 +49,29 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   }
 }
 
-function discoveryResult(skills: DiscoveredSkill[] = []): SkillDiscoveryResult {
+function discoveryResult(
+  skills: DiscoveredSkill[] = [],
+  sources: SkillDiscoverySource[] = []
+): SkillDiscoveryResult {
   return {
     skills,
-    sources: [],
+    sources,
     scannedAt: Date.now()
+  }
+}
+
+/** A root the host could not read: it reports `exists` because it cannot prove otherwise. */
+function unavailableSource(overrides: Partial<SkillDiscoverySource> = {}): SkillDiscoverySource {
+  return {
+    id: 'home',
+    label: 'Agent skills home',
+    path: '/Users/test/.agents/skills',
+    sourceKind: 'home',
+    providers: ['agent-skills'],
+    owner: null,
+    exists: true,
+    skippedReason: 'unavailable',
+    ...overrides
   }
 }
 
@@ -81,23 +103,60 @@ const projectWslRuntime: ProjectExecutionRuntimeResolution = {
   }
 }
 
+function runtimeEnvironment(
+  overrides: Partial<PublicKnownRuntimeEnvironment> = {}
+): PublicKnownRuntimeEnvironment {
+  return {
+    id: 'env-1',
+    name: 'Remote Mac',
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: null,
+    runtimeId: null,
+    endpoints: [{ id: 'ws-env-1', kind: 'websocket', label: 'Remote', endpoint: 'wss://env-1' }],
+    preferredEndpointId: 'ws-env-1',
+    ...overrides
+  }
+}
+
 function Probe({ discoveryTarget }: { discoveryTarget?: SkillDiscoveryTarget }): null {
   latestState = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  if (suspendNextProbeRender) {
+    const pending = suspendNextProbeRender
+    suspendNextProbeRender = null
+    throw pending
+  }
   renderedStates.push(latestState)
   return null
 }
 
-async function renderProbe(discoveryTarget?: SkillDiscoveryTarget): Promise<void> {
+function ensureRoot(): Root {
   if (!container) {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
   }
+  return root!
+}
+
+async function renderProbe(discoveryTarget?: SkillDiscoveryTarget): Promise<void> {
+  const probeRoot = ensureRoot()
   await act(async () => {
-    root?.render(<Probe discoveryTarget={discoveryTarget} />)
+    probeRoot.render(<Probe discoveryTarget={discoveryTarget} />)
+  })
+}
+
+async function renderProbeUnderSuspense(discoveryTarget?: SkillDiscoveryTarget): Promise<void> {
+  const probeRoot = ensureRoot()
+  await act(async () => {
+    probeRoot.render(
+      <Suspense fallback={null}>
+        <Probe discoveryTarget={discoveryTarget} />
+      </Suspense>
+    )
   })
 }
 
@@ -112,6 +171,7 @@ afterEach(async () => {
   container = null
   latestState = null
   renderedStates.length = 0
+  suspendNextProbeRender = null
   _installedAgentSkillDiscoveryInternalsForTests.reset()
   clearRuntimeCompatibilityCacheForTests()
   useAppStore.setState({
@@ -152,6 +212,71 @@ beforeEach(() => {
 })
 
 describe('useInstalledAgentSkill', () => {
+  // A root that did not answer holds unknown skills, not zero. Reporting a bare
+  // "not installed" there is what offered Install for an already-installed skill.
+  it('says the scan was incomplete when an in-scope root did not answer', async () => {
+    const scan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(scan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    scan.resolve(discoveryResult([], [unavailableSource()]))
+    await act(async () => {
+      await scan.promise
+    })
+
+    expect(latestState?.installed).toBe(false)
+    expect(latestState?.error).toContain('did not respond')
+  })
+
+  it('keeps a negative authoritative when the unread root is out of scope', async () => {
+    const scan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(scan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    // The probe asks only about home roots, so a stalled repo root proves nothing.
+    scan.resolve(
+      discoveryResult([], [unavailableSource({ id: 'repo', sourceKind: 'repo', path: '/repo' })])
+    )
+    await act(async () => {
+      await scan.promise
+    })
+
+    expect(latestState?.installed).toBe(false)
+    expect(latestState?.error).toBeNull()
+  })
+
+  it('does not flag an incomplete scan once the skill is found anyway', async () => {
+    const scan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(scan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    scan.resolve(discoveryResult([skill({ name: 'orca-linear' })], [unavailableSource()]))
+    await act(async () => {
+      await scan.promise
+    })
+
+    expect(latestState?.installed).toBe(true)
+    expect(latestState?.error).toBeNull()
+  })
+
   it('ignores stale discovery results after the discovery target changes', async () => {
     const hostScan = deferred<SkillDiscoveryResult>()
     const wslScan = deferred<SkillDiscoveryResult>()
@@ -180,8 +305,16 @@ describe('useInstalledAgentSkill', () => {
     })
 
     expect(latestState?.installed).toBe(false)
-    expect(discover).toHaveBeenNthCalledWith(1, undefined)
-    expect(discover).toHaveBeenNthCalledWith(2, { runtime: 'wsl', wslDistro: 'Fedora' })
+    expect(discover).toHaveBeenNthCalledWith(1, {
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
+    })
+    expect(discover).toHaveBeenNthCalledWith(2, {
+      runtime: 'wsl',
+      wslDistro: 'Fedora',
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
+    })
   })
 
   it('ignores same-target background discovery results when a forced refresh is waiting', async () => {
@@ -215,9 +348,16 @@ describe('useInstalledAgentSkill', () => {
     })
 
     expect(latestState?.installed).toBe(false)
-    expect(discover).toHaveBeenNthCalledWith(1, undefined)
+    expect(discover).toHaveBeenNthCalledWith(1, {
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
+    })
     // A forced refresh must also bypass the host's shared scans, not just this cache.
-    expect(discover).toHaveBeenNthCalledWith(2, { refresh: true })
+    expect(discover).toHaveBeenNthCalledWith(2, {
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home'],
+      refresh: true
+    })
   })
 
   it('returns installed from refresh when a legacy Linear skill is discovered', async () => {
@@ -265,7 +405,12 @@ describe('useInstalledAgentSkill', () => {
     })
 
     expect(latestState?.installed).toBe(true)
-    expect(discover).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(discover).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
+    })
   })
 
   it('detects a legacy Linear install through project-runtime skill discovery', async () => {
@@ -286,7 +431,9 @@ describe('useInstalledAgentSkill', () => {
     expect(discover).toHaveBeenCalledWith({
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
-      projectRuntime: projectWslRuntime
+      projectRuntime: projectWslRuntime,
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
     })
   })
 
@@ -354,7 +501,10 @@ describe('useInstalledAgentSkill', () => {
 
     // The freshness window is what bounds the storm; past it, focus still reads disk.
     expect(discover).toHaveBeenCalledTimes(2)
-    expect(discover).toHaveBeenLastCalledWith(undefined)
+    expect(discover).toHaveBeenLastCalledWith({
+      names: ['orca-linear', 'linear-tickets'],
+      sourceKinds: ['home']
+    })
   })
 
   it('reuses cached discovery when another surface finishes re-checking', async () => {
@@ -585,6 +735,8 @@ describe('useInstalledAgentSkill', () => {
     // fresh discovery per store write for as long as the host stays unreachable.
     expect(discover).toHaveBeenCalledTimes(1)
     expect(latestState?.error).toBe('runtime host unreachable')
+    // No result ever landed, so "not installed" is a claim this scan cannot back.
+    expect(latestState?.installedUnverifiable).toBe(true)
   })
 
   it('hydrates from the warm cache on its very first render pass', async () => {
@@ -611,6 +763,153 @@ describe('useInstalledAgentSkill', () => {
     // The first render pass, before any effect runs, must already be settled.
     expect(renderedStates[0]?.loading).toBe(false)
     expect(renderedStates[0]?.installed).toBe(true)
+  })
+
+  // Why: a same-id re-pair keeps the environment id, so nothing else the hook
+  // keys on moves. The store evicts the module cache, but a mounted consumer
+  // must also drop the retired peer's list and scan the new one.
+  it('rescans a mounted consumer when the focused runtime re-pairs under the same id', async () => {
+    const discover = vi.fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+    let remoteSkills = [skill({ name: 'linear-tickets' })]
+    const call = vi.fn(
+      async (args: { method: string; selector?: string }) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'skills',
+          ok: true,
+          result: discoveryResult(remoteSkills)
+        }
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
+    })
+    setRuntimeOwner('env-1')
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment()])
+
+    await renderProbe()
+    await flushMicrotasks()
+    expect(latestState?.installed).toBe(true)
+    const scansBeforeRepair = call.mock.calls.filter(
+      (entry) => entry[0].method === 'skills.discover'
+    ).length
+    expect(scansBeforeRepair).toBe(1)
+
+    remoteSkills = []
+    await act(async () => {
+      useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment({ pairingRevision: 2 })])
+    })
+    await flushMicrotasks()
+
+    expect(call.mock.calls.filter((entry) => entry[0].method === 'skills.discover')).toHaveLength(2)
+    expect(latestState?.installed).toBe(false)
+    expect(discover).not.toHaveBeenCalled()
+  })
+
+  it('drops an in-flight scan from the retired peer when its runtime re-pairs', async () => {
+    const discover = vi.fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+    const staleScan = deferred<SkillDiscoveryResult>()
+    const freshScan = deferred<SkillDiscoveryResult>()
+    const scans = [staleScan, freshScan]
+    const call = vi.fn(async (args: { method: string; selector?: string }) => {
+      const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (status) {
+        return status
+      }
+      const scan = scans.shift()
+      if (!scan) {
+        throw new Error('unexpected extra skills.discover call')
+      }
+      return { id: 'skills', ok: true, result: await scan.promise }
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover }, runtimeEnvironments: { call } }
+    })
+    setRuntimeOwner('env-1')
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment()])
+
+    await renderProbe()
+    await flushMicrotasks()
+    expect(latestState?.loading).toBe(true)
+
+    await act(async () => {
+      useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment({ pairingRevision: 2 })])
+    })
+    await flushMicrotasks()
+    staleScan.resolve(discoveryResult([skill({ name: 'linear-tickets' })]))
+    await flushMicrotasks()
+
+    expect(latestState?.installed).toBe(false)
+    expect(latestState?.loading).toBe(true)
+
+    freshScan.resolve(discoveryResult([]))
+    await flushMicrotasks()
+
+    expect(scans).toHaveLength(0)
+    expect(latestState?.installed).toBe(false)
+    expect(latestState?.loading).toBe(false)
+    expect(renderedStates.some((state) => state.installed)).toBe(false)
+  })
+
+  // Why: the reset once lived in a ref written during render. React drops the
+  // state updates of a render it throws away but not the ref write, so the retry
+  // saw "already reset" and kept painting the old target's list until a rescan.
+  it('still drops the old target list when React discards the render that saw the switch', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValueOnce(discoveryResult([skill({ name: 'linear-tickets' })]))
+      .mockResolvedValue(discoveryResult([]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbeUnderSuspense()
+    await flushMicrotasks()
+    expect(latestState?.installed).toBe(true)
+
+    const discardedRender = deferred<void>()
+    suspendNextProbeRender = discardedRender.promise
+    renderedStates.length = 0
+    await renderProbeUnderSuspense({ runtime: 'wsl', wslDistro: 'Fedora' })
+    expect(suspendNextProbeRender).toBeNull()
+    discardedRender.resolve()
+    await act(async () => {
+      await discardedRender.promise
+    })
+
+    expect(renderedStates.some((state) => state.installed)).toBe(false)
+    await flushMicrotasks()
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(latestState?.installed).toBe(false)
+  })
+
+  it('keeps a landed answer authoritative when a later refresh fails', async () => {
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValueOnce(discoveryResult([]))
+      .mockRejectedValue(new Error('refresh failed'))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    await flushMicrotasks()
+    expect(discover).toHaveBeenCalledTimes(1)
+    expect(latestState?.settled).toBe(true)
+    expect(latestState?.installedUnverifiable).toBe(false)
+
+    await act(async () => {
+      notifyInstalledAgentSkillsChanged()
+    })
+    await flushMicrotasks()
+
+    // The refresh failed, but the answer the scan already landed still stands.
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(latestState?.error).toBe('refresh failed')
+    expect(latestState?.settled).toBe(true)
+    expect(latestState?.installedUnverifiable).toBe(false)
   })
 
   it('empties the discovery cache when an install notification fires', async () => {

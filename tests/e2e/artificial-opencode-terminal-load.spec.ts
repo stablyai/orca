@@ -1,3 +1,4 @@
+import { presentTerminalPerfWindow } from './terminal-perf-presentation'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -28,6 +29,11 @@ import type { HiddenPressureOutputMode } from './artificial-opencode-hidden-pres
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
 import { runRendererBackpressureRevisitScenario } from './artificial-opencode-revisit-pressure-scenario'
 import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
+
+test.beforeEach(async ({ electronApp, orcaPage }, testInfo) => {
+  await orcaPage.waitForLoadState('domcontentloaded')
+  await presentTerminalPerfWindow(electronApp, testInfo)
+})
 
 type TypingMeasurement = {
   latencies: number[]
@@ -447,7 +453,7 @@ async function measureCrossWorkspaceTypingDuringHiddenLoad({
       scheduler,
       mainPressure
     )
-    expect(scheduler?.rendererDroppedBacklogs ?? 0).toBe(0)
+    expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
     expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
     expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_UNDER_LOAD_MS)

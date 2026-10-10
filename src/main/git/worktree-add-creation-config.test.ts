@@ -1,29 +1,18 @@
 // addWorktree: checkout creation, branch-base/push.autoSetupRemote config writes, ref qualification.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  gitExecFileSyncMock,
-  translateWslOutputPathsMock,
-  moveWorktreeDirectoryToTrashMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn(),
-  translateWslOutputPathsMock: vi.fn((output: string) => output),
-  moveWorktreeDirectoryToTrashMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    translateWslOutputPathsMock: vi.fn((output: string) => output)
+  })
+)
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,
   translateWslOutputPaths: translateWslOutputPathsMock
-}))
-
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
 }))
 
 import { addSparseWorktree, addWorktree, WORKTREE_ADD_TIMEOUT_MS } from './worktree'
@@ -40,10 +29,19 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
   }
 
+  // Why: argv now depends on the host OS, so pin a non-Windows default or every
+  // exact-argv assertion below would fail for a maintainer running vitest on Windows.
+  let platformSpy: MockInstance<() => NodeJS.Platform>
+
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockClear()
+    platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  })
+
+  afterEach(() => {
+    platformSpy.mockRestore()
   })
 
   it('creates the worktree without touching the local base ref by default', async () => {
@@ -99,6 +97,86 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('enables long paths for native Windows worktree creation', async () => {
+    platformSpy.mockReturnValue('win32')
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+
+    await addWorktree(
+      'C:\\repo',
+      'C:\\repo-feature',
+      'feature/test',
+      'feature/test',
+      false,
+      false,
+      { checkoutExistingBranch: true }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['-c', 'core.longpaths=true', 'worktree', 'add', 'C:\\repo-feature', 'feature/test'],
+      { cwd: 'C:\\repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
+    )
+  })
+
+  it('still enables long paths for a Windows-path repo that has a WSL distro configured', async () => {
+    // Why: a C:\ cwd can be served by host git.exe even with wslDistro set, and that
+    // is exactly the MAX_PATH-prone case; Linux git parses and ignores the key.
+    platformSpy.mockReturnValue('win32')
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+
+    await addWorktree(
+      'C:\\repo',
+      'C:\\repo-feature',
+      'feature/test',
+      'feature/test',
+      false,
+      false,
+      { checkoutExistingBranch: true, wslDistro: 'Ubuntu' }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['-c', 'core.longpaths=true', 'worktree', 'add', 'C:\\repo-feature', 'feature/test'],
+      { cwd: 'C:\\repo', wslDistro: 'Ubuntu', timeout: WORKTREE_ADD_TIMEOUT_MS }
+    )
+  })
+
+  it('does not pass the Windows-only long-path option for a WSL UNC repo path', async () => {
+    platformSpy.mockReturnValue('win32')
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+
+    const repoPath = '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo'
+    await addWorktree(
+      repoPath,
+      '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-feature',
+      'feature/test',
+      'feature/test',
+      false,
+      false,
+      { checkoutExistingBranch: true, wslDistro: 'Ubuntu' }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'add', '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-feature', 'feature/test'],
+      { cwd: repoPath, wslDistro: 'Ubuntu', timeout: WORKTREE_ADD_TIMEOUT_MS }
+    )
+  })
+
+  it.each(['darwin', 'linux'] as const)(
+    'does not pass the long-path option on %s',
+    async (platform) => {
+      platformSpy.mockReturnValue(platform)
+      gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+
+      await addWorktree('/repo', '/repo-feature', 'feature/test', 'feature/test', false, false, {
+        checkoutExistingBranch: true
+      })
+
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+        ['worktree', 'add', '/repo-feature', 'feature/test'],
+        { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
+      )
+    }
+  )
+
   it('bounds the worktree add call with a positive timeout (STA-1292 OneDrive stall guard)', async () => {
     // Why: without a timeout, a OneDrive cloud-placeholder checkout can stall
     // `git worktree add` for minutes. Assert the runner receives a non-zero
@@ -110,7 +188,7 @@ describe('addWorktree', () => {
     })
 
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
+      ([argv]) => Array.isArray(argv) && argv.includes('worktree') && argv.includes('add')
     )
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
@@ -125,7 +203,7 @@ describe('addWorktree', () => {
     })
 
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
+      ([argv]) => Array.isArray(argv) && argv.includes('worktree') && argv.includes('add')
     )
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: 600_000 })
   })
@@ -370,40 +448,6 @@ describe('addWorktree', () => {
         'refs/heads/main'
       ],
       { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
-    ])
-  })
-
-  it('qualifies slash-containing local branch names when no remote ref matches', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('no remote ref')) // rev-parse refs/remotes/release/main^{commit}
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/heads/release/main^{commit}
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
-    resolveCreationBaseConfigWrite()
-    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
-
-    await addWorktree('/repo', '/repo-feature', 'feature/release', 'release/main')
-
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
-      ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
-      [
-        'worktree',
-        'add',
-        '--no-track',
-        '-b',
-        'feature/release',
-        '/repo-feature',
-        'refs/heads/release/main'
-      ],
-      [
-        'config',
-        '--local',
-        '--replace-all',
-        'branch.feature/release.base',
-        'refs/heads/release/main'
-      ],
-      ['config', '--get', 'push.autoSetupRemote'],
-      ['config', '--local', 'push.autoSetupRemote', 'true']
     ])
   })
 

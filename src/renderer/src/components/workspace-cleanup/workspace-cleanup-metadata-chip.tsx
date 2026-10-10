@@ -8,12 +8,15 @@ export function WorkspaceCleanupMetadataChip({
   icon: Icon,
   label,
   value,
-  tone = 'neutral'
+  tone = 'neutral',
+  toneClassName
 }: {
   icon: LucideIcon
   label: string
   value?: string
   tone?: StatusPillTone
+  /** Overrides `tone` for chips whose color comes from a domain state (e.g. review state). */
+  toneClassName?: string
 }): React.JSX.Element {
   return (
     <Tooltip>
@@ -25,7 +28,8 @@ export function WorkspaceCleanupMetadataChip({
             tone === 'ready' &&
               'border-[color:color-mix(in_srgb,var(--git-decoration-added)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--git-decoration-added)_10%,transparent)] text-[var(--git-decoration-added)]',
             tone === 'review' && 'bg-muted text-foreground',
-            tone === 'destructive' && 'border-destructive/30 text-destructive'
+            tone === 'destructive' && 'border-destructive/30 text-destructive',
+            toneClassName
           )}
           aria-label={label}
         >

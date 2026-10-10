@@ -5,7 +5,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Field } from './automation-page-parts'
+import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { translate } from '@/i18n/i18n'
 
@@ -23,79 +23,91 @@ export function AutomationPrecheckFields({
   onDraftChange
 }: AutomationPrecheckFieldsProps): React.JSX.Element {
   return (
-    <>
-      <Field
-        label={translate(
-          'auto.components.automations.AutomationPrecheckFields.c2a762a180',
-          'Precheck'
+    <Field
+      label={
+        <span className="flex items-center justify-between gap-2">
+          <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>
+            {translate(
+              'auto.components.automations.AutomationPrecheckFields.c2a762a180',
+              'Precheck'
+            )}
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>
+              {translate(
+                'auto.components.automations.AutomationPrecheckFields.bb2dfb3629',
+                'Timeout'
+              )}
+            </span>
+            <Select
+              value={draft.precheckTimeoutSeconds}
+              disabled={disabled}
+              onValueChange={(precheckTimeoutSeconds) =>
+                onDraftChange((current) => ({ ...current, precheckTimeoutSeconds }))
+              }
+            >
+              <SelectTrigger
+                aria-label={translate(
+                  'auto.components.automations.AutomationPrecheckFields.bb2dfb3629',
+                  'Timeout'
+                )}
+                size="sm"
+                className={`h-7 w-auto shrink-0 px-2 ${pickerTriggerClassName}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" side="bottom" align="end" sideOffset={4}>
+                <SelectItem value="30">
+                  {translate(
+                    'auto.components.automations.AutomationPrecheckFields.51e28cdad9',
+                    '30 sec'
+                  )}
+                </SelectItem>
+                <SelectItem value="60">
+                  {translate(
+                    'auto.components.automations.AutomationPrecheckFields.c820119736',
+                    '1 min'
+                  )}
+                </SelectItem>
+                <SelectItem value="120">
+                  {translate(
+                    'auto.components.automations.AutomationPrecheckFields.d84d3765fd',
+                    '2 min'
+                  )}
+                </SelectItem>
+                <SelectItem value="300">
+                  {translate(
+                    'auto.components.automations.AutomationPrecheckFields.bf49585b3c',
+                    '5 min'
+                  )}
+                </SelectItem>
+                <SelectItem value="600">
+                  {translate(
+                    'auto.components.automations.AutomationPrecheckFields.d2a2ac89ac',
+                    '10 min'
+                  )}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </span>
+        </span>
+      }
+    >
+      <textarea
+        value={draft.precheckCommand}
+        disabled={disabled}
+        placeholder={translate(
+          'auto.components.automations.AutomationPrecheckFields.99a577306c',
+          "gh pr list --json number -q '.[0].number'"
         )}
-      >
-        <textarea
-          value={draft.precheckCommand}
-          disabled={disabled}
-          placeholder={translate(
-            'auto.components.automations.AutomationPrecheckFields.99a577306c',
-            "gh pr list --json number -q '.[0].number'"
-          )}
-          onChange={(event) =>
-            onDraftChange((current) => ({
-              ...current,
-              precheckCommand: event.target.value
-            }))
-          }
-          className="min-h-[68px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
-        />
-      </Field>
-      <Field
-        label={translate(
-          'auto.components.automations.AutomationPrecheckFields.bb2dfb3629',
-          'Timeout'
-        )}
-      >
-        <Select
-          value={draft.precheckTimeoutSeconds}
-          disabled={disabled}
-          onValueChange={(precheckTimeoutSeconds) =>
-            onDraftChange((current) => ({ ...current, precheckTimeoutSeconds }))
-          }
-        >
-          <SelectTrigger className={`w-full ${pickerTriggerClassName}`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-            <SelectItem value="30">
-              {translate(
-                'auto.components.automations.AutomationPrecheckFields.51e28cdad9',
-                '30 sec'
-              )}
-            </SelectItem>
-            <SelectItem value="60">
-              {translate(
-                'auto.components.automations.AutomationPrecheckFields.c820119736',
-                '1 min'
-              )}
-            </SelectItem>
-            <SelectItem value="120">
-              {translate(
-                'auto.components.automations.AutomationPrecheckFields.d84d3765fd',
-                '2 min'
-              )}
-            </SelectItem>
-            <SelectItem value="300">
-              {translate(
-                'auto.components.automations.AutomationPrecheckFields.bf49585b3c',
-                '5 min'
-              )}
-            </SelectItem>
-            <SelectItem value="600">
-              {translate(
-                'auto.components.automations.AutomationPrecheckFields.d2a2ac89ac',
-                '10 min'
-              )}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </Field>
-    </>
+        onChange={(event) =>
+          onDraftChange((current) => ({
+            ...current,
+            precheckCommand: event.target.value
+          }))
+        }
+        className="min-h-[56px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+      />
+    </Field>
   )
 }

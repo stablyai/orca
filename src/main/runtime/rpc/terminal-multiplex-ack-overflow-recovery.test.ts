@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -99,7 +100,7 @@ describe('terminal multiplex RPC', () => {
       [sourceRange(flooded.length, flooded.length + trailing.length)]
     )
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -160,7 +161,7 @@ describe('terminal multiplex RPC', () => {
     expect(harness.commit).toHaveBeenCalledOnce()
     expect(harness.rollback).toHaveBeenCalledOnce()
     expect(harness.lifecycle).toEqual(['reserve', 'commit', 'rollback', 'cancel'])
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -205,7 +206,7 @@ describe('terminal multiplex RPC', () => {
     expect(harness.commit).not.toHaveBeenCalled()
     expect(harness.rollback).toHaveBeenCalledOnce()
     expect(harness.lifecycle).toEqual(['reserve', 'rollback', 'cancel'])
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -260,7 +261,7 @@ describe('terminal multiplex RPC', () => {
     expect(harness.commit).not.toHaveBeenCalled()
     expect(harness.rollback).toHaveBeenCalledOnce()
     expect(harness.lifecycle.slice(0, 3)).toEqual(['reserve', 'rollback', 'cancel'])
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -298,7 +299,7 @@ describe('terminal multiplex RPC', () => {
               'ack-pending-overflow'
         )
     ).toBe(false)
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -413,11 +414,15 @@ describe('terminal multiplex RPC', () => {
       )!
     )
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'still interactive\r',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        {
+          text: 'still interactive\r',
+          enter: false,
+          interrupt: false
+        },
+        { inputKind: 'driving' }
+      )
     )
 
     binaryFrames.splice(0)
@@ -463,6 +468,15 @@ describe('terminal multiplex RPC', () => {
       decodeTerminalStreamJson<{ truncated?: boolean }>(drainFrames[recoveryStartIndex]!.payload)
         ?.truncated
     ).toBe(false)
+    // P2-5: the client's history ends before the dropped output, so recovery must carry history to replace it.
+    expect(runtime.serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
+      scrollbackRows: 1000
+    })
+    expect(
+      decodeTerminalStreamJson<{ scrollbackRows?: number }>(
+        drainFrames[recoveryStartIndex]!.payload
+      )?.scrollbackRows
+    ).toBe(1000)
     expect(firstOutputAfterAckIndex).toBeGreaterThan(recoveryStartIndex)
     expect(
       drainFrames
@@ -551,7 +565,7 @@ describe('terminal multiplex RPC', () => {
     await Promise.resolve()
     expect(serializeTerminalBuffer).toHaveBeenCalledTimes(2)
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 

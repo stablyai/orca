@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
+import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
   testState,
   createStore,
+  dataFile,
   writeDataFile,
   makeRepo,
   makeTerminalTab
@@ -18,6 +23,8 @@ import {
   makeSessionWithTerminalBuffers,
   makeSessionWithBrowserHistory
 } from './persistence-session-fixtures'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { Store, initDataPath } from './persistence'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -67,7 +74,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── GitHub Cache ───────────────────────────────────────────────────
@@ -187,10 +195,11 @@ describe('Store', () => {
     const profileDataFile = join(profileDataDirectory, 'orca-data.json')
     mkdirSync(profileDataDirectory, { recursive: true })
 
-    vi.resetModules()
-    const { Store, initDataPath } = await import('./persistence')
+    // Why: the legacy snapshot dir hangs off userData, which resolves through
+    // AppEnvironment — without this it points at the global fake's shared dir.
+    installFakeAppEnvironment({ getPath: () => testState.dir })
     initDataPath()
-    const store = new Store({ dataFile: profileDataFile })
+    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
     const session = makeSessionWithTerminalBuffers()
     store.setWorkspaceSession({
@@ -217,10 +226,11 @@ describe('Store', () => {
     mkdirSync(legacySnapshotDir, { recursive: true })
     writeFileSync(join(legacySnapshotDir, `${ref}.bin`), 'legacy-scrollback', 'utf-8')
 
-    vi.resetModules()
-    const { Store, initDataPath } = await import('./persistence')
+    // Why: the legacy snapshot dir hangs off userData, which resolves through
+    // AppEnvironment — without this it points at the global fake's shared dir.
+    installFakeAppEnvironment({ getPath: () => testState.dir })
     initDataPath()
-    const store = new Store({ dataFile: profileDataFile })
+    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
 
     expect(store.readTerminalScrollbackSnapshot(ref)).toBe('legacy-scrollback')
   })
@@ -298,6 +308,7 @@ describe('Store', () => {
       throw new Error('expected scrollback snapshot ref')
     }
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
+    store.flushOrThrow()
 
     store.setWorkspaceSession({
       activeRepoId: null,
@@ -308,6 +319,79 @@ describe('Store', () => {
     })
 
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const stillPublished = JSON.parse(readPersistedStateJson(dataFile())) as {
+      workspaceSession: {
+        terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
+      }
+    }
+    expect(
+      stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
+        ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]
+    ).toBe(ref)
+  })
+
+  it('leaves durable state pointing at deleted scrollback when the replacement write fails', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
+    const session = makeSessionWithTerminalBuffers()
+    store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        'remote-repo::/remote': session.tabsByWorktree['remote-repo::/remote']
+      },
+      terminalLayoutsByTabId: {
+        'remote-tab': session.terminalLayoutsByTabId['remote-tab']
+      }
+    })
+    const ref =
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
+        TEST_LEAF_2
+      ]
+    if (!ref) {
+      throw new Error('expected scrollback snapshot ref')
+    }
+    const snapshotPath = join(testState.dir, 'terminal-scrollback', `${ref}.bin`)
+    store.flushOrThrow()
+    const durableBeforeRemoval = readPersistedStateJson(dataFile())
+    expect(existsSync(snapshotPath)).toBe(true)
+
+    const writeError = Object.assign(new Error('profile mount rejected replacement write'), {
+      code: 'EIO'
+    })
+    const failure = vi
+      .spyOn(ProfileStateSqliteAuthority.prototype, 'writeSerializedDomains')
+      .mockImplementation(() => {
+        throw writeError
+      })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      store.setWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {}
+      })
+
+      expect(existsSync(snapshotPath)).toBe(false)
+      expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
+      await expect(store.flushPendingOrThrowAsync()).rejects.toBe(writeError)
+    } finally {
+      failure.mockRestore()
+      errors.mockRestore()
+    }
+
+    expect(readPersistedStateJson(dataFile())).toBe(durableBeforeRemoval)
+    const stillPublished = JSON.parse(durableBeforeRemoval) as {
+      workspaceSession: {
+        terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
+      }
+    }
+    expect(
+      stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
+        ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]
+    ).toBe(ref)
   })
 
   it('reads only the replay tail from oversized terminal scrollback snapshots', async () => {

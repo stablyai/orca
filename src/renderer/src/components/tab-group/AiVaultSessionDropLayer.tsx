@@ -1,3 +1,4 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
 import {
@@ -23,6 +24,7 @@ import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 
 type PaneDropTarget = {
   groupId: string
@@ -175,6 +177,12 @@ export default function AiVaultSessionDropLayer({
         )
         return true
       }
+      if (payload.structuredSession) {
+        // Same row, same reveal as clicking Resume. Activating by id alone cannot reach a chat
+        // whose tab is closed, which is the case this drop is most often used for.
+        void activateAiVaultStructuredSession(payload)
+        return true
+      }
 
       const state = useAppStore.getState()
       const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
@@ -193,7 +201,8 @@ export default function AiVaultSessionDropLayer({
           sessionFilePath: payload.sessionFilePath ?? null,
           sessionExecutionHostId: payload.sessionExecutionHostId ?? null,
           targetStatus,
-          targetExecutionHostId
+          targetExecutionHostId,
+          targetWslDistro: getAiVaultResumeWorkspaceWslDistro(state, worktreeId)
         })
       ) {
         toast.error(
@@ -224,6 +233,7 @@ export default function AiVaultSessionDropLayer({
         })
           ? window.api.aiVault.prepareSessionResume({
               agent: payload.agent,
+              sessionId: payload.sessionId,
               filePath: payload.sessionFilePath,
               executionHostId: payload.sessionExecutionHostId,
               codexHome: payload.codexHome

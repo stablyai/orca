@@ -33,22 +33,40 @@ export function deliverLaunchPromptToAgentTab(args: {
   forcePaste: boolean
   timeoutMs?: number
   onTimeout?: () => void
+  /** The paste was written without ever observing the agent's composer. */
+  onUnconfirmedDelivery?: () => void
+  /** Whether the paste may be written; the chat copy is seeded only once it opens. */
+  sendGate?: Promise<boolean>
 }): Promise<boolean> {
-  const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout } = args
+  const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
+    args
   const shouldSeed =
     submit === true && content.trim().length > 0 && isNativeChatSupportedAgent(agent)
-
-  if (shouldSeed) {
-    useAppStore.getState().seedNativeChatLaunchPrompt({
-      tabId,
-      agent,
-      text: content,
-      createdAt: Date.now()
-    })
-  } else if (submit !== true) {
-    // Why: an unsubmitted draft lives only in the TUI input buffer; seed the
-    // chat-composer copy so the context isn't invisible in the GUI view.
-    seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: content })
+  let seeded = false
+  const seedChatCopy = (): void => {
+    if (shouldSeed) {
+      seeded = true
+      useAppStore.getState().seedNativeChatLaunchPrompt({
+        tabId,
+        agent,
+        text: content,
+        createdAt: Date.now()
+      })
+    } else if (submit !== true) {
+      // Why: an unsubmitted draft lives only in the TUI input buffer; seed the
+      // chat-composer copy so the context isn't invisible in the GUI view.
+      seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: content })
+    }
+  }
+  // Chained ahead of the paste's own wait on the gate, so the copy always precedes the send.
+  const sendGate = args.sendGate?.then((open) => {
+    if (open) {
+      seedChatCopy()
+    }
+    return open
+  })
+  if (!sendGate) {
+    seedChatCopy()
   }
 
   // Why: native-prefill agents (claude/openclaude etc.) get the prompt at launch,
@@ -63,11 +81,21 @@ export function deliverLaunchPromptToAgentTab(args: {
     submit,
     forcePaste,
     timeoutMs,
-    onTimeout
-  }).then((delivered) => {
-    if (shouldSeed && !delivered && !deliversViaNativePrefill) {
-      useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+    onTimeout,
+    onUnconfirmedDelivery,
+    ...(sendGate ? { sendGate } : {})
+  }).then(
+    (delivered) => {
+      if (seeded && !delivered && !deliversViaNativePrefill) {
+        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+      }
+      return delivered || deliversViaNativePrefill
+    },
+    (error) => {
+      if (seeded && !deliversViaNativePrefill) {
+        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+      }
+      throw error
     }
-    return delivered || deliversViaNativePrefill
-  })
+  )
 }

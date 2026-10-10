@@ -132,14 +132,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -240,7 +240,7 @@ describe('connectPanePty', () => {
 
     const forward = deferPtyInput.mock.calls[0]?.[2] as (data: string) => void
     forward('a')
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   it('forwards terminal input directly when the host supplies no deferPtyInput', async () => {
@@ -253,7 +253,33 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     sendTerminalInputThroughPane(pane, 'a')
 
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+  })
+
+  it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    const binding = connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps() as never
+    ) as unknown as { markShortcutTerminalInputSent: () => void }
+    await flushAsyncTicks()
+    binding.markShortcutTerminalInputSent()
+
+    const redraw = `\x1b[2J\x1b[H${'pi composer redraw '.repeat(200)}`
+    expect(redraw.length).toBeGreaterThan(2_048)
+    capturedDataCallback.current?.(redraw)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
   })
 
   it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
-import { useNow } from '@/components/dashboard/useNow'
+import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'

@@ -1,47 +1,52 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
-  detectRemoteAgents,
   detectRemoteWindowsTerminalCapabilities,
-  detectInstalledAgentsWithShellPathHydration,
-  refreshShellPathAndDetectAgents,
   runPreflightCheck
-} from '../../../ipc/preflight'
+} from '../../../preflight/agent-detection'
+import {
+  detectAgentsOnHost,
+  refreshAgentsOnHost
+} from '../../../preflight/workspace-agent-detection'
+import {
+  PreflightAgentDetection,
+  PreflightCheck,
+  PreflightDetectRemoteAgents,
+  PreflightDetectRemoteWindowsTerminalCapabilities
+} from '../../../../shared/rpc-contract/preflight-params'
 
-const PreflightCheck = z.object({
-  force: z.boolean().optional()
-})
-const PreflightDetectRemoteAgents = z.object({
-  connectionId: z.string().min(1)
-})
-const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
-  connectionId: z.string().min(1)
-})
-
-export const PREFLIGHT_METHODS: RpcMethod[] = [
+export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.check',
+    permission: 'workspace',
     params: PreflightCheck,
     handler: async (params) => runPreflightCheck(params.force)
   }),
   defineMethod({
     name: 'preflight.detectAgents',
-    params: null,
-    handler: async () => detectInstalledAgentsWithShellPathHydration()
+    permission: 'workspace',
+    params: PreflightAgentDetection,
+    // Why the host resolves: only it knows the workspace's project runtime, including WSL.
+    handler: async (params, { runtime }) =>
+      detectAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId))
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',
+    permission: 'workspace',
     params: PreflightDetectRemoteAgents,
-    handler: async (params) => detectRemoteAgents(params)
+    handler: async (params) =>
+      detectAgentsOnHost({ kind: 'ssh', connectionId: params.connectionId })
   }),
   defineMethod({
     name: 'preflight.detectRemoteWindowsTerminalCapabilities',
+    permission: 'workspace',
     params: PreflightDetectRemoteWindowsTerminalCapabilities,
     handler: async (params) => detectRemoteWindowsTerminalCapabilities(params)
   }),
   defineMethod({
     name: 'preflight.refreshAgents',
-    params: null,
-    handler: async () => refreshShellPathAndDetectAgents()
+    permission: 'workspace',
+    params: PreflightAgentDetection,
+    handler: async (params, { runtime }) =>
+      refreshAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId))
   })
 ]

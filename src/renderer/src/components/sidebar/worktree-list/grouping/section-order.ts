@@ -73,16 +73,21 @@ export function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
+// Why: disambiguate a section's *own* label, not its anchor checkout's repo
+// name. Substituting repo.displayName made a project header read the project
+// name while it was the only repo-backed section and the checkout name as soon
+// as a second one rendered, so filtering workspaces renamed the project
+// (#16127). Path suffixes still resolve genuinely identical labels.
 export function withRepoSectionDisplayLabels(
   entries: readonly OrderedGroupEntry[]
 ): OrderedGroupEntry[] {
-  const repos = entries
-    .map((entry) => entry[1].repo)
-    .filter((repo): repo is Repo => repo !== undefined)
-  if (repos.length < 2) {
+  const labelItems = entries.flatMap(([, group]) =>
+    group.repo ? [{ ...group.repo, displayName: group.label }] : []
+  )
+  if (labelItems.length === 0) {
     return [...entries]
   }
-  const labelsByPath = getRepoDisplayLabelsByPath(repos)
+  const labelsByPath = getRepoDisplayLabelsByPath(labelItems)
   return entries.map(([key, group]) => [
     key,
     group.repo
@@ -115,6 +120,19 @@ export function recentRankForEntry(entry: OrderedGroupEntry): RecentRank {
   return {
     hasActivity: false,
     ts: typeof addedAt === 'number' ? addedAt : Number.NEGATIVE_INFINITY
+  }
+}
+
+export function createRecentRankLookup(): (entry: OrderedGroupEntry) => RecentRank {
+  const ranks = new Map<OrderedGroupEntry, RecentRank>()
+  return (entry) => {
+    const existing = ranks.get(entry)
+    if (existing) {
+      return existing
+    }
+    const rank = recentRankForEntry(entry)
+    ranks.set(entry, rank)
+    return rank
   }
 }
 
@@ -177,8 +195,12 @@ export function sortProjectEntries(
   repoOrder: Map<string, number> | undefined
 ): OrderedGroupEntry[] {
   if (projectOrderBy === 'recent') {
+    if (entries.length < 2) {
+      return [...entries]
+    }
+    const getRecentRank = createRecentRankLookup()
     return [...entries].sort((a, b) => {
-      const byRecent = compareRecentRank(recentRankForEntry(a), recentRankForEntry(b))
+      const byRecent = compareRecentRank(getRecentRank(a), getRecentRank(b))
       if (byRecent !== 0) {
         return byRecent
       }

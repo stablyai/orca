@@ -2,6 +2,7 @@ import {
   copyFileSync,
   existsSync,
   linkSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -79,8 +80,12 @@ async function runPty(options: {
   proc.onData((data) => {
     output += data
   })
+  let exited = false
   const exitPromise = new Promise<number>((resolve) => {
-    proc.onExit(({ exitCode }) => resolve(exitCode))
+    proc.onExit(({ exitCode }) => {
+      exited = true
+      resolve(exitCode)
+    })
   })
   let timeout: ReturnType<typeof setTimeout> | undefined
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -101,10 +106,12 @@ async function runPty(options: {
     if (timeout) {
       clearTimeout(timeout)
     }
-    try {
-      proc.kill()
-    } catch {
-      // The PTY may already have exited.
+    if (!exited) {
+      try {
+        proc.kill()
+      } catch {
+        // The PTY may have exited while cleanup was starting.
+      }
     }
   }
 }
@@ -155,10 +162,14 @@ describeWindows('Windows Codex shell preflight runtime', () => {
 
     const root = makeTempDir()
     const preflight = writeFailingPreflight(root)
-    const codexExecutable = join(root, 'codex.exe')
+    // Keep the fixture ahead of any host-global Codex installation in Git Bash.
+    // A `.local` segment is rewritten by MSYS when it converts temporary paths.
+    const codexExecutable = join(root, 'bin', 'codex.exe')
+    mkdirSync(join(root, 'bin'), { recursive: true })
     linkNodeExecutable(codexExecutable)
     const preflightMarker = join(root, 'git-bash-preflight-ran')
     const codexMarker = join(root, 'git-bash-codex-ran')
+    const codexPathMarker = join(root, 'git-bash-codex-path')
     const previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     process.env.ORCA_USER_DATA_PATH = join(root, 'user data')
 
@@ -176,7 +187,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
         shellArgs: resolved.shellArgs,
         cwd: root,
         env: {
-          ...withPathEntry(process.env, root),
+          ...withPathEntry(process.env, join(root, 'bin')),
           CHERE_INVOKING: '1',
           HOME: root,
           ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
@@ -185,7 +196,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
           TERM: 'xterm-256color'
         },
         input:
-          "codex -e \"require('node:fs').writeFileSync(process.env.ORCA_CODEX_MARKER,'ran')\"\nexit\n",
+          "type -P codex > git-bash-codex-path\ncodex -e \"require('node:fs').writeFileSync(process.env.ORCA_CODEX_MARKER,'ran')\"\nexit\n",
         // Paired "Windows low spec" QA measured 12.7–15.8s across four runs: Git Bash
         // cold-starts two large Node executables for AV scanning, so allow 25s without
         // inflating the faster cmd.exe budget.
@@ -200,6 +211,11 @@ describeWindows('Windows Codex shell preflight runtime', () => {
     }
 
     expect(existsSync(preflightMarker)).toBe(true)
+    const resolvedCodexPath = readFileSync(codexPathMarker, 'utf8')
+      .trim()
+      .replaceAll('\\', '/')
+      .toLowerCase()
+    expect(resolvedCodexPath).toMatch(/\/bin\/codex(?:\.exe)?$/)
     expect(readFileSync(codexMarker, 'utf8')).toBe('ran')
   })
 })

@@ -19,6 +19,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -39,10 +40,12 @@ export type OpenTabSearchEntryState = Pick<
   | 'activeWorktreeId'
   | 'browserPagesByWorkspace'
   | 'browserTabsByWorktree'
+  | 'folderWorkspaces'
   | 'groupsByWorktree'
   | 'openFiles'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
+  | 'worktreesByRepo'
 > & {
   executionHostId: ExecutionHostId
   generatedTitlesEnabled: boolean
@@ -52,7 +55,11 @@ export type OpenTabSearchEntryState = Pick<
 
 export type OpenTabSearchAgentState = Pick<
   AppState,
-  'agentStatusByPaneKey' | 'retainedAgentsByPaneKey' | 'sleepingAgentSessionsByPaneKey'
+  | 'agentStatusByPaneKey'
+  | 'paneForegroundAgentByPaneKey'
+  | 'retainedAgentsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'terminalLayoutsByTabId'
 >
 
 // No group id: every tab of the worktree is offered, including the one the
@@ -94,21 +101,25 @@ export function selectOpenTabSearchEntryState(
     browserPagesByWorkspace: state.browserPagesByWorkspace,
     browserTabsByWorktree: state.browserTabsByWorktree,
     executionHostId,
+    folderWorkspaces: state.folderWorkspaces,
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     groupsByWorktree: state.groupsByWorktree,
     openFiles: state.openFiles,
     repo,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-    worktree
+    worktree,
+    worktreesByRepo: state.worktreesByRepo
   }
 }
 
 export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAgentState {
   return {
     agentStatusByPaneKey: state.agentStatusByPaneKey,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
-    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey
+    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId
   }
 }
 
@@ -124,6 +135,7 @@ export function buildOpenTabSearchEntries(
   const worktrees = [scopedWorktree]
   const scope = {
     worktrees,
+    ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),
     repoMap: new Map(repo ? [[repo.id, repo]] : []),
     worktreeOrder: new Map([[worktree.id, 0]])
   }
@@ -137,6 +149,8 @@ export function buildOpenTabSearchEntries(
       agentStatusByPaneKey: agentState.agentStatusByPaneKey,
       retainedAgentsByPaneKey: agentState.retainedAgentsByPaneKey,
       sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
+      terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
       activeGroupIdByWorktree: state.activeGroupIdByWorktree,
       groupsByWorktree: state.groupsByWorktree,
       activeWorktreeId: state.activeWorktreeId,
@@ -152,6 +166,7 @@ export function buildOpenTabSearchEntries(
       ...scope,
       browserTabsByWorktree: state.browserTabsByWorktree,
       browserPagesByWorkspace: state.browserPagesByWorkspace,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       activeBrowserTabId: state.activeBrowserTabId,
       activeWorktreeId: state.activeWorktreeId,
       activeTabType: state.activeTabType

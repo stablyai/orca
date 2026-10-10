@@ -64,7 +64,10 @@ export function convertLifecycleMessageToRejection(
   reason: string
 ): MessageRow | undefined {
   const message = this.getMessageById(messageId)
-  if (!message || (message.type !== 'worker_done' && message.type !== 'heartbeat')) {
+  if (
+    !message ||
+    !['worker_done', 'heartbeat', 'escalation', 'decision_gate'].includes(message.type)
+  ) {
     return message
   }
 
@@ -75,7 +78,8 @@ export function convertLifecycleMessageToRejection(
   this.db
     .prepare(
       `UPDATE messages
-       SET priority = 'high', subject = ?, body = ?, payload = ?
+       SET type = CASE WHEN type IN ('escalation', 'decision_gate') THEN 'status' ELSE type END,
+           priority = 'high', subject = ?, body = ?, payload = ?
        WHERE id = ?`
     )
     .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
@@ -93,6 +97,7 @@ export function getUndeliveredUnreadMessages(
     'to_handle = ?',
     'read = 0',
     'delivered_at IS NULL',
+    'pointer_enter_pending = 0',
     "delivery_contract = 'current_delivery'"
   ]
   const params: (string | number)[] = [toHandle]
@@ -125,6 +130,7 @@ export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): strin
       .prepare(
         `SELECT DISTINCT to_handle FROM messages
          WHERE read = 0 AND delivered_at IS NULL
+           AND pointer_enter_pending = 0
            AND delivery_contract = 'current_delivery'`
       )
       .all() as { to_handle: string }[]
@@ -150,7 +156,11 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
   runBatchedMessageMutation(
     this,
     ids,
-    (placeholders) => `UPDATE messages SET read = 1 WHERE id IN (${placeholders})`
+    (placeholders) =>
+      `UPDATE messages
+       SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
+           pointer_process_incarnation = NULL
+       WHERE id IN (${placeholders})`
   )
 }
 
@@ -160,7 +170,10 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
     this,
     ids,
     (placeholders) =>
-      `UPDATE messages SET delivered_at = datetime('now') WHERE id IN (${placeholders})`
+      `UPDATE messages
+       SET delivered_at = datetime('now'), pointer_enter_pending = 0,
+           pointer_pty_id = NULL, pointer_process_incarnation = NULL
+       WHERE id IN (${placeholders})`
   )
 }
 
@@ -169,7 +182,9 @@ export function markAsUndelivered(this: OrchestrationDb, ids: string[]): void {
     this,
     ids,
     (placeholders) =>
-      `UPDATE messages SET delivered_at = NULL
+      `UPDATE messages
+       SET delivered_at = NULL, pointer_enter_pending = 0, pointer_pty_id = NULL,
+           pointer_process_incarnation = NULL
        WHERE read = 0 AND id IN (${placeholders})`
   )
 }
@@ -197,7 +212,11 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
     this,
     ids,
     (placeholders) =>
-      `UPDATE messages SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')) WHERE id IN (${placeholders})`
+      `UPDATE messages
+       SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')),
+           pointer_enter_pending = 0, pointer_pty_id = NULL,
+           pointer_process_incarnation = NULL
+       WHERE id IN (${placeholders})`
   )
 }
 

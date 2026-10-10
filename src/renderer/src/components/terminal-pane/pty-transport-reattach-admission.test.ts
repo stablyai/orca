@@ -92,7 +92,7 @@ describe('createIpcPtyTransport', () => {
     await transport.connect({ url: '', callbacks: { onError } })
     expect(onError).toHaveBeenCalled()
     expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('echo hello\r')).toBe(false)
+    expect(transport.sendInput('echo hello\r', 'driving')).toBe(false)
     await flushPtySideEffects()
     expect(write).not.toHaveBeenCalled()
 
@@ -102,7 +102,7 @@ describe('createIpcPtyTransport', () => {
     await transport.connect({ url: '', callbacks: { onError: onErrorKilled } })
     expect(onErrorKilled).not.toHaveBeenCalled()
     expect(transport.isConnected()).toBe(false)
-    expect(transport.sendInput('echo hello\r')).toBe(false)
+    expect(transport.sendInput('echo hello\r', 'driving')).toBe(false)
     await flushPtySideEffects()
     expect(write).not.toHaveBeenCalled()
   })
@@ -153,7 +153,10 @@ describe('createIpcPtyTransport', () => {
     const onDataCallback = vi.fn()
     const onExitCallback = vi.fn()
     spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
-    const transport = createIpcPtyTransport({ onPtySpawn })
+    // Built the way installPtyInputRecovery builds it: every real pane supplies
+    // retainDisposedSpawn, and for a live pane refusing its own id it answers "retain". The refusal
+    // must kill anyway — this transport is the pane's only one, so nothing else owns the PTY.
+    const transport = createIpcPtyTransport({ onPtySpawn, retainDisposedSpawn: () => true })
 
     const result = await transport.connect({
       url: '',
@@ -184,7 +187,7 @@ describe('createIpcPtyTransport', () => {
     const retirementError = new Error('provider shutdown refused')
     spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
     kill.mockRejectedValueOnce(retirementError)
-    const transport = createIpcPtyTransport({ onPtySpawn })
+    const transport = createIpcPtyTransport({ onPtySpawn, retainDisposedSpawn: () => true })
 
     await expect(
       transport.connect({
@@ -254,8 +257,35 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).toHaveBeenCalledWith('final output')
     expect(onExitCallback).toHaveBeenCalledWith(17)
     expect(onDisconnect).toHaveBeenCalledTimes(1)
-    expect(onPtyExit).toHaveBeenCalledWith(sessionId)
+    expect(onPtyExit).toHaveBeenCalledWith(sessionId, 17)
     expect(transport.isConnected()).toBe(false)
+  })
+
+  it('respawns a sole-newborn preserved exit at reveal instead of replaying it', async () => {
+    const { bufferPreHandlerPtyExit, consumePreHandlerPtyState, clearPreHandlerPtyState } =
+      await import('./pty-pre-handler-buffer')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'reveal-pty' })
+    const onExitCallback = vi.fn()
+    const sessionId = 'sole-newborn-dead-session'
+    // The parked sidecar's sole-newborn guard consumed the buffered exit
+    // (pre-fix primary parity), so reveal must take the readmission/spawn path.
+    // exitedBeforeAttach here would drain the exit into the reattached session
+    // — where spawnedFreshPtyId is null — and close the kept tab on reveal.
+    bufferPreHandlerPtyExit(sessionId, 1)
+    consumePreHandlerPtyState(sessionId)
+
+    const result = await createIpcPtyTransport({}).connect({
+      url: '',
+      sessionId,
+      callbacks: { onExit: onExitCallback }
+    })
+
+    expect(result).not.toEqual(expect.objectContaining({ exitedBeforeAttach: true }))
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId }))
+    expect(onExitCallback).not.toHaveBeenCalled()
+    clearPreHandlerPtyState(sessionId)
   })
 
   it('rejects a buffered dead-session exit before publishing its final frame', async () => {

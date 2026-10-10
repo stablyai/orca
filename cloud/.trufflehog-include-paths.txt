@@ -1,0 +1,2 @@
+(^|/)cloud/
+(^|/)\.github/workflows/cloud-[^/]+\.yml$

@@ -1,0 +1,245 @@
+import type * as pty from 'node-pty'
+import { statSync } from 'node:fs'
+import { release } from 'node:os'
+import { getCmdExePath } from '../../../shared/windows-batch-spawn'
+import {
+  ensureNodePtySpawnHelperExecutable,
+  getNodePtySpawnHelperCandidates,
+  validateWorkingDirectoryAsync,
+  WorkingDirectoryValidationAbortedError
+} from '../../providers/local-pty-utils'
+import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
+import { TerminalAttachCanceledError } from '../daemon-errors'
+import { DaemonProtocolError } from '../types'
+
+export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+
+async function loadNodePty(): Promise<typeof pty> {
+  return import('node-pty')
+}
+
+function daemonEnvironmentDiagSuffix(): string {
+  const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
+  const systemVersion =
+    (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
+    release()
+  return ` (orca: ${orca}, arch: ${process.arch}, platform: ${process.platform} ${systemVersion})`
+}
+
+function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
+  const detailName = kind === 'helper' ? 'helper' : 'cwd'
+  const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
+  const missingTarget = kind === 'helper' ? 'node-pty install' : 'working directory'
+  return new DaemonProtocolError(
+    `Daemon's ${missingTarget} is gone (worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT (errno 2, No such file or directory) - ${detailName}='${path}'${daemonEnvironmentDiagSuffix()}`
+  )
+}
+
+function isExistingDirectory(path: string | undefined): path is string {
+  if (!path) {
+    return false
+  }
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function repairDaemonCwd(): string | null {
+  const candidates = [process.env.ORCA_USER_DATA_PATH]
+  try {
+    candidates.push(resolveSafePtyDefaultCwd())
+  } catch {
+    // Keep daemon cwd repair best-effort even when no user terminal cwd is safe.
+  }
+  candidates.push(process.platform === 'win32' ? 'C:\\' : '/')
+  for (const candidate of candidates) {
+    if (isExistingDirectory(candidate)) {
+      try {
+        process.chdir(candidate)
+        return candidate
+      } catch {
+        // Try the next stable cwd candidate.
+      }
+    }
+  }
+  return null
+}
+
+function preflightDaemonCwd(): void {
+  let daemonCwd = '<unavailable>'
+  try {
+    daemonCwd = process.cwd()
+    if (isExistingDirectory(daemonCwd)) {
+      return
+    }
+  } catch {
+    // Recover below; process.cwd() throws after the original cwd is deleted.
+  }
+  if (repairDaemonCwd()) {
+    return
+  }
+  throw formatMissingDaemonPathError('cwd', daemonCwd)
+}
+
+function preflightMacNodePtySpawnEnvironment(): void {
+  if (process.platform !== 'darwin') {
+    return
+  }
+  let candidates: string[]
+  try {
+    candidates = getNodePtySpawnHelperCandidates()
+  } catch {
+    throw formatMissingDaemonPathError('helper', '<unresolved>')
+  }
+  for (const candidate of candidates) {
+    try {
+      if (statSync(candidate).isFile()) {
+        return
+      }
+    } catch {
+      // Try the next node-pty native location.
+    }
+  }
+  throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
+}
+
+function preflightUnixPtySpawnEnvironment(): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  // Why: detached daemons can outlive their launch cwd; repair before every spawn.
+  preflightDaemonCwd()
+  preflightMacNodePtySpawnEnvironment()
+}
+
+function isNativeWindowsPath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
+}
+
+export async function preflightPtySpawn(args: {
+  validationCwd: string
+  cwdWasExplicit: boolean
+  sessionId: string
+  signal?: AbortSignal
+}): Promise<void> {
+  ensureNodePtySpawnHelperExecutable()
+  preflightUnixPtySpawnEnvironment()
+  try {
+    if (process.platform === 'win32') {
+      if (args.cwdWasExplicit && isNativeWindowsPath(args.validationCwd)) {
+        await validateWorkingDirectoryAsync(
+          args.validationCwd,
+          args.signal ? { signal: args.signal } : {}
+        )
+      }
+    } else {
+      await validateWorkingDirectoryAsync(
+        args.validationCwd,
+        args.signal ? { signal: args.signal } : {}
+      )
+    }
+  } catch (error) {
+    if (error instanceof WorkingDirectoryValidationAbortedError) {
+      throw new TerminalAttachCanceledError(args.sessionId)
+    }
+    throw error
+  }
+}
+
+export class PtySpawnHealthTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`PTY spawn health check timed out after ${timeoutMs}ms`)
+    this.name = 'PtySpawnHealthTimeoutError'
+  }
+}
+
+export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
+  const message = err instanceof Error ? err.message : String(err)
+  const formatted = new DaemonProtocolError(
+    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}${daemonEnvironmentDiagSuffix()}`
+  )
+  if (err instanceof Error && err.stack) {
+    formatted.stack = err.stack
+  }
+  return formatted
+}
+
+export async function runPtySpawnHealthProbe(
+  timeoutMs = PTY_SPAWN_HEALTH_TIMEOUT_MS
+): Promise<void> {
+  const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
+    ? process.env.ORCA_USER_DATA_PATH
+    : resolveSafePtyDefaultCwd()
+  const command =
+    process.platform === 'win32'
+      ? { file: getCmdExePath(), args: ['/d', '/c', 'exit', '0'] }
+      : { file: '/bin/sh', args: ['-c', 'exit 0'] }
+  let proc: pty.IPty
+  try {
+    const env: Record<string, string> = { TERM: 'xterm-256color' }
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        env[key] = value
+      }
+    }
+    proc = (await loadNodePty()).spawn(command.file, command.args, {
+      name: 'xterm-256color',
+      cols: 2,
+      rows: 1,
+      cwd,
+      env,
+      // Qualify the bundled ConPTY the daemon spawns with (native-pty-spawn.ts), not the OS one.
+      ...(process.platform === 'win32' ? { useConptyDll: true } : {})
+    })
+  } catch (err) {
+    throw formatPtySpawnError(err, command.file, cwd)
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false
+    let exitDisposable: { dispose(): void } | undefined
+    const finish = (error?: Error, opts?: { kill?: boolean }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      exitDisposable?.dispose()
+      // Windows keeps the conout worker thread and pseudoconsole until kill(), even after the
+      // shell exits; left alive, they hold the probing process open.
+      if (opts?.kill || process.platform === 'win32') {
+        try {
+          proc.kill()
+        } catch {
+          // Best-effort cleanup for a short-lived health probe.
+        }
+      }
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+    const timer = setTimeout(() => {
+      finish(new PtySpawnHealthTimeoutError(timeoutMs), { kill: true })
+    }, timeoutMs)
+    exitDisposable = proc.onExit(({ exitCode }) => {
+      if (exitCode === 0) {
+        finish()
+      } else {
+        finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
+      }
+    })
+  })
+}
+
+export function preflightPtySpawnHealth(): boolean {
+  if (process.platform === 'win32') {
+    return false
+  }
+  ensureNodePtySpawnHelperExecutable()
+  preflightUnixPtySpawnEnvironment()
+  return true
+}

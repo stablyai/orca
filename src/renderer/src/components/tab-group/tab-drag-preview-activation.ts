@@ -30,6 +30,14 @@ function previewActiveSurfacePatch(
   })
 
   if (unifiedTab.contentType === 'terminal') {
+    if (
+      state.activeTabType === 'terminal' &&
+      state.activeTabTypeByWorktree[worktreeId] === 'terminal' &&
+      state.activeTabId === unifiedTab.entityId &&
+      state.activeTabIdByWorktree[worktreeId] === unifiedTab.entityId
+    ) {
+      return {}
+    }
     return {
       activeTabId: unifiedTab.entityId,
       activeTabType: 'terminal',
@@ -41,6 +49,14 @@ function previewActiveSurfacePatch(
     }
   }
   if (unifiedTab.contentType === 'browser') {
+    if (
+      state.activeTabType === 'browser' &&
+      state.activeTabTypeByWorktree[worktreeId] === 'browser' &&
+      state.activeBrowserTabId === unifiedTab.entityId &&
+      state.activeBrowserTabIdByWorktree[worktreeId] === unifiedTab.entityId
+    ) {
+      return {}
+    }
     return {
       activeBrowserTabId: unifiedTab.entityId,
       activeTabType: 'browser',
@@ -52,10 +68,24 @@ function previewActiveSurfacePatch(
     }
   }
   if (unifiedTab.contentType === 'simulator') {
+    if (
+      state.activeTabType === 'simulator' &&
+      state.activeTabTypeByWorktree[worktreeId] === 'simulator'
+    ) {
+      return {}
+    }
     return {
       activeTabType: 'simulator',
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
     }
+  }
+  if (
+    state.activeTabType === 'editor' &&
+    state.activeTabTypeByWorktree[worktreeId] === 'editor' &&
+    state.activeFileId === unifiedTab.entityId &&
+    state.activeFileIdByWorktree[worktreeId] === unifiedTab.entityId
+  ) {
+    return {}
   }
   return {
     activeFileId: unifiedTab.entityId,
@@ -95,7 +125,7 @@ export function applyDragPreviewTab({
     const focusUnchanged = (state.activeGroupIdByWorktree[worktreeId] ?? null) === activeGroupId
     const surfacePatch = previewActiveSurfacePatch(state, worktreeId, groupId, tabId)
     if (groupUnchanged && focusUnchanged) {
-      return Object.keys(surfacePatch).length > 0 ? surfacePatch : {}
+      return Object.keys(surfacePatch).length > 0 ? surfacePatch : state
     }
 
     const next: Partial<AppState> = { ...surfacePatch }
@@ -162,7 +192,7 @@ export function restoreTabDragActivationSnapshot(
     }
 
     if (Object.keys(next).length === 0) {
-      return {}
+      return state
     }
 
     return next
@@ -191,7 +221,7 @@ export function restoreSourceGroupActiveTabAfterCrossGroupDrop({
     const groups = state.groupsByWorktree[worktreeId] ?? []
     const sourceGroup = groups.find((group) => group.id === sourceGroupId)
     if (!sourceGroup || sourceGroup.activeTabId === preDragActiveTabId) {
-      return {}
+      return state
     }
     return {
       groupsByWorktree: {

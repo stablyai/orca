@@ -1,8 +1,14 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from './persistence-test-harness'
 /**
  * The same repo id may be registered on two execution hosts (see `removeProjectForHost`).
- * Every deletion that resolves a *row* must therefore delete only that row: `removeProject`
- * is id-only and would take the sibling host's registration with it. Since #11994 those
- * deletions fan out to every paired device, so a cross-host over-delete is no longer local.
+ * Every deletion that resolves a *row* must therefore delete only that row, never the sibling
+ * host's registration. Since #11994 those deletions fan out to every paired device, so a
+ * cross-host over-delete is no longer local.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -11,8 +17,11 @@ import { tmpdir } from 'node:os'
 import type { Project, ProjectHostSetup } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import { getDefaultPersistedState } from '../shared/constants'
+import { toRuntimeExecutionHostId } from '../shared/execution-host'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -49,10 +58,17 @@ async function createStoreFromState(state: Record<string, unknown>) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 function createStoreWithDuplicateRepoId() {
@@ -90,10 +106,13 @@ function staleLocalSetupState() {
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-dup-repo-id-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 
@@ -103,6 +122,23 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
 
     expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup', '/remote/dup'])
   })
+
+  it.each(['git', 'folder'] as const)(
+    'removing the local %s row keeps the other host row and its metadata',
+    async (kind) => {
+      // A stale renderer catalog once sent id-only removal when it could not see the SSH twin (#13071).
+      const store = await createStoreFromState({
+        repos: duplicateIdRepos().map((repo) => ({ ...repo, kind }))
+      })
+      store.setWorktreeMetaForHost('dup::/remote/dup', 'ssh:ssh-1', { displayName: 'SSH wt' })
+
+      store.removeProjectForHost('dup', 'local')
+      expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
+      expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
+        'SSH wt'
+      )
+    }
+  )
 
   it('removeProjectForHost drops only the addressed host row', async () => {
     const store = await createStoreWithDuplicateRepoId()
@@ -126,6 +162,43 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
         .map((repo) => repo.path)
         .filter((path) => path !== result?.repo?.path)
     )
+  })
+
+  it('setResolvedRepoGitUsername writes only the probed host row', async () => {
+    // Enrichment resolves per repo *location*, so the write must land on the row it probed; an
+    // id-only lookup would stamp the sibling host's username and host-scoped hydration cache.
+    const store = await createStoreFromState({
+      repos: [
+        {
+          id: 'dup',
+          path: '/work/dup',
+          displayName: 'Dup Local',
+          badgeColor: '#000',
+          addedAt: 1,
+          executionHostId: 'local'
+        } as Repo,
+        {
+          id: 'dup',
+          path: '/work/dup',
+          displayName: 'Dup Runtime',
+          badgeColor: '#000',
+          addedAt: 2,
+          executionHostId: toRuntimeExecutionHostId('env-1')
+        } as Repo
+      ]
+    })
+
+    expect(
+      store.setResolvedRepoGitUsername(
+        { id: 'dup', executionHostId: toRuntimeExecutionHostId('env-1') },
+        'runtime-user'
+      )
+    ).toBe(true)
+
+    expect(store.getRepos().map((repo) => [repo.displayName, repo.gitUsername])).toEqual([
+      ['Dup Local', ''],
+      ['Dup Runtime', 'runtime-user']
+    ])
   })
 
   it('a stale local setup for an id that only exists on ssh never deletes the ssh row', async () => {

@@ -10,7 +10,7 @@ import type {
   WorkspaceCleanupTicketSource,
   WorkspaceCleanupTriState
 } from './workspace-cleanup-filter-model'
-import type { WorkspaceCleanupBlocker, WorkspaceCleanupTier } from './workspace-cleanup'
+import type { WorkspaceCleanupBlocker } from './workspace-cleanup'
 
 // Records (not bare arrays) so tsc fails when a union gains a member.
 const BLOCKER_SEVERITY: Record<WorkspaceCleanupBlocker, number> = {
@@ -31,8 +31,6 @@ const BLOCKER_SEVERITY: Record<WorkspaceCleanupBlocker, number> = {
   'git-status-error': 30,
   dismissed: 10
 }
-
-const TIER_RANK: Record<WorkspaceCleanupTier, number> = { ready: 0, review: 1, protected: 2 }
 
 const AGENT_RANK: Record<WorkspaceCleanupAgentState, number> = {
   idle: 0,
@@ -58,7 +56,6 @@ const REVIEW_RANK: Record<WorkspaceCleanupReviewState, number> = {
 export const WORKSPACE_CLEANUP_BLOCKER_VALUES = Object.keys(
   BLOCKER_SEVERITY
 ) as WorkspaceCleanupBlocker[]
-export const WORKSPACE_CLEANUP_TIER_VALUES = Object.keys(TIER_RANK) as WorkspaceCleanupTier[]
 export const WORKSPACE_CLEANUP_AGENT_STATE_VALUES = Object.keys(
   AGENT_RANK
 ) as WorkspaceCleanupAgentState[]
@@ -110,16 +107,11 @@ export const WORKSPACE_CLEANUP_SORT_FIELD_VALUES: WorkspaceCleanupSortField[] = 
   'review',
   'ticket',
   'local-context',
-  'tier',
   'blocker-count'
 ]
 
 export function getWorkspaceCleanupBlockerSeverity(blocker: WorkspaceCleanupBlocker): number {
   return BLOCKER_SEVERITY[blocker] ?? 0
-}
-
-export function getWorkspaceCleanupTierRank(tier: WorkspaceCleanupTier): number {
-  return TIER_RANK[tier] ?? 0
 }
 
 export function getWorkspaceCleanupAgentRank(state: WorkspaceCleanupAgentState): number {

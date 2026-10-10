@@ -8,21 +8,32 @@ export type WorkspaceSessionTerminalTabCloseResult = {
   pinned: boolean
 }
 
-function pickNextActiveTab(group: TabGroup, closingIds: ReadonlySet<string>): string | null {
-  const remaining = group.tabOrder.filter((id) => !closingIds.has(id))
+function pickNextActiveTab(
+  group: TabGroup,
+  closingIds: ReadonlySet<string>,
+  remaining: readonly string[],
+  remainingIds: ReadonlySet<string>
+): string | null {
   for (let index = (group.recentTabIds?.length ?? 0) - 1; index >= 0; index -= 1) {
     const id = group.recentTabIds![index]
-    if (remaining.includes(id)) {
+    if (remainingIds.has(id)) {
       return id
     }
   }
+  const firstIndices = new Map<string, number>()
+  group.tabOrder.forEach((id, index) => {
+    if (!firstIndices.has(id)) {
+      firstIndices.set(id, index)
+    }
+  })
   const closingIndex = group.tabOrder.findIndex((id) => closingIds.has(id))
+  // -1 matches the pre-index `indexOf` miss, so an id outside `group.tabOrder` never wins.
   return (
-    remaining.find((id) => group.tabOrder.indexOf(id) > closingIndex) ?? remaining.at(-1) ?? null
+    remaining.find((id) => (firstIndices.get(id) ?? -1) > closingIndex) ?? remaining.at(-1) ?? null
   )
 }
 
-function pruneGroupLayout(
+export function pruneGroupLayout(
   node: TabGroupLayoutNode | undefined,
   validGroupIds: ReadonlySet<string>
 ): TabGroupLayoutNode | undefined {
@@ -148,17 +159,33 @@ function deriveActiveSurface(
   return { terminalTabId: terminalFallback, browserTabId: null, fileId: null, type: 'terminal' }
 }
 
-export function closeTerminalTabInWorkspaceSession(
+/** Whether this session holds the terminal tab, as a row or a unified tab. */
+export function workspaceSessionListsTerminalTab(
   session: WorkspaceSessionState,
   worktreeId: string,
   tabId: string
+): boolean {
+  return (
+    session.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true ||
+    findUnifiedTerminalTabs(session, worktreeId, tabId).length > 0
+  )
+}
+
+export function closeTerminalTabInWorkspaceSession(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string,
+  options: { force?: boolean } = {}
 ): WorkspaceSessionTerminalTabCloseResult {
   const terminalRow = session.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
   const unifiedTerminalTabs = findUnifiedTerminalTabs(session, worktreeId, tabId)
   if (!terminalRow && unifiedTerminalTabs.length === 0) {
     return { session, ptyIdsToKill: [], closed: false, pinned: false }
   }
-  if (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned)) {
+  if (
+    options.force !== true &&
+    (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned))
+  ) {
     return { session, ptyIdsToKill: [], closed: false, pinned: true }
   }
 
@@ -182,16 +209,17 @@ export function closeTerminalTabInWorkspaceSession(
   const nextGroups = (session.tabGroups?.[worktreeId] ?? [])
     .map((group) => {
       const tabOrder = group.tabOrder.filter((id) => !closedVisibleIds.has(id))
+      const remainingIds = new Set(tabOrder)
       const activeTabId = closedVisibleIds.has(group.activeTabId ?? '')
-        ? pickNextActiveTab(group, closedVisibleIds)
-        : group.activeTabId && tabOrder.includes(group.activeTabId)
+        ? pickNextActiveTab(group, closedVisibleIds, tabOrder, remainingIds)
+        : group.activeTabId && remainingIds.has(group.activeTabId)
           ? group.activeTabId
           : (tabOrder[0] ?? null)
       return {
         ...group,
         tabOrder,
         activeTabId,
-        recentTabIds: group.recentTabIds?.filter((id) => tabOrder.includes(id))
+        recentTabIds: group.recentTabIds?.filter((id) => remainingIds.has(id))
       }
     })
     .filter((group) => group.tabOrder.length > 0)
@@ -209,6 +237,9 @@ export function closeTerminalTabInWorkspaceSession(
       [worktreeId]: (session.tabsByWorktree[worktreeId] ?? []).filter((tab) => tab.id !== tabId)
     },
     terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId },
+    ...(session.localOnlyScrollbackByTabId
+      ? { localOnlyScrollbackByTabId: { ...session.localOnlyScrollbackByTabId } }
+      : {}),
     unifiedTabs: { ...session.unifiedTabs, [worktreeId]: nextTabs },
     tabGroups: { ...session.tabGroups, [worktreeId]: nextGroups },
     tabGroupLayouts: { ...session.tabGroupLayouts },
@@ -217,6 +248,7 @@ export function closeTerminalTabInWorkspaceSession(
     sleepingAgentSessionsByPaneKey: { ...session.sleepingAgentSessionsByPaneKey }
   }
   delete next.terminalLayoutsByTabId[tabId]
+  delete next.localOnlyScrollbackByTabId?.[tabId]
   delete next.remoteSessionIdsByTabId![tabId]
   if (nextLayout) {
     next.tabGroupLayouts![worktreeId] = nextLayout

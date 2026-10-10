@@ -9,6 +9,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
 import { getAutomationLegacyRepoId } from '../../../shared/automation-run-identity'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
@@ -96,8 +97,10 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     automation.workspaceMode,
     automation.setupDecision
   )
+  const { extraAgentArgs, ...rest } = automation
   return {
-    ...automation,
+    ...rest,
+    ...(hasExtraAgentArgs(extraAgentArgs) ? { extraAgentArgs } : {}),
     precheck: normalizeAutomationPrecheck(automation.precheck),
     setupDecision,
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
@@ -126,8 +129,15 @@ export function getAutomationContextsForRepo(
   const projection = projectHostSetupProjectionFromRepos([repo])
   const projectedProject = projection.projects[0]
   const projectedSetup = projection.setups[0]
+  // Why the host filter first: a repo id can be shared across hosts, and the
+  // contexts must describe the copy this record resolved to, not a sibling's.
+  const repoHostId = getRepoExecutionHostId(repo)
   const setup =
-    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ?? projectedSetup
+    projectHostSetups.find(
+      (candidate) => candidate.repoId === repo.id && candidate.hostId === repoHostId
+    ) ??
+    projectHostSetups.find((candidate) => candidate.repoId === repo.id) ??
+    projectedSetup
   const runContext = setup
     ? buildWorkspaceRunContext({
         projectId: setup.projectId,

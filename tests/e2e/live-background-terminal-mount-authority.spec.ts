@@ -23,6 +23,11 @@ import type {
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 type SpawnEvent = { args: string[]; pid: number }
 type TerminalIdentity = Pick<
@@ -40,10 +45,7 @@ const signalLedgerPath = path.join(fakeCliDir, 'terminal-signals.jsonl')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const args = process.argv.slice(2)
-if (args.includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendFileSync(process.env.ORCA_E2E_CODEX_SPAWN_LEDGER, JSON.stringify({ args, pid: process.pid }) + '\\n')
 process.stdout.write('LIVE_AGENT_READY:' + process.pid + '\\n')
 let inputBuffer = ''
@@ -69,6 +71,10 @@ if (process.platform === 'win32') {
   writeFileSync(executable, `#!/usr/bin/env node\n${fakeCodexSource}`)
   chmodSync(executable, 0o755)
 }
+
+const fakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 
 const test = base.extend({
   launchEnv: [
@@ -535,23 +541,28 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const repoId = added.result.repo.id
   await expect
     .poll(() =>
-      orcaPage.evaluate(async (repoId) => {
-        const state = window.__store?.getState()
-        await state?.fetchRepos()
-        const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
-        if (!repo) {
-          return false
-        }
-        await window.__store?.getState().updateRepo(repoId, {
-          hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
-        })
-        await window.__store?.getState().updateSettings({
-          disabledTuiAgents: [],
-          setupScriptLaunchMode: 'new-tab',
-          terminalHiddenViewParking: false
-        })
-        return true
-      }, repoId)
+      orcaPage.evaluate(
+        async ({ repoId, command, windowsShell }) => {
+          const state = window.__store?.getState()
+          await state?.fetchRepos()
+          const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
+          if (!repo) {
+            return false
+          }
+          await window.__store?.getState().updateRepo(repoId, {
+            hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
+          })
+          await window.__store?.getState().updateSettings({
+            agentCmdOverrides: { codex: command },
+            terminalWindowsShell: windowsShell,
+            disabledTuiAgents: [],
+            setupScriptLaunchMode: 'new-tab',
+            terminalHiddenViewParking: false
+          })
+          return true
+        },
+        { repoId, command: fakeCodexCommand, windowsShell: FAKE_AGENT_WINDOWS_SHELL }
+      )
     )
     .toBe(true)
 
@@ -601,6 +612,9 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   expect(agent).toBeTruthy()
   expect(setup).toBeTruthy()
   expect(canary).toBeTruthy()
+  if (!agent?.ptyId || !setup?.ptyId || !canary?.ptyId) {
+    throw new Error('Agent, Setup, and canary terminals must have live PTY identities')
+  }
   await expect.poll(readSpawnLedger).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(setupLedgerPath)).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(canaryLedgerPath)).toHaveLength(1)
@@ -760,7 +774,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const remountAgentAcceptedMarker = `AGENT_ACCEPTED_${randomUUID()}`
   expect(
     await orcaPage.evaluate(
-      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`),
+      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`, 'driving'),
       { marker: remountAgentAcceptedMarker, ptyId: agent!.ptyId }
     )
   ).toBe(true)

@@ -6,6 +6,13 @@ import {
 } from '../../context-only-dispatch-release'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import {
+  beginLifecycleWriteTransaction,
+  commitLifecycleWriteTransaction,
+  rollbackLifecycleWriteTransaction,
+  transitionLifecycleWithDb
+} from '../lifecycle-transition'
 
 export function isDispatchProcessCurrent(
   this: OrchestrationDb,
@@ -25,9 +32,18 @@ export function isDispatchProcessCurrent(
   )
 }
 
+/** A `stopping` row whose stop belongs to a runtime that can no longer report its outcome. */
+export function isStopStrandedByAnotherRuntime(
+  worker: WorkerDispatchRow,
+  runtimeEpoch: string
+): boolean {
+  return worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
+}
+
 export function beginWorkerStop(
   this: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  runtimeEpoch: string
 ):
   | { disposition: 'stopping'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
@@ -40,12 +56,7 @@ export function beginWorkerStop(
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
     if (!worker) {
-      const released = releaseContextOnlyDispatch(
-        this.db,
-        dispatch,
-        this.getDispatchContext(dispatch.task_id)?.id,
-        'stopped'
-      )
+      const released = releaseContextOnlyDispatch(this.db, dispatch, 'stopped')
       if (!released.alreadySettled) {
         this.closeQuestionsForDispatch(dispatchId)
       }
@@ -56,27 +67,46 @@ export function beginWorkerStop(
       this.db.exec('COMMIT')
       return { disposition: 'already_settled', worker, dispatch }
     }
-    if (!['ready', 'start_unknown'].includes(worker.state)) {
+    // Why `stopping` under a DIFFERENT epoch is accepted: a stop whose runtime died mid-flight
+    // leaves the row here forever, and refusing the re-issue was the only operator escape
+    // (#16904). Re-running the stop earns the honest outcome — settled, or `stop_unknown`, from
+    // which the worker can be abandoned. It never asserts an exit the runtime did not observe.
+    //
+    // Why the epoch and not just the state: this runtime's own `stopping` row means its stop is
+    // still in flight, and a second pass would record `stop_unknown` over it. The exit event that
+    // follows claims a clean stop only from `stopping` under its own epoch
+    // (failActiveDispatchOnExit), so it would then read the operator's stop as a crash and
+    // escalate it. Same predicate as that reader, so both agree on whose stop this is.
+    if (
+      !['ready', 'start_unknown'].includes(worker.state) &&
+      !isStopStrandedByAnotherRuntime(worker, runtimeEpoch)
+    ) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} cannot stop from ${worker.state}.`
       )
     }
-    this.db
-      .prepare(
-        `UPDATE worker_dispatches
-         SET state = 'stopping', stage = 'stop_requested', updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
-      )
-      .run(dispatchId)
-    this.db
-      .prepare(
-        `UPDATE dispatch_contexts
-         SET capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-         WHERE id = ?`
-      )
-      .run(dispatchId)
-    this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: worker.state,
+      to: 'stopping',
+      projection: {
+        stage: 'stop_requested',
+        runtime_epoch: runtimeEpoch,
+        updated_at: new Date().toISOString()
+      }
+    })
+    transitionLifecycleWithDb(this.db, {
+      entity: 'dispatch',
+      id: dispatchId,
+      from: dispatch.status,
+      to: dispatch.status,
+      projection: {
+        capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
+      }
+    })
+    reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')
     return {
@@ -98,20 +128,23 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
-    this.db
-      .prepare(
-        `UPDATE worker_dispatches
-         SET state = 'stopped', stage = 'process_stopped', updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state = 'stopping'`
-      )
-      .run(dispatchId)
-    this.db
-      .prepare(
-        `UPDATE dispatch_contexts
-         SET status = 'failed', completed_at = datetime('now'), last_failure = 'stopped'
-         WHERE id = ? AND status IN ('pending', 'dispatched')`
-      )
-      .run(dispatchId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: 'stopping',
+      to: 'stopped',
+      projection: { stage: 'process_stopped', updated_at: new Date().toISOString() }
+    })
+    if (['pending', 'dispatched'].includes(dispatch.status)) {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'dispatch',
+        id: dispatchId,
+        from: dispatch.status,
+        to: 'failed',
+        projection: { completed_at: new Date().toISOString(), last_failure: 'stopped' }
+      })
+    }
+    reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -124,7 +157,7 @@ export function reconcileFederatedWorkerStop(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerDispatchRow {
-  this.db.exec('BEGIN IMMEDIATE')
+  const transaction = beginLifecycleWriteTransaction(this.db, 'federated_worker_stop_reconcile')
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
@@ -135,7 +168,7 @@ export function reconcileFederatedWorkerStop(
       )
     }
     if (worker.state === 'stopped') {
-      this.db.exec('COMMIT')
+      commitLifecycleWriteTransaction(this.db, transaction)
       return worker
     }
     if (!['stopping', 'stop_unknown'].includes(worker.state)) {
@@ -144,26 +177,34 @@ export function reconcileFederatedWorkerStop(
         `Federated Dispatch ${dispatchId} cannot reconcile stop from ${worker.state}.`
       )
     }
-    this.db
-      .prepare(
-        `UPDATE worker_dispatches
-         SET state = 'stopped', stage = 'process_stopped', last_error = NULL,
-             updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state IN ('stopping', 'stop_unknown')`
-      )
-      .run(dispatchId)
-    this.db
-      .prepare(
-        `UPDATE dispatch_contexts
-         SET status = 'failed', completed_at = COALESCE(completed_at, datetime('now')),
-             last_failure = 'stopped'
-         WHERE id = ? AND status IN ('pending', 'dispatched')`
-      )
-      .run(dispatchId)
-    this.db.exec('COMMIT')
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: worker.state,
+      to: 'stopped',
+      projection: {
+        stage: 'process_stopped',
+        last_error: null,
+        updated_at: new Date().toISOString()
+      }
+    })
+    if (['pending', 'dispatched'].includes(dispatch.status)) {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'dispatch',
+        id: dispatchId,
+        from: dispatch.status,
+        to: 'failed',
+        projection: {
+          completed_at: dispatch.completed_at ?? new Date().toISOString(),
+          last_failure: 'stopped'
+        }
+      })
+    }
+    reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
+    commitLifecycleWriteTransaction(this.db, transaction)
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    rollbackLifecycleWriteTransaction(this.db, transaction)
     throw error
   }
 }
@@ -179,16 +220,22 @@ export function resumeFederatedWorkerForTerminalRelay(
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
-    this.db
-      .prepare(
-        `UPDATE worker_dispatches
-         SET state = 'ready', stage = 'remote_report_pending', updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state = 'stopping'`
-      )
-      .run(dispatchId)
-    this.db
-      .prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ? AND status = 'blocked'")
-      .run(dispatch.task_id)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: 'stopping',
+      to: 'ready',
+      projection: { stage: 'remote_report_pending', updated_at: new Date().toISOString() }
+    })
+    const task = this.getTask(dispatch.task_id)
+    if (task?.status === 'blocked') {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'task',
+        id: dispatch.task_id,
+        from: 'blocked',
+        to: 'dispatched'
+      })
+    }
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -206,15 +253,26 @@ export function markWorkerStopUnknown(
   if (!worker || worker.state !== 'stopping') {
     throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
   }
-  this.db
-    .prepare(
-      `UPDATE worker_dispatches
-       SET state = 'stop_unknown', stage = 'stop_outcome_unknown', last_error = ?,
-           updated_at = datetime('now')
-       WHERE dispatch_id = ? AND state = 'stopping'`
-    )
-    .run(reason, dispatchId)
-  return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+  this.db.exec('SAVEPOINT mark_worker_stop_unknown')
+  try {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: 'stopping',
+      to: 'stop_unknown',
+      projection: {
+        stage: 'stop_outcome_unknown',
+        last_error: reason,
+        updated_at: new Date().toISOString()
+      }
+    })
+    this.db.exec('RELEASE mark_worker_stop_unknown')
+    return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+  } catch (error) {
+    this.db.exec('ROLLBACK TO mark_worker_stop_unknown')
+    this.db.exec('RELEASE mark_worker_stop_unknown')
+    throw error
+  }
 }
 
 export type WorkerDispatchStopMethods = {

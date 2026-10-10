@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSshGitProviderMock, getActiveMultiplexerMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 
+function missingShowRefError(): Error & { code: number } {
+  return Object.assign(new Error('missing exact ref'), { code: 1 })
+}
+
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -35,6 +39,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -86,6 +93,83 @@ describe('registerWorktreeHandlers', () => {
     setupWorktreeHandlers()
   })
 
+  it('fetches a missing slash-named SSH base through the narrow RPC and uses the verified tracking ref', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    let fetched = false
+    const provider = {
+      exec: vi.fn(async (args: string[]) => {
+        if (args[0] === 'fetch') {
+          throw new Error('generic fetch is forbidden')
+        }
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
+        }
+        if (args[0] === 'rev-parse') {
+          if (fetched && args.includes('refs/remotes/origin/release/mobile^{commit}')) {
+            return { stdout: 'verified-sha\n', stderr: '' }
+          }
+          throw missingShowRefError()
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn(async () => {
+        fetched = true
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-missing-base',
+          head: 'verified-sha',
+          branch: 'refs/heads/missing-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: repo.id,
+      name: 'missing-base',
+      baseBranch: 'release/mobile'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      repo.path,
+      'origin',
+      'release/mobile',
+      'refs/remotes/origin/release/mobile',
+      { skipAutoMaintenance: true }
+    )
+    expect(provider.exec.mock.calls.some(([args]) => args[0] === 'fetch')).toBe(false)
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      repo.path,
+      'missing-base',
+      '/remote/repo-missing-base',
+      { base: 'origin/release/mobile' }
+    )
+  })
+
   it('reuses a fresh SSH remote-tracking base refresh for repeated creates', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -98,8 +182,14 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         return { stdout: '', stderr: '' }
       }),
@@ -169,8 +259,14 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         if (args[0] === 'for-each-ref') {
           return { stdout: '', stderr: '' }
@@ -238,8 +334,14 @@ describe('registerWorktreeHandlers', () => {
     })
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         return { stdout: '', stderr: '' }
       }),
@@ -301,6 +403,9 @@ describe('registerWorktreeHandlers', () => {
     const events: string[] = []
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         events.push(`exec:${args[0]}:${registeredRoots.has('/remote/repo')}`)
         if (!registeredRoots.has('/remote/repo')) {
           throw new Error('root not registered')
@@ -310,6 +415,9 @@ describe('registerWorktreeHandlers', () => {
         }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/master^{commit}')) {
           throw new Error('missing stale base')
@@ -378,11 +486,17 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
         }
         if (args[0] === 'remote') {
           return { stdout: 'team\norigin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
           return { stdout: 'main-sha\n', stderr: '' }
@@ -457,8 +571,14 @@ describe('registerWorktreeHandlers', () => {
     })
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return pendingRemoteList
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         return { stdout: '', stderr: '' }
       }),
@@ -523,8 +643,14 @@ describe('registerWorktreeHandlers', () => {
     })
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref' && args.includes('refs/heads/')) {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         return { stdout: '', stderr: '' }
       }),
@@ -567,7 +693,13 @@ describe('registerWorktreeHandlers', () => {
 
     resolveExactFetch()
     await vi.waitFor(() =>
-      expect(provider.exec.mock.calls.filter(([args]) => args[0] === 'fetch')).toHaveLength(1)
+      expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+        '/remote/repo',
+        'origin',
+        'local-base',
+        'refs/remotes/origin/local-base',
+        { skipAutoMaintenance: true }
+      )
     )
     await prefetch
     await create

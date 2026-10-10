@@ -98,4 +98,28 @@ describe('MobilePairingQrSection', () => {
 
     expect(persistentAction).toHaveFocus()
   })
+
+  it('keeps the QR on integer CSS scaling at normal and enlarged sizes', () => {
+    render(
+      <MobilePairingQrSection
+        qrDataUrl="data:image/png;base64,qr"
+        qrSize={218}
+        qrError={false}
+        pairingUrl="orca://pair#ready"
+        endpoint={null}
+        qrEnlarged
+        codeCopied={false}
+        onQrEnlargedChange={vi.fn()}
+        onCodeCopiedChange={vi.fn()}
+        onClearCodeCopiedTimer={vi.fn()}
+      />
+    )
+
+    const images = Array.from(
+      document.querySelectorAll<HTMLImageElement>('img[alt="QR Code for mobile pairing"]')
+    )
+    expect(images.map((image) => image.style.width).sort()).toEqual(['218px', '436px'])
+    expect(images.map((image) => image.style.height).sort()).toEqual(['218px', '436px'])
+    expect(images.every((image) => image.style.imageRendering === 'pixelated')).toBe(true)
+  })
 })

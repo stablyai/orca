@@ -1,5 +1,4 @@
 import { catalogRowsEqual } from '../../worktree-catalog-reconciliation'
-import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 
 export function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
@@ -15,15 +14,10 @@ export function areDetectedWorktreeResultsEqual(
     current.repoId === next.repoId &&
     current.authoritative === next.authoritative &&
     current.source === next.source &&
+    current.unavailableReason === next.unavailableReason &&
+    current.failureKind === next.failureKind &&
     catalogRowsEqual(current.worktrees, next.worktrees)
   )
-}
-
-export function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
-    return contentType
-  }
-  return 'editor'
 }
 
 export function toVisibleWorktree(

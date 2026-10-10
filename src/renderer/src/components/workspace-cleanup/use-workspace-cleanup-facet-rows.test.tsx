@@ -2,6 +2,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import {
   createDefaultWorkspaceCleanupFilterState,
   DEFAULT_WORKSPACE_CLEANUP_SORT
@@ -208,7 +209,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
       { initialProps: { current: candidates } }
     )
     const initialCounts = { ...counts }
-    const matched = view.result.current.facetMatchedWorktreeIds
+    const matched = view.result.current.facetMatchedIdentities
     const rows = view.result.current.rows
 
     // A no-op progress tick delivers a fresh array of the same candidate objects.
@@ -216,7 +217,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
 
     expect(counts).toEqual(initialCounts)
     expect(view.result.current.rows).toBe(rows)
-    expect(view.result.current.facetMatchedWorktreeIds).toBe(matched)
+    expect(view.result.current.facetMatchedIdentities).toBe(matched)
   })
 
   it('keeps facet identity for untouched rows when a tick replaces one candidate', () => {
@@ -294,5 +295,9 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
     expect(view.result.current.rows.find((row) => row.displayName === 'remote')?.sizeBytes).toBe(
       4_096
     )
+    expect([...view.result.current.facetMatchedIdentities]).toEqual([
+      getWorkspaceCleanupCandidateIdentity(candidates[0]!),
+      getWorkspaceCleanupCandidateIdentity(candidates[1]!)
+    ])
   })
 })

@@ -1,25 +1,25 @@
 import { isValidPtySize } from './daemon-pty-size'
-import { SessionOutputPlane, type AttachedClient } from './session-output-plane'
+import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
+import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
-import {
-  SessionTerminationController,
-  IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-} from './session-termination-controller'
-import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
+import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
-import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
+
 import type {
   SessionState,
   ShellReadyState,
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
-import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
+import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
   readonly sessionId: string
@@ -27,6 +27,7 @@ export class Session {
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
+  readonly processNameIsSpawnFile: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
@@ -36,7 +37,9 @@ export class Session {
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
-  private readonly startupIngress: PtyStartupIngress
+  /** Public so the creating host can print its own notice as terminal output. */
+  readonly startupIngress: PtyStartupIngress
+  private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -44,14 +47,19 @@ export class Session {
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
+    this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
-    this.output = new SessionOutputPlane({
+    const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback,
       wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks
+      historySeedChunks: opts.historySeedChunks,
+      subprocess: this.subprocess,
+      isAlive: () => !this._disposed && this._state !== 'exited'
     })
+    this.output = pipeline.output
+    this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
     this.termination = new SessionTerminationController({
       sessionId: this.sessionId,
@@ -66,23 +74,26 @@ export class Session {
       subprocess: this.subprocess,
       responderParser: this.output.responderParser,
       shellReadySupported: opts.shellReadySupported,
+      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
       releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
       acceptStartupIngress: (data) => this.startupIngress.accept(data)
     })
 
-    const echoProbe = createPtySlaveEchoProbe(this.subprocess.slavePath)
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.output.emit(emission),
-      ...(echoProbe ? { echoProbe } : {})
+      onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
     this.shellReady.startPromptReadinessProbe()
-    this.subprocess.onData((data) => this.handleSubprocessData(data))
-    this.subprocess.onExit((code) => this.handleSubprocessExit(code))
+    this.subprocess.onData((data) => {
+      if (!this._disposed) {
+        this.shellReady.ingestSubprocessData(data)
+      }
+    })
+    this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
   get state(): SessionState {
@@ -124,22 +135,21 @@ export class Session {
     return this.subprocess.pid
   }
 
+  /** Terminate this session's pty job object. `unavailable` is not proof of death. */
+  terminateOwnedTree(): JobTerminationOutcome {
+    return this.subprocess.terminateOwnedTree()
+  }
+
   write(data: string): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
 
     // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
-    if (
-      extractOnlyCookedEchoSafeQueryReplies(data) &&
-      this.startupIngress.answerLiveQueryReply(data)
-    ) {
-      return
-    }
-
-    // Why: keep queuing during the post-ready flush-gate window ('ready' but not yet flushed); a
-    // direct write would race fresh input ahead of the buffered startup command.
-    if (this.shellReady.tryEnqueue(data)) {
+    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
+    // Why the queue: keep queuing during the post-ready flush-gate window ('ready' but not yet
+    // flushed); a direct write would race fresh input ahead of the buffered startup command.
+    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
       return
     }
 
@@ -147,10 +157,7 @@ export class Session {
   }
 
   resize(cols: number, rows: number): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    if (!isValidPtySize(cols, rows)) {
+    if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
       return
     }
     this.output.resize(cols, rows)
@@ -158,16 +165,17 @@ export class Session {
   }
 
   /** Producer-side flow control: stop reading the PTY fd so a flooding child blocks on write.
-   *  Arms the lost-resume failsafe; re-pausing re-arms it. */
-  pauseProducer(): void {
+   *  Arms the lost-resume failsafe; re-pausing re-arms it. onStreamStall bounds a stream pause whose
+   *  consumer never drains and never closes. */
+  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
-    this.producerPause.pause()
+    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
   }
 
-  resumeProducer(): void {
-    this.producerPause.release({ resume: true })
+  resumeProducer(source?: 'stream'): void {
+    this.producerPause.resumeClient(source)
   }
 
   kill(): void {
@@ -184,9 +192,7 @@ export class Session {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
-  ): Promise<void> {
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
     await this.termination.forceKillAndWaitForExit(timeoutMs)
   }
 
@@ -242,30 +248,42 @@ export class Session {
     return this.output.getCwd()
   }
 
-  getForegroundProcess(): string | null {
-    return this.subprocess.getForegroundProcess()
+  inspectChildProcesses(): PtyChildProcessVerdict {
+    return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
+  }
+
+  getForegroundProcess(options?: { rawFallback?: boolean }): string | null {
+    return this.subprocess.getForegroundProcess(options)
   }
 
   async confirmForegroundProcess(): Promise<string | null> {
     return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
   }
 
+  confirmShellForeground(): Promise<boolean> {
+    return this.recoveryBarrier.confirmOwnerSettled()
+  }
+
+  async settleShellOwnershipConfirmation(): Promise<void> {
+    await this.recoveryBarrier.awaitProofSettled()
+    // Why the fence: a snapshot at settle-resolution must not race the drained prompt's async parse.
+    await this.output.flushParsedWrites()
+  }
+
   clearScrollback(): void {
-    if (this._disposed) {
-      return
-    }
-    this.output.clearScrollback()
-    this.subprocess.clear?.()
-    nudgePowerShellPromptRepaint({
-      subprocess: this.subprocess,
-      isGatingWrites: this.shellReady.isGatingWrites,
-      isCursorOnEmptyPromptLine: () => this.output.isCursorOnEmptyPromptLine()
-    })
+    this.output.clearScrollback(this.subprocess, this.shellReady.isGatingWrites)
+  }
+
+  resetInputModes(): void {
+    this.output.applyInputModeGround(this.recoveryBarrier.groundInputModes())
   }
 
   prepareForFinalSnapshot(): string {
     const held = this.shellReady.releaseHeldBytes()
     this.startupIngress.snapshotBarrier()
+    // Why last: snapshotBarrier can emit held spans into the barrier, and a
+    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
+    this.recoveryBarrier.flushPending()
     return held
   }
 
@@ -279,6 +297,10 @@ export class Session {
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    // Why after drainAndClose (and before clearClients below): a dispose
+    // mid-episode must deliver the barrier's queued bytes — drained ingress
+    // included — while clients are attached and the emulator accepts writes.
+    this.recoveryBarrier.flushPending()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
@@ -296,6 +318,7 @@ export class Session {
 
     this.output.clearClients()
     this.shellReady.clearPendingWrites()
+    this.recoveryBarrier.dispose()
     this.output.disposeEmulator()
 
     for (const client of clientsToNotify) {
@@ -335,14 +358,7 @@ export class Session {
     this.termination.disposeSubprocessHandle()
   }
 
-  private handleSubprocessData(data: string): void {
-    if (this._disposed) {
-      return
-    }
-    this.shellReady.ingestSubprocessData(data)
-  }
-
-  private handleSubprocessExit(code: number): void {
+  private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     this.termination.markPhysicalExit()
     if (this._disposed) {
       return
@@ -352,6 +368,11 @@ export class Session {
     this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    // Why after drainAndClose: drained ingress bytes re-enter the barrier and can
+    // open a fresh episode; flushing here delivers them too. A shell exiting
+    // mid-proof must not strand the queued post-133;D prompt — those bytes belong
+    // to clients, records, and history before broadcastExit below.
+    this.recoveryBarrier.flushPending()
     this._exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()
@@ -366,7 +387,7 @@ export class Session {
     // Not via #teardownSubprocess: it flips `_disposed`, short-circuiting the later Session.dispose() reaper.
     this.termination.disposeSubprocessHandle()
 
-    this.output.broadcastExit(code, this.incarnationId)
+    this.output.broadcastExit(code, this.incarnationId, cause)
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
     this.onSessionExit?.(code)

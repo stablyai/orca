@@ -57,6 +57,82 @@ function createStore(
 }
 
 describe('pruneLineageForMissingRepoWorktrees', () => {
+  it('keeps lineage stored under another spelling of a live worktree path', () => {
+    const parentId = 'repo-1::/repo'
+    const childId = 'repo-1::/repo/./child'
+    const edge = lineage(childId, parentId)
+    const worktreeLineageById = { [childId]: edge }
+    const workspaceLineageByChildKey = {
+      [worktreeWorkspaceKey(childId)]: workspaceLineage(childId, parentId)
+    }
+    const metaById = {
+      [parentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
+
+    pruneLineageForMissingRepoWorktrees(
+      store as never,
+      repo,
+      [
+        { path: '/repo', head: 'a', branch: 'main', isBare: false, isMainWorktree: true },
+        { path: '/repo/child/', head: 'b', branch: 'child', isBare: false, isMainWorktree: false }
+      ],
+      { platform: 'linux' }
+    )
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(worktreeLineageById[childId]).toBe(edge)
+  })
+
+  it('keeps captured metadata lineage not removed after Git canonicalizes paths', () => {
+    const parentId = 'repo-1::/alias/parent'
+    const childId = 'repo-1::/alias/child'
+    const edge = lineage(childId, parentId)
+    const worktreeLineageById = { [childId]: edge }
+    const workspaceLineageByChildKey = {
+      [worktreeWorkspaceKey(childId)]: workspaceLineage(childId, parentId)
+    }
+    const metaById = {
+      [childId]: { instanceId: edge.worktreeInstanceId } as WorktreeMeta,
+      [parentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
+
+    pruneLineageForMissingRepoWorktrees(
+      store as never,
+      repo,
+      [
+        {
+          path: '/canonical/parent',
+          head: 'a',
+          branch: 'parent',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: '/canonical/child',
+          head: 'b',
+          branch: 'child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ],
+      {
+        platform: 'linux',
+        preservedMetadataCandidateIds: new Set([parentId, childId])
+      }
+    )
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(worktreeLineageById[childId]).toBe(edge)
+    expect(workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toBeDefined()
+    expect(metaById[parentId].instanceId).toBe(edge.parentWorktreeInstanceId)
+  })
+
   it('refuses an empty scan when the repo still has registered lineage', () => {
     const parentId = 'repo-1::/repo/parent'
     const childId = 'repo-1::/repo/child'
@@ -78,7 +154,7 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     expect(workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toBe(workspaceEdge)
   })
 
-  it('prunes missing children and rotates missing parents after a trusted non-empty scan', () => {
+  it('prunes and rotates missing IDs absent from preserved metadata candidates', () => {
     const liveParentId = 'repo-1::/repo/live-parent'
     const missingChildId = 'repo-1::/repo/missing-child'
     const liveChildId = 'repo-1::/repo/live-child'
@@ -99,25 +175,31 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     }
     const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
 
-    pruneLineageForMissingRepoWorktrees(store as never, repo, [
-      {
-        path: '/repo/live-parent',
-        head: 'a',
-        branch: 'main',
-        isBare: false,
-        isMainWorktree: false
-      },
-      {
-        path: '/repo/live-child',
-        head: 'b',
-        branch: 'child',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
+    pruneLineageForMissingRepoWorktrees(
+      store as never,
+      repo,
+      [
+        {
+          path: '/repo/live-parent',
+          head: 'a',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: '/repo/live-child',
+          head: 'b',
+          branch: 'child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ],
+      { preservedMetadataCandidateIds: new Set([liveParentId, liveChildId]) }
+    )
 
     expect(store.removeWorktreeLineage).toHaveBeenCalledWith(missingChildId)
     expect(store.removeWorktreeLineage).not.toHaveBeenCalledWith(liveChildId)
+    expect(store.removeWorkspaceLineage).toHaveBeenCalledWith(worktreeWorkspaceKey(missingChildId))
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(missingParentId, {
       instanceId: expect.any(String)
     })
@@ -125,5 +207,26 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     expect(metaById[missingParentId].instanceId).not.toBe(
       missingParentEdge.parentWorktreeInstanceId
     )
+  })
+
+  it('does not rematerialize metadata already removed for a missing parent', () => {
+    const liveChildId = 'repo-1::/repo/live-child'
+    const removedParentId = 'repo-1::/repo/removed-parent'
+    const edge = lineage(liveChildId, removedParentId)
+    const worktreeLineageById = { [liveChildId]: edge }
+    const store = createStore(worktreeLineageById, {}, {})
+
+    pruneLineageForMissingRepoWorktrees(store as never, repo, [
+      {
+        path: '/repo/live-child',
+        head: 'child-head',
+        branch: 'child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(worktreeLineageById[liveChildId]).toBe(edge)
   })
 })

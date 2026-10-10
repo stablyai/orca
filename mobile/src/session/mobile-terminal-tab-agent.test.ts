@@ -4,7 +4,8 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
+  resolveMobileTerminalTabAgentId,
+  resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 
 function agentStatus(agentType: string | undefined): AgentStatusEntry {
@@ -75,6 +76,15 @@ describe('resolveMobileTerminalTabAgentId', () => {
   })
 })
 
+describe('resolveMobileTerminalTabOwnedAgentId', () => {
+  it('excludes display-only terminal titles from behavioral authority', () => {
+    expect(resolveMobileTerminalTabOwnedAgentId(terminalTab('✦ Gemini CLI'))).toBeNull()
+    expect(
+      resolveMobileTerminalTabOwnedAgentId(terminalTab('Terminal', { launchAgent: 'gemini' }))
+    ).toBe('gemini')
+  })
+})
+
 describe('getMobileSessionTabTitle', () => {
   it('strips leading agent decorations when an icon is shown', () => {
     expect(getMobileSessionTabTitle(terminalTab('✦ Gemini CLI'))).toBe('Gemini CLI')
@@ -109,5 +119,18 @@ describe('getMobileSessionTabTitle', () => {
     }
 
     expect(getMobileSessionTabTitle(blankBrowserTab)).toBe('New Browser')
+  })
+
+  it('labels structured agent-session tabs without terminal decoration rules', () => {
+    expect(
+      getMobileSessionTabTitle({
+        type: 'agent-session',
+        id: 'agent-tab-1',
+        title: 'Codex Chat',
+        sessionId: 'session-1',
+        agent: 'codex',
+        isActive: true
+      })
+    ).toBe('Codex Chat')
   })
 })

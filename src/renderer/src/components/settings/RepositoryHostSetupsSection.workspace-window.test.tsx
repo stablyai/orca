@@ -136,6 +136,46 @@ describe('RepositoryHostSetupsSection workspace window availability', () => {
     expect(container.textContent).not.toContain('Workspace window closed')
   })
 
+  it('does not mark a transport-connected but unavailable runtime setup Ready', () => {
+    useAppStore.setState({
+      repos: [repo],
+      projects: [project],
+      projectHostSetups: [setup],
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'hub',
+          {
+            checkedAt: 1,
+            status: null,
+            remoteControl: {
+              state: 'ready',
+              pendingRequestCount: 0,
+              subscriptionCount: 0,
+              reconnectAttempt: 0,
+              lastConnectedAt: 1,
+              lastClose: null,
+              lastError: null
+            }
+          }
+        ]
+      ])
+    })
+    act(() => {
+      root.render(
+        React.createElement(RepositoryHostSetupsSection, {
+          repo,
+          forceVisible: true,
+          searchQuery: '',
+          searchEntries: []
+        })
+      )
+    })
+
+    const currentSetup = container.querySelector('[data-current="true"]')
+    expect(currentSetup?.textContent).toContain('Unknown')
+    expect(currentSetup?.textContent).not.toContain('Ready')
+  })
+
   it('does not call a setup Ready when the owner control channel closed with an error', () => {
     renderWithOwnerStatus(
       makeStatus({

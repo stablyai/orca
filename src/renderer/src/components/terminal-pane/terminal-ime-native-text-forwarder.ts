@@ -110,6 +110,12 @@ function isNativeTextKeydown(event: ImeNativeTextKeyEvent, compositionActive: bo
     !event.ctrlKey &&
     !event.altKey &&
     !event.metaKey &&
+    // Space and letters must stay eligible. Claiming them is what blanks the helper textarea
+    // before macOS can read a preceding word, which is the only thing suppressing #11504 - the
+    // system rewriting a double space into ". " and handing the period to the pty. That
+    // suppression is a side effect of this predicate rather than a decision, so narrowing it
+    // back toward punctuation would return the bug. Pinned by
+    // terminal-ime-forwarder-space-claim.test.ts.
     event.key.length === 1 &&
     // Composing keystrokes already belong to xterm's composition helper.
     event.isComposing !== true &&
@@ -349,7 +355,10 @@ export function installTerminalImeNativeTextForwarder(args: {
       settleCommit(commit, null)
     }
     event.stopImmediatePropagation()
-    // Clear the helper textarea so the committed text doesn't accumulate.
+    // Clear the helper textarea so the committed text doesn't accumulate. Also load-bearing:
+    // macOS decides an automatic period substitution from the characters already in the field,
+    // so emptying it is what keeps #11504 from firing. Measured - with this line removed and
+    // everything else held constant, `hi` + two spaces reaches the pty as `hi. `.
     if (event.target instanceof HTMLTextAreaElement) {
       event.target.value = ''
     }

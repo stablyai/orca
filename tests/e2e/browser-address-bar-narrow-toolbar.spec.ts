@@ -17,15 +17,15 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/browser-address-bar-expansion'
+import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-expansion'
 
 // Why: the toolbar must land in a band — squeezed enough that the inline field
 // collapses, roomy enough that the overlay itself has somewhere to go. Target
 // the middle of that band rather than a fixed window width, because how much
 // chrome flanks the pane (left sidebar, and a right sidebar that other startup
 // paths may re-open) varies between runs.
-const TARGET_TOOLBAR_WIDTH = 420
-const MIN_USABLE_TOOLBAR_WIDTH = BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH + 100
+const TARGET_TOOLBAR_WIDTH = 260
+const MIN_USABLE_TOOLBAR_WIDTH = BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH + 20
 const NARROW_WINDOW_HEIGHT = 800
 
 async function startDestinationServer(): Promise<{ url: string; close: () => Promise<void> }> {
@@ -62,6 +62,8 @@ async function setWindowWidth(electronApp: ElectronApplication, width: number): 
       if (!window) {
         throw new Error('No Electron window')
       }
+      // Window minimums otherwise mask the narrow-pane state on some runners.
+      window.setMinimumSize(0, 0)
       window.setSize(size.width, size.height)
     },
     { width: Math.round(width), height: NARROW_WINDOW_HEIGHT }
@@ -118,8 +120,11 @@ async function settleToSqueezedRestingState(
         // Chrome flanking the pane is everything the toolbar didn't get.
         await setWindowWidth(electronApp, innerWidth - toolbar + TARGET_TOOLBAR_WIDTH)
         await addressBarInput(page).evaluate((node) => node.blur())
+        const measuredToolbar = await toolbarWidth(page)
         return {
-          toolbar: (await toolbarWidth(page)) > MIN_USABLE_TOOLBAR_WIDTH,
+          toolbar:
+            measuredToolbar > MIN_USABLE_TOOLBAR_WIDTH &&
+            measuredToolbar <= TARGET_TOOLBAR_WIDTH + 5,
           collapsed: (await addressBarOverlay(page).count()) === 0
         }
       },

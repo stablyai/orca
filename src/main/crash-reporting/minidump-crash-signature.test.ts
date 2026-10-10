@@ -194,6 +194,22 @@ function buildDump(options: {
   return { dump: builder.build(streams) }
 }
 
+/** Offset of a stream's directory entry: `{type, size, rva}`. */
+function streamEntry(dump: Buffer, type: number): number {
+  const directoryRva = dump.readUInt32LE(12)
+  for (let index = 0; index < dump.readUInt32LE(8); index += 1) {
+    const entry = directoryRva + index * 12
+    if (dump.readUInt32LE(entry) === type) {
+      return entry
+    }
+  }
+  throw new Error(`no stream of type ${type}`)
+}
+
+function moduleListRva(dump: Buffer): number {
+  return dump.readUInt32LE(streamEntry(dump, STREAM_TYPE_MODULE_LIST) + 8)
+}
+
 const FATAL_LINE =
   '[8104:1234:0815/143022.123456:FATAL:render_frame_impl.cc(4821)] Check failed: !is_detached_.'
 
@@ -201,12 +217,12 @@ const ELECTRON_43_CHECK_LINE =
   '[29136:0815/232206.330:ERROR:third_party\\blink\\common\\chrome_debug_urls.cc:180] Intentionally causing CHECK because user navigated to chrome://checkcrash/'
 
 describe('parseMinidumpCrashSignature', () => {
-  it('names the failing CHECK from the LOG_FATAL annotation', () => {
+  it('names the failing CHECK from the LOG_FATAL annotation', async () => {
     const { dump } = buildDump({
       annotations: { LOG_FATAL: FATAL_LINE, ptype: 'renderer' }
     })
 
-    const signature = parseMinidumpCrashSignature(dump)
+    const signature = await parseMinidumpCrashSignature(dump)
 
     expect(signature?.checkMessage).toBe(FATAL_LINE)
     expect(signature?.checkFile).toBe('render_frame_impl.cc')
@@ -214,14 +230,14 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.processType).toBe('renderer')
   })
 
-  it('recovers a CHECK line from Electron 43 dump memory without LOG_FATAL', () => {
+  it('recovers a CHECK line from Electron 43 dump memory without LOG_FATAL', async () => {
     const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
     ])
 
-    const signature = parseMinidumpCrashSignature(dumpWithMemory)
+    const signature = await parseMinidumpCrashSignature(dumpWithMemory)
 
     expect(signature?.checkMessage).toBe(ELECTRON_43_CHECK_LINE)
     expect(signature?.checkFile).toBe('chrome_debug_urls.cc')
@@ -229,14 +245,14 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.processType).toBe('renderer')
   })
 
-  it('stops at the process type when the dump belongs to another process', () => {
+  it('stops at the process type when the dump belongs to another process', async () => {
     const { dump } = buildDump({ annotations: { ptype: 'gpu-process' } })
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
     ])
 
-    const signature = parseMinidumpCrashSignature(dumpWithMemory, {
+    const signature = await parseMinidumpCrashSignature(dumpWithMemory, {
       expectedProcessType: 'renderer'
     })
 
@@ -245,49 +261,49 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.checkMessage).toBeUndefined()
   })
 
-  it('still parses fully when the process type matches', () => {
+  it('still parses fully when the process type matches', async () => {
     const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
     ])
 
-    const signature = parseMinidumpCrashSignature(dumpWithMemory, {
+    const signature = await parseMinidumpCrashSignature(dumpWithMemory, {
       expectedProcessType: 'renderer'
     })
 
     expect(signature?.checkMessage).toBe(ELECTRON_43_CHECK_LINE)
   })
 
-  it('ignores a log prefix further back than the prefix limit', () => {
+  it('ignores a log prefix further back than the prefix limit', async () => {
     const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
     // `[` separated from the marker by more than MAX_LOG_PREFIX_BYTES (96).
     const farPrefix = `[${'x'.repeat(200)}:FATAL:render_frame_impl.cc(4821)] Check failed: far.`
     const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${farPrefix}\0`, 'utf8')])
 
-    expect(parseMinidumpCrashSignature(dumpWithMemory)?.checkMessage).toBeUndefined()
+    expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBeUndefined()
   })
 
-  it('does not promote an unrelated Chromium ERROR line containing CHECK', () => {
+  it('does not promote an unrelated Chromium ERROR line containing CHECK', async () => {
     const { dump } = buildDump({})
     const unrelated =
       '[29136:0815/232206.330:ERROR:settings.cc:44] Opened the CHECK settings panel.'
     const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${unrelated}\0`, 'utf8')])
 
-    expect(parseMinidumpCrashSignature(dumpWithMemory)?.checkMessage).toBeUndefined()
+    expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBeUndefined()
   })
 
-  it('prefers the structured annotation over a dump-memory candidate', () => {
+  it('prefers the structured annotation over a dump-memory candidate', async () => {
     const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
     ])
 
-    expect(parseMinidumpCrashSignature(dumpWithMemory)?.checkMessage).toBe(FATAL_LINE)
+    expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBe(FATAL_LINE)
   })
 
-  it('reads annotations from the process-level simple string dictionary', () => {
+  it('reads annotations from the process-level simple string dictionary', async () => {
     const { dump } = buildDump({
       simpleAnnotations: {
         ptype: 'gpu-process',
@@ -295,13 +311,13 @@ describe('parseMinidumpCrashSignature', () => {
       }
     })
 
-    const signature = parseMinidumpCrashSignature(dump)
+    const signature = await parseMinidumpCrashSignature(dump)
 
     expect(signature?.processType).toBe('gpu-process')
     expect(signature?.annotations['gpu-gl-vendor']).toBe('Intel Inc.')
   })
 
-  it('drops annotations outside the allowlist', () => {
+  it('drops annotations outside the allowlist', async () => {
     const { dump } = buildDump({
       annotations: {
         LOG_FATAL: FATAL_LINE,
@@ -309,13 +325,13 @@ describe('parseMinidumpCrashSignature', () => {
       }
     })
 
-    const signature = parseMinidumpCrashSignature(dump)
+    const signature = await parseMinidumpCrashSignature(dump)
 
     expect(signature?.annotations['switch-3']).toBeUndefined()
     expect(Object.keys(signature?.annotations ?? {})).toEqual(['LOG_FATAL'])
   })
 
-  it('resolves the faulting module from the exception address', () => {
+  it('resolves the faulting module from the exception address', async () => {
     const { dump } = buildDump({
       exception: { code: 0x80000003, address: 0x7ff8_0000_1234n },
       modules: [
@@ -332,7 +348,7 @@ describe('parseMinidumpCrashSignature', () => {
       ]
     })
 
-    const signature = parseMinidumpCrashSignature(dump)
+    const signature = await parseMinidumpCrashSignature(dump)
 
     expect(signature?.exceptionCode).toBe(0x80000003)
     expect(signature?.exceptionAddress).toBe('0x7ff800001234')
@@ -340,44 +356,75 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.faultingModuleOffset).toBe('0x1234')
   })
 
-  it('omits the faulting module when no image range covers the address', () => {
+  it('resolves a faulting module past index 1024 on a real macOS image count', async () => {
+    // A measured macOS renderer carries 1042 loaded images; a cap below that
+    // dropped the whole module list, so no macOS report could name a module.
+    const modules = Array.from({ length: 1042 }, (_, index) => ({
+      base: 0x1_0000_0000n + BigInt(index) * 0x1_0000n,
+      size: 0x1000,
+      name: `/Applications/Orca.app/Contents/Frameworks/lib${index}.dylib`
+    }))
+    const { dump } = buildDump({
+      exception: { code: 11, address: 0x1_0000_0000n + 1030n * 0x1_0000n + 0x24n },
+      modules
+    })
+
+    const signature = await parseMinidumpCrashSignature(dump)
+
+    expect(signature?.faultingModule).toBe('lib1030.dylib')
+    expect(signature?.faultingModuleOffset).toBe('0x24')
+  })
+
+  it('still drops the module list when the claimed module count is absurd', async () => {
+    const { dump } = buildDump({
+      exception: { code: 11, address: 0x7ff7_0000_0010n },
+      modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
+    })
+    const corrupt = Buffer.from(dump)
+    corrupt.writeUInt32LE(0xffff_ffff, moduleListRva(corrupt))
+
+    await expect(parseMinidumpCrashSignature(corrupt)).resolves.not.toBeNull()
+    expect((await parseMinidumpCrashSignature(corrupt))?.faultingModule).toBeUndefined()
+  })
+
+  it('omits the faulting module when no image range covers the address', async () => {
     const { dump } = buildDump({
       exception: { code: 11, address: 0x10n },
       modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
     })
 
-    const signature = parseMinidumpCrashSignature(dump)
+    const signature = await parseMinidumpCrashSignature(dump)
 
     expect(signature?.exceptionAddress).toBe('0x10')
     expect(signature?.faultingModule).toBeUndefined()
   })
 
-  it('returns null for a buffer that is not a minidump', () => {
-    expect(parseMinidumpCrashSignature(Buffer.from('not a dump at all', 'utf8'))).toBeNull()
-    expect(parseMinidumpCrashSignature(Buffer.alloc(0))).toBeNull()
+  it('returns null for a buffer that is not a minidump', async () => {
+    expect(await parseMinidumpCrashSignature(Buffer.from('not a dump at all', 'utf8'))).toBeNull()
+    expect(await parseMinidumpCrashSignature(Buffer.alloc(0))).toBeNull()
   })
 
-  it('degrades instead of throwing on a truncated dump', () => {
+  it('degrades instead of throwing on a truncated dump', async () => {
     const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
 
     const truncated = dump.subarray(0, 48)
 
-    expect(() => parseMinidumpCrashSignature(truncated)).not.toThrow()
-    expect(parseMinidumpCrashSignature(truncated)?.checkMessage).toBeUndefined()
+    await expect(parseMinidumpCrashSignature(truncated)).resolves.not.toBeNull()
+    expect((await parseMinidumpCrashSignature(truncated))?.checkMessage).toBeUndefined()
   })
 
-  it('degrades instead of throwing when stream counts are corrupt', () => {
+  it('degrades instead of throwing when stream counts are corrupt', async () => {
     const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
     const corrupt = Buffer.from(dump)
     corrupt.writeUInt32LE(0xffff_ffff, 8)
 
-    expect(() => parseMinidumpCrashSignature(corrupt)).not.toThrow()
-    expect(parseMinidumpCrashSignature(corrupt)?.annotations).toEqual({})
+    await expect(parseMinidumpCrashSignature(corrupt)).resolves.not.toBeNull()
+    expect((await parseMinidumpCrashSignature(corrupt))?.annotations).toEqual({})
   })
 })
 
 describe('minidumpSignatureDetails', () => {
-  it('flattens the check location and faulting module into detail keys', () => {
+  it('flattens the check location and faulting module into detail keys', async () => {
     const { dump } = buildDump({
       annotations: {
         LOG_FATAL: FATAL_LINE,
@@ -388,7 +435,7 @@ describe('minidumpSignatureDetails', () => {
       modules: [{ base: 0x7ff8_0000_0000n, size: 0x10_0000, name: 'chrome_elf.dll' }]
     })
 
-    const details = minidumpSignatureDetails(parseMinidumpCrashSignature(dump)!)
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
 
     expect(details).toMatchObject({
       minidumpCheckMessage: FATAL_LINE,
@@ -401,10 +448,10 @@ describe('minidumpSignatureDetails', () => {
     })
   })
 
-  it('does not duplicate the fatal line into an annotation key', () => {
+  it('does not duplicate the fatal line into an annotation key', async () => {
     const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
 
-    const details = minidumpSignatureDetails(parseMinidumpCrashSignature(dump)!)
+    const details = minidumpSignatureDetails((await parseMinidumpCrashSignature(dump))!)
 
     expect(details.minidumpAnnotation_LOG_FATAL).toBeUndefined()
   })

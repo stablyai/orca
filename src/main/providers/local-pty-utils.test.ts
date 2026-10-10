@@ -30,7 +30,8 @@ vi.mock('../wsl', () => ({
 }))
 
 vi.mock('./macos-tcc-login-shell', () => ({
-  wrapShellSpawnForMacosTccAttribution: wrapSpawnMock
+  wrapShellSpawnForMacosTccAttribution: wrapSpawnMock,
+  hostReportsChildExitStatus: (file: string) => file !== '/usr/bin/login'
 }))
 
 import {
@@ -38,6 +39,7 @@ import {
   spawnShellWithFallback,
   validateWorkingDirectory
 } from './local-pty-utils'
+import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
 const NATIVE_DIR = 'C:\\Users\\jin\\repo'
@@ -236,5 +238,118 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       expect.objectContaining({ cwd: '/work' })
     )
     expect(result.shellPath).toBe('/bin/bash')
+  })
+
+  it('drops the primary shell’s launch env when an unwrapped fallback takes over', () => {
+    // Why: nothing in an unwrapped bash pane consumes the feature channel, so a
+    // leftover ZDOTDIR would point a nested zsh at Orca's wrapper and turn on
+    // features Orca never selected for it.
+    const zshLaunchEnv = {
+      ZDOTDIR: '/userdata/shell-ready/zsh',
+      ORCA_ORIG_ZDOTDIR: '/home/jin',
+      ORCA_SHELL_FEATURES: 'history'
+    }
+    const env: Record<string, string> = { HOME: '/home/jin', ...zshLaunchEnv }
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockReturnValue({ pid: 3 })
+
+    spawnShellWithFallback({
+      shellPath: '/bin/zsh',
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env,
+      ptySpawn: ptySpawn as never,
+      preLaunchEnv: {
+        ZDOTDIR: undefined,
+        ORCA_ORIG_ZDOTDIR: undefined,
+        ORCA_SHELL_FEATURES: undefined
+      },
+      getShellReadyConfig: (shell) =>
+        shell === '/bin/zsh' ? { args: ['-l'], env: zshLaunchEnv } : { args: null, env: {} }
+    })
+
+    expect(env.ORCA_SHELL_FEATURES).toBeUndefined()
+    expect(env.ZDOTDIR).toBeUndefined()
+    expect(env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+    expect(env.HOME).toBe('/home/jin')
+  })
+
+  it.each<[string, Record<string, string>, Record<string, string>]>([
+    [
+      '/opt/homebrew/bin/fish',
+      { XDG_DATA_DIRS: '/opt/a:/opt/b' },
+      getFishXdgDataDirsLaunchEnv('/userdata/wrappers', '/opt/a:/opt/b')
+    ],
+    [
+      '/bin/zsh',
+      { ZDOTDIR: '/home/jin/.zsh' },
+      { ZDOTDIR: '/userdata/shell-ready/zsh', ORCA_SHELL_FEATURES: 'history' }
+    ]
+  ])('hands back the user’s own env when %s falls back', (shellPath, userEnv, launchEnv) => {
+    const preLaunchEnv = Object.fromEntries(
+      Object.keys(launchEnv).map((key) => [key, userEnv[key]])
+    )
+    const env: Record<string, string> = { HOME: '/home/jin', ...userEnv, ...launchEnv }
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockReturnValue({ pid: 5 })
+
+    const result = spawnShellWithFallback({
+      shellPath,
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env,
+      ptySpawn: ptySpawn as never,
+      preLaunchEnv,
+      getShellReadyConfig: () => ({ args: null, env: {} })
+    })
+
+    expect(env).toEqual({ HOME: '/home/jin', SHELL: result.shellPath, ...userEnv })
+  })
+
+  it('drops the first fallback’s launch env when a second fallback takes over', () => {
+    // Why: the keys to scrub are the ones the LAST attempt wrote. Computed once
+    // from the primary, a wrapped first fallback leaks its own ZDOTDIR and
+    // feature channel into the shell that finally starts.
+    const bashLaunchEnv = { ORCA_SHELL_FEATURES: 'markers', BASH_ENV: '/userdata/bash/rcfile' }
+    const env: Record<string, string> = { HOME: '/home/jin', ZDOTDIR: '/userdata/shell-ready/zsh' }
+    const ptySpawn = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('primary boom')
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('first fallback boom')
+      })
+      .mockReturnValue({ pid: 4 })
+
+    spawnShellWithFallback({
+      shellPath: '/bin/zsh',
+      shellArgs: ['-l'],
+      cols: 80,
+      rows: 24,
+      cwd: '/work',
+      env,
+      ptySpawn: ptySpawn as never,
+      preLaunchEnv: { ZDOTDIR: undefined },
+      getShellReadyConfig: (shell) =>
+        shell === '/bin/bash' ? { args: ['--rcfile', '/rc'], env: bashLaunchEnv } : null
+    })
+
+    expect(env.ORCA_SHELL_FEATURES).toBeUndefined()
+    expect(env.BASH_ENV).toBeUndefined()
+    expect(env.ZDOTDIR).toBeUndefined()
+    expect(env.HOME).toBe('/home/jin')
   })
 })

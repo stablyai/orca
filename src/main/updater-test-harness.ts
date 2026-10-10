@@ -1,8 +1,11 @@
-import { vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { afterAll, vi } from 'vitest'
 import type { Mock } from 'vitest'
+import { clearTrackedRealTimers, trackRealTimers } from './updater-test-timer-tracking'
 
 /** Loose spy signature for the electron/electron-updater calls the suites only assert on. */
 type UpdaterSpy = Mock<(...args: unknown[]) => unknown>
+type LinuxPackageType = 'deb' | 'rpm' | 'non-root' | 'unusable'
 
 type AutoUpdaterMock = {
   autoDownload: boolean
@@ -26,6 +29,7 @@ type AppMock = {
   isPackaged: boolean
   getVersion: Mock<() => string>
   on: Mock<(event: string, handler: (...args: unknown[]) => void) => AppMock>
+  prependListener: Mock<(event: string, handler: (...args: unknown[]) => void) => AppMock>
   emit: (event: string, ...args: unknown[]) => void
   quit: UpdaterSpy
 }
@@ -43,7 +47,11 @@ type UpdaterModuleFactories = {
   electronUpdaterLoader: () => { loadElectronAutoUpdater: () => AutoUpdaterMock }
   electronToolkitUtils: () => { is: { dev: boolean } }
   ipcPty: () => { killAllPty: UpdaterSpy }
-  linuxUpdatePackageType: () => { getLinuxRootPackageType: Mock<() => 'deb' | 'rpm' | null> }
+  linuxUpdatePackageType: () => {
+    getLinuxPackageType: Mock<() => LinuxPackageType>
+    getLinuxRootPackageType: Mock<() => 'deb' | 'rpm' | null>
+    isExternallyManagedLinuxInstall: Mock<() => boolean>
+  }
   updaterLifecycleDiagnostics: () => { recordUpdaterLifecycle: UpdaterSpy }
   updaterChangelog: () => { fetchChangelog: UpdaterSpy }
   updaterNudge: () => { fetchNudge: UpdaterSpy; shouldApplyNudge: UpdaterSpy }
@@ -67,7 +75,9 @@ export type UpdaterMocks = {
   isMock: { dev: boolean }
   killAllPtyMock: UpdaterSpy
   powerMonitorOnMock: UpdaterSpy
+  getLinuxPackageTypeMock: Mock<() => LinuxPackageType>
   getLinuxRootPackageTypeMock: Mock<() => 'deb' | 'rpm' | null>
+  isExternallyManagedLinuxInstallMock: Mock<() => boolean>
   recordUpdaterLifecycleMock: UpdaterSpy
   fetchChangelogMock: UpdaterSpy
   fetchNudgeMock: UpdaterSpy
@@ -94,39 +104,61 @@ export const PRE_COMMIT_INSTALL_FAILURE =
  * `vi.hoisted` block so the mocks exist before the mock factories run.
  */
 export function createUpdaterMocks(): UpdaterMocks {
-  const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-  const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-
+  const appEvents = new EventEmitter()
+  const updaterEvents = new EventEmitter()
   const appOn = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    const handlers = appEventHandlers.get(event) ?? []
-    handlers.push(handler)
-    appEventHandlers.set(event, handlers)
+    appEvents.on(event, handler)
     return appMock
   })
-
-  const appEmit = (event: string, ...args: unknown[]) => {
-    for (const handler of appEventHandlers.get(event) ?? []) {
-      handler(...args)
-    }
+  const appPrependListener = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    appEvents.prependListener(event, handler)
+    return appMock
+  })
+  const appEmit = (event: string, ...args: unknown[]): void => {
+    appEvents.emit(event, ...args)
   }
-
   const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    const handlers = eventHandlers.get(event) ?? []
-    handlers.push(handler)
-    eventHandlers.set(event, handlers)
+    updaterEvents.on(event, handler)
     return autoUpdaterMock
   })
+  const emit = (event: string, ...args: unknown[]): void => {
+    updaterEvents.emit(event, ...args)
+  }
 
-  const emit = (event: string, ...args: unknown[]) => {
-    for (const handler of eventHandlers.get(event) ?? []) {
-      handler(...args)
-    }
+  // Why: `vi.resetModules()` abandons the previous test's `updater` module instance but cannot cancel
+  // the real timers it armed (1s silent-settle, 45s stall, 24h auto-check). Those fire during a later
+  // test — re-arming on that test's fake clock — and drove these shared spies, so a stale instance
+  // could land an extra `checkForUpdates()` inside the window under assertion.
+  let currentGeneration = 0
+
+  /**
+   * Hands each `updater` module instance an autoUpdater view stamped with the generation that loaded
+   * it. Once `resetUpdaterMocks` bumps the generation, the abandoned instance's calls and property
+   * writes are dropped instead of reaching the spies the running test asserts on.
+   */
+  const loadGenerationScopedAutoUpdater = (): AutoUpdaterMock => {
+    const loadedGeneration = currentGeneration
+    return new Proxy(autoUpdaterMock, {
+      get(target, property) {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
+        const value = Reflect.get(target, property)
+        if (loadedGeneration === currentGeneration || typeof value !== 'function') {
+          return value
+        }
+        return () => undefined
+      },
+      set(target, property, value) {
+        return loadedGeneration === currentGeneration ? Reflect.set(target, property, value) : true
+      }
+    })
   }
 
   const reset = () => {
-    appEventHandlers.clear()
+    currentGeneration += 1
+    appEvents.removeAllListeners()
     appOn.mockClear()
-    eventHandlers.clear()
+    appPrependListener.mockClear()
+    updaterEvents.removeAllListeners()
     on.mockClear()
     autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
     autoUpdaterMock.downloadUpdate.mockReset()
@@ -164,6 +196,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     isPackaged: true,
     getVersion: vi.fn(() => '1.0.51'),
     on: appOn,
+    prependListener: appPrependListener,
     emit: appEmit,
     quit: vi.fn()
   }
@@ -177,6 +210,10 @@ export function createUpdaterMocks(): UpdaterMocks {
   const killAllPtyMock = vi.fn()
   const powerMonitorOnMock = vi.fn()
   const getLinuxRootPackageTypeMock = vi.fn<() => 'deb' | 'rpm' | null>(() => null)
+  const getLinuxPackageTypeMock = vi.fn<() => LinuxPackageType>(() => {
+    return getLinuxRootPackageTypeMock() ?? 'non-root'
+  })
+  const isExternallyManagedLinuxInstallMock = vi.fn<() => boolean>(() => false)
   const recordUpdaterLifecycleMock = vi.fn()
   const fetchChangelogMock = vi.fn()
   const fetchNudgeMock = vi.fn()
@@ -199,11 +236,15 @@ export function createUpdaterMocks(): UpdaterMocks {
       net: { fetch: vi.fn() }
     }),
     electronUpdater: () => ({ autoUpdater: autoUpdaterMock }),
-    electronUpdaterLoader: () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }),
+    electronUpdaterLoader: () => ({ loadElectronAutoUpdater: loadGenerationScopedAutoUpdater }),
     electronToolkitUtils: () => ({ is: isMock }),
     ipcPty: () => ({ killAllPty: killAllPtyMock }),
     // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
-    linuxUpdatePackageType: () => ({ getLinuxRootPackageType: getLinuxRootPackageTypeMock }),
+    linuxUpdatePackageType: () => ({
+      getLinuxPackageType: getLinuxPackageTypeMock,
+      getLinuxRootPackageType: getLinuxRootPackageTypeMock,
+      isExternallyManagedLinuxInstall: isExternallyManagedLinuxInstallMock
+    }),
     updaterLifecycleDiagnostics: () => ({ recordUpdaterLifecycle: recordUpdaterLifecycleMock }),
     updaterChangelog: () => ({ fetchChangelog: fetchChangelogMock }),
     updaterNudge: () => ({ fetchNudge: fetchNudgeMock, shouldApplyNudge: shouldApplyNudgeMock }),
@@ -227,6 +268,11 @@ export function createUpdaterMocks(): UpdaterMocks {
 
   /** Shared `beforeEach` body: fresh module registry plus every mock back to its default. */
   const resetUpdaterMocks = () => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+    // Why: the generation fence only ignores a stale instance's spy calls; this cancels the real
+    // timers it left armed so it never runs at all.
+    clearTrackedRealTimers()
     vi.resetModules()
     autoUpdaterMock.reset()
     nativeUpdaterMock.on.mockReset()
@@ -242,6 +288,10 @@ export function createUpdaterMocks(): UpdaterMocks {
     disarmExitWatchdogMock.mockReset()
     powerMonitorOnMock.mockReset()
     getLinuxRootPackageTypeMock.mockReset().mockReturnValue(null)
+    getLinuxPackageTypeMock.mockReset().mockImplementation(() => {
+      return getLinuxRootPackageTypeMock() ?? 'non-root'
+    })
+    isExternallyManagedLinuxInstallMock.mockReset().mockReturnValue(false)
     recordUpdaterLifecycleMock.mockReset()
     fetchNudgeMock.mockReset().mockResolvedValue(null)
     shouldApplyNudgeMock.mockReset().mockReturnValue(false)
@@ -254,8 +304,15 @@ export function createUpdaterMocks(): UpdaterMocks {
       close: closeLocalBuildFeedMock
     })
     vi.unstubAllGlobals()
-    vi.useRealTimers()
+    trackRealTimers()
   }
+
+  // Why: keeps the timer patch scoped to files that use the harness. Fakes are dropped first
+  // because a file ending on a fake clock fails the wrapper's identity guard, stranding it.
+  afterAll(() => {
+    vi.useRealTimers()
+    clearTrackedRealTimers()
+  })
 
   return {
     appMock,
@@ -265,7 +322,9 @@ export function createUpdaterMocks(): UpdaterMocks {
     isMock,
     killAllPtyMock,
     powerMonitorOnMock,
+    getLinuxPackageTypeMock,
     getLinuxRootPackageTypeMock,
+    isExternallyManagedLinuxInstallMock,
     recordUpdaterLifecycleMock,
     fetchChangelogMock,
     fetchNudgeMock,

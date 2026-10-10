@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
   filterWorkspaceCleanupCandidates,
   getWorkspaceCleanupGitLabel,
@@ -32,6 +32,78 @@ describe('workspace cleanup presentation', () => {
       label: 'PR #42',
       state: 'open',
       title: 'Review alpha cleanup'
+    })
+  })
+
+  it('hides only the matching suppressed GitHub review', () => {
+    const cacheKey = getHostedReviewCacheKey('/repo', 'alpha', {}, 'repo-1', undefined)
+    const matching = makeState({
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            ...makeState().worktreesByRepo['repo-1']![0]!,
+            linkedPR: null,
+            suppressedGitHubPR: 42
+          }
+        ]
+      },
+      hostedReviewCache: {
+        [cacheKey]: { data: makeReview({ number: 42 }), fetchedAt: NOW }
+      }
+    })
+    const different = makeState({
+      ...matching,
+      hostedReviewCache: {
+        [cacheKey]: { data: makeReview({ number: 43 }), fetchedAt: NOW }
+      }
+    })
+
+    expect(getWorkspaceCleanupReviewInfo(makeCandidate(), matching).hasReview).toBe(false)
+    expect(getWorkspaceCleanupReviewInfo(makeCandidate(), different)).toMatchObject({
+      hasReview: true,
+      label: 'PR #43'
+    })
+  })
+
+  it('preserves explicit GitHub links and non-GitHub reviews despite stale suppression', () => {
+    const cacheKey = getHostedReviewCacheKey('/repo', 'alpha', {}, 'repo-1', undefined)
+    const explicit = makeState({
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            ...makeState().worktreesByRepo['repo-1']![0]!,
+            linkedPR: 42,
+            suppressedGitHubPR: 42
+          }
+        ]
+      },
+      hostedReviewCache: {
+        [cacheKey]: { data: makeReview({ number: 42 }), fetchedAt: NOW }
+      }
+    })
+    const gitLab = makeState({
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            ...makeState().worktreesByRepo['repo-1']![0]!,
+            linkedPR: null,
+            suppressedGitHubPR: 42,
+            linkedGitLabMR: 42
+          }
+        ]
+      },
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: makeReview({ provider: 'gitlab', number: 42 }),
+          fetchedAt: NOW
+        }
+      }
+    })
+
+    expect(getWorkspaceCleanupReviewInfo(makeCandidate(), explicit).hasReview).toBe(true)
+    expect(getWorkspaceCleanupReviewInfo(makeCandidate(), gitLab)).toMatchObject({
+      hasReview: true,
+      provider: 'gitlab'
     })
   })
 

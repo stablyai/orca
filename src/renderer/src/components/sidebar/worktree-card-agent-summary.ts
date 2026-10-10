@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
@@ -11,26 +11,21 @@ export type SummaryAgentGroup = {
 const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'waiting',
   'blocked',
-  'interrupted',
+  // Why: a failed main agent outranks live work; a pending question still comes first.
+  'failed',
   'working',
+  'monitoring',
+  'unconfirmed',
+  // Why: a user's Stop is not news, but it is not a finish either.
+  'interrupted',
   'done',
+  // Why: below every reporting state, above true idle — the pane is still held.
+  'unverifiable',
   'idle'
 ]
 
-function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
-  switch (state) {
-    case 'working':
-    case 'blocked':
-    case 'waiting':
-    case 'done':
-    case 'idle':
-      return state
-  }
-  return 'idle'
-}
-
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  return agent.entry.interrupted === true ? 'interrupted' : asDotState(agent.state)
+  return agentRowDisplayDotState(agent)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {
@@ -45,10 +40,16 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'failed'
     case 'working':
       return 'working'
+    case 'monitoring':
+      return 'monitoring'
     case 'done':
       return 'done'
     case 'idle':
       return 'idle'
+    case 'unverifiable':
+      return 'not reporting'
+    case 'unconfirmed':
+      return 'unconfirmed'
     case 'permission':
       return 'needs attention'
   }

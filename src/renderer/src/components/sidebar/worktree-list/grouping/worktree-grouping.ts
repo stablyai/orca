@@ -2,8 +2,18 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '../../../../store/types'
-import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-status'
-import { PR_GROUP_META, PR_GROUP_ORDER, getPRGroupKey } from './group-keys'
+import {
+  getWorkspaceStatus,
+  getWorkspaceStatusFromGroupKey,
+  getWorkspaceStatusGroupKey
+} from '../../workspace-status'
+import {
+  compareFolderWorkspacesForDisplay,
+  getFolderWorkspaceLaneKey,
+  type RenderableFolderWorkspace
+} from './folder-workspace-lanes'
+import { PR_GROUP_META, PR_GROUP_ORDER, getPRGroupKey, getPRLaneKey } from './group-keys'
+import type { PRGroupKey } from './group-keys'
 import { addRepoIdToGroup, getProjectGroupingForRepo } from './project-grouping'
 import type {
   OrderedGroupEntry,
@@ -17,6 +27,22 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import { getManualOrderAnchorRepo, sortProjectEntries } from './section-order'
+
+/** Lane label for a lane a folder workspace opened before any worktree did. */
+function getLaneLabelForKey(
+  key: string,
+  groupBy: Exclude<WorktreeGroupBy, 'repo'>,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+): string {
+  if (groupBy === 'workspace-status') {
+    const status = getWorkspaceStatusFromGroupKey(key, workspaceStatuses)
+    return workspaceStatuses.find((entry) => entry.id === status)?.label ?? status ?? key
+  }
+  if (groupBy === 'pr-status') {
+    return PR_GROUP_META[key.replace(/^pr:/, '') as PRGroupKey].label
+  }
+  return key
+}
 
 /** Buckets worktrees into their sections and returns them in render order. */
 export function buildOrderedGroups(args: {
@@ -33,6 +59,7 @@ export function buildOrderedGroups(args: {
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  folderWorkspaces?: readonly RenderableFolderWorkspace[]
 }): OrderedGroupEntry[] {
   const {
     groupBy,
@@ -47,7 +74,8 @@ export function buildOrderedGroups(args: {
     newExternalWorktreesInboxByRepo,
     pendingByRepo,
     repoOrder,
-    projectOrderBy
+    projectOrderBy,
+    folderWorkspaces = []
   } = args
 
   const grouped = new Map<string, WorktreeGroupEntry>()
@@ -67,7 +95,7 @@ export function buildOrderedGroups(args: {
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
     } else {
       const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
-      key = `pr:${prGroup}`
+      key = getPRLaneKey(prGroup)
       label = PR_GROUP_META[prGroup].label
     }
     if (!grouped.has(key)) {
@@ -76,6 +104,30 @@ export function buildOrderedGroups(args: {
     const group = grouped.get(key)!
     group.items.push(w)
     addRepoIdToGroup(group, w.repoId)
+  }
+  // Why: folder workspaces are not worktrees, so they never appear in the loop
+  // above. Bucketing them here — and creating the lane when no worktree opened
+  // one — is what lets a folder workspace be the sole occupant of a lane (#15362).
+  if (groupBy !== 'repo') {
+    for (const pair of folderWorkspaces) {
+      const key = getFolderWorkspaceLaneKey(pair, groupBy, workspaceStatuses)
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          label: getLaneLabelForKey(key, groupBy, workspaceStatuses),
+          items: [],
+          repo: undefined,
+          repoIds: new Set()
+        })
+      }
+      const group = grouped.get(key)!
+      group.folderWorkspaces ??= []
+      group.folderWorkspaces.push(pair)
+    }
+    for (const group of grouped.values()) {
+      group.folderWorkspaces?.sort((left, right) =>
+        compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+      )
+    }
   }
   if (groupBy === 'repo') {
     for (const repoId of placeholderRepoIds) {

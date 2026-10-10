@@ -22,6 +22,8 @@ export function mergeDetectedWorktreesForHost(
     current.repoId === refreshed.repoId &&
     current.authoritative === refreshed.authoritative &&
     current.source === refreshed.source &&
+    current.unavailableReason === refreshed.unavailableReason &&
+    current.failureKind === refreshed.failureKind &&
     current.worktrees === worktrees
   ) {
     return current

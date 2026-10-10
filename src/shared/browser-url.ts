@@ -64,6 +64,24 @@ function isValidDnsName(name: string): boolean {
     )
 }
 
+/** Avoids parsing a dotted host and port as a scheme; .localhost defaults to HTTP. */
+function classifySchemeLessDomainPortAddress(input: string): URL | null {
+  const match = /^([^\s/\\:@?#]+):\d+(?:[/?#].*)?$/.exec(input)
+  if (!match || !match[1].includes('.')) {
+    return null
+  }
+  try {
+    const url = new URL(`https://${input}`)
+    const hostname = normalizeCertificateHostname(url.hostname)
+    if (!isValidDnsName(hostname)) {
+      return null
+    }
+    return hostname.endsWith('.localhost') ? new URL(`http://${input}`) : url
+  } catch {
+    return null
+  }
+}
+
 function isIpv4Loopback(hostname: string): boolean {
   const octets = hostname.split('.')
   if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet))) {
@@ -239,6 +257,15 @@ export function looksLikeSearchQuery(input: string): boolean {
   return true
 }
 
+/** True for input shaped like an absolute filesystem path (POSIX, Windows drive, or UNC). */
+export function isAbsoluteFilesystemPathInput(input: string): boolean {
+  return (
+    UNIX_ABSOLUTE_PATH_PATTERN.test(input) ||
+    WINDOWS_ABSOLUTE_PATH_PATTERN.test(input) ||
+    WINDOWS_UNC_PATH_PATTERN.test(input)
+  )
+}
+
 function absolutePathToFileUrl(filePath: string): string {
   const normalizedPath = filePath.replaceAll('\\', '/')
   const segments = normalizedPath.split('/').map((segment, index) => {
@@ -279,6 +306,11 @@ export function normalizeBrowserNavigationUrl(
 
   if (UNIX_ABSOLUTE_PATH_PATTERN.test(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {
     return absolutePathToFileUrl(trimmed)
+  }
+
+  const domainPortAddress = classifySchemeLessDomainPortAddress(trimmed)
+  if (domainPortAddress) {
+    return domainPortAddress.toString()
   }
 
   try {

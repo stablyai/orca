@@ -6,8 +6,11 @@ import { disposeWebgl } from './pane-webgl-renderer'
 // letting hidden worktrees grow that cost with the mounted-pane population.
 const MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS = 6
 
+/** Identity of the surface whose hidden panes are retained; compared by reference only. */
+export type HiddenWebglRetentionOwner = WeakKey
+
 type RetainedHiddenEntry = {
-  owner: object
+  owner: HiddenWebglRetentionOwner
   livePanes: () => Iterable<ManagedPaneInternal>
 }
 
@@ -30,7 +33,7 @@ function disposeEntryContexts(entry: RetainedHiddenEntry): void {
   }
 }
 
-function removeEntry(owner: object): void {
+function removeEntry(owner: HiddenWebglRetentionOwner): void {
   const index = retainedEntries.findIndex((entry) => entry.owner === owner)
   if (index !== -1) {
     retainedEntries.splice(index, 1)
@@ -43,7 +46,7 @@ function removeEntry(owner: object): void {
  * least-recently-hidden owners to stay under the context cap.
  */
 export function tryRetainHiddenPanesWebgl(
-  owner: object,
+  owner: HiddenWebglRetentionOwner,
   livePanes: () => Iterable<ManagedPaneInternal>
 ): boolean {
   removeEntry(owner)
@@ -68,7 +71,7 @@ export function tryRetainHiddenPanesWebgl(
 }
 
 /** Drop retention bookkeeping on reveal/destroy; never disposes live addons. */
-export function releaseHiddenWebglRetention(owner: object): void {
+export function releaseHiddenWebglRetention(owner: HiddenWebglRetentionOwner): void {
   removeEntry(owner)
 }
 

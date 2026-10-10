@@ -1,9 +1,11 @@
 import {
   copyFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -12,6 +14,7 @@ import { dirname, join, posix as pathPosix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -24,7 +27,10 @@ import {
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
-import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
+import {
+  buildPosixHookPayloadCapture,
+  buildPosixHookSpoolLines
+} from '../agent-hooks/hook-stdin-contract'
 import {
   applyManagedKimiHooks,
   KIMI_HOOK_EVENTS,
@@ -47,6 +53,10 @@ function getConfigPath(): string {
 // is Git Bash even on Windows (see the CLI README / KIMI_SHELL_PATH), so a
 // single curl-based script body works on every platform.
 const MANAGED_SCRIPT_FILE_NAME = 'kimi-hook.sh'
+
+// Ownership test for every managed-block path: status, install, remove and the
+// bounded orphan recovery all agree on what counts as an Orca-written hook.
+const isManagedKimiCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
 
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(MANAGED_SCRIPT_FILE_NAME)
@@ -71,14 +81,25 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    // Why: the windows-local ordering runs this guard before stdin is read and before
+    // spool_hook_event is defined, so only the payload-first ordering may spool here.
+    ...(windowsLocal ? [] : ['  spool_hook_event']),
     '  exit 0',
     'fi'
   ]
   return [
     '#!/bin/sh',
     ...(windowsLocal
-      ? [...endpointRefreshAndGuard, ...buildPosixHookPayloadCapture()]
-      : [...buildPosixHookPayloadCapture(), ...endpointRefreshAndGuard]),
+      ? [
+          ...endpointRefreshAndGuard,
+          ...buildPosixHookPayloadCapture(),
+          ...buildPosixHookSpoolLines('kimi')
+        ]
+      : [
+          ...buildPosixHookPayloadCapture(),
+          ...buildPosixHookSpoolLines('kimi'),
+          ...endpointRefreshAndGuard
+        ]),
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
@@ -95,7 +116,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
   ].join('\n')
@@ -119,6 +140,8 @@ function readConfigToml(configPath: string): string | null {
 function writeConfigToml(configPath: string, text: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
+  // Why: renameSync replaces the inode, so the temp mode becomes the config mode.
+  let mode = 0o600
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === text) {
@@ -127,10 +150,19 @@ function writeConfigToml(configPath: string, text: string): void {
     } catch {
       // Fall through to the atomic write path.
     }
+    try {
+      mode = statSync(configPath).mode & 0o777
+    } catch (error) {
+      // Why: file was deleted between the existsSync check and here — nothing to preserve.
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+    }
   }
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
-    writeFileSync(tmpPath, text, 'utf-8')
+    writeFileSync(tmpPath, text, { encoding: 'utf-8', mode: 0o600 })
+    chmodSync(tmpPath, mode)
     if (existsSync(configPath)) {
       copyFileSync(configPath, `${configPath}.bak`)
     }
@@ -180,8 +212,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const isManagedCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
-    return buildStatus(readManagedKimiHookEvents(text, isManagedCommand), configPath)
+    return buildStatus(readManagedKimiHookEvents(text, isManagedKimiCommand), configPath)
   }
 
   install(): AgentHookInstallStatus {
@@ -200,7 +231,7 @@ export class KimiHookService {
     const command = getManagedCommand(scriptPath)
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
-    writeConfigToml(configPath, applyManagedKimiHooks(text, command))
+    writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
     return this.getStatus()
   }
 
@@ -221,7 +252,11 @@ export class KimiHookService {
       const command = wrapPosixHookCommand(remoteScriptPath)
       // Write the script first so config.toml never points at a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, applyManagedKimiHooks(text, command))
+      await writeTextFileRemoteAtomic(
+        sftp,
+        remoteConfigPath,
+        applyManagedKimiHooks(text, command, isManagedKimiCommand)
+      )
       return {
         agent: 'kimi',
         state: 'installed',
@@ -252,7 +287,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const { text: nextText, changed } = removeManagedKimiHooks(text)
+    const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
     if (changed) {
       writeConfigToml(configPath, nextText)
     }

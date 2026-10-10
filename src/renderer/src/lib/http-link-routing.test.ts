@@ -4,7 +4,7 @@ import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
-  registerRuntimeHttpLinkBrowserOpener,
+  registerWorkspaceHttpLinkBrowserOpener,
   resolveLocalhostHttpLinkDisplayUrl
 } from './http-link-routing'
 
@@ -48,7 +48,7 @@ beforeEach(() => {
   storeState.settings = undefined
   storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
-  registerRuntimeHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
+  registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
   vi.stubGlobal('window', {
     api: {
       shell: {
@@ -62,7 +62,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  registerRuntimeHttpLinkBrowserOpener(null)
+  registerWorkspaceHttpLinkBrowserOpener(null)
   vi.unstubAllGlobals()
 })
 
@@ -139,6 +139,41 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('keeps explicitly local links local while a remote runtime is active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openRuntimeBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('routes opted-in links without a source owner through the active runtime', () => {
+    storeState.settings = {
+      openLinksInApp: true,
+      activeRuntimeEnvironmentId: ' remote-1 '
+    }
+
+    openHttpLink('https://github.com/acme/widgets/pull/123', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true
+    })
+
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'https://github.com/acme/widgets/pull/123',
+      intent: { kind: 'url' }
+    })
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
   it('routes to the system browser when a remote runtime environment is active', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
 
@@ -163,26 +198,33 @@ describe('openHttpLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it('routes runtime and SSH document owners to their distinct destinations', () => {
+  it('routes runtime and SSH document owners through their workspace browsers', () => {
     storeState.settings = { openLinksInApp: true, localhostWorktreeLabelsEnabled: true }
 
     openHttpLink('http://localhost:5180/runtime', {
-      allowRuntimeInApp: true,
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
     })
     openHttpLink('http://localhost:5180/ssh', {
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
     })
 
-    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith({
+    expect(openRuntimeBrowserTabMock).toHaveBeenNthCalledWith(1, {
       workspaceId: 'wt-1',
       url: 'http://localhost:5180/runtime',
       intent: { kind: 'url' },
       expectedRuntimeEnvironmentId: 'env-1'
     })
-    expect(openUrlMock).toHaveBeenCalledWith('http://localhost:5180/ssh')
+    expect(openRuntimeBrowserTabMock).toHaveBeenNthCalledWith(2, {
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/ssh',
+      intent: { kind: 'url' },
+      expectedSshConnectionId: 'ssh-1'
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
@@ -193,7 +235,7 @@ describe('openHttpLink', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: null }
 
     openHttpLink('https://example.com/', {
-      allowRuntimeInApp: true,
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
     })
@@ -211,7 +253,7 @@ describe('openHttpLink', () => {
     openRuntimeBrowserTabMock.mockRejectedValueOnce(new Error('runtime unavailable'))
 
     openHttpLink('https://example.com/', {
-      allowRuntimeInApp: true,
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
     })

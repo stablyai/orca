@@ -1,19 +1,13 @@
 import { useId, useRef } from 'react'
-import { ClipboardCopy, FolderOpen, Info, MoreHorizontal, Share2 } from 'lucide-react'
+import { ClipboardCopy, FolderOpen, Info, MoreHorizontal, Share2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,6 +15,11 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { DiscoveredSkill, SkillProvider } from '../../../../shared/skills'
 import { sourceKindLabel } from './skill-display-labels'
+import {
+  SkillRowContextActions,
+  SkillRowDropdownActions,
+  type SkillRowAction
+} from './SkillRowActions'
 
 const providerLabels: Record<SkillProvider, string> = {
   codex: 'Codex',
@@ -39,25 +38,22 @@ function formatUpdatedAt(value: number | null): string {
     : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
 }
 
-type SkillRowAction = {
-  key: string
-  label: string
-  icon: React.JSX.Element
-  disabled?: boolean
-  onSelect: () => void
-}
-
 export function SkillRow({
   skill,
   selectionMode,
   selected,
   selectable,
   shareable,
+  deletable,
+  deleteDisabledReason,
+  disabledLabel,
   disabledReason,
   focusable,
   onOpenDetail,
   onSelectionChange,
   onShare,
+  onDelete,
+  onReveal,
   onFocus,
   onKeyDown
 }: {
@@ -66,6 +62,12 @@ export function SkillRow({
   selected: boolean
   selectable: boolean
   shareable: boolean
+  deletable: boolean
+  /** Shown on the `Delete…` item itself, so it reads outside selection mode too. */
+  deleteDisabledReason: string | null
+  /** Mode-dependent: a delete-ineligible row and a share-ineligible row need
+   *  different copy in the same visual slot. */
+  disabledLabel: string
   /** Row-specific explanation only; page-wide causes are stated once above the
    *  list instead of once per row. */
   disabledReason: string | null
@@ -73,6 +75,8 @@ export function SkillRow({
   onOpenDetail: () => void
   onSelectionChange: (selected: boolean, range: boolean) => void
   onShare: () => void
+  onDelete: () => void
+  onReveal: () => void
   onFocus: () => void
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }): React.JSX.Element {
@@ -82,15 +86,6 @@ export function SkillRow({
   const rangeRef = useRef(false)
   const selectionBlocked = selectionMode && !selectable
   const showReason = selectionBlocked && disabledReason !== null
-
-  const revealSkill = async (): Promise<void> => {
-    const result = await window.api.shell.openInFileManager(skill.skillFilePath)
-    if (!result.ok) {
-      toast.error(
-        translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')
-      )
-    }
-  }
 
   const copyPath = async (): Promise<void> => {
     await window.api.ui.writeClipboardText(skill.skillFilePath)
@@ -115,13 +110,22 @@ export function SkillRow({
       key: 'reveal',
       label: translate('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file'),
       icon: <FolderOpen />,
-      onSelect: () => void revealSkill()
+      onSelect: onReveal
     },
     {
       key: 'copy-path',
       label: translate('auto.components.skills.SkillRow.copyPath', 'Copy path'),
       icon: <ClipboardCopy />,
       onSelect: () => void copyPath()
+    },
+    {
+      key: 'delete',
+      label: translate('auto.components.skills.SkillRow.deleteSkill', 'Delete…'),
+      icon: <Trash2 />,
+      disabled: !deletable,
+      destructive: true,
+      ...(deleteDisabledReason ? { disabledReason: deleteDisabledReason } : {}),
+      onSelect: onDelete
     }
   ]
 
@@ -197,7 +201,7 @@ export function SkillRow({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {translate('auto.components.skills.SkillRow.notShareable', 'Not shareable')}
+                      {disabledLabel}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={4}>
@@ -247,28 +251,14 @@ export function SkillRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {actions.map((action) => (
-                  <DropdownMenuItem
-                    key={action.key}
-                    disabled={action.disabled}
-                    onSelect={action.onSelect}
-                  >
-                    {action.icon}
-                    {action.label}
-                  </DropdownMenuItem>
-                ))}
+                <SkillRowDropdownActions actions={actions} />
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        {actions.map((action) => (
-          <ContextMenuItem key={action.key} disabled={action.disabled} onSelect={action.onSelect}>
-            {action.icon}
-            {action.label}
-          </ContextMenuItem>
-        ))}
+        <SkillRowContextActions actions={actions} />
       </ContextMenuContent>
     </ContextMenu>
   )

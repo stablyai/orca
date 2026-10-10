@@ -1,0 +1,38 @@
+---
+title: Usage & rate-limit tracking
+---
+
+Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+
+## What's shown
+
+- Current usage against the active account's plan.
+- Time to reset for 5-hour, daily, weekly, and Claude Fable weekly windows (where applicable).
+- A warning chip when you cross 80% of a limit.
+
+## How it works
+
+Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+
+## Multi-account accounting
+
+The status bar always reflects the _active_ account. Other configured accounts are visible in the account switcher with their own usage.
+
+## Usage roster
+
+Click the usage segment in the status bar to open the **Usage** popover. It lists every tracked provider (icon · name · plan · soonest reset · per-window bars), sorted so the tightest limit is first. Use the header refresh control to re-read local usage state.
+
+- **Detailed** — full bars, labels, and percentages for every window
+- **Compact** — only the tightest window per provider
+
+Under [Settings → Appearance](/docs/settings), choose **% used** vs **% remaining** for how those numbers read.
+
+Rows without live numbers show a short status instead: **Loading usage…**, **not signed in**, **Usage unavailable**, **No usage data**, or a provider-specific error. Claude and Codex rows can drill into account switching; **Manage accounts** opens Settings.
+
+### Mobile
+
+On the companion app, open the host **Accounts** screen for the same switcher/usage readout. When Codex has earned **rate-limit reset** credits, spend one from that screen (see [Mobile companion](/docs/mobile)).
+
+## Estimated cost (Stats)
+
+The Stats breakdown may show **estimated cost** for known model families (including Claude 5-class and Codex GPT-5.6 rows). Rows marked **• inferred pricing** use Orca’s local price table, not a live bill from the provider. Prefer the provider console for authoritative spend.

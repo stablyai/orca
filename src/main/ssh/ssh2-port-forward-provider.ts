@@ -26,35 +26,43 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
       socket.on('close', () => activeSockets.delete(socket))
       socket.on('error', () => socket.destroy())
 
-      client.forwardOut(
-        options.localHost,
-        options.localPort,
-        options.remoteHost,
-        options.remotePort,
-        (err, channel) => {
-          if (err) {
-            socket.destroy()
-            return
+      // Why: a client whose SSH transport dropped throws synchronously; uncaught, that kills main.
+      try {
+        client.forwardOut(
+          options.localHost,
+          options.localPort,
+          options.remoteHost,
+          options.remotePort,
+          (err, channel) => {
+            if (err) {
+              socket.destroy()
+              return
+            }
+            if (closed || socket.destroyed) {
+              closeChannel(channel)
+              socket.destroy()
+              return
+            }
+            socket.pipe(channel).pipe(socket)
+            channel.on('close', () => socket.destroy())
+            channel.on('error', () => socket.destroy())
+            socket.on('close', () => channel.close())
           }
-          if (closed || socket.destroyed) {
-            closeChannel(channel)
-            socket.destroy()
-            return
-          }
-          socket.pipe(channel).pipe(socket)
-          channel.on('close', () => socket.destroy())
-          channel.on('error', () => socket.destroy())
-          socket.on('close', () => channel.close())
-        }
-      )
+        )
+      } catch {
+        socket.destroy()
+      }
     })
 
-    await listen(server, options.localHost, options.localPort)
+    await listenForPortForward(server, options.localHost, options.localPort)
+    // Why: port 0 asks the OS for a free port, and callers must dial the one it bound.
+    const address = server.address()
+    const localPort = typeof address === 'object' && address ? address.port : options.localPort
 
     const entry = {
       id: options.id,
       connectionId: options.connectionId,
-      localPort: options.localPort,
+      localPort,
       remoteHost: options.remoteHost,
       remotePort: options.remotePort,
       label: options.label
@@ -83,7 +91,7 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
   }
 }
 
-function listen(server: Server, host: string, port: number): Promise<void> {
+export function listenForPortForward(server: Server, host: string, port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const onError = (err: Error): void => {
       server.removeListener('listening', onListening)
@@ -91,6 +99,10 @@ function listen(server: Server, host: string, port: number): Promise<void> {
     }
     const onListening = (): void => {
       server.removeListener('error', onError)
+      // An accept-time error (EMFILE) on a server with no listener would crash the main process.
+      server.on('error', (error) => {
+        console.warn(`[ssh] Port forward listener on ${host}:${port} failed: ${error.message}`)
+      })
       resolve()
     }
     server.once('error', onError)

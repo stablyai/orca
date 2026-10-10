@@ -83,15 +83,14 @@ export function getUniqueLegacyCoordinatorHandle(
         .prepare(
           `SELECT DISTINCT assignee_handle AS handle
            FROM dispatch_contexts
-           WHERE run_id = ? AND contract_version = ?
-             AND assignee_handle IS NOT NULL
+           WHERE run_id = ? AND assignee_handle IS NOT NULL
            UNION
            SELECT DISTINCT terminal_handle AS handle
            FROM legacy_compatibility_principals
            WHERE run_id = ? AND role = 'worker'
              AND status IN ('committed', 'settled')`
         )
-        .all(runId, LEGACY_CONTRACT_VERSION, runId) as { handle: string }[]
+        .all(runId, runId) as { handle: string }[]
     ).map((row) => row.handle)
   )
   const durableRows = this.db
@@ -107,10 +106,9 @@ export function getUniqueLegacyCoordinatorHandle(
          AND EXISTS(
            SELECT 1 FROM dispatch_contexts d
            WHERE d.task_id = t.id AND d.run_id = t.run_id
-             AND d.contract_version = ?
          )`
     )
-    .all(adoption.adopted_at, runId, adoption.adopted_at, LEGACY_CONTRACT_VERSION) as {
+    .all(adoption.adopted_at, runId, adoption.adopted_at) as {
     handle: string
   }[]
   if (durableRows.some((row) => workerHandles.has(row.handle))) {

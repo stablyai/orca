@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as NodeFs from 'node:fs'
-import path from 'node:path'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
@@ -25,54 +23,7 @@ describe('getUpstreamStatus', () => {
     invalidateGitUpstreamStatusReads()
   })
 
-  it('benchmarks concurrent upstream Git command pressure', async () => {
-    const benchPath = process.env.ORCA_GIT_UPSTREAM_COALESCING_BENCH_JSON
-    if (!benchPath) {
-      return
-    }
-    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return Promise.resolve({ stdout: 'main\n' })
-      }
-      if (args[0] === 'rev-parse') {
-        return Promise.resolve({ stdout: 'origin/main\n' })
-      }
-      if (args[0] === 'rev-list') {
-        return Promise.resolve({ stdout: '2\t3\n' })
-      }
-      if (args[0] === 'log') {
-        return Promise.resolve({ stdout: '+ abc123 remote work\n' })
-      }
-      throw new Error(`unexpected git args: ${args.join(' ')}`)
-    })
-
-    await Promise.all(Array.from({ length: 10 }, () => getUpstreamStatus('/repo')))
-
-    const commands = gitExecFileAsyncMock.mock.calls.map(([args, options]) => ({ args, options }))
-    const commandCounts = Object.fromEntries(
-      ['symbolic-ref', 'rev-parse', 'rev-list', 'log'].map((command) => [
-        command,
-        commands.filter(({ args }) => args[0] === command).length
-      ])
-    )
-    const { mkdirSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
-    mkdirSync(path.dirname(benchPath), { recursive: true })
-    writeFileSync(
-      benchPath,
-      JSON.stringify({
-        scenario: 'local-git-upstream-concurrent-burst',
-        concurrentCalls: 10,
-        physicalGitCalls: commands.length,
-        commandCounts,
-        commandChain: ['symbolic-ref', 'rev-parse', 'rev-list', 'log'].map((command) =>
-          commands.find(({ args }) => args[0] === command)
-        )
-      })
-    )
-  })
-
-  // Why: the benchmark above only runs under an env var, so this is the CI-enforced
-  // guard that the native/WSL path actually coalesces rather than fanning out.
+  // Why: the CI-enforced guard that the native/WSL path actually coalesces rather than fanning out.
   it('shares one physical read across ten identical native callers', async () => {
     let resolveSymbolicRef = (): void => {}
     const symbolicRefGate = new Promise<void>((resolve) => {
@@ -271,9 +222,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockResolvedValueOnce({ stdout: '\n' })
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -289,9 +238,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -307,9 +254,7 @@ describe('getUpstreamStatus', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
       .mockRejectedValueOnce(missingTrackingRefError)
-      .mockRejectedValueOnce(new Error('missing branch remote'))
-      .mockRejectedValueOnce(new Error('missing branch merge'))
-      .mockRejectedValueOnce(new Error('missing branch base'))
+      .mockResolvedValueOnce({ stdout: '' })
       .mockRejectedValueOnce(new Error('missing remote branch'))
 
     const result = await getUpstreamStatus('/repo')
@@ -362,6 +307,16 @@ describe('getUpstreamStatus', () => {
       }
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
         return Promise.resolve({ stdout: 'https://github.com/pynickle/orca.git\n' })
+      }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return Promise.resolve({
+          stdout: [
+            'origin\thttps://github.com/stablyai/orca.git (fetch)',
+            'origin\thttps://github.com/stablyai/orca.git (push)',
+            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (fetch)',
+            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (push)'
+          ].join('\n')
+        })
       }
       if (args[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\npr-pynickle-orca\n' })
@@ -652,6 +607,8 @@ describe('getUpstreamStatus', () => {
       [
         [
           'log',
+          '--no-show-signature',
+          '--no-color',
           '--oneline',
           '--cherry-mark',
           '--right-only',

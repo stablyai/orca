@@ -4,6 +4,7 @@ import {
   readyHostSessionInventoryResponse,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -72,7 +73,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(hostListCalls).toBe(callsAfterTwoWindows)
       expect(transport.getRecoveryState?.().phase).toBe('recovering')
 
-      await vi.advanceTimersByTimeAsync(9_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(subscribedTerminalHandles()).toEqual(['terminal-stable'])
       transport.destroy?.()
@@ -180,7 +181,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         'terminal-flapping'
       ])
       expect(transport.isConnected()).toBe(false)
-      await vi.advanceTimersByTimeAsync(45_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       transport.destroy?.()
     } finally {
@@ -225,7 +226,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
-    const pendingSend = sendInputAccepted('sent-before-rebind')
+    const pendingSend = sendInputAccepted('sent-before-rebind', 'driving')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
     )
@@ -292,7 +293,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
-    const pendingSend = sendInputAccepted('sent-before-close')
+    const pendingSend = sendInputAccepted('sent-before-close', 'driving')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
     )
@@ -322,7 +323,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledOnce())
     expect(subscribedTerminalHandles()).toEqual(['terminal-old'])
-    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-old')
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-old', -1)
     expect(transport.getPtyId()).toBeNull()
     expect(transport.isConnected()).toBe(false)
   })
@@ -389,7 +390,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (!sendInputAccepted) {
         throw new Error('Expected acknowledged remote terminal input')
       }
-      const pendingSend = sendInputAccepted('sent-before-stream-end')
+      const pendingSend = sendInputAccepted('sent-before-stream-end', 'driving')
       await vi.waitFor(() =>
         expect(runtimeCall).toHaveBeenCalledWith(
           expect.objectContaining({ method: 'terminal.send' })

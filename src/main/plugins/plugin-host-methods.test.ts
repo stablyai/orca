@@ -194,10 +194,14 @@ describe('terminal.sendText explicit worktree routing', () => {
         { includeVisualLayouts: false }
       )
       expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
-      expect(delegate.sendTerminal).toHaveBeenCalledWith(terminalId, {
-        text: 'echo hi',
-        enter: true
-      })
+      expect(delegate.sendTerminal).toHaveBeenCalledWith(
+        terminalId,
+        {
+          text: 'echo hi',
+          enter: true
+        },
+        { inputKind: 'driving' }
+      )
       expect(vi.mocked(delegate.listTerminals).mock.invocationCallOrder[0]!).toBeLessThan(
         vi.mocked(delegate.sendTerminal).mock.invocationCallOrder[0]!
       )
@@ -230,5 +234,16 @@ describe('terminal.sendText explicit worktree routing', () => {
       PLUGIN_WORKSPACE_TERMINAL_LIMIT
     )
     expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('terminal.sendText', () => {
+  it('returns the runtime send acceptance', async () => {
+    const { delegate, services } = createTerminalHarness(['terminal:local:one'])
+
+    const outcome = await sendTerminalText(services, 'terminal:local:one')
+
+    expect(outcome).toEqual({ ok: true, value: { accepted: true } })
+    expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
   })
 })

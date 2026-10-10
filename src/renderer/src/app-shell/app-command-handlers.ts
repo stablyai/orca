@@ -1,10 +1,21 @@
 import { useShallow } from 'zustand/react/shallow'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
+import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import {
+  getRenderedLineageChipKeys,
+  resolveChildWorkspacesToggleGroupKey
+} from '../components/sidebar/child-workspaces-toggle-target'
+import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
+import {
+  deleteHoveredWorkspaceImmediately,
+  resolveHoveredWorkspaceDeleteTarget
+} from '../components/sidebar/hovered-workspace-delete'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -19,6 +30,8 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 // Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so one dispatch path serves both; KeybindingInput-compatible.
 export type ShortcutDispatchInput = {
+  isComposing?: boolean
+  altGraph?: boolean
   key?: string
   code?: string
   altKey?: boolean
@@ -68,6 +81,24 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
     : 'app'
+}
+
+/**
+ * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is
+ * addressed by its backing terminal id (`activeTabId`), a structured chat tab by its unified tab
+ * id. `activeTabId` is terminal-only state and never moves for a structured tab, so reading it
+ * there targets whichever terminal was last active. Mirrors TabGroupPanel's tab-strip resolution.
+ */
+function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
+  const store = useAppStore.getState()
+  if (store.activeTabType === 'terminal') {
+    return store.activeTabId
+  }
+  if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
+    return null
+  }
+  const activeTab = store.getActiveTab(activeWorktreeId)
+  return activeTab?.contentType === 'agent-session' ? activeTab.id : null
 }
 
 /**
@@ -156,6 +187,36 @@ export function createAppCommandHandlers(
         })
     ],
     [
+      'sidebar.childWorkspaces.toggle',
+      () => {
+        const store = useAppStore.getState()
+        // Locally controlled dialogs do not set activeModal.
+        if (
+          store.activeModal !== 'none' ||
+          floatingWorkspaceFocused ||
+          hasVisibleOverlay({ ignoreMatches: '[role="listbox"], [role="menu"]' })
+        ) {
+          return false
+        }
+        const groupKey = resolveChildWorkspacesToggleGroupKey(
+          store,
+          getRenderedLineageChipKeys(store)
+        )
+        if (!groupKey) {
+          return false
+        }
+        return claim('sidebar.childWorkspaces.toggle', () => {
+          const expanding = store.collapsedGroups.has(groupKey)
+          // Why: same scroll anchoring as the chip click, so the viewport does not jump.
+          requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
+          store.toggleCollapsedGroup(groupKey)
+          if (expanding) {
+            store.setSidebarOpen(true)
+          }
+        })
+      }
+    ],
+    [
       'floatingWorkspace.maximize',
       () => {
         if (floatingTerminalOpen || !floatingTerminalEnabled) {
@@ -167,16 +228,16 @@ export function createAppCommandHandlers(
     [
       'tab.rename',
       () => {
-        const store = useAppStore.getState()
-        if (
-          !workspaceChromeActive ||
-          floatingWorkspaceFocused ||
-          store.activeTabType !== 'terminal' ||
-          !store.activeTabId
-        ) {
+        if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
-        return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
+        // Why: a structured chat tab is renamed through the same inline editor, so gating on
+        // 'terminal' alone left the shortcut a silent no-op there.
+        const tabId = resolveRenameTargetTabId(activeWorktreeId)
+        if (!tabId) {
+          return false
+        }
+        return claim('tab.rename', () => requestTerminalTabRename(tabId))
       }
     ],
     [
@@ -188,6 +249,22 @@ export function createAppCommandHandlers(
         return claim('workspace.rename', () => {
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
+        })
+      }
+    ],
+    [
+      'workspace.delete',
+      () => {
+        if (floatingWorkspaceFocused) {
+          return false
+        }
+        const store = useAppStore.getState()
+        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        if (!target) {
+          return false
+        }
+        return claim('workspace.delete', () => {
+          deleteHoveredWorkspaceImmediately(store, target)
         })
       }
     ],

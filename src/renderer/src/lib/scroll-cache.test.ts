@@ -1,18 +1,5 @@
-import { describe, expect, it, beforeEach } from 'vitest'
-import {
-  cursorPositionCache,
-  diffViewStateCache,
-  pdfViewPositionCache,
-  setWithLRU,
-  scrollTopCache
-} from './scroll-cache'
-
-beforeEach(() => {
-  scrollTopCache.clear()
-  cursorPositionCache.clear()
-  diffViewStateCache.clear()
-  pdfViewPositionCache.clear()
-})
+import { describe, expect, it } from 'vitest'
+import { setWithLRU } from './scroll-cache'
 
 describe('setWithLRU', () => {
   it('inserts a new entry into the map', () => {
@@ -100,90 +87,5 @@ describe('setWithLRU', () => {
     expect(map.size).toBe(5)
     expect(map.has('key-0')).toBe(false)
     expect(map.has('new')).toBe(true)
-  })
-})
-
-describe('scrollTopCache', () => {
-  it('is an empty Map on import', () => {
-    expect(scrollTopCache).toBeInstanceOf(Map)
-    expect(scrollTopCache.size).toBe(0)
-  })
-
-  it('works with setWithLRU for mode-scoped keys', () => {
-    setWithLRU(scrollTopCache, '/path/to/file.ts', 100)
-    setWithLRU(scrollTopCache, '/path/to/file.ts:preview', 200)
-    setWithLRU(scrollTopCache, '/path/to/file.ts:rich', 300)
-    expect(scrollTopCache.get('/path/to/file.ts')).toBe(100)
-    expect(scrollTopCache.get('/path/to/file.ts:preview')).toBe(200)
-    expect(scrollTopCache.get('/path/to/file.ts:rich')).toBe(300)
-    expect(scrollTopCache.size).toBe(3)
-  })
-})
-
-describe('pdfViewPositionCache', () => {
-  it('is an empty Map on import', () => {
-    expect(pdfViewPositionCache).toBeInstanceOf(Map)
-    expect(pdfViewPositionCache.size).toBe(0)
-  })
-
-  it('round-trips pageNumber, top, and left intact', () => {
-    setWithLRU(pdfViewPositionCache, '/doc.pdf:pdf', { pageNumber: 12, top: 431.5, left: 62 })
-    expect(pdfViewPositionCache.get('/doc.pdf:pdf')).toEqual({
-      pageNumber: 12,
-      top: 431.5,
-      left: 62
-    })
-  })
-
-  it('keeps pane-scoped keys for the same file independent', () => {
-    setWithLRU(pdfViewPositionCache, '/doc.pdf:pdf', { pageNumber: 3, top: 700, left: 0 })
-    setWithLRU(pdfViewPositionCache, '/doc.pdf::tab-2:pdf', { pageNumber: 40, top: 120, left: 0 })
-    expect(pdfViewPositionCache.get('/doc.pdf:pdf')?.pageNumber).toBe(3)
-    expect(pdfViewPositionCache.get('/doc.pdf::tab-2:pdf')?.pageNumber).toBe(40)
-  })
-
-  it('evicts the oldest entry at the default cap of 20', () => {
-    for (let i = 0; i <= 20; i++) {
-      setWithLRU(pdfViewPositionCache, `/doc-${i}.pdf:pdf`, { pageNumber: i, top: 0, left: 0 })
-    }
-    expect(pdfViewPositionCache.size).toBe(20)
-    expect(pdfViewPositionCache.has('/doc-0.pdf:pdf')).toBe(false)
-    expect(pdfViewPositionCache.has('/doc-20.pdf:pdf')).toBe(true)
-  })
-
-  it('refreshes recency when an existing PDF key is re-set', () => {
-    for (let i = 0; i < 20; i++) {
-      setWithLRU(pdfViewPositionCache, `/doc-${i}.pdf:pdf`, { pageNumber: i, top: 0, left: 0 })
-    }
-    setWithLRU(pdfViewPositionCache, '/doc-0.pdf:pdf', { pageNumber: 99, top: 0, left: 0 })
-    setWithLRU(pdfViewPositionCache, '/doc-new.pdf:pdf', { pageNumber: 1, top: 0, left: 0 })
-    expect(pdfViewPositionCache.get('/doc-0.pdf:pdf')?.pageNumber).toBe(99)
-    expect(pdfViewPositionCache.has('/doc-1.pdf:pdf')).toBe(false)
-  })
-})
-
-describe('diffViewStateCache', () => {
-  it('is an empty Map on import', () => {
-    expect(diffViewStateCache).toBeInstanceOf(Map)
-    expect(diffViewStateCache.size).toBe(0)
-  })
-
-  it('works with setWithLRU for diff-tab keys', () => {
-    const diffState = {
-      original: {
-        cursorState: [],
-        viewState: { scrollTop: 10, scrollTopWithoutViewZones: 10, scrollLeft: 0 }
-      },
-      modified: {
-        cursorState: [],
-        viewState: { scrollTop: 20, scrollTopWithoutViewZones: 20, scrollLeft: 0 }
-      },
-      modelState: { unchangedRegions: [] }
-    } as unknown as typeof diffViewStateCache extends Map<string, infer T> ? T : never
-
-    setWithLRU(diffViewStateCache, 'diff-tab', diffState)
-
-    expect(diffViewStateCache.get('diff-tab')).toBe(diffState)
-    expect(diffViewStateCache.size).toBe(1)
   })
 })

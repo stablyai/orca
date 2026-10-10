@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -7,62 +6,48 @@ import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
+import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
-  deleteActiveClaudeKeychainCredentialsStrict,
-  readActiveClaudeKeychainCredentialsStrict,
-  writeActiveClaudeKeychainCredentials
-} from '../../main/claude-accounts/keychain'
+  buildWslExecArgs,
+  buildWslLoginShellCommand,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
 import {
   getVersionManagerBinPaths,
-  resolveCliCommand
+  resolveCliCommand,
+  withCliRuntimeOnPath
 } from '../../shared/node-cli-command-resolution'
 import {
   getSpawnArgsForWindows,
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
-import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
+import {
+  ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
+  ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  ManagedDataAccountsState
 } from '../../shared/managed-account-types'
 import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
+import { getWslAccountTarget } from './account-wsl-location'
+import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
+import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
 
 // Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
+  opencode?: ManagedDataAccountsState
+  devin?: ManagedDataAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
-}
-
-// Why: Claude and Codex managed-account summaries both carry id+email+active id,
-// so one formatter renders either provider's block.
-type AccountsBlock = {
-  accounts: readonly { id: string; email: string }[]
-  activeAccountId: string | null
-  activeAccountIdsByRuntime?: {
-    host: string | null
-    wsl: Record<string, string | null>
-  }
-}
-
-/** Renders a provider's managed-account list as a human-readable block, marking the active account. */
-function formatAccountsBlock(label: string, block: AccountsBlock): string {
-  if (block.accounts.length === 0) {
-    return `No managed ${label} accounts.`
-  }
-  const activeAccountIds = new Set([
-    block.activeAccountId,
-    block.activeAccountIdsByRuntime?.host,
-    ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
-  ])
-  const lines = block.accounts.map(
-    (account) => `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
-  )
-  return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
 function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -112,13 +97,25 @@ async function runAgentLoginInTerminal(
       )
       return
     }
-    const env = addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
-    const child = spawn(spawnCmd, spawnArgs, {
-      // Why: JSON mode reserves stdout for the response envelope while keeping
-      // the interactive login attached to the user's terminal via stderr.
-      stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
-      env
-    })
+    // Why paired after the seed: addAgentNodePaths prepends the *newest* version
+    // manager bin, which is not necessarily where this CLI lives. Pairing last puts
+    // the CLI's own node in front of that seed (stablyai/orca#10932).
+    const env = withCliRuntimeOnPath(
+      resolvedCommand,
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
+    )
+    const consoleStdio = stdioForWindowsInteractiveChild(json)
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(spawnCmd, spawnArgs, {
+        // Why: JSON mode reserves stdout for the response envelope while keeping
+        // the interactive login attached to the user's terminal via stderr.
+        stdio: consoleStdio.stdio,
+        env
+      })
+    } finally {
+      consoleStdio.dispose()
+    }
     session.child = child
     child.once('error', (error) =>
       rejectPromise(
@@ -146,85 +143,60 @@ async function runAgentLoginInTerminal(
   })
 }
 
-async function cleanupClaudeLoginArtifacts(
-  configDir: string,
-  legacyCredentials: string | null,
-  restoreLegacyCredentials: boolean
-): Promise<void> {
-  const errors: unknown[] = []
-  if (process.platform === 'darwin') {
-    try {
-      await deleteActiveClaudeKeychainCredentialsStrict(configDir)
-    } catch (error) {
-      errors.push(error)
-    }
-    if (restoreLegacyCredentials) {
-      try {
-        await (legacyCredentials
-          ? writeActiveClaudeKeychainCredentials(legacyCredentials)
-          : deleteActiveClaudeKeychainCredentialsStrict())
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-  }
-  try {
-    rmSync(configDir, { recursive: true, force: true })
-  } catch (error) {
-    errors.push(error)
-  }
-  if (errors.length > 0) {
-    throw new AggregateError(errors, 'Failed to clean up Claude login artifacts.')
-  }
-}
-
-/** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
-async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
-  const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
+/** Signs in to a new account folder the host created, then registers it (superset AddAccountDialog). */
+async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<void> {
+  const { result: signIn } = await client.call<ClaudeAccountSignIn>(
+    'accounts.beginClaudeSignIn',
+    getWslAccountTarget(cwd) ?? {},
+    { timeoutMs: 300_000 }
+  )
   const session: InteractiveLoginSession = {
     child: null,
     registering: false,
     terminationPromise: null
   }
-  let legacyCredentials: string | null = null
-  let restoreLegacyCredentials = false
   const result = await withInteractiveLoginCleanup(
     session,
+    // Why always: the host keeps a folder that became an account, and deletes an abandoned one.
+    // Never thrown: an older running Orca lacks the method, and the add itself already finished.
     async () => {
-      await cleanupClaudeLoginArtifacts(configDir, legacyCredentials, restoreLegacyCredentials)
+      const { accountId, runtime, wslDistro } = signIn
+      await client
+        .call('accounts.cancelClaudeSignIn', { accountId, runtime, wslDistro })
+        .catch((error: unknown) => console.warn('[account] Could not clean up sign-in:', error))
     },
     async () => {
-      if (process.platform === 'darwin') {
-        legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
-        restoreLegacyCredentials = true
+      if (signIn.runtime === 'wsl' && signIn.wslDistro) {
+        const login = `exec env CLAUDE_CONFIG_DIR=${quotePosixShell(signIn.configDir)} claude auth login`
+        await runAgentLoginInTerminal(
+          'wsl.exe',
+          buildWslExecArgs(signIn.wslDistro, ['/bin/sh', '-c', buildWslLoginShellCommand(login)]),
+          {},
+          json,
+          session
+        )
+      } else {
+        await runAgentLoginInTerminal(
+          'claude',
+          ['auth', 'login'],
+          { CLAUDE_CONFIG_DIR: signIn.configDir },
+          json,
+          session
+        )
       }
-      await runAgentLoginInTerminal(
-        'claude',
-        ['auth', 'login', '--claudeai'],
-        {
-          CLAUDE_CONFIG_DIR: configDir
-        },
-        json,
-        session
-      )
       session.registering = true
-      return client.call<ClaudeRateLimitAccountsState>('accounts.addClaudeFromConfigDir', {
-        configDir,
-        ...(process.platform === 'darwin'
-          ? {
-              previousLegacyCredentialsSha256: legacyCredentials
-                ? createHash('sha256').update(legacyCredentials).digest('hex')
-                : null
-            }
-          : {})
-      })
+      return client.call<ClaudeRateLimitAccountsState>(
+        'accounts.finishClaudeSignIn',
+        { accountId: signIn.accountId, runtime: signIn.runtime, wslDistro: signIn.wslDistro },
+        { timeoutMs: 300_000 }
+      )
     }
   )
   printResult(result, json, (state) => formatAccountsBlock('Claude', state))
 }
 
 /** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
-async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
+async function addCodexAccount({ client, cwd, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
   const session: InteractiveLoginSession = {
     child: null,
@@ -248,7 +220,8 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
       )
       session.registering = true
       return client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
-        sourceHome: codexHome
+        sourceHome: codexHome,
+        ...getWslAccountTarget(cwd)
       })
     }
   )
@@ -262,20 +235,21 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
  * mistake this feature exists to avoid. A `--help` note does not reach someone who
  * already typed the flag.
  */
-function rejectRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
-  for (const flag of ['environment', 'pairing-code']) {
-    if (ctx.flags.has(flag)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `\`--${flag}\` does not retarget \`${command}\`. Run it on the host whose accounts you want to manage.`
-      )
-    }
-  }
+function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
+  rejectRemoteSelectionFlags(
+    ctx.flags,
+    `\`${command}\`. Run it on the host whose accounts you want to manage.`
+  )
 }
 
-async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
+async function assertAccountImportSupported(
+  { client }: HandlerContext,
+  agent: 'claude' | 'codex'
+): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
+  const capability =
+    agent === 'claude' ? CLAUDE_SIGN_IN_RUNTIME_CAPABILITY : ACCOUNT_IMPORT_RUNTIME_CAPABILITY
+  if (!status.result.capabilities?.includes(capability)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
       'The running Orca runtime is too old to add accounts from the CLI. Update or restart Orca and try again.'
@@ -283,7 +257,7 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
   }
 }
 
-/** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */
+/** CLI handlers for managed account enrollment and listing. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
@@ -292,35 +266,54 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     if (agentFlag !== undefined && typeof agentFlag !== 'string') {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Missing a value for --agent. Use `--agent claude` or `--agent codex`.'
+        'Missing a value for --agent. Use `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent devin`.'
       )
     }
     const agent = agentFlag ?? 'claude'
-    if (agent !== 'claude' && agent !== 'codex') {
+    if (agent !== 'claude' && agent !== 'codex' && agent !== 'opencode' && agent !== 'devin') {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Unsupported --agent "${agent}". Use "claude" or "codex".`
+        `Unsupported --agent "${agent}". Use "claude", "codex", "opencode", or "devin".`
       )
     }
-    rejectRemoteSelectionFlags(ctx, 'orca account add')
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
+    if (agent === 'opencode' || agent === 'devin') {
+      await addDataAccount(ctx, agent, runAgentLoginInTerminal)
+      return
+    }
     // Why: fail on runtime version skew before burning a full OAuth round trip.
-    await assertAccountImportSupported(ctx)
+    await assertAccountImportSupported(ctx, agent)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
   'account list': async (ctx) => {
-    rejectRemoteSelectionFlags(ctx, 'orca account list')
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
+    const provider = ctx.flags.get('agent')
+    if (provider !== undefined) {
+      await listDataAccounts(ctx, provider)
+      return
+    }
     const { client, json } = ctx
     // Why: this command renders no usage numbers, so skip the forced provider
     // refresh — it is one serial network round-trip per managed account.
     const result = await client.call<AccountsListSnapshot>('accounts.list', {
       refreshUsage: false
     })
-    printResult(
-      result,
-      json,
-      (snapshot) =>
-        `${formatAccountsBlock('Claude', snapshot.claude)}\n\n${formatAccountsBlock('Codex', snapshot.codex)}`
+    printResult(result, json, (snapshot) =>
+      [
+        formatAccountsBlock('Claude', snapshot.claude),
+        formatAccountsBlock('Codex', snapshot.codex),
+        ...(snapshot.opencode ? [formatDataAccounts('OpenCode', snapshot.opencode)] : []),
+        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : [])
+      ].join('\n\n')
     )
+  },
+  'account select': async (ctx) => {
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account select')
+    await mutateDataAccount(ctx, 'select')
+  },
+  'account rm': async (ctx) => {
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account rm')
+    await mutateDataAccount(ctx, 'remove')
   }
 }

@@ -2,7 +2,10 @@ import { useCallback, useDeferredValue, useMemo, useState } from 'react'
 import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { matchWorkspaceBoardWorktrees } from './workspace-kanban-search'
+import {
+  buildWorkspaceBoardPaletteDocuments,
+  matchWorkspaceBoardWorktrees
+} from './workspace-kanban-search'
 
 function areWorktreeIdSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   if (a.size !== b.size) {
@@ -48,14 +51,27 @@ export function useWorkspaceKanbanSearch(args: {
   // lets React interrupt the board re-render.
   const deferredQuery = useDeferredValue(query)
 
+  // Why split from the match memo: the index only depends on the worktrees and repos, so a
+  // keystroke reruns the search over an already-built index instead of rebuilding every
+  // worktree's normalized fields.
+  const documents = useMemo(
+    () =>
+      buildWorkspaceBoardPaletteDocuments({
+        worktrees: args.worktrees,
+        repoMap: args.repoMap
+      }),
+    [args.repoMap, args.worktrees]
+  )
+
   const matched = useMemo(
     () =>
       matchWorkspaceBoardWorktrees({
         worktrees: args.worktrees,
         query: deferredQuery,
-        repoMap: args.repoMap
+        repoMap: args.repoMap,
+        documents
       }),
-    [args.repoMap, args.worktrees, deferredQuery]
+    [args.repoMap, args.worktrees, deferredQuery, documents]
   )
 
   const matchingWorktreeIds =

@@ -14,6 +14,7 @@ import type {
   RestoredEditorOwnerResult
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
+import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
 
 export function buildRestoredEditorOwnerTransition(
   args: RestoredEditorOwnerMigration,
@@ -170,6 +171,27 @@ export function buildRestoredEditorOwnerTransition(
       delete nextActiveGroupIdByWorktree[sourceWorktreeId]
     }
     nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
+    const tabState =
+      sourceWorktreeId === targetWorktreeId
+        ? rekeyRestoredEditorTabsInPlace(
+            s,
+            targetWorktreeId,
+            migrations,
+            tabIdMigration,
+            args.targetExecutionHostId
+          )
+        : {
+            activeFileIdByWorktree: nextActiveFileIdByWorktree,
+            activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+            activeTabTypeByWorktree: {
+              ...s.activeTabTypeByWorktree,
+              [targetWorktreeId]: 'editor' as const
+            },
+            groupsByWorktree: nextGroupsByWorktree,
+            layoutByWorktree: nextLayoutByWorktree,
+            tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+            unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+          }
 
     assignResult({ ok: true, fileId: newFileId })
     return {
@@ -205,6 +227,7 @@ export function buildRestoredEditorOwnerTransition(
         editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
         editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
         markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
+        markdownRichModeSizeOverride: rekeyFileIdRecord(s.markdownRichModeSizeOverride, migrations),
         editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
         markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
         markdownTableOfContentsVisible: rekeyFileIdRecord(
@@ -212,16 +235,7 @@ export function buildRestoredEditorOwnerTransition(
           migrations
         ),
         activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
-        activeFileIdByWorktree: nextActiveFileIdByWorktree,
-        activeTabTypeByWorktree: {
-          ...s.activeTabTypeByWorktree,
-          [targetWorktreeId]: 'editor'
-        },
-        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-        groupsByWorktree: nextGroupsByWorktree,
-        layoutByWorktree: nextLayoutByWorktree,
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+        ...tabState,
         ...(s.pendingEditorReveal?.fileId && migrations.has(s.pendingEditorReveal.fileId)
           ? {
               pendingEditorReveal: {

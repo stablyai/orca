@@ -1,32 +1,100 @@
-import type { GateStatus, DecisionGateRow } from '../../types'
-import { LEGACY_RUN_ID } from '../contract-constants'
+import type { DecisionGateRow, DispatchContextRow, GateStatus } from '../../types'
+import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 
 // ── Decision Gates ──
 
 export function createGate(
   this: OrchestrationDb,
-  gate: { taskId: string; question: string; options?: string[] }
+  gate: {
+    taskId: string
+    question: string
+    options?: string[]
+    requester?: { handle: string; paneKey?: string | null; dispatchId: string }
+  }
 ): DecisionGateRow {
-  const id = generateId('gate')
-  const optionsJson = JSON.stringify(gate.options ?? [])
-  this.db
-    .prepare(
-      'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(
-      id,
-      this.getTask(gate.taskId)?.run_id ?? LEGACY_RUN_ID,
-      gate.taskId,
-      gate.question,
-      optionsJson
-    )
-
-  this.completeActiveDispatchForTask(gate.taskId)
-  this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
-
-  return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as DecisionGateRow
+  this.db.exec('SAVEPOINT create_gate')
+  try {
+    const task = this.getTask(gate.taskId)
+    if (!task) {
+      throw new OrchestrationError(
+        'lifecycle_not_found',
+        `Task ${gate.taskId} was not found while creating a decision gate.`,
+        { taskId: gate.taskId }
+      )
+    }
+    const runId = task.run_id
+    this.requireRun(runId)
+    const rawActive = this.db
+      .prepare(
+        `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+         WHERE task_id = ? AND status IN ('pending', 'dispatched')
+         ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(gate.taskId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns one Dispatch row or undefined; the adapter exposes unknown.
+    const active = rawActive as DispatchContextRow | undefined
+    if (
+      gate.requester &&
+      (!active ||
+        active.id !== gate.requester.dispatchId ||
+        !this.isDispatchMessageSender({
+          dispatchId: active.id,
+          handle: gate.requester.handle,
+          paneKey: gate.requester.paneKey,
+          allowCanonicalDispatchHandle: true
+        }))
+    ) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Terminal ${gate.requester.handle} does not own the active Dispatch for Task ${gate.taskId}.`,
+        { taskId: gate.taskId, dispatchId: active?.id }
+      )
+    }
+    const activeWorker = this.db
+      .prepare(
+        `SELECT active.id
+         FROM dispatch_contexts active
+         JOIN worker_dispatches worker ON worker.dispatch_id = active.id
+         WHERE active.task_id = ? AND active.status IN ('pending', 'dispatched')
+           AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
+         ORDER BY active.rowid DESC LIMIT 1`
+      )
+      .get(gate.taskId) as { id: string } | undefined
+    if (activeWorker) {
+      throw new OrchestrationError(
+        'task_not_startable',
+        `Task ${gate.taskId} cannot open a gate while supervised Dispatch ${activeWorker.id} is active; stop or settle its worker first.`,
+        { taskId: gate.taskId, dispatchId: activeWorker.id }
+      )
+    }
+    const id = generateId('gate')
+    const optionsJson = JSON.stringify(gate.options ?? [])
+    this.db
+      .prepare(
+        'INSERT INTO decision_gates (id, run_id, task_id, question, options) VALUES (?, ?, ?, ?, ?)'
+      )
+      .run(id, runId, gate.taskId, gate.question, optionsJson)
+    this.completeActiveDispatchesForTask(gate.taskId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'task',
+      id: gate.taskId,
+      from: task.status,
+      to: 'blocked'
+    })
+    const created = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as
+      | DecisionGateRow
+      | undefined
+    this.db.exec('RELEASE create_gate')
+    return created as DecisionGateRow
+  } catch (error) {
+    this.db.exec('ROLLBACK TO create_gate')
+    this.db.exec('RELEASE create_gate')
+    throw error
+  }
 }
 
 export function resolveGate(
@@ -41,18 +109,24 @@ export function resolveGate(
     return undefined
   }
 
-  this.db
-    .prepare(
-      "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
-    )
-    .run(resolution, gateId)
-
-  // Why: set to 'ready' (not the previous status) so the coordinator re-dispatches the worker with the resolution context.
-  this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(gate.task_id)
-
-  return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
-    | DecisionGateRow
-    | undefined
+  this.db.exec('SAVEPOINT resolve_gate')
+  try {
+    this.db
+      .prepare(
+        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
+      )
+      .run(resolution, gateId)
+    this.updateTaskStatus(gate.task_id, 'ready')
+    const resolved = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+      | DecisionGateRow
+      | undefined
+    this.db.exec('RELEASE resolve_gate')
+    return resolved
+  } catch (error) {
+    this.db.exec('ROLLBACK TO resolve_gate')
+    this.db.exec('RELEASE resolve_gate')
+    throw error
+  }
 }
 
 export function timeoutGate(this: OrchestrationDb, gateId: string): DecisionGateRow | undefined {

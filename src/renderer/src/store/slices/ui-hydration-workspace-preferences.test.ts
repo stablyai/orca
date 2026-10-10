@@ -139,7 +139,9 @@ describe('createUISlice hydratePersistedUI', () => {
       'kimi',
       'minimax',
       'antigravity',
-      'grok'
+      'grok',
+      'cursor',
+      'zcode'
     ])
     expect(setUI).toHaveBeenCalledWith({
       statusBarItems: [
@@ -149,13 +151,17 @@ describe('createUISlice hydratePersistedUI', () => {
         'kimi',
         'minimax',
         'antigravity',
-        'grok'
+        'grok',
+        'cursor',
+        'zcode'
       ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
-      _grokStatusBarDefaultAdded: true
+      _grokStatusBarDefaultAdded: true,
+      _cursorStatusBarDefaultAdded: true,
+      _zcodeStatusBarDefaultAdded: true
     })
   })
 
@@ -171,7 +177,9 @@ describe('createUISlice hydratePersistedUI', () => {
         _kimiStatusBarDefaultAdded: true,
         _minimaxStatusBarDefaultAdded: true,
         _antigravityStatusBarDefaultAdded: true,
-        _grokStatusBarDefaultAdded: true
+        _grokStatusBarDefaultAdded: true,
+        _cursorStatusBarDefaultAdded: true,
+        _zcodeStatusBarDefaultAdded: true
       })
     )
 
@@ -229,32 +237,89 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().usagePercentageDisplay).toBe('used')
   })
 
-  it('persists and hydrates the status bar usage mode', () => {
+  it('initializes new users with compact status bar usage', () => {
+    expect(createUIStore().getState().statusBarUsageMode).toBe('compact')
+  })
+
+  it.each(['verbose', 'compact'] as const)(
+    'persists and hydrates explicit %s usage mode',
+    (mode) => {
+      const setUI = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+      const store = createUIStore()
+
+      store.getState().setStatusBarUsageMode(mode)
+
+      expect(store.getState().statusBarUsageMode).toBe(mode)
+      expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: mode })
+
+      const restoredStore = createUIStore()
+      restoredStore.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: mode }))
+      expect(restoredStore.getState().statusBarUsageMode).toBe(mode)
+    }
+  )
+
+  it.each([undefined, null, 'expanded'])(
+    'hydrates missing or invalid status bar usage mode %j as compact',
+    (value) => {
+      const store = createUIStore()
+      const ui = makePersistedUI()
+      if (value === undefined) {
+        delete ui.statusBarUsageMode
+      } else {
+        Reflect.set(ui, 'statusBarUsageMode', value)
+      }
+
+      store.getState().hydratePersistedUI(ui)
+
+      expect(store.getState().statusBarUsageMode).toBe('compact')
+    }
+  )
+
+  it('hydrates and permanently dismisses the Compact change notice', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
 
-    expect(store.getState().statusBarUsageMode).toBe('verbose')
-
-    store.getState().setStatusBarUsageMode('compact')
-
-    expect(store.getState().statusBarUsageMode).toBe('compact')
-    expect(setUI).toHaveBeenCalledWith({ statusBarUsageMode: 'compact' })
-
-    store.getState().hydratePersistedUI(makePersistedUI({ statusBarUsageMode: 'verbose' }))
-    expect(store.getState().statusBarUsageMode).toBe('verbose')
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ statusBarCompactChangeNoticeDismissed: false }))
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(false)
+    setUI.mockClear()
+    store.getState().dismissStatusBarCompactChangeNotice()
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
+    expect(setUI).toHaveBeenCalledWith({ statusBarCompactChangeNoticeDismissed: true })
+    store.getState().dismissStatusBarCompactChangeNotice()
+    expect(setUI).toHaveBeenCalledTimes(1)
   })
 
-  it('defaults invalid status bar usage modes to verbose', () => {
-    const store = createUIStore()
+  it.each(['verbose', 'compact'] as const)(
+    'dismisses the Compact notice when choosing %s',
+    (mode) => {
+      const setUI = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+      const store = createUIStore()
+      store
+        .getState()
+        .hydratePersistedUI(makePersistedUI({ statusBarCompactChangeNoticeDismissed: false }))
 
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        statusBarUsageMode: 'expanded' as PersistedUIState['statusBarUsageMode']
+      store.getState().setStatusBarUsageMode(mode)
+
+      expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
+      expect(setUI).toHaveBeenCalledWith({
+        statusBarUsageMode: mode,
+        statusBarCompactChangeNoticeDismissed: true
       })
-    )
+    }
+  )
 
-    expect(store.getState().statusBarUsageMode).toBe('verbose')
+  it('keeps the Compact notice hidden with an older host that omits its flag', () => {
+    const store = createUIStore()
+    const ui = makePersistedUI()
+    delete ui.statusBarCompactChangeNoticeDismissed
+    store.getState().hydratePersistedUI(ui)
+    expect(store.getState().statusBarCompactChangeNoticeDismissed).toBe(true)
   })
 
   it('clamps persisted workspace board column width', () => {
@@ -518,6 +583,145 @@ describe('createUISlice hydratePersistedUI', () => {
     }
   })
 
+  it('keeps agents scope filter array identities stable across unchanged re-hydrations', () => {
+    const store = createUIStore()
+    const persisted = makePersistedUI({
+      agentsVisibleHostIds: ['ssh:devbox'],
+      agentsFilterRepoIds: ['repo-1']
+    })
+
+    store.getState().hydratePersistedUI(persisted)
+    const firstHostIds = store.getState().agentsVisibleHostIds
+    const firstRepoIds = store.getState().agentsFilterRepoIds
+
+    // Why identity (toBe): sync hydration fires on every ui:changed broadcast, and a
+    // fresh array would invalidate the agents-view scope memos each time.
+    store.getState().hydratePersistedUI(makePersistedUI({ ...persisted }))
+    expect(store.getState().agentsVisibleHostIds).toBe(firstHostIds)
+    expect(store.getState().agentsFilterRepoIds).toBe(firstRepoIds)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ ...persisted, agentsVisibleHostIds: ['ssh:otherbox'] }))
+    expect(store.getState().agentsVisibleHostIds).toEqual(['ssh:otherbox'])
+    expect(store.getState().agentsFilterRepoIds).toBe(firstRepoIds)
+  })
+
+  it('hydrates agents view preferences with safe defaults for absent fields', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({}))
+
+    expect(store.getState().agentsVisibleHostIds).toBeNull()
+    expect(store.getState().agentsFilterRepoIds).toEqual([])
+    expect(store.getState().agentsHideWorkspacesFromOtherDevices).toBe(false)
+    expect(store.getState().agentsHideAutomationGeneratedWorkspaces).toBe(false)
+    expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(false)
+    expect(store.getState().agentsShowChildAgents).toBe(false)
+    expect(store.getState().agentsCompactMode).toBe(true)
+    expect(store.getState().agentsShowSearch).toBe(true)
+    expect(store.getState().agentsReadFilter).toBe('all')
+    expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores the agents workspace-origin filters independently of the workspace-nav ones', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsHideWorkspacesFromOtherDevices: true,
+        agentsHideAutomationGeneratedWorkspaces: true,
+        agentsHideCliCreatedWorkspaces: true,
+        hideCliCreatedWorkspaces: false
+      })
+    )
+
+    expect(store.getState().agentsHideWorkspacesFromOtherDevices).toBe(true)
+    expect(store.getState().agentsHideAutomationGeneratedWorkspaces).toBe(true)
+    expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(true)
+    expect(store.getState().hideCliCreatedWorkspaces).toBe(false)
+  })
+
+  it('restores a hidden agents search field', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ agentsShowSearch: false }))
+
+    expect(store.getState().agentsShowSearch).toBe(false)
+  })
+
+  it('restores the persisted agents read filter and grouping, rejecting unknown values', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ agentsReadFilter: 'unread', agentsGroupBy: 'project' }))
+    expect(store.getState().agentsReadFilter).toBe('unread')
+    expect(store.getState().agentsGroupBy).toBe('project')
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsReadFilter: 'bogus' as unknown as PersistedUIState['agentsReadFilter'],
+        agentsGroupBy: 'bogus' as unknown as PersistedUIState['agentsGroupBy']
+      })
+    )
+    expect(store.getState().agentsReadFilter).toBe('all')
+    expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('sanitizes malformed agents repo filters before the repo catalog loads', () => {
+    const store = createUIStore()
+
+    expect(() =>
+      store.getState().hydratePersistedUI(
+        makePersistedUI({
+          agentsFilterRepoIds: 'repo-1' as unknown as PersistedUIState['agentsFilterRepoIds']
+        })
+      )
+    ).not.toThrow()
+    expect(store.getState().agentsFilterRepoIds).toEqual([])
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsFilterRepoIds: [
+          'repo-1',
+          42,
+          'missing'
+        ] as unknown as PersistedUIState['agentsFilterRepoIds']
+      })
+    )
+    expect(store.getState().agentsFilterRepoIds).toEqual(['repo-1', 'missing'])
+  })
+
+  it('sanitizes and prunes agents repo filters against a loaded repo catalog', () => {
+    const store = createUIStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/tmp/repo-1',
+          displayName: 'Repo 1',
+          badgeColor: 'gray',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ]
+    })
+
+    expect(() =>
+      store.getState().hydratePersistedUI(
+        makePersistedUI({
+          agentsFilterRepoIds: [
+            'repo-1',
+            null,
+            'missing'
+          ] as unknown as PersistedUIState['agentsFilterRepoIds']
+        })
+      )
+    ).not.toThrow()
+    expect(store.getState().agentsFilterRepoIds).toEqual(['repo-1'])
+  })
+
   it('prunes acknowledgedAgentsByPaneKey entries older than the 7-day TTL during hydration', () => {
     // HYDRATE_MAX_AGE_MS lives in src/renderer/src/store/slices/ui.ts and matches
     // the constant in src/main/agent-hooks/server.ts.
@@ -691,5 +895,35 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().agentActivityDisplayMode).toBe('compact')
+  })
+})
+
+describe('createUISlice hydratePersistedUI manual unread turns', () => {
+  it('restores manual unread stamps and prunes malformed or stale ones', () => {
+    const store = createUIStore()
+    const fresh = Date.now() - 60_000
+    const stale = Date.now() - 8 * 24 * 60 * 60 * 1000
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        manuallyUnreadTurnsByPaneKey: {
+          'tab-a:1': fresh,
+          'tab-b:1': stale,
+          'tab-c:1': 'bogus' as unknown as number
+        }
+      })
+    )
+
+    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({ 'tab-a:1': fresh })
+  })
+
+  it('hydrates to an empty record when the field is absent from an older profile', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ manuallyUnreadTurnsByPaneKey: undefined }))
+
+    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({})
   })
 })

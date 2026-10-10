@@ -1,4 +1,5 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 
@@ -23,7 +24,7 @@ async function readElectronHomeState(electronApp: ElectronApplication) {
 // HOME boundary and that real-home routing lands inside the disposable profile.
 test('isolates Electron and Codex from the developer home by default', async ({ electronApp }) => {
   const state = await readElectronHomeState(electronApp)
-  const expectedHome = path.join(state.userDataDir!, 'home')
+  const expectedHome = realpathSync.native(path.join(state.userDataDir!, 'home'))
 
   expect(state.appHome).toBe(expectedHome)
   expect(state.nodeHome).toBe(expectedHome)

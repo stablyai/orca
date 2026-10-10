@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
   linkSync,
@@ -11,11 +11,46 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import type * as NodeFsPromises from 'node:fs/promises'
 import {
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases
 } from '../ai-vault/codex-session-root-dedup'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
+
+const lstatFaults = vi.hoisted(() => ({
+  path: null as string | null,
+  reset(): void {
+    lstatFaults.path = null
+  }
+}))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    lstat: async (...args: Parameters<typeof actual.lstat>) => {
+      if (args[0] === lstatFaults.path) {
+        const error: NodeJS.ErrnoException = new Error(`EBUSY: locked '${args[0]}'`)
+        error.code = 'EBUSY'
+        throw error
+      }
+      return actual.lstat(...args)
+    }
+  }
+})
+
+// Why: session backfill resolves Orca's managed Codex home from userData, which otherwise resolves to the live one.
+let userDataRoot: string
+beforeEach(() => {
+  userDataRoot = mkdtempSync(join(tmpdir(), 'orca-codex-resume-user-data-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', userDataRoot)
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(userDataRoot, { recursive: true, force: true })
+})
 
 describe('prepareLegacySharedCodexSessionResume', () => {
   let root: string
@@ -24,6 +59,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
   let rolloutPath: string
 
   beforeEach(() => {
+    lstatFaults.reset()
     root = mkdtempSync(join(tmpdir(), 'orca-legacy-codex-resume-'))
     legacyHome = join(root, 'codex-runtime-home', 'home')
     systemHome = join(root, 'real-codex-home')
@@ -40,6 +76,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
   })
 
   afterEach(() => {
+    lstatFaults.reset()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -109,18 +146,15 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     }
   )
 
-  it.each(['managed account', 'custom CODEX_HOME'])(
-    'preserves the legacy home while the %s lane is selected',
-    async () => {
-      const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
-        ...options(),
-        isHostSystemDefaultRealHome: () => false
-      })
+  it('preserves the legacy home while a non-default Codex home lane is selected', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
+      ...options(),
+      isHostSystemDefaultRealHomeSelected: () => false
+    })
 
-      expect(result).toEqual({ useRealCodexHome: false })
-      expect(existsSync(targetRolloutPath())).toBe(false)
-    }
-  )
+    expect(result).toEqual({ useRealCodexHome: false })
+    expect(existsSync(targetRolloutPath())).toBe(false)
+  })
 
   it('still materializes a legacy resume when an account selection exists', async () => {
     const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
@@ -146,7 +180,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
 
   function options() {
     return {
-      isHostSystemDefaultRealHome: () => true,
+      isHostSystemDefaultRealHomeSelected: () => true,
       legacyCodexHomePath: legacyHome,
       systemCodexHomePath: systemHome
     }
@@ -269,6 +303,22 @@ describe('per-account resume repin', () => {
     expect(result).toEqual({ useRealCodexHome: false })
   })
 
+  it('refuses when the selected rollout is temporarily unreadable', async () => {
+    lstatFaults.path = recordedRolloutPath
+
+    await expect(
+      prepareLegacySharedCodexSessionResume(
+        {
+          agent: 'codex',
+          filePath: bridgedRolloutPath,
+          codexHome: peerHome,
+          executionHostId: 'local'
+        },
+        repinOptions()
+      )
+    ).rejects.toBeInstanceOf(ManagedCodexHomeTemporarilyUnavailableError)
+  })
+
   it('declines a session owned by another host', async () => {
     const result = await prepareLegacySharedCodexSessionResume(
       {
@@ -278,6 +328,27 @@ describe('per-account resume repin', () => {
         executionHostId: 'ssh:server-1' as 'local'
       },
       repinOptions()
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
+  it('does not consult the host selection while resuming a WSL account session', async () => {
+    const wslHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\orca\\codex-accounts\\account-1\\home'
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: `${wslHome}\\sessions\\2026\\07\\20\\rollout-session.jsonl`,
+        codexHome: wslHome,
+        executionHostId: 'local'
+      },
+      {
+        ...repinOptions(),
+        getSelectedHostAccountCodexHomePath: () => {
+          throw new Error('host lane must not be consulted')
+        }
+      }
     )
 
     expect(result).toEqual({ useRealCodexHome: false })
@@ -302,7 +373,7 @@ describe('per-account resume repin', () => {
 
   function repinOptions() {
     return {
-      isHostSystemDefaultRealHome: () => false,
+      isHostSystemDefaultRealHomeSelected: () => false,
       getSelectedHostAccountCodexHomePath: () => selectedHome
     }
   }

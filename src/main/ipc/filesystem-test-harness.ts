@@ -28,6 +28,7 @@ export const realpathMock: IpcMock = vi.fn()
 export const lstatMock: IpcMock = vi.fn()
 export const commitChangesMock: IpcMock = vi.fn()
 export const getStatusMock: IpcMock = vi.fn()
+export const detectConflictOperationMock: IpcMock = vi.fn()
 export const abortMergeMock: IpcMock = vi.fn()
 export const abortRebaseMock: IpcMock = vi.fn()
 export const getDiffMock: IpcMock = vi.fn()
@@ -36,6 +37,7 @@ export const getBranchDiffMock: IpcMock = vi.fn()
 export const getStagedCommitContextMock: IpcMock = vi.fn()
 export const stageFileMock: IpcMock = vi.fn()
 export const bulkStageFilesMock: IpcMock = vi.fn()
+export const stageWorktreeChangesMock: IpcMock = vi.fn()
 export const unstageFileMock: IpcMock = vi.fn()
 export const bulkUnstageFilesMock: IpcMock = vi.fn()
 export const bulkDiscardChangesMock: IpcMock = vi.fn()
@@ -59,6 +61,7 @@ export const recordCrashBreadcrumbMock: IpcMock = vi.fn()
 export const promoteLocalDownloadedFolderMock: IpcMock = vi.fn()
 
 export const electronMock = {
+  app: { getPath: () => '/orca-test-user-data' },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
   dialog: { showSaveDialog: showSaveDialogMock, showOpenDialog: showOpenDialogMock },
   ipcMain: { handle: handleMock },
@@ -88,6 +91,7 @@ export const folderPromotionMock = {
 export const gitStatusModuleMock = {
   commitChanges: commitChangesMock,
   getStatus: getStatusMock,
+  detectConflictOperation: detectConflictOperationMock,
   abortMerge: abortMergeMock,
   abortRebase: abortRebaseMock,
   getDiff: getDiffMock,
@@ -96,6 +100,7 @@ export const gitStatusModuleMock = {
   getStagedCommitContext: getStagedCommitContextMock,
   stageFile: stageFileMock,
   bulkStageFiles: bulkStageFilesMock,
+  stageWorktreeChanges: stageWorktreeChangesMock,
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
@@ -105,6 +110,7 @@ export const gitStatusModuleMock = {
 export const gitIgnoredPathsMock = { checkIgnoredPaths: checkIgnoredPathsMock }
 
 export const gitWorktreeMock = {
+  listWorktreeGraph: listWorktreesMock,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock
 }
@@ -126,7 +132,8 @@ export const sshFilesystemDispatchMock = {
 
 export const sshGitDispatchMock = {
   getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE,
+  sshGitProviderMissingError: () => new Error(PROVIDER_UNAVAILABLE_MESSAGE)
 }
 
 export const textGenerationModuleMock = {
@@ -204,12 +211,16 @@ export async function withPlatform<T>(
   }
 }
 
-function collectMocks(moduleMock: object): IpcMock[] {
+function isMockContainer(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function collectMocks(moduleMock: Record<string, unknown>): IpcMock[] {
   return Object.values(moduleMock).flatMap((value) => {
     if (vi.isMockFunction(value)) {
       return [value as IpcMock]
     }
-    return value && typeof value === 'object' ? collectMocks(value) : []
+    return isMockContainer(value) ? collectMocks(value) : []
   })
 }
 
@@ -229,6 +240,36 @@ const ALL_MOCKS = [
   pullRequestTemplateMock,
   pullRequestLinkedIssueMock
 ].flatMap(collectMocks)
+
+/** A FileHandle double over `content`: positional reads copy from it, and stat reports its size. */
+export function localFileHandleMock(
+  content: Buffer,
+  { isFile = true, size = content.byteLength }: { isFile?: boolean; size?: number } = {}
+): Record<string, unknown> {
+  return {
+    stat: vi.fn(async () => ({
+      size,
+      isFile: () => isFile,
+      isDirectory: () => false,
+      mtimeMs: 123,
+      dev: 1,
+      ino: 2,
+      birthtimeMs: 3
+    })),
+    read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+      const bytesRead = content.copy(
+        buffer,
+        offset,
+        position,
+        Math.min(position + length, content.length)
+      )
+      return { bytesRead, buffer }
+    }),
+    write: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn()
+  }
+}
 
 /** Resets every filesystem IPC mock and reinstalls the defaults every suite starts from. */
 export function resetFilesystemIpcMocks(): void {
@@ -265,14 +306,6 @@ export function resetFilesystemIpcMocks(): void {
   statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
   renameMock.mockResolvedValue(undefined)
   rmMock.mockResolvedValue(undefined)
-  openMock.mockResolvedValue({
-    read: vi.fn(async (buffer: Buffer) => {
-      buffer.fill(0x61)
-      return { bytesRead: buffer.length, buffer }
-    }),
-    write: vi.fn().mockResolvedValue(undefined),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn()
-  })
+  openMock.mockResolvedValue(localFileHandleMock(Buffer.from('a'.repeat(10))))
   lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
 }

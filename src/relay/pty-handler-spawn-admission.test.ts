@@ -1,5 +1,13 @@
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
+import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
+import * as runProcessModule from '@orca/process-host'
+import * as nodePtyBindingSurvey from './node-pty-binding-survey'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -32,12 +40,14 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { MAX_RELAY_PTY_SESSIONS, PtyHandler, formatNodePtyUnavailableMessage } from './pty-handler'
+import { MAX_RELAY_PTY_SESSIONS, PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 import {
   beginPtyHandlerTest,
   createMockDispatcher,
   createPtyRequestHelpers,
+  createTestPtyHandler,
+  testPtyId,
   endPtyHandlerTest
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
@@ -79,7 +89,84 @@ describe('PtyHandler', () => {
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
     expect(notifMethods).toContain('pty.data')
     expect(notifMethods).toContain('pty.resize')
-    expect(notifMethods).toContain('pty.ackData')
+    // Why not `toContain('pty.ackData')`: PtyHandler must NOT own that method. It used to
+    // register a no-op here, which survived only because the consumer session adapter was
+    // constructed later and overwrote it (STA-4571).
+    expect(notifMethods).not.toContain('pty.ackData')
+  })
+
+  it('rescans the process table for a close decision but not for a poll', async () => {
+    const hasChildren = vi.mocked(ptyChildProcessInspection.processHasChildren)
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockResolvedValue({
+        rows: [
+          {
+            pid: mockPtyInstance.pid,
+            ppid: 1,
+            pgid: mockPtyInstance.pid,
+            tpgid: mockPtyInstance.pid,
+            stat: 'S+',
+            tty: '/dev/pts/1',
+            startTime: '1',
+            command: 'bash'
+          }
+        ],
+        capturedAgeMs: 0
+      })
+    const { id } = (await spawnPty({ cols: 80, rows: 24 })) as { id: string }
+    hasChildren.mockClear()
+
+    await dispatcher.callRequest('pty.inspectProcess', { id })
+    // The poll shares the TTL-cached process table used for the foreground lookup,
+    // so it does not fork a separate child-process probe.
+    expect(snapshot).toHaveBeenCalledOnce()
+    expect(hasChildren).not.toHaveBeenCalled()
+
+    await dispatcher.callRequest('pty.hasChildProcesses', { id })
+    // This RPC only ever gates a destructive decision (window close, workspace
+    // cleanup), so it has to see a child started inside the 500ms window.
+    expect(hasChildren).toHaveBeenLastCalledWith(mockPtyInstance.pid, { fresh: true })
+  })
+
+  it('does not re-enter the shared capture after the evidence read gave up on it', async () => {
+    // The budget is worthless if the compatibility fields answer by joining the very capture the
+    // evidence read just abandoned: `inspectPtyChildProcesses` and `getForegroundProcessName`
+    // read the same TTL-shared table with no budget of their own, so on a slow host this call
+    // would still block for the whole capture -- once, then once per managed PTY in the listing.
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockRejectedValue(new Error('process table unreadable: capture_over_budget'))
+    const hasChildren = vi.spyOn(ptyChildProcessInspection, 'inspectPtyChildProcesses')
+    const foregroundName = vi.spyOn(ptyShellUtils, 'getForegroundProcessName')
+
+    const { id } = (await spawnPty({ cols: 80, rows: 24 })) as { id: string }
+    hasChildren.mockClear()
+    foregroundName.mockClear()
+
+    const inspection = (await dispatcher.callRequest('pty.inspectProcess', { id })) as {
+      hasChildProcesses: boolean
+      childProcessEvidence?: string
+      foregroundProcessEvidence?: { verdict: string; reason?: string }
+    }
+
+    expect(snapshot).toHaveBeenCalled()
+    expect(hasChildren).not.toHaveBeenCalled()
+    // The verdict the gates already handle, reached promptly instead of late.
+    expect(inspection.foregroundProcessEvidence?.verdict).toBe('unverifiable')
+    expect(inspection.foregroundProcessEvidence?.reason).toBe('process_table_unreadable')
+    // The honest verdict rather than a fabricated negative, reached without the wait. The
+    // compatibility boolean still spells `unverifiable` as `false` for older clients.
+    expect(inspection.childProcessEvidence).toBe('unverifiable')
+    expect(inspection.hasChildProcesses).toBe(false)
+
+    const listing = (await dispatcher.callRequest('pty.listProcesses', {})) as {
+      id: string
+      title: string
+    }[]
+
+    expect(foregroundName).not.toHaveBeenCalled()
+    expect(listing.find((entry) => entry.id === id)?.title).toBeTruthy()
   })
 
   it('rejects strict process inspection for a missing relay PTY', async () => {
@@ -90,7 +177,13 @@ describe('PtyHandler', () => {
 
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
-    expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
+    // shellReadyArmed rides every spawn reply, false included: absent has to keep
+    // meaning "host predates the field", not "host did not arm".
+    expect(result).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
   })
@@ -109,10 +202,42 @@ describe('PtyHandler', () => {
       agentSessionCreateOperationId: operationId
     })
 
-    expect(replayed).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
+    expect(replayed).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
     expect(mockPtyInstance.kill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('starts a create however many create records it holds, and still replays an earlier one', async () => {
+    // Why: a 4,096-record limit refused a user's create for unrelated traffic.
+    const request = (operationId: string) => ({
+      cols: 80,
+      rows: 24,
+      agentSessionCreateOperationId: operationId
+    })
+    await dispatcher.callRequest('pty.spawn', request('a'.repeat(43)))
+    const records = handler['agentSessionCreateOperations']
+    const held = records.get('a'.repeat(43))!
+    for (let index = records.size; index < 4_096; index += 1) {
+      records.set(`held-${index}`, held)
+    }
+
+    await expect(dispatcher.callRequest('pty.spawn', request('b'.repeat(43)))).resolves.toEqual({
+      id: testPtyId(2),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
+    await expect(dispatcher.callRequest('pty.spawn', request('a'.repeat(43)))).resolves.toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
+    expect(records.size).toBe(4_097)
+    expect(mockPtySpawn).toHaveBeenCalledTimes(2)
   })
 
   it('retains an operation fence when publication fails after native spawn', async () => {
@@ -163,7 +288,7 @@ describe('PtyHandler', () => {
 
     loadPty.mockResolvedValue({ spawn: mockPtySpawn })
     await expect(dispatcher.callRequest('pty.spawn', request)).resolves.toMatchObject({
-      id: expect.stringMatching(/^pty-/)
+      id: testPtyId(2)
     })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
@@ -204,35 +329,17 @@ describe('PtyHandler', () => {
     })) as Record<string, unknown>
 
     expect(first).toMatchObject({
-      id: 'pty-1',
+      id: testPtyId(1),
       agentSessionEnsure: { disposition: 'created' }
     })
     expect(second).toMatchObject({
-      id: 'pty-1',
+      id: testPtyId(1),
       agentSessionEnsure: { disposition: 'adopted' }
     })
     expect(second.agentSessionEnsure).toMatchObject({
       owner: (first.agentSessionEnsure as { owner: unknown }).owner
     })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
-  })
-
-  it('hedges both causes on Linux and offers the build-tools remedy nowhere else', () => {
-    const linux = formatNodePtyUnavailableMessage('linux')
-    expect(linux).toContain('Remote terminals are unavailable')
-    // Conditional, not asserted: a host with build-essential can still hit an ABI/Node-version flip.
-    expect(linux).toMatch(/If it is missing the C\/C\+\+ build tools/)
-    expect(linux).toContain('python3')
-    expect(linux).toContain('version and architecture match the installed binding')
-
-    // Windows/macOS ship node-pty prebuilds, so "install make/g++/python3" sends the user chasing nothing.
-    for (const platform of ['win32', 'darwin'] as const) {
-      const message = formatNodePtyUnavailableMessage(platform)
-      expect(message).toContain('Remote terminals are unavailable')
-      expect(message).not.toContain('build tools')
-      expect(message).not.toContain('python3')
-      expect(message).toMatch(/reconnect/i)
-    }
   })
 
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
@@ -246,6 +353,78 @@ describe('PtyHandler', () => {
       'Remote terminals are unavailable'
     )
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  const THROWN_LOAD_ERROR =
+    'Failed to load native module: pty.node, checked: build/Release, prebuilds/linux-x64'
+
+  function failSpawnWithToolchainProbe(
+    toolchainProbeStdout: string
+  ): Promise<(Error & { data?: unknown }) | null> {
+    const realRunProcess = runProcessModule.runProcess
+    vi.spyOn(runProcessModule, 'runProcess').mockImplementation((spec) =>
+      spec.program === '/bin/sh'
+        ? Promise.resolve({
+            stdout: toolchainProbeStdout,
+            stderr: '',
+            code: 0,
+            signal: null,
+            timedOut: false
+          })
+        : realRunProcess(spec)
+    )
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error(THROWN_LOAD_ERROR)
+    })
+    return dispatcher.callRequest('pty.spawn', {}).then(
+      () => null,
+      (error: Error & { data?: unknown }) => error
+    )
+  }
+
+  it('diagnoses a relay installed without node-pty instead of asking for a reconnect (#20386)', async () => {
+    // Relies on no node-pty beside the relay source — what the no-toolchain deploy leaves. Absence
+    // is observed on the owning host, so it is a diagnosis (docs/reference/ssh-execution-boundary.md).
+    expect(typeof process.resourcesPath, 'packaged node-pty lookup must be off').not.toBe('string')
+    expect(
+      existsSync(join(__dirname, 'node_modules', 'node-pty')),
+      'a node-pty beside src/relay would turn this into the installed-but-unbuilt case'
+    ).toBe(false)
+    // The checkout's own node_modules holds a node-pty an SSH host's relay dir never has.
+    vi.spyOn(nodePtyBindingSurvey, 'resolveNodePtyInstallDir').mockReturnValue(null)
+
+    const rejection = await failSpawnWithToolchainProbe('HAVE python3\nPKG apt-get\n')
+    const message = rejection?.message ?? ''
+
+    // #17830: the load error the relay was handed still travels with the rejection.
+    // No compiler means no rebuild, so the client must not auto-reconnect on this one.
+    expect(rejection?.data).toMatchObject({
+      reason: 'toolchain_missing',
+      repairable: false,
+      rawError: THROWN_LOAD_ERROR
+    })
+    expect(message).not.toContain('could not establish why')
+    expect(message).toContain('node-pty is not installed at')
+    expect(message).toContain('sudo apt-get install -y build-essential python3')
+    // Every message still names the host, for the bug report.
+    expect(message).toMatch(/Host: linux\/\w+, .*Node v[\d.]+ \(ABI \d+\)/)
+  })
+
+  it('diagnoses the node-pty an ancestor node_modules supplied, not the absent one beside the relay', async () => {
+    const ancestorInstall = join(mkdtempSync(join(tmpdir(), 'orca-node-pty-')), 'node-pty')
+    mkdirSync(ancestorInstall)
+    vi.spyOn(nodePtyBindingSurvey, 'resolveNodePtyInstallDir').mockReturnValue(ancestorInstall)
+
+    try {
+      const message =
+        (await failSpawnWithToolchainProbe('HAVE make\nHAVE g++\nHAVE python3\nPKG apt-get\n'))
+          ?.message ?? ''
+
+      expect(message).not.toContain('node-pty is not installed at')
+      expect(message).toContain(`under ${ancestorInstall}`)
+    } finally {
+      rmSync(dirname(ancestorInstall), { recursive: true, force: true })
+    }
   })
 
   it('preserves unrelated node-pty spawn failures', async () => {
@@ -280,7 +459,9 @@ describe('PtyHandler', () => {
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toReversed')
     Reflect.deleteProperty(Array.prototype, 'toReversed')
     try {
-      await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toMatchObject({ id: 'pty-1' })
+      await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toMatchObject({
+        id: testPtyId(1)
+      })
       expect(handler.activePtyCount).toBe(1)
     } finally {
       if (descriptor) {
@@ -292,8 +473,80 @@ describe('PtyHandler', () => {
   it('increments PTY ids on each spawn', async () => {
     const r1 = await dispatcher.callRequest('pty.spawn', {})
     const r2 = await dispatcher.callRequest('pty.spawn', {})
-    expect((r1 as { id: string }).id).toBe('pty-1')
-    expect((r2 as { id: string }).id).toBe('pty-2')
+    expect((r1 as { id: string }).id).toBe(testPtyId(1))
+    expect((r2 as { id: string }).id).toBe(testPtyId(2))
+  })
+
+  it('does not remint a PTY id across handler lifetimes', async () => {
+    const first = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+    await handler.dispose({ waitForPhysicalExit: false })
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+
+    const second = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    expect(first.id).toMatch(/^pty2:[^:]+:1$/)
+    expect(second.id).toMatch(/^pty2:[^:]+:1$/)
+    expect(second.id).not.toBe(first.id)
+  })
+
+  it('escapes the mint epoch so it cannot forge the id separators', async () => {
+    await handler.dispose({ waitForPhysicalExit: false })
+    dispatcher = createMockDispatcher()
+    // Why: the epoch is constructor-supplied. Encoding is what keeps a minted id
+    // exactly three fields, so it can never be read as another epoch/sequence and
+    // can never smuggle the `@@` that app-side SSH id routing splits on.
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher, undefined, 'a:b@@c:9')
+
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    const [prefix, epoch, sequence, ...extra] = spawned.id.split(':')
+    expect(extra).toEqual([])
+    expect(prefix).toBe('pty2')
+    expect(decodeURIComponent(epoch)).toBe('a:b@@c:9')
+    expect(sequence).toBe('1')
+    expect(spawned.id).not.toContain('@@')
+  })
+
+  it('revives a legacy id and advances the legacy sequence', async () => {
+    const state = JSON.stringify([
+      { id: 'pty-7', pid: process.pid, cols: 80, rows: 24, cwd: process.cwd() }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const serialized = (await dispatcher.callRequest('pty.serialize', {
+      ids: ['pty-7']
+    })) as string
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    expect(JSON.parse(serialized)).toMatchObject([{ id: 'pty-7' }])
+    expect(spawned.id).toBe(testPtyId(8))
+  })
+
+  it('does not advance its sequence from a revived foreign mint epoch', async () => {
+    const foreignId = 'pty2:previous-mint-epoch:40'
+    const state = JSON.stringify([
+      { id: foreignId, pid: process.pid, cols: 80, rows: 24, cwd: process.cwd() }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const serialized = (await dispatcher.callRequest('pty.serialize', {
+      ids: [foreignId]
+    })) as string
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+
+    expect(JSON.parse(serialized)).toMatchObject([{ id: foreignId }])
+    expect(spawned.id).toBe(testPtyId(1))
   })
 
   it('admits default-cwd spawns through the worktree removal coordinator', async () => {
@@ -306,6 +559,28 @@ describe('PtyHandler', () => {
     expect(beginWorktreePtySpawn).toHaveBeenCalledWith(expect.any(String))
     expect(beginWorktreePtySpawn.mock.calls[0][0]).not.toBe('')
     expect(finishCreation).toHaveBeenCalledTimes(1)
+  })
+
+  // requireRelaySpawnCwd strips the `::workspace:<uuid>` instance suffix to get the real folder
+  // path, so a fence keyed on the unstripped id would guard a directory no spawn ever uses --
+  // exactly what routing both through one resolver is supposed to make impossible.
+  it('fences a folder-workspace instance id on the directory the spawn will use', async () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), 'orca-relay-fence-'))
+    try {
+      const finishCreation = vi.fn()
+      const beginWorktreePtySpawn = vi.fn((_operationPath: string) => finishCreation)
+      handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
+
+      await dispatcher.callRequest('pty.spawn', {
+        worktreeId: `repo-1::${workspaceRoot}::workspace:b1706d92-9d05-4932-8360-01e00b54305a`
+      })
+
+      const fencedPaths = beginWorktreePtySpawn.mock.calls.map((call) => call[0])
+      expect(fencedPaths).toContain(workspaceRoot)
+      expect(fencedPaths.some((fenced) => fenced.includes('::workspace:'))).toBe(false)
+    } finally {
+      rmSync(workspaceRoot, { recursive: true, force: true })
+    }
   })
 
   it('fences both sibling worktree identity and removing cwd with rollback', async () => {
@@ -367,9 +642,9 @@ describe('PtyHandler', () => {
 
       const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
       try {
-        await expect(attachPty({ id: 'pty-1', suppressReplayNotification: true })).rejects.toThrow(
-          'PTY "pty-1" not found'
-        )
+        await expect(
+          attachPty({ id: testPtyId(1), suppressReplayNotification: true })
+        ).rejects.toThrow(`PTY "${testPtyId(1)}" not found`)
       } finally {
         aliveSpy.mockRestore()
       }
@@ -474,10 +749,12 @@ describe('PtyHandler', () => {
 
     it('fires for a revived PTY whose creation was admitted before the pool was empty', async () => {
       await spawnPty({ cols: 80, rows: 24, cwd: '/tmp' })
-      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      const state = (await dispatcher.callRequest('pty.serialize', {
+        ids: [testPtyId(1)]
+      })) as string
       await handler.dispose({ waitForPhysicalExit: false })
       dispatcher = createMockDispatcher()
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
       const poolActive = vi.fn()
       handler.onPtyPoolActive(poolActive)

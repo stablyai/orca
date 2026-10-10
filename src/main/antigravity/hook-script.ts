@@ -1,25 +1,35 @@
 import {
   buildPosixHookPayloadCapture,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue,
-  WINDOWS_HOOK_STDIN_DRAIN_COMMAND
+  POSIX_HOOK_JSON_STDIN,
+  buildPosixHookSpoolLines,
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
+import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 
-export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+export function getManagedScript(
+  target: 'local' | 'posix' = 'local',
+  windowsRuntimePath = process.execPath
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
-      'setlocal',
+      // Why (#9358/#9941): inherited delayed expansion eats `!` out of the percent-expanded
+      // curl args, mangling paneKey and dropping worktreeId. `!` is legal in a Windows path.
+      'setlocal DisableDelayedExpansion',
       'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
       '  echo {"decision":""}',
+      ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
+      `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
       ') else (',
       '  echo {}',
       ')',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      buildWindowsAntigravityHookPostCommand(),
+      // The runtime path is fixed at installation; hook payloads stay on stdin.
+      'set "ELECTRON_RUN_AS_NODE=1"',
+      `if not defined ORCA_AGENT_HOOK_NODE set "ORCA_AGENT_HOOK_NODE=${windowsRuntimePath.replaceAll('%', '%%')}"`,
+      '"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs" >nul 2>nul',
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -30,20 +40,24 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  Stop)',
     '    printf \'{"decision":""}\\n\'',
     '    ;;',
+    '  PreToolUse)',
+    `    printf '${ANTIGRAVITY_PRE_TOOL_USE_DECISION}\\n'`,
+    '    ;;',
     '  *)',
     // Why: Antigravity accepts an empty JSON object for passive status hooks;
-    // returning allow/ask/deny from PreToolUse would change the user's tool
-    // permission policy.
+    // only the PreToolUse gate rejects it, and that branch answers above.
     '    printf "{}\\n"',
     '    ;;',
     'esac',
     // Why: some Antigravity events arrive without stdin but still need a
     // status post, so the shared capture maps empty input to an object.
-    ...buildPosixHookPayloadCapture('empty-object'),
+    ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_JSON_STDIN),
+    ...buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  spool_hook_event',
     '  exit 0',
     'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.
@@ -61,7 +75,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "hook_event_name=${ORCA_ANTIGRAVITY_EVENT}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
   ].join('\n')
@@ -70,7 +84,10 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 export function getWindowsWrapperScript(eventName: string): string {
   return [
     '@echo off',
-    'setlocal',
+    // Why (#9358/#9941): `!` is legal in the hooks path, and inherited delayed expansion
+    // eats it out of the percent-expanded `%~dp0` — the wrapper then misses the core and
+    // silently falls back on every event. Same reason the core disables it.
+    'setlocal DisableDelayedExpansion',
     `set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`,
     'set "ORCA_ANTIGRAVITY_CORE=%~dp0antigravity-hook.cmd"',
     'if exist "%ORCA_ANTIGRAVITY_CORE%" (',
@@ -79,20 +96,14 @@ export function getWindowsWrapperScript(eventName: string): string {
     ')',
     'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
     '  echo {"decision":""}',
+    ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
+    `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
     ') else (',
     '  echo {}',
     ')',
-    // Why: when the shared core script is missing, this wrapper becomes the
-    // stdin owner and must finish the agent's payload write before returning.
-    WINDOWS_HOOK_STDIN_DRAIN_COMMAND,
+    // Missing-core fallbacks obey the same outside-Orca stdin guard as the core.
+    ...buildWindowsHookEnvironmentGuardLines(),
     'exit /b 0',
     ''
   ].join('\r\n')
-}
-
-function buildWindowsAntigravityHookPostCommand(): string {
-  // Why: Antigravity hooks are best-effort status updates; do not let a stalled
-  // local listener hold the agent process open. Qualify PowerShell so a
-  // worktree-local powershell.exe cannot hijack hook payloads.
-  return `"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); try { $payload=if ([string]::IsNullOrWhiteSpace($inputData)) { @{} } else { $inputData | ConvertFrom-Json }; $body=@{ paneKey=$env:ORCA_PANE_KEY; launchToken=$env:ORCA_AGENT_LAUNCH_TOKEN; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; hook_event_name=$env:ORCA_ANTIGRAVITY_EVENT; payload=$payload } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/antigravity') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes -TimeoutSec 2 | Out-Null } catch {}"`
 }

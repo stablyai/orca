@@ -62,6 +62,9 @@ function makeTerminalSessionState(title: string, label = title): Partial<AppStat
   }
 }
 
+/** These cases reopen the gate through a store update, so they need no wake-up of their own. */
+const noGateOpenWakeUp = (): (() => void) => () => {}
+
 describe('createSessionWriteSubscriber', () => {
   beforeEach(() => {
     initialState = useAppStore.getState()
@@ -96,6 +99,27 @@ describe('createSessionWriteSubscriber', () => {
     vi.advanceTimersByTime(200)
 
     expect(persist).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('writes when the gate is already open at creation, with no store tick to wake it', () => {
+    // Why the store-write spy: every other case here opens the gate *after* creating the
+    // subscriber, so the opening setState is itself the tick that produces the first write. With
+    // the gate already open only the creation-time seed can, and equal catalogs no longer publish
+    // a tick to stand in for it.
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const storeTicks = vi.fn()
+    const unsubStoreTicks = useAppStore.subscribe(storeTicks)
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    vi.advanceTimersByTime(200)
+
+    expect(storeTicks).not.toHaveBeenCalled()
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    unsubStoreTicks()
     cleanup()
   })
 
@@ -187,6 +211,25 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('persists defaultTerminalTabsAppliedByWorktreeId after markDefaultTerminalTabsApplied', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    const worktreeId = 'repo1::/wt-1'
+    useAppStore.getState().markDefaultTerminalTabsApplied(worktreeId)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
+    cleanup()
+  })
+
   it('writes exactly once when a relevant field changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -242,6 +285,56 @@ describe('createSessionWriteSubscriber', () => {
     })
     vi.advanceTimersByTime(200)
 
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+  it('schedules no session timer for one display-title bucket in a 300-worktree fleet', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const tabsByWorktree = Object.fromEntries(
+      Array.from({ length: 300 }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [
+          worktreeId,
+          [
+            {
+              id: `tab-${index}`,
+              ptyId: `${worktreeId}@@pty-1`,
+              worktreeId,
+              title: '⠋ Codex is thinking',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        ]
+      })
+    )
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      tabsByWorktree
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+    expect(vi.getTimerCount()).toBe(0)
+
+    const changedWorktreeId = 'wt-173'
+    useAppStore.setState({
+      tabsByWorktree: {
+        ...tabsByWorktree,
+        [changedWorktreeId]: [
+          {
+            ...tabsByWorktree[changedWorktreeId][0],
+            title: '⠙ Codex is thinking'
+          }
+        ]
+      }
+    })
+
+    expect(vi.getTimerCount()).toBe(0)
+    vi.advanceTimersByTime(200)
     expect(persist).not.toHaveBeenCalled()
     cleanup()
   })
@@ -326,6 +419,43 @@ describe('createSessionWriteSubscriber', () => {
           {
             ...useAppStore.getState().tabsByWorktree['wt-1'][0],
             pendingActivationSpawn: true
+          }
+        ]
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('ignores recovery-ledger-only changes', () => {
+    // Why: the ledger is stripped from the persisted session, so churning it
+    // must not rebuild and rewrite the durable payload on every remount.
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('bash')
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+            recovery: {
+              attemptedAt: [1],
+              generation: 1,
+              outcome: 'pending',
+              startedAt: 1,
+              reason: 'reattach-unverifiable',
+              tabGeneration: 0
+            }
           }
         ]
       }
@@ -521,13 +651,14 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
+  it('defers rather than drops a change made while shouldSchedulePersist returns false', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = false
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
-      shouldSchedulePersist: () => shouldSchedule
+      shouldSchedulePersist: () => shouldSchedule,
+      subscribeToPersistGateOpen: noGateOpenWakeUp
     })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -538,25 +669,34 @@ describe('createSessionWriteSubscriber', () => {
     useAppStore.setState({ activeTabId: 'tab-1' })
     vi.advanceTimersByTime(200)
     expect(persist).toHaveBeenCalledTimes(1)
+    // The suppressed first pass owed every field; only activeTabId changed after the gate opened.
+    expect(persist.mock.calls[0][0].patch.tabsByWorktree).toBeDefined()
     cleanup()
   })
 
-  it('cancels a pending debounce when shouldSchedulePersist returns false', () => {
+  it('holds a write whose change arrived while shouldSchedulePersist returned false', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
-      shouldSchedulePersist: () => shouldSchedule
+      shouldSchedulePersist: () => shouldSchedule,
+      subscribeToPersistGateOpen: noGateOpenWakeUp
     })
 
-    useAppStore.setState({ workspaceSessionReady: true })
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(50)
     shouldSchedule = false
     useAppStore.setState({ activeTabId: 'remote-tab' })
     vi.advanceTimersByTime(200)
 
     expect(persist).not.toHaveBeenCalled()
+
+    shouldSchedule = true
+    useAppStore.setState({ activeRepoId: 'repo-after-remote-pull' })
+    vi.advanceTimersByTime(200)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeTabId).toBe('remote-tab')
     cleanup()
   })
 
@@ -566,7 +706,8 @@ describe('createSessionWriteSubscriber', () => {
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
-      shouldSchedulePersist: () => shouldSchedule
+      shouldSchedulePersist: () => shouldSchedule,
+      subscribeToPersistGateOpen: noGateOpenWakeUp
     })
 
     useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
@@ -579,6 +720,13 @@ describe('createSessionWriteSubscriber', () => {
     vi.advanceTimersByTime(200)
 
     expect(persist).not.toHaveBeenCalled()
+
+    // The suppressed write is owed, not forgotten: it lands when the gate reopens.
+    shouldSchedule = true
+    useAppStore.setState({ activeTabId: 'tab-after-remote-pull' })
+    vi.advanceTimersByTime(200)
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.activeWorktreeId).toBe('wt-before-remote-pull')
     cleanup()
   })
 

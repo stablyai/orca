@@ -20,7 +20,7 @@ import {
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
 import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
-import { Input } from '../ui/input'
+import { CustomAgentCommandField } from './CustomAgentCommandField'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { SearchableSetting } from './SearchableSetting'
@@ -104,7 +104,8 @@ export function CommitMessageAiPane({
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
   const ownership = getSettingOwnershipSummary('sourceControlAiDefaults')
-  const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const settingsWriteQueueRef = useRef<Promise<void>>(undefined!)
+  settingsWriteQueueRef.current ??= Promise.resolve()
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current
@@ -261,36 +262,10 @@ export function CommitMessageAiPane({
         keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
         className="space-y-2 py-2"
       >
-        <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-custom-command">
-            {translate('auto.components.settings.CommitMessageAiPane.47e45cbd5a', 'Custom command')}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.CommitMessageAiPane.4f722a5f53',
-              'Used by commit-message, pull-request, and branch-name recipes that select Custom command. Use'
-            )}{' '}
-            <code className="font-mono">
-              {translate('auto.components.settings.CommitMessageAiPane.b8b6fd55b4', '{prompt}')}
-            </code>{' '}
-            {translate(
-              'auto.components.settings.CommitMessageAiPane.3f1b26cc91',
-              'to pass the command input as an argument; otherwise Orca pipes it on stdin.'
-            )}
-          </p>
-        </div>
-        <Input
+        <CustomAgentCommandField
           id="source-control-ai-custom-command"
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="off"
           value={config.customAgentCommand}
-          onChange={(event) => onCustomCommandChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.CommitMessageAiPane.15b60d54b2',
-            'e.g. ollama run llama3.1 {prompt}'
-          )}
-          className="h-8 font-mono text-xs"
+          onChange={onCustomCommandChange}
         />
       </SearchableSetting>
     )

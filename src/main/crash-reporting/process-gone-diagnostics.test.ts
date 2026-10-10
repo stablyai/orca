@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProcessGoneCrashDetails,
   collectProcessGoneMetricDetails,
-  resetPreGoneProcessMetricsSamplingForTest,
+  resetPreGoneCrashSamplingForTest,
   samplePreGoneProcessMetrics,
-  startPreGoneProcessMetricsSampling
+  startPreGoneCrashSampling
 } from './process-gone-diagnostics'
-import { setSystemMemoryInfoReaderForTest } from './gone-time-system-memory'
+import { setSystemMemoryInfoReaderForTest } from './system-memory-details'
 
 type MetricFixture = {
   pid?: number
@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
 
 describe('process gone diagnostics', () => {
   beforeEach(() => {
-    resetPreGoneProcessMetricsSamplingForTest()
+    resetPreGoneCrashSamplingForTest()
     setSystemMemoryInfoReaderForTest(null)
   })
 
@@ -141,8 +141,8 @@ describe('process gone diagnostics', () => {
     appMetricsMock.mockReturnValue([
       { pid: 30, type: 'Tab', memory: { workingSetSize: 1024 * 100 } }
     ])
-    startPreGoneProcessMetricsSampling(1_000)
-    startPreGoneProcessMetricsSampling(1_000)
+    startPreGoneCrashSampling(1_000)
+    startPreGoneCrashSampling(1_000)
 
     // A crash inside the first interval already has a sample to draw from.
     expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
@@ -582,12 +582,12 @@ describe('process gone diagnostics', () => {
   it("arms an unref'd interval so sampling never holds the event loop open", () => {
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
     try {
-      startPreGoneProcessMetricsSampling(60_000)
+      startPreGoneCrashSampling(60_000)
       const timer = setIntervalSpy.mock.results[0]?.value as NodeJS.Timeout
       expect(timer.hasRef()).toBe(false)
     } finally {
       setIntervalSpy.mockRestore()
-      resetPreGoneProcessMetricsSamplingForTest()
+      resetPreGoneCrashSamplingForTest()
     }
   })
 
@@ -612,7 +612,36 @@ describe('process gone diagnostics', () => {
     expect(details.systemMemorySwapFreeMB).toBeUndefined()
   })
 
-  it('samples system memory at gone time but never into the pre-gone snapshot', () => {
+  it('reports Linux MemAvailable as its own field alongside MemFree', () => {
+    // MemFree alone hid the pressure on the SIGKILL-at-OOM reports; MemAvailable
+    // is the kernel's reclaim-aware estimate. Electron 43 exposes it on Linux.
+    setSystemMemoryInfoReaderForTest(() => ({
+      total: 1024 * 14_551,
+      free: 1024 * 1_292,
+      available: 1024 * 340,
+      swapTotal: 1024 * 4_096,
+      swapFree: 1024 * 167
+    }))
+
+    expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
+      systemMemoryFreeMB: 1_292,
+      systemMemoryAvailableMB: 340
+    })
+  })
+
+  it('omits the available field on platforms that do not report it', () => {
+    setSystemMemoryInfoReaderForTest(() => ({ total: 1024 * 65_536, free: 1024 * 59 }))
+    expect(buildProcessGoneCrashDetails({}, 'renderer').systemMemoryAvailableMB).toBeUndefined()
+  })
+
+  it('drops a NaN available reading instead of emitting it as zero', () => {
+    setSystemMemoryInfoReaderForTest(() => ({ total: 1024 * 16_384, available: Number.NaN }))
+    const details = buildProcessGoneCrashDetails({}, 'renderer')
+    expect(details.systemMemoryAvailableMB).toBeUndefined()
+    expect(details.systemMemoryTotalMB).toBe(16_384)
+  })
+
+  it('samples system memory at gone time but never into the processMetrics family', () => {
     appMetricsMock.mockReturnValue([{ pid: 1, type: 'Browser', memory: { workingSetSize: 0 } }])
     samplePreGoneProcessMetrics()
     setSystemMemoryInfoReaderForTest(() => ({
@@ -629,7 +658,9 @@ describe('process gone diagnostics', () => {
       systemMemorySwapTotalMB: 8_192,
       systemMemorySwapFreeMB: 40
     })
-    expect(details.processMetricsPreGoneSystemMemoryTotalMB).toBeUndefined()
+    expect(
+      Object.keys(details).filter((key) => key.startsWith('processMetricsPreGoneSystem'))
+    ).toEqual([])
   })
 
   it('leaves records unflagged when the crashed bucket is still populated', () => {

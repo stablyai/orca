@@ -3,9 +3,27 @@ import {
   getDiffSectionBodyHeight,
   getLargeDiffFallbackBodyHeight,
   getDiffSectionEstimatedHeight,
-  isIntrinsicHeightImageDiff
+  getDiffSectionRowEstimatedHeight,
+  isIntrinsicHeightImageDiff,
+  usesLargeDiffFallbackHeight
 } from './diff-section-layout'
+import type { DiffSection } from './diff-section-types'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+
+const largeTextSection: DiffSection = {
+  key: 'section',
+  path: 'big.txt',
+  status: 'modified',
+  added: 50_000,
+  removed: 0,
+  originalContent: '',
+  modifiedContent: '',
+  collapsed: false,
+  loading: true,
+  dirty: false,
+  diffResult: null,
+  largeDiffRenderLimit: null
+}
 
 describe('diff section layout', () => {
   it('uses Monaco measured content height for text diffs', () => {
@@ -21,6 +39,32 @@ describe('diff section layout', () => {
 
   it('uses a bounded fallback height for oversized diffs before measurement', () => {
     expect(getLargeDiffFallbackBodyHeight()).toBe(160)
+  })
+
+  it('uses the bounded fallback height for an on-demand diff', () => {
+    expect(
+      getDiffSectionRowEstimatedHeight(
+        { ...largeTextSection, loading: false, loadOnDemand: true },
+        undefined
+      )
+    ).toBe(188)
+  })
+
+  // Why: every viewer's virtualizer must estimate the same height DiffSectionItem
+  // renders for these rows, or each large row drifts ~100px per measure pass.
+  it('estimates deferred and in-flight large rows at the rendered fallback height', () => {
+    expect(getDiffSectionRowEstimatedHeight(largeTextSection, undefined)).toBe(188)
+    expect(getDiffSectionRowEstimatedHeight(largeTextSection, 3_800_000)).toBe(188)
+    expect(
+      getDiffSectionRowEstimatedHeight(
+        { ...largeTextSection, added: undefined, removed: undefined, path: 'vendor/blob.bin' },
+        undefined
+      )
+    ).toBe(88)
+  })
+
+  it('estimates a collapsed row as a header, whatever its size', () => {
+    expect(getDiffSectionRowEstimatedHeight({ ...largeTextSection, collapsed: true }, 500)).toBe(28)
   })
 
   it('falls back to line-count height before Monaco has mounted', () => {
@@ -66,8 +110,10 @@ describe('diff section layout', () => {
   })
 
   it('estimates line-count height without allocating split arrays', () => {
-    const originalSplit = String.prototype.split
-    const patchedSplit = function patchedSplit(
+    // Method-shaped type: a call-signature capture would reject `split`'s splitter-object overload.
+    const originalSplit: { split(separator: unknown, limit?: number): string[] }['split'] =
+      String.prototype.split
+    const patchedSplit: typeof String.prototype.split = function patchedSplit(
       this: string,
       separator?: unknown,
       limit?: number
@@ -75,9 +121,8 @@ describe('diff section layout', () => {
       if (String(this).startsWith('line 0')) {
         throw new Error('layout should not split full diff content')
       }
-      const args = limit === undefined ? [separator] : [separator, limit]
-      return Reflect.apply(originalSplit, this, args) as string[]
-    } as typeof String.prototype.split
+      return originalSplit.call(this, separator, limit)
+    }
     String.prototype.split = patchedSplit
 
     try {
@@ -211,6 +256,24 @@ describe('diff section layout', () => {
         isLargeDiffLimited: true
       })
     ).toBe(188)
+  })
+
+  it('keeps the deferred fallback height while a loaded-on-demand diff fetches', () => {
+    const section = {
+      path: 'big.txt',
+      added: 50_000,
+      removed: 0,
+      largeDiffRenderLimit: null
+    }
+    expect(usesLargeDiffFallbackHeight({ ...section, loading: false, loadOnDemand: true })).toBe(
+      true
+    )
+    expect(usesLargeDiffFallbackHeight({ ...section, loading: true, loadOnDemand: false })).toBe(
+      true
+    )
+    expect(
+      usesLargeDiffFallbackHeight({ ...section, added: 3, loading: true, loadOnDemand: false })
+    ).toBe(false)
   })
 
   it('estimates collapsed virtualized sections as header-only rows', () => {

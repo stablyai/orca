@@ -75,6 +75,11 @@ function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path'>): Repo {
     badgeColor: 'blue',
     addedAt: 1,
     kind: 'git',
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/owner/repo',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/owner/repo.git'
+    },
     ...overrides
   }
 }
@@ -126,41 +131,53 @@ describe('GitHub PR refresh owner-host routing', () => {
     resetRuntimeMocks()
   })
 
-  it('routes explicit PR refresh for a runtime-owned repo to its owner while Local desktop is active', async () => {
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: true,
-      result: makePR({ number: 23 }),
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    const store = createTestStore()
-    const repoPath = '/runtime/repo'
-    const branch = 'feature/runtime-owner'
-    seed(store, {
-      settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
-      repos: [
-        makeRepo({
-          id: 'repo-runtime',
-          path: repoPath,
-          executionHostId: 'runtime:env-1'
-        })
-      ],
-      worktreesByRepo: {
-        'repo-runtime': [makeWorktree('repo-runtime', branch, 'wt-runtime')]
-      }
-    })
+  it.each([
+    ['active', 80],
+    ['manual', 100]
+  ] as const)(
+    'routes %s PR refresh to the runtime repo owner with its reason',
+    async (reason, priority) => {
+      runtimeEnvironmentCall.mockResolvedValueOnce({
+        id: 'rpc-1',
+        ok: true,
+        result: makePR({ number: 23 }),
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      const store = createTestStore()
+      const repoPath = '/runtime/repo'
+      const branch = 'feature/runtime-owner'
+      seed(store, {
+        settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+        repos: [
+          makeRepo({
+            id: 'repo-runtime',
+            path: repoPath,
+            executionHostId: 'runtime:env-1'
+          })
+        ],
+        worktreesByRepo: {
+          'repo-runtime': [makeWorktree('repo-runtime', branch, 'wt-runtime')]
+        }
+      })
 
-    store.getState().enqueueGitHubPRRefresh('wt-runtime', 'active', 80)
+      store.getState().enqueueGitHubPRRefresh('wt-runtime', reason, priority)
 
-    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
-    expect(enqueuePRRefresh).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
-      timeoutMs: 30_000
-    })
-  })
+      await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+      expect(enqueuePRRefresh).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'github.prForBranch',
+        params: {
+          repo: 'repo-runtime',
+          branch,
+          linkedPRNumber: null,
+          currentHeadOid: 'head-oid',
+          reason
+        },
+        timeoutMs: 30_000
+      })
+    }
+  )
 
   it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
     const store = createTestStore()
@@ -230,7 +247,13 @@ describe('GitHub PR refresh owner-host routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.prForBranch',
-      params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
+      params: {
+        repo: 'repo-runtime',
+        branch,
+        linkedPRNumber: null,
+        currentHeadOid: 'head-oid',
+        reason: 'post-push'
+      },
       timeoutMs: 30_000
     })
   })
@@ -260,7 +283,8 @@ describe('GitHub PR refresh owner-host routing', () => {
 
     store.getState().reportVisibleGitHubPRRefreshCandidates(['wt-local', 'wt-runtime'], 123)
 
-    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().visibleReviewWorktreeIds).toEqual(['wt-local', 'wt-runtime'])
     expect(reportVisiblePRRefreshCandidates).toHaveBeenCalledWith({
       candidates: [
         expect.objectContaining({
@@ -271,16 +295,57 @@ describe('GitHub PR refresh owner-host routing', () => {
       ],
       generation: 123
     })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'github.prForBranch',
-      params: {
-        repo: 'repo-runtime',
-        branch: 'feature/runtime',
-        linkedPRNumber: null,
-        currentHeadOid: 'head-oid'
-      },
-      timeoutMs: 30_000
-    })
   })
+})
+
+describe('known non-GitHub review event routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRuntimeMocks()
+  })
+
+  it.each(['local', 'runtime:env-1'] as const)(
+    'does not start GitHub lookups from activation, push or manual enqueue on %s',
+    (executionHostId) => {
+      const store = createTestStore()
+      const worktree = { ...makeWorktree('repo', 'feature/review', 'worktree'), linkedGitLabMR: 8 }
+      seed(store, {
+        repos: [makeRepo({ id: 'repo', path: '/repo', executionHostId })],
+        worktreesByRepo: { repo: [worktree] },
+        activeWorktreeId: worktree.id
+      })
+      store.getState().enqueueGitHubPRRefresh(worktree.id, 'active', 80)
+      store.getState().refreshGitHubForWorktreeIfStale(worktree.id)
+      store.getState().refreshGitHubForWorktree(worktree.id)
+      expect(enqueuePRRefresh).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    }
+  )
+})
+
+it('acknowledges visibility admission before foreground callers can enqueue work', async () => {
+  vi.clearAllMocks()
+  let release: () => void = () => {}
+  reportVisiblePRRefreshCandidates.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      })
+  )
+  const store = createTestStore()
+  seed(store, {
+    repos: [makeRepo({ id: 'repo', path: '/repo' })],
+    worktreesByRepo: { repo: [makeWorktree('repo', 'branch', 'worktree')] }
+  })
+  const acknowledged = vi.fn()
+  const completion = store
+    .getState()
+    .reportVisibleGitHubPRRefreshCandidates(['worktree'], 1)
+    .then(acknowledged)
+  await Promise.resolve()
+  expect(acknowledged).not.toHaveBeenCalled()
+  release()
+  await completion
+  expect(acknowledged).toHaveBeenCalledOnce()
 })

@@ -13,6 +13,7 @@ import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
+import { detectOwnCgroupScopeUnit } from './daemon-cgroup-scope'
 import {
   DAEMON_EXIT_ENDPOINT_OCCUPIED,
   DaemonEndpointUnavailableError
@@ -25,6 +26,9 @@ import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 import { publishDaemonPidFile } from './daemon-spawner'
+import { isNativePtyException } from './daemon-native-pty-exception'
+import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
+import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -36,6 +40,7 @@ export type ParsedDaemonArgs = {
   spawnerExecPath?: string
   /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
   loginSessionWatch?: boolean
+  freshDaemonScope?: boolean
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
   logFilePath?: string
 }
@@ -50,6 +55,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let appVersion = ''
   let spawnerExecPath = ''
   let loginSessionWatch = false
+  let freshDaemonScope = false
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -78,6 +84,8 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
       i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
+    } else if (argv[i] === '--fresh-daemon-scope') {
+      freshDaemonScope = true
     }
   }
 
@@ -97,6 +105,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     ...(appVersion ? { appVersion } : {}),
     ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
+    ...(freshDaemonScope ? { freshDaemonScope } : {}),
     ...(logFilePath ? { logFilePath } : {})
   }
 }
@@ -118,6 +127,7 @@ async function main(): Promise<void> {
     appVersion,
     spawnerExecPath,
     loginSessionWatch,
+    freshDaemonScope,
     logFilePath
   } = parseArgs(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
@@ -125,6 +135,11 @@ async function main(): Promise<void> {
   // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
+  startDaemonScopeDeathWatch({
+    freshScope: freshDaemonScope === true,
+    launchNonce,
+    log: (event, details) => daemonLog.log(event, details)
+  })
   void warmPwshAvailabilityCache()
 
   // Why: detached daemons destroy stderr, so the preflight's console.warn is lost;
@@ -149,15 +164,7 @@ async function main(): Promise<void> {
   // crash the daemon — masking those would hide real issues.
   process.on('uncaughtException', (err) => {
     const msg = err?.message ?? ''
-    const isNativeError =
-      err?.name === 'Error' &&
-      (msg.includes('pty') ||
-        msg.includes('Pty') ||
-        msg.includes('EIO') ||
-        msg.includes('EPIPE') ||
-        msg.includes('EBADF') ||
-        msg.includes('ENXIO'))
-    if (isNativeError) {
+    if (isNativePtyException(err)) {
       daemonLog.log('uncaught-exception-suppressed', { name: err?.name, message: msg })
       console.error('[daemon] Native PTY exception (suppressed):', err)
       return
@@ -275,11 +282,14 @@ async function main(): Promise<void> {
       ? {
           publishEndpointOwnership: () =>
             publishDaemonPidFile(pidPath, {
-              pid: process.pid,
               ...readyIdentity,
               ...(entryPath ? { entryPath } : {}),
               ...(appVersion ? { appVersion } : {}),
               ...(spawnerExecPath ? { spawnerExecPath } : {}),
+              // Why detect rather than trust the launcher's intent: this is the ground truth of
+              // where the daemon's own cgroup landed, verified from inside the process that
+              // matters. See daemon-cgroup-scope.ts.
+              cgroupUnit: detectOwnCgroupScopeUnit(),
               launchNonce
             })
         }
@@ -325,10 +335,18 @@ async function main(): Promise<void> {
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
+  // Whether the addon loads is fixed for this process, and a detached daemon has
+  // no stderr, so the module's own warn cannot report it here. Both answers, so a
+  // bundle can tell "native" from "never asked" (#16905). Loading it now also pays
+  // the dlopen off the first teardown.
+  if (process.platform === 'win32') {
+    daemonLog.log('windows-process-table', { native: isWindowsProcessTableAvailable() })
+  }
 }
 
-// Only auto-run when executed directly (not imported for testing)
-const isDirectExecution = !process.env.VITEST
+// Only auto-run when executed directly (not imported for testing, or for the build guard's
+// load check — see config/scripts/build-orcad.mjs).
+const isDirectExecution = !process.env.VITEST && !process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)

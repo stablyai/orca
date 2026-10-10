@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
@@ -10,8 +11,8 @@ import { PROTOCOL_VERSION } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
 type DaemonServerPrivate = {
-  pendingPtySpawnPreparations: Map<string, Set<unknown>>
-  clients: Map<string, { streamSocket: Socket | null }>
+  preparations: { pending: Map<string, Set<unknown>> }
+  connections: { clients: Map<string, { streamSocket: Socket | null }> }
 }
 
 function createMockSubprocess(): SubprocessHandle {
@@ -23,6 +24,7 @@ function createMockSubprocess(): SubprocessHandle {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData: vi.fn(),
@@ -95,7 +97,7 @@ describe('daemon preflight client replacement', () => {
     await replacement.ensureConnected()
     finishPreparation()
     await vi.waitFor(() =>
-      expect((server as unknown as DaemonServerPrivate).pendingPtySpawnPreparations.size).toBe(0)
+      expect((server as unknown as DaemonServerPrivate).preparations.pending.size).toBe(0)
     )
     expect(spawnSubprocess).not.toHaveBeenCalled()
 
@@ -138,12 +140,13 @@ describe('daemon preflight client replacement', () => {
     disconnected.stream.destroy()
     await vi.waitFor(() =>
       expect(
-        (server as unknown as DaemonServerPrivate).clients.get(disconnectedClientId)?.streamSocket
+        (server as unknown as DaemonServerPrivate).connections.clients.get(disconnectedClientId)
+          ?.streamSocket
       ).toBeNull()
     )
     finishPreparation()
     await vi.waitFor(() =>
-      expect((server as unknown as DaemonServerPrivate).pendingPtySpawnPreparations.size).toBe(0)
+      expect((server as unknown as DaemonServerPrivate).preparations.pending.size).toBe(0)
     )
     expect(spawnSubprocess).toHaveBeenCalledOnce()
 

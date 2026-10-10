@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_SESSION_EXPIRED_ERROR
@@ -72,7 +73,8 @@ describe('registerPtyHandlers', () => {
           )
         })
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
@@ -96,7 +98,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        setPtyOwnership(scopedPtyId, 'ssh-1')
+        setPtyOwnership(scopedPtyId, 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -136,7 +138,8 @@ describe('registerPtyHandlers', () => {
       })
       it('does not tombstone an SSH lease when explicit kill shutdown fails transiently', async () => {
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: vi.fn(),
@@ -160,7 +163,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        setPtyOwnership('remote-pty', 'ssh-1')
+        setPtyOwnership('remote-pty', 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -188,7 +191,8 @@ describe('registerPtyHandlers', () => {
       it('marks an SSH lease terminated after runtime controller kill succeeds', async () => {
         const shutdown = vi.fn(async () => undefined)
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
@@ -216,7 +220,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        setPtyOwnership('remote-pty', 'ssh-1')
+        setPtyOwnership('remote-pty', 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -289,7 +293,9 @@ describe('registerPtyHandlers', () => {
         await Promise.resolve()
 
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, {
+          providerExitObserved: true
+        })
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
@@ -342,7 +348,9 @@ describe('registerPtyHandlers', () => {
         await expect(stopPromise).resolves.toBe(true)
 
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, {
+          providerExitObserved: true
+        })
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
@@ -352,7 +360,8 @@ describe('registerPtyHandlers', () => {
         const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
         const runtime = {
           setPtyController: vi.fn(),
-          onPtyExit: vi.fn()
+          onPtyExit: vi.fn(),
+          intentionalPtyStops: new TerminalIntentionalStops()
         }
         setLocalPtyProvider({
           spawn: vi.fn(),
@@ -386,15 +395,14 @@ describe('registerPtyHandlers', () => {
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-          markReversibleStops: (ptyIds: readonly string[]) => () => void
           stopAndWait: (ptyId: string) => Promise<boolean>
         }
-        const release = controller.markReversibleStops(['local-pty'])
+        const settleStop = runtime.intentionalPtyStops.mark('local-pty', 'reversible', null)
 
         const stopPromise = controller.stopAndWait('local-pty')
         await vi.advanceTimersByTimeAsync(1_200)
         await expect(stopPromise).resolves.toBe(true)
-        release()
+        settleStop(true)
 
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
@@ -404,7 +412,8 @@ describe('registerPtyHandlers', () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
@@ -432,7 +441,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        setPtyOwnership('remote-pty', 'ssh-1')
+        setPtyOwnership('remote-pty', 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -459,7 +468,7 @@ describe('registerPtyHandlers', () => {
           'remote-pty',
           'terminated'
         )
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 0, undefined)
       })
       it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
         // Why: sequential RPCs must share one absolute deadline; otherwise both get

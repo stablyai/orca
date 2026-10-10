@@ -30,20 +30,34 @@ vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
     linearConnect: (...args: unknown[]) => linearConnect(...args),
     linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
     linearDisconnectWorkspace: vi.fn(),
-    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
-    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
-    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
-    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
-    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
-    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
     linearListIssues: (...args: unknown[]) => linearListIssues(...args),
-    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
-    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
-    linearListTeams: (...args: unknown[]) => linearListTeams(...args),
     linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
     linearSelectWorkspace: vi.fn(),
     linearStatus: (...args: unknown[]) => linearStatus(...args),
     linearTestConnection: (...args: unknown[]) => linearTestConnection(...args)
+  }
+})
+
+vi.mock('@/runtime/runtime-linear-issue-mutations', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
+  }
+})
+
+vi.mock('@/runtime/runtime-linear-project-client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
+    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
+    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
+    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
+    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
+    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
+    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
+    linearListTeams: (...args: unknown[]) => linearListTeams(...args)
   }
 })
 
@@ -122,6 +136,60 @@ describe('createLinearSlice caching', () => {
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
     ).toBeNull()
+  })
+
+  it('uses source-selected workspaces for searches, lists, and matching cache reads', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'focused-workspace' }
+    })
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    const options = { sourceContext, workspaceId: 'source-workspace' }
+    linearSearchIssues.mockResolvedValue([issue('SOURCE-1')])
+    linearListIssues.mockResolvedValue({ items: [issue('SOURCE-2')] })
+    await store.getState().searchLinearIssues('query', 12, options)
+    await store.getState().listLinearIssues({ kind: 'list', limit: 12 }, options)
+    expect(linearSearchIssues).toHaveBeenCalledWith(sourceContext, 'query', 12, 'source-workspace')
+    expect(linearListIssues).toHaveBeenCalledWith(
+      sourceContext,
+      'assigned',
+      12,
+      'source-workspace',
+      undefined
+    )
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'search', query: 'query', limit: 12 }, options)
+    ).toMatchObject([{ id: 'SOURCE-1' }])
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', limit: 12 }, options)
+    ).toMatchObject({ items: [{ id: 'SOURCE-2' }] })
+    store.getState().prefetchLinearIssues({ kind: 'search', query: 'query', limit: 12 }, options)
+    expect(linearSearchIssues).toHaveBeenCalledTimes(1)
+    expect(
+      store
+        .getState()
+        .getCachedLinearIssues({ kind: 'search', query: 'query', limit: 12 }, { sourceContext })
+    ).toBeNull()
+  })
+
+  it('distinguishes explicit default, all, and inherited focused workspace selections', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'focused-workspace' }
+    })
+    const sourceContext = linearSourceContext('source-runtime')
+    linearSearchIssues.mockResolvedValue([])
+    await store.getState().searchLinearIssues('query', 12, { sourceContext, workspaceId: null })
+    await store.getState().searchLinearIssues('query', 12, { sourceContext, workspaceId: 'all' })
+    await store
+      .getState()
+      .searchLinearIssues('query', 12, { sourceContext, workspaceId: undefined })
+    expect(linearSearchIssues.mock.calls.map((args) => args[3])).toEqual([
+      null,
+      'all',
+      'focused-workspace'
+    ])
+    expect(Object.keys(store.getState().linearSearchCache)).toHaveLength(3)
   })
 
   it('scopes cached Linear teams, projects, and views to the explicit source context', async () => {
@@ -293,5 +361,31 @@ describe('createLinearSlice caching', () => {
       store.getState().linearListCache[`${remoteScope}::workspace-1::list::all::36`]?.data?.items[0]
         ?.title
     ).toBe('Remote title')
+  })
+  it('does not reuse an unscoped issue detail for an explicit source', async () => {
+    const store = createTestStore()
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    store.setState({
+      linearIssueCache: {
+        'same-id': { data: { ...issue('same-id'), title: 'Wrong source' }, fetchedAt: Date.now() }
+      }
+    })
+    linearGetIssue.mockResolvedValueOnce({ ...issue('same-id'), title: 'Correct source' })
+    await expect(
+      store.getState().fetchLinearIssue('same-id', 'source-workspace', { sourceContext })
+    ).resolves.toMatchObject({ title: 'Correct source' })
+    expect(linearGetIssue).toHaveBeenCalledWith(sourceContext, 'same-id', 'source-workspace')
+  })
+  it('keeps the previous scoped detail when a deadline aborts its revalidation', async () => {
+    const store = createTestStore()
+    const sourceContext = linearSourceContext('source-runtime', 'source-workspace')
+    const cacheKey = `${getTaskSourceCacheScope(sourceContext)}::source-workspace::same-id`
+    const previous = { data: issue('same-id'), fetchedAt: 0 }
+    store.setState({ linearIssueCache: { [cacheKey]: previous } })
+    linearGetIssue.mockRejectedValueOnce(new Error('Linear issue detail lookup timed out'))
+    await expect(
+      store.getState().fetchLinearIssue('same-id', 'source-workspace', { sourceContext })
+    ).resolves.toBeNull()
+    expect(store.getState().linearIssueCache[cacheKey]).toBe(previous)
   })
 })

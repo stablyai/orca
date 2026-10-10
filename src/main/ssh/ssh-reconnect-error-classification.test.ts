@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isTransientError } from './ssh-connection-utils'
+import { HostKeyVerificationError } from './ssh-host-key-decision'
 import {
   isDefiniteSystemSshHostFailure,
   isTransientReconnectError
@@ -10,6 +11,14 @@ describe('isTransientReconnectError', () => {
     const err = new Error('System SSH connection timed out')
     // Guards the split: widening isTransientError would spend 5 connect() attempts on this.
     expect(isTransientError(err)).toBe(false)
+    expect(isTransientReconnectError(err)).toBe(true)
+  })
+
+  it('treats the bounded ssh2 authentication watchdog as recoverable', () => {
+    const err = Object.assign(new Error('Timed out while waiting for SSH authentication'), {
+      level: 'client-timeout'
+    })
+
     expect(isTransientReconnectError(err)).toBe(true)
   })
 
@@ -45,6 +54,13 @@ describe('isTransientReconnectError', () => {
         )
       )
     ).toBe(false)
+  })
+
+  it('treats a pre-banner socket close as recoverable on the ladder only', () => {
+    // ssh2 attaches no errno here, so the code table alone stranded hosts in 'error' after an outage.
+    const err = Object.assign(new Error('Connection lost before handshake'), { level: 'protocol' })
+    expect(isTransientError(err)).toBe(false)
+    expect(isTransientReconnectError(err)).toBe(true)
   })
 
   it('keeps credential failures permanent', () => {
@@ -90,5 +106,20 @@ describe('isTransientReconnectError', () => {
 
   it('keeps unrelated failures permanent', () => {
     expect(isTransientReconnectError(new Error('something went wrong'))).toBe(false)
+  })
+
+  // Retrying re-derives the same verdict, so this would back off against an already-refused host
+  // until the ladder gave up — with the reason buried under nine failed attempts.
+  it('never retries a refused host key', () => {
+    expect(isTransientReconnectError(new HostKeyVerificationError('key changed', 'mismatch'))).toBe(
+      false
+    )
+  })
+
+  // The classifier is otherwise substring-driven, so a reason that happened to contain network
+  // wording would silently become retryable. The type is what decides.
+  it('never retries a refused host key whose reason reads like a network fault', () => {
+    const err = new HostKeyVerificationError('connection reset while checking the key', 'mismatch')
+    expect(isTransientReconnectError(err)).toBe(false)
   })
 })

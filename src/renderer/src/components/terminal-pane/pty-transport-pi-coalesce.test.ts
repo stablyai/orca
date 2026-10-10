@@ -79,9 +79,9 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
     // renders 'working' as long as detectAgentStatusFromTitle sees a working
     // title — if the intermediate frames are dropped, users never see the
     // spinner on fast-agent prompts.
-    expect(seen).toContain('⠋ Pi')
+    expect(seen).toContain('⠋ π - cwd')
     // Idle must land last so the spinner disappears on agent_end.
-    expect(seen.at(-1)).toBe('Pi')
+    expect(seen.at(-1)).toBe('π - cwd')
 
     transport.disconnect()
   })
@@ -101,7 +101,7 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
     await flushPtySideEffects()
 
     const seen = onTitleChange.mock.calls.map((c) => c[0])
-    expect(seen).toContain('⠋ Pi')
+    expect(seen).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })

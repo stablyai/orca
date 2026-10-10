@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
 import { ArrowRight, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
@@ -14,18 +14,12 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const signedIn = authStatus?.state === 'connected'
   const isWebClient = isWebClientLocation()
   const agentSharingEnabled = settings?.agentSkillSharingEnabled === true
 
-  useEffect(() => {
-    if (!authStatus) {
-      void fetchAuthStatus()
-    }
-  }, [authStatus, fetchAuthStatus])
+  useOrcaProfileAuthStatusRefresh()
 
   const steps: HowToStep[] = [
     {
@@ -140,14 +134,12 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
             <Button
               type="button"
               size="sm"
-              disabled={connecting || authStatus?.configured !== true}
+              disabled={authStatus?.configured !== true}
               onClick={() => void connect()}
             >
-              {connecting
-                ? translate('auto.components.settings.shareSkills.signingIn', 'Signing in…')
-                : authStatus?.state === 'reconnect-required'
-                  ? translate('auto.components.settings.shareSkills.signInAgain', 'Sign in again')
-                  : translate('auto.components.settings.shareSkills.signIn', 'Sign in to Orca')}
+              {authStatus?.state === 'reconnect-required'
+                ? translate('auto.components.settings.shareSkills.signInAgain', 'Sign in again')
+                : translate('auto.components.settings.shareSkills.signIn', 'Sign in to Orca')}
             </Button>
           ) : null}
         </section>

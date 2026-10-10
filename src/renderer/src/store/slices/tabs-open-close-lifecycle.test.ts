@@ -4,7 +4,13 @@ import { getDefaultUIState } from '../../../../shared/constants'
 import { buildMobileSessionTabSnapshots } from '../../runtime/sync-runtime-graph'
 import { closeMobileSessionTabInStore } from '../../runtime/mobile-session-tab-close'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, makeOpenFile, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
+import {
+  createTestStore,
+  makeOpenFile,
+  makeTabGroup,
+  makeUnifiedTab,
+  makeWorktree
+} from './store-test-helpers'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -55,6 +61,36 @@ describe('TabsSlice', () => {
       expect(tab.id).toBe('/tmp/feature/src/main.ts')
       expect(tab.contentType).toBe('editor')
       expect(tab.label).toBe('main.ts')
+    })
+
+    it('stamps tabs with the active execution host', () => {
+      store.setState({
+        activeWorktreeId: WT,
+        activeWorkspaceExecutionHostId: 'runtime:host-b'
+      })
+
+      expect(store.getState().createUnifiedTab(WT, 'simulator').executionHostId).toBe(
+        'runtime:host-b'
+      )
+    })
+
+    it('stamps active local tabs when the local host field is null', () => {
+      store.setState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
+
+      expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('local')
+    })
+
+    it("stamps an SSH worktree's own host when activation passed none", () => {
+      store.setState({
+        repos: [
+          { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+        ],
+        worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', hostId: 'ssh:box' })] },
+        activeWorktreeId: WT,
+        activeWorkspaceExecutionHostId: null
+      })
+
+      expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('ssh:box')
     })
 
     it('activates the newly created tab', () => {
@@ -330,12 +366,12 @@ describe('TabsSlice', () => {
       expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
     })
 
-    it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
+    it('activates the previously-active tab across content types', () => {
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'browser')
+      const t3 = store.getState().createUnifiedTab(WT, 'editor')
 
-      // Visit order ...→t3→t1→t3; closing t3 should jump to t1 (MRU previous), not the visual neighbor t2.
+      // Visit order ...→t3→t1→t3; closing t3 should jump to t1, not browser neighbor t2.
       store.getState().activateTab(t1.id)
       store.getState().activateTab(t3.id)
       store.getState().closeUnifiedTab(t3.id)

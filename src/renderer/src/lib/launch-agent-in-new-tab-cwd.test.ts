@@ -43,6 +43,7 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () => 'local',
   getRuntimeEnvironmentIdForWorktree: () => 'web-runtime'
 }))
 
@@ -77,6 +78,7 @@ describe('launchAgentInNewTab initial cwd', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
+      requestId: 'request-1',
       agent: 'claude',
       worktreeId: 'wt-1',
       initialCwd: '/repo/worktree/packages/app'
@@ -90,6 +92,7 @@ describe('launchAgentInNewTab initial cwd', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
+      requestId: 'request-2',
       agent: 'claude',
       worktreeId: 'wt-1',
       groupId: 'group-1',
@@ -112,6 +115,7 @@ describe('launchAgentInNewTab initial cwd', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-3',
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: 'continue the unfinished task',

@@ -13,6 +13,9 @@ function readRootEntries(sha) {
   return stdout.split('\0').filter(Boolean)
 }
 
+// These reviewed additions stay listed until the base tree carries them.
+const REVIEWED_ROOT_ENTRIES = new Set(['cloud', 'opencode.json'])
+
 function checkRootDirectoryEntries(argv) {
   if (argv.length !== 2) {
     console.error(`Usage: ${process.argv[1]} <base-sha> <head-sha>`)
@@ -21,7 +24,9 @@ function checkRootDirectoryEntries(argv) {
 
   const [baseSha, headSha] = argv
   const baseEntries = new Set(readRootEntries(baseSha))
-  const blockedEntries = readRootEntries(headSha).filter((entry) => !baseEntries.has(entry))
+  const blockedEntries = readRootEntries(headSha).filter(
+    (entry) => !baseEntries.has(entry) && !REVIEWED_ROOT_ENTRIES.has(entry)
+  )
 
   if (blockedEntries.length === 0) {
     console.log('Root directory guard passed: no new root-level files or folders.')

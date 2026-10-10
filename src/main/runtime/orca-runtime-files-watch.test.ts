@@ -4,6 +4,7 @@ import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
+import type { IFilesystemProvider } from '../providers/types'
 import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 
@@ -87,7 +88,8 @@ function createRuntimeFileCommands(rootPath: string) {
         id: 'wt-1',
         repoId: 'repo-1',
         path: rootPath
-      }
+      },
+      executionHostId: 'local'
     })),
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()
@@ -542,38 +544,62 @@ describe('RuntimeFileCommands file watching', () => {
     expect(drained).toBe(true)
   })
 
-  it('forwards the abort signal into SSH-backed file explorer watches', async () => {
-    const watch = vi.fn(async () => () => {})
-    getSshFilesystemProviderMock.mockReturnValue({ watch })
-    const store = { getRepo: vi.fn(() => ({ connectionId: 'ssh-1' })) }
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => store,
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/remote/repo'
-      })),
-      resolveRuntimeFileTarget: vi.fn(async () => ({
-        worktree: {
+  it.each(['abort', 'unsubscribe'] as const)(
+    'forwards the SSH watch signal and fences terminal errors after %s',
+    async (stop) => {
+      const dispose = vi.fn()
+      const watch = vi.fn<IFilesystemProvider['watch']>().mockResolvedValue(dispose)
+      getSshFilesystemProviderMock.mockReturnValue({ watch })
+      const store = { getRepo: vi.fn(() => ({ connectionId: 'ssh-1' })) }
+      const commands = new RuntimeFileCommands({
+        getRuntimeId: () => 'runtime-1',
+        requireStore: () => store,
+        resolveWorktreeSelector: vi.fn(async () => ({
           id: 'wt-1',
           repoId: 'repo-1',
           path: '/remote/repo'
-        },
-        connectionId: 'ssh-1'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn()
-    } as never)
-    const controller = new AbortController()
-    const onTerminalError = vi.fn()
+        })),
+        resolveRuntimeFileTarget: vi.fn(async () => ({
+          worktree: {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '/remote/repo'
+          },
+          executionHostId: 'ssh:ssh-1'
+        })),
+        resolveRuntimeGitTarget: vi.fn(),
+        openFile: vi.fn()
+      } as never)
+      const controller = new AbortController()
+      const onTerminalError = vi.fn()
 
-    await commands.watchFileExplorer('id:wt-1', vi.fn(), onTerminalError, controller.signal)
+      const unsubscribe = await commands.watchFileExplorer(
+        'id:wt-1',
+        vi.fn(),
+        onTerminalError,
+        controller.signal
+      )
 
-    expect(watch).toHaveBeenCalledWith('/remote/repo', expect.any(Function), {
-      signal: controller.signal,
-      onTerminalError
-    })
-    expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
-  })
+      expect(watch).toHaveBeenCalledWith('/remote/repo', expect.any(Function), {
+        signal: controller.signal,
+        onTerminalError: expect.any(Function)
+      })
+      const options = watch.mock.calls[0]?.[2]
+      expect(options?.signal).toBe(controller.signal)
+      const currentError = new Error('current remote watch failed')
+      options?.onTerminalError?.(currentError)
+      expect(onTerminalError).toHaveBeenCalledExactlyOnceWith(currentError)
+      if (stop === 'abort') {
+        controller.abort()
+      } else {
+        await unsubscribe()
+        expect(controller.signal.aborted).toBe(false)
+      }
+      options?.onTerminalError?.(new Error('late remote watch failure'))
+      expect(onTerminalError).toHaveBeenCalledExactlyOnceWith(currentError)
+      await unsubscribe()
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
+    }
+  )
 })

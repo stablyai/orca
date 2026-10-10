@@ -2,7 +2,6 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { applyWorktreeUpdates } from '../../worktree-helpers'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { branchName } from '@/lib/git-utils'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
@@ -49,6 +48,13 @@ export function hasBranchScopedHostedReviewContext(worktree: Worktree): boolean 
 
 export function hasHostedReviewLinkUpdates(updates: Partial<WorktreeMeta>): boolean {
   return HOSTED_REVIEW_LINK_KEYS.some((key) => key in updates) || 'pushTarget' in updates
+}
+
+export function hasChangedHostedReviewLinkUpdates(
+  updates: Partial<WorktreeMeta>,
+  worktree: Worktree
+): boolean {
+  return HOSTED_REVIEW_LINK_KEYS.some((key) => key in updates && updates[key] !== worktree[key])
 }
 
 export function getHostedReviewLinkMutationGeneration(worktreeId: string): number {
@@ -254,7 +260,7 @@ export function applyHostedReviewLinkClear(
       nextWorktrees === s.worktreesByRepo &&
       nextDetectedWorktrees === s.detectedWorktreesByRepo
     ) {
-      return {}
+      return s
     }
     return {
       ...(nextWorktrees !== s.worktreesByRepo
@@ -265,37 +271,6 @@ export function applyHostedReviewLinkClear(
         : {})
     }
   })
-}
-
-export function getPositiveHostedReviewLinkUpdateKey(
-  updates: Partial<WorktreeMeta>
-): HostedReviewLinkKey | null {
-  for (const key of HOSTED_REVIEW_LINK_KEYS) {
-    if (isPositiveHostedReviewNumber(updates[key])) {
-      return key
-    }
-  }
-  return null
-}
-
-export function clearOlderHostedReviewLinksForReplacement(
-  updates: Partial<WorktreeMeta>,
-  existingWorktree: Worktree
-): Partial<WorktreeMeta> {
-  const replacementKey = getPositiveHostedReviewLinkUpdateKey(updates)
-  if (!replacementKey) {
-    return updates
-  }
-  let normalized = updates
-  for (const key of HOSTED_REVIEW_LINK_KEYS) {
-    if (key === replacementKey || existingWorktree[key] == null) {
-      continue
-    }
-    // Why: one branch pushes to one hosted-review head; stale provider links would win the target lookup after replacement.
-    normalized = normalized === updates ? { ...updates } : normalized
-    normalized[key] = null
-  }
-  return normalized
 }
 
 export function getHostedReviewLinkForMetaRefresh(

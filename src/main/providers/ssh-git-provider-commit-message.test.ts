@@ -163,7 +163,8 @@ describe('SshGitProvider', () => {
         binary: 'codex',
         args: ['exec', 'PROMPT'],
         stdinPayload: null,
-        label: 'Codex'
+        label: 'Codex',
+        env: { FLAG: 'literal $HOME' }
       },
       '/home/user/repo',
       60_000
@@ -176,8 +177,10 @@ describe('SshGitProvider', () => {
         args: ['exec', 'PROMPT'],
         cwd: '/home/user/repo',
         stdin: null,
+        env: { FLAG: 'literal $HOME' },
         timeoutMs: 60_000,
-        operation: 'commit-message'
+        operation: 'commit-message',
+        shell: true
       },
       { timeoutMs: 65_000 }
     )
@@ -226,7 +229,8 @@ describe('SshGitProvider', () => {
         cwd: '/home/user/repo',
         stdin: null,
         timeoutMs: 60_000,
-        operation: 'commit-message'
+        operation: 'commit-message',
+        shell: true
       },
       { timeoutMs: 65_000 }
     )
@@ -239,7 +243,8 @@ describe('SshGitProvider', () => {
         cwd: '/home/user/repo',
         stdin: null,
         timeoutMs: 60_000,
-        operation: 'pull-request-fields'
+        operation: 'pull-request-fields',
+        shell: true
       },
       { timeoutMs: 65_000 }
     )

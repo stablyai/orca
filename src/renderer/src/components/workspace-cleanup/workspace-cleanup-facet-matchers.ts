@@ -170,13 +170,7 @@ export function matchesWorkspaceCleanupSafety(
   facets: WorkspaceCleanupFacets,
   filter: WorkspaceCleanupSafetyFilter
 ): boolean {
-  if (filter.tiers.length > 0 && !filter.tiers.includes(facets.tier)) {
-    return false
-  }
   if (!matchesWorkspaceCleanupTriState(filter.dismissed, facets.isDismissed)) {
-    return false
-  }
-  if (filter.selectableOnly && !facets.isSelectable) {
     return false
   }
   if (filter.blockers.length === 0) {

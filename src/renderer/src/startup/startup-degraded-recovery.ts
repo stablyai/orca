@@ -26,7 +26,10 @@ function forceWorkspaceSessionReady(): void {
     workspaceSessionReady: true,
     pendingReconnectWorktreeIds: [],
     pendingReconnectTabByWorktree: {},
-    pendingReconnectPtyIdByTabId: {}
+    pendingReconnectPtyIdByTabId: {},
+    // Why: the activation gate waits on this flag; a degraded boot must still release it
+    // or no worktree ever gets its fallback terminal.
+    terminalStartupRestorationReady: true
   })
 }
 
@@ -90,6 +93,11 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     )
     await reconnectPersistedTerminals(abortSignal)
     await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+    // Why: reconnect set workspaceSessionReady but not this flag, which the success chain sets
+    // last; without it a degraded boot keeps every restoration reader waiting for good.
+    if (!isCancelled()) {
+      useAppStore.setState({ terminalStartupRestorationReady: true })
+    }
   } catch (reconnectErr) {
     console.error('[startup] reconnectPersistedTerminals failed in error path:', reconnectErr)
     // Why (issue #1158): the await may have run during StrictMode teardown; re-check cancellation so a cancelled pass 1 doesn't stomp pass 2's hydration.

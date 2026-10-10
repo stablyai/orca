@@ -22,6 +22,14 @@ on:
         description: 'Optional TestFlight external tester changelog'
         required: false
         type: string
+      shell:
+        description: 'Which shell the binary mounts: native screens, or the web page delivered over the air. Default native; `ota` is the only value that changes it.'
+        required: false
+        default: native
+        type: choice
+        options:
+          - native
+          - ota
 
 jobs:
   ios-build:
@@ -32,6 +40,14 @@ jobs:
     runs-on: macos-26
     # Archive + upload is ~30–40m when healthy; 90m leaves margin for setup.
     timeout-minutes: 90
+
+    env:
+      # Why: this job and ios-distribute resolve gems ~25 minutes apart, so both
+      # must install the committed Gemfile.lock exactly. Frozen turns a lockfile
+      # drift into a setup failure instead of two different fastlane versions in
+      # one release.
+      BUNDLE_FROZEN: 'true'
+
     outputs:
       release_version: ${{ steps.release_metadata.outputs.version }}
       build_number: ${{ steps.release_metadata.outputs.build_number }}
@@ -56,9 +72,9 @@ jobs:
           node-version: 24
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -86,6 +102,8 @@ jobs:
         run: node -e 'const fs = require("node:fs"); const { expo } = require("./app.json"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nbuild_number=${expo.ios.buildNumber}\n`)'
 
       - name: Expo prebuild
+        env:
+          ORCA_IOS_APS_ENVIRONMENT: production
         run: npx expo prebuild --platform ios --no-install
 
       - name: Install CocoaPods
@@ -131,7 +149,13 @@ jobs:
           # Keep fastlane non-interactive and quiet about analytics in CI.
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
-        run: bundle exec fastlane ios build_and_upload
+          # The one build-time constant that decides whether this binary mounts the web page or
+          # the native screens. A tag push and a schedule carry no inputs, so both read native.
+          EXPO_PUBLIC_MOBILE_SHELL: ${{ inputs.shell || 'native' }}
+        run: |
+          set -euo pipefail
+          echo "Mobile shell: $EXPO_PUBLIC_MOBILE_SHELL"
+          bundle exec fastlane ios build_and_upload
 
       - name: Upload .ipa artifact
         if: always()
@@ -148,6 +172,10 @@ jobs:
     # Fastlane's processing wait fails after 20m; this outer bound leaves setup
     # margin without allowing App Store Connect polling to hang for hours.
     timeout-minutes: 30
+
+    env:
+      # Same fastlane as ios-build, or fail before touching App Store Connect.
+      BUNDLE_FROZEN: 'true'
 
     defaults:
       run:

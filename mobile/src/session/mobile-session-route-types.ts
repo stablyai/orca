@@ -1,3 +1,5 @@
+import type { MobileFileMedia } from '../files/mobile-file-media'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
@@ -9,7 +11,7 @@ import type { TerminalRecord } from './mobile-terminal-records'
 
 export type Terminal = TerminalRecord
 
-export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
+export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
 
 export type MobileSessionTab =
   | {
@@ -28,6 +30,14 @@ export type MobileSessionTab =
       launchDraft?: string
       launchDraftCreatedAt?: number
       terminalTheme?: MobileTerminalTheme
+      isActive: boolean
+    }
+  | {
+      type: 'agent-session'
+      id: string
+      title: string
+      sessionId: string
+      agent: AgentSessionHandleProvider
       isActive: boolean
     }
   | {
@@ -61,6 +71,8 @@ export type SessionTabsResult = {
   tabs: MobileSessionTab[]
   activeTabId: string | null
   activeTabType: MobileSessionTabType | null
+  /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
+  navigationIntent?: 'follow'
 }
 
 export type RuntimeStatusResult = {
@@ -80,10 +92,13 @@ export type MarkdownDocState =
       saving?: boolean
       saveError?: string
       readOnlyReason?: string
+      truncated?: true
+      byteLength?: number
     }
   | { status: 'error'; message: string }
 
 export type FileDocState =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
   | { status: 'loading' }
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
@@ -95,6 +110,8 @@ export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
 
 export type DiffCommentActions = {
   comments: DiffComment[]
+  /** Notes a new agent session is still being started with. */
+  sendingCommentIds: ReadonlySet<string>
   busy: boolean
   onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
   onDelete: (commentId: string) => Promise<void>
@@ -127,16 +144,8 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-export type TerminalCreateResult = {
-  tab: Extract<MobileSessionTab, { type: 'terminal' }>
-}
-
-export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
-
-export type RuntimeRepoSummary = {
-  id: string
-  connectionId?: string | null
-}
+/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
+export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 

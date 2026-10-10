@@ -3,8 +3,6 @@ import { releaseRemoteRuntimePreparedRequest } from './remote-runtime-prepared-r
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type {
-  RemoteRuntimeSharedConnectionDiagnostics,
-  SharedControlConnectionState,
   SharedControlLogicalSubscription,
   SharedControlPendingRequest,
   SharedControlReadyWaiter
@@ -12,27 +10,6 @@ import type {
 import { getSubscriptionId, isEndResult } from './remote-runtime-shared-control-protocol'
 import { withReconnectJitter } from './reconnect-jitter'
 import { tagRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
-
-export function buildSharedControlDiagnostics(args: {
-  state: SharedControlConnectionState
-  reconnecting: boolean
-  pendingRequestCount: number
-  subscriptionCount: number
-  reconnectAttempt: number
-  lastConnectedAt: number | null
-  lastClose: { code: number; reason: string } | null
-  lastError: string | null
-}): RemoteRuntimeSharedConnectionDiagnostics {
-  return {
-    state: args.reconnecting ? 'reconnecting' : args.state,
-    pendingRequestCount: args.pendingRequestCount,
-    subscriptionCount: args.subscriptionCount,
-    reconnectAttempt: args.reconnectAttempt,
-    lastConnectedAt: args.lastConnectedAt,
-    lastClose: args.lastClose,
-    lastError: args.lastError
-  }
-}
 
 export function rejectSharedControlPendingRequest(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>,

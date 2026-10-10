@@ -2,7 +2,12 @@ import type { PersistedState } from '../../shared/persisted-state-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { TransferProfileState } from './profile-project-state-file'
 import { isRepoWorktreeId } from './profile-project-worktree-identity'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../shared/worktree/host-qualified-identity'
 
+/** Includes worktrees referenced only by sessions or UI preferences so profile transfer cannot strand their state. */
 export function collectTransferWorktreeIds(
   state: TransferProfileState,
   repoId: string
@@ -32,6 +37,7 @@ export function collectTransferWorktreeIds(
   for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
     collectSessionWorktreeIds(session, repoId, ids)
   }
+  Object.keys(state.ui?.explorerDisplayRootByWorktree ?? {}).forEach(add)
   Object.keys(state.ui?.showDotfilesByWorktree ?? {}).forEach(add)
   return ids
 }
@@ -51,8 +57,9 @@ function collectSessionWorktreeIds(
   }
   const addOwnerKeys = (record: Record<string, unknown> | undefined): void => {
     for (const key of Object.keys(record ?? {})) {
-      if (isRepoWorktreeId(repoId, key)) {
-        ids.add(key)
+      const rawKey = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+      if (isRepoWorktreeId(repoId, rawKey)) {
+        ids.add(rawKey)
       }
       const parsed = parseWorkspaceKey(key)
       if (parsed?.type === 'worktree' && isRepoWorktreeId(repoId, parsed.worktreeId)) {

@@ -56,7 +56,7 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
-  it('keeps workspace delete unassigned until users customize it', () => {
+  it('binds immediate workspace delete without claiming terminal split right', () => {
     const binding = {
       key: 'Backspace',
       code: 'Backspace',
@@ -66,13 +66,28 @@ describe('keybindings', () => {
       shift: true
     }
 
-    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([])
-    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(false)
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'darwin')).toEqual([
+      'Mod+Shift+Backspace'
+    ])
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([
+      'Mod+Shift+Backspace'
+    ])
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'win32')).toEqual([
+      'Mod+Shift+Backspace'
+    ])
+    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(true)
     expect(
       keybindingMatchesAction('workspace.delete', binding, 'linux', {
-        'workspace.delete': ['Mod+Shift+Backspace']
+        'workspace.delete': []
       })
-    ).toBe(true)
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'workspace.delete',
+        { key: 'd', code: 'KeyD', control: false, meta: true, alt: true, shift: false },
+        'darwin'
+      )
+    ).toBe(false)
   })
 
   it('keeps workspace board unassigned until users customize it', () => {
@@ -97,6 +112,38 @@ describe('keybindings', () => {
     expect(definition?.title).toBe('Toggle Workspace Board')
     expect(definition?.searchKeywords).toEqual(
       expect.arrayContaining(['workspace', 'board', 'kanban', 'toggle', 'open', 'close'])
+    )
+  })
+
+  it('keeps the agent dashboard toggle unassigned until users customize it', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('dashboard.toggle', platform)).toEqual([])
+    }
+
+    const binding = {
+      key: 'd',
+      code: 'KeyD',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('dashboard.toggle', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('dashboard.toggle', binding, 'linux', {
+        'dashboard.toggle': ['Mod+Alt+D']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('dashboard.toggle')
+    expect(definition?.title).toBe('Toggle Agent Dashboard')
+    expect(definition?.group).toBe('Global')
+    expect(definition?.allowInTerminal).toBe(true)
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['agent', 'dashboard', 'kanban', 'toggle', 'open', 'close'])
     )
   })
 
@@ -165,6 +212,36 @@ describe('keybindings', () => {
     expect(definition?.title).toBe('Toggle Sleeping Workspaces')
     expect(definition?.searchKeywords).toEqual(
       expect.arrayContaining(['sleeping', 'workspaces', 'filter'])
+    )
+  })
+
+  it('keeps the child-workspaces toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 'h',
+      code: 'KeyH',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('sidebar.childWorkspaces.toggle', platform)).toEqual(
+        []
+      )
+    }
+    expect(keybindingMatchesAction('sidebar.childWorkspaces.toggle', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('sidebar.childWorkspaces.toggle', binding, 'linux', {
+        'sidebar.childWorkspaces.toggle': ['Mod+Alt+H']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.childWorkspaces.toggle')
+    expect(definition?.title).toBe('Toggle Child Workspaces')
+    expect(definition?.scope).toBe('global')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['child', 'children', 'collapse', 'expand'])
     )
   })
 

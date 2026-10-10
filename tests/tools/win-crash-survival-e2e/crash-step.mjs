@@ -4,7 +4,7 @@
 // daemon (which hosts the ConPTYs) died with it, severing the console pipe, and
 // PowerShell hard-crashed with a 0xE9 "No process is on the other end of the
 // pipe" FailFast. The fix relocates the daemon into a standalone, detached
-// orca-terminal-daemon.exe that SURVIVES main death (src/main/daemon/
+// host process outside the install dir that SURVIVES main death (src/main/daemon/
 // daemon-host-relocation.ts). This module reproduces the crash and scans for the
 // pwsh FailFast that must no longer occur.
 

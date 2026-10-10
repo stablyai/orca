@@ -1,0 +1,46 @@
+---
+title: Session restore
+description: Quit Orca, reopen it, and pick up exactly where you left off — worktrees, splits, scrollback, focused tab.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+When you close Orca, the next launch rehydrates the whole workspace: every open worktree, every terminal split, the scrollback in each pane, and the tab you had focused. You shouldn't have to remember which agents you had running on which branches — that's Orca's job.
+
+## What gets restored
+
+- **Open worktrees** — every worktree you had open in the sidebar.
+- **Tabs and splits** — pane layout per worktree, including nested splits and which tab was focused.
+- **Running agent processes** — agents you had running keep running across an Orca quit. A background daemon owns the PTYs, so closing the app window doesn't kill Claude Code, Codex, or any other agent CLI mid-task. On next launch, Orca warm-reattaches to the same processes.
+- **Terminal scrollback** — the buffer in each terminal, including output produced while Orca was closed.
+- **Focused worktree and tab** — Orca opens to the same view you closed.
+
+## What doesn't get restored
+
+The daemon dies when the host does, so anything that takes the whole machine down — reboot, OS update, kernel panic, hard power-off — ends every running agent. On next launch the worktrees, tabs, splits, and last-known scrollback come back, but the agent processes themselves are gone. Re-run the agent in any tab to keep going.
+
+A daemon crash while Orca is closed has the same effect for any sessions it was holding, but the layout and scrollback still restore on next launch.
+
+## When restore runs
+
+Session restore runs on every launch. The cases divide by whether the **daemon** survived the gap or not:
+
+**Daemon survives → agents keep running:**
+
+- **Cmd-Q** — the normal way to quit. Agents keep working in the background.
+- **Auto-updater relaunch** — Orca restarts to install an update; agents are unaffected.
+- **App crash** — if Orca itself crashes, the daemon keeps your sessions alive for warm reattach on next launch.
+
+**Daemon dies → agents are gone, layout still restores:**
+
+- **Host reboot** — laptop restart, OS update, kernel panic, hard power-off. Worktrees, tabs, splits, and the last-persisted scrollback still come back on next launch.
+
+<Callout title="Starting fresh">
+  If you want a clean slate, close worktrees explicitly before quitting. There is no "open in a new
+  session" mode — Orca always restores. Closed worktrees stay closed.
+</Callout>
+
+## Next steps
+
+- [Agents & sessions](/docs/model/agents-sessions) — state dots and the lifecycle of an agent session.
+- [Tabs, panes & split layouts](/docs/model/tabs-panes-splits) — how the layout you'll be restoring is built in the first place.

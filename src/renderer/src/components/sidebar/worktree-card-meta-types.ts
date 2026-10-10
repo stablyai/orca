@@ -1,11 +1,13 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type {
+  Worktree,
+  WorkspaceAttachment,
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance
 } from '../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
+import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
 
 export type WorktreeCardIssueDisplay =
   | IssueInfo
@@ -22,6 +24,7 @@ export type WorktreeCardLinearIssueDisplay = {
   title: string
   url?: string
   stateName?: string
+  stateType?: string
   labels?: string[]
 }
 
@@ -32,6 +35,9 @@ export type WorktreeCardJiraIssueDisplay = {
 }
 
 export type WorktreeCardMetaBadgesProps = {
+  referenceItems?: readonly WorkspaceAttachment[]
+  referenceDetails?: WorkspaceReferenceDetailsMap
+  linkedItemCount?: number
   issue: WorktreeCardIssueDisplay | null
   linearIssue: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
@@ -45,12 +51,13 @@ export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
   React.HTMLAttributes<HTMLDivElement>
 
 export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
+  workspace?: Worktree
+  onManageLinks?: (event: React.MouseEvent) => void
   children: React.ReactElement
   branchName?: string
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'
   workspaceTitleRenameDisabled?: boolean
-  automationHostId?: ExecutionHostId
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number
@@ -59,8 +66,10 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   onEditIssue?: (event: React.MouseEvent) => void
   onEditComment?: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenIssueInBrowser?: (url: string) => void
   onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
   onOpenReviewInOrca?: (event: React.MouseEvent) => void
+  onOpenReviewInBrowser?: (url: string) => void
   onUnlinkReview?: () => void
   onOpenAutomation?: (event: React.MouseEvent) => void
   onOpenAutomationRun?: (event: React.MouseEvent) => void

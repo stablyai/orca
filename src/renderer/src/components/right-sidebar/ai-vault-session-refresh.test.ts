@@ -13,6 +13,7 @@ import {
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
+import { withNonSecureContextCrypto } from '@/lib/non-secure-context-crypto-stub'
 
 const EMPTY_RESULT: AiVaultListResult = {
   sessions: [],
@@ -754,5 +755,68 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
 
     await setAgentStatuses({ 'pane-2': makeAgentEntry('sess-2', 'working') })
     expect(listSessionsMock).toHaveBeenCalledTimes(3)
+  })
+
+  // Reported against an adhoc build: a workspace whose editor was loading files fine still showed
+  // "SSH relay is not ready" with "0 shown · 0 recent" in this panel. That error is what the relay
+  // throws before it is ready, which is ordinary at startup and for the window a reconnect leaves it
+  // not-ready — but nothing here retried on the relay simply becoming ready. The remaining triggers
+  // are mount, window refocus and a new agent session id, so the error stuck while the rest of the
+  // workspace worked. The file explorer already recovers off this same signal.
+  it('retries after a not-ready failure once the SSH connection lands', async () => {
+    listSessionsMock.mockRejectedValueOnce(new Error('SSH relay is not ready'))
+    await renderHook(['/home/neil/projects/orca'])
+    await flushMicrotasks()
+
+    expect(latest?.error).toBe('SSH relay is not ready')
+    const callsWhileBroken = listSessionsMock.mock.calls.length
+
+    listSessionsMock.mockResolvedValue(EMPTY_RESULT)
+    await act(async () => {
+      useAppStore.setState({ sshConnectedGeneration: 1 })
+    })
+    await flushMicrotasks()
+
+    expect(
+      listSessionsMock.mock.calls.length,
+      'the panel never retried after SSH became ready'
+    ).toBeGreaterThan(callsWhileBroken)
+    expect(latest?.error).toBeNull()
+  })
+
+  it('does not rescan on a connection bump when the last listing succeeded', async () => {
+    // Gated on a prior error so a local workspace, or one that already listed fine, does not rescan
+    // every time some unrelated host connects.
+    listSessionsMock.mockResolvedValue(EMPTY_RESULT)
+    await renderHook(['/home/neil/projects/orca'])
+    await flushMicrotasks()
+
+    expect(latest?.error).toBeNull()
+    const callsWhileHealthy = listSessionsMock.mock.calls.length
+
+    await act(async () => {
+      useAppStore.setState({ sshConnectedGeneration: 1 })
+    })
+    await flushMicrotasks()
+
+    expect(listSessionsMock.mock.calls.length).toBe(callsWhileHealthy)
+  })
+})
+
+// Regression for #18096: over plain HTTP the browser hides crypto.randomUUID, so minting
+// the request token with a raw call threw during render and the panel showed "The right
+// sidebar hit an error". The fallback must still be a well-formed v4 UUID.
+describe('useAiVaultSessionRefresh in a non-secure context', () => {
+  it('mints a request token when crypto.randomUUID is unavailable', async () => {
+    await withNonSecureContextCrypto(async () => {
+      await renderHook()
+      await flushMicrotasks()
+
+      expect(lastCallArgs()).toMatchObject({
+        requestToken: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+        )
+      })
+    })
   })
 })

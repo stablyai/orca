@@ -76,6 +76,12 @@ export type JiraApi = {
     query?: string
     siteId?: string
   }) => Promise<JiraUser[]>
+  listAssignableUsersForProject: (args: {
+    projectIdOrKey: string
+    query?: string
+    siteId?: string
+  }) => Promise<JiraUser[]>
+  searchUsers: (args?: { query?: string; siteId?: string }) => Promise<JiraUser[]>
   listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   getProjectStatusOrder: (args: {
     projectKey: string

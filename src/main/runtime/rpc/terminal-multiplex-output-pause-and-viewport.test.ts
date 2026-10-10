@@ -1,7 +1,9 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService, RuntimeTerminalDataMeta } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -114,7 +116,7 @@ describe('terminal multiplex RPC', () => {
         .join('')
     ).toContain('VISIBLE_MARKER')
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
     expect(harness.handlers.size).toBe(0)
   })
@@ -180,7 +182,7 @@ describe('terminal multiplex RPC', () => {
         .join('')
     ).toContain('LEGACY_VISIBLE')
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -191,7 +193,7 @@ describe('terminal multiplex RPC', () => {
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let resizeListener:
       | ((event: {
           cols: number
@@ -232,9 +234,8 @@ describe('terminal multiplex RPC', () => {
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         options.reserveWrite('pty-1')
@@ -309,7 +310,11 @@ describe('terminal multiplex RPC', () => {
       expect(runtime.sendTerminal).toHaveBeenCalledWith(
         'terminal-1',
         { text: 'x', enter: false, interrupt: false },
-        { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
+        {
+          inputKind: 'driving',
+          reserveWrite: expect.any(Function),
+          afterWrite: expect.any(Function)
+        }
       )
     )
     expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
@@ -356,13 +361,13 @@ describe('terminal multiplex RPC', () => {
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
     expect(snapshotData).toEqual(['newer'])
 
-    cleanups.get('terminal-multiplex:conn-stale-multiplex-resize')?.()
+    registry.cleanupSubscription('terminal-multiplex:conn-stale-multiplex-resize')
     await dispatchPromise
   })
 
   it('owns and releases a viewport floor for legacy JSON desktop streams', async () => {
     const messages: string[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -372,14 +377,9 @@ describe('terminal multiplex RPC', () => {
       getLayout: vi.fn().mockReturnValue({ seq: 1 }),
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        const cleanup = cleanups.get(id)
-        cleanups.delete(id)
-        cleanup?.()
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -443,7 +443,7 @@ describe('terminal multiplex RPC', () => {
     await vi.waitFor(() => expect(trace).toContain('driver-changed'))
     expect(trace.lastIndexOf('snapshot')).toBeLessThan(trace.indexOf('fit-override-changed'))
     expect(trace.lastIndexOf('snapshot')).toBeLessThan(trace.indexOf('driver-changed'))
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 })

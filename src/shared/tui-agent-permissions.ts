@@ -5,9 +5,12 @@ export type AgentPermissionMode = 'yolo' | 'manual' | 'mixed'
 
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--dangerously-skip-permissions',
+  codebuddy: '--dangerously-skip-permissions',
   'claude-agent-teams': '--dangerously-skip-permissions',
   openclaude: '--dangerously-skip-permissions',
   codex: '--dangerously-bypass-approvals-and-sandbox',
+  qoder: '--dangerously-skip-permissions',
+  'qoder-cn': '--dangerously-skip-permissions',
   gemini: '--yolo',
   antigravity: '--dangerously-skip-permissions',
   aider: '--yes-always',
@@ -20,15 +23,19 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   continue: '--allow "*"',
   cursor: '--yolo',
   kimi: '--yolo',
+  muse: '--yolo',
+  // Why: ZCode gates tools by collaboration mode; `yolo` is its bypass-everything mode.
+  zcode: '--mode yolo',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',
   rovo: '--yolo',
   hermes: '--yolo',
   copilot: '--yolo',
   grok: '--permission-mode bypassPermissions',
-  devin: '--permission-mode bypass',
+  devin: '--permission-mode bypass --respect-workspace-trust false',
   ante: '--yolo',
-  trae: '--yolo'
+  trae: '--yolo',
+  droid: '--auto high'
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {

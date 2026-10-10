@@ -3,8 +3,6 @@ import type {
   JiraComment,
   JiraConnectionStatus,
   JiraCreateField,
-  JiraCreateIssueArgs,
-  JiraCreateIssueResult,
   JiraIssue,
   JiraIssueFilter,
   JiraIssueType,
@@ -15,7 +13,6 @@ import type {
   JiraProjectStatusOrder,
   JiraSiteSelection,
   JiraTransition,
-  JiraUser,
   JiraViewer
 } from '../../../shared/jira-types'
 import { searchLocalJiraIssues } from './local-jira-search-cancellation'
@@ -23,8 +20,15 @@ import { callRuntimeRpc, RuntimeRpcCallError } from './runtime-rpc-client'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
 import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-target'
+import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
 
 export { jiraLookupIssueSummary, jiraReadStatus } from './runtime-jira-summary-client'
+export {
+  jiraCreateIssue,
+  jiraListAssignableUsers,
+  jiraListAssignableUsersForProject,
+  jiraSearchUsers
+} from './runtime-jira-user-fields-client'
 export type { RuntimeJiraSettings } from './runtime-jira-target'
 
 export type JiraConnectResult = { ok: true; viewer: JiraViewer } | { ok: false; error: string }
@@ -50,9 +54,11 @@ async function readRemoteJiraPayload<TResult>(
 
 export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
   const target = getJiraRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraConnectionStatus>(target, 'jira.status', undefined, { timeoutMs: 15_000 })
-    : window.api.jira.status()
+  return parseJiraConnectionStatus(
+    target.kind === 'environment'
+      ? await callRuntimeRpc<unknown>(target, 'jira.status', undefined, { timeoutMs: 15_000 })
+      : await window.api.jira.status()
+  )
 }
 
 export async function jiraConnect(
@@ -84,14 +90,11 @@ export async function jiraSelectSite(
   siteId: JiraSiteSelection
 ): Promise<JiraConnectionStatus> {
   const target = getJiraRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraConnectionStatus>(
-        target,
-        'jira.selectSite',
-        { siteId },
-        { timeoutMs: 15_000 }
-      )
-    : window.api.jira.selectSite({ siteId })
+  return parseJiraConnectionStatus(
+    target.kind === 'environment'
+      ? await callRuntimeRpc<unknown>(target, 'jira.selectSite', { siteId }, { timeoutMs: 15_000 })
+      : await window.api.jira.selectSite({ siteId })
+  )
 }
 
 export async function jiraTestConnection(
@@ -153,16 +156,6 @@ export async function jiraGetIssue(
   return target.kind === 'environment'
     ? readRemoteJiraPayload<JiraIssue | null>(target, 'jira.getIssueStream', 'jira.getIssue', args)
     : window.api.jira.getIssue(args)
-}
-
-export async function jiraCreateIssue(
-  settings: RuntimeJiraSettings,
-  args: JiraCreateIssueArgs
-): Promise<JiraCreateIssueResult> {
-  const target = getJiraRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraCreateIssueResult>(target, 'jira.createIssue', args, { timeoutMs: 30_000 })
-    : window.api.jira.createIssue(args)
 }
 
 export async function jiraUpdateIssue(
@@ -264,22 +257,7 @@ export async function jiraListPriorities(
     : window.api.jira.listPriorities(siteId ? { siteId } : undefined)
 }
 
-export async function jiraListAssignableUsers(
-  settings: RuntimeJiraSettings,
-  key: string,
-  query?: string,
-  siteId?: string | null
-): Promise<JiraUser[]> {
-  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
-    return []
-  }
-  const target = getJiraRuntimeTarget(settings)
-  const args = { key, query, siteId: siteId ?? undefined }
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraUser[]>(target, 'jira.listAssignableUsers', args, { timeoutMs: 30_000 })
-    : window.api.jira.listAssignableUsers(args)
-}
-
+/** Lists users assignable to an existing issue, via the active runtime. */
 export async function jiraListTransitions(
   settings: RuntimeJiraSettings,
   key: string,

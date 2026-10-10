@@ -7,13 +7,46 @@ import {
   getCodexExplicitHomeHookSourcePath,
   normalizeCodexHookSourcePath
 } from './config-toml-trust'
+import { _internals as grantInternals } from './codex-hook-trust-grant'
+import { _internals as lookupInternals } from './codex-hook-hash-lookup'
+import { computeOrcaCodexHookHashes } from './codex-hook-definition'
+import type { CodexHookAnswer } from './codex-hook-trust-derivation'
+import { CODEX_VERSION_FOR_TESTS } from './codex-hook-trust-derivation.test-fixture'
+
+// Why (#16441): the grant session now runs in-process instead of in a
+// forked bundle that never existed under vitest. Without this stub these
+// suites spawn the developer's real `codex app-server`, so they pass in CI
+// (no codex installed) and fail on any machine that has one. Stand in for the
+// missing binary so the fallback lane is exercised either way.
+function stubMissingCodexBinary(): never {
+  throw Object.assign(new Error('spawn codex ENOENT'), { code: 'ENOENT' })
+}
 
 export type CodexHookHomes = {
   tmpHome: string
   userDataDir: string
 }
 
-/** Mutable holder: fields are re-pointed at fresh temp dirs by the registered beforeEach. */
+/** The answer a real Codex gives about Orca's entry. */
+export function codexHookAnswerForTests(): CodexHookAnswer {
+  return {
+    kind: 'hashes',
+    codexVersion: CODEX_VERSION_FOR_TESTS,
+    hashes: computeOrcaCodexHookHashes()
+  }
+}
+
+/** Applies the stubs above; for suites that build their own temp homes. */
+export function stubCodexTrustSessionsForTests(): void {
+  grantInternals.setGrantSessionRunner(stubMissingCodexBinary)
+}
+
+export function restoreCodexTrustSessionsForTests(): void {
+  grantInternals.setGrantSessionRunner(null)
+  grantInternals.resetDiagnostics()
+  lookupInternals.resetForTesting()
+}
+
 export function setupCodexHookHomes(
   homedirMock: Mock<() => string>,
   getPathMock: Mock<(name: string) => string>
@@ -27,6 +60,7 @@ export function setupCodexHookHomes(
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     process.env.ORCA_USER_DATA_PATH = homes.userDataDir
     homedirMock.mockReturnValue(homes.tmpHome)
+    stubCodexTrustSessionsForTests()
     getPathMock.mockImplementation((name: string) => {
       if (name === 'userData') {
         return homes.userDataDir
@@ -36,6 +70,7 @@ export function setupCodexHookHomes(
   })
 
   afterEach(() => {
+    restoreCodexTrustSessionsForTests()
     rmSync(homes.tmpHome, { recursive: true, force: true })
     rmSync(homes.userDataDir, { recursive: true, force: true })
     if (previousUserDataPath === undefined) {

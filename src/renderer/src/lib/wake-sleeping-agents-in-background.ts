@@ -9,7 +9,7 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import {
   getProviderSessionClaimKey,
-  isPassiveCompletedHibernationEvidence,
+  activationTreatsNoteAsFinished,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
 
@@ -89,12 +89,12 @@ function getCanonicalPassiveWakeRecords(
 ): SleepingAgentSessionRecord[] {
   const activeClaimKeys = new Set(
     records
-      .filter((record) => !isPassiveCompletedHibernationEvidence(record))
+      .filter((record) => !activationTreatsNoteAsFinished(record))
       .map(getProviderSessionClaimKey)
   )
   const recordsByClaim = new Map<string, SleepingAgentSessionRecord[]>()
   for (const record of records) {
-    if (!isPassiveCompletedHibernationEvidence(record)) {
+    if (!activationTreatsNoteAsFinished(record)) {
       continue
     }
     const claimKey = getProviderSessionClaimKey(record)
@@ -209,13 +209,11 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
-  const launchedTabIds: string[] = []
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     suppressNavigation: true,
     skipClaimKeys: wokenClaimKeys,
-    onSessionLaunched: (tabId) => launchedTabIds.push(tabId)
+    // Why: a mirror-parked sweep replays after this call returns, so each tab
+    // must request its own mount instead of a batch collected here.
+    onSessionLaunched: (tabId) => dispatchBackgroundMount(worktreeId, [tabId])
   })
-  if (launchedTabIds.length > 0) {
-    dispatchBackgroundMount(worktreeId, launchedTabIds)
-  }
 }

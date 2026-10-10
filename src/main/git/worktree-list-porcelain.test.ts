@@ -7,26 +7,18 @@ const {
   translateWslOutputPathsMock,
   statMock,
   readFileMock,
-  resolveGitDirMock,
-  moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn(),
-  moveWorktreeDirectoryToTrashMock: vi.fn(),
-  restoreWorktreeDirectoryFromTrashMock: vi.fn(),
-  scheduleWorktreeTrashDeletionMock: vi.fn()
+  resolveGitDirMock: vi.fn()
 }))
 
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletion: scheduleWorktreeTrashDeletionMock
+vi.mock('../../shared/git-worktree-admin', () => ({
+  annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
 }))
 
 vi.mock('./runner', () => ({
@@ -58,11 +50,7 @@ const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
 beforeEach(() => {
-  resetWorktreeRemovalState({
-    moveWorktreeDirectoryToTrashMock,
-    restoreWorktreeDirectoryFromTrashMock,
-    scheduleWorktreeTrashDeletionMock
-  })
+  resetWorktreeRemovalState()
 })
 
 describe('listWorktrees', () => {
@@ -243,7 +231,13 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    expect(resolveGitDirMock).toHaveBeenCalledWith(featureWorktreePath)
+    // The second argument is what carries the distro when the caller has one; this listing has
+    // none, and the UNC repo path names the distro on its own.
+    const gitDirCall = resolveGitDirMock.mock.calls.find(
+      ([probed]) => probed === featureWorktreePath
+    )
+    expect(gitDirCall).toBeDefined()
+    expect(gitDirCall?.[1]?.wslDistro).toBeUndefined()
     // Why: the detection path must not spawn a git subprocess per worktree —
     // the perf regression in #1131 came from `git sparse-checkout list` firing
     // on every poll.

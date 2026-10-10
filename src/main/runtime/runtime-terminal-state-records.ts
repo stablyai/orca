@@ -1,0 +1,171 @@
+import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
+import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
+import type { HeadlessEmulator } from '../daemon/headless-emulator'
+import type { PtyProviderBufferSnapshot } from '../providers/types'
+import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
+import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import type { TerminalCommandPaint } from './terminal-command-paint'
+import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+
+type RuntimeTerminalTailState = {
+  tailBuffer: string[]
+  tailTranscriptBuffer: string[]
+  tailTranscriptChars: number
+  tailPartialLine: string
+  tailPendingAnsi: string
+  tailRedrawCursor: RetainedTailRedrawCursor | null
+  tailTruncated: boolean
+  tailLinesTotal: number
+  preview: string
+  waitBlockedAt: number | null
+  tailWaitState?: TerminalTailWaitState
+}
+
+export type RuntimeLeafRecord = RuntimeSyncedLeaf &
+  RuntimeTerminalTailState & {
+    ptyGeneration: number
+    connected: boolean
+    writable: boolean
+    lastOutputAt: number | null
+    lastExitCode: number | null
+    lastExitCause: TerminalExitCause | null
+    lastAgentStatus: AgentStatus | null
+    lastAgentStatusObservedLive: boolean
+    lastOscTitle: string | null
+    lastOscTitleAt: number | null
+    paneTitleUpdatedAt: number | null
+  }
+
+export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
+  ptyId: string
+  incarnationId: PtyIncarnationId | null
+  worktreeId: string
+  connectionId: string | null
+  runtimeSessionOwned: boolean
+  isWsl: boolean | null
+  wslDistro: string | null
+  tabId: string | null
+  paneKey: string | null
+  /**
+   * `graphSequence` when `paneKey` was last written. A surface recorded since the last graph
+   * statement has not yet been offered one that could contradict it — see
+   * pty-recorded-surface-topology.ts.
+   */
+  surfaceRecordedAtGraphSequence: number
+  launchConfig: SleepingAgentLaunchConfig | null
+  launchToken: string | null
+  launchIncarnationId: PtyIncarnationId | null
+  launchAgent: TuiAgent | null
+  agentSessionOwners: AgentSessionOwnerBinding[]
+  foregroundAgent: TerminalAgent | null
+  connected: boolean
+  disconnectedAt: number | null
+  lastExitCode: number | null
+  lastExitCause: TerminalExitCause | null
+  lastAgentStatus: AgentStatus | null
+  lastAgentStatusObservedLive: boolean
+  /** Latest first-party state from the agent's own OSC 9999 status stream — what the
+   *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
+   *  OSC title. Optional: absent until a payload lands. */
+  lastExplicitAgentStatus?: {
+    state: AgentStatusState
+    updatedAt: number
+    /** A `done` row that marks a new session owning the pane, not the end of a turn. */
+    sessionBoundary?: boolean
+  } | null
+  lastAgentStatusStartedAtEpochMs: number | null
+  lastAgentStatusRichInvalidatedAtEpochMs: number | null
+  lastOscTitle: string | null
+  lastOscTitleAt: number | null
+  lastOscTitleEpochMs: number | null
+  /** The stale-working timer's cleared title, dated as a genuine title would be, while it stands
+   *  over `lastOscTitle`. Display readers project through it (getPtyDisplayRecord); evidence never
+   *  reads it. On the record so it lives as long as the native title it retires. In memory only. */
+  titleDisplayClear?: { title: string; observedAt: number; observedAtEpochMs: number } | null
+  managementTitle: string | null
+  managementTitleAt: number | null
+  controllerTitle: string | null
+  title: string | null
+  titleUpdatedAt: number | null
+  lastOutputAt: number | null
+  /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
+  commandPaint?: TerminalCommandPaint
+}
+
+export type RuntimePtyTabCloseAuthority = {
+  handle: string
+  ptyId: string
+  incarnationId: PtyIncarnationId | null
+  worktreeId: string
+}
+
+export type RuntimePtyTitleTrackerEntry = {
+  tracker: TerminalTitleTracker
+  applyingChunk: boolean
+  lastMobileTitleGateKey: string | null
+  /** When the last title fact was emitted — throttles decorative-only repeats. */
+  lastTitleFactAtMs: number | null
+  chunkTouchedSessionTabs: boolean
+  pendingFacts: TerminalSideEffectFact[]
+  /** Run once this chunk's facts are emitted: status that readers must see after them. */
+  afterFacts: (() => void)[]
+  commandCodeDetector: { observe: (data: string) => boolean } | null
+}
+
+export type RuntimeHeadlessTerminal = {
+  emulator: HeadlessEmulator
+  outputSequence: number
+  writeChain: Promise<void>
+  ownership: PtyShellOwnershipMirror
+  /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
+  unrepaintedReflowGrid?: { cols: number; rows: number }
+}
+
+export type RuntimeVisibleTerminalState = {
+  lines: string[]
+  draft?: string
+  isAlternateScreen: boolean
+  sequence: number
+  generation: number
+}
+
+export type ProviderBufferAcquisition = {
+  generation: number
+  scrollbackRows: number
+  promise: Promise<PtyProviderBufferSnapshot | null>
+  timedOut: boolean
+}
+
+export type RuntimeTerminalBufferSnapshot = {
+  data: string
+  frameRestoreAnsi?: string
+  cols: number
+  rows: number
+  seq?: number
+  cwd?: string | null
+  lastTitle?: string
+  source?: 'headless' | 'renderer'
+  oscLinks?: TerminalOscLinkRange[]
+  alternateScreen?: boolean
+  scrollbackAnsi?: string
+  pendingEscapeTailAnsi?: string
+  kittyKeyboardFlags?: number
+}
+
+export type HeadlessSeedMetadata = {
+  cwd?: string | null
+  oscLinks?: TerminalOscLinkRange[]
+  preferProviderIfExisting?: boolean
+  kittyKeyboardFlags?: number
+  terminalOwner?: 'shell'
+}

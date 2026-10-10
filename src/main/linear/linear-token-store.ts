@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
@@ -31,15 +31,17 @@ import {
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
+import { readCredentialFileProtection } from '../credential-file-protection'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 function writeEncryptedToken(path: string, apiKey: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiKey)
+  if (getSecretStore().isEncryptionAvailable()) {
+    const encrypted = getSecretStore().encryptString(apiKey)
     writeFileSync(path, encrypted, { mode: 0o600 })
     return
   }
 
-  console.warn('[linear] safeStorage encryption unavailable — storing token in plaintext')
+  console.warn('[linear] secret encryption unavailable — storing token in plaintext')
   writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
 }
 
@@ -90,6 +92,11 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
     }
     return null
   }
+}
+
+/** How a workspace's stored token sits on disk, or null when none is stored. */
+export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestProtection | null {
+  return readCredentialFileProtection(getWorkspaceTokenPath(workspaceId))
 }
 
 export function clearTokenFile(workspaceId: string): void {

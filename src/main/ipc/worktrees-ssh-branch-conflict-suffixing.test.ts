@@ -39,6 +39,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -102,6 +105,9 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref') {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
@@ -197,14 +203,21 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref') {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
         if (args[0] === 'branch' && args.includes('feature/something')) {
           return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'for-each-ref') {
-          return { stdout: 'refs/remotes/origin/feature/something\n', stderr: '' }
+        if (args[0] === 'show-ref') {
+          const ref = 'refs/remotes/origin/feature/something'
+          if (args.includes(ref)) {
+            return { stdout: `abc ${ref}\n`, stderr: '' }
+          }
+          throw Object.assign(new Error('missing remote ref'), { code: 1 })
         }
         if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/something^{commit}')) {
           throw new Error('missing local branch')
@@ -262,11 +275,18 @@ describe('registerWorktreeHandlers', () => {
     }
     const provider = {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'for-each-ref') {
+          return { stdout: '', stderr: '' }
+        }
         if (args[0] === 'remote') {
           return { stdout: 'origin\nfoo/bar\n', stderr: '' }
         }
-        if (args[0] === 'for-each-ref') {
-          return { stdout: 'refs/remotes/foo/bar/feature/something\n', stderr: '' }
+        if (args[0] === 'show-ref') {
+          const ref = 'refs/remotes/foo/bar/feature/something'
+          if (args.includes(ref)) {
+            return { stdout: `abc ${ref}\n`, stderr: '' }
+          }
+          throw Object.assign(new Error('missing remote ref'), { code: 1 })
         }
         if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/something^{commit}')) {
           throw new Error('missing local branch')

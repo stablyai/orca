@@ -1,4 +1,5 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -60,12 +61,19 @@ export function createForceDeletePreservedBranch(
       const target =
         retainedTarget?.target ??
         getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
+      const parsedCleanupHost = parseExecutionHostId(cleanupHostId)
+      const effectiveHostId =
+        target.kind === 'environment' &&
+        parsedCleanupHost?.kind === 'runtime' &&
+        parsedCleanupHost.environmentId === target.environmentId
+          ? undefined
+          : cleanupHostId
       const result = await (target.kind === 'local'
         ? window.api.worktrees.forceDeletePreservedBranch({
             worktreeId,
             branchName,
             expectedHead,
-            ...(cleanupHostId ? { hostId: cleanupHostId } : {})
+            ...(effectiveHostId ? { hostId: effectiveHostId } : {})
           })
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
@@ -74,19 +82,10 @@ export function createForceDeletePreservedBranch(
               worktree: toRuntimeWorktreeSelector(worktreeId),
               branchName,
               expectedHead,
-              ...(cleanupHostId ? { hostId: cleanupHostId } : {})
+              ...(effectiveHostId ? { hostId: effectiveHostId } : {})
             },
             { timeoutMs: 15_000 }
           ))
-      if (options?.suppressToast !== true) {
-        toast.success(translate('auto.store.slices.worktrees.19db0085fb', 'Local branch deleted'), {
-          description: translate(
-            'auto.store.slices.worktrees.5a58e03a26',
-            'Deleted "{{value0}}".',
-            { value0: branchName }
-          )
-        })
-      }
       preservedBranchRuntimeTargetByCleanupKey.delete(
         retainedTarget ? preservedBranchCleanupKey(retainedTarget.cleanup) : requestedCleanupKey
       )

@@ -1,7 +1,7 @@
 import { resolve, dirname, basename } from 'node:path'
-import { realpathSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import type { Store } from '../persistence'
+import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../shared/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
 import {
@@ -10,45 +10,33 @@ import {
   isRegisteredWorktreePath
 } from './registered-worktree-roots-cache'
 
-export const PATH_ACCESS_DENIED_MESSAGE =
-  'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
-// Why: authorized external paths accumulate all session; LRU-bound the set. Safe to evict because every caller re-authorizes before operating.
-export const AUTHORIZED_EXTERNAL_PATHS_MAX = 4096
-const authorizedExternalPaths = new Set<string>()
+// Compatibility exports for runtime command modules that historically imported these seams from
+// filesystem-auth. The implementations remain owned by their focused modules.
+export { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+export { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
+export { isENOENT } from './filesystem-path-containment'
 
-function rememberAuthorizedExternalPath(path: string): void {
-  // Delete-then-add makes re-authorized paths most-recent so LRU eviction sheds only the oldest untouched entries.
-  authorizedExternalPaths.delete(path)
-  authorizedExternalPaths.add(path)
-  while (authorizedExternalPaths.size > AUTHORIZED_EXTERNAL_PATHS_MAX) {
-    const oldest = authorizedExternalPaths.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    authorizedExternalPaths.delete(oldest)
-  }
+export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
+/** One allowed-root list shared by every check in a single authorization, built on first use. */
+type AllowedRootsSnapshot = { get: () => readonly string[] }
+
+function createAllowedRootsSnapshot(
+  store: Store,
+  extraRoots: readonly string[] = []
+): AllowedRootsSnapshot {
+  let roots: readonly string[] | undefined
+  return { get: () => (roots ??= [...getAllowedRoots(store), ...extraRoots]) }
 }
 
-export function authorizeExternalPath(targetPath: string): void {
+export function isPathAllowed(
+  targetPath: string,
+  store: Store,
+  allowedRoots?: AllowedRootsSnapshot
+): boolean {
   const resolvedTarget = resolve(targetPath)
-  rememberAuthorizedExternalPath(resolvedTarget)
-  try {
-    // Why: macOS canonicalizes /tmp to /private/tmp during read authorization.
-    rememberAuthorizedExternalPath(realpathSync(resolvedTarget))
-  } catch {}
-}
-
-export function isPathAllowed(targetPath: string, store: Store): boolean {
-  const resolvedTarget = resolve(targetPath)
-  if (authorizedExternalPaths.has(resolvedTarget)) {
-    return true
-  }
-  for (const authorizedPath of authorizedExternalPaths) {
-    if (isDescendantOrEqual(resolvedTarget, authorizedPath)) {
-      return true
-    }
-  }
-  return getAllowedRoots(store).some((root) => isDescendantOrEqual(resolvedTarget, root))
+  return (allowedRoots?.get() ?? getAllowedRoots(store)).some((root) =>
+    isDescendantOrEqual(resolvedTarget, root)
+  )
 }
 
 export type ResolveAuthorizedPathOptions = {
@@ -56,6 +44,8 @@ export type ResolveAuthorizedPathOptions = {
    * Canonicalize the parent but preserve the leaf so delete/rename target the symlink itself, not its destination (which may live outside allowed roots).
    */
   preserveSymlink?: boolean
+  /** Roots only the desktop window may use (never runtime RPC), checked like any other root. */
+  extraRoots?: readonly string[]
 }
 
 export async function resolveAuthorizedPath(
@@ -64,7 +54,10 @@ export async function resolveAuthorizedPath(
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
   const resolvedTarget = resolve(targetPath)
-  if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store))) {
+  // Why: the roots depend only on store state, not on the candidate path, so one snapshot serves
+  // every authorization below; each candidate is still checked against it in full.
+  const allowedRoots = createAllowedRootsSnapshot(store, options.extraRoots)
+  if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store, { allowedRoots }))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
 
@@ -75,14 +68,15 @@ export async function resolveAuthorizedPath(
       realParent = await realpath(dirname(resolvedTarget))
     } catch (error) {
       if (isENOENT(error)) {
-        return resolveAuthorizedMissingPath(resolvedTarget, store)
+        return resolveAuthorizedMissingPath(resolvedTarget, store, allowedRoots)
       }
       throw error
     }
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
-        canonicalSourcePath: resolvedTarget
+        canonicalSourcePath: resolvedTarget,
+        allowedRoots
       }))
     ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -95,7 +89,8 @@ export async function resolveAuthorizedPath(
     const realTarget = resolve(await realpath(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store, {
-        canonicalSourcePath: resolvedTarget
+        canonicalSourcePath: resolvedTarget,
+        allowedRoots
       }))
     ) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -105,11 +100,15 @@ export async function resolveAuthorizedPath(
     if (!isENOENT(error)) {
       throw error
     }
-    return resolveAuthorizedMissingPath(resolvedTarget, store)
+    return resolveAuthorizedMissingPath(resolvedTarget, store, allowedRoots)
   }
 }
 
-async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store): Promise<string> {
+async function resolveAuthorizedMissingPath(
+  resolvedTarget: string,
+  store: Store,
+  allowedRoots: AllowedRootsSnapshot
+): Promise<string> {
   let existingAncestor = resolvedTarget
   const missingSegments: string[] = []
 
@@ -119,7 +118,8 @@ async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store
       const candidateTarget = resolve(realAncestor, ...missingSegments)
       if (
         !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
-          canonicalSourcePath: resolvedTarget
+          canonicalSourcePath: resolvedTarget,
+          allowedRoots
         }))
       ) {
         throw new Error(PATH_ACCESS_DENIED_MESSAGE)
@@ -143,21 +143,30 @@ async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store
 async function isPathAllowedIncludingRegisteredWorktrees(
   targetPath: string,
   store: Store,
-  options: { canonicalSourcePath?: string } = {}
+  options: { canonicalSourcePath?: string; allowedRoots?: AllowedRootsSnapshot } = {}
 ): Promise<boolean> {
-  if (isPathAllowed(targetPath, store)) {
+  if (isPathAllowed(targetPath, store, options.allowedRoots)) {
     return true
   }
 
-  if (isRegisteredWorktreePath(targetPath)) {
+  if (isRegisteredWorktreePath(targetPath, store)) {
     return true
   }
 
-  if (await isPathAllowedByCanonicalAllowedRoot(targetPath, options.canonicalSourcePath, store)) {
+  if (
+    await isPathAllowedByCanonicalAllowedRoot(
+      targetPath,
+      options.canonicalSourcePath,
+      store,
+      options.allowedRoots
+    )
+  ) {
     return true
   }
 
-  if (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath)) {
+  if (
+    await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath, store)
+  ) {
     return true
   }
 
@@ -165,20 +174,21 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 
   // Why: linked worktrees are already git-trusted; reuse the cached root index so reads don't spawn `git worktree list` each time.
   return (
-    isRegisteredWorktreePath(targetPath) ||
-    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath))
+    isRegisteredWorktreePath(targetPath, store) ||
+    (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath, store))
   )
 }
 
 async function isPathAllowedByCanonicalAllowedRoot(
   targetPath: string,
   sourcePath: string | undefined,
-  store: Store
+  store: Store,
+  allowedRoots?: AllowedRootsSnapshot
 ): Promise<boolean> {
   if (!sourcePath) {
     return false
   }
-  for (const root of getAllowedRoots(store)) {
+  for (const root of allowedRoots?.get() ?? getAllowedRoots(store)) {
     const resolvedRoot = resolve(root)
     if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
       continue

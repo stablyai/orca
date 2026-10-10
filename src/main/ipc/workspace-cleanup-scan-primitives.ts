@@ -1,4 +1,5 @@
 import { basename } from 'node:path'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceCleanupScanError } from '../../shared/workspace-cleanup'
 
@@ -91,7 +92,8 @@ export function createWorkspaceCleanupScanError(
   return {
     repoId: repo.id,
     repoName: repo.displayName || basename(repo.path),
-    message
+    message,
+    executionHostId: getRepoExecutionHostId(repo)
   }
 }
 

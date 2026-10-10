@@ -1,13 +1,16 @@
+import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
-import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
+import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
+import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { delimiter } from 'node:path'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
-import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
-import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { registerPtyHandlers, buildPtyHostEnv } from './pty'
+import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { selectShellStartupFeatures } from '../shell-startup-features'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -57,6 +60,201 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it.each(['/bin/bash', '/bin/zsh'])(
+      'does not wrap a bare %s pane merely to expose this app CLI',
+      (shellPath) => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+        try {
+          const env = buildPtyHostEnv(
+            'bare-cli-pane',
+            {},
+            {
+              isPackaged: false,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              agentStatusHooksEnabled: false
+            }
+          )
+          expect(env.ORCA_CLI_BIN_DIR).toBe('/tmp/orca-user-data/cli/bin')
+          expect(
+            selectShellStartupFeatures({
+              shellPath,
+              env,
+              hasStartupCommand: false,
+              waitsForShellReady: false,
+              emitsStartupIdentity: false
+            })
+          ).toEqual([])
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      }
+    )
+
+    it('does not install managed Pi extensions when Pi is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      buildPtyHostEnv(
+        'pty-pi-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['pi']
+        }
+      )
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+
+    it('does not install managed OMP extensions when OMP is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      const env = buildPtyHostEnv(
+        'pty-omp-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          launchCommand: 'omp',
+          launchAgent: 'omp',
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['omp']
+        }
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+    })
+
+    it('threads disabled Pi settings through a bare PTY spawn', async () => {
+      piBuildPtyEnvMock.mockClear()
+
+      await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        agentStatusHooksEnabled: true,
+        disabledTuiAgents: ['pi']
+      }))
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+    it('prepares fresh OMP settings even when status hooks are disabled', () => {
+      const env = buildPtyHostEnv(
+        'fresh-without-hooks',
+        { ORCA_OMP_FRESH_CONFIG: '/other-host/stale.yml' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          launchCommand: withFreshOmpLaunch('omp', 'posix')
+        }
+      )
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+    })
+
+    it('routes headless browser launches through the owning Orca workspace', () => {
+      const inheritedBrowser = process.env.BROWSER
+      delete process.env.BROWSER
+      try {
+        const env = buildPtyHostEnv(
+          'pty-headless',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            agentStatusHooksEnabled: false,
+            routeBrowserOpensToClient: true
+          }
+        )
+
+        expect(env.BROWSER).toBe('orca open-url --url %s')
+      } finally {
+        if (inheritedBrowser === undefined) {
+          delete process.env.BROWSER
+        } else {
+          process.env.BROWSER = inheritedBrowser
+        }
+      }
+    })
+
+    it('preserves an explicit browser command on headless runtimes', () => {
+      const env = buildPtyHostEnv(
+        'pty-custom-browser',
+        { BROWSER: 'custom-browser %s' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          routeBrowserOpensToClient: true
+        }
+      )
+
+      expect(env.BROWSER).toBe('custom-browser %s')
+    })
+
+    it('uses the registered WSL CLI name for headless browser launches', () => {
+      const inheritedBrowser = process.env.BROWSER
+      delete process.env.BROWSER
+      try {
+        const env = buildPtyHostEnv(
+          'pty-headless-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            isWsl: true,
+            agentStatusHooksEnabled: false,
+            routeBrowserOpensToClient: true
+          }
+        )
+
+        expect(env.BROWSER).toBe('orca-ide open-url --url %s')
+      } finally {
+        if (inheritedBrowser === undefined) {
+          delete process.env.BROWSER
+        } else {
+          process.env.BROWSER = inheritedBrowser
+        }
+      }
+    })
+
+    it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
+      const runtimeHome =
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
+      const ensureForDistro = vi
+        .spyOn(wslHookRelayManager, 'ensureForDistro')
+        .mockImplementation(async () => {})
+
+      try {
+        buildPtyHostEnv(
+          'pty-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: runtimeHome,
+            isWsl: true,
+            wslDistro: 'Ubuntu',
+            agentStatusHooksEnabled: true
+          }
+        )
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome, undefined)
+      } finally {
+        ensureForDistro.mockRestore()
+      }
+    })
+
     it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
       const originalPlatform = process.platform
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -121,49 +319,6 @@ describe('registerPtyHandlers', () => {
         id: expect.any(String)
       })
     })
-    it('marks local Claude launches live until the PTY is killed', async () => {
-      let exitCb: ((info: { exitCode: number }) => void) | undefined
-      spawnMock.mockReturnValue({
-        onData: vi.fn(() => makeDisposable()),
-        onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
-          exitCb = cb
-          return makeDisposable()
-        }),
-        write: vi.fn(),
-        resize: vi.fn(),
-        kill: vi.fn(() => exitCb?.({ exitCode: -1 })),
-        process: 'zsh',
-        pid: 12345
-      })
-      const prepareClaudeAuth = vi.fn(async () => ({
-        configDir: '/tmp/claude',
-        envPatch: {},
-        stripAuthEnv: false,
-        provenance: 'managed:account-1'
-      }))
-      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
-
-      const spawnResult = (await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        command: 'claude'
-      })) as { id: string }
-
-      expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
-      expect(hasLiveClaudePtys()).toBe(true)
-
-      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    })
-    it('clears Claude live-PTY tracking from shared provider teardown', () => {
-      markClaudePtySpawned('ssh-claude-pty')
-      expect(hasLiveClaudePtys()).toBe(true)
-
-      clearProviderPtyState('ssh-claude-pty')
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    })
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
@@ -175,6 +330,31 @@ describe('registerPtyHandlers', () => {
     it('lets caller-provided env override LANG', async () => {
       const env = await spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
       expect(env.LANG).toBe('fr_FR.UTF-8')
+    })
+
+    it('stamps a per-pane jcode runtime dir on local spawns', async () => {
+      const leafId = '7bad1a11-ba5f-4d47-9761-d5d7ac6e975f'
+      const tabId = 'tab-1'
+      const paneKey = makePaneKey(tabId, leafId)
+      handlers.clear()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's mock BrowserWindow, widened the same way every other registerPtyHandlers call in this file does; the handler only touches webContents.send.
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        tabId,
+        leafId,
+        worktreeId: 'wt-1'
+      })
+      const spawnedEnv: Record<string, string | undefined> =
+        spawnMock.mock.calls.at(-1)?.[2]?.env ?? {}
+      // Why: buildJcodeRuntimeDirEnv intentionally omits the var on win32.
+      if (shouldInjectJcodeRuntimeDir(process.platform)) {
+        expect(spawnedEnv.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
+      } else {
+        expect(spawnedEnv.JCODE_RUNTIME_DIR).toBeUndefined()
+      }
     })
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
       // Why: the local provider spreads main's process.env, so a GUI launched from
@@ -189,6 +369,16 @@ describe('registerPtyHandlers', () => {
       expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
       expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
     })
+    it('strips an inherited agent session id so a pane never claims that session', async () => {
+      // Why: an Orca launched inside a structured session inherits its id; every pane would then
+      // present that session as its orchestration caller instead of its own terminal.
+      const env = await spawnAndGetEnv(undefined, {
+        ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+        ORCA_STRUCTURED_SESSION: '1'
+      })
+      expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
+      expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
+    })
     it('keeps an explicitly requested Claude child-session stamp on a local spawn', async () => {
       const env = await spawnAndGetEnv(
         { CLAUDE_CODE_CHILD_SESSION: '1' },
@@ -201,6 +391,10 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
+    })
+    it('hints inline-image support to agents via ORCA_IMAGE_PROTOCOL', async () => {
+      const env = await spawnAndGetEnv()
+      expect(env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
     })
     it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
@@ -240,33 +434,8 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
-      // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
-      // wrapper inherits, so the preflight must carry the CLI's verified absolute path.
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-    })
-    it('skips the Codex launch preflight when the bundled CLI is not executable', async () => {
-      const env = await withBundledCli(
-        () => spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME),
-        { launcherExecutable: false }
-      )
-
-      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      // Why: the app prepares a native pane's Codex home; only WSL panes run the preflight.
       expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
-    })
-    // Why (STA-4270): profile scripts run before the codex() wrapper and routinely prepend
-    // directories to PATH, so a scratch `orca` there must never become the preflight.
-    it('pins the Codex launch preflight to the bundled CLI even when PATH leads elsewhere', async () => {
-      const env = await withBundledCli(() =>
-        spawnAndGetEnv(
-          { PATH: `/tmp/hijack-scratch${delimiter}/usr/bin` },
-          undefined,
-          () => TEST_CODEX_HOME
-        )
-      )
-
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).not.toBe('orca')
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT.startsWith('/tmp/hijack-scratch')).toBe(false)
     })
     it('does not install the Codex launch preflight when Codex hooks are disabled', async () => {
       const env = await spawnAndGetEnv(

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
+import { makeAnnotation } from './browser-annotation-test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   createBrowserMockApi,
@@ -45,66 +46,22 @@ function seedUnifiedBrowserTab(
   })
 }
 
-function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotation {
-  return {
-    id,
-    browserPageId: pageId,
-    comment: 'Fix this button',
-    intent: 'fix',
-    priority: 'important',
-    createdAt: '2026-05-15T00:00:00.000Z',
-    payload: {
-      page: {
-        sanitizedUrl: 'https://example.com',
-        title: 'Example',
-        viewportWidth: 1280,
-        viewportHeight: 720,
-        scrollX: 0,
-        scrollY: 0,
-        devicePixelRatio: 1,
-        capturedAt: '2026-05-15T00:00:00.000Z'
-      },
-      target: {
-        tagName: 'button',
-        selector: 'button',
-        textSnippet: 'Submit',
-        htmlSnippet: '<button>Submit</button>',
-        attributes: {},
-        accessibility: {
-          role: 'button',
-          accessibleName: 'Submit',
-          ariaLabel: null,
-          ariaLabelledBy: null
-        },
-        rectViewport: { x: 0, y: 0, width: 100, height: 40 },
-        rectPage: { x: 0, y: 0, width: 100, height: 40 },
-        computedStyles: {
-          display: 'inline-flex',
-          position: 'static',
-          width: '100px',
-          height: '40px',
-          margin: '0px',
-          padding: '0px',
-          color: 'rgb(0, 0, 0)',
-          backgroundColor: 'rgba(0, 0, 0, 0)',
-          border: '0px none',
-          borderRadius: '0px',
-          fontFamily: 'Geist',
-          fontSize: '14px',
-          fontWeight: '400',
-          lineHeight: '20px',
-          textAlign: 'center',
-          zIndex: 'auto'
-        }
-      },
-      nearbyText: [],
-      ancestorPath: [],
-      screenshot: null
-    }
-  }
-}
-
 describe('createBrowserSlice annotations', () => {
+  it('announces the store-selected browser page before its guest is destroyed', () => {
+    const store = createTestStore()
+    const previous = store.getState().createBrowserTab('wt-1', 'https://previous.example.com')
+    const closing = store.getState().createBrowserTab('wt-1', 'https://closing.example.com')
+    store.getState().setActiveBrowserTab(previous.id)
+    store.getState().setActiveBrowserTab(closing.id)
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenCalledWith({
+      browserPageId: previous.activePageId
+    })
+  })
+
   it('keeps a requested canonical page identity distinct from its workspace', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
@@ -149,7 +106,7 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
-  it('clears page annotations when the browser page URL changes', () => {
+  it('retains saved page annotations while retiring geometry when the URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
@@ -160,9 +117,13 @@ describe('createBrowserSlice annotations', () => {
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
     expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(1)
 
+    const saved = store.getState().browserAnnotationsByPageId[pageId]
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
+    store.getState().setBrowserPageUrl(pageId, 'https://example.com')
 
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toBe(saved)
+    expect(saved?.[0]?.payload.page.sanitizedUrl).toBe('https://example.com')
+    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
   })
 
   it('can commit a navigation URL without hiding an active recovery error', () => {
@@ -237,6 +198,22 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().activeBrowserTabIdByWorktree['wt-1']).toBeNull()
   })
 
+  it('creates pages cold so a deferred guest is never owed a navigation', () => {
+    const store = createTestStore()
+
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      activate: false
+    })
+    store.getState().createBrowserPage(tab.id, 'https://example.com/second', { activate: false })
+
+    // Why: only a live guest reports loading; a background page has none until first shown.
+    expect(store.getState().browserPagesByWorkspace[tab.id]?.map((page) => page.loading)).toEqual([
+      false,
+      false
+    ])
+    expect(tab.loading).toBe(false)
+  })
+
   it('uses local browser profile defaults for client-local fallback pages', () => {
     const store = createTestStore()
     store.setState({
@@ -285,6 +262,53 @@ describe('createBrowserSlice annotations', () => {
 
     expect(store.getState().browserPagesByWorkspace).toBe(browserPagesByWorkspace)
     expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+  })
+
+  it('persists a captured favicon with history and refreshes it with the page state', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const initialFavicon = 'https://example.com/favicon.ico'
+    const refreshedFavicon = 'https://cdn.example.com/favicon.png'
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', initialFavicon)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(initialFavicon)
+
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: refreshedFavicon })
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(refreshedFavicon)
+  })
+
+  it('clears a stale history favicon when a page reports none, and keeps it when none is reported', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const favicon = 'https://example.com/favicon.ico'
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', favicon)
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: favicon })
+
+    // An omitted favicon leaves the stored one alone; an explicit null clears it.
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(favicon)
+
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: null })
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBeNull()
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', favicon)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(favicon)
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', null)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBeNull()
   })
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', () => {
@@ -343,7 +367,7 @@ describe('createBrowserSlice annotations', () => {
     expect(repaired).toMatchObject({
       title: 'Example',
       url: 'https://example.com',
-      loading: true,
+      loading: false,
       canGoBack: false,
       canGoForward: false
     })
@@ -451,6 +475,61 @@ describe('createBrowserSlice annotations', () => {
     const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
     expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
     expect(stored?.payload.screenshot).toBeNull()
+  })
+
+  it('updates an existing annotation comment and intent', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+
+    store
+      .getState()
+      .updateBrowserPageAnnotation(pageId, 'annotation-1', { comment: 'Updated', intent: 'change' })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toBe('Updated')
+    expect(stored?.intent).toBe('change')
+  })
+
+  it('sanitizes an oversized comment when updating an annotation', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    const oversizedComment = 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10)
+
+    store.getState().updateBrowserPageAnnotation(pageId, 'annotation-1', {
+      comment: oversizedComment,
+      intent: 'fix'
+    })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
+  })
+
+  it('is a no-op when updating an annotation id that does not exist', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    const stateBefore = store.getState()
+
+    store.getState().updateBrowserPageAnnotation(pageId, 'missing-annotation', {
+      comment: 'Updated',
+      intent: 'change'
+    })
+
+    expect(store.getState()).toBe(stateBefore)
   })
 })
 

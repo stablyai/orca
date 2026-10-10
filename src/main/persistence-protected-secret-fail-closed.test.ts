@@ -1,8 +1,14 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 type FailureMode = 'availability-throws' | 'encryption-throws' | 'unavailable'
 
@@ -19,31 +25,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => testState.dir },
-  safeStorage: {
-    isEncryptionAvailable: () => {
-      if (cipherState.availability === 'throws') {
-        throw new Error('keychain access denied')
-      }
-      return cipherState.availability === 'available'
-    },
-    encryptString: (plaintext: string) => {
-      if (cipherState.encryptionThrows) {
-        throw new Error('keychain encryption failed')
-      }
-      return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
-    },
-    decryptString: (ciphertext: Buffer) => {
-      if (cipherState.decryptionThrows) {
-        throw new Error('keychain decryption failed')
-      }
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    }
-  }
+  app: { getPath: () => testState.dir }
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
@@ -53,9 +35,38 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 async function createStore() {
   vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => {
+      if (cipherState.availability === 'throws') {
+        throw new Error('keychain access denied')
+      }
+      return cipherState.availability === 'available'
+    },
+    encryptString: (plaintext) => {
+      if (cipherState.encryptionThrows) {
+        throw new Error('keychain encryption failed')
+      }
+      return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
+    },
+    decryptString: (ciphertext) => {
+      if (cipherState.decryptionThrows) {
+        throw new Error('keychain decryption failed')
+      }
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('enc:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('enc:'.length + 36 + 1)
+    },
+    describeProtectionGap: () => null
+  })
   const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 function dataFile(): string {
@@ -73,7 +84,7 @@ type ProtectedState = {
 }
 
 function readState(path = dataFile()): ProtectedState {
-  return JSON.parse(readFileSync(path, 'utf-8'))
+  return JSON.parse(readPersistedStateJson(path))
 }
 
 const ORIGINAL = {
@@ -136,7 +147,8 @@ describe('protected persistence when safeStorage fails', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -148,7 +160,7 @@ describe('protected persistence when safeStorage fails', () => {
       const store = await createStore()
       await writeProtectedState(store, PENDING, 'non-secret-saved')
 
-      const raw = readFileSync(dataFile(), 'utf-8')
+      const raw = readPersistedStateJson(dataFile())
       const persisted = readState()
       expectPlaintextsAbsent(raw, PENDING)
       expect(persisted.settings.httpProxyUrl).toBe('')
@@ -378,14 +390,14 @@ describe('protected persistence when safeStorage fails', () => {
       const store = await createStore()
       await writeProtectedState(store, ORIGINAL, 'before')
       const originalCiphertext = readState()
-      expectPlaintextsAbsent(readFileSync(dataFile(), 'utf-8'), ORIGINAL)
+      expectPlaintextsAbsent(readPersistedStateJson(dataFile()), ORIGINAL)
 
       vi.advanceTimersByTime(60 * 60 * 1_000 + 1)
       setFailure(failureMode)
       await writeProtectedState(store, PENDING, 'during-failure')
 
-      const primaryRaw = readFileSync(dataFile(), 'utf-8')
-      const backupRaw = readFileSync(`${dataFile()}.bak.0`, 'utf-8')
+      const primaryRaw = readPersistedStateJson(dataFile())
+      const backupRaw = store.prepareProfileStateExport().json
       const persisted = readState()
       expectPlaintextsAbsent(primaryRaw, PENDING)
       expectPlaintextsAbsent(backupRaw, PENDING)
@@ -404,7 +416,7 @@ describe('protected persistence when safeStorage fails', () => {
       const loadedDuringFailure = await createStore()
       expect(loadedDuringFailure.getSettings().httpProxyBypassRules).toBe('during-failure')
       await settleSave(loadedDuringFailure)
-      expectPlaintextsAbsent(readFileSync(dataFile(), 'utf-8'), PENDING)
+      expectPlaintextsAbsent(readPersistedStateJson(dataFile()), PENDING)
 
       cipherState.availability = 'available'
       cipherState.encryptionThrows = false

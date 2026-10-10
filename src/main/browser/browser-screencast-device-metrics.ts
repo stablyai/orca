@@ -1,5 +1,9 @@
 import type { Debugger, WebContents } from 'electron'
-import { sendDebuggerCommand } from './browser-screencast-debugger-command'
+import {
+  runDebuggerCommandWithTimeout,
+  sendDebuggerCommand
+} from './browser-screencast-debugger-command'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import type { BrowserScreencastOptions } from './browser-screencast-stream-types'
 import { positiveInteger, positiveNumber } from './browser-screencast-viewport-fit'
 
@@ -15,6 +19,8 @@ export function createBrowserScreencastDeviceMetrics(
   options: BrowserScreencastOptions
 ): BrowserScreencastDeviceMetrics {
   let deviceMetricsOverridden = false
+  const sendViewportCommand = (method: string, params: Record<string, unknown>): Promise<unknown> =>
+    runDebuggerCommandWithTimeout(method, () => sendGuestCdpCommand(webContents, method, params))
 
   const clearDeviceMetricsOverride = async (): Promise<void> => {
     if (webContents.isDestroyed() || !dbg.isAttached()) {
@@ -29,19 +35,22 @@ export function createBrowserScreencastDeviceMetrics(
     const viewportWidth = positiveInteger(options.viewportWidth)
     const viewportHeight = positiveInteger(options.viewportHeight)
     if (!viewportWidth || !viewportHeight) {
+      if (deviceMetricsOverridden) {
+        await clearDeviceMetricsOverride()
+      }
       return
     }
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
     // Why: Back/Forward and cross-process navigations can drop emulation while
     // the screencast remains attached. Reapply before fallback captures so the
     // page lays out at the client pane size, not the host BrowserView size.
-    await sendDebuggerCommand(dbg, 'Emulation.setDeviceMetricsOverride', {
+    await sendViewportCommand('Emulation.setDeviceMetricsOverride', {
       width: viewportWidth,
       height: viewportHeight,
       deviceScaleFactor,
       mobile: options.mobile === true
     })
-    await sendDebuggerCommand(dbg, 'Emulation.setVisibleSize', {
+    await sendViewportCommand('Emulation.setVisibleSize', {
       width: viewportWidth,
       height: viewportHeight
     }).catch(() => {})

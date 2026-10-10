@@ -1,4 +1,6 @@
+import type { WorktreeCatalogVersion } from './catalog-version'
 import type { ExecutionHostId } from '../execution-host'
+import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../task-source-context'
 import type { WorkspaceKey } from '../folder-workspace-types'
@@ -8,6 +10,7 @@ import type {
   GitPushTarget,
   GitWorktreeInfo,
   WorkspaceLinkedItem,
+  WorkspaceAttachment,
   WorkspaceStatus,
   Worktree
 } from './types'
@@ -18,10 +21,23 @@ import type {
   WorktreeStartupLaunch
 } from './launch-types'
 import type {
+  PreparedCheckoutMissReason,
+  PreparedCheckoutOrigin,
+  PreparedCheckoutReset,
+  WorktreeCreateExecutionHost
+} from './create-timing-vocabulary'
+import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion,
   WorktreeBaseStatusEvent
 } from './base-ref-drift-types'
+
+export type {
+  PreparedCheckoutMissReason,
+  PreparedCheckoutOrigin,
+  PreparedCheckoutReset,
+  WorktreeCreateExecutionHost
+}
 
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
@@ -31,9 +47,26 @@ export type WorktreeCreateTimingPhase = {
   durationMs: number
 }
 
+/** Whether a create reused a prewarmed checkout, and when it did not, which part of
+ *  the claim key disagreed. A hit says what reset it needed, who armed it, how long it took
+ *  to build and how long it then sat ready before this create claimed it. */
+export type PreparedCheckoutOutcome =
+  | {
+      status: 'hit'
+      reset: PreparedCheckoutReset
+      origin: PreparedCheckoutOrigin
+      buildMs: number
+      idleMs: number
+    }
+  | { status: 'miss'; reason: PreparedCheckoutMissReason }
+
 export type WorktreeCreateTiming = {
   totalDurationMs: number
   phases: WorktreeCreateTimingPhase[]
+  preparedCheckout?: PreparedCheckoutOutcome
+  executionHost?: WorktreeCreateExecutionHost
+  /** Worktrees Git listed after the create, main checkout included; absent when the listing failed. */
+  worktreeCount?: number
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -68,6 +101,8 @@ export type CreateWorktreeArgs = {
    *  branch/path seed. Used when a workspace is created from a GitHub or
    *  Linear artifact whose title should remain readable in the sidebar. */
   displayName?: string
+  /** Distinguishes user labels from generated artifact titles at creation time. */
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   /** Source Control compare target when it differs from the checkout start point. */
   compareBaseRef?: string
@@ -88,6 +123,7 @@ export type CreateWorktreeArgs = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
@@ -127,6 +163,8 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
 }
 
 export type CreateWorktreeResult = {
+  /** The catalog this create produced; additive, older hosts omit it. */
+  catalogVersion?: WorktreeCatalogVersion
   worktree: Worktree & {
     parentWorktreeId?: string | null
     childWorktreeIds?: string[]
@@ -173,7 +211,15 @@ export type PreservedWorktreeBranch = {
 }
 
 export type RemoveWorktreeResult = {
+  /** The catalog this removal produced; additive, older hosts omit it. */
+  catalogVersion?: WorktreeCatalogVersion
   preservedBranch?: PreservedWorktreeBranch
+  nestedPreservedBranches?: (PreservedWorktreeBranch & { worktreeId: string })[]
+  /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
+  archiveHookOverride?: ArchiveHookOverride
+  /** The host accepted the removal and is still deleting the checkout. Sent only to clients that
+   *  cannot show a removal in progress; the others get the reply when the delete has finished. */
+  removing?: true
 }
 
 export type ForceDeleteWorktreeBranchResult = {

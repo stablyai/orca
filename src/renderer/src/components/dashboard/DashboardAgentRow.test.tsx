@@ -299,8 +299,8 @@ describe('DashboardAgentRow', () => {
     expect(classes.every((className) => !/\bgroup-hover:/.test(className))).toBe(true)
   })
 
-  it('renders interrupted done rows with plain text on the secondary line', () => {
-    const markup = renderRow(
+  function renderEndedRow(ending: Partial<AgentStatusEntry>): string {
+    return renderRow(
       makeAgent(
         { state: 'done', startedAt: 1_000 },
         {
@@ -309,21 +309,53 @@ describe('DashboardAgentRow', () => {
           updatedAt: 2_000,
           stateStartedAt: 2_000,
           stateHistory: [{ state: 'working', prompt: 'Give me a quick update', startedAt: 1_000 }],
-          interrupted: true
+          ...ending
         }
       )
     )
-    const promptIndex = markup.indexOf('Give me a quick update')
-    const interruptedIndex = markup.indexOf('>interrupted<')
+  }
 
-    // Why: interrupted keeps the leading red dot, but the plain text belongs
-    // on the response line so it does not compete with the user's prompt.
-    expect(markup).toContain('data-slot="tooltip-trigger"')
-    expect(markup).toContain('aria-label="Interrupted by user"')
+  it('renders a crash-cut row as failed, with the red dot and no interrupted tag', () => {
+    const markup = renderEndedRow({
+      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: 2_000 }
+    })
+
+    expect(markup).toContain('aria-label="Failed"')
     expect(markup).toContain('bg-red-500')
-    expect(markup).not.toContain('data-slot="badge"')
-    expect(interruptedIndex).toBeGreaterThan(promptIndex)
+    expect(markup).not.toContain('>interrupted<')
     expect(markup).not.toContain('lucide-circle-check')
+  })
+
+  it.each([
+    ['recorded', { mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2_000 } }],
+    ["an old host's flag", { interrupted: true }]
+  ] as const)(
+    "renders a user's Stop (%s) as interrupted, with plain text on the secondary line",
+    (_, ending) => {
+      const markup = renderEndedRow(ending)
+      const promptIndex = markup.indexOf('Give me a quick update')
+      const interruptedIndex = markup.indexOf('>interrupted<')
+
+      // Why: the plain text belongs on the response line so it does not compete with the prompt.
+      expect(markup).toContain('data-slot="tooltip-trigger"')
+      expect(markup).toContain('aria-label="Interrupted by user"')
+      expect(markup).not.toContain('data-slot="badge"')
+      expect(interruptedIndex).toBeGreaterThan(promptIndex)
+      expect(markup).toContain('bg-muted-foreground')
+      expect(markup).not.toContain('bg-red-500')
+      expect(markup).not.toContain('lucide-circle-check')
+    }
+  )
+
+  it('renders a turn a newer request replaced as interrupted, naming no one', () => {
+    const markup = renderEndedRow({
+      mainAgent: { state: 'done', outcome: 'superseded', stateStartedAt: 2_000 }
+    })
+
+    expect(markup).toContain('aria-label="Interrupted"')
+    expect(markup).not.toContain('Interrupted by user')
+    expect(markup).toContain('>interrupted<')
+    expect(markup).toContain('bg-muted-foreground')
   })
 
   it('reserves a real working tool line before tool metadata arrives', () => {
@@ -346,6 +378,82 @@ describe('DashboardAgentRow', () => {
     expect(emptyToolMarkup).not.toContain('lucide-wrench')
     expect(activeToolMarkup).toContain('lucide-wrench')
     expect(activeToolMarkup).toContain('ListDir')
+  })
+
+  it("says Stopping in place of the tool line while a person's Stop ends the turn", () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          toolName: 'Bash',
+          toolInput: 'pnpm test',
+          mainAgent: { state: 'working', stopping: true, stateStartedAt: 60_000 }
+        }
+      )
+    )
+
+    expect(markup).toContain('Stopping…')
+    expect(markup).not.toContain('lucide-wrench')
+    expect(markup).toContain('data-agent-spinner')
+  })
+
+  it('renders monitoring without a spinner or active tool line', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          workingMode: 'monitoring',
+          prompt: '',
+          toolName: 'Bash',
+          toolInput: 'pnpm dev'
+        }
+      )
+    )
+
+    expect(markup).toContain('Monitoring background tasks')
+    expect(markup).toContain('lucide-activity')
+    expect(classTokens(markup)).toContain('text-yellow-500')
+    expect(markup).not.toContain('data-agent-spinner')
+    expect(markup).not.toContain('data-agent-row-tool-slot')
+  })
+
+  it('names what a blocked approval is waiting on', () => {
+    const markup = renderRow(
+      makeAgent(
+        { state: 'waiting' },
+        { state: 'waiting', toolName: 'bash', toolInput: 'rm -rf build/' }
+      )
+    )
+
+    // Why: a permission request parks the row on 'waiting'; without the tool line the row
+    // is a bare amber dot that cannot say what the user is being asked to approve.
+    expect(markup).toContain('lucide-wrench')
+    expect(markup).toContain('bash')
+    expect(markup).toContain('rm -rf build/')
+  })
+
+  it('leaves a wait without tool metadata unchanged', () => {
+    const markup = renderRow(makeAgent({ state: 'waiting' }, { state: 'waiting' }))
+
+    // Why: the height placeholder exists because a working row's tool line is imminent.
+    // A question-style wait has nothing coming, so reserving the row would just add a gap.
+    expect(markup).not.toContain('data-agent-row-tool-slot=""')
+    expect(markup).not.toContain('lucide-wrench')
+  })
+
+  it('keeps a resolved tool off a finished row', () => {
+    for (const state of ['done', 'blocked', 'idle'] as const) {
+      const markup = renderRow(
+        makeAgent(
+          { state },
+          // Why: 'idle' is a row-only state; the entry it is derived from still reports 'done'.
+          { state: state === 'idle' ? 'done' : state, toolName: 'bash', toolInput: 'rm -rf build/' }
+        )
+      )
+
+      expect(markup).not.toContain('lucide-wrench')
+      expect(markup).not.toContain('rm -rf build/')
+    }
   })
 
   it('renders orchestration child rows with a connector and tree level', () => {

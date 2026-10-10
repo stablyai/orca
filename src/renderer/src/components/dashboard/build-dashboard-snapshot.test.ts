@@ -10,6 +10,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectRuntimeAgentOrchestrationBatch } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'
 import type * as DashboardSnapshotWorkspacesModule from './dashboard-snapshot-workspaces'
 import type * as AgentRowLineageModule from './agent-row-lineage'
 
@@ -48,6 +49,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const CHILD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const GRANDCHILD_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 const GONE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const SPLIT_SIBLING_LEAF_ID = '55555555-5555-4555-8555-555555555555'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const CHILD_PANE_KEY = makePaneKey(TAB_ID, CHILD_LEAF_ID)
 const GRANDCHILD_PANE_KEY = makePaneKey(TAB_ID, GRANDCHILD_LEAF_ID)
@@ -200,6 +202,23 @@ describe('buildDashboardSnapshot', () => {
     expect(card.unseen).toBe(true)
   })
 
+  it('keeps monitoring in the working bucket with a passive dot state', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'working', workingMode: 'monitoring' })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0]).toMatchObject({
+      bucket: 'working',
+      dotState: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+
   it('publishes terminal-backed orchestrated workers under their direct parent', () => {
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -334,6 +353,46 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     expect(unnamed.cards[0].conversationName).toBeUndefined()
+  })
+
+  // STA-2811: both panes of a split tab carried the focused pane's title.
+  it('names each pane of a split tab from its own title', () => {
+    const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({}),
+          [siblingPaneKey]: entry({ paneKey: siblingPaneKey })
+        },
+        // The tab title is whichever pane has focus, so it must not name both.
+        tabsByWorktree: { w1: [{ ...tab(), title: '\u2733 Linear work log' }] },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: SPLIT_SIBLING_LEAF_ID }
+            },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty1', [SPLIT_SIBLING_LEAF_ID]: 'pty2' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1', 'pty2'] },
+        // Pane ids are replay-creation-ordered: 1 -> first leaf, 2 -> second.
+        runtimePaneTitlesByTabId: {
+          [TAB_ID]: { 1: '\u2733 Linear work log', 2: '\u2733 Redis cache strategy' }
+        }
+      }),
+      NOW
+    )
+
+    const nameByPaneKey = new Map(
+      snapshot.cards.map((card) => [card.paneKey, card.conversationName])
+    )
+    expect(nameByPaneKey.get(PANE_KEY)).toBe('Linear work log')
+    expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
   })
 
   // Why: `orca terminal rename --title` is unbounded, and the main-process
@@ -695,7 +754,10 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].task).toBe('Batched orchestration task')
   })
 
-  it('releases stale batch references when production moves from multi to singleton to zero', () => {
+  // Why identity, not release: the batch is a view of the shared orchestration index, which
+  // mounted sidebar cards read through. A dashboard that drops below two worktrees must not
+  // invalidate it, and nothing the index reads changed across these transitions.
+  it('keeps batch records live and correct when production moves from multi to singleton to zero', () => {
     const secondLeafId = '77777777-7777-4777-8777-777777777777'
     const firstPaneKey = makePaneKey('tab-w1', LEAF_ID)
     const secondPaneKey = makePaneKey('tab-w2', secondLeafId)
@@ -730,13 +792,17 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     const afterSingleton = selectRuntimeAgentOrchestrationBatch(multiState, requested)
-    expect(afterSingleton).not.toBe(firstBatch)
-    expect(afterSingleton.get('w1')).not.toBe(firstW1)
+    expect(afterSingleton).toBe(firstBatch)
+    expect(afterSingleton.get('w1')).toBe(firstW1)
 
     buildDashboardSnapshot(baseState({ repos: [], worktreesByRepo: {} }), NOW)
     const afterZero = selectRuntimeAgentOrchestrationBatch(multiState, requested)
-    expect(afterZero).not.toBe(afterSingleton)
-    expect(afterZero.get('w1')).not.toBe(afterSingleton.get('w1'))
+    expect(afterZero).toBe(firstBatch)
+    for (const worktreeId of requested) {
+      expect(afterZero.get(worktreeId)).toBe(
+        selectRuntimeAgentOrchestrationForWorktree(multiState, worktreeId)
+      )
+    }
   })
 
   it('scans orchestration runtime once for a dashboard snapshot', () => {

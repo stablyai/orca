@@ -5,6 +5,7 @@ import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { useAppStore } from '../../store'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type TabGroupAppState = ReturnType<typeof useAppStore.getState>
 
@@ -22,6 +23,7 @@ export type TabGroupWorktreeSnapshot = {
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
+export type GroupAgentSessionItem = Tab & { contentType: 'agent-session' }
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 
@@ -49,6 +51,18 @@ export function useTabGroupItemProjections({
     () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
     [worktreeState.terminalTabs]
   )
+  // Why indexed like the terminal tabs above: `openFiles` is the global list across every
+  // worktree and `tabOrder` is as long as the group, so the per-tab `.find` scans below were
+  // quadratic in tab count on a path that reruns whenever any unified tab is written.
+  const openFileById = useMemo(
+    () => new Map(worktreeState.openFiles.map((item) => [item.id, item])),
+    [worktreeState.openFiles]
+  )
+  const browserTabById = useMemo(
+    () => new Map(worktreeState.browserTabs.map((item) => [item.id, item])),
+    [worktreeState.browserTabs]
+  )
+  const groupTabById = useMemo(() => new Map(groupTabs.map((item) => [item.id, item])), [groupTabs])
 
   const terminalTabs = useMemo<TerminalTabItem[]>(
     () =>
@@ -91,19 +105,13 @@ export function useTabGroupItemProjections({
   const editorItems = useMemo<GroupEditorItem[]>(
     () =>
       groupTabs
-        .filter(
-          (item) =>
-            item.contentType === 'editor' ||
-            item.contentType === 'diff' ||
-            item.contentType === 'conflict-review' ||
-            item.contentType === 'check-details'
-        )
+        .filter((item) => isEditorTabContentType(item.contentType))
         .map((item) => {
-          const file = worktreeState.openFiles.find((candidate) => candidate.id === item.entityId)
+          const file = openFileById.get(item.entityId)
           return file ? { ...file, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
-    [groupTabs, worktreeState.openFiles]
+    [groupTabs, openFileById]
   )
 
   const browserItems = useMemo<GroupBrowserItem[]>(
@@ -111,17 +119,25 @@ export function useTabGroupItemProjections({
       groupTabs
         .filter((item) => item.contentType === 'browser')
         .map((item) => {
-          const bt = worktreeState.browserTabs.find((candidate) => candidate.id === item.entityId)
+          const bt = browserTabById.get(item.entityId)
           return bt ? { ...bt, tabId: item.id } : null
         })
         .filter((item): item is GroupBrowserItem => item !== null),
-    [groupTabs, worktreeState.browserTabs]
+    [browserTabById, groupTabs]
+  )
+
+  const agentSessionItems = useMemo<GroupAgentSessionItem[]>(
+    () =>
+      groupTabs.filter(
+        (item): item is GroupAgentSessionItem => item.contentType === 'agent-session'
+      ),
+    [groupTabs]
   )
 
   const tabBarOrder = useMemo(
     () =>
       (group?.tabOrder ?? []).map((itemId) => {
-        const item = groupTabs.find((candidate) => candidate.id === itemId)
+        const item = groupTabById.get(itemId)
         if (!item) {
           return itemId
         }
@@ -129,8 +145,17 @@ export function useTabGroupItemProjections({
           ? item.entityId
           : item.id
       }),
-    [group, groupTabs]
+    [group, groupTabById]
   )
 
-  return { group, groupTabs, activeTab, terminalTabs, editorItems, browserItems, tabBarOrder }
+  return {
+    group,
+    groupTabs,
+    activeTab,
+    terminalTabs,
+    editorItems,
+    browserItems,
+    agentSessionItems,
+    tabBarOrder
+  }
 }

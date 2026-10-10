@@ -24,7 +24,12 @@ vi.mock('./tab-create-entry-action', () => ({
   isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
-  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+  useRuntimeFileListForWorktree: () => ({
+    files: [],
+    loading: false,
+    loadError: null,
+    truncated: false
+  })
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
@@ -301,7 +306,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
     const input = container.querySelector('input')!
     const placeholder = input.getAttribute('placeholder')
-    expect(placeholder).toBe('Search open tabs, files, URLs, agents\u2026')
+    expect(placeholder).toBe('Search open tabs, history, files, URLs, agents\u2026')
     expect(input.getAttribute('aria-label')).toBe(placeholder)
   })
 

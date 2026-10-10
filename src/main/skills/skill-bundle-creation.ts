@@ -20,11 +20,19 @@ import {
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 import { extractSkillBundleArchive } from './skill-bundle-extraction'
-import { observeSkillPackage, type ObservedSkillPackage } from './skill-package-identity'
+import {
+  observedSkillPackagesMatch,
+  observeSkillPackage,
+  type ObservedSkillPackage
+} from './skill-package-identity'
 import { writeSkillTarGzip, type SkillTarWriteEntry } from './skill-package-tar'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 
-export type SkillBundleSource = { id?: string; sourceDirectory: string }
+export type SkillBundleSource = {
+  id?: string
+  sourceDirectory: string
+  executablePaths?: ReadonlySet<string>
+}
 
 export type CreatedSkillBundle = {
   pluginManifest: AgentPluginManifestV1
@@ -37,23 +45,6 @@ export type CreatedSkillBundle = {
 export type SkillBundleCreationDependencies = { afterSourcesObserved?: () => Promise<void> }
 
 const SOURCE_OBSERVATION_CONCURRENCY = 4
-
-function observationsMatch(left: ObservedSkillPackage, right: ObservedSkillPackage): boolean {
-  return (
-    left.files.length === right.files.length &&
-    left.files.every((file, index) => {
-      const other = right.files[index]
-      return (
-        file.path === other.path &&
-        file.size === other.size &&
-        file.executable === other.executable &&
-        file.classification === other.classification &&
-        file.exactSha256 === other.exactSha256 &&
-        file.identitySha256 === other.identitySha256
-      )
-    })
-  )
-}
 
 function bundleEntry(input: {
   id: string
@@ -92,8 +83,15 @@ async function stageSkill(input: {
     force: false,
     errorOnExist: true
   })
-  const stagedObservation = await observeSkillPackage(stagedDirectory)
-  if (!observationsMatch(input.sourceObservation, stagedObservation)) {
+  const stagedObservation = await observeSkillPackage(
+    stagedDirectory,
+    undefined,
+    input.source.executablePaths,
+    undefined,
+    process.platform,
+    process.platform === 'win32'
+  )
+  if (!observedSkillPackagesMatch(input.sourceObservation, stagedObservation)) {
     throw new Error('skill-package-source-changed-during-staging')
   }
   const stagedSummary = summarizeSkillMarkdown(
@@ -135,7 +133,14 @@ async function createSkillBundleArchiveUnobserved(
     const observed = await Promise.all(
       batch.map(async (source) => {
         const [observation, markdown] = await Promise.all([
-          observeSkillPackage(source.sourceDirectory),
+          observeSkillPackage(
+            source.sourceDirectory,
+            undefined,
+            source.executablePaths,
+            undefined,
+            process.platform,
+            process.platform === 'win32'
+          ),
           readFile(join(source.sourceDirectory, 'SKILL.md'), 'utf8')
         ])
         const summary = summarizeSkillMarkdown(markdown)

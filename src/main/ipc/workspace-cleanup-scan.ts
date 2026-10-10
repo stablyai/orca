@@ -1,6 +1,6 @@
 import type { Store } from '../persistence'
-import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { mergeWorktree } from './worktree-logic'
@@ -14,6 +14,7 @@ import {
   handleRepoWorktreeListError,
   listCleanupGitWorktrees
 } from './workspace-cleanup-worktree-listing'
+import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 import { shouldScanBroadWorkspaceCleanupWorktree } from './workspace-cleanup-scan-eligibility'
 import {
   resolvePersistedWorkspaceCleanupActivityWorktree,
@@ -43,6 +44,7 @@ import {
   getTargetWorktreeIdsByRepo,
   hasTargetedWorkspaceCleanupScan
 } from './workspace-cleanup-scan-targets'
+import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Why: SSH repos pay a worktree-list round trip each; strictly serial repos
@@ -66,10 +68,15 @@ export async function scanWorkspaceCleanup(
   if (hasTargetedWorkspaceCleanupScan(args) && targetWorktreeIdsByRepo.size === 0) {
     return { scannedAt, candidates: [], errors: [] }
   }
+  const allRepos = store.getRepos()
   const repos =
     targetWorktreeIdsByRepo.size > 0
-      ? store.getRepos().filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
-      : store.getRepos()
+      ? allRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
+      : allRepos
+  const repoOwnerCountById = new Map<string, number>()
+  for (const repo of allRepos) {
+    repoOwnerCountById.set(repo.id, (repoOwnerCountById.get(repo.id) ?? 0) + 1)
+  }
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -83,6 +90,7 @@ export async function scanWorkspaceCleanup(
         return scanRepoWorkspaces({
           store,
           repo,
+          repoOwnerCount: repoOwnerCountById.get(repo.id) ?? 1,
           scannedAt,
           targetWorktreeIds: targetWorktreeIdsByRepo.get(repo.id),
           refreshTargetActivity: args.worktreeId !== undefined || args.refreshActivity === true,
@@ -109,6 +117,7 @@ async function scanRepoWorkspaces(
   args: {
     store: Store
     repo: Repo
+    repoOwnerCount: number
     scannedAt: number
     targetWorktreeIds?: ReadonlySet<string>
     refreshTargetActivity: boolean
@@ -120,6 +129,7 @@ async function scanRepoWorkspaces(
   const {
     store,
     repo,
+    repoOwnerCount,
     scannedAt,
     targetWorktreeIds,
     refreshTargetActivity,
@@ -132,12 +142,12 @@ async function scanRepoWorkspaces(
   } = args
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const repoIsFolder = isFolderRepo(repo)
-  let provider: IGitProvider | null = null
+  let route: WorkspaceCleanupGitRoute
   let gitWorktrees: GitWorktreeInfo[] = []
 
   try {
     const discovered = await listCleanupGitWorktrees(store, repo, repoIsFolder, signal)
-    provider = discovered.provider
+    route = discovered.route
     gitWorktrees = discovered.gitWorktrees
   } catch (error) {
     if (error instanceof WorkspaceCleanupScanCancelledError) {
@@ -152,7 +162,7 @@ async function scanRepoWorkspaces(
     })
   }
 
-  if (repo.connectionId && !provider) {
+  if (route.kind === 'ssh' && !route.provider) {
     // Why: a disconnected host still owns real workspaces; the full list shows
     // them (blocked), while legacy scans keep omitting what they cannot inspect.
     const candidates =
@@ -161,6 +171,7 @@ async function scanRepoWorkspaces(
             store,
             repo,
             scannedAt,
+            repoOwnerCount,
             targetWorktreeIds,
             includeAllWorkspaces
           )
@@ -174,11 +185,15 @@ async function scanRepoWorkspaces(
 
   const mergedWorktrees =
     repoIsFolder && includeAllWorkspaces
-      ? listWorkspaceCleanupFolderWorkspaces(store, repo)
+      ? listWorkspaceCleanupFolderWorkspaces(store, repo, repoOwnerCount)
       : gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
+          // Host-qualified first: the same repoId::path is a different checkout on each host.
+          const hostMeta = readWorktreeMetaForHost(store, worktreeId, route.hostId)
           const meta = store.getWorktreeMeta(worktreeId)
-          return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+          const ownedMeta =
+            hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
+          return mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
         })
   // Why: with includeAllWorkspaces the browser shows every workspace and lets
   // filters narrow it; an age threshold here would hide rows from all views.
@@ -221,7 +236,7 @@ async function scanRepoWorkspaces(
         (targetWorktreeIds ? !refreshTargetActivity : persistedActivityIsRecent)
           ? persistedActivityWorktree
           : await resolveCleanupActivityWithTimeout(
-              repo,
+              route,
               worktree,
               () => {
                 activityStatsUnavailable = true
@@ -240,9 +255,9 @@ async function scanRepoWorkspaces(
         repo,
         worktree: worktreeWithActivity,
         scannedAt,
-        provider,
-        // Why: a row with no inactivity reason can never be queued or selected,
-        // so full-fleet scans stream it now and let a focused scan read git later.
+        route,
+        // Why: full-fleet scans defer git for recently active rows; removal preflight
+        // forces a fresh read before any selected row can be deleted.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
         signal
@@ -265,7 +280,7 @@ async function scanRepoWorkspaces(
 }
 
 async function resolveCleanupActivityWithTimeout(
-  repo: Repo,
+  route: WorkspaceCleanupGitRoute,
   worktree: Worktree,
   onActivityStatsUnavailable: () => void,
   signal?: AbortSignal,
@@ -275,7 +290,7 @@ async function resolveCleanupActivityWithTimeout(
     return await withWorkspaceCleanupTimeout(
       () =>
         resolveWorkspaceCleanupActivityWorktree(
-          repo,
+          route,
           worktree,
           undefined,
           undefined,

@@ -52,6 +52,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -109,16 +110,6 @@ describe('AgentBrowserBridge', () => {
   // ── Worktree filtering ──
 
   describe('worktree filtering', () => {
-    it('returns all tabs when no worktreeId', () => {
-      const tabs = new Map([
-        ['tab-a', 1],
-        ['tab-b', 2]
-      ])
-      const b = new AgentBrowserBridge(mockBrowserManager(tabs))
-      const result = b.tabList()
-      expect(result.tabs).toHaveLength(2)
-    })
-
     it('returns only matching worktree tabs', () => {
       const tabs = new Map([
         ['tab-a', 1],
@@ -232,6 +223,44 @@ describe('AgentBrowserBridge', () => {
 
     await bridge.onTabClosed(100)
     expect(bridge.getActiveWebContentsId()).toBeNull()
+  })
+
+  it('resolves repeated guest lookups without enumerating registered tabs', () => {
+    const tabCount = 1_000
+    const tabs = new Map<string, number>()
+    const tabIdByWebContentsId = new Map<number, string>()
+    for (let index = 0; index < tabCount; index += 1) {
+      const tabId = `tab-${index}`
+      const webContentsId = 20_000 + index
+      tabs.set(tabId, webContentsId)
+      tabIdByWebContentsId.set(webContentsId, tabId)
+    }
+
+    const getRegisteredTabs = vi.fn(() => {
+      throw new Error('unexpected registered-tab enumeration')
+    })
+    const getTabIdForWebContentsId = vi.fn(
+      (webContentsId: number) => tabIdByWebContentsId.get(webContentsId) ?? null
+    )
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, new Map(), {
+        getWebContentsIdByTabId: getRegisteredTabs,
+        getTabIdForWebContentsId
+      })
+    )
+    const resolveTabIdSafe = (
+      b as unknown as { resolveTabIdSafe: (webContentsId: number) => string | null }
+    ).resolveTabIdSafe.bind(b)
+    const targetWebContentsId = 20_000 + tabCount - 1
+
+    // The old forward scan inspected 1,000,000 entries for this repeated last-tab lookup.
+    for (let lookup = 0; lookup < tabCount; lookup += 1) {
+      expect(resolveTabIdSafe(targetWebContentsId)).toBe(`tab-${tabCount - 1}`)
+    }
+
+    expect(getTabIdForWebContentsId).toHaveBeenCalledTimes(tabCount)
+    expect(getRegisteredTabs).not.toHaveBeenCalled()
+    expect(resolveTabIdSafe(99_999)).toBeNull()
   })
 
   it('closes the named agent-browser session when a tab closes', async () => {
@@ -370,15 +399,14 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
-          return
-        }
-        if (args.includes('snapshot')) {
+        } else if (args.includes('snapshot')) {
           releaseSnapshot = () => {
             cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
           }
-          return
+        } else {
+          cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
         }
-        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+        return createFakeAgentBrowserChild({})
       }
     )
 

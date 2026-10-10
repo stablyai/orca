@@ -2,24 +2,25 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   appendPendingSendCache,
-  appendCommandMarkerCache,
-  applyCommandMarkerBoundaries,
-  clearCommandMarkerCacheForTests,
   clearPendingSendCacheForTests,
-  commandMarkersAsMessages,
-  isCommandMarkerId,
   isLaunchPromptMessageId,
   isPendingMessageId,
   launchPromptAsMessage,
   nextNativeChatPendingSendId,
   pendingSendsAsMessages,
   prunePendingSends,
-  readCommandMarkerCache,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
+  clearCommandMarkerCacheForTests,
+  commandMarkersAsMessages,
+  readCommandMarkerCache
+} from './native-chat-command-marker'
 import { stripNoiseMessages } from './native-chat-noise'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
@@ -55,6 +56,39 @@ function imageMessage(id: string, ...paths: string[]): NativeChatMessage {
 const pendingOf = (id: string, text: string): NativeChatPendingSend => ({ id, text, sentAt: 100 })
 
 describe('prunePendingSends', () => {
+  it.each(['/remote/.orca/drops/Screenshot 2026-09-20 at 18.25.43.png', '/tmp/local photo.png'])(
+    'reconciles a pasted attachment path recorded as text: %s',
+    (path) => {
+      const pending = [
+        { ...pendingOf('pending', '看一下'), imagePaths: [path], afterMessageId: null }
+      ]
+      const user = userMessage('real', `${path} 看一下`, 101)
+      expect(pendingSendsAsMessages(pending, [user])).toEqual([])
+      expect(prunePendingSends(pending, [user])).toEqual(pending)
+      expect(prunePendingSends(pending, [user, assistantMessage('reply', '好的', 102)])).toEqual([])
+      expect(
+        prunePendingSends(pending, [
+          userMessage('unrelated', `${path}.other 看一下`, 101),
+          assistantMessage('reply', 'ok', 102)
+        ])
+      ).toEqual(pending)
+    }
+  )
+
+  it('reconciles image-only and multiple attachments without consuming a prior turn', () => {
+    const paths = ['/remote/a.png', '/remote/b.png']
+    const pending = [{ ...pendingOf('pending', ''), imagePaths: paths, afterMessageId: 'old' }]
+    const old = userMessage('old', paths.join(' '), 99)
+    expect(prunePendingSends(pending, [old, assistantMessage('old-reply', 'old', 100)])).toEqual(
+      pending
+    )
+    const messages = [
+      old,
+      userMessage('new', paths.join(''), 101),
+      assistantMessage('reply', 'ok', 102)
+    ]
+    expect(prunePendingSends(pending, messages)).toEqual([])
+  })
   it('returns the same reference when there is nothing pending', () => {
     const pending: NativeChatPendingSend[] = []
     expect(prunePendingSends(pending, [userMessage('m1', 'hi')])).toBe(pending)
@@ -330,6 +364,84 @@ describe('glued rapid sends', () => {
     expect(prunePendingSends(pending, history)).toEqual(pending)
     expect(pendingSendsAsMessages(pending, history)).toHaveLength(2)
   })
+
+  // A row that already existed when a send was issued can never be that send's
+  // echo — for EVERY queued send, not just the oldest one the glue run starts at.
+  const mixedAgeGlue = (): { messages: NativeChatMessage[]; pending: NativeChatPendingSend[] } => {
+    const gluedRow = userMessage('glue-row', 'fix the bug', 6000)
+    return {
+      messages: [
+        GLUE_BOUNDARY,
+        gluedRow,
+        assistantMessage('glue-answer', 'fixed', 6100),
+        userMessage('later-history', 'anything', 6200)
+      ],
+      // 'fix the' was queued before the row landed; 'bug' only after it.
+      pending: [
+        gluePending('p1', 'fix the'),
+        {
+          id: 'p2',
+          text: 'bug',
+          sentAt: 7000,
+          afterMessageId: 'glue-answer',
+          afterMessageTimestamp: 6100
+        }
+      ]
+    }
+  }
+
+  it('keeps a queued send whose own boundary is newer than the glued row (STA-4477)', () => {
+    const { messages, pending } = mixedAgeGlue()
+
+    expect(prunePendingSends(pending, messages)).toEqual(pending)
+  })
+
+  // Separate from the prune case on purpose: the render path is what makes the
+  // bubble visually vanish, and a shared `it` would mask it behind the first
+  // failing assertion.
+  it('still renders a queued send whose own boundary is newer than the row (STA-4477)', () => {
+    const { messages, pending } = mixedAgeGlue()
+
+    expect(pendingSendsAsMessages(pending, messages)).toHaveLength(2)
+  })
+
+  // Glue is adjacency: a send the row predates ends the run rather than being
+  // skipped, so a row must never bridge across a send it cannot represent.
+  it('never glues across a send the row cannot represent (STA-4477)', () => {
+    const gluedRow = userMessage('glue-row', 'alpha gamma', 6000)
+    const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'ok', 6100)]
+    const pending = [
+      gluePending('p1', 'alpha'),
+      // Queued after the row landed, so the row is not its echo...
+      {
+        id: 'p2',
+        text: 'beta',
+        sentAt: 7000,
+        afterMessageId: 'glue-row',
+        afterMessageTimestamp: 6000
+      },
+      // ...and 'alpha'+'gamma' must not close over the gap it leaves.
+      gluePending('p3', 'gamma')
+    ]
+
+    expect(prunePendingSends(pending, messages)).toEqual(pending)
+    expect(pendingSendsAsMessages(pending, messages)).toHaveLength(3)
+  })
+
+  it('still retires the leading run the glued row did land after (STA-4477)', () => {
+    const gluedRow = userMessage('glue-row', 'first second', 6000)
+    const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'done', 6100)]
+    const third = {
+      id: 'p3',
+      text: 'third',
+      sentAt: 7000,
+      afterMessageId: 'glue-row',
+      afterMessageTimestamp: gluedRow.timestamp
+    }
+    const pending = [gluePending('p1', 'first'), gluePending('p2', 'second'), third]
+
+    expect(prunePendingSends(pending, messages)).toEqual([third])
+  })
 })
 
 describe('pendingSendsAsMessages', () => {
@@ -400,6 +512,27 @@ describe('pendingSendsAsMessages', () => {
       'pending:new-send'
     ])
     expect(prunePendingSends(pending, history)).toEqual(pending)
+  })
+
+  // #11519: a first send into a settled empty transcript has no row to compare, and the
+  // host that writes the transcript may run a clock behind this one.
+  it('retires a send into a settled empty transcript whatever the host clock says', () => {
+    const fiveMinutes = 5 * 60_000
+    const pending = [
+      {
+        ...pendingOf('first-send', 'run tests'),
+        sentAt: 1_000_000,
+        afterMessageId: null,
+        afterEmptyTranscriptSessionId: 'session-1'
+      }
+    ]
+    const hostBehind = [
+      { ...userMessage('u1', 'run tests'), timestamp: 1_000_000 - fiveMinutes },
+      { ...assistantMessage('a1', 'passed'), timestamp: 1_000_000 - fiveMinutes + 10 }
+    ]
+
+    expect(pendingSendsAsMessages(pending, hostBehind)).toEqual([])
+    expect(prunePendingSends(pending, hostBehind)).toEqual([])
   })
 
   it('uses the transcript boundary clock after pagination, not the renderer send clock', () => {
@@ -614,11 +747,6 @@ describe('commandMarkersAsMessages', () => {
     const markers = commandMarkersAsMessages([{ id: 'c1', command: '/compact', sentAt: 1 }])
     expect(stripNoiseMessages(markers)).toEqual(markers)
   })
-
-  it('isCommandMarkerId recognizes the prefix', () => {
-    expect(isCommandMarkerId('command:c1')).toBe(true)
-    expect(isCommandMarkerId('pending:p1')).toBe(false)
-  })
 })
 
 describe('command marker cache', () => {
@@ -726,5 +854,16 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
     expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
       1
     )
+  })
+})
+
+describe('commandMarkersAsMessages with a host answer', () => {
+  it('shows the answer in place of the Ran line', () => {
+    const [message] = commandMarkersAsMessages([
+      { id: 'c2', command: '/context', sentAt: 9, output: 'Context: 54.6k / 200k tokens (27%)' }
+    ])
+    expect(message?.role).toBe('system')
+    // Plain text: it draws as the muted aside the Ran line would have been.
+    expect(message?.blocks).toEqual([{ type: 'text', text: 'Context: 54.6k / 200k tokens (27%)' }])
   })
 })

@@ -9,7 +9,13 @@ const electron = vi.hoisted(() => {
     destroy = vi.fn()
     resolveLoad!: () => void
     webContents = {
-      debugger: { sendCommand: vi.fn(async (_method: string) => ({ cookies: [] })) },
+      debugger: {
+        sendCommand: vi.fn(
+          async (_method: string, _params?: Record<string, unknown>): Promise<unknown> => ({
+            cookies: []
+          })
+        )
+      },
       isDestroyed: vi.fn(() => false)
     }
 
@@ -76,5 +82,20 @@ describe('cookie clear debugger lifecycle', () => {
     expect(electron.windows[0].destroy).toHaveBeenCalledOnce()
     await expect(store.restoreClearIdentities([])).rejects.toThrow(/store was disposed/)
     expect(electron.windows).toHaveLength(1)
+  })
+
+  it('attempts the whole frozen restore snapshot after one cookie is rejected', async () => {
+    const store = openCookieClearStore(targetSession())
+    const restore = store.restoreClearIdentities([
+      { url: 'https://first.example/', name: 'first', value: 'one', sameSite: 'unspecified' },
+      { url: 'https://second.example/', name: 'second', value: 'two', sameSite: 'unspecified' }
+    ])
+    const sendCommand = electron.windows[0].webContents.debugger.sendCommand
+    sendCommand.mockResolvedValueOnce({ success: false }).mockResolvedValueOnce({ success: true })
+
+    electron.windows[0].resolveLoad()
+
+    await expect(restore).rejects.toThrow(/restore/i)
+    expect(sendCommand.mock.calls.map(([, params]) => params?.name)).toEqual(['first', 'second'])
   })
 })

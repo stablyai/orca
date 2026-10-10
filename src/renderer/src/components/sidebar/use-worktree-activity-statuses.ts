@@ -33,9 +33,15 @@ export function selectWorktreeActivityStatuses(
     const {
       hasPermission,
       hasLiveWorking,
+      hasLiveMonitoring,
+      hasFailed,
+      hasInterrupted,
+      hasUnconfirmed,
       hasLiveDone,
       hasRetainedDone,
-      agentStatusPaneIdsByTabId
+      hasRetainedFailed,
+      agentStatusPaneIdsByTabId,
+      stalePaneIdsByTabId
     } = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
     statuses.set(
       worktreeId,
@@ -45,11 +51,17 @@ export function selectWorktreeActivityStatuses(
         ptyIdsByTabId: selectLivePtyIdsForWorktree(statusInputs, worktreeId),
         runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
         agentStatusPaneIdsByTabId,
+        stalePaneIdsByTabId,
         terminalLayoutRootsByTabId: selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
         hasPermission,
         hasLiveWorking,
+        hasLiveMonitoring,
+        hasFailed,
+        hasInterrupted,
+        hasUnconfirmed,
         hasLiveDone,
-        hasRetainedDone
+        hasRetainedDone,
+        hasRetainedFailed
       })
     )
   }

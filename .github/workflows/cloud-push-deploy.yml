@@ -1,0 +1,566 @@
+name: Deploy Push Gateway Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full reviewed commit SHA to build (feature may remain unmerged)
+        required: true
+        type: string
+      confirmation:
+        description: Enter DEPLOY_PUSH_GATEWAY to shift production traffic
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+# Serialize push traffic changes independently of Relay and the shared database.
+concurrency:
+  group: production-push-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  deploy:
+    if: >-
+      ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      SERVICE_NAME: orca-cloud-push
+      REPOSITORY_ID: orca-cloud
+      IMAGE_NAME: push
+      PUSH_ORIGIN: https://push.onorca.dev
+      PUSH_RUNTIME_SERVICE_ACCOUNT: orca-cloud-push@onorca-cloud.iam.gserviceaccount.com
+      # Scaling the serving revision must already hold, matching push_min_instances and
+      # push_max_instances. Terraform owns both, and the candidate inherits them from the
+      # service, so this deploy never passes a scaling flag: doing so would write a
+      # Terraform-owned field that `lifecycle.ignore_changes` does not cover, and a later
+      # `push_max_instances` raise would then be reverted by every deploy. These two values
+      # are the expected shape, asserted before the candidate is created and again on the
+      # candidate itself, so a deploy that would change the gateway's Cloud SQL draw fails.
+      PUSH_MIN_INSTANCES: 1
+      PUSH_MAX_INSTANCES: 2
+      CONFIRMATION: ${{ inputs.confirmation }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require the explicit deploy confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CONFIRMATION}" = DEPLOY_PUSH_GATEWAY
+          [[ "${SOURCE_SHA}" =~ ^[a-f0-9]{40}$ ]]
+
+      # Keep the workflow and rollout lease on main; only the Docker build uses candidate code.
+      - name: Fetch the immutable gateway source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${SOURCE_SHA}"
+          test "$(git rev-parse FETCH_HEAD)" = "${SOURCE_SHA}"
+          mkdir -p "${RUNNER_TEMP}/push-source"
+          git -C "${GITHUB_WORKSPACE}" archive "${SOURCE_SHA}" cloud \
+            | tar -x -C "${RUNNER_TEMP}/push-source"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_PUSH_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_PUSH_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      # Building an image does not need the deployment lease.
+      - name: Build and publish the immutable gateway image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_tag="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}:sha-${SOURCE_SHA}"
+          docker buildx build --push --platform linux/amd64 --provenance=false --metadata-file "${RUNNER_TEMP}/push-image.json" \
+            -f "${RUNNER_TEMP}/push-source/cloud/apps/push/Dockerfile" \
+            -t "${image_tag}" "${RUNNER_TEMP}/push-source/cloud"
+          digest="$(jq -er '."containerimage.digest"' "${RUNNER_TEMP}/push-image.json")"
+          [[ "${digest}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "IMAGE=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}@${digest}" \
+            >> "${GITHUB_ENV}"
+          echo "IMAGE_DIGEST=${digest}" >> "${GITHUB_ENV}"
+
+      # Refuse older images before they ever boot against production.
+      - name: Require image support for inert validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint node "${IMAGE}" --input-type=module -e '
+            import { loadPushConfig } from "./apps/push/dist/config.js";
+            const env = { ORCA_PUSH_PUBLIC_URL: "https://push.onorca.dev", ORCA_PUSH_MODE: "validation", ORCA_PUSH_FCM_PROJECT_ID: "onorca-cloud" };
+            if (loadPushConfig(env).mode !== "validation") throw new Error("validation_mode_unsupported");
+            let rejected = false;
+            try { loadPushConfig({ ...env, ORCA_PUSH_MODE: "invalid" }); } catch { rejected = true; }
+            if (!rejected) throw new Error("validation_mode_not_fail_closed");
+          '
+
+      # Held across the deploy, not just a separate schema step: the gateway opens its pool and
+      # applies its schema while the new revision starts, so the revision is the schema step.
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/push-rollout/production.lock
+
+      # Why: the candidate inherits the serving revision's scaling. A serving revision that has
+      # drifted below the floor would hand the candidate a cold start on every notification, and
+      # one that has drifted above the ceiling would hand it a larger Cloud SQL draw than the
+      # rollout lease was taken for. Refuse to inherit either rather than latch it.
+      - name: Record the serving revision and require its Terraform-owned scaling
+        shell: bash
+        run: |
+          set -euo pipefail
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test -n "${serving}"
+          revisions="$(gcloud run revisions list --service "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format='value(metadata.name)')"
+          if test "${revisions}" != "${serving}"; then
+            echo 'Retire leftover revisions under the rollout lease before deploying; three pools are the limit.' >&2
+            exit 1
+          fi
+          floor="$(gcloud run revisions describe "${serving}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/minScale'])")"
+          if [[ "${floor:-0}" -lt "${PUSH_MIN_INSTANCES}" ]]; then
+            echo "serving revision ${serving} holds ${floor:-0} minimum instances," \
+              "below ${PUSH_MIN_INSTANCES}; deploying would inherit and latch it." >&2
+            echo "Restore the floor first: gcloud run services update ${SERVICE_NAME}" \
+              "--region ${GCP_REGION} --min-instances=${PUSH_MIN_INSTANCES}" >&2
+            exit 1
+          fi
+          ceiling="$(gcloud run revisions describe "${serving}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/maxScale'])")"
+          test "${ceiling}" = "${PUSH_MAX_INSTANCES}"
+          echo "serving revision ${serving} holds ${floor} minimum and ${ceiling} maximum instances"
+          echo "ROLLBACK_REVISION=${serving}" >> "${GITHUB_ENV}"
+          gcloud run revisions describe "${serving}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            > "${RUNNER_TEMP}/push-rollback-revision.json"
+          image="$(jq -er '.status.imageDigest' "${RUNNER_TEMP}/push-rollback-revision.json")"
+          [[ "${image}" =~ @sha256:[a-f0-9]{64}$ ]]
+          echo "ROLLBACK_IMAGE=${image}" >> "${GITHUB_ENV}"
+          jq -e 'all(.spec.containers[0].env[]?; .name != "ORCA_PUSH_MODE" or .value == "active")' \
+            "${RUNNER_TEMP}/push-rollback-revision.json" > /dev/null
+
+      # Validation has no schema writes, HTTP mutations, worker, or pruners; tags alone do not
+      # isolate background consumers from production.
+      - name: Deploy the candidate revision with no traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="c${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "VALIDATION_DEPLOY_ATTEMPTED=true"
+            echo "VALIDATION_REVISION=${SERVICE_NAME}-${tag}"
+            echo "VALIDATION_TAG=${tag}"
+            echo "CANDIDATE_TAG=${tag}"
+            echo "CANDIDATE_REVISION=${SERVICE_NAME}-${tag}"
+          } >> "${GITHUB_ENV}"
+          gcloud run deploy "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --image "${IMAGE}" \
+            --tag "${tag}" \
+            --revision-suffix "${tag}" \
+            --no-traffic \
+            --update-env-vars ORCA_PUSH_MODE=validation \
+            --quiet
+          candidate="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -er --arg tag "${tag}" \
+              '[.status.traffic[] | select(.tag == $tag)]
+               | if length == 1 then .[0] else error("tagged candidate is not unique") end')"
+          test "$(jq -r '.revisionName' <<< "${candidate}")" = "${SERVICE_NAME}-${tag}"
+          echo "CANDIDATE_URL=$(jq -r '.url' <<< "${candidate}")" >> "${GITHUB_ENV}"
+
+      # A tagged revision is directly addressable and sits outside the service-wide cap, so the
+      # candidate and the serving revision each draw up to the ceiling during the probe window.
+      # Successor creation later requires three revision pools; assert the inherited ceiling.
+      - name: Require the candidate to serve the exact image and inherited scaling
+        shell: bash
+        run: |
+          set -euo pipefail
+          served="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+          test "${served}" = "${IMAGE}"
+          test "${CANDIDATE_REVISION}" != "${ROLLBACK_REVISION}"
+          candidate_ceiling="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format="value(metadata.annotations['autoscaling.knative.dev/maxScale'])")"
+          test "${candidate_ceiling}" = "${PUSH_MAX_INSTANCES}"
+
+      - name: Probe the candidate readiness endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_URL}" =~ ^https://[^/]+$ ]]
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o "${RUNNER_TEMP}/push-ready.json" -w '%{http_code}' \
+              --max-time 10 "${CANDIDATE_URL}/ready" || true)"
+            if test "${code}" = 200; then
+              jq -e . < "${RUNNER_TEMP}/push-ready.json" > /dev/null
+              curl --fail --silent --show-error --max-time 10 "${CANDIDATE_URL}/health" \
+                | jq -e '.ok == true and .deliveryProtocol == 2 and .mode == "validation"' > /dev/null
+              echo "candidate ${CANDIDATE_REVISION} is ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${attempt}: /ready returned ${code}"
+            sleep 5
+          done
+          echo "candidate ${CANDIDATE_REVISION} never reported ready" >&2
+          exit 1
+
+      # Why: a gateway that boots and answers /ready can still be unable to send. This proves the
+      # runtime account's FCM grant end to end without delivering anything: validate_only stops
+      # Google before any push, and the deliberately invalid token means a healthy credential
+      # answers INVALID_ARGUMENT. PERMISSION_DENIED is the failure this step exists to catch.
+      #
+      # Only the four verdicts below are conclusive. A 429, a 5xx, or a transport failure says
+      # nothing about the credential, so it is retried rather than treated as either answer; a
+      # denied credential still fails on the first attempt, without burning the retries.
+      - name: Prove the runtime identity can reach FCM
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth print-access-token \
+            --impersonate-service-account "${PUSH_RUNTIME_SERVICE_ACCOUNT}")"
+          test -n "${token}"
+          echo "::add-mask::${token}"
+          body='{"validate_only":true,"message":{"token":"orca-push-deploy-probe-invalid-token","notification":{"title":"Orca","body":"deploy probe"}}}'
+          for attempt in $(seq 1 5); do
+            code="$(curl -sS -o "${RUNNER_TEMP}/push-fcm.json" -w '%{http_code}' --max-time 20 \
+              -X POST "https://fcm.googleapis.com/v1/projects/${GCP_PROJECT_ID}/messages:send" \
+              -H "Authorization: Bearer ${token}" \
+              -H 'Content-Type: application/json' \
+              --data "${body}" || true)"
+            status="$(jq -r '.error.status // empty' < "${RUNNER_TEMP}/push-fcm.json" || true)"
+            echo "attempt ${attempt}: FCM validate-only send returned HTTP ${code} status ${status:-OK}"
+            if test "${status}" = PERMISSION_DENIED || test "${status}" = INVALID_ARGUMENT ||
+              test "${code}" = 401 || test "${code}" = 403; then
+              break
+            fi
+            sleep 5
+          done
+          if test "${status}" = PERMISSION_DENIED || test "${code}" = 401 || test "${code}" = 403; then
+            echo "the push runtime identity cannot send through FCM" >&2
+            exit 1
+          fi
+          test "${status}" = INVALID_ARGUMENT
+
+      # Cloud Run requires a successor before the latest revision can be deleted.
+      - name: Retire inert validation and activate the verified image
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="a${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "CANDIDATE_TAG=${tag}"
+            echo "CANDIDATE_REVISION=${SERVICE_NAME}-${tag}"
+            echo "ACTIVATION_ATTEMPTED=true"
+          } >> "${GITHUB_ENV}"
+          # This is the production-effect boundary: schema, pruners and workers start here.
+          gcloud run deploy "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --image "${IMAGE}" --tag "${tag}" --revision-suffix "${tag}" \
+            --remove-env-vars ORCA_PUSH_MODE --no-traffic --quiet
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --remove-tags "${VALIDATION_TAG}" --quiet
+          gcloud run revisions delete "${VALIDATION_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --quiet
+          echo "VALIDATION_RETIRED=true" >> "${GITHUB_ENV}"
+          revision="$(gcloud run revisions describe "${SERVICE_NAME}-${tag}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          jq -e --arg image "${IMAGE}" --arg account "${PUSH_RUNTIME_SERVICE_ACCOUNT}" \
+            --arg ceiling "${PUSH_MAX_INSTANCES}" --arg floor "${PUSH_MIN_INSTANCES}" \
+            --slurpfile prior "${RUNNER_TEMP}/push-rollback-revision.json" '
+             def shape: del(.containers[0].image) |
+               .containers[0].env = ((.containers[0].env // []) |
+                 map(select(.name != "ORCA_PUSH_MODE")) | sort_by(.name));
+             .spec.containers[0].image == $image and .spec.serviceAccountName == $account and
+             all(.spec.containers[0].env[]?; .name != "ORCA_PUSH_MODE") and
+             (.spec | shape) == ($prior[0].spec | shape) and
+             .metadata.annotations["autoscaling.knative.dev/maxScale"] == $ceiling and
+             (.metadata.annotations["autoscaling.knative.dev/minScale"] | tonumber) >= ($floor | tonumber)' \
+            <<< "${revision}" > /dev/null
+          candidate="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -er --arg tag "${tag}" '[.status.traffic[] | select(.tag == $tag)]
+              | if length == 1 then .[0] else error("active candidate is not unique") end')"
+          test "$(jq -r '.revisionName' <<< "${candidate}")" = "${SERVICE_NAME}-${tag}"
+          url="$(jq -er '.url' <<< "${candidate}")"
+          [[ "${url}" =~ ^https://[^/]+$ ]]
+          curl --fail --silent --show-error --max-time 10 "${url}/ready" | jq -e '.ok == true'
+          curl --fail --silent --show-error --max-time 10 "${url}/health" \
+            | jq -e '.ok == true and .deliveryProtocol == 2 and .mode == "active"'
+
+      - name: Shift all traffic to the verified candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "TRAFFIC_SHIFT_ATTEMPTED=true" >> "${GITHUB_ENV}"
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${CANDIDATE_REVISION}=100" \
+            --quiet
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test "${serving}" = "${CANDIDATE_REVISION}"
+          echo "TRAFFIC_SHIFTED=true" >> "${GITHUB_ENV}"
+
+      # Why: the summary is written before the origin check, not after it. Once traffic has
+      # moved, the rollback target is the single thing an operator needs, and a summary that only
+      # appeared on success would be missing in exactly the run that needs it.
+      - name: Publish the rollout summary
+        if: ${{ always() && env.CANDIDATE_REVISION != '' && env.ROLLBACK_REVISION != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Push gateway rollout'
+            echo
+            echo "Source: ${SOURCE_SHA}"
+            echo
+            echo "Revision: \`${CANDIDATE_REVISION}\`"
+            echo
+            echo "Image: \`${IMAGE_DIGEST}\`"
+            echo "Known-good image: \`${ROLLBACK_IMAGE}\`"
+            echo
+            echo "Recovery: deploy \`${ROLLBACK_IMAGE}\` as a new revision with" \
+              "\`--remove-env-vars ORCA_PUSH_MODE --no-traffic --tag <unique-recovery-tag> --revision-suffix <unique-recovery-suffix>\`."
+            echo 'Verify its exact digest, configuration, readiness and active mode, then promote and check the public origin.'
+            echo 'Only then remove obsolete tags and delete rejected/previous revisions; never delete the latest revision.'
+            echo 'The previous revision is retired after public checks; retain this immutable image for recovery under the rollout lease.'
+            echo "Activation attempted: ${ACTIVATION_ATTEMPTED:-false}; traffic rollback cannot undo schema or deliveries."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Verify the public origin after the shift
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+              "${PUSH_ORIGIN}/ready" || true)"
+            if test "${code}" = 200; then
+              curl --fail --silent --show-error --max-time 10 "${PUSH_ORIGIN}/health" \
+                | jq -e '.ok == true and .deliveryProtocol == 2 and .mode == "active"' > /dev/null
+              echo "ROLLOUT_VERIFIED=true" >> "${GITHUB_ENV}"
+              echo "${PUSH_ORIGIN} is ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${attempt}: ${PUSH_ORIGIN}/ready returned ${code}"
+            sleep 5
+          done
+          echo "${PUSH_ORIGIN} never reported ready after the shift" >&2
+          exit 1
+
+      # Why: everything after the shift runs with production on the candidate. A failure there
+      # is not a failure to deploy, it is a live gateway that has to go back, so the traffic move
+      # is undone here rather than left to whoever reads the run.
+      - name: Roll traffic back to the previous revision
+        if: ${{ (failure() || cancelled()) && env.TRAFFIC_SHIFT_ATTEMPTED == 'true' && env.ROLLOUT_VERIFIED != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ROLLBACK_REVISION:-}"
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --to-revisions "${ROLLBACK_REVISION}=100" \
+            --quiet
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -r '[.status.traffic[] | select((.percent // 0) > 0)]
+                     | if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test "${serving}" = "${ROLLBACK_REVISION}"
+          echo "TRAFFIC_ROLLED_BACK=true" >> "${GITHUB_ENV}"
+          {
+            echo
+            echo '### Push gateway rolled back'
+            echo
+            echo "Traffic returned to \`${ROLLBACK_REVISION}\`; the candidate" \
+              "\`${CANDIDATE_REVISION}\` no longer serves HTTP; deletion below must stop its workers."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # Deleting a revision does not restore the service template that Terraform reconciles.
+      - name: Restore the known-good service template
+        if: ${{ (failure() || cancelled()) && env.VALIDATION_DEPLOY_ATTEMPTED == 'true' && env.ROLLOUT_VERIFIED != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${TRAFFIC_SHIFT_ATTEMPTED:-false}" != true || test "${TRAFFIC_ROLLED_BACK:-false}" = true
+          test -n "${ROLLBACK_IMAGE}"
+          # A partial activation may leave validation plus active; free one slot before recovery.
+          latest="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --format='value(status.latestCreatedRevisionName)')"
+          test -n "${latest}"
+          if test "${VALIDATION_RETIRED:-false}" != true && test "${latest}" != "${VALIDATION_REVISION}"; then
+            existing="$(gcloud run revisions list --service "${SERVICE_NAME}" \
+              --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+              --filter "metadata.name=${VALIDATION_REVISION}" --format='value(metadata.name)')"
+            if test -n "${existing}"; then
+              test "${existing}" = "${VALIDATION_REVISION}"
+              gcloud run services update-traffic "${SERVICE_NAME}" \
+                --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+                --remove-tags "${VALIDATION_TAG}" --quiet
+              gcloud run revisions delete "${VALIDATION_REVISION}" \
+                --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --quiet
+            fi
+          fi
+          tag="r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "RECOVERY_TAG=${tag}" >> "${GITHUB_ENV}"
+          echo "TEMPLATE_RECOVERY_REVISION=${SERVICE_NAME}-${tag}" >> "${GITHUB_ENV}"
+          echo "Template recovery attempted: ${SERVICE_NAME}-${tag}, image ${ROLLBACK_IMAGE}." \
+            >> "${GITHUB_STEP_SUMMARY}"
+          # Known-good schema/workers can run here even though HTTP stays on the old revision.
+          gcloud run deploy "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --image "${ROLLBACK_IMAGE}" --revision-suffix "${tag}" --tag "${tag}" \
+            --remove-env-vars ORCA_PUSH_MODE --no-traffic --quiet
+          gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            > "${RUNNER_TEMP}/push-recovered-service.json"
+          gcloud run revisions describe "${SERVICE_NAME}-${tag}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            > "${RUNNER_TEMP}/push-recovery-revision.json"
+          jq -e --arg image "${ROLLBACK_IMAGE}" --arg serving "${ROLLBACK_REVISION}" \
+            --arg floor "${PUSH_MIN_INSTANCES}" --arg ceiling "${PUSH_MAX_INSTANCES}" \
+            --slurpfile prior "${RUNNER_TEMP}/push-rollback-revision.json" \
+            --slurpfile recovered "${RUNNER_TEMP}/push-recovery-revision.json" '
+              def shape: del(.containers[0].image) |
+                .containers[0].env = ((.containers[0].env // []) |
+                  map(select(.name != "ORCA_PUSH_MODE")) | sort_by(.name));
+              .spec.template.spec.containers[0].image == $image and
+              all(.spec.template.spec.containers[0].env[]?; .name != "ORCA_PUSH_MODE") and
+              $recovered[0].spec.containers[0].image == $image and
+              all($recovered[0].spec.containers[0].env[]?; .name != "ORCA_PUSH_MODE") and
+              ($recovered[0].spec | shape) == ($prior[0].spec | shape) and
+              .spec.template.metadata.annotations["autoscaling.knative.dev/maxScale"] == $ceiling and
+              (.spec.template.metadata.annotations["autoscaling.knative.dev/minScale"] | tonumber) >= ($floor | tonumber) and
+              ([.status.traffic[] | select((.percent // 0) > 0)] |
+                length == 1 and .[0].revisionName == $serving and .[0].percent == 100)
+            ' "${RUNNER_TEMP}/push-recovered-service.json" > /dev/null
+          echo "TEMPLATE_RESTORED=true" >> "${GITHUB_ENV}"
+          echo 'Known-good image and normal mode restored; previous revision still serves HTTP.' \
+            >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Promote and verify the known-good recovery revision
+        if: ${{ always() && env.TEMPLATE_RESTORED == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(jq -er --arg tag "${RECOVERY_TAG}" \
+            '.status.traffic[] | select(.tag == $tag) | .url' "${RUNNER_TEMP}/push-recovered-service.json")"
+          [[ "${url}" =~ ^https://[^/]+$ ]]
+          curl --fail --silent --show-error --max-time 10 "${url}/ready" | jq -e '.ok == true'
+          curl --fail --silent --show-error --max-time 10 "${url}/health" \
+            | jq -e '.ok == true and .deliveryProtocol == 2 and .mode == "active"'
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --to-revisions "${TEMPLATE_RECOVERY_REVISION}=100" --quiet
+          serving="$(gcloud run services describe "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json \
+            | jq -er '[.status.traffic[] | select((.percent // 0) > 0)] |
+              if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end')"
+          test "${serving}" = "${TEMPLATE_RECOVERY_REVISION}"
+          curl --fail --silent --show-error --max-time 10 "${PUSH_ORIGIN}/ready" | jq -e '.ok == true'
+          curl --fail --silent --show-error --max-time 10 "${PUSH_ORIGIN}/health" \
+            | jq -e '.ok == true and .deliveryProtocol == 2 and .mode == "active"'
+          echo "RECOVERY_VERIFIED=true" >> "${GITHUB_ENV}"
+          echo "Recovery revision ${TEMPLATE_RECOVERY_REVISION} now serves the known-good image." \
+            >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Delete the rejected candidate revision
+        if: ${{ always() && env.RECOVERY_VERIFIED == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -z "${CANDIDATE_REVISION:-}"; then
+            echo "CANDIDATE_DELETED=true" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+          if test -n "${CANDIDATE_TAG:-}"; then
+            gcloud run services update-traffic "${SERVICE_NAME}" \
+              --project "${GCP_PROJECT_ID}" \
+              --region "${GCP_REGION}" \
+              --remove-tags "${CANDIDATE_TAG}" \
+              --quiet
+            echo "CANDIDATE_TAG=" >> "${GITHUB_ENV}"
+          fi
+          existing="$(gcloud run revisions list --service "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" \
+            --filter "metadata.name=${CANDIDATE_REVISION}" --format='value(metadata.name)')"
+          if test -n "${existing}"; then
+            test "${existing}" = "${CANDIDATE_REVISION}"
+            gcloud run revisions delete "${CANDIDATE_REVISION}" \
+              --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --quiet
+          fi
+          echo "CANDIDATE_DELETED=true" >> "${GITHUB_ENV}"
+          echo "candidate revision ${CANDIDATE_REVISION} is absent"
+
+      # Public checks commit the serving revision; cleanup failures must not roll it back.
+      - name: Retire previous consumers after public checks
+        if: ${{ always() && (env.ROLLOUT_VERIFIED == 'true' || (env.RECOVERY_VERIFIED == 'true' && env.CANDIDATE_DELETED == 'true')) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          serving="${CANDIDATE_REVISION}"
+          if test "${RECOVERY_VERIFIED:-false}" = true; then
+            serving="${TEMPLATE_RECOVERY_REVISION}"
+          fi
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --clear-tags --quiet
+          revisions="$(gcloud run revisions list --service "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format='value(metadata.name)')"
+          while IFS= read -r revision; do
+            test -n "${revision}" || continue
+            test "${revision}" != "${serving}" || continue
+            case "${revision}" in
+              "${ROLLBACK_REVISION}"|"${VALIDATION_REVISION}"|"${CANDIDATE_REVISION}") ;;
+              *) echo "Unexpected revision ${revision}; manual retirement required." >&2; exit 1 ;;
+            esac
+            gcloud run revisions delete "${revision}" \
+              --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --quiet
+          done <<< "${revisions}"
+          echo "CANDIDATE_TAG=" >> "${GITHUB_ENV}"
+          echo 'Obsolete revision resources retired; verify actual SQL session drain operationally.' \
+            >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Drop the candidate traffic tag
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CANDIDATE_TAG:-}" || exit 0
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --remove-tags "${CANDIDATE_TAG}" \
+            --quiet

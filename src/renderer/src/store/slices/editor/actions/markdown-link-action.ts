@@ -6,6 +6,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
@@ -81,13 +82,15 @@ export function createMarkdownLinkAction(
       if (target.kind === 'file') {
         const { line, column } = target
         if (target.relativePath === undefined) {
-          if (isLocalPathOpenBlocked(sourceSettings, { connectionId: sourceConnectionId })) {
+          if (
+            isLocalPathOpenBlocked(
+              getLinkSourceLocalOpenOwner(initialState, sourceOwner, ctx.worktreeId)
+            )
+          ) {
             // Why: a file:// link outside the worktree is client-local; remote runtime/SSH editors must not treat server paths as client paths.
             showLocalPathOpenBlockedToast()
             return
           }
-          // Why: markdown file:// links need the same user-gesture authorization terminal links get, so external paths (e.g. /tmp screenshots) can open in Orca.
-          await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
         } else {
           let stats: { isDirectory: boolean }
           try {

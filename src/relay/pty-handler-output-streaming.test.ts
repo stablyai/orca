@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
+import { _resetPtyOwnerHostColorsForTest } from '../shared/pty-owner-color-query-colors'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -35,8 +39,29 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 import { PtyHandler } from './pty-handler'
 import { RelayDispatcher } from './dispatcher'
 import { encodeJsonRpcFrame } from './protocol'
-import { beginPtyHandlerTest, endPtyHandlerTest } from './pty-handler-test-harness'
+import type { RelayPtySourcePublication } from './relay-pty-source-publication'
+import {
+  beginPtyHandlerTest,
+  createTestPtyHandler,
+  endPtyHandlerTest,
+  testPtyId
+} from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
+
+type PendingFlowState = {
+  pendingOutputByPty: Map<string, { data: string }[]>
+  pendingProducerBytesByPty: Map<string, number>
+}
+
+function pendingFlowState(handler: PtyHandler): PendingFlowState {
+  return handler as unknown as PendingFlowState
+}
+
+function chargedPendingBytes(data: string): number {
+  return Math.max(Buffer.byteLength(data, 'utf8'), 2 * data.length) + 128
+}
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -84,7 +109,7 @@ describe('PtyHandler', () => {
         writableHighWaterMark: () => 4 * 1024 * 1024
       }
     )
-    const boundedHandler = new PtyHandler(boundedDispatcher)
+    const boundedHandler = new PtyHandler(boundedDispatcher, undefined, 'bounded-test-mint-epoch')
     try {
       boundedDispatcher.feed(
         encodeJsonRpcFrame({ jsonrpc: '2.0', id: 1, method: 'pty.spawn', params: {} }, 1, 0)
@@ -125,7 +150,38 @@ describe('PtyHandler', () => {
     dataCallback!('hello world')
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
     vi.advanceTimersByTime(8)
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'hello world' })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: 'hello world' })
+  })
+
+  it('publishes Freebuff host status without charging synthetic OSC bytes to the PTY', async () => {
+    let onData: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        onData = callback
+      })
+    })
+    await dispatcher.callRequest('pty.spawn', { launchAgent: 'freebuff', cols: 120, rows: 40 })
+    const raw = readFileSync(
+      join(import.meta.dirname, '../main/runtime/__fixtures__/freebuff-trust.txt'),
+      'utf8'
+    )
+    onData!(raw)
+    vi.advanceTimersByTime(8)
+    // The capture opens with Freebuff's OSC 10/11 probes, which the relay answers and strips.
+    expect(dispatcher.notify).toHaveBeenCalledWith(
+      'pty.data',
+      expect.objectContaining({
+        id: PTY_1,
+        data: expect.stringContaining('"state":"blocked"'),
+        seq: raw.length,
+        transformed: true
+      })
+    )
+    dispatcher.notify.mockClear()
+    onData!('more output')
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: 'more output' })
   })
 
   it('consumes capable startup queries before relay replay and fanout', async () => {
@@ -153,16 +209,16 @@ describe('PtyHandler', () => {
 
     expect(term.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: '',
       rawLength: query.length,
       seq: query.length,
       transformed: true
     })
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'prompt' })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: 'prompt' })
     await expect(
       dispatcher.callRequest('pty.attach', {
-        id: 'pty-1',
+        id: PTY_1,
         suppressReplayNotification: true
       })
     ).resolves.toEqual({ replay: 'prompt', incarnationId: expect.any(String) })
@@ -184,7 +240,7 @@ describe('PtyHandler', () => {
       tryNotifyPtyExit: vi.fn(() => true),
       legacyRetentionBelowLowWater: true
     })
-    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler = createTestPtyHandler(dispatcher)
     let dataCallback: ((data: string) => void) | undefined
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -210,13 +266,13 @@ describe('PtyHandler', () => {
     expect(tryNotifyPtyData).toHaveBeenCalledTimes(3)
     expect(admitted).toEqual([
       {
-        id: 'pty-1',
+        id: PTY_1,
         data: '',
         rawLength: query.length,
         seq: query.length,
         transformed: true
       },
-      { id: 'pty-1', data: 'fresh' }
+      { id: PTY_1, data: 'fresh' }
     ])
   })
 
@@ -250,7 +306,7 @@ describe('PtyHandler', () => {
           Math.min(maxChars, data.length, limit ?? data.length)
         )
       })
-      handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+      handler = createTestPtyHandler(dispatcher)
       dataCallback = undefined
       mockPtySpawn.mockReturnValue({
         ...mockPtyInstance,
@@ -278,7 +334,7 @@ describe('PtyHandler', () => {
       expect(admitted.map((frame) => frame.data).join('')).toBe('a'.repeat(20_000) + 'b'.repeat(10))
       expect((admitted[0].data as string).length).toBe(5_000)
       // Why: remainder frames must not leak transformed/rawLength/seq keys.
-      expect(admitted[1]).toStrictEqual({ id: 'pty-1', data: expect.any(String) })
+      expect(admitted[1]).toStrictEqual({ id: PTY_1, data: expect.any(String) })
     })
 
     it('keeps a tail appended after a failed flush under constant capacity', async () => {
@@ -331,13 +387,13 @@ describe('PtyHandler', () => {
       await vi.runAllTimersAsync()
 
       expect(admitted).toEqual([
-        { id: 'pty-1', data: '', rawLength: 7, seq: 7, transformed: true },
-        { id: 'pty-1', data: '', rawLength: 7, seq: 14, transformed: true }
+        { id: PTY_1, data: '', rawLength: 7, seq: 7, transformed: true },
+        { id: PTY_1, data: '', rawLength: 7, seq: 14, transformed: true }
       ])
     })
   })
 
-  it('leaves startup queries untouched for an unsupported relay capability version', async () => {
+  it('ignores an intent from another ingress version and answers from the default theme', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     try {
@@ -362,8 +418,8 @@ describe('PtyHandler', () => {
       dataCallback!(query)
       vi.advanceTimersByTime(8)
 
-      expect(term.write).not.toHaveBeenCalled()
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+      expect(term.write).toHaveBeenCalledWith('\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
+      expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -371,7 +427,7 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('consumes a color query at a native Windows SSH relay owner', async () => {
+  it('answers a color query at a native Windows SSH relay owner', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -389,9 +445,9 @@ describe('PtyHandler', () => {
       dataCallback!('\x1b]10;?\x07')
       vi.advanceTimersByTime(8)
 
-      expect(term.write).not.toHaveBeenCalled()
+      expect(term.write).toHaveBeenCalledWith('\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+        id: PTY_1,
         data: '',
         rawLength: '\x1b]10;?\x07'.length,
         seq: '\x1b]10;?\x07'.length,
@@ -404,33 +460,45 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('forwards color queries from a POSIX SSH relay owner', async () => {
+  it('answers a POSIX SSH relay query from the latest relay-wide colours', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     try {
       let dataCallback: ((data: string) => void) | undefined
-      mockPtySpawn.mockReturnValue({
+      const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
           dataCallback = cb
         }),
         onExit: vi.fn()
-      })
+      }
+      mockPtySpawn.mockReturnValue(term)
       await dispatcher.callRequest('pty.spawn', { shellOverride: '/bin/bash' })
-      const query = '\x1b]10;?\x07'
+      const query = '\x1b]11;?\x07'
 
+      dispatcher.callNotification('pty.setColorQueryReplyColors', {
+        colors: { foreground: '#000000', background: '#123456' }
+      })
+      dataCallback!(query)
+      // A malformed push keeps the previous colours rather than blanking them.
+      dispatcher.callNotification('pty.setColorQueryReplyColors', { colors: { background: 7 } })
       dataCallback!(query)
       vi.advanceTimersByTime(8)
 
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+      expect(term.write.mock.calls).toEqual([
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\'],
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\']
+      ])
+      expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
     } finally {
+      _resetPtyOwnerHostColorsForTest()
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
     }
   })
 
-  it('keeps renderer color replies for a Windows SSH relay that owns WSL', async () => {
+  it('answers a Windows SSH relay query for a WSL shell at the owner too', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -447,17 +515,15 @@ describe('PtyHandler', () => {
         shellOverride: 'wsl.exe',
         terminalWindowsWslDistro: 'Ubuntu'
       })
-      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
 
       dataCallback!('\x1b]11;?\x07')
       vi.advanceTimersByTime(8)
-      dispatcher.callNotification('pty.data', { id: 'pty-1', data: reply })
 
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-        id: 'pty-1',
+      expect(term.write).toHaveBeenCalledWith('\x1b]11;rgb:2828/2c2c/3434\x1b\\')
+      expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', {
+        id: PTY_1,
         data: '\x1b]11;?\x07'
       })
-      expect(term.write).toHaveBeenCalledWith(reply)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -482,9 +548,116 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: 'hello world'
     })
+  })
+
+  it('tracks exact pending producer bytes through coalescing and sliced drains', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        dataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    const first = '界'.repeat(16_380)
+    const second = `${'界'.repeat(10)}tail`
+    dataCallback!(first)
+    dataCallback!(second)
+
+    const flow = pendingFlowState(handler)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes(first + second))
+
+    vi.advanceTimersByTime(8)
+    const remaining = `${'界'.repeat(6)}tail`
+    expect(flow.pendingOutputByPty.get(PTY_1)?.[0]?.data).toBe(remaining)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes(remaining))
+
+    vi.advanceTimersByTime(1)
+    expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
+  })
+
+  it('drops the pending producer counter with attach replay and disposal', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        dataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    dataCallback!('replayed output')
+    const flow = pendingFlowState(handler)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(true)
+    await dispatcher.callRequest('pty.attach', {
+      id: PTY_1,
+      suppressReplayNotification: true
+    })
+    expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
+
+    Object.assign(dispatcher, { tryNotifyPtyData: vi.fn(() => false) })
+    dataCallback!('blocked output')
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(true)
+    await handler.dispose({ waitForPhysicalExit: false })
+    expect(flow.pendingOutputByPty.size).toBe(0)
+    expect(flow.pendingProducerBytesByPty.size).toBe(0)
+  })
+
+  it('tracks each negotiated source entry without rescanning the queue', async () => {
+    let sourceDataCallback: ((data: string) => void) | undefined
+    const pause = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pause,
+      onData: vi.fn((callback: (data: string) => void) => {
+        sourceDataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    const publish = vi.fn(() => false)
+    handler.setSourcePublication({
+      accepts: () => true,
+      publish,
+      onCreditAvailable: () => {},
+      exitPublicationSettled: () => false,
+      sealAndPublishExit: () => false,
+      publishExitAfterRetire: () => null,
+      waitForPendingSend: async () => true,
+      activate: () => false,
+      receivingActivation: () => undefined,
+      getDebugSnapshot: () => ({}),
+      dispose: () => {}
+    } as unknown as RelayPtySourcePublication)
+
+    const entryCount = 2_000
+    for (let index = 0; index < entryCount; index += 1) {
+      sourceDataCallback!('x')
+    }
+
+    const flow = pendingFlowState(handler)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(entryCount * chargedPendingBytes('x'))
+    expect(pause).toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(8)
+    expect(publish).toHaveBeenCalledTimes(1)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(entryCount * chargedPendingBytes('x'))
+
+    publish.mockReturnValue(true)
+    handler.handleSourcePublicationCapacity(PTY_1)
+    await vi.runAllTimersAsync()
+
+    expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
   })
 
   it('sends recent-input redraw output immediately', async () => {
@@ -498,13 +671,13 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    dispatcher.callNotification('pty.data', { id: 'pty-1', data: 'a' })
+    dispatcher.callNotification('pty.data', { id: PTY_1, data: 'a' })
     dispatcher.notify.mockClear()
 
     dataCallback!('\x1b[20;2Hredraw')
 
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: '\x1b[20;2Hredraw'
     })
     vi.advanceTimersByTime(8)
@@ -528,15 +701,50 @@ describe('PtyHandler', () => {
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).toHaveBeenCalledTimes(1)
     expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: firstChunk
     })
 
     vi.advanceTimersByTime(1)
     expect(dispatcher.notify).toHaveBeenCalledTimes(2)
     expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: 'tail'
+    })
+  })
+
+  it('does not split a bounded slice inside an open DEC 2026 frame', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    // A frame that closes just before the 16KB boundary, then a second frame
+    // that straddles it. Cutting at the raw boundary would strand the second
+    // frame's \x1b[?2026l, and xterm paints nothing while the latch is open.
+    const open = '\x1b[?2026h'
+    const close = '\x1b[?2026l'
+    const firstFrame = `${open}${'x'.repeat(16 * 1024 - 2 * open.length - close.length)}${close}`
+    const secondFrame = `${open}${'y'.repeat(64)}${close}`
+    dataCallback!(`${firstFrame}${secondFrame}`)
+
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(1)
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
+      id: PTY_1,
+      data: firstFrame
+    })
+
+    vi.advanceTimersByTime(1)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(2)
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.data', {
+      id: PTY_1,
+      data: secondFrame
     })
   })
 
@@ -550,7 +758,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    dispatcher.callNotification('pty.data', { id: 'pty-1', data: 'ls\n' })
+    dispatcher.callNotification('pty.data', { id: PTY_1, data: 'ls\n' })
     expect(mockWrite).toHaveBeenCalledWith('ls\n')
   })
 
@@ -564,7 +772,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    dispatcher.callNotification('pty.resize', { id: 'pty-1', cols: 120, rows: 40 })
+    dispatcher.callNotification('pty.resize', { id: PTY_1, cols: 120, rows: 40 })
     expect(mockResize).toHaveBeenCalledWith(120, 40)
   })
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SkillScanRoot } from './skill-discovery-sources'
 import { buildWslSkillDiscoveryCommand, parseWslSkillDiscoveryOutput } from './skill-discovery-wsl'
 
@@ -72,12 +72,9 @@ describe('WSL skill discovery', () => {
   })
 
   it('builds a distro-side scan for enumeration, reads, and canonical identity', () => {
-    const command = buildWslSkillDiscoveryCommand([
+    const script = buildWslSkillDiscoveryCommand([
       { ...repoRoot, path: "/work/alice's project/.agents/skills" }
     ])
-    const encoded = /printf %s '([^']+)'/.exec(command)?.[1]
-    expect(encoded).toBeTruthy()
-    const script = Buffer.from(encoded!, 'base64').toString('utf8')
 
     expect(script).toContain('find -L "$root_path"')
     expect(script).toContain('realpath -- "$skill_file"')
@@ -85,9 +82,117 @@ describe('WSL skill discovery', () => {
     expect(script).toContain(`'/work/alice'\\''s project/.agents/skills'`)
   })
 
+  it('filters requested names before reading skill payloads', () => {
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['Orchestration', 'computer-use'])
+
+    expect(script).toContain("'orchestration'|'computer-use') return 0")
+    expect(script).toContain('local normalized_name=${1,,}')
+    expect(script).toContain('metadata_name_known=0')
+    expect(script).toContain('IFS= read -r -n "$remaining" line || read_status=$?')
+    expect(script).toContain('[ "$line_length" -ge "$remaining" ] && return')
+    expect(script).toContain('[[ "$candidate_name" =~ $non_ascii_pattern ]] && continue')
+    expect(script).toContain("line=${line#$'\\xEF\\xBB\\xBF'}")
+    expect(script).toContain('if [ "$metadata_name_known" -eq 1 ]; then')
+    expect(script).toContain('done < "$1"')
+    expect(script).not.toContain("awk '")
+    expect(script).not.toContain("tr '[:upper:]'")
+    expect(script.indexOf('matches_requested_name "$metadata_name" || continue')).toBeLessThan(
+      script.indexOf('encoded_markdown=$(head')
+    )
+  })
+
+  it('filters classified source kinds while parsing', () => {
+    const markdown = Buffer.from('---\nname: Bundled\n---\n').toString('base64')
+    const output = [
+      record('R', '0', '1'),
+      record(
+        'S',
+        '0',
+        '/home/alice/.codex/skills/.system/bundled/SKILL.md',
+        '/home/alice/.codex/skills/.system/bundled/SKILL.md',
+        '1700000000',
+        markdown
+      )
+    ].join('')
+
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, ['home']).skills).toEqual([])
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, []).skills).toHaveLength(1)
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, [], ['   ']).skills).toHaveLength(1)
+  })
+
+  it('keeps ASCII prefiltering for mixed-locale requested names', () => {
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['orchestration', 'hébergement'])
+
+    expect(script).toContain("'orchestration') return 0")
+    expect(script).not.toContain('hébergement) return 0')
+    expect(script).toContain('is_ascii_name "$directory_name"')
+  })
+
+  it('uses the TypeScript summary parser for uncertain WSL name candidates', () => {
+    const blockName = Buffer.from('\uFEFF---\nname: >-\n  Agent\n  Orchestration\n---\n').toString(
+      'base64'
+    )
+    const headingName = Buffer.from('# Computer Use\n\nUse the computer.\n').toString('base64')
+    const output = [
+      record('R', '0', '1'),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '1700000000',
+        blockName
+      ),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '1700000000',
+        headingName
+      )
+    ].join('')
+
+    expect(
+      parseWslSkillDiscoveryOutput(
+        output,
+        [homeRoot],
+        42,
+        ['home'],
+        ['agent orchestration', 'computer use']
+      ).skills.map((skill) => skill.name)
+    ).toEqual(['Agent Orchestration', 'Computer Use'])
+  })
+
   it('rejects malformed host responses instead of reporting an empty scan', () => {
     expect(() => parseWslSkillDiscoveryOutput(record('S', '9'), [homeRoot])).toThrow(
       'unknown source'
     )
   })
+})
+
+it('reuses one source collator while preserving locale, lexical numbers, and stable ties', () => {
+  const labels = Array.from(
+    { length: 200 },
+    (_, index) =>
+      ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul'][index % 7]
+  )
+  const roots = labels.map((label, index) => ({ ...homeRoot, id: String(index), label }))
+  const expected = [...roots].sort((a, b) =>
+    // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+    a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+  )
+  const NativeCollator = Intl.Collator
+  const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
+    return new NativeCollator(locales, options)
+  })
+  const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+  try {
+    const result = parseWslSkillDiscoveryOutput('', roots, 42)
+    expect(result.sources.map((source) => source.id)).toEqual(expected.map((root) => root.id))
+    expect(construct).toHaveBeenCalledExactlyOnceWith(undefined, { sensitivity: 'base' })
+    expect(localeCompare).not.toHaveBeenCalled()
+  } finally {
+    vi.restoreAllMocks()
+  }
 })

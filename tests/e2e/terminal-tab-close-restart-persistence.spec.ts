@@ -11,6 +11,7 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { worktreeRowSurface } from './worktree-row-locators'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import type {
@@ -136,8 +137,19 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     const secondLaunch = await session.launch()
     secondApp = secondLaunch.app
     await waitForSessionReady(secondLaunch.page)
-    const restoredWorktreeId = await attachRepoAndOpenTerminal(secondLaunch.page, repoPath)
-    expect(restoredWorktreeId).toBe(worktreeId)
+    // Activation deliberately creates a fresh terminal; observe passive hydration first.
+    await expect
+      .poll(() =>
+        secondLaunch.page.evaluate(
+          (id) =>
+            window.__store
+              ?.getState()
+              .allWorktrees()
+              .some((worktree) => worktree.id === id),
+          worktreeId
+        )
+      )
+      .toBe(true)
 
     // Why: wait past initial worktree effects so this checks resurrection, not
     // only the first hydrated frame before default-tab logic has run.
@@ -149,6 +161,18 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
       worktree: `id:${worktreeId}`
     })
     expect(afterRestart.result.terminals).toEqual([])
+
+    // Why: the tombstone only binds passive hydration. Clicking the sidebar row is the
+    // user asking for the workspace back, so explicit activation must re-seed a fresh
+    // terminal instead of leaving the blank tab bar that regressed in #14590.
+    await worktreeRowSurface(secondLaunch.page, worktreeId).click()
+    await expect
+      .poll(() => getWorktreeTabs(secondLaunch.page, worktreeId), {
+        message: 'Explicit sidebar activation did not re-seed a terminal tab'
+      })
+      .toHaveLength(1)
+    const reseededTabs = await getWorktreeTabs(secondLaunch.page, worktreeId)
+    expect(reseededTabs[0]?.id).not.toBe(closedTabId)
   } finally {
     if (firstApp) {
       await session.close(firstApp)

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as filesystemAuth from './filesystem-auth'
+import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import {
   removeWorktreeLinkedPathsMock,
   findExistingWorktreeSymlinkPathsMock,
@@ -50,6 +52,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -101,6 +106,8 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
+    vi.spyOn(filesystemAuth, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
+    vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
   })
 
   it('fails dirty non-force deletes before PTY teardown', async () => {
@@ -136,6 +143,8 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
+    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 
   it('propagates a timed-out removal preflight before watcher teardown', async () => {
@@ -197,6 +206,8 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
+    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 
   it('rechecks a local Git lock after the archive hook before teardown', async () => {

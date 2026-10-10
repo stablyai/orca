@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/headless'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
@@ -58,7 +59,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"old","agentType":"codex"}\x07after\x1b]0;Remote title\x07\x07'
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07')
+    expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07', {
+      carriesNormalBuffer: true
+    })
     await vi.waitFor(() =>
       expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
     )
@@ -88,10 +91,83 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"old","agentType":"codex"}\x07after'
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('beforeafter')
+    expect(onReplayData).toHaveBeenCalledWith('beforeafter', { carriesNormalBuffer: true })
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
+  })
+
+  // Why: a push buffered during a cancelled shutdown is the same folded image and must
+  // keep its flag when the rollback replays it.
+  it('flags a pushed snapshot replayed after a cancelled shutdown', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { unregisterPtyDataHandlers, restorePtyDataHandlersAfterFailedShutdown } =
+      await import('./pty-shutdown-data-suspension')
+    const onReplayData = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    await transport.connect({ url: '', callbacks: { onReplayData } })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+    const ptyId = transport.getPtyId()
+    expect(ptyId).toBeTruthy()
+    const shutdown = unregisterPtyDataHandlers([ptyId ?? ''])
+    emitSnapshot(streamId, 'buffered image')
+    expect(onReplayData).not.toHaveBeenCalled()
+    restorePtyDataHandlersAfterFailedShutdown(shutdown)
+
+    await vi.waitFor(() =>
+      expect(onReplayData).toHaveBeenCalledWith('buffered image', { carriesNormalBuffer: true })
+    )
+  })
+
+  it('paints a nonempty lossy initial snapshot once before resuming live output', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const terminal = new Terminal({ cols: 80, rows: 24 })
+    let xtermWrites = 0
+    const write = (data: string): void => {
+      xtermWrites += 1
+      terminal.write(data)
+    }
+    const onReplayData = vi.fn(write)
+    const onData = vi.fn(write)
+    const onConnect = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+
+    await transport.connect({ url: '', callbacks: { onReplayData, onData, onConnect } })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotStart,
+      encodeTerminalStreamJson({ kind: 'scrollback', cols: 80, rows: 24, seq: 41, truncated: true })
+    )
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotChunk,
+      encodeTerminalStreamText('AUTHORITATIVE_INITIAL_MARKER')
+    )
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+    const liveOutput = 'LIVE_AFTER_INITIAL'
+    const liveSeq = 41 + liveOutput.length
+    emitOutput(streamId, liveOutput, liveSeq)
+
+    expect(onReplayData).toHaveBeenCalledOnce()
+    expect(onReplayData).toHaveBeenCalledWith(
+      'AUTHORITATIVE_INITIAL_MARKER',
+      // The host's grid rides the snapshot so the pane replays it there.
+      expect.objectContaining({ snapshotCols: 80, snapshotRows: 24 })
+    )
+    expect(onConnect).toHaveBeenCalledOnce()
+    expect(onData).toHaveBeenCalledWith(liveOutput, expect.objectContaining({ seq: liveSeq }))
+    await vi.waitFor(() => {
+      const rendered = terminal.buffer.active.getLine(0)?.translateToString(true) ?? ''
+      expect({ rendered, xtermWrites }).toEqual({
+        rendered: 'AUTHORITATIVE_INITIAL_MARKERLIVE_AFTER_INITIAL',
+        xtermWrites: 2
+      })
+    })
+    terminal.dispose()
   })
 
   it('resolves explicit binary snapshot requests without replaying into xterm', async () => {
@@ -107,7 +183,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     const { streamId } = latestSubscribePayload()
     emitSnapshot(streamId, 'initial')
-    expect(onReplayData).toHaveBeenCalledWith('initial')
+    expect(onReplayData).toHaveBeenCalledWith('initial', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
 
     const snapshotPromise = transport.serializeBuffer?.({ scrollbackRows: 5000 })
@@ -147,7 +223,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       cols: 132,
       rows: 43,
       seq: 17,
-      source: 'headless'
+      source: 'headless',
+      carriesNormalBuffer: true
     })
     expect(onReplayData).toHaveBeenCalledTimes(1)
     expect(onData).not.toHaveBeenCalledWith('requested snapshot', expect.anything())
@@ -204,7 +281,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeUndefined()
 
     emitSnapshot(streamId, 'initial replay')
-    expect(onReplayData).toHaveBeenCalledWith('initial replay')
+    expect(onReplayData).toHaveBeenCalledWith('initial replay', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
 
     await vi.waitFor(() =>
@@ -238,7 +315,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       cols: 100,
       rows: 20,
       seq: undefined,
-      source: undefined
+      source: undefined,
+      carriesNormalBuffer: true
     })
     expect(onReplayData).toHaveBeenCalledTimes(1)
   })

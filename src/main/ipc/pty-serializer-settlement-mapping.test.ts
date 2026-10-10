@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import { spawnMock, openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type * as WslManagedCliModule from '../cli/wsl-managed-cli'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_SESSION_EXPIRED_ERROR
@@ -46,6 +48,13 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+const managedWslCliDir = vi.hoisted(() =>
+  vi.fn((): string | null => 'C:\\orca-user-data\\wsl-managed-cli\\hash')
+)
+vi.mock('../cli/wsl-managed-cli', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslManagedCliModule>()),
+  getManagedWslCliDir: managedWslCliDir
+}))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
@@ -108,9 +117,11 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -121,13 +132,14 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
 
     try {
-      setPtyOwnership(appPtyId, connectionId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(connectionId))
       registerPtyHandlers(
         mainWindow as never,
         runtime as never,
@@ -211,11 +223,13 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(() => {
         throw new Error('disk full')
       }),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
 
     try {
@@ -244,7 +258,10 @@ describe('registerPtyHandlers', () => {
         })
       ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
 
-      expect(remoteShutdown).toHaveBeenCalledWith(appPtyId, { immediate: true })
+      expect(remoteShutdown).toHaveBeenCalledWith(appPtyId, {
+        immediate: true,
+        expectedIncarnationId: incarnationId
+      })
       expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
       expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()
       expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)
@@ -408,6 +425,7 @@ describe('registerPtyHandlers', () => {
     const destroyedListeners: (() => void)[] = []
     const sender = {
       id: 42,
+      isDestroyed: () => false,
       once: vi.fn((event: string, listener: () => void) => {
         if (event === 'destroyed') {
           destroyedListeners.push(listener)
@@ -421,6 +439,20 @@ describe('registerPtyHandlers', () => {
     expect(destroyedListeners).toHaveLength(1)
     destroyedListeners[0]()
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+  })
+  it('does not retain a serializer declaration from an already-destroyed renderer', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const paneKey = makePaneKey('tab-dead', '77777777-7777-4777-8777-777777777777')
+    const sender = {
+      id: 43,
+      isDestroyed: () => true,
+      once: vi.fn()
+    }
+
+    await handlers.get('pty:declarePendingPaneSerializer')!({ sender }, { paneKey })
+
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+    expect(sender.once).not.toHaveBeenCalled()
   })
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
@@ -436,12 +468,13 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
-      env: { ORCA_TERMINAL_HANDLE: 'term_untrusted' }
+      env: { ORCA_TERMINAL_HANDLE: 'term_untrusted', ORCA_WSL_CLI_DIR: 'C:\\stale' }
     })
 
     const spawnCall = spawnMock.mock.calls.at(-1)!
     const env = spawnCall[2].env as Record<string, string>
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_trusted')
+    expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
     expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
   })
   it('forwards the trusted Orca terminal handle into managed WSL terminals', async () => {
@@ -478,15 +511,17 @@ describe('registerPtyHandlers', () => {
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
     expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
+    expect(env.ORCA_WSL_CLI_DIR).toBe('C:\\orca-user-data\\wsl-managed-cli\\hash')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_USER_DATA_PATH/p',
         'ORCA_CLI_COMMAND/u',
+        'ORCA_WSL_CLI_DIR/p',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
         // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
-        'ORCA_OMP_STATUS_EXTENSION/p',
+        'ORCA_OMP_STATUS_EXTENSION/u',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])
     )
@@ -494,7 +529,8 @@ describe('registerPtyHandlers', () => {
       expect.arrayContaining(['ORCA_OMP_SOURCE_AGENT_DIR/p'])
     )
   })
-  it('forces managed ORCA_USER_DATA_PATH for WSL spawns even when the caller provides a stale root', async () => {
+  it('forces managed WSL env over stale caller values, even when CLI setup fails', async () => {
+    managedWslCliDir.mockReturnValueOnce(null)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -515,7 +551,8 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         shellOverride: 'wsl.exe',
         env: {
-          ORCA_USER_DATA_PATH: '/tmp/stale-orca-user-data'
+          ORCA_USER_DATA_PATH: '/tmp/stale-orca-user-data',
+          ORCA_WSL_CLI_DIR: '/tmp/stale-wsl-cli'
         }
       })
     } finally {
@@ -528,5 +565,6 @@ describe('registerPtyHandlers', () => {
     const env = spawnCall[2].env as Record<string, string>
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+    expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
   })
 })

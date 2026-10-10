@@ -7,20 +7,21 @@ import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
-import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { useTabAgent } from './use-tab-agent'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const initialAppState = useAppStore.getInitialState()
 const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-let latestAgent: TuiAgent | null | undefined
+let latestAgent: TerminalAgent | null | undefined
 let root: Root | null = null
 const identityScenarios: [
   string,
-  { isRemote: boolean; title?: string; siblingHookAgent?: TuiAgent }
+  { isRemote: boolean; title?: string; siblingHookAgent?: TerminalAgent }
 ][] = [
   ['live local', { isRemote: false }],
   ['inactive local split', { isRemote: false, siblingHookAgent: 'claude' }],

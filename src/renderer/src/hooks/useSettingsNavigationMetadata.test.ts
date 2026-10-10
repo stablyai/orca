@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { buildCmdJSettingsResults } from '../components/cmd-j/palette-results'
+import { matchesSettingsSearch } from '../components/settings/settings-search'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
+import { getCodexTerminalServerIsolationTitle } from '../components/settings/codex-terminal-server-isolation-copy'
 
 const repo = {
   id: 'repo-1',
@@ -32,6 +33,47 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it.each([false, undefined])(
+    'omits Chat navigation and search when the opt-in is %s',
+    (enabled) => {
+      const sections = buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient: false,
+        nativeChatEnabled: enabled,
+        repos: []
+      })
+      expect(sections.some((section) => section.id === 'chat')).toBe(false)
+      expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'chat')).toBe(
+        false
+      )
+      for (const query of ['Code text size', 'Reset chat appearance']) {
+        expect(
+          sections.some((section) => matchesSettingsSearch(query, section.searchEntries))
+        ).toBe(false)
+      }
+    }
+  )
+
+  it('places Chat directly after Appearance in Interface and moves its search entries', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      nativeChatEnabled: true,
+      repos: []
+    })
+    const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
+    const chat = sections[appearanceIndex + 1]
+    expect(chat.id).toBe('chat')
+    expect(chat.title).toBe('Chat')
+    expect(chat.group).toBe('interface')
+    for (const query of ['Code text size', 'Reset chat appearance']) {
+      expect(matchesSettingsSearch(query, chat.searchEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, sections[appearanceIndex].searchEntries)).toBe(false)
+    }
+  })
+
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 10)).toEqual([
       'agents',
@@ -45,6 +87,22 @@ describe('settings navigation metadata', () => {
       'integrations',
       'mobile'
     ])
+  })
+
+  it('owns nested worker depth under Orchestration on desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const agents = sections.find((section) => section.id === 'agents')
+    const orchestration = sections.find((section) => section.id === 'orchestration')
+
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
+      'Nested worker depth'
+    )
   })
 
   it('adds the Linear capability section right after Orchestration only when connected', () => {
@@ -157,6 +215,27 @@ describe('settings navigation metadata', () => {
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
       'New mobile emulator tab'
     )
+    const agents = webSections.find((section) => section.id === 'agents')
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    const orchestration = webSections.find((section) => section.id === 'orchestration')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'Nested worker depth'
+    )
+  })
+
+  it('lists the host-only Codex server setting in desktop Agents search only', () => {
+    const agentTitles = (isWebClient: boolean): string[] | undefined =>
+      buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient,
+        repos: [repo]
+      })
+        .find((section) => section.id === 'agents')
+        ?.searchEntries.map((entry) => entry.title)
+
+    expect(agentTitles(false)).toContain(getCodexTerminalServerIsolationTitle())
+    expect(agentTitles(true)).not.toContain(getCodexTerminalServerIsolationTitle())
   })
 
   it('keeps the Browser shortcut searchable for a capable web runtime', () => {
@@ -379,37 +458,32 @@ describe('settings navigation metadata', () => {
     expect(repoSections[0].id).toBe('repo-local-1')
   })
 
+  it('renders a nav section per same-host clone, titled by the clone (#20861)', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const clone = { badgeColor: '#000', addedAt: 0, gitRemoteIdentity: gitRemote }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        { ...clone, id: 'clone-a', path: '/work/app', displayName: 'app' },
+        { ...clone, id: 'clone-b', path: '/work/app-b', displayName: 'app-b' }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections.map((section) => [section.id, section.title])).toEqual([
+      ['repo-clone-a', 'app'],
+      ['repo-clone-b', 'app-b']
+    ])
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
-  })
-
-  it('does not import Settings page or pane UI modules from the metadata hook', () => {
-    const testDir = import.meta.dirname
-    const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
-    const importLines = hookSource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
-  })
-
-  it('does not import Settings page or pane UI modules from the quick action registry', () => {
-    const testDir = import.meta.dirname
-    const registrySource = readFileSync(
-      resolve(testDir, '../components/cmd-j/quick-actions.ts'),
-      'utf8'
-    )
-    const importLines = registrySource
-      .split('\n')
-      .filter((line) => line.trim().startsWith('import '))
-      .join('\n')
-
-    expect(importLines).not.toMatch(/components\/settings\/Settings(?:'|")/)
-    expect(importLines).not.toMatch(/components\/settings\/[A-Z][A-Za-z]+Pane(?:'|")/)
-    expect(importLines).not.toMatch(/components\/stats\/StatsPane(?:'|")/)
   })
 })

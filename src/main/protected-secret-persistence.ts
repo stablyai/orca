@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../shared/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
   opencodeSessionCookie: 'settings.opencodeSessionCookie',
@@ -18,6 +18,7 @@ export type ProtectedSecretDecryption = {
 export type ProtectedSecretRetentionUpdate = {
   slot: string
   blob: string | null
+  epoch: symbol
 }
 
 export type LegacyPlaintextValidator = (value: string) => boolean
@@ -33,10 +34,29 @@ type ProtectedSecretEncryption = {
 export class ProtectedSecretPersistence {
   private readonly retainedBlobs = new Map<string, string>()
   private readonly sealedSlots = new Set<string>()
+  private readonly pendingEncryption = new Set<string>()
+  private readonly retentionEpochs = new Map<string, symbol>()
+
+  hasPendingEncryption(): boolean {
+    return this.pendingEncryption.size > 0
+  }
 
   removeRetainedBlob(slot: string): void {
+    this.retentionEpochs.delete(slot)
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
+    this.pendingEncryption.delete(slot)
+  }
+
+  /** Parks ciphertext without allowing an earlier pending write to replace it. */
+  retainSealed(slot: string, blob: string): void {
+    this.removeRetainedBlob(slot)
+    this.retainedBlobs.set(slot, blob)
+    this.sealedSlots.add(slot)
+  }
+
+  sealedBlob(slot: string): string | null {
+    return this.sealedSlots.has(slot) ? (this.retainedBlobs.get(slot) ?? null) : null
   }
 
   isSealed(slot: string, value: string): boolean {
@@ -45,6 +65,12 @@ export class ProtectedSecretPersistence {
 
   commitRetentionUpdates(updates: readonly ProtectedSecretRetentionUpdate[]): void {
     for (const update of updates) {
+      // A delayed save must not overwrite a newer secret decision.
+      if (this.retentionEpochs.get(update.slot) !== update.epoch) {
+        continue
+      }
+      this.retentionEpochs.delete(update.slot)
+      this.pendingEncryption.delete(update.slot)
       if (update.blob === null) {
         this.removeRetainedBlob(update.slot)
       } else {
@@ -55,11 +81,21 @@ export class ProtectedSecretPersistence {
   }
 
   encrypt(slot: string, plaintext: string): ProtectedSecretEncryption {
+    this.retentionEpochs.delete(slot)
     const retained = this.retainedBlobs.get(slot) ?? ''
     if (!plaintext && !retained) {
-      return { blob: '', degraded: false }
+      return {
+        blob: '',
+        degraded: false,
+        ...(this.pendingEncryption.has(slot)
+          ? { retentionUpdate: this.prepareRetentionUpdate(slot, null) }
+          : {})
+      }
     }
     if (!this.encryptionAvailable()) {
+      if (!this.isSealed(slot, plaintext) && (plaintext || !this.sealedSlots.has(slot))) {
+        this.pendingEncryption.add(slot)
+      }
       return {
         blob: retained,
         degraded: true,
@@ -73,17 +109,18 @@ export class ProtectedSecretPersistence {
       return {
         blob: '',
         degraded: false,
-        retentionUpdate: { slot, blob: null }
+        retentionUpdate: this.prepareRetentionUpdate(slot, null)
       }
     }
     try {
-      const blob = safeStorage.encryptString(plaintext).toString('base64')
+      const blob = getSecretStore().encryptString(plaintext).toString('base64')
       return {
         blob,
         degraded: false,
-        retentionUpdate: { slot, blob }
+        retentionUpdate: this.prepareRetentionUpdate(slot, blob)
       }
     } catch (err) {
+      this.pendingEncryption.add(slot)
       console.error('[persistence] Encryption failed; retaining the prior protected value:', err)
       return { blob: retained, degraded: true }
     }
@@ -98,6 +135,7 @@ export class ProtectedSecretPersistence {
     ciphertext: string,
     isLegacyPlaintext?: LegacyPlaintextValidator
   ): ProtectedSecretDecryption {
+    this.retentionEpochs.delete(slot)
     if (!ciphertext) {
       this.removeRetainedBlob(slot)
       return { plaintext: '', status: 'decrypted' }
@@ -109,7 +147,7 @@ export class ProtectedSecretPersistence {
     }
     try {
       const decrypted = {
-        plaintext: safeStorage.decryptString(Buffer.from(ciphertext, 'base64')),
+        plaintext: getSecretStore().decryptString(Buffer.from(ciphertext, 'base64')),
         status: 'decrypted' as const
       }
       this.sealedSlots.delete(slot)
@@ -117,22 +155,36 @@ export class ProtectedSecretPersistence {
     } catch {
       if (isLegacyPlaintext?.(ciphertext)) {
         this.sealedSlots.delete(slot)
-        console.warn('[persistence] safeStorage decryption failed; accepting legacy plaintext.')
+        console.warn('[persistence] secret decryption failed; accepting legacy plaintext.')
         return { plaintext: ciphertext, status: 'failed' }
       }
       this.sealedSlots.add(slot)
       console.warn(
-        '[persistence] safeStorage decryption failed; retaining the protected value without exposing it.'
+        '[persistence] secret decryption failed; retaining the protected value without exposing it.'
       )
       return { plaintext: '', status: 'failed' }
     }
   }
 
+  private prepareRetentionUpdate(
+    slot: string,
+    blob: string | null
+  ): ProtectedSecretRetentionUpdate {
+    const epoch = Symbol()
+    this.retentionEpochs.set(slot, epoch)
+    return { slot, blob, epoch }
+  }
+
   private encryptionAvailable(): boolean {
+    // Why getSecretStore() sits outside the try: an uninstalled store is a startup bug,
+    // not a keyring failure. Swallowing it would degrade to an empty blob and report
+    // 'unavailable' — the silent-wrong-state outcome the port throws to prevent. Only
+    // the backend probe itself may fail softly.
+    const store = getSecretStore()
     try {
-      return safeStorage.isEncryptionAvailable()
+      return store.isEncryptionAvailable()
     } catch (err) {
-      console.warn('[persistence] safeStorage availability check failed:', err)
+      console.warn('[persistence] secret store availability check failed:', err)
       return false
     }
   }

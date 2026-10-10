@@ -14,7 +14,10 @@ export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
     useState: <T>(initial: T | (() => T)) => {
       const value = typeof initial === 'function' ? (initial as () => T)() : initial
       return [value, vi.fn()] as const
-    }
+    },
+    // Why: module-level external stores (client-hosted browser rows) read through this; without a
+    // stub the real hook looks for a dispatcher these headless renders never install.
+    useSyncExternalStore: <T>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot()
   }
 }
 
@@ -40,6 +43,21 @@ export function stubTabStripDragScroll(): Record<string, unknown> {
       onDragScrollEndEnter: vi.fn(),
       onDragScrollLeave: vi.fn()
     })
+  }
+}
+
+// Tooltip primitives render to inert descriptors so the probe never invokes a
+// hook-using provider/trigger under the headless React stub.
+export function stubTooltip(): Record<string, unknown> {
+  const passthrough = (type: string) =>
+    function TooltipPrimitiveStub(props: { children?: unknown }) {
+      return { type, props }
+    }
+  return {
+    TooltipProvider: passthrough('TooltipProvider'),
+    Tooltip: passthrough('Tooltip'),
+    TooltipTrigger: passthrough('TooltipTrigger'),
+    TooltipContent: passthrough('TooltipContent')
   }
 }
 

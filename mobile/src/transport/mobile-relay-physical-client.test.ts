@@ -130,8 +130,59 @@ describe('mobile relay physical pairing client', () => {
     const status = client.sendRequest('status.get')
     socket.receive(JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }))
 
-    await expect(status).rejects.toEqual(new RelayOuterError(4404))
+    await expect(status).rejects.toEqual(new RelayOuterError(4404, true))
     expect(fakes.start).not.toHaveBeenCalled()
+  })
+
+  it('keeps the typed close code when transport error precedes close', async () => {
+    const socket = new FakeSocket()
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket
+    })
+    const status = client.sendRequest('status.get')
+    socket.onerror?.()
+    socket.onclose?.({ code: 4409 })
+
+    await expect(status).rejects.toEqual(new RelayOuterError(4409))
+  })
+
+  it('classifies an opaque close after transport error as 1006', async () => {
+    const socket = new FakeSocket()
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket
+    })
+    const status = client.sendRequest('status.get')
+    socket.onerror?.()
+    socket.onclose?.({ code: 0 })
+
+    await expect(status).rejects.toEqual(new RelayOuterError(1006))
+  })
+
+  it('settles after an error when the platform never emits close', async () => {
+    vi.useFakeTimers()
+    try {
+      const socket = new FakeSocket()
+      const client = connectMobileRelayForPairing({
+        relay,
+        deviceToken: 'device-token',
+        desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        createSocket: () => socket as unknown as WebSocket
+      })
+      const status = client.sendRequest('status.get')
+      const rejected = expect(status).rejects.toEqual(new RelayOuterError(1006))
+      socket.onerror?.()
+      await vi.advanceTimersByTimeAsync(250)
+
+      await rejected
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('narrates dial, outer auth, handshake and authentication without leaking the invite', async () => {
@@ -180,7 +231,7 @@ describe('mobile relay physical pairing client', () => {
     const status = client.sendRequest('status.get')
     socket.receive(JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }))
 
-    await expect(status).rejects.toEqual(new RelayOuterError(4404))
+    await expect(status).rejects.toEqual(new RelayOuterError(4404, true))
     expect(entries.at(-1)).toMatchObject({
       level: 'warn',
       message: 'Relay: pairing socket closed',

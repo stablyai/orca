@@ -79,7 +79,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
         toolInput: 'pnpm test',
         terminalHandle: 'term-future',
         receivedAt: 1_700_000_000_000,
-        stateStartedAt: 1_699_999_999_000
+        stateStartedAt: 1_699_999_999_000,
+        // A reload starts with no state history; the host's turn start must arrive with the row.
+        turnStartedAt: 1_699_999_990_000
       }
     ])
     await Promise.resolve()
@@ -87,6 +89,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     expect(setAgentStatus).not.toHaveBeenCalled()
 
+    const beforeHydration = { ...storeState }
     Object.assign(storeState, {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
@@ -99,7 +102,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-    subscribeListenerRef.current?.(storeState, storeState)
+    subscribeListenerRef.current?.(storeState, beforeHydration)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
@@ -112,7 +115,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         toolInput: 'pnpm test'
       }),
       'SSH Tab',
-      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      {
+        updatedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000,
+        turnStartedAt: 1_699_999_990_000
+      },
       expectWorktreeRouting('wt-1'),
       undefined
     )
@@ -192,6 +199,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     expect(setAgentStatus).not.toHaveBeenCalled()
 
+    const beforeHydration = { ...storeState }
     Object.assign(storeState, {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
@@ -204,7 +212,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-    subscribeListenerRef.current?.(storeState, storeState)
+    subscribeListenerRef.current?.(storeState, beforeHydration)
 
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,

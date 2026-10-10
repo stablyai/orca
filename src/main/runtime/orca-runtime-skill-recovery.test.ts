@@ -29,4 +29,13 @@ describe('managed skill startup recovery', () => {
     finishRecovery()
     await expect(listing).resolves.toEqual([])
   })
+
+  it('continues skill management after startup recovery fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      skillTransactionRecovery: Promise.reject(new Error('transient-recovery-failure'))
+    })
+
+    await expect(runtime.listManagedSkillInstalls()).resolves.toEqual([])
+  })
 })

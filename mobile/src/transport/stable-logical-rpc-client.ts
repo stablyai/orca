@@ -7,12 +7,17 @@ import {
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
+import type { RelayHostReachability } from './relay-host-reachability'
+import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
 export class LogicalClientCutoverError extends Error {
-  constructor() {
-    super('RPC interrupted by connection migration')
+  constructor(cause?: unknown) {
+    super('RPC interrupted by connection migration', { cause })
+    if (isRpcDeliveryUnknown(cause)) {
+      markRpcDeliveryUnknown(this)
+    }
   }
 }
 
@@ -33,10 +38,6 @@ type SubscriptionRecord = {
   cancelled: boolean
 }
 
-type PendingRequest = {
-  reject: (error: Error) => void
-}
-
 export type StableLogicalRpcClient = RpcClient & {
   migrateTo(
     session: RpcClient,
@@ -50,7 +51,16 @@ export type StableLogicalRpcClient = RpcClient & {
   getActivePath(): MobileConnectionPath
   // The path the user is waiting on while migration or scheduled recovery is active.
   getPendingPath(): MobileConnectionPath | null
-  setRecoveryPath(path: MobileConnectionPath | null): void
+  setRecoveryPath(path: MobileConnectionPath | null, attempt?: number): void
+  setRecoveryAttempt(attempt: number): void
+  // Latched when the desktop has repeatedly refused this device's relay credential.
+  setPairingRejected(rejected: boolean): void
+  isPairingRejected(): boolean
+  // Latched by the relay's own verdict: the cell's close reason outright, or
+  // consecutive identical dial failures naming the desktop's state.
+  setRelayHostReachability(reachability: RelayHostReachability): void
+  getRelayHostReachability(): RelayHostReachability
+  // Recovery attempts share this signal so status-only changes rerender.
   onConnectionPathChange(listener: () => void): () => void
   getGeneration(): number
 }
@@ -67,7 +77,6 @@ export function createStableLogicalRpcClient(
   let nextSubscriptionId = 0
   let activeStateUnsubscribe: (() => void) | null = null
   const subscriptions = new Map<number, SubscriptionRecord>()
-  const pendingRequests = new Set<PendingRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
   const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
@@ -85,24 +94,20 @@ export function createStableLogicalRpcClient(
       const requestGeneration = generation
       const session = activeSession
       return new Promise<RpcResponse>((resolve, reject) => {
-        const pending = { reject }
-        pendingRequests.add(pending)
         void session
           .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
           .then(
             (response) => {
-              pendingRequests.delete(pending)
-              if (closed) {
-                reject(new Error('Client closed'))
-              } else if (requestGeneration !== generation) {
-                reject(new LogicalClientCutoverError())
-              } else {
-                resolve(response)
-              }
+              // A correlated response is definitive even if close/cutover won the
+              // callback race after the physical promise had already settled.
+              resolve(response)
             },
             (error: unknown) => {
-              pendingRequests.delete(pending)
-              reject(error)
+              // Why: the retiring physical session settles this, so keep its error as the
+              // cause — it is the only evidence of whether the frame reached the wire.
+              reject(
+                requestGeneration !== generation ? new LogicalClientCutoverError(error) : error
+              )
             }
           )
       })
@@ -153,8 +158,9 @@ export function createStableLogicalRpcClient(
     },
 
     getState: () => state,
-    getReconnectAttempt: () => activeSession.getReconnectAttempt(),
+    getReconnectAttempt: () => connectionPath.reconnectAttempt(activeSession.getReconnectAttempt()),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
+    getLastInboundAt: () => activeSession.getLastInboundAt?.() ?? null,
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
@@ -256,15 +262,12 @@ export function createStableLogicalRpcClient(
       suspended = false
       previousStateUnsubscribe?.()
       bindActiveState(nextSession, nextGeneration)
-      for (const pending of pendingRequests) {
-        pending.reject(new LogicalClientCutoverError())
-      }
-      pendingRequests.clear()
       state = nextSession.getState()
       connectionPath.clearAfterConnected()
       for (const listener of stateListeners) {
         listener(state)
       }
+      // Only the physical sender knows whether a pending request reached the wire.
       previous.close()
     },
 
@@ -272,7 +275,13 @@ export function createStableLogicalRpcClient(
     // Why: a previous session that recovers mid-dial makes the pending path a lie —
     // once we're connected the user is no longer waiting on anything.
     getPendingPath: () => connectionPath.pending(),
-    setRecoveryPath: (path) => connectionPath.setRecovery(path),
+    setRecoveryPath: (path, attempt) => connectionPath.setRecovery(path, attempt),
+    setRecoveryAttempt: (attempt) => connectionPath.setRecoveryAttempt(attempt),
+    setPairingRejected: (rejected) => connectionPath.setPairingRejected(rejected),
+    isPairingRejected: () => connectionPath.isPairingRejected(),
+    setRelayHostReachability: (reachability) =>
+      connectionPath.setRelayHostReachability(reachability),
+    getRelayHostReachability: () => connectionPath.getRelayHostReachability(),
     onConnectionPathChange: (listener) => connectionPath.subscribe(listener),
     getGeneration: () => generation
   }

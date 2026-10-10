@@ -49,13 +49,13 @@ describe('GitHandler', () => {
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockRejectedValue(new Error('aborted'))
 
-      const result = await dispatcher.callRequest(
-        'git.listWorktrees',
-        { repoPath: tmpDir },
-        { isStale: () => false, signal: controller.signal }
-      )
-
-      expect(result).toEqual([])
+      await expect(
+        dispatcher.callRequest(
+          'git.listWorktrees',
+          { repoPath: tmpDir },
+          { isStale: () => false, signal: controller.signal }
+        )
+      ).rejects.toThrow('aborted')
       expect(gitSpy).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], tmpDir, {
         signal: controller.signal
       })
@@ -115,6 +115,35 @@ describe('GitHandler', () => {
           path: await fs.realpath(repoPath),
           isMainWorktree: true
         })
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      'leaves a bare main entry unchanged when scanned via its linked worktree',
+      async () => {
+        // A bare main entry IS the git-common-dir; only the repo path's own git dir shows it is linked.
+        const sourcePath = path.join(tmpDir, 'source')
+        mkdirSync(sourcePath)
+        gitInit(sourcePath)
+        writeFileSync(path.join(sourcePath, 'file.txt'), 'hello')
+        gitCommit(sourcePath, 'initial')
+        const barePath = path.join(tmpDir, 'project.git')
+        execFileSync('git', ['clone', '--bare', '--quiet', sourcePath, barePath], { stdio: 'pipe' })
+        const linkedWorktreePath = path.join(tmpDir, 'linked-wt')
+        execFileSync('git', ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'], {
+          cwd: barePath,
+          stdio: 'pipe'
+        })
+        const resolvedLinked = await fs.realpath(linkedWorktreePath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: resolvedLinked
+        })) as Record<string, unknown>[]
+
+        expect(result.find((worktree) => worktree.isMainWorktree === true)?.path).toBe(
+          await fs.realpath(barePath)
+        )
+        expect(result.filter((worktree) => worktree.path === resolvedLinked)).toHaveLength(1)
       }
     )
 

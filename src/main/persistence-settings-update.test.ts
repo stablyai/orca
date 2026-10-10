@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { GlobalSettings } from '../shared/global-settings-types'
-import type { PersistedState } from '../shared/persisted-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -14,6 +8,18 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { GlobalSettings } from '../shared/global-settings-types'
+import type { PersistedState } from '../shared/persisted-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+
+import {
+  getLocalWorktreeScanGeneration,
+  isLocalWorktreeScanGenerationCurrent
+} from './local-worktree-scan-generation'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -63,7 +69,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 9. Settings: get/update ────────────────────────────────────────
@@ -225,6 +232,21 @@ describe('Store', () => {
     store.updateSettings({ theme: 'dark' })
 
     expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('invalidates local worktree scans when the global Windows runtime changes', async () => {
+    writeDataFile({ repos: [makeRepo()] })
+    const store = await createStore()
+    const generation = getLocalWorktreeScanGeneration('r1')
+
+    store.updateSettings({ theme: 'dark' })
+    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(true)
+
+    store.updateSettings({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
   })
 
   it('migrates missing terminal scrollback rows to the row default and writes back rows only', async () => {
@@ -689,7 +711,7 @@ describe('Store', () => {
     }
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {
         'repo1::/worktree-a': { status: 'active' },
         'repo1::/worktree-b': { status: 'active' }

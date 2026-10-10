@@ -11,10 +11,6 @@ describe('SshGitProvider', () => {
     provider = new SshGitProvider('conn-1', mux as never)
   })
 
-  it('returns the connectionId', () => {
-    expect(provider.getConnectionId()).toBe('conn-1')
-  })
-
   it('getStatus sends git.status request', async () => {
     const statusResult = {
       entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
@@ -53,6 +49,18 @@ describe('SshGitProvider', () => {
       2,
       'git.status',
       { worktreePath: '/home/user/repo' },
+      { signal: expect.any(AbortSignal) }
+    )
+  })
+
+  it('getStatus forwards a false line-stats request', async () => {
+    mux.request.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await provider.getStatus('/home/user/repo', { includeLineStats: false })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.status',
+      { worktreePath: '/home/user/repo', includeLineStats: false },
       { signal: expect.any(AbortSignal) }
     )
   })
@@ -193,10 +201,13 @@ describe('SshGitProvider', () => {
     const compareResult = { summary: { ahead: 2, behind: 0 }, entries: [] }
     mux.request.mockResolvedValue(compareResult)
 
-    const result = await provider.getBranchCompare('/home/user/repo', 'main')
+    const result = await provider.getBranchCompare('/home/user/repo', 'main', {
+      admissionTier: 'background'
+    })
     expect(mux.request).toHaveBeenCalledWith('git.branchCompare', {
       worktreePath: '/home/user/repo',
-      baseRef: 'main'
+      baseRef: 'main',
+      admissionTier: 'background'
     })
     expect(result).toEqual(compareResult)
   })

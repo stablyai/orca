@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Activity } from 'lucide-react-native'
+import { Animated, StyleSheet, View } from 'react-native'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 
@@ -17,32 +19,27 @@ const STATUS_COLORS: Record<WorktreeStatus, string> = {
   inactive: 'rgba(115,115,115,0.4)'
 }
 
-export function AgentSpinner({ status }: { status: WorktreeStatus }) {
-  const spinValue = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    if (status === 'working') {
-      const animation = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true
-        })
-      )
-      animation.start()
-      return () => animation.stop()
-    }
-    spinValue.setValue(0)
-  }, [status, spinValue])
+export function AgentSpinner({
+  status,
+  workingMode
+}: {
+  status: WorktreeStatus
+  workingMode?: AgentWorkingMode
+}) {
+  const monitoring = status === 'working' && workingMode === 'monitoring'
+  const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
 
   const color = STATUS_COLORS[status] ?? STATUS_COLORS.inactive
 
+  if (monitoring) {
+    return (
+      <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
+        <Activity size={12} color={STATUS_COLORS.working} />
+      </View>
+    )
+  }
+
   if (status === 'working') {
-    const rotate = spinValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['0deg', '360deg']
-    })
     return (
       <View style={styles.wrapper}>
         <Animated.View style={[styles.spinner, { borderColor: color, transform: [{ rotate }] }]} />

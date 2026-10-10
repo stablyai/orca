@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  foldToolMessages,
-  pairToolBlocks,
-  splitNativeChatBlocks
-} from '../../../src/shared/native-chat-tool-fold'
+import { foldToolMessages, pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function msg(
@@ -13,18 +9,6 @@ function msg(
 ): NativeChatMessage {
   return { id, role, blocks, timestamp: 0, source: 'transcript' }
 }
-
-describe('splitNativeChatBlocks', () => {
-  it('separates prose from tool blocks', () => {
-    const { prose, tools } = splitNativeChatBlocks([
-      { type: 'text', text: 'hi' },
-      { type: 'tool-call', name: 'Bash', input: {} },
-      { type: 'tool-result', output: 'ok' }
-    ])
-    expect(prose.map((b) => b.type)).toEqual(['text'])
-    expect(tools.map((b) => b.type)).toEqual(['tool-call', 'tool-result'])
-  })
-})
 
 describe('pairToolBlocks', () => {
   it('pairs each call with the following result', () => {
@@ -125,10 +109,9 @@ describe('foldToolMessages', () => {
     expect(folded.map((m) => m.id)).toEqual(['a0', 'a2'])
   })
 
-  it('keeps a tool message standalone when no assistant precedes it', () => {
+  it('drops a tool message whose call is outside the loaded window', () => {
     const folded = foldToolMessages([msg('tool', [{ type: 'tool-result', output: 'x' }])])
-    expect(folded).toHaveLength(1)
-    expect(folded[0]!.role).toBe('tool')
+    expect(folded).toHaveLength(0)
   })
 
   it('does not merge across a user message', () => {
@@ -137,17 +120,18 @@ describe('foldToolMessages', () => {
       msg('user', [{ type: 'text', text: 'q' }], 'u'),
       msg('tool', [{ type: 'tool-result', output: 'r' }], 't')
     ])
-    expect(folded.map((m) => m.role)).toEqual(['assistant', 'user', 'tool'])
+    expect(folded.map((m) => m.role)).toEqual(['assistant', 'user'])
   })
 
   it('folds a long tool run without mutating the source assistant', () => {
     const assistant = msg('assistant', [{ type: 'text', text: 'working' }], 'a')
-    const tools = Array.from({ length: 1_000 }, (_unused, index) =>
+    const tools = Array.from({ length: 1_000 }, (_unused, index) => [
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: {} }], `c-${index}`),
       msg('tool', [{ type: 'tool-result', output: String(index) }], `t-${index}`)
-    )
+    ]).flat()
     const folded = foldToolMessages([assistant, ...tools])
 
-    expect(folded[0].blocks).toHaveLength(1_001)
+    expect(folded[0].blocks).toHaveLength(2_001)
     expect(assistant.blocks).toHaveLength(1)
   })
 })

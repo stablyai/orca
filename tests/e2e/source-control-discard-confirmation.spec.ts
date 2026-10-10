@@ -16,8 +16,11 @@ async function openSourceControl(page: Page): Promise<void> {
   await expect(page.getByPlaceholder(/Filter files/)).toBeVisible()
 }
 
-async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
-  return page.evaluate(async () => {
+async function seedUntrackedFile(
+  page: Page,
+  requestedFileName?: string
+): Promise<SeededUntrackedFile> {
+  return page.evaluate(async (requestedFileName) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -33,7 +36,7 @@ async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
     }
 
     const separator = worktree.path.includes('\\') ? '\\' : '/'
-    const fileName = `orca-discard-confirm-${Date.now()}.txt`
+    const fileName = requestedFileName ?? `orca-discard-confirm-${Date.now()}.txt`
     const relativePath = fileName
     await window.api.fs.writeFile({
       filePath: `${worktree.path}${separator}${relativePath}`,
@@ -50,7 +53,7 @@ async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
     return {
       fileName
     }
-  })
+  }, requestedFileName)
 }
 
 async function refreshGitStatus(page: Page): Promise<void> {
@@ -90,19 +93,65 @@ async function confirmPendingDelete(page: Page): Promise<void> {
   await confirmButton.click()
 }
 
+async function expectDeleteDialogLayout(page: Page, fileName: string): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: `Delete "${fileName}"?` })
+  await expect(dialog).toBeVisible()
+  await expect
+    .poll(
+      async () =>
+        dialog.evaluate((element) => {
+          const panel = element.getBoundingClientRect()
+          const title = element.querySelector<HTMLElement>('[data-slot="dialog-title"]')
+          const footer = element.querySelector<HTMLElement>('[data-slot="dialog-footer"]')
+          if (!title || !footer) {
+            return false
+          }
+          const titleRect = title.getBoundingClientRect()
+          const footerRect = footer.getBoundingClientRect()
+          const lineHeight = Number.parseFloat(getComputedStyle(title).lineHeight) || 16
+          const buttonsFit = [...footer.querySelectorAll<HTMLElement>('button')].every((button) => {
+            const rect = button.getBoundingClientRect()
+            return rect.left >= panel.left && rect.right <= panel.right
+          })
+          return (
+            titleRect.height > lineHeight * 1.5 &&
+            titleRect.left >= panel.left &&
+            titleRect.right <= panel.right &&
+            footerRect.left >= panel.left &&
+            footerRect.right <= panel.right &&
+            buttonsFit &&
+            element.scrollWidth <= element.clientWidth
+          )
+        }),
+      { timeout: 5_000, message: 'long delete-dialog title or footer escaped the panel' }
+    )
+    .toBe(true)
+}
+
 test.describe('Source Control discard confirmation', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
   })
 
-  test('deletes an untracked file without confirmation', async ({ orcaPage }) => {
-    const seededFile = await seedUntrackedFile(orcaPage)
+  test('keeps long untracked-file confirmation usable and deletes on confirm', async ({
+    orcaPage
+  }) => {
+    const seededFile = await seedUntrackedFile(
+      orcaPage,
+      `orca-discard-confirm-${'x'.repeat(96)}.txt`
+    )
     await openSourceControl(orcaPage)
 
     const row = orcaPage
       .locator('[data-testid="source-control-entry"]')
       .filter({ hasText: seededFile.fileName })
+    await expect(row).toBeVisible()
+
+    await deleteUntrackedFileFromRow(row)
+    await expectDeleteDialogLayout(orcaPage, seededFile.fileName)
+
+    await orcaPage.getByRole('button', { name: 'Cancel' }).click()
     await expect(row).toBeVisible()
 
     await deleteUntrackedFileFromRow(row)

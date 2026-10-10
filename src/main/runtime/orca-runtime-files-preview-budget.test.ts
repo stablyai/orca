@@ -27,16 +27,8 @@ vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
-  '../ipc/rg-availability',
-  async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
-)
-vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
-)
-vi.mock(
-  '../ipc/filesystem-search-git',
-  async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
@@ -228,6 +220,38 @@ describe('RuntimeFileCommands', () => {
       await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 128)).rejects.toThrow(
         'file_too_large'
       )
+    })
+
+    it('sends preview authority to the SSH execution host in one read', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const readDocPreviewFile = vi.fn().mockResolvedValue({ content: 'ok', isBinary: false })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ readDocPreviewFile } as never)
+
+      await expect(
+        commands.readDocPreviewFile('id:wt-1', 'docs/index.html', 'docs/index.html', 'docs', [
+          'assets'
+        ])
+      ).resolves.toEqual({ content: 'ok', isBinary: false })
+      expect(readDocPreviewFile).toHaveBeenCalledWith({
+        boundaryPath: '/repo',
+        entryPath: '/repo/docs/index.html',
+        implicitRootPath: '/repo/docs',
+        authorizedRootPaths: ['/repo/assets'],
+        targetPath: '/repo/docs/index.html',
+        maxTextBytes: 512 * 1024,
+        maxBinaryBytes: 10 * 1024 * 1024
+      })
+    })
+
+    it('fails closed when the SSH execution host lacks scoped preview reads', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({} as never)
+
+      await expect(
+        commands.readDocPreviewFile('id:wt-1', 'docs/index.html', 'docs/index.html', 'docs', [])
+      ).rejects.toThrow('newer SSH relay')
     })
   })
 })

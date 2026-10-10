@@ -41,6 +41,7 @@ const {
   mergePR: mergePRMock,
   setPRAutoMerge: setPRAutoMergeMock,
   updatePRState: updatePRStateMock,
+  markPRReadyForReview: markPRReadyForReviewMock,
   rerunPRChecks: rerunPRChecksMock,
   requestPRReviewers: requestPRReviewersMock,
   removePRReviewers: removePRReviewersMock
@@ -137,6 +138,15 @@ describe('registerGitHubHandlers', () => {
     )
     await handlers['gh:listLabels'](null, { repoPath: '/workspace/repo' })
     await handlers['gh:listAssignableUsers'](null, { repoPath: '/workspace/repo' })
+    const metadataRepo = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+    await handlers['gh:listLabels'](null, {
+      repoPath: '/workspace/repo',
+      ownerRepo: metadataRepo
+    })
+    await handlers['gh:listAssignableUsers'](null, {
+      repoPath: '/workspace/repo',
+      ownerRepo: metadataRepo
+    })
 
     expect(getPRForBranchMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -196,7 +206,8 @@ describe('registerGitHubHandlers', () => {
       7,
       { body: 'Updated' },
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(addIssueCommentMock).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -204,9 +215,24 @@ describe('registerGitHubHandlers', () => {
       'Comment',
       null,
       null,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(listLabelsMock).toHaveBeenCalledWith('/workspace/repo', undefined, null, localGitOptions)
+    expect(listLabelsMock).toHaveBeenLastCalledWith(
+      '/workspace/repo',
+      undefined,
+      null,
+      localGitOptions,
+      metadataRepo
+    )
+    expect(listAssignableUsersMock).toHaveBeenLastCalledWith(
+      '/workspace/repo',
+      undefined,
+      null,
+      localGitOptions,
+      metadataRepo
+    )
     expect(listAssignableUsersMock).toHaveBeenCalledWith(
       '/workspace/repo',
       undefined,
@@ -246,6 +272,7 @@ describe('registerGitHubHandlers', () => {
     mergePRMock.mockResolvedValue({ ok: true })
     setPRAutoMergeMock.mockResolvedValue({ ok: true })
     updatePRStateMock.mockResolvedValue({ ok: true })
+    markPRReadyForReviewMock.mockResolvedValue({ ok: true })
     rerunPRChecksMock.mockResolvedValue({ ok: true, count: 1 })
     requestPRReviewersMock.mockResolvedValue({ ok: true })
     removePRReviewersMock.mockResolvedValue({ ok: true })
@@ -378,6 +405,14 @@ describe('registerGitHubHandlers', () => {
         repoPath: '/workspace/repo',
         prNumber: 42,
         updates: { state: 'closed' },
+        prRepo
+      }
+    )
+    await handlers['gh:markPRReadyForReview'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
         prRepo
       }
     )
@@ -532,6 +567,13 @@ describe('registerGitHubHandlers', () => {
       '/workspace/repo',
       42,
       { state: 'closed' },
+      null,
+      prRepo,
+      localGitOptions
+    )
+    expect(markPRReadyForReviewMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
       null,
       prRepo,
       localGitOptions

@@ -1,8 +1,26 @@
 import type { Terminal } from '@xterm/xterm'
 import { isEditableTarget } from '@/lib/editable-target'
+import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import {
+  APP_MENU_SELECTION_ACTION_EVENT,
+  type AppMenuSelectionAction
+} from '@/lib/app-menu-selection-actions'
+import { copyTerminalSelection } from '@/components/terminal-pane/terminal-selection-copy'
+import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 
-type PreviewTerminalSelection = Pick<Terminal, 'getSelection' | 'selectAll'>
+type PreviewTerminalSelection = Pick<Terminal, 'getSelection' | 'selectAll' | 'clearSelection'>
 
+/**
+ * Routes Edit-menu and context-menu clipboard commands to the preview terminal.
+ *
+ * Listens to the renderer-wide ownership events, exactly like a real pane, and
+ * NOT to the raw ui:appMenuPaste / ui:appMenuSelectionAction IPC. The
+ * preventDefault() claim is load-bearing: without it the App-level handler
+ * falls back to the focused text control, which for a focused terminal is
+ * xterm's hidden .xterm-helper-textarea — the clipboard text lands there and
+ * never reaches the PTY. Leaving an event unclaimed is equally deliberate: the
+ * App handler then performs the native action for text controls.
+ */
 export function installPreviewTerminalAppMenuClipboard({
   container,
   getTerminal,
@@ -10,34 +28,45 @@ export function installPreviewTerminalAppMenuClipboard({
 }: {
   container: HTMLElement
   getTerminal: () => PreviewTerminalSelection | null
-  pasteClipboardText: (activeElementAtDispatch: Element | null, source: 'app-menu') => Promise<void>
+  pasteClipboardText: (
+    activeElementAtDispatch: Element | null,
+    source: PreviewTerminalPasteSource
+  ) => void
 }): () => void {
-  const offPaste = window.api.ui.onAppMenuPaste(() => {
+  const onAppMenuPaste = (event: Event): void => {
     const active = document.activeElement
-    if (active && container.contains(active)) {
-      void pasteClipboardText(active, 'app-menu')
+    if (!active || !container.contains(active)) {
+      return
     }
-  })
-  const offSelection = window.api.ui.onAppMenuSelectionAction((action) => {
+    event.preventDefault()
+    event.stopPropagation()
+    pasteClipboardText(active, 'app-menu')
+  }
+  const onAppMenuSelectionAction = (event: Event): void => {
     const active = document.activeElement
     const terminal = getTerminal()
     if (!active || !container.contains(active) || isEditableTarget(active) || !terminal) {
-      window.api.ui.performNativeSelectionAction(action)
       return
     }
+    const action = (event as CustomEvent<AppMenuSelectionAction>).detail
     if (action === 'select-all') {
+      event.preventDefault()
       terminal.selectAll()
       return
     }
-    const selection = terminal.getSelection()
-    if (selection) {
-      void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
-    } else {
-      window.api.ui.performNativeSelectionAction(action)
+    if (!terminal.getSelection()) {
+      return
     }
-  })
+    event.preventDefault()
+    void copyTerminalSelection({
+      terminal,
+      writeClipboardText: window.api.ui.writeTerminalClipboardText
+    }).catch(() => undefined)
+  }
+  window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+  window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
   return () => {
-    offPaste()
-    offSelection()
+    window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+    window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
   }
 }

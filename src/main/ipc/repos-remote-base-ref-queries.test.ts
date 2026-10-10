@@ -26,11 +26,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createRepoHandlerHarness } from './repos-remote-test-harness'
+import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../shared/repo-search-limits'
 
 const { handleMock, mockStore, mockGitProvider, prepareLocalWorktreeRootForRepoMock } = reposMocks
 
@@ -49,7 +51,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     // Reset exec so a newly added test doesn't inherit the previous test's exec mock.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('returns { defaultBaseRef, remoteCount: 0 } for folder-mode repos', async () => {
@@ -105,25 +107,20 @@ describe('repos:getBaseRefDefault envelope', () => {
       return Promise.reject(new Error(`unexpected exec call: ${argv.join(' ')}`))
     }
   }
-  const isSymbolicRef = (argv: string[]): boolean =>
-    argv[0] === 'symbolic-ref' && argv.includes('refs/remotes/origin/HEAD')
-  const isRevParseFor =
-    (ref: string) =>
-    (argv: string[]): boolean =>
-      argv[0] === 'rev-parse' && argv.includes(ref)
+  const isRefSnapshot = (argv: string[]): boolean =>
+    argv[0] === 'for-each-ref' && argv.includes('--format=%(refname)%00%(symref)')
   const isRemoteList = (argv: string[]): boolean => argv.length === 1 && argv[0] === 'remote'
 
   it('returns envelope over SSH relay for remote repos', async () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          matches: isSymbolicRef,
-          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
-        },
-        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
-        {
-          matches: isRevParseFor('refs/remotes/origin/main'),
-          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+          matches: isRefSnapshot,
+          respond: () =>
+            Promise.resolve({
+              stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n',
+              stderr: ''
+            })
         },
         {
           matches: isRemoteList,
@@ -152,13 +149,12 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          matches: isSymbolicRef,
-          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
-        },
-        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
-        {
-          matches: isRevParseFor('refs/remotes/origin/main'),
-          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+          matches: isRefSnapshot,
+          respond: () =>
+            Promise.resolve({
+              stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n',
+              stderr: ''
+            })
         },
         {
           matches: isRemoteList,
@@ -184,20 +180,12 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(0)
   })
 
-  it('falls back through probes over SSH when symbolic-ref fails', async () => {
+  it('uses the primary fallback over SSH when origin/HEAD is absent', async () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
-        // symbolic-ref rejects (no origin/HEAD on the remote)
-        { matches: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
-        // probe 1: refs/remotes/origin/main — rejects
         {
-          matches: isRevParseFor('refs/remotes/origin/main'),
-          respond: () => Promise.reject(new Error('missing'))
-        },
-        // probe 2: refs/remotes/origin/master — succeeds
-        {
-          matches: isRevParseFor('refs/remotes/origin/master'),
-          respond: () => Promise.resolve({ stdout: 'abc123\n', stderr: '' })
+          matches: isRefSnapshot,
+          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/master\0\n', stderr: '' })
         },
         {
           matches: isRemoteList,
@@ -218,7 +206,6 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: when symbolic-ref fails, the probe chain resolves origin/master, matching the local path.
     expect(result.defaultBaseRef).toBe('origin/master')
     expect(result.remoteCount).toBe(1)
   })
@@ -233,7 +220,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     mockStore.getRepo.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('returns [] for a folder-mode repo without invoking the relay', async () => {
@@ -281,7 +268,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv.some((arg: string) => arg.startsWith('--exclude=refs/remotes/'))).toBe(true)
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/**')
     expect(argv).toContain('refs/heads/**/**/**')
@@ -307,7 +294,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv.some((arg: string) => arg.startsWith('--exclude=refs/remotes/'))).toBe(true)
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/**')
     expect(argv).toContain('refs/heads/**/**/**')
@@ -333,6 +320,36 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
+  it('clamps oversized limits before building broad relay searches', async () => {
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+      }
+      return Promise.resolve({
+        stdout: 'refs/remotes/origin/main\0origin/main',
+        stderr: ''
+      })
+    })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: REPO_SEARCH_REFS_MAX_LIMIT + 1
+    })
+
+    expect(result).toEqual(['origin/main'])
+    const forEachRefCall = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(forEachRefCall?.[0]).toContain('--count=4000')
+  })
+
   it('retries without --exclude for older git on SSH hosts', async () => {
     const stdout = [
       'refs/remotes/origin/main\0origin/main',
@@ -342,7 +359,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       if (argv[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\n', stderr: '' })
       }
-      if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+      if (argv.some((arg) => arg.startsWith('--exclude=refs/remotes/'))) {
         return Promise.reject(
           Object.assign(new Error("unknown option `exclude'"), {
             stderr: "error: unknown option `exclude'"
@@ -375,10 +392,16 @@ describe('repos:searchBaseRefs SSH relay', () => {
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
     expect(forEachRefCalls).toHaveLength(3)
-    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
-    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[0][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(true)
+    expect(
+      (forEachRefCalls[1][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
     expect(forEachRefCalls[1][0]).toContain('--count=104')
-    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(
+      (forEachRefCalls[2][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))
+    ).toBe(false)
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {

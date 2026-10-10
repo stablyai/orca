@@ -1,6 +1,7 @@
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
@@ -9,7 +10,7 @@ import {
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'fr'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -53,6 +54,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_SPANISH) {
     return 'es'
+  }
+  if (language === UI_LANGUAGE_FRENCH) {
+    return 'fr'
   }
   return normalizeSupportedUiLocale(systemLocale)
 }

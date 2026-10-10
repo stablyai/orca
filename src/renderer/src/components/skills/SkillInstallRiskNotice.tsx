@@ -1,5 +1,6 @@
-import { Info } from 'lucide-react'
+import { Info, ShieldAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import type { SkillInstallRiskSummary } from './skill-package-install-risk'
 import { fileCountLabel } from './skill-display-labels'
 
@@ -43,9 +44,26 @@ export function SkillInstallRiskNotice({
       : translate('auto.components.skills.install.reviewInstructions', 'About this skill')
 
   return (
-    <section className="space-y-2 rounded-md border border-border p-3" role="note">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Info className="size-4" />
+    <section
+      className={cn(
+        'space-y-1.5 rounded-lg border p-3',
+        summary.requiresAcknowledgement
+          ? 'border-amber-500/30 bg-amber-500/5 text-foreground'
+          : 'border-border/50 bg-muted/20 text-muted-foreground'
+      )}
+      role="note"
+    >
+      <div
+        className={cn(
+          'flex items-center gap-2 text-xs font-medium',
+          summary.requiresAcknowledgement ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'
+        )}
+      >
+        {summary.requiresAcknowledgement ? (
+          <ShieldAlert className="size-4 shrink-0 text-amber-500" />
+        ) : (
+          <Info className="size-4 shrink-0 text-muted-foreground" />
+        )}
         {title}
       </div>
       {summary.requiresAcknowledgement ? (

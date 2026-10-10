@@ -8,10 +8,13 @@ import type {
   OrchestrationMailboxPointerDelivery,
   OrchestrationMessageWaiter
 } from './mailbox-pointer-delivery'
+import type { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 
 type NotificationCoordinatorDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   mailboxOwner: OrchestrationMailboxOwner
   pointerDelivery: OrchestrationMailboxPointerDelivery<TWaiter>
+  /** Sibling lane for workers that ARE a structured session; it has no PTY to type into. */
+  structuredPointerDelivery?: OrchestrationStructuredMailboxPointerDelivery<TWaiter>
   getDb: () => OrchestrationDb | null
   getLiveLeafForHandle: (handle: string) => OrchestrationMailboxLeaf
   getPaneKeyForHandle: (handle: string) => string | undefined
@@ -28,6 +31,9 @@ export class OrchestrationMailboxNotificationCoordinator<
   constructor(private readonly deps: NotificationCoordinatorDependencies<TWaiter>) {}
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
+    if (this.deps.structuredPointerDelivery?.deliverForHandle(handle, reservedTypes)) {
+      return
+    }
     this.deps.pointerDelivery.deliverForHandle(handle, reservedTypes)
   }
 

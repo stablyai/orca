@@ -14,15 +14,22 @@ import {
   getWorkspaceCleanupInactivityReasonsForWorkspace,
   isWorkspaceInactiveForCleanup
 } from './workspace-cleanup-candidate'
+import { getRepoOwnedWorktreeMeta, isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
+import {
+  readAllWorktreeMetaForHost,
+  readWorktreeMetaForHost
+} from '../persistence/host-qualified-worktree-meta'
 
 export function synthesizeDisconnectedSshCleanupCandidates(
   store: Store,
   repo: Repo,
   scannedAt: number,
+  repoOwnerCount: number,
   targetWorktreeIds?: ReadonlySet<string>,
   includeAllWorkspaces = false
 ): WorkspaceCleanupCandidate[] {
   const repoWorktreePrefix = `${repo.id}::`
+  const executionHostId = getRepoExecutionHostId(repo)
   if (targetWorktreeIds) {
     const candidates: WorkspaceCleanupCandidate[] = []
     // Why: targeted refreshes name their workspaces already; walking all
@@ -31,8 +38,12 @@ export function synthesizeDisconnectedSshCleanupCandidates(
       if (!worktreeId.startsWith(repoWorktreePrefix)) {
         continue
       }
-      const meta = store.getWorktreeMeta(worktreeId)
-      if (meta) {
+      const meta =
+        readWorktreeMetaForHost(store, worktreeId, executionHostId) ??
+        (typeof store.getWorktreeMetaForHost === 'function'
+          ? undefined
+          : store.getWorktreeMeta(worktreeId))
+      if (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount)) {
         candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
       }
     }
@@ -40,12 +51,12 @@ export function synthesizeDisconnectedSshCleanupCandidates(
   }
 
   const candidates: WorkspaceCleanupCandidate[] = []
-  const allMeta = store.getAllWorktreeMeta()
+  const allMeta = readAllWorktreeMetaForHost(store, executionHostId)
   for (const worktreeId in allMeta) {
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
-    const meta = allMeta[worktreeId]
+    const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
     if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }
@@ -72,8 +83,6 @@ function createDisconnectedSshCandidate(
     displayName: meta.displayName || basename(path),
     branch: basename(path),
     path,
-    tier: 'protected',
-    selectedByDefault: false,
     reasons,
     blockers: ['ssh-disconnected'],
     lastActivityAt: meta.lastActivityAt,

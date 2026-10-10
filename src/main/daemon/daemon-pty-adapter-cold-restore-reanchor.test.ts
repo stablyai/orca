@@ -1,9 +1,12 @@
+import './mock-descendant-sweep'
 /* Re-anchoring after a cold restore: aliveness probing, sticky restore cache, persistence. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DaemonPtyRouter } from './daemon-pty-router'
 import type { DaemonServer } from './daemon-server'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
 import {
@@ -13,6 +16,7 @@ import {
 } from './daemon-pty-adapter-test-harness'
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
+import type { TerminalSnapshot } from './types'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -217,6 +221,123 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(true)
     })
 
+    it('re-anchors and resumes history after attach-only adoption', async () => {
+      const sessionId = 'attach-only-history-adoption'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const firstData: string[] = []
+      first.onData(({ data }) => firstData.push(data))
+      await first.spawn({ cols: 80, rows: 24, cwd: '/home/user', sessionId })
+
+      lastSubprocess._simulateData('BASELINE-BEFORE-RESTART\r\n')
+      await waitFor(() => firstData.includes('BASELINE-BEFORE-RESTART\r\n'))
+      const firstInternals = first as unknown as {
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+      }
+      await firstInternals.checkpointSessions([sessionId])
+      expect(readFileSync(join(sessionDir, 'output.log')).includes('BASELINE-BEFORE-RESTART')).toBe(
+        true
+      )
+
+      await first.disconnectOnly()
+      expect(
+        JSON.parse(readFileSync(join(sessionDir, 'checkpoint.json'), 'utf8')).snapshotAnsi
+      ).toContain('BASELINE-BEFORE-RESTART')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const attachedData: string[] = []
+      historyAdapter.onData(({ data }) => attachedData.push(data))
+      await historyAdapter.attach(sessionId)
+      await historyAdapter.attach(sessionId)
+
+      const manager = historyAdapter.getHistoryManager()!
+      const managerInternals = manager as unknown as { writers: Map<string, unknown> }
+      expect(historyAdapter.getActiveSessionIds()).toEqual([sessionId])
+      expect(manager.hasWriter(sessionId)).toBe(true)
+      expect([...managerInternals.writers]).toHaveLength(1)
+
+      const attachedInternals = historyAdapter as unknown as {
+        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
+      }
+      expect(
+        JSON.parse(readFileSync(join(sessionDir, 'checkpoint.json'), 'utf8')).snapshotAnsi
+      ).toContain('BASELINE-BEFORE-RESTART')
+
+      lastSubprocess._simulateData('FIRST-AFTER-RESTART\r\n')
+      await waitFor(() => attachedData.includes('FIRST-AFTER-RESTART\r\n'))
+      await attachedInternals.checkpointSessions([sessionId])
+      expect(readFileSync(join(sessionDir, 'output.log')).includes('FIRST-AFTER-RESTART')).toBe(
+        true
+      )
+
+      lastSubprocess._simulateData('SECOND-AFTER-RESTART\r\n')
+      await waitFor(() => attachedData.includes('SECOND-AFTER-RESTART\r\n'))
+      await attachedInternals.checkpointSessions([sessionId])
+      const appendedLog = readFileSync(join(sessionDir, 'output.log'))
+      expect(appendedLog.includes('FIRST-AFTER-RESTART')).toBe(true)
+      expect(appendedLog.includes('SECOND-AFTER-RESTART')).toBe(true)
+
+      await historyAdapter.shutdown(sessionId, { immediate: true })
+      expect(historyAdapter.getActiveSessionIds()).toEqual([])
+      expect(manager.hasWriter(sessionId)).toBe(false)
+    })
+
+    it('does not route an exact incarnation that exits during attach history overlay', async () => {
+      const sessionId = 'attach-overlay-exit-race'
+      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const initial = await first.spawn({ cols: 80, rows: 24, sessionId })
+      await first.disconnectOnly()
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const overlayTarget = historyAdapter as unknown as {
+        overlayDurableRestoreSnapshot(
+          id: string,
+          snapshot: TerminalSnapshot
+        ): Promise<TerminalSnapshot>
+      }
+      const originalOverlay = overlayTarget.overlayDurableRestoreSnapshot.bind(historyAdapter)
+      let reportOverlayReady!: () => void
+      const overlayReady = new Promise<void>((resolve) => {
+        reportOverlayReady = resolve
+      })
+      let releaseOverlay!: () => void
+      const overlayRelease = new Promise<void>((resolve) => {
+        releaseOverlay = resolve
+      })
+      vi.spyOn(overlayTarget, 'overlayDurableRestoreSnapshot').mockImplementation(
+        async (id, snapshot) => {
+          const result = await originalOverlay(id, snapshot)
+          reportOverlayReady()
+          await overlayRelease
+          return result
+        }
+      )
+      const router = new DaemonPtyRouter({ current: historyAdapter, legacy: [] })
+      const exits: { id: string; incarnationId?: string }[] = []
+      router.onExit((event) => exits.push(event))
+
+      const spawning = router.spawn({ cols: 80, rows: 24, sessionId, attachOnly: true })
+      await overlayReady
+      lastSubprocess._simulateExit(0)
+      await waitFor(() => exits.some((event) => event.incarnationId === initial.incarnationId))
+      releaseOverlay()
+
+      const result = await spawning
+      expect(result).toMatchObject({
+        id: sessionId,
+        incarnationId: initial.incarnationId,
+        exitedBeforeSpawnReply: true,
+        isReattach: true
+      })
+      const routerInternals = router as unknown as {
+        sessionAdapters: Map<string, DaemonPtyAdapter>
+      }
+      expect(routerInternals.sessionAdapters.has(sessionId)).toBe(false)
+      expect(historyAdapter.getActiveSessionIds()).toEqual([])
+      expect(historyAdapter.getHistoryManager()!.hasWriter(sessionId)).toBe(false)
+      router.disposeRouterOnly()
+    })
+
     it('does not probe session aliveness when there is no restorable history', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const client = (
@@ -366,7 +487,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // Second call (StrictMode remount) should get cached data
       const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(second.coldRestore).toBeDefined()
-      expect(second.coldRestore!.scrollback).toBe('cached output')
+      expect(second.coldRestore!.scrollback).toBe(`cached output${PROCESS_BOUNDARY_GROUND}`)
 
       // After ack, cold restore should not be returned
       historyAdapter.ackColdRestore(sessionId)

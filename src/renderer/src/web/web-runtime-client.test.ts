@@ -12,11 +12,19 @@ import {
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../shared/agent-session-background-task-child-views-capability'
 
 const fakeSockets: FakeWebSocket[] = []
 
@@ -57,6 +65,34 @@ describe('WebRuntimeClient', () => {
     vi.unstubAllGlobals()
   })
 
+  it('closes a connecting child search socket immediately on abort and never starts after pre-abort', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const controller = new AbortController()
+    const pending = client.subscribe(
+      'files.search',
+      {},
+      { onResponse: vi.fn() },
+      { signal: controller.signal, timeoutMs: 15_000 }
+    )
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    const child = fakeSockets.at(-1)
+    expect(child?.readyState).toBe(FakeWebSocket.CONNECTING)
+    controller.abort()
+    await rejection
+    expect(child?.close).toHaveBeenCalledOnce()
+    const count = fakeSockets.length
+    await expect(
+      client.subscribe('files.search', {}, { onResponse: vi.fn() }, { signal: controller.signal })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fakeSockets).toHaveLength(count)
+    client.close()
+  })
+
   it('advertises explicit close intent support in encrypted authentication', async () => {
     const client = new WebRuntimeClient({
       v: 2,
@@ -84,10 +120,18 @@ describe('WebRuntimeClient', () => {
       type: 'e2ee_auth',
       deviceToken: 'token',
       clientCapabilities: [
+        AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+        AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
+        AGENT_SESSION_TURN_ITEM_CAPABILITY,
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+        SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+        SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
         AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+        WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
         WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+        WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
       ]
     })
 
@@ -656,7 +700,8 @@ describe('WebRuntimeClient', () => {
     vi.stubGlobal('WebSocket', WebSocket)
     const serverKeys = generateKeyPair()
     const frame = new Uint8Array([9, 8, 7])
-    const wss = new WebSocketServer({ port: 0 })
+    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     const sockets = new Set<WebSocket>()
     wss.on('connection', (socket) => {
       sockets.add(socket)

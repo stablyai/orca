@@ -84,7 +84,9 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: spendsSharedGitHubComQuotaMock
 }))
 
-import { getPRChecks, rerunPRChecks, _resetOwnerRepoCache } from './client'
+import { getPRChecks } from './client/check/get-pr-checks'
+import { rerunPRChecks } from './client/check/rerun-pr-checks'
+import { _resetOwnerRepoCache } from './gh-utils'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
@@ -208,6 +210,29 @@ function expectGraphQLRollupCall(callIndex = 1, noCache = false): void {
 }
 
 describe('getPRChecks', () => {
+  it('shares concurrent checks reads and honors explicit uncached refreshes', async () => {
+    vi.clearAllMocks()
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    acquireMock.mockResolvedValue(undefined)
+    const response = graphQLChecksResponse()
+    let finish: ((value: typeof response) => void) | undefined
+    ghExecFileAsyncMock.mockImplementation(
+      () =>
+        new Promise<typeof response>((resolve) => {
+          finish = resolve
+        })
+    )
+    const first = getPRChecks('/repo', 12)
+    const second = getPRChecks('/repo', 12)
+    await vi.waitFor(() => expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    finish?.(response)
+    await expect(Promise.all([first, second])).resolves.toEqual([[], []])
+    ghExecFileAsyncMock.mockResolvedValue(response)
+    await getPRChecks('/repo', 12, undefined, undefined, { noCache: true })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock.mock.calls[1][0]).not.toContain('--cache')
+  })
+
   beforeEach(() => {
     execFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockReset()
@@ -567,6 +592,74 @@ describe('getPRChecks', () => {
         host: 'github.com'
       }
     )
+  })
+  it('reports a resource-neutral not-found error when a workflow-run rerun 404s', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce(
+        graphQLChecksResponse({
+          contexts: [
+            graphQLCheckRun({
+              name: 'lint',
+              conclusion: 'FAILURE',
+              detailsUrl: 'https://github.com/acme/widgets/actions/runs/77/job/88',
+              workflowRunId: 77
+            })
+          ]
+        })
+      )
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh api'), {
+          stderr: 'gh: HTTP 404 Not Found (repos/acme/widgets/actions/runs/77/rerun-failed-jobs)',
+          stdout: ''
+        })
+      )
+
+    const result = await rerunPRChecks('/repo-root', 42, { failedOnly: true })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'GitHub resource to rerun was not found — it may have expired or been deleted.'
+    })
+  })
+
+  it('reports a resource-neutral not-found error when a standalone check-run rerequest 404s', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce(
+        graphQLChecksResponse({
+          contexts: [
+            {
+              __typename: 'CheckRun',
+              databaseId: 88,
+              name: 'external-ci',
+              status: 'COMPLETED',
+              conclusion: 'FAILURE',
+              detailsUrl: 'https://ci.example.com/builds/88',
+              url: 'https://ci.example.com/builds/88',
+              checkSuite: { databaseId: 1000, workflowRun: null }
+            }
+          ]
+        })
+      )
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh api'), {
+          stderr: 'gh: HTTP 404 Not Found (repos/acme/widgets/check-runs/88/rerequest)',
+          stdout: ''
+        })
+      )
+
+    const result = await rerunPRChecks('/repo-root', 42, { failedOnly: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', '-X', 'POST', 'repos/acme/widgets/check-runs/88/rerequest'],
+      expect.objectContaining({ cwd: '/repo-root' })
+    )
+    expect(result).toEqual({
+      ok: false,
+      error: 'GitHub resource to rerun was not found — it may have expired or been deleted.'
+    })
   })
 
   it('routes local WSL check retrieval and reruns through the selected distro', async () => {

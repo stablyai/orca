@@ -1,9 +1,10 @@
+import { closeTestStores, testState, createStore, makeRepo } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTerminalLeafId } from '../shared/stable-pane-id'
-import { testState, createStore, makeRepo } from './persistence-test-harness'
+
 import {
   TEST_LEAF_1,
   TEST_LEAF_2,
@@ -59,7 +60,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('drops legacy leaf-keyed records from mixed-version writes before binding preservation', async () => {
@@ -211,7 +213,9 @@ describe('Store', () => {
     expect(leafId).not.toBe(TEST_LEAF_2)
   })
 
-  it('does not restore cleared SSH bindings after a lease expired', async () => {
+  // An `expired` lease means reattach gave up, not that the remote shell died. Dropping the
+  // binding here left the pane unable to re-adopt a process that is still running.
+  it('restores a cleared SSH binding after a lease expired so the pane can reattach', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({
       targetId: 'ssh-1',
@@ -220,6 +224,79 @@ describe('Store', () => {
       tabId: 'tab1',
       leafId: TEST_LEAF_1,
       state: 'expired'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'remote-pty'
+    })
+  })
+
+  it('does not restore cleared SSH bindings after a lease was terminated', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'terminated'
     })
     store.setWorkspaceSession({
       activeRepoId: 'r1',

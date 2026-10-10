@@ -1,6 +1,13 @@
-import { defineMethod, type RpcMethod } from '../core'
-import { z } from 'zod'
-import { SkillDiscoveryTargetSchema } from '../../../../shared/skills'
+import { defineMethod } from '../core'
+import type { z } from 'zod'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
+import {
+  previewSkillDeleteRequest,
+  runSkillDeleteRequest,
+  type SkillDeleteRequestDependencies
+} from '../../../skills/skill-delete/request-service'
+import type { SkillDiscoveryTargetSchema } from '../../../../shared/skills'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
@@ -26,8 +33,15 @@ import {
   AgentSkillShareRequestSchema,
   AgentSkillSharingError
 } from '../../../../shared/agent-skill-sharing-contract'
+import {
+  SkillsCancelInstallParams,
+  SkillsDiscoverParams,
+  SkillsGetInstallProgressParams
+} from '../../../../shared/rpc-contract/skills-params'
 
-function resolveDiscoveryTarget(
+/** Exported so the delete plan's root rebuild resolves its target exactly the
+ *  way `skills.discover` resolved the scan's — including WSL. */
+export function resolveDiscoveryTarget(
   params: z.infer<typeof SkillDiscoveryTargetSchema>,
   runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>
 ) {
@@ -40,10 +54,21 @@ function resolveDiscoveryTarget(
   return resolveSkillDiscoveryTarget(target)
 }
 
-export const SKILL_METHODS: RpcMethod[] = [
+function skillDeleteDependencies(
+  runtime: Pick<OrcaRuntimeService, 'listRepos' | 'resolveSkillDiscoveryProviderRoots'>
+): SkillDeleteRequestDependencies {
+  return {
+    repos: () => runtime.listRepos(),
+    resolveProviderRootOverrides: (target) => runtime.resolveSkillDiscoveryProviderRoots(target),
+    userDataPath: getAppEnvironment().getPath('userData')
+  }
+}
+
+export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.discover',
-    params: SkillDiscoveryTargetSchema.default({}),
+    permission: 'workspace',
+    params: SkillsDiscoverParams,
     handler: async (params, { runtime }) => {
       // Why: the executing runtime owns WSL project preferences. Remote callers
       // send worktree identity only; trusting their projectRuntime absence
@@ -56,7 +81,30 @@ export const SKILL_METHODS: RpcMethod[] = [
     }
   }),
   defineMethod({
+    name: 'skills.previewDelete',
+    permission: 'workspace',
+    params: SkillDeleteRequestSchema,
+    handler: async (params, { runtime }) =>
+      previewSkillDeleteRequest(
+        params,
+        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        skillDeleteDependencies(runtime)
+      )
+  }),
+  defineMethod({
+    name: 'skills.delete',
+    permission: 'skills-admin',
+    params: SkillDeleteRequestSchema,
+    handler: async (params, { runtime }) =>
+      runSkillDeleteRequest(
+        params,
+        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        skillDeleteDependencies(runtime)
+      )
+  }),
+  defineMethod({
     name: 'skills.share',
+    permission: 'skills-admin',
     params: AgentSkillShareRequestSchema,
     handler: async (params, { runtime, signal, clientKind }) => {
       runtime.assertAgentSkillSharingAllowed()
@@ -82,6 +130,7 @@ export const SKILL_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'skills.install',
+    permission: 'skills-admin',
     params: SkillInstallRequestSchema,
     handler: async (params, { runtime, signal, clientCapabilities }) => {
       const result = await runtime.installSharedSkillRequest(params, signal)
@@ -101,20 +150,23 @@ export const SKILL_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'skills.installBundle',
+    permission: 'skills-admin',
     params: SkillBundleInstallRequestSchema,
     handler: (params, { runtime, signal }) =>
       runtime.installSharedSkillBundleRequest(params, signal)
   }),
   defineMethod({
     name: 'skills.cancelInstall',
-    params: z.object({ operationId: z.string().min(1).max(128) }).strict(),
+    permission: 'skills-admin',
+    params: SkillsCancelInstallParams,
     handler: (params, { runtime }) => ({
       cancelled: runtime.cancelSharedSkillInstall(params.operationId)
     })
   }),
   defineMethod({
     name: 'skills.getInstallProgress',
-    params: z.object({ operationId: z.string().min(1).max(128) }).strict(),
+    permission: 'workspace',
+    params: SkillsGetInstallProgressParams,
     handler: (params, { runtime }) => {
       const progress = runtime.getSharedSkillInstallProgress(params.operationId)
       return progress ? SkillBundleInstallProgressSchema.parse(progress) : null
@@ -122,36 +174,43 @@ export const SKILL_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'skills.previewInstall',
+    permission: 'workspace',
     params: SkillInstallPreviewRequestSchema,
     handler: (params, { runtime }) => runtime.previewSharedSkillInstallRequest(params)
   }),
   defineMethod({
     name: 'skills.removeInstall',
+    permission: 'skills-admin',
     params: SkillRemoveRequestSchema,
     handler: (params, { runtime }) => runtime.removeSharedSkillInstallRequest(params)
   }),
   defineMethod({
     name: 'skills.listManagedInstalls',
+    permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => runtime.listManagedSkillInstalls()
   }),
   defineMethod({
     name: 'skills.beginUpload',
+    permission: 'skills-admin',
     params: SkillUploadBeginRequestSchema,
     handler: (params, { runtime }) => runtime.beginSkillUpload(params)
   }),
   defineMethod({
     name: 'skills.uploadChunk',
+    permission: 'skills-admin',
     params: SkillUploadChunkRequestSchema,
     handler: (params, { runtime }) => runtime.appendSkillUploadChunk(params)
   }),
   defineMethod({
     name: 'skills.commitUpload',
+    permission: 'skills-admin',
     params: SkillUploadCommitRequestSchema,
     handler: (params, { runtime }) => runtime.commitSkillUpload(params.uploadId)
   }),
   defineMethod({
     name: 'skills.cancelUpload',
+    permission: 'skills-admin',
     params: SkillUploadCommitRequestSchema,
     handler: (params, { runtime }) => runtime.cancelSkillUpload(params.uploadId)
   })

@@ -70,6 +70,7 @@ export function useSourceControlCreateReviewComposer({
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     stackedCreationSupported: prStackedCreationSupported,
     repoDefaultBaseRef: prRepoDefaultBaseRef,
     baseQuery: prBaseQuery,
@@ -107,9 +108,7 @@ export function useSourceControlCreateReviewComposer({
       seed: activePullRequestGenerationRecord?.seed ?? null,
       seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
       onSeedRestored: handlePullRequestGenerationSeedRestored,
-      onGenerate: (fields, fieldRevisions, overrides) => {
-        void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
-      },
+      onGenerate: handleGeneratePullRequestFieldsForActive,
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
   })
@@ -202,6 +201,7 @@ export function useSourceControlCreateReviewComposer({
     prBaseSearchPending,
     prBody,
     prDraft,
+    prFieldsAreSeedPlaceholders,
     prGenerateDisabled,
     prGenerateDisabledReason,
     prGenerateError,

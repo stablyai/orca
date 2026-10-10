@@ -49,6 +49,33 @@ beforeEach(() => {
   mocks.toastError.mockReset()
 })
 
+describe('sidebar reveal actions', () => {
+  it('skip reveals while the activity view is showing instead of switching bodies', () => {
+    const store = createUIStore()
+    store.getState().setSidebarBody('agents')
+
+    store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+    store.getState().revealSidebarRow('repo:r1')
+
+    expect(store.getState().sidebarBody).toBe('agents')
+    expect(store.getState().pendingRevealWorktree).toBeNull()
+    expect(store.getState().pendingRevealSidebarRow).toBeNull()
+  })
+
+  it('reveal after an explicit switch to the workspace list', () => {
+    const store = createUIStore()
+    store.getState().setSidebarBody('agents')
+
+    store.getState().setSidebarBody('workspaces')
+    store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+    store.getState().revealSidebarRow('repo:r1')
+
+    expect(store.getState().sidebarBody).toBe('workspaces')
+    expect(store.getState().pendingRevealWorktree?.worktreeId).toBe('wt-1')
+    expect(store.getState().pendingRevealSidebarRow?.rowKey).toBe('repo:r1')
+  })
+})
+
 describe('createUISlice hydratePersistedUI', () => {
   it('defaults persisted right sidebar visibility to open', () => {
     expect(getDefaultUIState().rightSidebarOpen).toBe(true)
@@ -148,22 +175,11 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().activeView).toBe('terminal')
   })
 
-  it('drops a persisted activity view when experimental activity is disabled', () => {
+  it('keeps a persisted activity view when the settings fetch failed', () => {
+    // A failed window.api.settings.get() leaves settings null; downgrading here would let the
+    // persisted-UI writer overwrite the saved view with terminal.
     const store = createUIStore()
-    store.setState({
-      settings: { experimentalActivity: false } as AppState['settings']
-    })
-
-    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
-
-    expect(store.getState().activeView).toBe('terminal')
-  })
-
-  it('restores a persisted activity view when experimental activity is enabled', () => {
-    const store = createUIStore()
-    store.setState({
-      settings: { experimentalActivity: true } as AppState['settings']
-    })
+    store.setState({ settings: null as unknown as AppState['settings'] })
 
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
 
@@ -207,6 +223,43 @@ describe('createUISlice hydratePersistedUI', () => {
     })
 
     expect(store.getState().rightSidebarWidth).toBe(360)
+  })
+
+  it('hydrates a persisted closed left sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ sidebarOpen: false }))
+
+    expect(store.getState().sidebarOpen).toBe(false)
+  })
+
+  it('hydrates a persisted open left sidebar preference', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ sidebarOpen: true }))
+
+    expect(store.getState().sidebarOpen).toBe(true)
+  })
+
+  it('hydrates a missing left sidebar preference as open', () => {
+    const store = createUIStore()
+
+    store.setState({ sidebarOpen: false })
+    store.getState().hydratePersistedUI({ ...makePersistedUI(), sidebarOpen: undefined })
+
+    expect(store.getState().sidebarOpen).toBe(true)
+  })
+
+  it('keeps an unsaved left sidebar close when a sync omits the left sidebar preference', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI(), 'startup')
+
+    store.getState().setSidebarOpen(false)
+    store.getState().hydratePersistedUI({ ...makePersistedUI(), sidebarOpen: undefined }, 'sync')
+
+    // Why: the baseline must stay open or the writer sees no diff and the close never persists.
+    expect(store.getState().sidebarOpen).toBe(false)
+    expect(store.getState().persistedUIWriteBaseline?.sidebarOpen).toBe(true)
   })
 
   it('hydrates a persisted closed right sidebar preference', () => {
@@ -427,7 +480,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('persists workspace host scope changes', () => {
+  it('updates workspace host scope for the guarded UI writer', () => {
     const setUI = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -436,13 +489,10 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
     expect(store.getState().visibleWorkspaceHostIds).toEqual(['runtime:env-1'])
-    expect(setUI).toHaveBeenCalledWith({
-      workspaceHostScope: 'runtime:env-1',
-      visibleWorkspaceHostIds: ['runtime:env-1']
-    })
+    expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('persists visible workspace host changes independently of focused host', () => {
+  it('updates host visibility independently of focused host for the guarded UI writer', () => {
     const setUI = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -452,10 +502,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().workspaceHostScope).toBe('runtime:env-1')
     expect(store.getState().visibleWorkspaceHostIds).toEqual(['local', 'runtime:env-1'])
-    expect(setUI).toHaveBeenLastCalledWith({
-      workspaceHostScope: 'runtime:env-1',
-      visibleWorkspaceHostIds: ['local', 'runtime:env-1']
-    })
+    expect(setUI).not.toHaveBeenCalled()
   })
 
   it('persists workspace host order changes', () => {
@@ -480,6 +527,24 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().groupBy).toBe('none')
     expect([...store.getState().collapsedGroups]).toEqual([])
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
+  })
+
+  it('hydrates persisted per-worktree explorer roots', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        explorerDisplayRootByWorktree: {
+          'repo-1::/repo': '/',
+          'repo-2::/repo': 'packages/app'
+        }
+      })
+    )
+
+    expect(store.getState().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
   })
 
   it('hydrates persisted per-worktree dotfile visibility', () => {

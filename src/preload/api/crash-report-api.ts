@@ -7,7 +7,12 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult
 } from '../../shared/crash-reporting'
+import type {
+  FeedbackSubmitArgs,
+  FeedbackSubmitResult
+} from '../../shared/feedback-submit-contract'
 import type { RendererHeapStatistics } from '../../shared/renderer-heap-statistics'
+import type { RendererProcessMemory } from '../../shared/renderer-process-memory'
 
 export type CrashReportsApi = {
   getLatestPending: () => Promise<CrashReportRecord | null>
@@ -23,16 +28,10 @@ export type CrashReportsApi = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   /** Exact V8/Blink heap sizes; null when the runtime withholds them. */
   readHeapStatistics: () => RendererHeapStatistics | null
+  /** This renderer's OS-level footprint, which the heap counters never include. */
+  readProcessMemory?: () => Promise<RendererProcessMemory | null>
 }
 
 export type FeedbackApi = {
-  submit: (args: {
-    feedback: string
-    submitAnonymously?: boolean
-    githubLogin: string | null
-    githubEmail: string | null
-    images?: { contentType: string; data: Uint8Array }[]
-  }) => Promise<
-    { ok: true; imagesDelivered?: boolean } | { ok: false; status: number | null; error: string }
-  >
+  submit: (args: FeedbackSubmitArgs) => Promise<FeedbackSubmitResult>
 }

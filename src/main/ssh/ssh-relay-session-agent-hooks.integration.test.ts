@@ -50,6 +50,7 @@ type CapturedStatus = {
   connectionId: string | null
   payload: {
     state: string
+    workingMode?: 'monitoring'
     prompt: string
     agentType?: string
     toolName?: string
@@ -156,10 +157,16 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn(),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),
-    markSshRemotePtyLeasesAttachedAsync: vi.fn()
+    markSshRemotePtyLeasesAttachedAsync: vi.fn(),
+    getSshRemotePtyKillIntents: vi.fn().mockReturnValue([]),
+    pruneExpiredSshRemotePtyKillIntents: vi.fn(),
+    recordSshRemotePtyKillIntent: vi.fn(),
+    clearSshRemotePtyKillIntent: vi.fn(),
+    noteSshRemotePtyKillReplayAttempt: vi.fn()
   } as unknown as Store
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)
@@ -184,6 +191,7 @@ function captureAgentStatuses(events: CapturedStatus[]): void {
       connectionId: event.connectionId,
       payload: {
         state: event.payload.state,
+        ...(event.payload.workingMode ? { workingMode: event.payload.workingMode } : {}),
         prompt: event.payload.prompt,
         agentType: event.payload.agentType,
         toolName: event.payload.toolName
@@ -298,6 +306,75 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     })
   })
 
+  it('preserves tmux evidence age and unavailable across the real notification adapter', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-tmux')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mocked deployment never reads the connection.
+    await session.establish({} as SshConnection)
+    const envelope = makeEnvelope({
+      source: 'opencode',
+      evidenceAgeMs: 60_000,
+      payload: { state: 'done', prompt: 'older inner turn', agentType: 'opencode' }
+    })
+    const before = Date.now()
+    relay.notifyAgentHook(envelope)
+    await waitForStatusCount(events, 1)
+    const row = agentHookServer
+      .getStatusSnapshot()
+      .find((entry) => entry.paneKey === envelope.paneKey)
+    expect(row?.evidenceObservedAt).toBeGreaterThanOrEqual(before - 60_000)
+    expect(row?.evidenceObservedAt).toBeLessThanOrEqual(Date.now() - 60_000)
+    relay.notifyAgentHook({ ...envelope, statusUnavailable: true, payload: null })
+    await vi.waitFor(() =>
+      expect(
+        agentHookServer.getStatusSnapshot().find((entry) => entry.paneKey === envelope.paneKey)
+      ).toBeUndefined()
+    )
+  })
+
+  it('preserves Claude monitoring mode across the SSH relay boundary', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-monitoring')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        source: 'claude',
+        claudeRunningNonAgentTask: true,
+        payload: {
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch the build',
+          agentType: 'claude'
+        }
+      })
+    )
+
+    await waitForStatusCount(events, 1)
+    expect(events[0]).toMatchObject({
+      connectionId: 'conn-monitoring',
+      payload: { state: 'working', workingMode: 'monitoring', agentType: 'claude' }
+    })
+    expect(agentHookServer.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+
   it('stamps SSH ownership and settles only the exact manual compact identity', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
@@ -330,17 +407,23 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       })
 
     relay.notifyAgentHook(compactEnvelope('UserPromptSubmit', 'working'))
+    await waitForStatusCount(events, 1)
+
+    // Why: PreCompact fires before the compact is validated, so it may never move the pane —
+    // over SSH just as locally.
     relay.notifyAgentHook(compactEnvelope('PreCompact', 'working'))
-    await waitForStatusCount(events, 2)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(events).toHaveLength(1)
+
     relay.notifyAgentHook({
       ...compactEnvelope('PostCompact', 'done'),
       providerPromptId: undefined
     })
     await new Promise((resolve) => setImmediate(resolve))
-    expect(events).toHaveLength(2)
+    expect(events).toHaveLength(1)
 
     relay.notifyAgentHook(compactEnvelope('PostCompact', 'done'))
-    await waitForStatusCount(events, 3)
+    await waitForStatusCount(events, 2)
 
     expect(events.at(-1)).toMatchObject({
       connectionId: 'conn-compact',
@@ -351,16 +434,18 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     ).toMatchObject({
       source: 'claude',
       providerPromptId: COMPACT_PROMPT_ID,
-      compactTrigger: undefined,
-      connectionId: 'conn-compact'
+      connectionId: 'conn-compact',
+      // Why: a compact that finished must not read as a completed turn to notification and
+      // automation consumers, over SSH just as locally.
+      payload: { sessionBoundary: true }
     })
 
     relay.notifyAgentHook(compactEnvelope('PostCompact', 'done'))
     await new Promise((resolve) => setImmediate(resolve))
-    expect(events).toHaveLength(3)
+    expect(events).toHaveLength(2)
   })
 
-  it('clears stamped status on reconnect loss but not final shutdown', async () => {
+  it('keeps stamped status unverifiable across reconnect loss and final shutdown', async () => {
     const initialRelay = createFakeRelay()
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay)
@@ -384,16 +469,13 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await session.reconnect({} as SshConnection)
     initialRelay.dispose()
 
-    expect(agentHookServer.getStatusSnapshot()).toEqual([])
-    expect(clearListener).toHaveBeenCalledOnce()
-    expect(clearListener).toHaveBeenCalledWith({
-      transient: true,
-      connectionId: 'conn-clear',
-      clearedAt: expect.any(Number)
-    })
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-clear', state: 'working' })
+    ])
+    expect(clearListener).not.toHaveBeenCalled()
     session.dispose()
     session = null
-    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).not.toHaveBeenCalled()
   })
 
   it('asks the fake relay for cached hook replay after the session wires its listener', async () => {
@@ -547,6 +629,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         promptInteractionKey: 'command-code-transcript-user-3',
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
+        teammateName: 'reviewer',
         toolAgentType: 'Review',
         claudeRunningNonAgentTask: true,
         providerSessionOnly: true,
@@ -570,6 +653,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
           promptInteractionKey: 'command-code-transcript-user-3',
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
+          teammateName: 'reviewer',
           toolAgentType: 'Review',
           claudeRunningNonAgentTask: true,
           providerSessionOnly: true,
@@ -632,6 +716,31 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
+
+  it.each([{ isReplay: 'true' }, { isReplay: null }, { launchToken: 42 }])(
+    'rejects malformed OMP authority metadata before forwarding: %j',
+    async (invalid) => {
+      relay = createFakeRelay()
+      vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      session = createSession('conn-omp-invalid')
+      await session.establish({} as SshConnection)
+      const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+      const envelope = makeEnvelope({
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        payload: { agentType: 'omp', state: 'working', prompt: 'new turn' }
+      })
+      relay.notifyAgentHook(JSON.parse(JSON.stringify({ ...envelope, ...invalid })))
+      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(ingestSpy).not.toHaveBeenCalled()
+      ingestSpy.mockRestore()
+    }
+  )
 
   it('preserves replay metadata from remote hook notifications', async () => {
     relay = createFakeRelay()

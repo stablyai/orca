@@ -3,13 +3,12 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import { buildFontFamily } from './layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
 import {
@@ -22,6 +21,7 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
@@ -30,6 +30,7 @@ import { publishTerminalViewAttributes } from './terminal-view-attributes-publis
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -159,23 +160,6 @@ export function applyTerminalAppearance(
     settings.terminalLigatures,
     settings.terminalFontFamily
   )
-  // FitAddon parses each CSS padding as an integer, so normalize imported half-pixels before styling and fitting.
-  const paddingX = normalizeTerminalPadding(settings.terminalPaddingX ?? 4)
-  const paddingY = normalizeTerminalPadding(settings.terminalPaddingY ?? 4)
-
-  // Why before the pane loop: FitAddon subtracts live .xterm padding, so the
-  // CSS vars must be stamped before safeFit or a padding shrink leaves a stale grid.
-  manager.setPaneStyleOptions({
-    splitBackground: paneBackground,
-    paneBackground,
-    inactivePaneOpacity: paneStyles.inactivePaneOpacity,
-    activePaneOpacity: paneStyles.activePaneOpacity,
-    opacityTransitionMs: paneStyles.opacityTransitionMs,
-    dividerThicknessPx: paneStyles.dividerThicknessPx,
-    focusFollowsMouse: paneStyles.focusFollowsMouse,
-    paddingX,
-    paddingY
-  })
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
@@ -187,7 +171,8 @@ export function applyTerminalAppearance(
     // Why value-gated: writing minimumContrastRatio clears xterm's contrast cache, so skip on no-op re-applies.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       theme?.background,
-      appearance.mode
+      appearance.mode,
+      settings.terminalMinimumContrastRatio
     )
     if (pane.terminal.options.minimumContrastRatio !== minimumContrastRatio) {
       pane.terminal.options.minimumContrastRatio = minimumContrastRatio
@@ -198,7 +183,9 @@ export function applyTerminalAppearance(
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
-    pane.terminal.options.cursorBlink = settings.terminalCursorBlink
+    // Why not a direct write: a suspended (hidden) pane parks the value instead, so a
+    // settings change mid-hide cannot re-arm its blink timer behind the hidden surface.
+    setTerminalCursorBlinkOption(pane.terminal, settings.terminalCursorBlink)
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
@@ -225,6 +212,12 @@ export function applyTerminalAppearance(
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
     // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
+    // Why unconditional: setInlineImagesEnabled is idempotent (attach no-ops when
+    // already loaded, detach no-ops when absent), so this keeps live toggles in sync.
+    manager.setPaneInlineImagesEnabled(
+      pane.id,
+      resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)
+    )
     const transport = paneTransports.get(pane.id)
     // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
     const appearancePtyId = transport?.getPtyId()
@@ -245,4 +238,16 @@ export function applyTerminalAppearance(
       safeFit(pane)
     }
   }
+
+  manager.setPaneStyleOptions({
+    splitBackground: paneBackground,
+    paneBackground,
+    inactivePaneOpacity: paneStyles.inactivePaneOpacity,
+    activePaneOpacity: paneStyles.activePaneOpacity,
+    opacityTransitionMs: paneStyles.opacityTransitionMs,
+    dividerThicknessPx: paneStyles.dividerThicknessPx,
+    focusFollowsMouse: paneStyles.focusFollowsMouse,
+    paddingX: settings.terminalPaddingX,
+    paddingY: settings.terminalPaddingY
+  })
 }

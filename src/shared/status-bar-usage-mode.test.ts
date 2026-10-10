@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { normalizeStatusBarUsageMode } from './status-bar-usage-mode'
 
 describe('normalizeStatusBarUsageMode', () => {
-  it('defaults missing and invalid values to verbose', () => {
-    expect(normalizeStatusBarUsageMode(undefined)).toBe('verbose')
-    expect(normalizeStatusBarUsageMode('expanded')).toBe('verbose')
-  })
+  it.each([undefined, null, '', 'expanded', 0, false, {}])(
+    'defaults missing or invalid value %j to compact',
+    (value) => {
+      expect(normalizeStatusBarUsageMode(value)).toBe('compact')
+    }
+  )
 
   it('preserves supported modes', () => {
     expect(normalizeStatusBarUsageMode('verbose')).toBe('verbose')

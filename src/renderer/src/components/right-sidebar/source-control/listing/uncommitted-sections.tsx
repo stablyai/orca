@@ -58,6 +58,12 @@ export function SourceControlUncommittedSections(props: {
   isExecutingBulk: boolean
   requestDiscardAllInArea: (area: DiscardAllArea, paths?: readonly string[]) => void
   handleStageAllPaths: (paths: readonly string[]) => Promise<void>
+  /** Stages a section header's set; a capped listing defers "all" to the host. */
+  handleStageSectionPaths: (
+    sectionId: SourceControlDisplaySectionId,
+    paths: readonly string[]
+  ) => Promise<void>
+  isStatusTruncated: boolean
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   sourceControlViewMode: SourceControlViewMode
   visibleTreeRowsBySection: Partial<
@@ -82,7 +88,7 @@ export function SourceControlUncommittedSections(props: {
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
-  handleUnstage: (path: string) => Promise<void>
+  handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
@@ -98,7 +104,11 @@ export function SourceControlUncommittedSections(props: {
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
         const unstageAllPaths = getUnstageAllPaths(actionItems)
         const discardAllPaths = getDiscardAllPaths(actionItems, area)
-        const canStageAll = !props.normalizedFilter && stageAllPaths.length > 0
+        // Why: a capped listing cannot name every untracked file, and the host has no untracked-only stage.
+        const canStageAll =
+          !props.normalizedFilter &&
+          stageAllPaths.length > 0 &&
+          !(props.isStatusTruncated && id === 'untracked')
         const canUnstageAll = !props.normalizedFilter && unstageAllPaths.length > 0
         const canRevertAll = !props.normalizedFilter && discardAllPaths.length > 0
         const sectionLabel = id === 'conflicts' ? CONFLICTS_SECTION_LABEL : SECTION_LABELS[area]
@@ -112,69 +122,62 @@ export function SourceControlUncommittedSections(props: {
               isCollapsed={isCollapsed}
               onToggle={() => props.toggleSection(id)}
               actions={
-                <>
-                  {/* Why: bulk actions are hover-only, but forced visible on no-hover pointers (touch/SSH; see AGENTS.md "SSH Use Case"). One wrapper so focusing any action reveals all three (else keyboard tabs into an invisible stop). */}
-                  <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
-                    {canRevertAll && (
-                      <ActionButton
-                        icon={area === 'untracked' ? Trash : Undo2}
-                        title={
-                          area === 'untracked'
-                            ? translate(
-                                'auto.components.right.sidebar.SourceControl.2f609a2e7c',
-                                'Delete all untracked'
-                              )
-                            : translate(
-                                'auto.components.right.sidebar.SourceControl.ce41708855',
-                                'Discard all'
-                              )
-                        }
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          props.requestDiscardAllInArea(area, discardAllPaths)
-                        }}
-                        disabled={props.isExecutingBulk}
-                      />
-                    )}
-                    {canStageAll && (
-                      <ActionButton
-                        icon={Plus}
-                        title={translate(
-                          'auto.components.right.sidebar.SourceControl.24d2598eff',
-                          'Stage all'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void props.handleStageAllPaths(stageAllPaths)
-                        }}
-                        disabled={props.isExecutingBulk}
-                      />
-                    )}
-                    {canUnstageAll && (
-                      <ActionButton
-                        icon={Minus}
-                        title={translate(
-                          'auto.components.right.sidebar.SourceControl.9339382454',
-                          'Unstage all'
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void props.handleUnstagePaths(unstageAllPaths)
-                        }}
-                        disabled={props.isExecutingBulk}
-                      />
-                    )}
-                  </div>
+                <div className="flex items-center">
+                  {canRevertAll && (
+                    <ActionButton
+                      icon={area === 'untracked' ? Trash : Undo2}
+                      title={
+                        area === 'untracked'
+                          ? translate(
+                              'auto.components.right.sidebar.SourceControl.2f609a2e7c',
+                              'Delete all untracked'
+                            )
+                          : translate(
+                              'auto.components.right.sidebar.SourceControl.ce41708855',
+                              'Discard all'
+                            )
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        props.requestDiscardAllInArea(area, discardAllPaths)
+                      }}
+                      disabled={props.isExecutingBulk}
+                    />
+                  )}
+                  {canStageAll && (
+                    <ActionButton
+                      icon={Plus}
+                      title={translate(
+                        'auto.components.right.sidebar.SourceControl.24d2598eff',
+                        'Stage all'
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void props.handleStageSectionPaths(id, stageAllPaths)
+                      }}
+                      disabled={props.isExecutingBulk}
+                    />
+                  )}
+                  {canUnstageAll && (
+                    <ActionButton
+                      icon={Minus}
+                      title={translate(
+                        'auto.components.right.sidebar.SourceControl.9339382454',
+                        'Unstage all'
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void props.handleUnstagePaths(unstageAllPaths)
+                      }}
+                      disabled={props.isExecutingBulk}
+                    />
+                  )}
                   {sectionViewAction ? (
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className={
-                        items.some((entry) => entry.conflictStatus === 'unresolved')
-                          ? 'h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground'
-                          : 'h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground'
-                      }
+                      size="xs"
+                      className="px-1.5 text-muted-foreground hover:text-foreground"
                       onClick={(event) => {
                         event.stopPropagation()
                         props.onViewSection(sectionViewAction)
@@ -186,7 +189,7 @@ export function SourceControlUncommittedSections(props: {
                       )}
                     </Button>
                   ) : null}
-                </>
+                </div>
               }
             />
             {!isCollapsed && (

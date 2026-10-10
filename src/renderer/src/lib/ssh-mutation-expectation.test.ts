@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import { captureDirectSshMutationExpectation } from './ssh-mutation-expectation'
+import { useAppStore } from '@/store'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
+import {
+  captureDirectSshMutationExpectation,
+  captureWorktreeSshMutationExpectation
+} from './ssh-mutation-expectation'
 
 function stateWithGenerations(): Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'> {
   return {
@@ -33,6 +38,7 @@ function stateWithGenerations(): Pick<AppState, 'sshConnectionStates' | 'sshStat
             ]
           ]),
           targets: [],
+          targetGenerations: new Map(),
           targetLabels: new Map(),
           removedTargetLabels: new Map(),
           targetsHydrated: true
@@ -63,5 +69,18 @@ describe('captureDirectSshMutationExpectation', () => {
     expect(() =>
       captureDirectSshMutationExpectation(stateWithGenerations(), 'ssh-1', 'hub-2')
     ).toThrow("Couldn't verify the SSH connection")
+  })
+})
+
+describe('captureWorktreeSshMutationExpectation', () => {
+  it('treats the floating workspace as local even while a runtime is focused', () => {
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'hub-1' },
+      repos: [],
+      worktreesByRepo: {}
+    })
+    expect(
+      captureWorktreeSshMutationExpectation(useAppStore.getState(), FLOATING_TERMINAL_WORKTREE_ID)
+    ).toEqual({ expectedExecutionHostId: 'local' })
   })
 })

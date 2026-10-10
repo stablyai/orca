@@ -13,15 +13,18 @@ export async function activateWorktreeFromSidebar(
 ): Promise<void> {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    if (executionHostId) {
-      activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
-        executionHostId
-      })
-    } else {
-      activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
-    }
+    activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
+      navigationIntent: 'user-open',
+      ...(executionHostId ? { executionHostId } : {})
+    })
     return
   }
+  // Keep navigation independent from an optional runtime wake IPC.
+  activateAndRevealWorktree(worktreeId, {
+    navigationIntent: 'user-open',
+    revealInSidebar: false,
+    ...(executionHostId ? { executionHostId } : {})
+  })
 
   if (typeof window !== 'undefined' && window.api?.ephemeralVm?.resumeWorkspace) {
     try {
@@ -41,14 +44,6 @@ export async function activateWorktreeFromSidebar(
           description: error instanceof Error ? error.message : String(error)
         }
       )
-      return
     }
   }
-
-  // Why: sidebar clicks already happen on a visible row; revealing again can
-  // jump duplicate pinned/canonical entries back to the first mounted copy.
-  activateAndRevealWorktree(worktreeId, {
-    revealInSidebar: false,
-    ...(executionHostId ? { executionHostId } : {})
-  })
 }

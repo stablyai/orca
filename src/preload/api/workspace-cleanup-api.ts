@@ -1,7 +1,5 @@
 import type {
   WorkspaceCleanupDismissArgs,
-  WorkspaceCleanupLocalProcessArgs,
-  WorkspaceCleanupLocalProcessResult,
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult,
@@ -24,9 +22,6 @@ export type WorkspaceCleanupApi = {
   getCachedScan: () => Promise<WorkspaceCleanupScanResult | null>
   dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
   clearDismissals: () => Promise<void>
-  hasKillableLocalProcesses: (
-    args: WorkspaceCleanupLocalProcessArgs
-  ) => Promise<WorkspaceCleanupLocalProcessResult>
   beginRemovalSnapshotPruneBatch?: (args: WorkspaceCleanupSnapshotPruneBatchArgs) => Promise<void>
   recordRemovalSnapshotPrune?: (args: WorkspaceCleanupSnapshotPruneRecordArgs) => Promise<void>
   finishRemovalSnapshotPruneBatch?: (args: WorkspaceCleanupSnapshotPruneBatchArgs) => Promise<void>

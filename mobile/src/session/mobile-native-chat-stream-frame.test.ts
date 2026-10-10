@@ -37,6 +37,36 @@ describe('applyMobileNativeChatStreamFrame', () => {
     })
   })
 
+  it('marks a pending snapshot so the caller can settle the view but not the read', () => {
+    const merger = createNativeChatMerger()
+    const result = applyMobileNativeChatStreamFrame({
+      merger,
+      frame: { type: 'snapshot', messages: [], hasMore: false, pending: true },
+      limit: 40,
+      replaceSnapshot: true
+    })
+
+    expect(result).toEqual({
+      kind: 'messages',
+      messages: [],
+      hasMore: false,
+      windowReplaced: true,
+      pending: true
+    })
+  })
+
+  it('leaves an ordinary snapshot unmarked', () => {
+    const merger = createNativeChatMerger()
+    const result = applyMobileNativeChatStreamFrame({
+      merger,
+      frame: { type: 'snapshot', messages: [message('a')], hasMore: false },
+      limit: 40,
+      replaceSnapshot: true
+    })
+
+    expect(result).not.toHaveProperty('pending')
+  })
+
   it('merges reconnect snapshots and live appends into the bounded window', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, [message('a'), message('b')])
@@ -320,7 +350,7 @@ describe('applyMobileNativeChatStreamFrame', () => {
     })
   })
 
-  it('surfaces snapshot errors and ignores unrelated frames', () => {
+  it('surfaces snapshot errors, reports a host end as an error, and ignores unrelated frames', () => {
     const merger = createNativeChatMerger()
     expect(
       applyMobileNativeChatStreamFrame({
@@ -342,6 +372,14 @@ describe('applyMobileNativeChatStreamFrame', () => {
       applyMobileNativeChatStreamFrame({
         merger,
         frame: { type: 'end' },
+        limit: 40,
+        replaceSnapshot: true
+      })
+    ).toEqual({ kind: 'error', error: 'Transcript stream ended' })
+    expect(
+      applyMobileNativeChatStreamFrame({
+        merger,
+        frame: { type: 'subscribed' },
         limit: 40,
         replaceSnapshot: true
       })

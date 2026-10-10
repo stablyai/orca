@@ -9,7 +9,7 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import { buildRows } from './worktree-list/grouping/build-rows'
 import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
-import { addHostSectionRows } from './host-section-rows'
+import { addHostSectionRows, type HostSectionRow } from './host-section-rows'
 import { orderHostSectionOptions } from './host-section-order'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import { getLogicalRepoOrderRankById } from './project-header-drop'
@@ -35,10 +35,21 @@ const EMPTY_PENDING_CREATIONS = Object.freeze([]) as never
  * Why worktrees are passed in: keeps the dependency on visible-worktrees.ts
  * one-way, since test suites mock that module's path.
  */
-export function computeRenderedSidebarWorktreeOrder(
+export function computeRenderedSidebarWorktrees(
   state: AppState,
   visibleWorktrees: readonly Worktree[]
-): string[] {
+): Worktree[] {
+  return getRenderedWorktreesInSidebarOrder(
+    computeRenderedSidebarRows(state, visibleWorktrees),
+    getPinnedWorktreeDisplayPolicy(state.settings)
+  )
+}
+
+/** The sidebar's row model, replayed from the store without mounting WorktreeList. */
+export function computeRenderedSidebarRows(
+  state: AppState,
+  visibleWorktrees: readonly Worktree[]
+): HostSectionRow[] {
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(state.settings)
   const projection = getProjectHostSetupProjectionFromState(state)
@@ -89,7 +100,7 @@ export function computeRenderedSidebarWorktreeOrder(
   // Deliberately a superset of its internal guards — on <=1 host it still no-ops, wasting only the registry build.
   const needsHostSections =
     state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || state.visibleWorkspaceHostIds != null
-  const sectionRows = needsHostSections
+  return needsHostSections
     ? addHostSectionRows({
         rows,
         hostOptions: orderHostSectionOptions(
@@ -112,12 +123,13 @@ export function computeRenderedSidebarWorktreeOrder(
         preferProjectGrouping: true
       })
     : rows
+}
 
+export function computeRenderedSidebarWorktreeOrder(
+  state: AppState,
+  visibleWorktrees: readonly Worktree[]
+): string[] {
   return Array.from(
-    new Set(
-      getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy).map(
-        (worktree) => worktree.id
-      )
-    )
+    new Set(computeRenderedSidebarWorktrees(state, visibleWorktrees).map((worktree) => worktree.id))
   )
 }

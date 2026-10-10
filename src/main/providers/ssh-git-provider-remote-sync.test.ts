@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 import { createMockMux, type MockMultiplexer } from './ssh-git-provider-test-harness'
+import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../shared/git-rebase-source'
 
 describe('SshGitProvider', () => {
   let mux: MockMultiplexer
@@ -101,10 +102,14 @@ describe('SshGitProvider', () => {
   it('rebaseFromBase sends git.rebaseFromBase request', async () => {
     await provider.rebaseFromBase('/home/user/repo', 'upstream/main')
 
-    expect(mux.request).toHaveBeenCalledWith('git.rebaseFromBase', {
-      worktreePath: '/home/user/repo',
-      baseRef: 'upstream/main'
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.rebaseFromBase',
+      {
+        worktreePath: '/home/user/repo',
+        baseRef: 'upstream/main'
+      },
+      { timeoutMs: REBASE_FROM_BASE_RPC_TIMEOUT_MS }
+    )
   })
 
   it('fetchRemote sends git.fetch request', async () => {

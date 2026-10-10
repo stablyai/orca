@@ -86,7 +86,7 @@ describe('workspace cleanup browse slice', () => {
     const store = createStore(uiSet)
 
     const next = createDefaultWorkspaceCleanupBrowseState()
-    next.filters.safety.tiers = ['review']
+    next.filters.safety.blockers = ['dirty-files']
     next.sort = { field: 'size', direction: 'desc' }
     store.getState().updateWorkspaceCleanupBrowseState(next)
     await vi.advanceTimersByTimeAsync(WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS)

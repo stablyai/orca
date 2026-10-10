@@ -133,16 +133,16 @@ describe('WorktreeList lineage child card renderer', () => {
     mockStore.state.activeWorktreeId = 'child'
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3Achild"')
+    expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3A%7Cchild"')
   })
 
   it('points aria-activedescendant at the pinned row for active pinned workspaces', async () => {
     setPinnedFixtureState()
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain('aria-activedescendant="worktree-list-option-pinned%3Apinned"')
-    expect(markup).toContain('id="worktree-list-option-pinned%3Apinned"')
-    expect(markup).not.toContain('id="worktree-list-option-all%3Apinned"')
+    expect(markup).toContain('aria-activedescendant="worktree-list-option-pinned%3A%7Cpinned"')
+    expect(markup).toContain('id="worktree-list-option-pinned%3A%7Cpinned"')
+    expect(markup).not.toContain('id="worktree-list-option-all%3A%7Cpinned"')
   })
 
   it('points aria-activedescendant at the natural duplicate when enabled', async () => {
@@ -150,22 +150,23 @@ describe('WorktreeList lineage child card renderer', () => {
     mockStore.state.settings = { showPinnedWorktreesInGroups: true }
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3Apinned"')
-    expect(markup).toContain('id="worktree-list-option-pinned%3Apinned"')
-    expect(markup).toContain('id="worktree-list-option-all%3Apinned"')
+    expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3A%7Cpinned"')
+    expect(markup).toContain('id="worktree-list-option-pinned%3A%7Cpinned"')
+    expect(markup).toContain('id="worktree-list-option-all%3A%7Cpinned"')
   })
 
   it('opens inline rename only for the row-scoped lineage child request', async () => {
     setLineageFixtureState()
-    mockStore.state.renamingWorktreeId = { worktreeId: 'child', rowKey: 'all:child' }
+    mockStore.state.renamingWorktreeId = { worktreeId: 'child', rowKey: 'all:|child' }
     const markup = await renderWorktreeListMarkup()
 
     const childCard =
       markup.match(
-        /<div id="worktree-list-option-all%3Achild"[\s\S]*?lineage child with agent/
+        /<div id="worktree-list-option-all%3A%7Cchild"[\s\S]*?lineage child with agent/
       )?.[0] ?? ''
     const parentCard =
-      markup.match(/<div id="worktree-list-option-all%3Aparent"[\s\S]*?lineage parent/)?.[0] ?? ''
+      markup.match(/<div id="worktree-list-option-all%3A%7Cparent"[\s\S]*?lineage parent/)?.[0] ??
+      ''
 
     expect(childCard).toContain('data-begin-editing="true"')
     expect(parentCard).not.toContain('data-begin-editing="true"')
@@ -177,7 +178,7 @@ describe('WorktreeList lineage child card renderer', () => {
 
     const parentRow = getOptionOpeningTag(markup, 'parent')
 
-    expect(parentRow).toContain('id="worktree-list-option-all%3Aparent"')
+    expect(parentRow).toContain('id="worktree-list-option-all%3A%7Cparent"')
     expect(parentRow).not.toContain('padding-left')
   })
 

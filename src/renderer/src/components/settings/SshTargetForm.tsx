@@ -19,6 +19,7 @@ import {
   type EditingTarget
 } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 export { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
 
 type SshTargetFormProps = {
@@ -90,21 +91,18 @@ export function SshTargetForm({
     isEditing &&
     (editingLabel !== '' || (endpointSummary !== '' && endpointSummary !== editingLabel))
 
-  const preventOutsideDismiss = (event: Event): void => {
-    // Why: outside click is easy to hit by accident with a long multi-field form;
-    // keep Escape / Cancel / × as explicit discard paths. Read both refs at call
-    // time — the session effect can rewrite the baseline without a re-render.
-    if (isSshTargetFormDirty(formRef.current, baselineRef.current)) {
-      event.preventDefault()
-    }
-  }
+  // Why: outside click is easy to hit by accident with a long multi-field form; keep Escape /
+  // Cancel / × as explicit discard paths. Read both refs at call time — the session effect can
+  // rewrite the baseline without a re-render.
+  const isDraftDirty = (): boolean => isSshTargetFormDirty(formRef.current, baselineRef.current)
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(isDraftDirty)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="flex max-h-[calc(100vh-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
-        onPointerDownOutside={preventOutsideDismiss}
-        onInteractOutside={preventOutsideDismiss}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
       >
         <form
           className="flex min-h-0 flex-1 flex-col"

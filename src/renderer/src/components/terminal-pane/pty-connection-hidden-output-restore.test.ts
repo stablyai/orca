@@ -130,14 +130,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -543,7 +543,14 @@ describe('connectPanePty', () => {
     expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
     expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
       makePaneKey('tab-1', LEAF_1),
-      { state: 'working', prompt: 'paired task', agentType: 'claude' },
+      {
+        state: 'working',
+        prompt: 'paired task',
+        agentType: 'claude',
+        // Why: the renderer parsed these OSC 9999 bytes itself for a remote-runtime pane, so it
+        // is the sequencing authority for the row (STA-4293).
+        observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
+      },
       undefined,
       undefined,
       { connectionId: null }

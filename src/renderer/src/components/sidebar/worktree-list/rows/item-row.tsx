@@ -1,7 +1,12 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { WorktreeGroupBy } from '../grouping/row-types'
@@ -18,7 +23,7 @@ import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
-import type { WorktreePointerDrag, WorktreeRowDragState } from '../drag/row-state'
+import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
@@ -28,16 +33,17 @@ export type WorktreeItemRowContext = {
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
-  worktreePointerDragRef: React.MutableRefObject<WorktreePointerDrag | null>
   nativeLineageDropTargetId: string | null
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
   currentWorktreeId: string | null
   highlightedRevealRowKey: string | null
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   getActiveSurfaceVariant: (row: WorktreeItemRow) => ActiveSurfaceVariant
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
+  onWorktreeCardClick?: () => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -46,7 +52,7 @@ export type WorktreeItemRowContext = {
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (
     event: React.PointerEvent<HTMLDivElement>,
-    worktreeId: string,
+    worktree: Worktree,
     rowKey: string
   ) => void
   onCardDragStart: (
@@ -130,20 +136,25 @@ export function renderWorktreeItemRow(
     ? getLineageChildrenInlineStyle(lineageChildrenInlineOffset ?? LINEAGE_CHILDREN_INLINE_OFFSET)
     : undefined
   const worktreeDragGroupKey = ctx.groupKeyByRowKey.get(itemRow.rowKey)
+  const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreePointerDragRef.current?.latestStatusDropTarget?.target.lineageParentId ===
-      itemRow.worktree.id ||
+    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
-  const isActiveWorktree = ctx.activeWorktreeId === itemRow.worktree.id
+  const isActiveWorktree =
+    ctx.activeWorktreeId === itemRow.worktree.id &&
+    (!ctx.activeWorkspaceExecutionHostId ||
+      worktreeIdentity ===
+        composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, itemRow.worktree.id))
   return (
     <div
       key={itemRow.rowKey}
       id={getWorktreeOptionId(itemRow.rowKey)}
       role="option"
-      aria-selected={ctx.selectedWorktreeIds.has(itemRow.worktree.id)}
+      aria-selected={ctx.selectedWorktreeIds.has(worktreeIdentity)}
       aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={itemRow.worktree.id}
+      data-worktree-host-identity={worktreeIdentity}
       data-worktree-row-key={itemRow.rowKey}
       data-worktree-section-key={itemRow.sectionKey}
       data-worktree-drag-id={worktreeDragGroupKey ? itemRow.worktree.id : undefined}
@@ -168,7 +179,7 @@ export function renderWorktreeItemRow(
         if (nested) {
           event.stopPropagation()
         }
-        ctx.onRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
+        ctx.onRowPointerDown(event, itemRow.worktree, itemRow.rowKey)
       }}
       style={{
         paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
@@ -184,7 +195,7 @@ export function renderWorktreeItemRow(
         activeSurfaceVariant={
           isActiveWorktree && !forceActiveSurface ? ctx.getActiveSurfaceVariant(itemRow) : 'primary'
         }
-        isMultiSelected={ctx.selectedWorktreeIds.has(itemRow.worktree.id)}
+        isMultiSelected={ctx.selectedWorktreeIds.has(worktreeIdentity)}
         revealHighlight={ctx.highlightedRevealRowKey === itemRow.rowKey}
         revealHighlightTone={
           ctx.agentSendTargetWorktreeId === itemRow.worktree.id ? 'ai' : 'default'
@@ -197,6 +208,7 @@ export function renderWorktreeItemRow(
         activationRowKey={itemRow.rowKey}
         onImmediateActivate={ctx.onImmediateActivate}
         onSelectionGesture={ctx.onSelectionGesture}
+        onWorktreeCardClick={ctx.onWorktreeCardClick}
         onContextMenuSelect={ctx.onContextMenuSelect}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}

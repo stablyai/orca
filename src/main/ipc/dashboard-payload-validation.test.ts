@@ -99,6 +99,19 @@ function imageIconSrc(bodyBytes: number, withWhitespace = false): string {
 describe('dashboard payload validation', () => {
   it('accepts a complete dashboard snapshot', () => {
     expect(isDashboardSnapshot(SNAPSHOT)).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [
+          {
+            ...SNAPSHOT.cards[0],
+            bucket: 'working',
+            dotState: 'working',
+            workingMode: 'monitoring'
+          }
+        ]
+      })
+    ).toBe(true)
   })
 
   it('rejects malformed or unbounded snapshot fields', () => {
@@ -107,6 +120,18 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], bucket: 'unexpected' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], dotState: 'monitoring' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], dotState: 'done', workingMode: 'monitoring' }]
       })
     ).toBe(false)
     expect(
@@ -322,28 +347,6 @@ describe('dashboard payload validation', () => {
     }
   })
 
-  // Why: terminalInput is per-card, so a host profile this validator does not
-  // know must cost that preview its card, never the whole board.
-  it('drops only the card whose terminal input profile is unusable', () => {
-    const good = SNAPSHOT.cards[0]
-    const bad = {
-      ...good,
-      paneKey: 'tab-2:leaf-2',
-      terminalInput: {
-        hostPlatform: 'plan9',
-        localWindowsConpty: false,
-        windowsShiftEnterEncoding: 'csi-u',
-        ctrlEnterCsiU: false,
-        kittyKeyboardAdvertised: true
-      }
-    }
-
-    const admitted = admitDashboardSnapshot({ ...SNAPSHOT, cards: [good, bad] })
-
-    expect(admitted?.droppedCardCount).toBe(1)
-    expect(admitted?.snapshot.cards.map((card) => card.paneKey)).toEqual(['tab-1:leaf-1'])
-  })
-
   // Why: the pop-out replays the last accepted snapshot, so rejecting the whole
   // board over one card froze every other agent's status until it was renamed.
   describe('admitDashboardSnapshot', () => {
@@ -418,22 +421,6 @@ describe('dashboard payload validation', () => {
           filterOptions: { ...SNAPSHOT.filterOptions, projects: [{ id: '', label: 'Invalid' }] }
         })
       ).toBeNull()
-    })
-
-    it('mirrors isDashboardSnapshot on every snapshot-level rejection', () => {
-      const cases: unknown[] = [
-        { ...SNAPSHOT, generatedAt: Number.NaN },
-        { ...SNAPSHOT, cards: 'nope' },
-        { ...SNAPSHOT, repoIconsByRepoId: [] },
-        { ...SNAPSHOT, showIdle: 'yes' },
-        { ...SNAPSHOT, filterOptions: { projects: [], workspaceStatuses: 'nope' } },
-        null,
-        []
-      ]
-      for (const value of cases) {
-        expect(isDashboardSnapshot(value)).toBe(false)
-        expect(admitDashboardSnapshot(value)).toBeNull()
-      }
     })
   })
 

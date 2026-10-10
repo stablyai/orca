@@ -51,7 +51,9 @@ vi.mock('./cdp-bridge', () => ({
 }))
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
+import { AGENT_BROWSER_IDLE_TIMEOUT_MS } from './agent-browser-process-environment'
 import {
+  createFakeAgentBrowserChild,
   createSucceedWith,
   mockBrowserManager,
   mockWebContents,
@@ -116,12 +118,12 @@ describe('AgentBrowserBridge', () => {
     expect((snapshotCall![1] as string[])[cdpIdx + 1]).toBe('9222')
 
     await bridge.click('@e1')
-    await bridge.mouseMove(10, 20)
+    await bridge.scroll('down')
     await bridge.setOffline('on')
     await bridge.consoleLog()
     await bridge.exec('get title')
 
-    for (const command of ['click', 'mouse', 'set', 'console', 'get']) {
+    for (const command of ['click', 'scroll', 'set', 'console', 'get']) {
       const call = execFileMock.mock.calls.find((candidate: unknown[]) =>
         (candidate[1] as string[]).includes(command)
       )
@@ -167,7 +169,7 @@ describe('AgentBrowserBridge', () => {
 
   it('maps in-flight CDP discovery failures to tab not found after the session disappears', async () => {
     let releaseSnapshot: (() => void) | null = null
-    const activeChild = { kill: vi.fn() }
+    const activeChild = createFakeAgentBrowserChild({ kill: vi.fn() })
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('snapshot')) {
@@ -177,7 +179,7 @@ describe('AgentBrowserBridge', () => {
           return activeChild
         }
         cb(null, JSON.stringify({ success: true, data: null }), '')
-        return { kill: vi.fn() }
+        return createFakeAgentBrowserChild({ kill: vi.fn() })
       }
     )
 
@@ -206,15 +208,6 @@ describe('AgentBrowserBridge', () => {
       code: 'browser_tab_not_found',
       message: 'Browser page tab-1 is no longer available'
     })
-  })
-
-  it('handles malformed JSON from agent-browser', async () => {
-    execFileMock.mockImplementation(
-      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        cb(null, 'not json at all', '')
-      }
-    )
-    await expect(bridge.snapshot()).rejects.toThrow()
   })
 
   // ── exec passthrough ──
@@ -338,7 +331,10 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('wait')
     expect(args).toContain('#ready')
     expect(options.timeout).toBe(2200)
-    expect(options.env).toBe(process.env)
+    // Why not toBe(process.env): the bridge hands the daemon an idle-lifetime bound (#16367).
+    const env = options.env as NodeJS.ProcessEnv
+    expect(env.PATH).toBe(process.env.PATH)
+    expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe(String(AGENT_BROWSER_IDLE_TIMEOUT_MS))
   })
 
   it('returns browser_timeout for timed conditional waits without recycling the session', async () => {

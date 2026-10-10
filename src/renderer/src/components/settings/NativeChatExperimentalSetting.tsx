@@ -1,12 +1,13 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useLocalStructuredAgentSessionsHeld } from '@/runtime/local-structured-chats'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { NativeChatQueueFollowUpsSetting } from './NativeChatQueueFollowUpsSetting'
+import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
+import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
 import { getExperimentalSearchEntry } from './experimental-search'
-
-type NativeChatDefaultView = 'terminal-chat' | 'native-chat'
 
 type NativeChatExperimentalSettingProps = {
   settings: GlobalSettings
@@ -18,15 +19,16 @@ export function NativeChatExperimentalSetting({
   updateSettings
 }: NativeChatExperimentalSettingProps): React.JSX.Element {
   const nativeChatEnabled = settings.experimentalNativeChat === true
-  const openByDefault = settings.openAgentTabsInChatByDefault === true
-  const defaultView: NativeChatDefaultView = openByDefault ? 'native-chat' : 'terminal-chat'
+  const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
+  const holdsStructuredChats = useLocalStructuredAgentSessionsHeld()
+  const structuredChatActive = nativeChatEnabled || holdsStructuredChats
 
   return (
     <SearchableSetting
       title={translate('auto.components.settings.ExperimentalPane.nativeChat.title', 'Chat UI')}
       description={translate(
         'auto.components.settings.ExperimentalPane.nativeChat.description',
-        'Preview the desktop chat surface for supported agent terminal sessions.'
+        'Open supported new agents in Chat UI.'
       )}
       keywords={getExperimentalSearchEntry().nativeChat.keywords}
       className="space-y-3 py-2"
@@ -40,9 +42,10 @@ export function NativeChatExperimentalSetting({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.nativeChat.copy',
-              'Adds a Chat UI view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.'
+              'Supported new agents open in structured chat. Other agents open in the terminal; existing chats stay available.'
             )}
           </p>
+          <NativeChatSupportedAgents />
         </div>
         <SettingsSwitch
           checked={nativeChatEnabled}
@@ -57,57 +60,48 @@ export function NativeChatExperimentalSetting({
           }
         />
       </div>
-      {nativeChatEnabled ? (
-        <div className="ml-4 border-l border-border pl-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-0.5">
-              <Label>
-                {translate(
-                  'auto.components.settings.ExperimentalPane.nativeChat.defaultTitle',
-                  'Default view'
+      {structuredChatActive ? (
+        <div className="ml-4 space-y-4 border-l border-border pl-4">
+          {/* Only structured sessions have a resume cursor to continue from. */}
+          {structuredChatActive ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.resumeTitle',
+                    'Resume working chats automatically after a restart'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
+                    'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={resumeOnRestartEnabled}
+                ariaLabel={translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
+                  'Toggle automatic resume after a restart'
                 )}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ExperimentalPane.nativeChat.defaultCopy',
-                  'Choose how new supported agent terminal tabs open.'
-                )}
-              </p>
+                onChange={() =>
+                  updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
+                }
+              />
             </div>
-            <Select
-              value={defaultView}
-              onValueChange={(value: NativeChatDefaultView) => {
-                updateSettings({
-                  openAgentTabsInChatByDefault: value === 'native-chat'
-                })
-              }}
-            >
-              <SelectTrigger
-                aria-label={translate(
-                  'auto.components.settings.ExperimentalPane.nativeChat.defaultViewLabel',
-                  'Default Chat UI view'
-                )}
-                className="w-36"
-                size="sm"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
-                <SelectItem value="terminal-chat">
-                  {translate(
-                    'auto.components.settings.ExperimentalPane.nativeChat.defaultViewTerminal',
-                    'Terminal chat'
-                  )}
-                </SelectItem>
-                <SelectItem value="native-chat">
-                  {translate(
-                    'auto.components.settings.ExperimentalPane.nativeChat.defaultViewNative',
-                    'Chat UI'
-                  )}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatQueueFollowUpsSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatShellEnvironmentSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
         </div>
       ) : null}
     </SearchableSetting>

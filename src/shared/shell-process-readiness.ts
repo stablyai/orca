@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, readlink, realpath, stat } from 'node:fs/promises'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import { PS_MAX_BUFFER_BYTES } from './process-table-snapshot'
 
 const execFile = promisify(execFileCallback)
 const PROCESS_READINESS_TIMEOUT_MS = 3000
@@ -45,7 +46,8 @@ export async function readShellProcessReadiness(
     readExecutablePath(pid),
     execFile('ps', ['-p', String(pid), '-o', 'stat='], {
       encoding: 'utf8',
-      timeout: PROCESS_READINESS_TIMEOUT_MS
+      timeout: PROCESS_READINESS_TIMEOUT_MS,
+      maxBuffer: PS_MAX_BUFFER_BYTES
     })
   ])
   const status = stdout.trim()
@@ -54,12 +56,12 @@ export async function readShellProcessReadiness(
     : null
 }
 
-export async function resolveShellExecutablePath(
+function shellExecutableCandidates(
   shellPath: string,
   cwd: string,
   pathEnv: string | undefined
-): Promise<string | null> {
-  const candidates = shellPath.includes('/')
+): string[] {
+  return shellPath.includes('/')
     ? [isAbsolute(shellPath) ? shellPath : resolve(cwd, shellPath)]
     : (
         pathEnv ??
@@ -67,14 +69,42 @@ export async function resolveShellExecutablePath(
       )
         .split(delimiter)
         .map((entry) => resolve(isAbsolute(entry) ? entry : resolve(cwd, entry), shellPath))
-  for (const candidate of candidates) {
-    try {
-      await access(candidate, constants.X_OK)
-      const canonicalPath = await realpath(candidate)
-      if ((await stat(canonicalPath)).isFile()) {
-        return canonicalPath
-      }
-    } catch {}
+}
+
+async function canonicalizeExecutable(candidate: string): Promise<string | null> {
+  try {
+    await access(candidate, constants.X_OK)
+    const canonicalPath = await realpath(candidate)
+    return (await stat(canonicalPath)).isFile() ? canonicalPath : null
+  } catch {
+    return null
+  }
+}
+
+export async function resolveShellExecutablePath(
+  shellPath: string,
+  cwd: string,
+  pathEnv: string | undefined
+): Promise<string | null> {
+  for (const candidate of shellExecutableCandidates(shellPath, cwd, pathEnv)) {
+    const canonicalPath = await canonicalizeExecutable(candidate)
+    if (canonicalPath) {
+      return canonicalPath
+    }
   }
   return null
+}
+
+/** Every canonical executable `shellName` names on `pathEnv` — the installations a
+ *  startup profile could legitimately `exec` into, and nothing a dropped-in binary
+ *  outside the search path can reach. `shellName` must be a bare name. */
+export async function resolveInstalledShellExecutablePaths(
+  shellName: string,
+  cwd: string,
+  pathEnv: string | undefined
+): Promise<string[]> {
+  const canonicalPaths = await Promise.all(
+    shellExecutableCandidates(shellName, cwd, pathEnv).map(canonicalizeExecutable)
+  )
+  return [...new Set(canonicalPaths.filter((path): path is string => path !== null))]
 }

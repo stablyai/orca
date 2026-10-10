@@ -1,4 +1,4 @@
-import type { AgentType } from './agent-status-types'
+import type { AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -35,11 +35,15 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
+export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
 
 /** Completed agents stay green until acknowledged, then settle into gray idle. */
 export function dashboardCardDisplayState(
-  card: Pick<DashboardCard, 'dotState' | 'unseen'>
-): DashboardCardDotState {
+  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen'>
+): DashboardCardDisplayState {
+  if (card.dotState === 'working' && card.workingMode === 'monitoring') {
+    return 'monitoring'
+  }
   return card.dotState === 'done' && !card.unseen ? 'idle' : card.dotState
 }
 
@@ -84,6 +88,8 @@ export type DashboardCard = {
   agentType: AgentType
   bucket: DashboardBucket
   dotState: DashboardCardDotState
+  /** Additive discriminator; older pop-outs render this as ordinary working. */
+  workingMode?: AgentWorkingMode
   /** One-line task/prompt text shown on the card. */
   task: string
   /** The most recent message the user sent this agent (its current prompt). */
@@ -97,11 +103,11 @@ export type DashboardCard = {
   leafId: string | null
   /** Agent pane that spawned this agent, when both are visible. */
   parentPaneKey?: string
-  /** Direct workspace parent. The map uses it only when both workspace rings are visible. */
+  /** Direct workspace parent. */
   parentWorktreeId?: string
   repoName: string
   worktreeName: string
-  /** Optional for preload compatibility with snapshots produced before Agent Map. */
+  /** Optional for preload compatibility with snapshots produced by older hosts. */
   hostKind?: DashboardCardHostKind
   /** Exact owner used by in-window workspace actions when IDs collide across hosts. */
   executionHostId?: ExecutionHostId

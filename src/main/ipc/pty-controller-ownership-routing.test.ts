@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { SshPlainShellPtyProvider } from '../providers/ssh-plain-shell-pty-provider'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -12,6 +14,15 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import {
+  writeRefused,
+  writeUnverifiable,
+  type WriteSettlement
+} from '../../shared/pty-write-settlement'
+
+type SettledControllerDouble = {
+  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+}
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -74,7 +85,7 @@ describe('registerPtyHandlers', () => {
     const sshProvider = createAgentClaimProvider({})
     setLocalPtyProvider(localProvider as never)
     registerSshPtyProvider(connectionId, sshProvider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     const controller = registerAgentClaimController()
 
     unregisterSshPtyProvider(connectionId)
@@ -93,6 +104,61 @@ describe('registerPtyHandlers', () => {
 
     unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
+  })
+  it('routes settled pointer writes through the installed SSH controller and preserves uncertainty', async () => {
+    const connectionId = 'ssh-settled'
+    const ptyId = `ssh:${connectionId}@@remote-pty`
+    const provider = {
+      ...createAgentClaimProvider({}),
+      writeWithSettlement: vi
+        .fn()
+        .mockResolvedValue(writeUnverifiable('transport_settlement_lost', true))
+    }
+    registerSshPtyProvider(connectionId, provider as never)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
+    const controller = registerAgentClaimController() as unknown as SettledControllerDouble
+    try {
+      expect(controller.writeWithSettlement).toBeTypeOf('function')
+      await expect(controller.writeWithSettlement(ptyId, 'pointer')).resolves.toEqual(
+        writeUnverifiable('transport_settlement_lost', true)
+      )
+      expect(provider.writeWithSettlement).toHaveBeenCalledWith(ptyId, 'pointer')
+      expect(provider.write).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      clearProviderPtyState(ptyId)
+    }
+  })
+
+  it('refuses a settled write before any bytes when the routed provider cannot settle', async () => {
+    const connectionId = 'ssh-unsettled'
+    const ptyId = `ssh:${connectionId}@@remote-pty`
+    const provider = createAgentClaimProvider({}) as Record<string, unknown>
+    // A provider predating the settled contract, reached through the production registry.
+    delete provider.writeWithSettlement
+    registerSshPtyProvider(connectionId, provider as never)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
+    const controller = registerAgentClaimController() as unknown as SettledControllerDouble
+    try {
+      // Synchronous by construction: the refusal happens before any effect is attempted.
+      expect(await controller.writeWithSettlement(ptyId, 'pointer')).toEqual(
+        writeRefused('provider_cannot_settle')
+      )
+      expect(provider.write).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      clearProviderPtyState(ptyId)
+    }
+  })
+
+  it('preserves a provider write refusal for callers that gate follow-up input', () => {
+    const provider = createAgentClaimProvider({})
+    provider.write.mockReturnValue(false)
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+
+    expect(controller.write('pty-refused', 'input')).toBe(false)
+    expect(provider.write).toHaveBeenCalledWith('pty-refused', 'input')
   })
   describe('controller probePtyLiveness routing', () => {
     it('proves absence for an id the in-process local provider never owned', async () => {
@@ -128,7 +194,7 @@ describe('registerPtyHandlers', () => {
       const ptyId = `ssh:${connectionId}@@remote-pty`
       setLocalPtyProvider(new LocalPtyProvider())
       registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
-      setPtyOwnership(ptyId, connectionId)
+      setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
       const controller = registerAgentClaimController()
       try {
         await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
@@ -140,6 +206,28 @@ describe('registerPtyHandlers', () => {
         unregisterSshPtyProvider(connectionId)
         clearPtyOwnershipForConnection(connectionId)
         clearProviderPtyState(ptyId)
+      }
+    })
+
+    it('answers unknown for an earlier relay PTY once the target is in plain SSH mode', async () => {
+      // Why: rung D never saw that PTY; it may still run on the earlier relay.
+      const connectionId = 'ssh-plain-1'
+      const ptyId = `ssh:${connectionId}@@prior-relay-pty`
+      setLocalPtyProvider(new LocalPtyProvider())
+      const openShell = vi.fn(async () => {
+        throw new Error('no shell in this test')
+      })
+      const mode = { reason: 'no_runtime' as const, message: 'plain' }
+      registerSshPtyProvider(
+        connectionId,
+        new SshPlainShellPtyProvider(connectionId, openShell, mode, true, 1)
+      )
+      const controller = registerAgentClaimController()
+      try {
+        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
+        await expect(controller.attach(ptyId)).resolves.toBe(false)
+      } finally {
+        unregisterSshPtyProvider(connectionId)
       }
     })
 
@@ -173,7 +261,7 @@ describe('registerPtyHandlers', () => {
     const controller = registerAgentClaimController()
     const daemonPtyId = 'repo-1::/tmp/wt@@1a2b3c4d'
     const ownedSshPtyId = 'owned-remote-pty'
-    setPtyOwnership(ownedSshPtyId, 'ssh-attach')
+    setPtyOwnership(ownedSshPtyId, 'ssh:ssh-attach')
     try {
       // Local daemon session: attach flows to the provider.
       await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
@@ -315,9 +403,11 @@ describe('registerPtyHandlers', () => {
     }
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     const runtime = {
       setPtyController: vi.fn(),

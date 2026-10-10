@@ -9,6 +9,7 @@ vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
@@ -52,6 +53,7 @@ describe('SSH IPC handlers', () => {
     expect(channels).toContain('ssh:connect')
     expect(channels).toContain('ssh:disconnect')
     expect(channels).toContain('ssh:terminateSessions')
+    expect(channels).toContain('ssh:moveToManagedServer')
     expect(channels).toContain('ssh:resetRelay')
     expect(channels).toContain('ssh:getState')
     expect(channels).toContain('ssh:testConnection')
@@ -80,6 +82,35 @@ describe('SSH IPC handlers', () => {
     const result = await handlers.get('ssh:addTarget')!(null, { target: newTarget })
     expect(mockSshStore.addTarget).toHaveBeenCalledWith(newTarget)
     expect(result).toEqual({ target: withId, repoReadoptions: [] })
+  })
+
+  it('ssh:addTarget strips a renderer-supplied registration generation', async () => {
+    const target = {
+      label: 'New Server',
+      host: 'new.example.com',
+      port: 22,
+      username: 'deploy',
+      generation: 999
+    }
+    mockSshStore.addTarget.mockReturnValue({ ...target, id: 'ssh-new', generation: 7 })
+
+    await handlers.get('ssh:addTarget')!(null, { target })
+
+    expect(mockSshStore.addTarget).toHaveBeenCalledWith({
+      label: 'New Server',
+      host: 'new.example.com',
+      port: 22,
+      username: 'deploy'
+    })
+  })
+
+  it('ssh:updateTarget strips a renderer-supplied registration generation', async () => {
+    await handlers.get('ssh:updateTarget')!(null, {
+      id: 'ssh-1',
+      updates: { label: 'Renamed', generation: 999 }
+    })
+
+    expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', { label: 'Renamed' })
   })
 
   it('ssh:addTarget returns exact re-adoption evidence and refreshes repos', async () => {

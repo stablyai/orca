@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 
@@ -32,6 +33,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+    resetMobileNativeChatDraftStoreForTests()
     renderer = null
     state = null
   })
@@ -42,7 +44,8 @@ describe('useMobileNativeChatDrafts', () => {
     messages = [],
     launchDraft = null,
     chatActive = true,
-    transcriptLoading = false
+    transcriptLoading = false,
+    transcriptSettled = !transcriptLoading
   }: {
     tabId: string
     sessionId?: string | null
@@ -50,6 +53,7 @@ describe('useMobileNativeChatDrafts', () => {
     launchDraft?: string | null
     chatActive?: boolean
     transcriptLoading?: boolean
+    transcriptSettled?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
@@ -59,7 +63,8 @@ describe('useMobileNativeChatDrafts', () => {
       messages,
       launchDraft,
       chatActive,
-      transcriptLoading
+      transcriptLoading,
+      transcriptSettled
     })
     return null
   }
@@ -100,16 +105,18 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending.map((pending) => pending.text)).toEqual(['from a'])
   })
 
-  it('clears the composer at send time, before the RPC settles', async () => {
+  it('tracks every composer mutation with a stable route-owned generation', async () => {
     await mount('a')
-    act(() => state?.setComposerText('ping'))
-    const origin = state?.captureSendOrigin('ping')
-    act(() => {
-      if (origin) {
-        state?.clearDraftForSend(origin, 'ping')
-      }
-    })
-    expect(state?.composerText).toBe('')
+    const getter = state!.getComposerEditGeneration
+    const initialGeneration = getter()
+
+    act(() => state?.setComposerText('typed'))
+    expect(getter()).toBe(initialGeneration + 1)
+
+    await switchTo('b')
+    expect(state?.getComposerEditGeneration).toBe(getter)
+    act(() => state?.setComposerText((current) => `${current} dictated`))
+    expect(getter()).toBe(initialGeneration + 2)
   })
 
   it('restores the text on a definite rejection', async () => {
@@ -125,7 +132,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('ping')
   })
 
-  it('does not clobber newer edits when restoring a rejected send', async () => {
+  it('appends a rejected send after edits typed while it was in flight', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -140,7 +147,27 @@ describe('useMobileNativeChatDrafts', () => {
         state?.restoreRejectedDraft(origin, 'ping')
       }
     })
-    expect(state?.composerText).toBe('newer edit')
+    expect(state?.composerText).toBe('newer edit\n\nping')
+  })
+
+  it('returns a rejected send even after a newer edit was cleared', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+      }
+    })
+    act(() => state?.setComposerText('newer edit'))
+    act(() => state?.setComposerText(''))
+    act(() => {
+      if (origin) {
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+
+    expect(state?.composerText).toBe('ping')
   })
 
   it('restores a rejected send onto its originating tab only', async () => {
@@ -154,12 +181,13 @@ describe('useMobileNativeChatDrafts', () => {
     })
 
     await switchTo('b')
+    act(() => state?.setComposerText('from b'))
     act(() => {
       if (originA) {
         state?.restoreRejectedDraft(originA, 'from a')
       }
     })
-    expect(state?.composerText).toBe('')
+    expect(state?.composerText).toBe('from b')
 
     await switchTo('a')
     expect(state?.composerText).toBe('from a')
@@ -181,7 +209,9 @@ describe('useMobileNativeChatDrafts', () => {
 
       // A relay drop can stall the transcript stream past the deadline; the
       // delivered prompt must not reappear in the composer when it recovers.
-      act(() => vi.advanceTimersByTime(25_000))
+      act(() => {
+        vi.advanceTimersByTime(25_000)
+      })
       await act(async () =>
         renderer?.update(
           createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
@@ -440,6 +470,20 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('new edit')
   })
 
+  it('does not erase a whitespace-only newer edit when an older send clears', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('/clear'))
+    const origin = state?.captureSendOrigin('/clear')
+    act(() => state?.setComposerText(' /clear'))
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, '/clear')
+      }
+    })
+
+    expect(state?.composerText).toBe(' /clear')
+  })
+
   it('stays quiet when an unconfirmed send lands in the transcript', async () => {
     vi.useFakeTimers()
     try {
@@ -458,7 +502,9 @@ describe('useMobileNativeChatDrafts', () => {
         )
       )
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -505,7 +551,9 @@ describe('useMobileNativeChatDrafts', () => {
           })
         )
       )
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -562,7 +610,9 @@ describe('useMobileNativeChatDrafts', () => {
       })
 
       expect(vi.getTimerCount()).toBe(0)
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -581,9 +631,13 @@ describe('useMobileNativeChatDrafts', () => {
         }
       })
 
-      act(() => vi.advanceTimersByTime(19_999))
+      act(() => {
+        vi.advanceTimersByTime(19_999)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
-      act(() => vi.advanceTimersByTime(1))
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -618,7 +672,9 @@ describe('useMobileNativeChatDrafts', () => {
       )
       expect(state?.composerText).toBe('ping')
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -652,7 +708,9 @@ describe('useMobileNativeChatDrafts', () => {
       )
       expect(state?.composerText).toBe('ping')
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -679,7 +737,9 @@ describe('useMobileNativeChatDrafts', () => {
           createElement(Harness, { tabId: 'a', messages: [userTextMessage('echo-1', 'ping')] })
         )
       )
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
 
       expect(firstUnconfirmed).not.toHaveBeenCalled()
       expect(secondUnconfirmed).toHaveBeenCalledTimes(1)
@@ -705,7 +765,9 @@ describe('useMobileNativeChatDrafts', () => {
       })
 
       expect(vi.getTimerCount()).toBe(0)
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -755,7 +817,9 @@ describe('useMobileNativeChatDrafts', () => {
       )
 
       expect(state?.composerText).toBe('ping')
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()

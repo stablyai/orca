@@ -145,6 +145,26 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toMatchObject({ number: 2, status: 'pending' })
   })
 
+  it('omits a matching suppressed branch PR from attached worktrees', () => {
+    const worktree = makeWorktree({
+      id: 'suppressed',
+      linkedPR: null,
+      suppressedGitHubPR: 4
+    })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::suppressed': makePrEntry(4, 'failure') }
+    })
+
+    expect(display).toBeNull()
+  })
+
   it('includes nested attached worktree PRs', () => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })
     const nested = makeWorktree({ id: 'nested', instanceId: 'nested', linkedPR: 4 })

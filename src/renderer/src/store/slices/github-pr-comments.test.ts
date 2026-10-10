@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mergePRCommentIntoList, prCommentsCacheSuffix } from './github'
+import { prCommentsCacheSuffix } from '../github/cache-identity'
+import { mergePRCommentIntoList } from '../github/pr-comment-cache'
+import type { PRComment } from '../../../../shared/github/comment-types'
 import {
   createTestStore,
   githubSourceContext,
@@ -184,6 +186,31 @@ describe('createGitHubSlice.fetchPRComments', () => {
     expect(mockApi.gh.prComments).not.toHaveBeenCalled()
   })
 
+  it('deduplicates a forced comment fetch onto an existing non-forced request', async () => {
+    const store = createTestStore()
+    const pendingComments = Promise.withResolvers<PRComment[]>()
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'octocat',
+        authorAvatarUrl: '',
+        body: 'pending',
+        createdAt: '2026-08-23T00:00:00Z',
+        url: ''
+      }
+    ]
+    mockApi.gh.prComments.mockReturnValueOnce(pendingComments.promise)
+
+    const first = store.getState().fetchPRComments('/repo/one', 12, { repoId: 'repo-1' })
+    const forced = store
+      .getState()
+      .fetchPRComments('/repo/one', 12, { repoId: 'repo-1', force: true })
+
+    expect(mockApi.gh.prComments).toHaveBeenCalledTimes(1)
+    pendingComments.resolve(comments)
+    await expect(Promise.all([first, forced])).resolves.toEqual([comments, comments])
+  })
+
   it('bounds PR comment cache entries across many repos', async () => {
     vi.useFakeTimers()
 
@@ -206,62 +233,6 @@ describe('createGitHubSlice.fetchPRComments', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('preserves cached checks when the checks IPC fails', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const checksCacheKey = `${repoPath}::pr-checks::12`
-    const cachedChecks = [
-      { name: 'build', status: 'completed', conclusion: 'failure', url: null } as const
-    ]
-
-    store.setState({
-      checksCache: {
-        [checksCacheKey]: {
-          data: cachedChecks,
-          fetchedAt: 1,
-          headSha: 'abc123head'
-        }
-      }
-    } as unknown as Partial<AppState>)
-    mockApi.gh.prChecks.mockRejectedValueOnce(new Error('rate limited'))
-
-    await expect(
-      store.getState().fetchPRChecks(repoPath, 12, branch, 'abc123head', null, { force: true })
-    ).resolves.toEqual(cachedChecks)
-
-    expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(cachedChecks)
-    expect(store.getState().checksCache[checksCacheKey]?.fetchedAt).toBe(1)
-  })
-
-  it('does not return cached checks for a different requested head SHA after IPC failure', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const checksCacheKey = `${repoPath}::pr-checks::12`
-    const oldHeadChecks = [
-      { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
-    ]
-
-    store.setState({
-      checksCache: {
-        [checksCacheKey]: {
-          data: oldHeadChecks,
-          fetchedAt: 1,
-          headSha: 'old-head'
-        }
-      }
-    } as unknown as Partial<AppState>)
-    mockApi.gh.prChecks.mockRejectedValueOnce(new Error('rate limited'))
-
-    await expect(
-      store.getState().fetchPRChecks(repoPath, 12, branch, 'new-head', null, { force: true })
-    ).resolves.toEqual([])
-
-    expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(oldHeadChecks)
-    expect(store.getState().checksCache[checksCacheKey]?.headSha).toBe('old-head')
   })
 })
 

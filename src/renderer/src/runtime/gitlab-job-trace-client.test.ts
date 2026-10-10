@@ -136,7 +136,7 @@ describe('loadGitLabJobLogDetails', () => {
       'gitlab.jobTrace',
       // Why: bounding in main keeps the response under the 1 MB transport frame cap.
       { repo: 'repo-1', jobId: 42, projectRef: undefined, logExcerpt: true },
-      { timeoutMs: 30_000 }
+      { timeoutMs: 65_000 }
     )
   })
 
@@ -163,7 +163,7 @@ describe('loadGitLabJobLogDetails', () => {
         check: gitLabCheck
       })
       const assertion = expect(pending).rejects.toThrow('Timed out loading the GitLab job log.')
-      await vi.advanceTimersByTimeAsync(30_000)
+      await vi.advanceTimersByTimeAsync(65_000)
       await assertion
     } finally {
       vi.useRealTimers()

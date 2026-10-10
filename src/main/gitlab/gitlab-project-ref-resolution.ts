@@ -1,4 +1,7 @@
 import { glabExecFileAsync } from '../git/runner'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { shouldProbeGitRemote } from '../git/remote-name-listing'
+import { addWslEnvKeys } from '../wsl-env'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
@@ -123,7 +126,8 @@ async function resolveProjectRefForRemote(
       {
         repoPath,
         connectionId,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+        ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       },
       remoteName
     )
@@ -178,17 +182,26 @@ export async function getIssueProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(
+  const originPromise = getProjectRefForRemote(
     repoPath,
-    'upstream',
+    'origin',
     knownHosts,
     connectionId,
     localGitOptions
   )
-  return (
-    upstream ??
-    getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
-  )
+  if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
+    const upstream = await getProjectRefForRemote(
+      repoPath,
+      'upstream',
+      knownHosts,
+      connectionId,
+      localGitOptions
+    )
+    if (upstream) {
+      return upstream
+    }
+  }
+  return originPromise
 }
 
 export type ResolvedIssueSource = {
@@ -246,12 +259,13 @@ export function glabRepoExecOptions(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string } {
+): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
   return connectionId
     ? {}
     : {
         cwd: repoPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+        ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       }
 }
 
@@ -260,6 +274,22 @@ export function glabHostnameArgs(
   connectionId?: string | null
 ): string[] {
   return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
+}
+
+/** Why: only `api`/`auth` define `--hostname`; `mr` and `issue` subcommands reject it (#12193). */
+export function glabHostEnvOptions(
+  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
+  connectionId?: string | null
+): { env?: NodeJS.ProcessEnv } {
+  if (!connectionId || !projectRef?.host) {
+    return {}
+  }
+  const env: NodeJS.ProcessEnv = { ...process.env, GITLAB_HOST: projectRef.host }
+  if (process.platform === 'win32') {
+    // Why: spawn env stops at the wsl.exe boundary unless WSLENV names the var.
+    addWslEnvKeys(env, ['GITLAB_HOST'])
+  }
+  return { env }
 }
 
 async function isGlabConfiguredForRemoteHost(

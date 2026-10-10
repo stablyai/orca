@@ -3,6 +3,7 @@ import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { normalizeRightSidebarRoute } from '../../../right-sidebar-route'
 import type { WorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
+import { omitRecordKeys } from './record-key-omission'
 
 export function createWorktreePurgeOmitters(
   s: AppState,
@@ -11,31 +12,15 @@ export function createWorktreePurgeOmitters(
 ) {
   const { doomedTabIds, doomedPtyIds, doomedBrowserWorkspaceIds, doomedPageIds, removedFileIds } =
     doomed
-  const omitByWorktree = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const id of worktreeIdSet) {
-      if (id in out) {
-        delete out[id]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
+  const omitByWorktree = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(obj, worktreeIdSet)
   const omitWorkspaceLineageByWorktree = (
     obj: Record<string, WorkspaceLineage>
-  ): Record<string, WorkspaceLineage> => {
-    let changed = false
-    const out = { ...obj }
-    for (const id of worktreeIdSet) {
-      const childKey = isWorkspaceKey(id) ? id : worktreeWorkspaceKey(id)
-      if (childKey in out) {
-        delete out[childKey]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
+  ): Record<string, WorkspaceLineage> =>
+    omitRecordKeys(
+      obj,
+      [...worktreeIdSet].map((id) => (isWorkspaceKey(id) ? id : worktreeWorkspaceKey(id)))
+    )
   const pruneRightSidebarTabByWorktree = (): AppState['rightSidebarTabByWorktree'] => {
     const omitted = omitByWorktree(s.rightSidebarTabByWorktree)
     let changed = omitted !== s.rightSidebarTabByWorktree
@@ -50,94 +35,40 @@ export function createWorktreePurgeOmitters(
     }
     return changed ? out : omitted
   }
-  const omitByTabId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const tabId of doomedTabIds) {
-      if (tabId in out) {
-        delete out[tabId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
+  const omitByTabId = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(obj, doomedTabIds)
   const survivingTabIds = new Set(
     Object.entries(s.tabsByWorktree)
       .filter(([worktreeId]) => !worktreeIdSet.has(worktreeId))
       .flatMap(([, tabs]) => tabs.map((tab) => tab.id))
   )
-  const omitRetiredDirectSshLedgerByTabId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const tabId of doomedTabIds) {
-      if (!survivingTabIds.has(tabId) && tabId in out) {
-        delete out[tabId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
-  const omitByPtyId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const ptyId of doomedPtyIds) {
-      if (ptyId in out) {
-        delete out[ptyId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
+  const omitRetiredDirectSshLedgerByTabId = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(
+      obj,
+      [...doomedTabIds].filter((tabId) => !survivingTabIds.has(tabId))
+    )
+  const omitByPtyId = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(obj, doomedPtyIds)
   // Pane-scoped maps are keyed `${tabId}:${leafId}`; tabId never contains ":", so the prefix before the first ":" is the owning tab.
   const omitByPaneKeyTabPrefix = <T>(obj: Record<string, T>): Record<string, T> => {
     // Null-tolerant like omitByTabId: some worktree-isolation callers omit these slices (production store always inits to {}).
     if (!obj) {
       return obj
     }
-    let changed = false
-    const out = { ...obj }
-    for (const paneKey of Object.keys(obj)) {
-      const sep = paneKey.indexOf(':')
-      if (sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))) {
-        delete out[paneKey]
-        changed = true
-      }
-    }
-    return changed ? out : obj
+    return omitRecordKeys(
+      obj,
+      Object.keys(obj).filter((paneKey) => {
+        const sep = paneKey.indexOf(':')
+        return sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))
+      })
+    )
   }
-  const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const workspaceId of doomedBrowserWorkspaceIds) {
-      if (workspaceId in out) {
-        delete out[workspaceId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
-  const omitByPageId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const pageId of doomedPageIds) {
-      if (pageId in out) {
-        delete out[pageId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
-  const omitByFileId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const fileId of removedFileIds) {
-      if (fileId in out) {
-        delete out[fileId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
+  const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(obj, doomedBrowserWorkspaceIds)
+  const omitByPageId = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(obj, doomedPageIds)
+  const omitByFileId = <T>(obj: Record<string, T>): Record<string, T> =>
+    omitRecordKeys(obj, removedFileIds)
 
   return {
     omitByWorktree,

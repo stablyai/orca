@@ -145,14 +145,14 @@ function notifyStoreSubscribers(): void {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -235,7 +235,7 @@ describe('connectPanePty', () => {
 
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Codex working')
       expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
-      expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+      expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'terminal-bell')
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
       vi.advanceTimersByTime(250)
       expect(deps.dispatchNotification).toHaveBeenCalledWith(
@@ -413,7 +413,11 @@ describe('connectPanePty', () => {
         facts: [{ kind: 'pr-link', link }]
       })
 
-      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith('wt-1', link)
+      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
+        'wt-1',
+        link,
+        expect.objectContaining({ tabId: 'tab-1', ptyId: 'tab-pty' })
+      )
     })
 
     it('does not byte-scan PR links or OSC 133 — facts are the only consumer', async () => {

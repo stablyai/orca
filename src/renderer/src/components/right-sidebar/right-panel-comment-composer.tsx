@@ -1,9 +1,11 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -171,6 +173,11 @@ export function RightPanelCommentComposer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Why: the Enter that only confirms a CJK candidate still reports the held
+      // modifier, so submitting here posts the comment without its last syllable.
+      if (isImeCompositionKeyDown(event)) {
+        return
+      }
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
       if (event.key === 'Enter' && modifierPressed) {
         event.preventDefault()
@@ -232,7 +239,7 @@ export function RightPanelCommentComposer({
       onClick={stopPropagation}
       onMouseDown={stopPropagation}
     >
-      <textarea
+      <ImeTextarea
         ref={setTextareaRef}
         value={body}
         rows={3}

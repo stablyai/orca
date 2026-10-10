@@ -479,7 +479,6 @@ describe('OrcaRuntimeRpcServer', () => {
       deviceToken: mobile.token,
       params: { worktree: 'id:wt-1', page: 'page-1' }
     })
-
     expect(replies).toContainEqual(
       expect.objectContaining({
         id: 'req_forbidden',
@@ -629,14 +628,18 @@ describe('OrcaRuntimeRpcServer', () => {
       expectedCodexResetScope
     )
     expect(mocks.readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
-    expect(mocks.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(mocks.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', { admissionTier: 'status' })
     expect(mocks.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined, undefined)
     expect(mocks.getRuntimeGitUpstreamStatus).toHaveBeenCalledWith('id:wt-1')
-    expect(mocks.bulkStageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['a.ts', 'b.ts'])
+    expect(mocks.bulkStageRuntimeGitPaths).toHaveBeenCalledWith(
+      'id:wt-1',
+      ['a.ts', 'b.ts'],
+      undefined
+    )
     expect(mocks.abortRuntimeGitMerge).toHaveBeenCalledWith('id:wt-1')
     expect(mocks.abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(mocks.bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
-    expect(mocks.openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
+    expect(mocks.openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true, undefined)
     // A mobile WebSocket client is transport-capped; a local caller gets undefined here.
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledWith(
       'id:wt-1',
@@ -645,7 +648,10 @@ describe('OrcaRuntimeRpcServer', () => {
       undefined,
       remoteRpcContentBudget('req_git_diff')
     )
-    expect(mocks.browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
+    expect(mocks.browserTabCreate).toHaveBeenCalledWith(
+      { worktree: 'id:wt-1', url: 'about:blank' },
+      { pairedDeviceId: mobile.deviceId, clientKind: 'mobile' }
+    )
     expect(mocks.browserSetViewport).toHaveBeenCalledWith({
       worktree: 'id:wt-1',
       page: 'page-1',

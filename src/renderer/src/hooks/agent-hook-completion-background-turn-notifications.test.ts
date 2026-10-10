@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
-import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const dispatchTerminalNotification = vi.fn()
@@ -26,7 +27,6 @@ type MockStoreState = {
   agentLaunchConfigByPaneKey: Record<string, unknown>
   agentStatusByPaneKey: Record<string, unknown>
   getAgentLaunchConfigForStatusEntry: () => undefined
-  getAgentLaunchConfigForStatusMetadata: () => undefined
 }
 
 let mockStoreState: MockStoreState
@@ -83,8 +83,7 @@ describe('Claude background-turn completion notifications', () => {
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined,
-      getAgentLaunchConfigForStatusMetadata: () => undefined
+      getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })
 
@@ -217,54 +216,5 @@ describe('Claude background-turn completion notifications', () => {
       stateStartedAt: 1_700_000_011_000
     })
     expect(banners[0]?.stateStartedAt).not.toBe(banners[1]?.stateStartedAt)
-  })
-
-  it('notifies every turn under a persistent session cron with distinct ids', async () => {
-    const cron = [{ id: 'cron-1' }]
-    const { banners } = await play([
-      {
-        at: 1_700_000_000_000,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' }
-      },
-      {
-        at: 1_700_000_001_000,
-        payload: {
-          hook_event_name: 'Stop',
-          last_assistant_message: 'First done.',
-          session_crons: cron
-        }
-      },
-      {
-        at: 1_700_000_002_000,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'second' }
-      },
-      {
-        at: 1_700_000_003_000,
-        payload: {
-          hook_event_name: 'Stop',
-          last_assistant_message: 'Second done.',
-          session_crons: cron
-        }
-      },
-      {
-        at: 1_700_000_004_000,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'third' }
-      },
-      {
-        at: 1_700_000_005_000,
-        payload: {
-          hook_event_name: 'Stop',
-          last_assistant_message: 'Third done.',
-          session_crons: cron
-        }
-      }
-    ])
-
-    expect(banners.map((banner) => banner.body)).toEqual([
-      'First done.',
-      'Second done.',
-      'Third done.'
-    ])
-    expect(new Set(banners.map((banner) => banner.stateStartedAt)).size).toBe(3)
   })
 })

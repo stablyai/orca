@@ -9,6 +9,7 @@ vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
@@ -22,12 +23,12 @@ vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
+import { getActiveMultiplexer } from './ssh'
 import {
   beginSshShutdown,
   SSH_SHUTDOWN_BUDGET_MS,
-  getActiveMultiplexer,
   type SshShutdownResult
-} from './ssh'
+} from './ssh-shutdown-drain'
 import type { SshTarget } from '../../shared/ssh-types'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'

@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest'
 import {
   buildJiraCreateCustomFields,
   buildJiraCreateFieldValue,
+  buildJiraCreateSubmission,
   findJiraCreateAllowedValue,
   getJiraCreateAllowedValueLabel,
   getJiraCreateOptionPayload,
+  getJiraUserCreateFieldKeys,
+  hasJiraAssigneeCreateField,
+  isJiraScalarUserCreateField,
+  isJiraUserCreateField,
   isVisibleJiraCreateField
 } from './task-page-jira-create-fields'
 import type { JiraCreateField } from '../../../shared/jira-types'
@@ -22,6 +27,8 @@ describe('isVisibleJiraCreateField', () => {
     { key: 'issuetype', required: true, expected: false },
     { key: 'summary', required: true, expected: false },
     { key: 'description', required: true, expected: false },
+    // the dialog renders a dedicated assignee picker, so the generic field must not show
+    { key: 'assignee', required: true, expected: false },
     // characterization: current behavior — the system-field filter is exact-match
     // and case-sensitive, so a differently-cased key stays visible.
     { key: 'Summary', required: true, expected: true }
@@ -32,6 +39,54 @@ describe('isVisibleJiraCreateField', () => {
       expect(isVisibleJiraCreateField(field({ key, required }))).toBe(expected)
     })
   }
+})
+
+describe('isJiraUserCreateField', () => {
+  it('matches user pickers, which carry no allowedValues to detect them by', () => {
+    expect(isJiraUserCreateField(field({ key: 'reporter', schema: { type: 'user' } }))).toBe(true)
+    expect(isJiraUserCreateField(field({ schema: { type: 'array', items: 'user' } }))).toBe(true)
+  })
+
+  it('ignores non-user fields', () => {
+    expect(isJiraUserCreateField(field({ schema: { type: 'string' } }))).toBe(false)
+    expect(isJiraUserCreateField(field({ schema: { type: 'array', items: 'option' } }))).toBe(false)
+    expect(isJiraUserCreateField(field())).toBe(false)
+  })
+})
+
+describe('isJiraScalarUserCreateField', () => {
+  it('matches single-user fields the picker can hold', () => {
+    expect(isJiraScalarUserCreateField(field({ key: 'reporter', schema: { type: 'user' } }))).toBe(
+      true
+    )
+  })
+
+  it('rejects array-of-user, which the single-value picker would collapse to one member', () => {
+    expect(isJiraScalarUserCreateField(field({ schema: { type: 'array', items: 'user' } }))).toBe(
+      false
+    )
+  })
+
+  it('ignores non-user fields', () => {
+    expect(isJiraScalarUserCreateField(field({ schema: { type: 'string' } }))).toBe(false)
+    expect(isJiraScalarUserCreateField(field())).toBe(false)
+  })
+})
+
+describe('getJiraUserCreateFieldKeys', () => {
+  it('collects only the user-typed keys for the host to shape', () => {
+    expect(
+      getJiraUserCreateFieldKeys([
+        field({ key: 'reporter', schema: { type: 'user' } }),
+        field({ key: 'customfield_1', schema: { type: 'string' } }),
+        field({ key: 'customfield_2', schema: { type: 'array', items: 'user' } })
+      ])
+    ).toEqual(['reporter', 'customfield_2'])
+  })
+
+  it('returns an empty list when nothing is user-typed', () => {
+    expect(getJiraUserCreateFieldKeys([field()])).toEqual([])
+  })
 })
 
 describe('getJiraCreateAllowedValueLabel', () => {
@@ -169,5 +224,57 @@ describe('buildJiraCreateCustomFields', () => {
 
   it('treats a missing draft entry as blank', () => {
     expect(buildJiraCreateCustomFields([field({ key: 'a' })], { other: 'x' })).toBeUndefined()
+  })
+})
+
+describe('hasJiraAssigneeCreateField', () => {
+  it('detects whether the create screen accepts an assignee', () => {
+    expect(hasJiraAssigneeCreateField([field({ key: 'assignee', required: false })])).toBe(true)
+    expect(hasJiraAssigneeCreateField([field({ key: 'reporter' })])).toBe(false)
+    expect(hasJiraAssigneeCreateField([])).toBe(false)
+  })
+})
+
+describe('buildJiraCreateSubmission', () => {
+  const userField = field({ key: 'customfield_9', schema: { type: 'user' } })
+
+  it('omits assignee and userFieldKeys for the Automatic default', () => {
+    expect(buildJiraCreateSubmission([field({ key: 'a' })], { a: 'one' }, null)).toEqual({
+      customFields: { a: 'one' },
+      userFieldKeys: undefined
+    })
+    expect(buildJiraCreateSubmission([], {}, undefined)).toEqual({
+      customFields: undefined,
+      userFieldKeys: undefined
+    })
+  })
+
+  it('adds the picked assignee to customFields and names it as a user field', () => {
+    expect(buildJiraCreateSubmission([], {}, 'acc-1')).toEqual({
+      customFields: { assignee: 'acc-1' },
+      userFieldKeys: ['assignee']
+    })
+  })
+
+  it('names only the user-typed fields that carry a value', () => {
+    expect(
+      buildJiraCreateSubmission(
+        [userField, field({ key: 'customfield_8', schema: { type: 'user' } })],
+        { customfield_9: 'acc-9' },
+        'acc-1'
+      )
+    ).toEqual({
+      customFields: { customfield_9: 'acc-9', assignee: 'acc-1' },
+      userFieldKeys: ['customfield_9', 'assignee']
+    })
+  })
+
+  it('keeps userFieldKeys absent when user fields exist but are blank', () => {
+    // Why it matters: a non-empty key list trips the remote user-fields
+    // capability gate, which older hosts fail even with nothing to shape.
+    expect(buildJiraCreateSubmission([userField], {}, null)).toEqual({
+      customFields: undefined,
+      userFieldKeys: undefined
+    })
   })
 })

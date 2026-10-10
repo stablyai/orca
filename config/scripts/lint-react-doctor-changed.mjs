@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
 
@@ -31,11 +32,11 @@ if (lintTargets.length === 0) {
   process.exit(0)
 }
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const { command, prefixArgs } = resolveOxlintInvocation()
 const result = spawnSync(
-  pnpm,
-  ['exec', 'oxlint', '--config', 'config/oxlint-react-doctor.json', ...lintTargets],
-  { stdio: 'inherit' }
+  command,
+  [...prefixArgs, '--config', 'config/oxlint-react-doctor.json', ...lintTargets],
+  { stdio: 'inherit', windowsHide: true }
 )
 
 if (result.error) {

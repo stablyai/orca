@@ -32,20 +32,6 @@ describe('parseAiVaultListResult', () => {
     expect(parsed.issues).toEqual([])
   })
 
-  it('accepts an all-unknown-agent response as an empty supported session list', () => {
-    const parsed = parseAiVaultListResult({
-      sessions: [
-        { ...validSession('future-1'), agent: 'future-agent' },
-        { ...validSession('future-2'), agent: 'newer-agent' }
-      ],
-      issues: [],
-      scannedAt: '2026-07-27T00:00:00.000Z'
-    })
-
-    expect(parsed.sessions).toEqual([])
-    expect(parsed.issues).toEqual([])
-  })
-
   it('keeps known scan issues while silently dropping unknown-agent issues', () => {
     const parsed = parseAiVaultListResult({
       sessions: [],
@@ -110,6 +96,39 @@ describe('parseAiVaultListResult', () => {
       firstUserPrompt: 'first',
       lastUserPrompt: 'last'
     })
+  })
+
+  // #15036: a `kind` this build has never heard of used to fail the whole issue,
+  // and the fallback re-reported it as an unkinded entry — i.e. a newer host's
+  // whole-source failure came back to an older client as a skipped transcript.
+  it('keeps an issue whose kind this build does not know, as its own kinded row', () => {
+    const parsed = parseAiVaultListResult({
+      sessions: [validSession()],
+      issues: [
+        {
+          agent: 'opencode',
+          kind: 'source-from-a-newer-host',
+          path: '/home/ada/.local/share/opencode/opencode.db',
+          message: 'OpenCode history was skipped.'
+        }
+      ],
+      scannedAt: '2026-07-27T00:00:00.000Z'
+    })
+
+    expect(parsed.issues).toEqual([
+      expect.objectContaining({ kind: 'scope', message: 'OpenCode history was skipped.' })
+    ])
+    expect(parsed.issues.some((issue) => issue.message.includes('invalid'))).toBe(false)
+  })
+
+  it('leaves an unkinded issue unkinded so real skipped transcripts still count', () => {
+    const parsed = parseAiVaultListResult({
+      sessions: [validSession()],
+      issues: [{ agent: 'codex', path: '/bad.jsonl', message: 'Malformed transcript' }],
+      scannedAt: '2026-07-27T00:00:00.000Z'
+    })
+
+    expect(parsed.issues[0]?.kind).toBeUndefined()
   })
 
   it('rejects a malformed result envelope', () => {

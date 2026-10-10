@@ -131,7 +131,8 @@ function getWorktreeById(
   )
 }
 
-function getLineageChildWorktree(
+/** Exported so the composer's parent picker offers exactly the roots this view attaches. */
+export function getLineageChildWorktree(
   lineage: WorkspaceLineage,
   worktreeById: Map<string, Worktree>
 ): Worktree | null {

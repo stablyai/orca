@@ -33,6 +33,10 @@ vi.mock('./browser-manager', () => ({
   }
 }))
 
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({ mode: 'clean', userAgent: 'Mozilla/5.0 Test' })
+}))
+
 import { browserSessionRegistry } from './browser-session-registry'
 import {
   cancelAllBrowserWebAuthnAccountRequests,
@@ -42,13 +46,16 @@ import {
 type MockSession = Electron.Session & EventEmitter
 
 function mockSession(): MockSession {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this focused Electron Session double implements every member the exercised policy and WebAuthn paths read.
   return Object.assign(new EventEmitter(), {
     clearCache: vi.fn().mockResolvedValue(undefined),
     clearStorageData: vi.fn().mockResolvedValue(undefined),
     setDevicePermissionHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
-    setPermissionRequestHandler: vi.fn()
+    setPermissionRequestHandler: vi.fn(),
+    setUserAgent: vi.fn(),
+    webRequest: { onBeforeSendHeaders: vi.fn() }
   }) as unknown as MockSession
 }
 
@@ -97,8 +104,8 @@ describe('browser WebAuthn profile deletion', () => {
   })
 
   it('leaves another session pending when a profile is deleted', async () => {
-    const firstProfile = browserSessionRegistry.createProfile('isolated', 'First')
-    const secondProfile = browserSessionRegistry.createProfile('isolated', 'Second')
+    const firstProfile = await browserSessionRegistry.createProfile('isolated', 'First')
+    const secondProfile = await browserSessionRegistry.createProfile('isolated', 'Second')
     expect(firstProfile).not.toBeNull()
     expect(secondProfile).not.toBeNull()
 

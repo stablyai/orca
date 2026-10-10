@@ -28,18 +28,6 @@ import { createOsc133CommandFinishedScanner } from './terminal-osc133-command-fi
 /** Ms of title-less output after a working title before it is cleared. */
 export const STALE_WORKING_TITLE_TIMEOUT_MS = 3000
 
-// Braille spinner glyphs (U+2800–U+28FF); mirrors the range clearWorkingIndicators strips in agent-detection.ts.
-// eslint-disable-next-line no-control-regex -- intentional unicode range
-const BRAILLE_SPINNER_RE = /[\u2800-\u28FF]/g
-
-/**
- * Strip decorative braille spinner frame glyphs so titles differing only by the animation frame
- * compare equal — the gate consumers use to avoid fan-out churn on spinner ticks.
- */
-export function stripBrailleSpinnerGlyphs(title: string): string {
-  return title.replace(BRAILLE_SPINNER_RE, '').trim()
-}
-
 /** Provenance for title/idle facts; `staleWorkingTitleClear` marks facts synthesized by the 3s stale timer — not genuine task completions. */
 export type TerminalTitleFactMeta = {
   staleWorkingTitleClear?: boolean
@@ -63,6 +51,8 @@ export type TerminalTitleTrackerCallbacks = {
    * mirrors renderer command-lifecycle semantics so the fact path drops stale agent rows like byte mode.
    */
   onCommandFinished?: (bestEffortExitCode: number | null) => void
+  /** Fired per complete OSC 133;C: the shell exec'd a command, so the pane's foreground changed. */
+  onCommandStarted?: () => void
   /** Fired once per newly observed GitHub PR URL (chunk-boundary-safe, deduplicated per tracker). */
   onPrLink?: (link: TerminalGitHubPRLink) => void
   /**
@@ -93,7 +83,7 @@ export type TerminalTitleTracker = {
    */
   seedInitialTitle: (rawTitle: string) => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
-  restoreLastAgentExit: () => AgentStatus | null
+  restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
   /**
@@ -119,15 +109,20 @@ export function createTerminalTitleTracker(
     onAgentExited,
     onBell,
     onCommandFinished,
+    onCommandStarted,
     onPrLink,
     onMode2031Subscribe,
     onMode2031Unsubscribe
   } = callbacks
   let bellDetector = onBell ? createBellDetector() : null
   // Why: created only when a consumer exists so headless serve never pays the per-chunk 133/URL scans.
-  const commandFinishedScanner = onCommandFinished
-    ? createOsc133CommandFinishedScanner(onCommandFinished)
-    : null
+  const commandFinishedScanner =
+    onCommandFinished || onCommandStarted
+      ? createOsc133CommandFinishedScanner(
+          (exitCode) => onCommandFinished?.(exitCode),
+          onCommandStarted ? () => onCommandStarted() : undefined
+        )
+      : null
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
   let transientSideEffectScanningEnabled = true
   let transientFactScanningSuppressed = false
@@ -280,8 +275,8 @@ export function createTerminalTitleTracker(
         agentTracker?.seedTitle(rawTitle)
       }
     },
-    restoreLastAgentExit(): AgentStatus | null {
-      return agentTracker?.restoreLastExit() ?? null
+    restoreLastAgentExit(confirmedStatus?: AgentStatus): AgentStatus | null {
+      return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
     setTransientFactScanningSuppressed(suppressed: boolean): void {

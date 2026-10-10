@@ -1,7 +1,10 @@
+import type { RuntimeEnvironmentStatus } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getSshTargetIdForExecutionHost,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -16,6 +19,7 @@ import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
+import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
 
 export type ExecutionHostHealth =
   | 'local'
@@ -40,20 +44,19 @@ export type ExecutionHostRegistryEntry = {
   platform?: NodeJS.Platform | null
   remoteControlState?: RuntimeStatus['remoteControl']
   source?: RuntimeEnvironmentSource
+  /** See managed-orcad-execution-host: pairs an SSH host with its managed server. */
+  aliasHostIds?: readonly ExecutionHostId[]
+  mergedIntoHostId?: ExecutionHostId
 }
 
 type RuntimeEnvironmentSummary = {
   id: string
   name?: string | null
   source?: RuntimeEnvironmentSource
+  orcadDeployment?: { sshTargetId: string } | null
 }
 
-type RuntimeHostStatus = {
-  status?: RuntimeStatus | null
-  appVersion?: string | null
-}
-
-type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeHostStatus>
+type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
 
 export type ExecutionHostSource = 'configured-only' | 'include-references'
 
@@ -79,13 +82,13 @@ function runtimeCompatibility(
 
 function runtimeHealth(
   status: RuntimeStatus | null | undefined,
-  compatibility: RuntimeCompatVerdict | null
+  compatibility: RuntimeCompatVerdict | null,
+  remoteControl: RuntimeStatus['remoteControl'] | null | undefined
 ): ExecutionHostHealth {
-  // Why: with no live status we have no evidence the Orca server is reachable, so
-  // it must read 'disconnected' (like SSH) rather than defaulting to 'available'.
-  // A configured-but-never-connected host was showing "Connected" otherwise.
+  // Why: with no live status we have no evidence the Orca server is reachable,
+  // unless a ready shared-control socket already proved the transport is up.
   if (!status) {
-    return 'disconnected'
+    return remoteControl?.state === 'ready' ? 'available' : 'disconnected'
   }
   if (!compatibility) {
     return 'available'
@@ -157,22 +160,44 @@ function addRuntimeHost(
   const hostId = toRuntimeExecutionHostId(environmentId)
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
-  const compatibility = runtimeCompatibility(status)
-  const controlHealth = runtimeControlHealth(status?.remoteControl)
+  const snapshot = runtimeStatus?.snapshot
+  const metadata = status ?? snapshot?.status
+  const compatibility = runtimeCompatibility(metadata)
+  const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
+  // Why: the status owner withdraws `verified` whenever a ready socket drops, so a verified
+  // answer proves the host reachable while shared control is still connecting (#10704).
+  const reachable =
+    snapshot?.transport === 'ready'
+      ? snapshot.verification !== 'checking'
+      : snapshot?.verification === 'verified' && snapshot.transport !== 'disconnected'
+  const controlHealth = snapshot?.retired
+    ? 'disconnected'
+    : snapshot?.verification === 'blocked'
+      ? 'blocked'
+      : reachable
+        ? compatibility?.kind === 'blocked'
+          ? 'blocked'
+          : 'available'
+        : !runtimeStatus ||
+            snapshot?.verification === 'checking' ||
+            snapshot?.transport === 'disconnected' ||
+            snapshot?.transport === 'connecting'
+          ? 'connecting'
+          : runtimeControlHealth(remoteControl)
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
     label,
     detail: 'Orca server',
-    health: controlHealth ?? runtimeHealth(status, compatibility),
+    health: controlHealth ?? runtimeHealth(status, compatibility, remoteControl),
     compatibility: compatibility ?? undefined,
-    capabilities: status?.capabilities,
-    appVersion: runtimeStatus?.appVersion ?? status?.appVersion ?? null,
-    protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
+    capabilities: metadata?.capabilities,
+    appVersion: runtimeStatus?.appVersion ?? metadata?.appVersion ?? null,
+    protocolVersion: metadata?.runtimeProtocolVersion ?? metadata?.protocolVersion ?? null,
     minCompatibleClientVersion:
-      status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null,
-    remoteControlState: status?.remoteControl ?? null,
+      metadata?.minCompatibleRuntimeClientVersion ?? metadata?.minCompatibleMobileVersion ?? null,
+    platform: metadata?.hostPlatform ?? null,
+    remoteControlState: remoteControl ?? null,
     ...(source ? { source } : {})
   })
 }
@@ -261,7 +286,9 @@ export function buildExecutionHostRegistry(args: {
   }
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
-      const targetId = normalizeHostPart(repo.connectionId)
+      // Why the host, not `connectionId`: a paired-server repo's `connectionId` is the server's
+      // own SSH target, which this client cannot dial.
+      const targetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
       if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }
@@ -280,12 +307,21 @@ export function buildExecutionHostRegistry(args: {
     })
   }
 
+  annotateManagedOrcadExecutionHosts({
+    hosts,
+    runtimeEnvironments: args.runtimeEnvironments ?? [],
+    sshConnectionStates: args.sshConnectionStates
+  })
+
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {
     return [...hosts.values()]
   }
   return [...hosts.values()].map((host) => {
-    const label = overrides.get(host.id)
+    // Why the alias fallback: a rename saved on the merged-away id still names the merged row.
+    const label =
+      overrides.get(host.id) ??
+      host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
     return label ? { ...host, label } : host
   })
 }

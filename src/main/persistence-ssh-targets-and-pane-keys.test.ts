@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
-import { SshConnectionStore } from './ssh/ssh-connection-store'
-import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -13,6 +7,14 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import { SshConnectionStore } from './ssh/ssh-connection-store'
+import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
@@ -63,7 +65,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 2. Load from existing valid file ─────────────────────────────────
@@ -264,6 +267,78 @@ describe('Store', () => {
     expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
+  it('persists known relay runtime choices and drops unknown ones', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-runtime-pinned',
+      label: 'Pinned runtime',
+      host: 'pinned.example.com',
+      port: 22,
+      username: 'dev',
+      remoteRuntime: 'pinned-node'
+    })
+    store.addSshTarget({
+      id: 'ssh-runtime-host-node',
+      label: 'Host Node runtime',
+      host: 'host-node.example.com',
+      port: 22,
+      username: 'dev',
+      remoteRuntime: 'legacy'
+    })
+    store.addSshTarget({
+      id: 'ssh-runtime-unknown',
+      label: 'Newer build value',
+      host: 'newer.example.com',
+      port: 22,
+      username: 'dev',
+      // A value from a newer build, which this one must not act on.
+      ...JSON.parse('{"remoteRuntime":"auto"}')
+    })
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const byId = (id: string) => persisted.sshTargets?.find((t) => t.id === id)
+    expect(byId('ssh-runtime-pinned')?.remoteRuntime).toBe('pinned-node')
+    // An explicit Host Node choice must outlive a later default flip.
+    expect(byId('ssh-runtime-host-node')?.remoteRuntime).toBe('legacy')
+    expect(byId('ssh-runtime-unknown')).not.toHaveProperty('remoteRuntime')
+  })
+
+  it('keeps a well-formed runtime ladder decision and drops a malformed one', async () => {
+    const store = await createStore()
+    const resolution = {
+      rung: 'C',
+      pinnedRefusal: 'illegal_instruction',
+      glibc: '2.28',
+      runtimeSha256: 'a'.repeat(64),
+      orcaMajor: 1
+    }
+    store.addSshTarget({
+      id: 'ssh-ladder-ok',
+      label: 'Ladder ok',
+      host: 'ok.example.com',
+      port: 22,
+      username: 'dev',
+      ...JSON.parse(JSON.stringify({ remoteRuntimeResolution: resolution }))
+    })
+    store.addSshTarget({
+      id: 'ssh-ladder-bad',
+      label: 'Ladder bad',
+      host: 'bad.example.com',
+      port: 22,
+      username: 'dev',
+      ...JSON.parse(
+        JSON.stringify({ remoteRuntimeResolution: { ...resolution, runtimeSha256: '../x' } })
+      )
+    })
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const byId = (id: string) => persisted.sshTargets?.find((t) => t.id === id)
+    expect(byId('ssh-ladder-ok')?.remoteRuntimeResolution).toEqual(resolution)
+    expect(byId('ssh-ladder-bad')).not.toHaveProperty('remoteRuntimeResolution')
+  })
+
   it('drops retired per-target SSH terminal source-credit selections', async () => {
     const store = await createStore()
     store.addSshTarget({
@@ -346,7 +421,7 @@ describe('Store', () => {
     const acknowledgedAt = 1_700_000_000_000
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {},
       settings: {},
       ui: {
@@ -408,7 +483,7 @@ describe('Store', () => {
 
     writeDataFile({
       schemaVersion: 1,
-      repos: [makeRepo()],
+      repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
       worktreeMeta: {},
       settings: {},
       ui: {

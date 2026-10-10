@@ -2,8 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck, AutomationPrecheckResult } from '../../shared/automations-types'
 import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../shared/automation-precheck'
-import { getSshConnectionManager } from '../ipc/ssh'
+import { getSshConnectionManager } from '../ssh/ssh-target-registry'
 import { shellEscape } from '../ssh/ssh-connection-utils'
+import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
+import { errorMessage } from '../../shared/error-message'
 
 type AutomationPrecheckExecutionTarget =
   | {
@@ -73,7 +75,10 @@ function failedPrecheckResult(
   })
 }
 
-function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof setTimeout> | null {
+/** Exported for the refusal-fallback test; the timeout path is otherwise unreachable. */
+export function killLocalPrecheckProcessTree(
+  child: ChildProcess
+): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
   if (!pid) {
     child.kill()
@@ -81,6 +86,18 @@ function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof se
   }
 
   if (process.platform === 'win32') {
+    if (
+      !admitSelfInitiatedTreeKill({
+        pid,
+        site: 'automation-precheck-timeout',
+        scope: 'win-taskkill-tree'
+      })
+    ) {
+      // Refusal blocks the tree walk, not the termination: killing the root by
+      // handle cannot reach a recycled pid, and a timed-out precheck must stop.
+      child.kill()
+      return null
+    }
     try {
       // Why: shell prechecks can launch child processes; taskkill walks the
       // Windows process tree so timeout means the command is actually stopped.
@@ -250,11 +267,7 @@ async function runSshPrecheck(
     const channel = await connection.exec(remoteCommand)
     return await runSshChannelPrecheck({ precheck, channel, startedAt })
   } catch (error) {
-    return failedPrecheckResult(
-      precheck,
-      startedAt,
-      error instanceof Error ? error.message : String(error)
-    )
+    return failedPrecheckResult(precheck, startedAt, errorMessage(error))
   }
 }
 

@@ -1,11 +1,13 @@
 import type {
   ConfirmForegroundProcessRequest,
+  ConfirmShellForegroundRequest,
   GetForegroundProcessRequest,
   InspectProcessRequest
 } from './daemon-foreground-process-protocol'
 
 export type {
   ConfirmForegroundProcessRequest,
+  ConfirmShellForegroundRequest,
   GetForegroundProcessRequest,
   InspectProcessRequest
 } from './daemon-foreground-process-protocol'
@@ -20,6 +22,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
@@ -77,6 +80,7 @@ export type CreateOrAttachRequest = {
      *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
      *  or the hard-coded powershell.exe fallback. */
     shellOverride?: string
+    terminalShellArgs?: string[]
     /** Preferred WSL distro for generic `wsl.exe` launches. */
     terminalWindowsWslDistro?: string | null
     /** Why: the UI keeps PowerShell as one shell family, but the runtime may
@@ -94,12 +98,6 @@ export type CreateOrAttachRequest = {
       surface: AgentSessionSurfaceBinding
     }
   }
-}
-
-export type CloseStartupQueryAuthorityRequest = {
-  id: string
-  type: 'closeStartupQueryAuthority'
-  payload: { sessionId: string }
 }
 
 export type CancelCreateOrAttachRequest = {
@@ -203,9 +201,10 @@ export type GetCwdRequest = {
   }
 }
 
-export type ClearScrollbackRequest = {
+// Why resetInputModes is a type, not a clear flag: an older daemon rejects it instead of clearing.
+export type TerminalBufferActionRequest = {
   id: string
-  type: 'clearScrollback'
+  type: 'clearScrollback' | 'resetInputModes'
   payload: {
     sessionId: string
   }
@@ -317,7 +316,8 @@ export type DaemonRequest =
   | GetForegroundProcessRequest
   | InspectProcessRequest
   | ConfirmForegroundProcessRequest
-  | ClearScrollbackRequest
+  | ConfirmShellForegroundRequest
+  | TerminalBufferActionRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest
@@ -325,7 +325,8 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
-  | CloseStartupQueryAuthorityRequest
+  | PtyOwnerQueryProtocol.CloseStartupQueryAuthorityRequest
+  | PtyOwnerQueryProtocol.SetColorQueryReplyColorsRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 
@@ -388,7 +389,7 @@ export type DaemonSessionInfo = SessionInfo & {
 
 // Stream-socket event shapes live in daemon-stream-events.ts; re-exported so
 // existing importers keep one types entry point.
-export * from './daemon-stream-events'
+export type * from './daemon-stream-events'
 
 // ─── Notify prefix ──────────────────────────────────────────────────
 // Requests with IDs starting with this prefix are fire-and-forget:
@@ -400,6 +401,9 @@ export const NOTIFY_PREFIX = 'notify_'
 // live in daemon-errors.ts (this file is capped for wire-shape declarations).
 export {
   TerminalAttachCanceledError,
+  DaemonConnectionLostError,
   DaemonProtocolError,
+  DaemonRequestTimeoutError,
+  DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   SessionNotFoundError
 } from './daemon-errors'

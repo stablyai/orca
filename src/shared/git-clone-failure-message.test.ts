@@ -71,4 +71,59 @@ describe('getGitCloneFailureMessage', () => {
     )
     expect(usedLineSplit).toBe(false)
   })
+
+  it('names the non-interactive remote clone when a key could not be offered', () => {
+    const stderr =
+      "Cloning into 'repo'...\n" +
+      'git@github.com: Permission denied (publickey).\n' +
+      'fatal: Could not read from remote repository.\n'
+
+    const message = getGitCloneFailureMessage(stderr)
+
+    expect(message).toContain('fatal: Could not read from remote repository.')
+    expect(message).toContain('BatchMode=yes')
+    expect(message).toContain('ssh-add')
+  })
+
+  it('points host key failures at the machine that runs the clone', () => {
+    const stderr = 'Host key verification failed.\nfatal: Could not read from remote repository.\n'
+
+    const message = getGitCloneFailureMessage(stderr)
+
+    expect(message).toContain('known_hosts')
+    expect(message).not.toContain('ssh-add')
+  })
+
+  it('still explains where an unrecognised SSH clone failure ran', () => {
+    const stderr =
+      'kex_exchange_identification: read: Connection reset by peer\nfatal: Could not read from remote repository.\n'
+
+    expect(getGitCloneFailureMessage(stderr)).toContain('BatchMode=yes')
+  })
+
+  it('leaves non-SSH clone failures untouched', () => {
+    expect(
+      getGitCloneFailureMessage("fatal: repository 'https://github.com/org/repo.git/' not found")
+    ).toBe("fatal: repository 'https://github.com/org/repo.git/' not found")
+  })
+
+  it('withholds SSH guidance when the failing transport was HTTPS', () => {
+    // Git reuses this line for the HTTP remote helper, so the string alone does not prove SSH.
+    const stderr =
+      'remote: Invalid username or token.\n' +
+      "fatal: Authentication failed for 'https://github.com/org/repo.git/'\n" +
+      'fatal: Could not read from remote repository.\n'
+
+    expect(getGitCloneFailureMessage(stderr)).not.toContain('BatchMode=yes')
+  })
+
+  it('does not repeat the guidance when a relay message is re-parsed', () => {
+    const relayMessage = `Clone failed: ${getGitCloneFailureMessage(
+      'git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n'
+    )}`
+
+    const reparsed = getGitCloneFailureMessage(relayMessage)
+
+    expect(reparsed.match(/BatchMode=yes/g)).toHaveLength(1)
+  })
 })

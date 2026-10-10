@@ -1,18 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
+  classifyAutomationCronSchedule,
+  describeAutomationSchedule,
+  formatAutomationSchedule
+} from './automation-schedules'
+import {
   buildAutomationCronSchedule,
   buildAutomationRrule,
-  classifyAutomationCronSchedule,
-  formatAutomationSchedule,
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from './automation-schedule-occurrences'
+import {
+  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
   getAutomationCronExpressionFields,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
-  latestAutomationOccurrenceAtOrBefore,
-  nextAutomationOccurrenceAfter,
   parseAutomationRrule,
   tryParseAutomationRrule
-} from './automation-schedules'
+} from './automation-schedule-parsing'
 
 function formatTimeForTest(hour: number, minute: number): string {
   const date = new Date()
@@ -104,6 +109,50 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('FREQ=YEARLY')).toBe('Invalid schedule')
   })
 
+  it.each([
+    ['TU,TH,SA', new Date(2026, 9, 6, 8)],
+    ['MO,WE,FR,SU', new Date(2026, 9, 7, 8)],
+    ['MO,TU,WE,TH,FR,SA,SU', new Date(2026, 9, 6, 8)]
+  ])(
+    'labels a runnable multi-day weekly rule %s without calling it invalid (#24985)',
+    (days, next) => {
+      const rrule = `FREQ=WEEKLY;BYDAY=${days};BYHOUR=8;BYMINUTE=0`
+      const start = new Date(2026, 9, 5, 9).getTime()
+
+      expect(isValidAutomationSchedule(rrule)).toBe(true)
+      expect(nextAutomationOccurrenceAfter(rrule, start, start)).toBe(next.getTime())
+      expect(formatAutomationSchedule(`  ${rrule}  `)).toBe(rrule)
+      expect(describeAutomationSchedule(`  ${rrule}  `)).toEqual({
+        kind: 'custom',
+        expression: rrule
+      })
+    }
+  )
+
+  it.each(['FREQ=WEEKLY;BYDAY=TU,NO;BYHOUR=8;BYMINUTE=0', 'FREQ=YEARLY', '0 0 31 2 *'])(
+    'keeps the invalid label for schedules the scheduler rejects: %s',
+    (schedule) => {
+      expect(isValidAutomationSchedule(schedule)).toBe(false)
+      expect(formatAutomationSchedule(schedule)).toBe('Invalid schedule')
+      expect(describeAutomationSchedule(schedule)).toEqual({ kind: 'invalid' })
+    }
+  )
+
+  it.each([
+    ['\u001b[2J', '\\x1b[2J'],
+    ['\u001b]52;c;ZXZpbA==\u0007', '\\x1b]52;c;ZXZpbA==\\x07'],
+    ['\u009b2J', '\\x9b2J'],
+    ['\t\r\n', '\\x09\\x0d\\x0a']
+  ])('renders accepted control bytes as printable schedule text', (control, escaped) => {
+    const prefix = 'FREQ=WEEKLY;BYDAY=TU,TH;BYHOUR=8;BYMINUTE=0;X='
+    const expression = `${prefix}${control};Y=keep`
+    const expected = `${prefix}${escaped};Y=keep`
+
+    expect(isValidAutomationSchedule(expression)).toBe(true)
+    expect(formatAutomationSchedule(expression)).toBe(expected)
+    expect(describeAutomationSchedule(expression)).toEqual({ kind: 'custom', expression: expected })
+  })
+
   it('formats hourly schedules using the stored minute', () => {
     expect(formatAutomationSchedule('FREQ=HOURLY;BYMINUTE=5')).toBe('Hourly at :05')
   })
@@ -135,6 +184,54 @@ describe('automation schedules', () => {
     expect(
       buildAutomationCronSchedule({ preset: 'weekly', hour: 9, minute: 15, dayOfWeek: 0 })
     ).toBe('15 9 * * 0')
+  })
+
+  // Why: shared labels feed the CLI, so they must stay English on any OS locale (#14404).
+  it('formats schedule labels without reading the OS weekday names', () => {
+    const nativeDateTimeFormat = Intl.DateTimeFormat
+    const dateTimeFormat = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (
+      ...args: ConstructorParameters<typeof Intl.DateTimeFormat>
+    ) {
+      return new nativeDateTimeFormat(...args)
+    } as unknown as typeof Intl.DateTimeFormat)
+    const weeklyRrule = buildAutomationRrule({ preset: 'weekly', hour: 9, minute: 0, dayOfWeek: 5 })
+
+    expect(formatAutomationSchedule('30 12 * * 7')).toBe(`Sundays at ${formatTimeForTest(12, 30)}`)
+    expect(formatAutomationSchedule(weeklyRrule)).toBe(`Fridays at ${formatTimeForTest(9, 0)}`)
+    expect(classifyAutomationCronSchedule('30 12 * * 7').label).toBe(
+      `Sundays at ${formatTimeForTest(12, 30)}`
+    )
+    expect(
+      dateTimeFormat.mock.calls.filter(([, options]) => options?.weekday !== undefined)
+    ).toHaveLength(0)
+  })
+
+  it('exposes a locale-free descriptor for callers that render their own copy', () => {
+    expect(describeAutomationSchedule('30 12 * * 7')).toEqual({
+      kind: 'weekly',
+      hour: 12,
+      minute: 30,
+      dayOfWeek: 0
+    })
+    expect(describeAutomationSchedule('5 * * * *')).toEqual({ kind: 'hourly', minute: 5 })
+    expect(describeAutomationSchedule('15 10 * * MON-FRI')).toEqual({
+      kind: 'weekdays',
+      hour: 10,
+      minute: 15
+    })
+    expect(describeAutomationSchedule('FREQ=DAILY;BYHOUR=9;BYMINUTE=0')).toEqual({
+      kind: 'daily',
+      hour: 9,
+      minute: 0
+    })
+    expect(describeAutomationSchedule('FREQ=WEEKLY;BYDAY=FR;BYHOUR=9;BYMINUTE=0')).toEqual({
+      kind: 'weekly',
+      hour: 9,
+      minute: 0,
+      dayOfWeek: 5
+    })
+    expect(describeAutomationSchedule('*/30 9-17 * * MON-FRI')).toEqual({ kind: 'custom' })
+    expect(describeAutomationSchedule('FREQ=YEARLY')).toEqual({ kind: 'invalid' })
   })
 
   it('formats simple cron schedules with friendly labels', () => {
@@ -189,7 +286,9 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('0 9,17 * * MON-FRI')).toBe('Custom schedule')
   })
 
-  it('treats all-value cron day fields as unrestricted for DOM/DOW matching', () => {
+  // Restriction is lexical (#15896), but a star step is still a star: `*/1` does not
+  // restrict, so the day rule stays AND and this fires on Mondays only.
+  it('treats a stepped cron day-of-month field as unrestricted for DOM/DOW matching', () => {
     const next = nextAutomationOccurrenceAfter(
       '0 9 */1 * MON',
       new Date('2026-05-01T00:00:00').getTime(),

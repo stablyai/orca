@@ -1,7 +1,7 @@
 // Pure mapping from a parsed hook event plus its raw body onto the `agent.hook` envelope that goes
 // over the SSH channel. Sits beside agent-hook-envelope-publication.ts, which owns shedding and
 // redelivery of the same envelope.
-import type { AgentHookEventPayload } from '../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
 
 // Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
@@ -16,7 +16,12 @@ export function buildRelayHookEnvelope(
 ): AgentHookRelayEnvelope {
   return {
     source,
+    ...(event.hostEvidenceObservedAt !== undefined
+      ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
+      : {}),
+    agentPresence: event.agentPresence,
     paneKey: event.paneKey,
+    ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
     tabId: event.tabId,
     worktreeId: event.worktreeId,
@@ -25,9 +30,11 @@ export function buildRelayHookEnvelope(
     promptInteractionKey: event.promptInteractionKey,
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
+    grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
     toolAgentId: event.toolAgentId,
+    teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,
     claudeRunningNonAgentTask: event.claudeRunningNonAgentTask,
     ...(event.providerSession ? { providerSession: event.providerSession } : {}),

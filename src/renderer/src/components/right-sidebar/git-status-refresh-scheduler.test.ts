@@ -29,7 +29,7 @@ function createScheduler(
     activityDebounceMs: 125,
     activityMinGapMs: 3000,
     slowTaskBackoff: {
-      idleMultiplier: 5,
+      idleMultiplier: 1,
       changeSignalMultiplier: 1,
       maxIntervalMs: 5 * 60_000
     },
@@ -176,11 +176,11 @@ describe('createGitStatusRefreshScheduler', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(2)
 
-    // The second scan is also slow; the next safety waits max(60s, 5x) = 150s.
+    // The second scan is also slow; the next safety waits max(60s, 1x) = 60s.
     await vi.advanceTimersByTimeAsync(30_000)
     calls[1]?.resolve()
     await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(149_999)
+    await vi.advanceTimersByTimeAsync(59_999)
     expect(task).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(3)

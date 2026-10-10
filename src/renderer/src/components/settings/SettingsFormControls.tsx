@@ -4,6 +4,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Switch } from '../ui/switch'
+import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
 import { normalizeColor } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -262,13 +263,22 @@ type ColorFieldProps = {
 type NumberFieldProps = {
   label: string
   description: string
-  value: number
+  /** undefined renders the field empty — pair it with `placeholder` and `onClear` for an unset state. */
+  value: number | undefined
   defaultValue?: number
   min: number
-  max: number
+  max?: number
   step?: number
+  integer?: boolean
   onChange: (value: number) => void
+  /** When set, emptying the field clears the setting instead of snapping back to the current value. */
+  onClear?: () => void
+  placeholder?: string
   suffix?: string
+  className?: string
+  disabled?: boolean
+  /** Hover explanation shown only while the field is disabled. */
+  disabledReason?: string
 }
 
 export function ColorField({
@@ -312,8 +322,14 @@ export function NumberField({
   min,
   max,
   step = 1,
+  integer = false,
   onChange,
-  suffix
+  onClear,
+  placeholder,
+  suffix,
+  className,
+  disabled = false,
+  disabledReason
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
@@ -325,15 +341,23 @@ export function NumberField({
   }
 
   const commit = (): void => {
+    if (disabled) {
+      return
+    }
     const trimmed = draft.trim()
     if (trimmed === '') {
+      if (onClear) {
+        // Clearable fields treat empty as "unset" so the caller can fall back to its automatic value.
+        onClear()
+        return
+      }
       // Empty input — reset to current value rather than committing 0
       setDraft(Number.isFinite(value) ? String(value) : '')
       return
     }
     const next = Number(trimmed)
-    if (Number.isFinite(next)) {
-      const clamped = Math.min(max, Math.max(min, next))
+    if (Number.isFinite(next) && (!integer || Number.isSafeInteger(next))) {
+      const clamped = max === undefined ? Math.max(min, next) : Math.min(max, Math.max(min, next))
       onChange(clamped)
       setDraft(String(clamped))
     } else {
@@ -344,6 +368,7 @@ export function NumberField({
 
   return (
     <SettingsRow
+      className={className}
       label={label}
       description={
         <>
@@ -358,21 +383,26 @@ export function NumberField({
       }
       control={
         <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                commit()
-              }
-            }}
-            className="number-input-clean w-24 tabular-nums"
-          />
+          <SettingsDisabledControlTooltip reason={disabled ? disabledReason : undefined}>
+            <Input
+              type="number"
+              disabled={disabled}
+              min={min}
+              max={max}
+              step={step}
+              aria-label={label}
+              placeholder={placeholder}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commit()
+                }
+              }}
+              className="number-input-clean w-24 tabular-nums"
+            />
+          </SettingsDisabledControlTooltip>
           {suffix ? <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span> : null}
         </div>
       }

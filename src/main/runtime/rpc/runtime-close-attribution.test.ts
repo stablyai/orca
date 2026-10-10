@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../../observability/tracer'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -22,6 +23,31 @@ function capturingSink(): CapturingSink {
 
 function request(method: string, params: unknown): RpcRequest {
   return { id: 'close-request-1', authToken: 'test-token', method, params }
+}
+
+function visibleSessionTab(worktree: string, tabId: string) {
+  return {
+    worktree,
+    publicationEpoch: 'epoch-1',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: tabId,
+    activeTabType: 'browser' as const,
+    tabs: [
+      {
+        type: 'browser' as const,
+        id: tabId,
+        title: 'Browser',
+        browserWorkspaceId: tabId,
+        browserPageId: tabId,
+        url: 'about:blank',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        isActive: true
+      }
+    ]
+  }
 }
 
 describe('runtime close attribution', () => {
@@ -106,6 +132,7 @@ describe('runtime close attribution', () => {
     async (method, params, spanName) => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',
+        listMobileSessionTabs: vi.fn(async () => visibleSessionTab('wt-1', 'tab-1')),
         closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
       } as unknown as OrcaRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })

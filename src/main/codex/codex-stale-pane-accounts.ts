@@ -2,29 +2,28 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
 import {
   forgetCodexPaneAccount,
-  getCodexPaneAccount,
-  type CodexPaneHomeRoute
+  listRecordedCodexPaneAccounts
 } from './codex-pane-account-registry'
 
 export type StaleCodexPane = {
   ptyId: string
   launchAccountId: string | null
   activeAccountId: string | null
-  reason: 'account-change' | 'home-route-change'
 }
 
 /**
  * Reports which of the given PTYs still launch Codex as a previously selected
  * account, so the restart prompt survives an app restart the shells outlive.
+ * Why only the account: a pane on an older Codex home keeps working, refreshed from ~/.codex.
  */
 export function listStaleCodexPanes(args: {
   ptyIds: readonly string[]
   settings: GlobalSettings
-  activeHostHomeRoute?: CodexPaneHomeRoute
 }): StaleCodexPane[] {
   const stalePanes: StaleCodexPane[] = []
+  const records = listRecordedCodexPaneAccounts(args.ptyIds)
   for (const ptyId of args.ptyIds) {
-    const record = getCodexPaneAccount(ptyId)
+    const record = records.get(ptyId)
     if (!record) {
       continue
     }
@@ -32,20 +31,8 @@ export function listStaleCodexPanes(args: {
       args.settings,
       parseSelectionLaneKey(record.selectionKey)
     )
-    const homeRouteChanged =
-      record.selectionKey === 'host' &&
-      record.homeRoute !== undefined &&
-      record.homeRoute !== 'custom-home' &&
-      args.activeHostHomeRoute !== undefined &&
-      record.homeRoute !== args.activeHostHomeRoute
-    const accountChanged = record.accountId !== activeAccountId
-    if (accountChanged || homeRouteChanged) {
-      stalePanes.push({
-        ptyId,
-        launchAccountId: record.accountId,
-        activeAccountId,
-        reason: accountChanged ? 'account-change' : 'home-route-change'
-      })
+    if (record.accountId !== activeAccountId) {
+      stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })
     }
   }
   return stalePanes

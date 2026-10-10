@@ -2,11 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { SkillInstallProgress } from '../../../../shared/skill-sharing-contract'
 import { translate } from '@/i18n/i18n'
 
-const INSTALL_PHASE_LABELS = {
-  authorizing: 'Authorizing package access…',
-  installing: 'Downloading, verifying, and installing…'
-} as const
-
 export function useSkillInstallProgress(): {
   activeOperationId: string | null
   phaseLabel: string | null
@@ -40,7 +35,12 @@ export function useSkillInstallProgress(): {
           }
         )
       : progress
-        ? INSTALL_PHASE_LABELS[progress.phase]
+        ? progress.phase === 'authorizing'
+          ? translate('auto.components.skills.install.authorizing', 'Authorizing package access…')
+          : translate(
+              'auto.components.skills.install.installing',
+              'Downloading, verifying, and installing…'
+            )
         : null,
     begin: (operationId) => {
       activeOperationIdRef.current = operationId

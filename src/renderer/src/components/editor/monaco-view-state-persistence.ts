@@ -1,10 +1,10 @@
 import type { MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import { editorSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor
-  filePath: string
+  fileIdRef: MutableRefObject<string>
   viewStateKey: string
   scrollThrottleTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>
   setEditorCursorLine: (fileId: string, line: number) => void
@@ -14,20 +14,16 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
   cursorPositionSub: { dispose: () => void }
   scrollStateSub: { dispose: () => void }
 } {
-  const { editorInstance, filePath, viewStateKey, scrollThrottleTimerRef, setEditorCursorLine } =
+  const { editorInstance, fileIdRef, viewStateKey, scrollThrottleTimerRef, setEditorCursorLine } =
     params
 
   // Track cursor line for "copy path to line" feature
   const pos = editorInstance.getPosition()
   if (pos) {
-    setEditorCursorLine(filePath, pos.lineNumber)
+    setEditorCursorLine(fileIdRef.current, pos.lineNumber)
   }
   const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
-    setEditorCursorLine(filePath, e.position.lineNumber)
-    setWithLRU(cursorPositionCache, viewStateKey, {
-      lineNumber: e.position.lineNumber,
-      column: e.position.column
-    })
+    setEditorCursorLine(fileIdRef.current, e.position.lineNumber)
   })
 
   // Why: only the resting scroll position matters, so trailing-throttle writes (~150ms) instead of writing every 60fps frame.
@@ -48,13 +44,13 @@ export function restoreMonacoViewState(
   editorInstance: editor.IStandaloneCodeEditor,
   viewStateKey: string
 ): void {
-  const savedCursor = cursorPositionCache.get(viewStateKey)
+  const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
-  if (savedScrollTop !== undefined || savedCursor) {
+  if (savedScrollTop !== undefined || savedSelections) {
     // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
     requestAnimationFrame(() => {
-      if (savedCursor) {
-        editorInstance.setPosition(savedCursor)
+      if (savedSelections) {
+        editorInstance.setSelections(savedSelections)
       }
       if (savedScrollTop !== undefined) {
         editorInstance.setScrollTop(savedScrollTop)
@@ -74,12 +70,9 @@ export function snapshotMonacoViewState(
   const ed = editorRef.current
   if (ed) {
     setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop())
-    const pos = ed.getPosition()
-    if (pos) {
-      setWithLRU(cursorPositionCache, viewStateKey, {
-        lineNumber: pos.lineNumber,
-        column: pos.column
-      })
+    const selections = ed.getSelections()
+    if (selections) {
+      setWithLRU(editorSelectionCache, viewStateKey, selections)
     }
   }
 }

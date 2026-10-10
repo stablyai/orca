@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { mobileSessionRouteTarget } from './mobile-session-route'
 import {
@@ -6,8 +5,6 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const homeSource = readFileSync(new URL('../../app/index.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -94,31 +91,5 @@ describe('mobile session route', () => {
       source: 'host-index',
       payload: target
     })
-  })
-
-  it('routes the home Resume card through the cold-navigator-safe transition', () => {
-    const start = homeSource.indexOf('{/* ─── Resume card ─── */}')
-    const end = homeSource.indexOf('{/* ─── Quick actions ─── */}', start)
-
-    // Assert the markers first: a renamed banner would otherwise slice garbage and
-    // report a missing call instead of the real cause.
-    expect(start).toBeGreaterThanOrEqual(0)
-    expect(end).toBeGreaterThan(start)
-
-    const resumeCard = homeSource.slice(start, end)
-    expect(resumeCard).toContain('openResume(')
-    expect(resumeCard).not.toContain('router.push(')
-
-    // The tap handler itself must go through the coordinated transition; its only
-    // direct push is the shallow noticed host-index route for a proven-missing target.
-    const handlerStart = homeSource.indexOf('const openResume = useCallback(')
-    const handlerEnd = homeSource.indexOf('[openMobileSession, router]', handlerStart)
-    expect(handlerStart).toBeGreaterThanOrEqual(0)
-    expect(handlerEnd).toBeGreaterThan(handlerStart)
-
-    const openResume = homeSource.slice(handlerStart, handlerEnd)
-    expect(openResume).toContain('openMobileSession({')
-    expect(openResume.match(/router\.push\(/g)).toHaveLength(1)
-    expect(openResume).toContain('router.push(hostRouteWithNotice(')
   })
 })

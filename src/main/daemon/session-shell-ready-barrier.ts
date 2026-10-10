@@ -1,3 +1,4 @@
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import {
   installDeviceAttributesResponder,
   STARTUP_DA1_RESPONSE
@@ -15,10 +16,10 @@ import {
 } from '../shell-prompt-readiness-probe'
 import type { HeadlessEmulator } from './headless-emulator'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import { basename } from 'node:path'
 import type { ShellReadyState } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
-// Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
 export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 
 export type SessionShellReadyBarrierDeps = {
@@ -30,6 +31,10 @@ export type SessionShellReadyBarrierDeps = {
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
   acceptStartupIngress(data: string): void
+  /** Reports a readiness outcome worth diagnosing. Why injected rather than
+   *  console: the daemon runs detached with stdio 'ignore', so console output
+   *  goes nowhere -- the only durable sink is the daemon's NDJSON file log. */
+  reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
 
 /** The startup gate every byte of PTY output passes through: it strips the shell-ready marker, holds
@@ -64,7 +69,10 @@ export class SessionShellReadyBarrier {
       this._state = 'unsupported'
     }
 
-    this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
+    this.postReadyFlushGate = new PostReadyFlushGate(
+      () => this.flushPreReadyQueue(),
+      shellReadyMarkerComesFromLineEditor(deps.subprocess.shellPath ?? '')
+    )
   }
 
   get state(): ShellReadyState {
@@ -183,11 +191,37 @@ export class SessionShellReadyBarrier {
     this.postReadyFlushGate.arm(postMarkerBytesObserved)
   }
 
+  /** Why the shell basename and not its path: the path can carry a home dir, and
+   *  the basename is all a diagnosis needs. The session id is already logged by
+   *  the daemon's session lifecycle events, so it is only correlation here. */
+  private reportReadiness(event: string, details: Record<string, unknown>): void {
+    const shellPath = this.deps.subprocess.shellPath
+    try {
+      this.deps.reportReadinessEvent?.(event, {
+        sessionId: this.deps.sessionId,
+        shell: shellPath ? basename(shellPath) : 'unknown',
+        ...details
+      })
+    } catch {
+      // Why swallow: this runs before the state transition that releases held
+      // PTY bytes and flushes queued stdin, and the ready timer is already
+      // cleared. A throwing sink must never strand the barrier in `pending`
+      // with nothing left to wake it -- diagnostics cannot break the terminal.
+    }
+  }
+
   private onShellReadyTimeout(): void {
     this.readyTimer = null
     if (this._state !== 'pending') {
       return
     }
+    // Why report: this path costs every startup command the full timeout, and it
+    // used to fail silently -- a wrapper that never emits the marker looks
+    // identical to a slow shell. Name the shell so the next report can be
+    // diagnosed from the log alone.
+    this.reportReadiness('shell-ready-timeout', {
+      timeoutMs: this.deps.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS
+    })
     this._state = 'timed_out'
     this.disposePromptReadinessProbe()
     this.releaseDeviceAttributes()
@@ -199,9 +233,8 @@ export class SessionShellReadyBarrier {
     if (this._state !== 'pending') {
       return
     }
-    console.warn(
-      `[Session] ${this.deps.sessionId}: shell-ready wrapper was replaced before its marker; releasing at the identified shell prompt. OSC 133 integration may be unavailable.`
-    )
+    // Same sink as the timeout above: console goes nowhere in the detached daemon.
+    this.reportReadiness('shell-ready-wrapper-replaced', {})
     this.releaseHeldBytes()
     this.transitionToReady(true)
     this.releaseDeviceAttributes()

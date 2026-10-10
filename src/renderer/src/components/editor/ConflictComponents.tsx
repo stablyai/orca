@@ -241,12 +241,13 @@ export function ConflictReviewPanel({
       })),
     [liveEntriesByPath, snapshotEntries]
   )
-  const unresolvedSnapshotEntries = treeEntries.filter(
-    (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
+  const unresolvedCount = treeEntries.reduce(
+    (count, entry) => (entry.liveEntry?.conflictStatus === 'unresolved' ? count + 1 : count),
+    0
   )
-  const unresolvedCount = unresolvedSnapshotEntries.length
+  const [renderStartTime] = React.useState(() => Date.now())
   const snapshotTime = new Date(
-    file.conflictReview?.snapshotTimestamp ?? Date.now()
+    file.conflictReview?.snapshotTimestamp ?? renderStartTime
   ).toLocaleTimeString()
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed

@@ -40,8 +40,8 @@ export class PortScanHandler {
   private async scanLinuxListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
     signal?.throwIfAborted()
     const [tcp4, tcp6] = await Promise.all([
-      this.readProcNet('/proc/net/tcp', signal),
-      this.readProcNet('/proc/net/tcp6', signal)
+      this.readProcNet('/proc/net/tcp', signal, false),
+      this.readProcNet('/proc/net/tcp6', signal, true)
     ])
     signal?.throwIfAborted()
 
@@ -97,15 +97,21 @@ export class PortScanHandler {
 
   private async readProcNet(
     path: string,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined,
+    absentMeansNone: boolean
   ): Promise<{ port: number; host: string; inode: number }[]> {
     signal?.throwIfAborted()
     let content: string
     try {
       content = await readFile(path, 'utf-8')
-    } catch {
+    } catch (error) {
       signal?.throwIfAborted()
-      return []
+      // Why: tcp6 is absent when IPv6 is off; any other failure means the listeners were never
+      // read, which must not be reported as "none listening".
+      if (absentMeansNone && error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return []
+      }
+      throw new Error(`Could not read ${path} to list listening ports.`)
     }
     signal?.throwIfAborted()
 
@@ -161,6 +167,13 @@ export class PortScanHandler {
 
     for (const pidStr of pids) {
       signal?.throwIfAborted()
+      // Why: every remaining pid costs a readdir plus one readlink per fd, and this scan repeats for
+      // the life of the session. Without this the walk was O(all host processes x all fds) even once
+      // every listener was already attributed, so its cost grew with the remote's process count and
+      // never came back down — the shape behind "SSH gets slower the longer Orca stays open".
+      if (result.size === inodes.size) {
+        return result
+      }
       const fdDir = `/proc/${pidStr}/fd`
       let fds: string[]
       try {
@@ -192,6 +205,9 @@ export class PortScanHandler {
         const inode = Number.parseInt(match[1], 10)
         if (inodes.has(inode)) {
           result.set(inode, pid)
+          if (result.size === inodes.size) {
+            return result
+          }
         }
       }
     }

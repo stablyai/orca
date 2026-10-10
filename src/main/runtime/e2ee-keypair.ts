@@ -4,12 +4,17 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
-import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError,
+  writeSecureJsonFile
+} from '../../shared/secure-file'
+import {
+  E2EE_KEYPAIR_FILENAME as KEYPAIR_FILENAME,
+  MAX_E2EE_KEYPAIR_FILE_BYTES as MAX_KEYPAIR_FILE_BYTES
+} from '../../shared/runtime-e2ee-keypair-file'
 
-const KEYPAIR_FILENAME = E2EE_KEYPAIR_FILENAME
 const KEYPAIR_VERSION = 1
-const MAX_KEYPAIR_FILE_BYTES = 8 * 1024
 
 type KeypairFile = {
   v: number
@@ -21,6 +26,19 @@ export type E2EEKeypair = {
   publicKey: Uint8Array
   secretKey: Uint8Array
   publicKeyB64: string
+}
+
+// The listener decrypts with the secret key, so the advertised key must be the
+// one derived from it; a file whose stored public key disagrees would otherwise
+// put a key in every pairing offer that no listener holds. The file is left as is.
+function keypairFromSecret(secretKey: Uint8Array, storedPublicKey: Uint8Array): E2EEKeypair {
+  const { publicKey } = nacl.box.keyPair.fromSecretKey(secretKey)
+  if (!Buffer.from(publicKey).equals(Buffer.from(storedPublicKey))) {
+    console.warn(
+      '[e2ee] stored public key does not match the secret key; advertising the derived key'
+    )
+  }
+  return { publicKey, secretKey, publicKeyB64: Buffer.from(publicKey).toString('base64') }
 }
 
 export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
@@ -39,10 +57,20 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
         const publicKey = Uint8Array.from(Buffer.from(raw.publicKeyB64, 'base64'))
         const secretKey = Uint8Array.from(Buffer.from(raw.secretKeyB64, 'base64'))
         if (publicKey.length === 32 && secretKey.length === 32) {
-          return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
+          return keypairFromSecret(secretKey, publicKey)
         }
       }
-    } catch {
+    } catch (error) {
+      // A read this process is not permitted to make says nothing about the contents. Falling
+      // through would overwrite the only copy of the secret key — and the overwrite succeeds, so
+      // nothing downstream stops it. Every paired device derives its shared secret from this key,
+      // so regenerating silently un-pairs all of them and no old message stays decryptable.
+      if (isUnreadableError(error)) {
+        throw new Error(
+          `Cannot read the E2EE keypair at ${filePath}: the read failed. Refusing to regenerate it, which would invalidate every paired device.`,
+          { cause: error }
+        )
+      }
       // Malformed file — regenerate below.
     }
   }

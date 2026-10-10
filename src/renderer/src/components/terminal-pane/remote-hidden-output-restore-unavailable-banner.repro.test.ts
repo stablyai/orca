@@ -1,6 +1,9 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from './pty-connection-test-environment'
 
 // Deterministic reproduction for issue2-hidden-output-skip:
 //   "[Orca skipped hidden terminal output because main recovery was unavailable.]"
@@ -29,20 +32,6 @@ async function flushAsyncTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve()
   }
-}
-
-async function drainFakeTimerWork(limit = 20): Promise<void> {
-  await flushAsyncTicks(20)
-  if (!vi.isFakeTimers()) {
-    return
-  }
-  for (let iteration = 0; iteration < limit && vi.getTimerCount() > 0; iteration += 1) {
-    await vi.runOnlyPendingTimersAsync()
-    await flushAsyncTicks(20)
-  }
-  vi.clearAllTimers()
-  await flushAsyncTicks(20)
-  vi.clearAllTimers()
 }
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
@@ -482,13 +471,10 @@ function observeFinalPaneState(drive: RemotePaneDrive): {
 }
 
 describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)', () => {
-  const originalRequestAnimationFrame = globalThis.requestAnimationFrame
-  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
-  const originalDocument = globalThis.document
-
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
+    await installTerminalTestGlobals()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
@@ -545,7 +531,6 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
         >
         return byPaneKey[entry.paneKey]?.launchConfig
       }),
-      getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       clearSleepingAgentSession: vi.fn((paneKey: string) => {
         delete (mockStoreState.sleepingAgentSessionsByPaneKey as Record<string, unknown>)[paneKey]
       }),
@@ -627,30 +612,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     globalThis.cancelAnimationFrame = vi.fn()
   })
 
-  afterEach(async () => {
-    await drainFakeTimerWork()
-    vi.useRealTimers()
-    vi.restoreAllMocks()
-    if (originalRequestAnimationFrame) {
-      globalThis.requestAnimationFrame = originalRequestAnimationFrame
-    } else {
-      delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
-        .requestAnimationFrame
-    }
-    if (originalCancelAnimationFrame) {
-      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
-    } else {
-      delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
-        .cancelAnimationFrame
-    }
-    if (originalDocument) {
-      globalThis.document = originalDocument
-    } else {
-      delete (globalThis as { document?: Document }).document
-    }
-    delete (globalThis as unknown as { window?: unknown }).window
-    resetAgentStartupDelayedDeliveryForTests()
-  })
+  afterEach(restoreTerminalTestGlobals)
 
   // ── Mechanism (GREEN on main): pins the defective transition exactly ──────
 

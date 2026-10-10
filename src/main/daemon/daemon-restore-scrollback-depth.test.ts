@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,6 +16,7 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { TerminalHost } from './terminal-host'
 import type { DaemonFileLog } from './daemon-file-log'
+import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
@@ -46,6 +48,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExit?.(0), 1)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExit?.(137)),
     signal: vi.fn(),
     onData(callback) {
@@ -145,7 +148,9 @@ describe('STA-4091 previously recoverable restore depth', () => {
         const restoreInfo = await reader.detectColdRestore('restore-depth')
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot,
-          restoreInfo
+          restoreInfo,
+          pendingRecords: [],
+          isFirstTake: false
         })
         expect(await manager.checkpoint('restore-depth', durable)).toBe('committed')
 
@@ -173,7 +178,8 @@ describe('STA-4091 previously recoverable restore depth', () => {
           restoreInfo: null,
           pendingRecords: [
             { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
-          ]
+          ],
+          isFirstTake: false
         })
         expect(snapshotText(durable)).toContain(OLDEST_WRITTEN_LINE)
         expect(snapshotText(durable)).toContain(PREVIOUSLY_RECOVERABLE_LINE)
@@ -199,7 +205,9 @@ describe('STA-4091 previously recoverable restore depth', () => {
         live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot: { ...live.getSnapshot(), outputSequence: 9 },
-          restoreInfo
+          restoreInfo,
+          pendingRecords: [],
+          isFirstTake: false
         })
         expect(durable.outputSequence).toBe(9)
         expect(durable.scrollbackAnsi).toBe('')
@@ -208,6 +216,41 @@ describe('STA-4091 previously recoverable restore depth', () => {
       } finally {
         live.dispose()
       }
+    })
+
+    it('takes terminal ownership from the live snapshot, not the persisted proof', async () => {
+      const restoreInfo: ColdRestoreInfo = {
+        snapshotAnsi: 'stale-tui',
+        scrollbackAnsi: '',
+        rehydrateSequences: '\x1b[?1049h',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+        modes: {
+          bracketedPaste: false,
+          mouseTracking: true,
+          applicationCursor: false,
+          alternateScreen: true
+        },
+        terminalOwner: 'shell'
+      }
+      // Why no owner: the live recovery barrier already revoked it when the TUI started.
+      const { terminalOwner: _persistedOwner, ...liveState } = restoreInfo
+      const liveSnapshot: TerminalSnapshot = {
+        ...liveState,
+        scrollbackLines: 0,
+        outputSequence: 42
+      }
+
+      const durable = await buildDurableCheckpointSnapshot({
+        liveSnapshot,
+        restoreInfo,
+        pendingRecords: [{ kind: 'output', data: '\x1b[?1049hLIVE-TUI' }],
+        isFirstTake: false
+      })
+
+      expect(durable.modes.alternateScreen).toBe(true)
+      expect(durable.terminalOwner).toBeUndefined()
     })
 
     it('falls back to the live window when pending resize records are invalid', async () => {
@@ -231,7 +274,8 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const durable = await buildDurableCheckpointSnapshot({
         liveSnapshot,
         restoreInfo: null,
-        pendingRecords: [{ kind: 'resize', cols: 0, rows: 24 }]
+        pendingRecords: [{ kind: 'resize', cols: 0, rows: 24 }],
+        isFirstTake: false
       })
       expect(durable).toBe(liveSnapshot)
     })

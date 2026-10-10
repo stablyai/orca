@@ -25,7 +25,6 @@ const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
-const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
 const state = createAgentBackgroundSessionTestState({
@@ -84,7 +83,6 @@ describe('launchAgentBackgroundSession', () => {
       updateTabPtyId: mockUpdateTabPtyId,
       dispatchEvent: mockDispatchEvent,
       kill: mockKill,
-      markTrusted: mockMarkTrusted,
       spawn: mockSpawn,
       write: mockWrite
     })
@@ -92,6 +90,7 @@ describe('launchAgentBackgroundSession', () => {
 
   it('spawns a PTY first and creates the inactive tab already bound to it', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockSpawn.mockResolvedValue({ id: 'pty-1', incarnationId: 'inc-fresh' })
 
     const result = await launchAgentBackgroundSession({
       agent: 'claude',
@@ -130,7 +129,8 @@ describe('launchAgentBackgroundSession', () => {
         }),
         connectionId: null,
         worktreeId: 'wt-1',
-        tabId
+        tabId,
+        placement: { kind: 'new-tab', row: { customTitle: 'Nightly audit' } }
       })
     )
     const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
@@ -160,7 +160,13 @@ describe('launchAgentBackgroundSession', () => {
       recordInteraction: false
     })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
-    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
+    // The incarnation rides along so a relay-recycled id cannot drain the previous owner's exit
+    // into this handler and tear the session down right after launch.
+    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith(
+      'pty-1',
+      expect.any(Function),
+      'inc-fresh'
+    )
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
@@ -332,28 +338,12 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        command: `claude '--dangerously-skip-permissions' 'don'"'"'t use powershell quoting'`,
         connectionId: null,
         worktreeId: 'wt-1',
         tabId: expect.stringMatching(UUID_RE)
       })
     )
-  })
-
-  it('pre-marks trust for agents with first-launch trust prompts', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockMarkTrusted).toHaveBeenCalledWith({
-      preset: 'codex',
-      workspacePath: '/repo/worktree'
-    })
-    expect(mockSpawn).toHaveBeenCalled()
   })
 
   it('stamps hidden SSH status from renderer fallback when the kill switch is off', async () => {
@@ -426,7 +416,9 @@ describe('launchAgentBackgroundSession', () => {
       {
         state: 'working',
         prompt: 'check the status spinner',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: Orca launched this hidden session, so the seed predates any provider signal (STA-4293).
+        observation: expect.objectContaining({ origin: 'launch', kind: 'transition' })
       },
       undefined,
       undefined,
@@ -465,6 +457,31 @@ describe('launchAgentBackgroundSession', () => {
     )
     expect(onExit).toHaveBeenCalledWith('pty-1', 0)
     expect(unsubscribe).toHaveBeenCalled()
+    expect(state.markUnverifiedPtyLoss).not.toHaveBeenCalled()
+  })
+
+  it('keeps the tab bound to its PTY when contact was lost rather than observed', async () => {
+    // Same rule the terminal panes follow: a -1 sentinel retires the transport
+    // only. Clearing the binding would leave a reconnect with nothing to adopt
+    // and let orphan cleanup sweep a tab whose agent may still be running.
+    mockSubscribeToPtyExit.mockReturnValue(vi.fn())
+    const onExit = vi.fn()
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      onExit
+    })
+
+    const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
+    sidecar(-1)
+
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    expect(state.clearTabPtyId).not.toHaveBeenCalled()
+    expect(state.markUnverifiedPtyLoss).toHaveBeenCalledWith(tabId)
+    expect(onExit).toHaveBeenCalledWith('pty-1', -1)
   })
 
   it('leaves no tab behind if PTY spawn fails', async () => {

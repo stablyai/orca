@@ -1,4 +1,6 @@
 import type {
+  RemoteWorkspaceObservedPatchResult,
+  RemoteWorkspaceObservedSnapshot,
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot
@@ -9,6 +11,7 @@ import { CLIENT_ID } from './remote-workspace-client-identity'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import {
   getCachedRemoteWorkspaceSnapshot,
+  rememberLocallyPatchedRemoteWorkspaceSnapshot,
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import {
@@ -16,9 +19,11 @@ import {
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace-snapshot-normalization'
 
-export async function getRemoteSnapshot(
-  target: SshTarget
-): Promise<RemoteWorkspaceSnapshot | null> {
+// Keep comparison and cache mutation together in the response continuation.
+export async function readRemoteSnapshot<Result>(
+  target: SshTarget,
+  receive: (snapshot: RemoteWorkspaceSnapshot) => Result
+): Promise<Result | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
@@ -26,9 +31,7 @@ export async function getRemoteSnapshot(
   const namespace = getRemoteWorkspaceNamespace(target)
   try {
     const raw = await mux.request('workspace.get', { namespace })
-    const snapshot = normalizeSnapshot(raw, namespace)
-    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
-    return snapshot
+    return receive(normalizeSnapshot(raw, namespace))
   } catch (err) {
     if ((err as { code?: unknown })?.code === -32601) {
       return null
@@ -37,10 +40,41 @@ export async function getRemoteSnapshot(
   }
 }
 
+export function getRemoteSnapshot(
+  target: SshTarget
+): Promise<RemoteWorkspaceObservedSnapshot | null> {
+  return readRemoteSnapshot(target, (snapshot) =>
+    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+  )
+}
+
+function observePatchResult(
+  targetId: string,
+  result: RemoteWorkspacePatchResult
+): RemoteWorkspaceObservedPatchResult {
+  if (result.ok) {
+    return {
+      ok: true,
+      snapshot: rememberLocallyPatchedRemoteWorkspaceSnapshot(targetId, result.snapshot)
+    }
+  }
+  const failure = {
+    ok: false as const,
+    reason: result.reason,
+    ...(result.message !== undefined ? { message: result.message } : {})
+  }
+  return result.snapshot
+    ? {
+        ...failure,
+        snapshot: rememberRemoteWorkspaceSnapshot(targetId, result.snapshot)
+      }
+    : failure
+}
+
 export async function patchRemoteWorkspaceSession(
   target: SshTarget,
   session: RemoteWorkspaceSession
-): Promise<RemoteWorkspacePatchResult | null> {
+): Promise<RemoteWorkspaceObservedPatchResult | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
@@ -80,13 +114,9 @@ export async function patchRemoteWorkspaceSession(
     }
   }
 
-  const result = await requestPatch(current?.revision)
+  const result = observePatchResult(target.id, await requestPatch(current?.revision))
   if (result.ok) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
     return result
-  }
-  if (result.snapshot) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
   }
 
   if (
@@ -102,13 +132,7 @@ export async function patchRemoteWorkspaceSession(
     // backwards while this process still has the old cached revision. Retrying
     // only for backwards revisions restores the blank-slate target without
     // overwriting a newer snapshot from another device.
-    const retry = await requestPatch(result.snapshot.revision)
-    if (retry.ok) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
-    } else if (retry.snapshot) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
-    }
-    return retry
+    return observePatchResult(target.id, await requestPatch(result.snapshot.revision))
   }
 
   return result

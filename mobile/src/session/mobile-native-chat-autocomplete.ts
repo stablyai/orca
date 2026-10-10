@@ -81,10 +81,10 @@ export function rankSuggestions(candidates: readonly string[], query: string, li
   const substring: string[] = []
   for (const candidate of candidates) {
     const lower = candidate.toLowerCase()
-    const base = lower.split('/').pop() ?? lower
+    const base = lower.slice(lower.lastIndexOf('/') + 1)
     if (lower.startsWith(q) || base.startsWith(q)) {
       prefix.push(candidate)
-    } else if (lower.includes(q)) {
+    } else if (substring.length < limit && lower.includes(q)) {
       substring.push(candidate)
     }
     if (prefix.length >= limit) {
@@ -112,7 +112,7 @@ export function rankSlashCommandSuggestions(
     const lower = command.name.toLowerCase()
     if (lower.startsWith(q)) {
       prefix.push(command)
-    } else if (lower.includes(q)) {
+    } else if (substring.length < limit && lower.includes(q)) {
       substring.push(command)
     }
     if (prefix.length >= limit) {

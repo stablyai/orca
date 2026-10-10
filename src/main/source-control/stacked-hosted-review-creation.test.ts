@@ -47,12 +47,12 @@ describe('createStackedHostedReview', () => {
       stackNumber: 50
     })
 
-    const result = await createStackedHostedReview('/repo', input, 'ssh-1')
+    const result = await createStackedHostedReview('/repo', input, 'ssh:ssh-1')
 
     expect(result).toMatchObject({ ok: true, stackNumber: 50 })
-    expect(createMock).toHaveBeenCalledWith('/repo', input, 'ssh-1', {})
+    expect(createMock).toHaveBeenCalledWith('/repo', input, 'ssh:ssh-1', {})
     expect(registerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ parentReview, currentReview, connectionId: 'ssh-1' })
+      expect.objectContaining({ parentReview, currentReview, executionHostId: 'ssh:ssh-1' })
     )
   })
 
@@ -70,7 +70,7 @@ describe('createStackedHostedReview', () => {
       stackNumber: 50
     })
 
-    await createStackedHostedReview('/repo', input)
+    await createStackedHostedReview('/repo', input, 'local')
 
     expect(createMock).not.toHaveBeenCalled()
     expect(registerMock).toHaveBeenCalledOnce()
@@ -83,7 +83,7 @@ describe('createStackedHostedReview', () => {
       error: 'Choose the top pull request.'
     })
 
-    const result = await createStackedHostedReview('/repo', input)
+    const result = await createStackedHostedReview('/repo', input, 'local')
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
     expect(createMock).not.toHaveBeenCalled()

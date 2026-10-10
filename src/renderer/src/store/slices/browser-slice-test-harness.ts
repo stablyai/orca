@@ -15,7 +15,9 @@ export type BrowserMockApi = {
     sessionDeleteProfile: Mock
     sessionImportCookies: Mock
     sessionDetectBrowsers: Mock
+    sessionDetectBrowsersForClientHost: Mock
     sessionImportFromBrowser: Mock
+    sessionImportFromBrowserForClientHost: Mock
     sessionClearDefaultCookies: Mock
     notifyActiveTabChanged: Mock
   }
@@ -30,7 +32,11 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
       sessionDeleteProfile: vi.fn().mockResolvedValue(false),
       sessionImportCookies: vi.fn().mockResolvedValue({ ok: false, reason: 'canceled' }),
       sessionDetectBrowsers: vi.fn().mockResolvedValue([]),
+      // Why: null means this desktop hosts no pages for the server, so the RPC path runs.
+      sessionDetectBrowsersForClientHost: vi.fn().mockResolvedValue(null),
       sessionImportFromBrowser: vi.fn().mockResolvedValue({ ok: false, reason: 'canceled' }),
+      // Why: null means this desktop hosts no pages for the server, so the RPC path runs.
+      sessionImportFromBrowserForClientHost: vi.fn().mockResolvedValue(null),
       sessionClearDefaultCookies: vi.fn().mockResolvedValue(false),
       notifyActiveTabChanged: vi.fn().mockResolvedValue(undefined)
     },
@@ -43,11 +49,13 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store; browser actions touch only the fields seeded here.
       ({
         settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
         activeWorktreeId: 'wt-1',
         browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
+        groupsByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
         openFiles: [],

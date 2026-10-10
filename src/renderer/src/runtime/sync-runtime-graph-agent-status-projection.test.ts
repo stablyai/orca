@@ -6,34 +6,47 @@ import {
   resetRuntimeMobileAgentStatusProjectionCacheForTests
 } from './sync-runtime-graph'
 
-// Reference: the pre-change whole-array serialization, kept verbatim. The bucket
-// width is read from the module under test so a drifted constant cannot make this
-// reference silently disagree for a reason unrelated to the change.
+// Reference: the pre-change whole-array serialization, kept verbatim apart from the sort, which
+// is now a code-unit compare — the projection is only ever `===`-compared, never displayed, so it
+// needs to be deterministic rather than locale-correct. `localeCompareOrderedEntries` below pins
+// that the two orders still serialize the same entries. The bucket width is read from the module
+// under test so a drifted constant cannot make this reference silently disagree for a reason
+// unrelated to the change.
 const BUCKET_MS = AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
+type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+function mainAgentKey(mainAgent: MainAgentStatus) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
   return JSON.stringify(
     Object.entries(map)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([paneKey, entry]) => ({
         paneKey,
         entryPaneKey: entry.paneKey,
         state: entry.state,
+        workingMode: entry.workingMode ?? null,
         prompt: entry.prompt,
         updatedAtBucket: Math.floor(entry.updatedAt / BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
+        // A new turn can keep the state (child work held it open); its stamp alone must republish.
+        turnStartedAt: entry.turnStartedAt ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({
           state: history.state,
           prompt: history.prompt,
           startedAt: history.startedAt,
-          interrupted: history.interrupted ?? null
+          interrupted: history.interrupted ?? null,
+          mainAgent: mainAgentKey(history.mainAgent)
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
-        interrupted: entry.interrupted ?? null
+        lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
+        interrupted: entry.interrupted ?? null,
+        mainAgent: mainAgentKey(entry.mainAgent)
       }))
   )
 }
@@ -60,18 +73,20 @@ function makeEntry(index: number, overrides: Record<string, unknown> = {}): neve
 }
 
 describe('mobile agent-status projection equivalence', () => {
-  it('matches the whole-array serialization across shapes and cache reuse', () => {
+  it('matches the whole-array serialization across status maps and cache reuse', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const shapes: AppState['agentStatusByPaneKey'][] = []
-    shapes.push({})
-    shapes.push({ 'tab-0:leaf-0': makeEntry(0) })
+    const statusMaps: AppState['agentStatusByPaneKey'][] = []
+    statusMaps.push({})
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0) })
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { turnStartedAt: 1740000000500 }) })
     const many: AppState['agentStatusByPaneKey'] = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)
     }
-    shapes.push(many)
+    statusMaps.push(many)
     // Optional fields absent entirely, which the ?? null fallbacks must cover.
-    shapes.push({
+    statusMaps.push({
       'tab-9:leaf-1': makeEntry(9, {
         agentType: undefined,
         terminalTitle: undefined,
@@ -83,17 +98,17 @@ describe('mobile agent-status projection equivalence', () => {
       })
     })
     // Keys deliberately out of insertion order to pin the sort.
-    shapes.push({
+    statusMaps.push({
       'tab-z:leaf-0': makeEntry(2),
       'tab-a:leaf-0': makeEntry(1),
       'tab-m:leaf-0': makeEntry(3)
     })
 
-    for (const [index, shape] of shapes.entries()) {
+    for (const [index, statusMap] of statusMaps.entries()) {
       expect({
         index,
-        projection: buildRuntimeMobileAgentStatusProjectionForTests(shape)
-      }).toEqual({ index, projection: referenceProjection(shape) })
+        projection: buildRuntimeMobileAgentStatusProjectionForTests(statusMap)
+      }).toEqual({ index, projection: referenceProjection(statusMap) })
     }
 
     // Now exercise the cache: replace one entry the way setAgentStatus does and
@@ -116,5 +131,62 @@ describe('mobile agent-status projection equivalence', () => {
         projection: buildRuntimeMobileAgentStatusProjectionForTests(current)
       }).toEqual({ round, projection: referenceProjection(current) })
     }
+  })
+
+  it('serializes the same entries the localeCompare order did', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    // Keys where locale and code-unit order disagree: 'tab-1:' sorts after 'tab-10:' by code unit
+    // (':' > '0') and before it by locale, and case/accent handling differs too.
+    const map: AppState['agentStatusByPaneKey'] = {}
+    for (const paneKey of ['tab-1:leaf-0', 'tab-10:leaf-0', 'B:leaf-0', 'a:leaf-0', 'á:leaf-0']) {
+      map[paneKey] = makeEntry(0, { paneKey })
+    }
+    const localeCompareOrderedEntries = JSON.parse(
+      JSON.stringify(
+        Object.entries(map)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([paneKey]) => paneKey)
+      )
+    ) as string[]
+    const projected = (
+      JSON.parse(buildRuntimeMobileAgentStatusProjectionForTests(map)) as { paneKey: string }[]
+    ).map((entry) => entry.paneKey)
+    expect([...projected].sort()).toEqual([...localeCompareOrderedEntries].sort())
+    expect(projected).toHaveLength(localeCompareOrderedEntries.length)
+  })
+
+  it('republishes a verdict change that leaves the interrupted flag as it was', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const project = (live: 'success' | 'failure', history: 'success' | 'failure'): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, {
+          state: 'done',
+          mainAgent: { state: 'done', outcome: live, stateStartedAt: 1740000000000 },
+          stateHistory: [
+            {
+              state: 'done',
+              prompt: 'p',
+              startedAt: 1,
+              mainAgent: { state: 'done', outcome: history, stateStartedAt: 1 }
+            }
+          ]
+        })
+      })
+    expect(project('failure', 'success')).not.toBe(project('success', 'success'))
+    expect(project('success', 'failure')).not.toBe(project('success', 'success'))
+  })
+
+  it('republishes a main agent failing while its subagents keep the row working', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const project = (outcome?: 'failure', stateStartedAt = 1740000000000): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, {
+          state: 'working',
+          mainAgent: { state: 'done', ...(outcome ? { outcome } : {}), stateStartedAt }
+        })
+      })
+    expect(project('failure')).not.toBe(project())
+    // The main agent's own clock dates the failure on mobile, so moving it republishes too.
+    expect(project('failure', 1740000001000)).not.toBe(project('failure'))
   })
 })

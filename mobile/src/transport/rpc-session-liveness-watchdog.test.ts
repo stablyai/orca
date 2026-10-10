@@ -46,6 +46,37 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(terminate).toHaveBeenCalledWith(identity)
   })
 
+  it('reports causal evidence before terminating a stale session', async () => {
+    const onTimeout = vi.fn()
+    const terminate = vi.fn()
+    const identity = {}
+    const watchdog = new RpcSessionLivenessWatchdog({
+      transport: 'relay',
+      idleProbeMs: null,
+      probeTimeoutMs: 4_000,
+      missedProbeLimit: 2,
+      sendProbe: () => true,
+      terminate,
+      onTimeout,
+      now: Date.now
+    })
+    watchdog.start(identity)
+    watchdog.probeNow(identity)
+
+    await vi.advanceTimersByTimeAsync(8_000)
+
+    expect(onTimeout).toHaveBeenCalledWith({
+      transport: 'relay',
+      reason: 'probe-timeout',
+      missedProbes: 2,
+      missedProbeLimit: 2,
+      lastInboundAgeMs: 8_000
+    })
+    expect(onTimeout.mock.invocationCallOrder[0]).toBeLessThan(
+      terminate.mock.invocationCallOrder[0]!
+    )
+  })
+
   it('authenticated activity resets suspicion', async () => {
     const { identity, terminate, watchdog } = fixture()
     watchdog.probeNow(identity)

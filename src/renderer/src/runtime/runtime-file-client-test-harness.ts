@@ -2,6 +2,7 @@ import { beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { clearLegacyQuickOpenInventoryCacheForTests } from './runtime-legacy-quick-open-inventory'
 import {
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -18,6 +19,7 @@ export type RuntimeRpcRequest = {
   params?: unknown
   timeoutMs?: number
   expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
 }
 
 export type RuntimeRpcStub = Mock<(args: RuntimeRpcRequest) => unknown>
@@ -32,6 +34,7 @@ export type RuntimeSubscribeStub = Mock<
 >
 
 export const fsReadFile: PreloadStub = vi.fn()
+export const fsReadFileChunk: PreloadStub = vi.fn()
 export const fsWriteFile: PreloadStub = vi.fn()
 export const fsOnChanged: PreloadStub = vi.fn()
 export const fsCopy: PreloadStub = vi.fn()
@@ -52,6 +55,7 @@ export const fsFinishDownloadedFile: PreloadStub = vi.fn()
 export const fsCancelDownloadedFile: PreloadStub = vi.fn()
 export const fsImportExternalPaths: PreloadStub = vi.fn()
 export const fsStageExternalPathsForRuntimeUpload: PreloadStub = vi.fn()
+export const fsUploadExternalFileToRuntime: PreloadStub = vi.fn()
 export const runtimeEnvironmentCall: RuntimeRpcStub = vi.fn()
 export const runtimeEnvironmentTransportCall: RuntimeRpcStub = vi.fn()
 export const runtimeEnvironmentSubscribe: RuntimeSubscribeStub = vi.fn()
@@ -62,8 +66,10 @@ export function installRuntimeFileClientEnvironment(): void {
   beforeEach(() => {
     delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
     clearRuntimeCompatibilityCacheForTests()
+    clearLegacyQuickOpenInventoryCacheForTests()
     replaceRuntimeEnvironmentRevisions([])
     fsReadFile.mockReset()
+    fsReadFileChunk.mockReset()
     fsWriteFile.mockReset()
     fsOnChanged.mockReset()
     fsCopy.mockReset()
@@ -85,6 +91,8 @@ export function installRuntimeFileClientEnvironment(): void {
     fsCancelDownloadedFile.mockReset()
     fsImportExternalPaths.mockReset()
     fsStageExternalPathsForRuntimeUpload.mockReset()
+    fsUploadExternalFileToRuntime.mockReset()
+    fsUploadExternalFileToRuntime.mockResolvedValue({ byteLength: 0 })
     runtimeEnvironmentCall.mockReset()
     runtimeEnvironmentTransportCall.mockReset()
     runtimeEnvironmentSubscribe.mockReset()
@@ -95,6 +103,7 @@ export function installRuntimeFileClientEnvironment(): void {
           id: 'status',
           ok: true,
           result: {
+            runtimeId: 'remote-runtime',
             runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
             minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
             capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
@@ -108,6 +117,7 @@ export function installRuntimeFileClientEnvironment(): void {
       api: {
         fs: {
           readFile: fsReadFile,
+          readFileChunk: fsReadFileChunk,
           writeFile: fsWriteFile,
           onFsChanged: fsOnChanged,
           copy: fsCopy,
@@ -127,10 +137,12 @@ export function installRuntimeFileClientEnvironment(): void {
           finishDownloadedFile: fsFinishDownloadedFile,
           cancelDownloadedFile: fsCancelDownloadedFile,
           importExternalPaths: fsImportExternalPaths,
-          stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
+          stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload,
+          uploadExternalFileToRuntime: fsUploadExternalFileToRuntime
         },
         runtime: { call: runtimeCall },
         runtimeEnvironments: {
+          cancelSubscription: vi.fn().mockResolvedValue(undefined),
           call: runtimeEnvironmentTransportCall,
           subscribe: runtimeEnvironmentSubscribe
         }

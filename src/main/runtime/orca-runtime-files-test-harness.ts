@@ -2,6 +2,11 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
 import { resetSshConnectionGenerations } from '../ssh/ssh-connection-generation'
 import { resetRuntimeFileMocks } from './orca-runtime-files-mock-registry'
+import {
+  getConnectionExecutionHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 
 /** Restores the shared fs/auth/watcher mock state and fake timers around each test. */
 export function useRuntimeFileCommandsLifecycle(): void {
@@ -42,6 +47,7 @@ export function createRuntimeFileCommands(options?: {
   hasRecentNativeChatOutputPath?: ReturnType<typeof vi.fn>
 }) {
   const store = {
+    getSettings: vi.fn(() => ({ followSymlinkedDirectories: false })),
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
   const path = options?.path ?? '/repo'
@@ -51,6 +57,11 @@ export function createRuntimeFileCommands(options?: {
     path,
     ...(options?.hostId ? { hostId: options.hostId } : {})
   }
+  // Mirrors the real resolver: the worktree's own host outranks the repo row.
+  const runtimeFileTargetExecutionHostId = (): ExecutionHostId => {
+    const connectionId = store.getRepo(worktree.repoId)?.connectionId
+    return normalizeExecutionHostId(options?.hostId) ?? getConnectionExecutionHostId(connectionId)
+  }
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
@@ -59,7 +70,7 @@ export function createRuntimeFileCommands(options?: {
       options?.resolveRuntimeFileTarget ??
       vi.fn(async () => ({
         worktree,
-        connectionId: store.getRepo(worktree.repoId)?.connectionId
+        executionHostId: runtimeFileTargetExecutionHostId()
       })),
     ...(options?.resolveKnownWorkspaceFileTarget
       ? { resolveKnownWorkspaceFileTarget: options.resolveKnownWorkspaceFileTarget }

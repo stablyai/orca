@@ -1,22 +1,15 @@
 [
   {
-    "filePath": "src/renderer/src/components/sidebar/worktree-card-meta-row.tsx",
-    "kind": "jsx-attribute:label",
-    "text": "sidebar",
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Idioma",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "语言",
-    "dynamic": false,
-    "count": 1
-  },
-  {
-    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "語言",
+    "text": "Langue",
     "dynamic": false,
     "count": 1
   },
@@ -37,16 +30,16 @@
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "Idioma",
+    "text": "語言",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "Ghostty",
+    "text": "语言",
     "dynamic": false,
-    "count": 2
+    "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
@@ -56,6 +49,20 @@
     "count": 2
   },
   {
+    "filePath": "src/renderer/src/components/settings/terminal-advanced-platform-search.ts",
+    "kind": "object-property:keywords",
+    "text": "Ghostty",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "ghostty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
     "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
     "kind": "object-property:keywords",
     "text": "Ghostty",
@@ -63,9 +70,9 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/settings/terminal-pane-appearance-search.ts",
-    "kind": "object-property:keywords",
-    "text": "ghostty",
+    "filePath": "src/renderer/src/components/sidebar/worktree-card-meta-row.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "sidebar",
     "dynamic": false,
     "count": 1
   }

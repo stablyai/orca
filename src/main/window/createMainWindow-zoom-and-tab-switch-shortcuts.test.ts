@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
@@ -19,6 +19,9 @@ import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
+const originalPlatform = process.platform
+afterEach(() => Object.defineProperty(process, 'platform', { value: originalPlatform }))
+
 describe('createMainWindow', () => {
   beforeEach(() => {
     resetMainWindowMocks()
@@ -26,73 +29,87 @@ describe('createMainWindow', () => {
     vi.useRealTimers()
   })
 
-  it('supports all minus key variants for terminal zoom out', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      once: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    'zooms with unshifted minus and preserves terminal shifted-minus on %s',
+    (platform) => {
+      Object.defineProperty(process, 'platform', { value: platform })
+      const windowHandlers: Record<string, (...args: any[]) => void> = {}
+      const webContents = {
+        on: vi.fn((event, handler) => {
+          windowHandlers[event] = handler
+        }),
+        once: vi.fn((event, handler) => {
+          windowHandlers[event] = handler
+        }),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn()
+      }
+      const browserWindowInstance = {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      createMainWindow(null)
+
+      const beforeInputEvent = windowHandlers['before-input-event']
+
+      const primary =
+        process.platform === 'darwin'
+          ? { control: false, meta: true }
+          : { control: true, meta: false }
+
+      for (const input of [
+        { type: 'keyDown', ...primary, alt: false, key: '-' },
+        { type: 'keyDown', ...primary, alt: false, key: 'Minus' },
+        { type: 'keyDown', ...primary, alt: false, key: 'Subtract' },
+        { type: 'keyDown', ...primary, alt: false, key: '', code: 'Minus' },
+        { type: 'keyDown', ...primary, alt: false, key: '', code: 'NumpadSubtract' }
+      ]) {
+        const preventDefault = vi.fn()
+        beforeInputEvent({ preventDefault } as never, input as never)
+        expect(preventDefault).toHaveBeenCalledTimes(1)
+      }
+
+      expect(webContents.send).toHaveBeenCalledTimes(5)
+      expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
+      expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'out')
+      expect(webContents.send).toHaveBeenNthCalledWith(3, 'terminal:zoom', 'out')
+      expect(webContents.send).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
+      expect(webContents.send).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'out')
+
+      const setTerminalFocus = vi
+        .mocked(ipcMain.on)
+        .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+      expect(setTerminalFocus).toBeTypeOf('function')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked focus listener reads only sender and receives its own window's webContents.
+      setTerminalFocus?.({ sender: webContents } as never, true)
+
+      for (const key of ['_', '-']) {
+        const undoPreventDefault = vi.fn()
+        beforeInputEvent(
+          { preventDefault: undoPreventDefault },
+          { type: 'keyDown', ...primary, alt: false, shift: true, key, code: 'Minus' }
+        )
+        expect(undoPreventDefault).not.toHaveBeenCalled()
+        expect(webContents.send).toHaveBeenCalledTimes(5)
+      }
     }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
-
-    const beforeInputEvent = windowHandlers['before-input-event']
-
-    const primary =
-      process.platform === 'darwin'
-        ? { control: false, meta: true }
-        : { control: true, meta: false }
-
-    for (const input of [
-      { type: 'keyDown', ...primary, alt: false, key: '-' },
-      { type: 'keyDown', ...primary, alt: false, key: 'Minus' },
-      { type: 'keyDown', ...primary, alt: false, key: 'Subtract' },
-      { type: 'keyDown', ...primary, alt: false, key: '', code: 'Minus' },
-      { type: 'keyDown', ...primary, alt: false, key: '', code: 'NumpadSubtract' }
-    ]) {
-      const preventDefault = vi.fn()
-      beforeInputEvent({ preventDefault } as never, input as never)
-      expect(preventDefault).toHaveBeenCalledTimes(1)
-    }
-
-    expect(webContents.send).toHaveBeenCalledTimes(5)
-    expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
-    expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'out')
-    expect(webContents.send).toHaveBeenNthCalledWith(3, 'terminal:zoom', 'out')
-    expect(webContents.send).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
-    expect(webContents.send).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'out')
-
-    const undoPreventDefault = vi.fn()
-    beforeInputEvent(
-      { preventDefault: undoPreventDefault } as never,
-      { type: 'keyDown', ...primary, alt: false, shift: true, key: '_' } as never
-    )
-    expect(undoPreventDefault).not.toHaveBeenCalled()
-  })
+  )
 
   it('routes Electron zoom command events to terminal zoom', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -116,8 +133,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -158,8 +175,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -176,6 +193,18 @@ describe('createMainWindow', () => {
     const preventDefault = vi.fn()
     onZoomChanged({ preventDefault } as never, 'out')
     onZoomChanged({ preventDefault } as never, 'in')
+
+    windowHandlers['before-input-event'](
+      { preventDefault },
+      {
+        type: 'keyDown',
+        key: '_',
+        code: 'Minus',
+        shift: true,
+        meta: process.platform === 'darwin',
+        control: process.platform !== 'darwin'
+      }
+    )
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalled()
@@ -206,8 +235,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -252,8 +281,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -300,8 +329,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -375,8 +404,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -423,8 +452,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -484,8 +513,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance

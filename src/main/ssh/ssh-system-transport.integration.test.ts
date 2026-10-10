@@ -1,5 +1,5 @@
 import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -11,6 +11,7 @@ import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { uploadDirectoryViaSystemSsh } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
+import { relayArtifactFilenames } from '../../shared/relay-artifacts'
 
 const RELAY_VERSION = '0.1.0+systemtransport'
 
@@ -21,7 +22,9 @@ function makeTarget(): SshTarget {
     configHost: 'fdpass-host',
     host: 'ignored.example.com',
     port: 22,
-    username: ''
+    username: '',
+    // The fixture pre-installs a host-Node relay tree.
+    remoteRuntime: 'legacy'
   }
 }
 
@@ -54,9 +57,15 @@ exec /bin/sh -c "$cmd"
 }
 
 function writeFakeRelay(dir: string): void {
-  writeFileSync(join(dir, 'relay-watcher.js'), '')
-  writeFileSync(join(dir, 'relay-ai-vault-service.js'), '')
-  writeFileSync(join(dir, 'managed-hook-runtime.js'), '')
+  // Stage every companion the manifest declares — relay.js gets real content
+  // below — so adding one cannot silently fail the completeness probe here.
+  for (const filename of relayArtifactFilenames(false)) {
+    if (filename !== 'relay.js') {
+      const artifactPath = join(dir, filename)
+      mkdirSync(dirname(artifactPath), { recursive: true })
+      writeFileSync(artifactPath, '')
+    }
+  }
   writeFileSync(
     join(dir, 'relay.js'),
     `

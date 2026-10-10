@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 export {
   getCmdExePath,
   getSpawnArgsForWindows,
+  wrapWindowsStartWait,
   isWindowsBatchScript,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,
@@ -75,7 +76,7 @@ export function resolveWindowsCommand(
   return command
 }
 
-/** Check whether an error is a Windows permission error (EACCES or EPERM). */
+/** EACCES or EPERM. */
 export function isPermissionError(error: unknown): boolean {
   return (
     error instanceof Error &&

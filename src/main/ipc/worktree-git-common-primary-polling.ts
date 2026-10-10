@@ -5,7 +5,7 @@ import type {
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
-import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-polling'
+import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-metadata-files'
 
 type PrimaryMetadataSnapshot = {
   signatures: Map<string, string>
@@ -14,12 +14,15 @@ type PrimaryMetadataSnapshot = {
 
 async function snapshotPrimaryCheckoutMetadata(
   commonDirPath: string,
-  getStatusRefPaths: () => readonly string[]
+  getStatusRefPaths: () => readonly string[],
+  includePrimary: boolean
 ): Promise<PrimaryMetadataSnapshot> {
   const signatures = new Map<string, string>()
   const statusRefPaths = new Set(getStatusRefPaths())
   const paths = [
-    ...PRIMARY_CHECKOUT_METADATA_FILES.map((name) => join(commonDirPath, name)),
+    ...(includePrimary
+      ? PRIMARY_CHECKOUT_METADATA_FILES.map((name) => join(commonDirPath, name))
+      : []),
     ...statusRefPaths
   ]
   await Promise.all(
@@ -78,11 +81,17 @@ export async function startGitCommonPrimaryPolling(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   visibility: WorktreePollerWindowVisibility,
-  onFullScan?: () => void
+  onFullScan?: () => void,
+  /** false: the shallow watcher covers the primary files; poll only status refs. */
+  includePrimary = true
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
-  let snapshot = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
+  let snapshot = await snapshotPrimaryCheckoutMetadata(
+    commonDirPath,
+    getStatusRefPaths,
+    includePrimary
+  )
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
@@ -100,9 +109,15 @@ export async function startGitCommonPrimaryPolling(
     }
     ticking = true
     const startedAt = Date.now()
-    onFullScan?.()
+    if (includePrimary) {
+      onFullScan?.()
+    }
     try {
-      const next = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
+      const next = await snapshotPrimaryCheckoutMetadata(
+        commonDirPath,
+        getStatusRefPaths,
+        includePrimary
+      )
       if (disposed) {
         return
       }

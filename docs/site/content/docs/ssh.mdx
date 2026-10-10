@@ -1,0 +1,100 @@
+---
+title: SSH worktrees
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Orca can drive agents on remote machines over SSH — useful for long-running builds, GPU boxes, or any environment where your laptop isn't the right place to run the work.
+
+<Callout title="One of four run modes">
+  SSH is one way to put agents on remote compute. For local, self-hosted servers, and ephemeral VMs,
+  see [Ways to run Orca](/docs/ways-to-run).
+</Callout>
+
+## Add an SSH target
+
+1. Open [Settings → SSH](/docs/settings).
+1. Click **Add Target**. The host form opens in a modal (not inline under the list), so Host, Advanced, and Save stay reachable even with a long host list. Edit uses the same dialog and shows the target label plus `user@host:port`.
+1. Fill in host, user, port, and optional identity file — or open the **OpenSSH config** picker in the same dialog to search `~/.ssh/config` (including `Include`d files), pick one host, and prefill the form. Hosts already saved in Orca show an **In Orca** badge. You can still import hosts in bulk from config when that flow is available.
+1. If the key is passphrase-protected, Orca will prompt the first time.
+1. Click **Test** to verify connectivity, then **Save**.
+
+Dirty add/edit forms ignore outside clicks so an accidental click away does not discard your fields; use Escape, Cancel, or × to discard.
+
+## Host key verification
+
+Orca checks built-in SSH connections against your effective OpenSSH `known_hosts` files and keys it previously saved. Existing matches connect silently. With the default policy, Orca accepts and remembers a host on first contact and shows its fingerprint; `StrictHostKeyChecking yes` rejects unknown hosts, while `no` / `off` accepts without saving a trust record.
+
+A changed, revoked, or unexpectedly different key type is rejected before Orca asks for a password or key passphrase. If you intentionally rebuilt or reprovisioned the host, verify its new fingerprint first, then follow the recovery path in the error. For a `known_hosts` mismatch, Orca provides the appropriate `ssh-keygen -R` command (including the bracketed host and port when needed).
+
+## Use a target
+
+When creating a worktree, choose an SSH target instead of Local. Orca will:
+
+- Create the git worktree on the remote host.
+- Run agents remotely through the SSH connection.
+- Sync file events so the editor, diff, and browser still feel local.
+
+## Advanced connection options
+
+Open **Settings → SSH**, edit a target, and expand **Advanced Connection** when the host needs a proxy, jump host, or SSH multiplexing override. Orca enables **Reuse SSH connection for faster setup** by default, which uses OpenSSH connection reuse on macOS and Linux so setup commands do not each pay a fresh SSH handshake. Turn it off only for hosts whose SSH policy rejects multiplexed sessions.
+
+## Passphrases
+
+Passphrases are held in memory for the life of the Orca session. Closing Orca clears them. You can opt into a longer TTL under SSH settings.
+
+## Status
+
+Remote worktrees show a chip with live SSH status — green connected, yellow reconnecting, red disconnected. While an SSH host is still connecting, Orca can list workspaces from **persisted local metadata** so the sidebar is not empty until the live provider comes up; those rows refresh to authoritative remote state once the connection settles. Disconnects don't kill running agents; Orca reconnects and re-attaches, replaying scrolling output and restoring full-screen app panes from their rendered frame instead of returning them blank or fragmented. When a host drops, the affected workspace card can show an inline **Connect** / reconnect control so you can recover without opening a terminal overlay or hunting the status bar. If an SSH relay drops with a "Multiplexer disposed" style failure, Orca recovers automatically instead of leaving the pane stuck until you restart. Agent status (working / idle / blocked) propagates over SSH the same way it does locally, so the sidebar and [Agents feed](/docs/activity) reflect remote agents in real time.
+
+## Sessions across app close
+
+Closing the desktop app no longer kills your remote PTY sessions. Remote terminal sessions are leased through the relay running on the remote host, so they survive Orca closing on your laptop. When you reopen the app and reconnect to the target, leased PTYs are restored to their tabs in the **attached** state, with their scrollback intact. By default there is no countdown at all: **Keep terminals alive until reset** is on for every target, so detached sessions keep running until you end them explicitly — **End Remote Terminals**, **Reset Relay**, removing the target, or closing the tab. Turn that switch off under **Advanced Connection** to set a bounded **Timeout after disconnect** for that target instead; the form starts at 24 hours and accepts 60 seconds to 7 days, after which the relay tears down detached sessions. Losing contact with a host is not evidence that its work stopped, so a remote session you cannot currently reach should not be assumed dead — check the host before starting a second agent on the same worktree.
+
+## Downloading remote files and folders
+
+Right-click in the SSH worktree file explorer:
+
+- **File** → **Download** — native save dialog; copies the file to your laptop.
+- **Folder** → **Download Folder** — recursive download into a folder you choose (desktop only).
+
+Orca uses the same SSH transfer path as the connection. Folder download appears only when the connection advertises recursive folder transfer (typically full SFTP). Connections that stay on system OpenSSH-only transfer may still download **files** but not show **Download Folder**.
+
+This is a desktop-only action — the web client doesn't expose Download because it relies on Electron's save dialog.
+
+## Open a remote workspace in VS Code
+
+For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to VS Code Remote-SSH when your configured app is VS Code or VS Code Insiders (`code` / `code-insiders`, or a direct path to those launchers).
+
+1. Configure **Settings → General → Open in menu** so VS Code is listed (preset or custom command).
+1. Right-click the SSH worktree (or use the worktree overflow menu) → **Open in** → **VS Code**.
+1. Orca launches VS Code with Remote-SSH against that host and the worktree path (`--remote ssh-remote+<host> <path>`). The menu entry may show a **Remote SSH** badge.
+
+**Not supported for this remote path:** Cursor, Zed, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
+
+## Kerberos / GSSAPI
+
+If a host in OpenSSH config sets `GSSAPIAuthentication yes`, Orca prefers the **system OpenSSH** transport for that target (the built-in ssh2 client does not speak GSSAPI). Keep a valid Kerberos ticket (`kinit` / your org's SSO) before connecting. Manual targets can also enable GSSAPI when configured for system SSH.
+
+You do not flip a separate “Kerberos mode” switch for config-imported hosts — import/`ssh -G` carries the flag through.
+
+## FIDO2 / security keys
+
+Hardware-backed OpenSSH identities (`ed25519-sk`, `ecdsa-sk`, including agent-backed security keys) also use **system OpenSSH** rather than the built-in ssh2 client. Orca detects the key type from your identity files and hands the connection to the OS OpenSSH binary so the touch / PIN prompt works as usual. Regular Ed25519, ECDSA, and RSA keys stay on the built-in transport. If OpenSSH is not available on the machine, those FIDO2 targets cannot authenticate until it is installed and on `PATH` (or in the usual Windows/macOS/Linux locations).
+
+## Linux hosts without a C/C++ toolchain
+
+On first connect, Orca installs a small relay on the remote. Remote terminals need a native `node-pty` module. Linux packages often compile on the host; macOS/Windows relays use prebuilds.
+
+If the remote is missing **make**, a **C++ compiler**, and **python3**, Orca still finishes connect for **files, git, and the editor**, but **remote terminals will not work** until build tools are installed. Example install hints Orca may surface:
+
+- Debian/Ubuntu: `sudo apt-get install -y build-essential python3`
+- Fedora/RHEL: `sudo dnf install -y make gcc gcc-c++ python3`
+- Alpine: `sudo apk add build-base python3`
+- Arch: `sudo pacman -S --needed base-devel python`
+
+Install the tools, then reconnect so the relay can install native modules.
+
+## Port forwarding
+
+For remote worktrees, the right sidebar shows a **Ports** tab (toggle with `Cmd+Shift+I`). Orca scans `/proc/net/tcp` on the remote and lists listening ports under **Detected** — one click forwards them to your laptop. You can also add forwards manually, edit them, or remove them. Forwards persist across app restarts and SSH reconnects, and privileged remote ports auto-remap locally (e.g. remote 80 → local 10080).

@@ -1,3 +1,4 @@
+import { clampToSafeSplitIndex } from './daemon-stream-data-split'
 import type { TerminalCheckpointFile, TerminalSnapshot } from './types'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { HeadlessEmulator } from './headless-emulator'
@@ -27,6 +28,7 @@ function checkpointFile(
     modes: snapshot.modes,
     scrollbackLines: snapshot.scrollbackLines,
     ...(snapshot.lastTitle ? { lastTitle: snapshot.lastTitle } : {}),
+    ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}),
     generation: metadata.generation,
     ...(metadata.pendingOutputSeq !== undefined
       ? { pendingOutputSeq: metadata.pendingOutputSeq }
@@ -59,29 +61,12 @@ class BoundedJsonWriter {
     return true
   }
 
+  remainingBytes(): number {
+    return this.maxBytes - this.bytes
+  }
+
   result(): string | null {
     return this.exceeded ? null : this.output + this.chunk
-  }
-}
-
-function escapedCodeUnit(codeUnit: number): string | null {
-  switch (codeUnit) {
-    case 0x08:
-      return '\\b'
-    case 0x09:
-      return '\\t'
-    case 0x0a:
-      return '\\n'
-    case 0x0c:
-      return '\\f'
-    case 0x0d:
-      return '\\r'
-    case 0x22:
-      return '\\"'
-    case 0x5c:
-      return '\\\\'
-    default:
-      return codeUnit < 0x20 ? `\\u${codeUnit.toString(16).padStart(4, '0')}` : null
   }
 }
 
@@ -89,44 +74,17 @@ function appendJsonString(writer: BoundedJsonWriter, value: string): boolean {
   if (!writer.append('"', 1)) {
     return false
   }
-  let spanStart = 0
-  let spanBytes = 0
-  for (let index = 0; index < value.length; index += 1) {
-    const codeUnit = value.charCodeAt(index)
-    let escaped = escapedCodeUnit(codeUnit)
-    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1)
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        spanBytes += 4
-        index += 1
-      } else {
-        escaped = `\\u${codeUnit.toString(16)}`
-      }
-    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
-      escaped = `\\u${codeUnit.toString(16)}`
-    } else if (escaped === null) {
-      spanBytes += codeUnit < 0x80 ? 1 : codeUnit < 0x800 ? 2 : 3
+  let start = 0
+  while (start < value.length) {
+    // Keep a surrogate pair together even when only one byte remains.
+    const remainingBytes = writer.remainingBytes()
+    const chunkLength = remainingBytes < 16 * 1024 ? Math.max(2, remainingBytes) : 16 * 1024
+    const end = clampToSafeSplitIndex(value, start, Math.min(value.length, start + chunkLength))
+    const json = JSON.stringify(value.slice(start, end)).slice(1, -1)
+    if (!writer.append(json, Buffer.byteLength(json, 'utf8'))) {
+      return false
     }
-
-    if (escaped !== null) {
-      if (
-        (index > spanStart && !writer.append(value.slice(spanStart, index), spanBytes)) ||
-        !writer.append(escaped, escaped.length)
-      ) {
-        return false
-      }
-      spanStart = index + 1
-      spanBytes = 0
-    } else if (index + 1 - spanStart >= 16 * 1024) {
-      if (!writer.append(value.slice(spanStart, index + 1), spanBytes)) {
-        return false
-      }
-      spanStart = index + 1
-      spanBytes = 0
-    }
-  }
-  if (spanStart < value.length && !writer.append(value.slice(spanStart), spanBytes)) {
-    return false
+    start = end
   }
   return writer.append('"', 1)
 }
@@ -218,29 +176,38 @@ function stringifyWithinLimit(checkpoint: TerminalCheckpointFile, maxBytes: numb
   return writer.result()
 }
 
-async function replaySnapshot(snapshot: TerminalSnapshot): Promise<HeadlessEmulator> {
+/** Rebuilds a snapshot, optionally trimmed to `scrollbackRows` of scrollback. */
+export async function replayTerminalSnapshot(
+  snapshot: TerminalSnapshot,
+  opts: { scrollbackRows?: number } = {}
+): Promise<HeadlessEmulator> {
+  const scrollbackRows = opts.scrollbackRows ?? snapshot.scrollbackLines
   const emulator = new HeadlessEmulator({
     cols: snapshot.cols,
     rows: snapshot.rows,
-    scrollback: Math.max(0, Math.min(50_000, snapshot.scrollbackLines))
+    scrollback: Math.max(0, Math.min(50_000, scrollbackRows))
   })
   const replay = new ColdRestoreReplayWriter(emulator)
-  try {
-    for (const segment of [
-      snapshot.scrollbackAnsi,
-      snapshot.rehydrateSequences,
-      snapshot.snapshotAnsi,
-      snapshot.pendingEscapeTailAnsi ?? ''
-    ]) {
-      if (!(await replay.write(segment))) {
-        throw new Error('Terminal checkpoint replay is unavailable')
-      }
+  const write = async (data: string): Promise<void> => {
+    if (!(await replay.write(data))) {
+      throw new Error('Terminal checkpoint replay is unavailable')
     }
+  }
+  try {
+    await write(snapshot.scrollbackAnsi)
+    await write(snapshot.rehydrateSequences)
+    await write(snapshot.snapshotAnsi)
+    // Why: rehydrateSequences omits kitty flags, and the torn escape tail must stay last.
+    await emulator.applyKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags ?? 0)
+    await write(snapshot.pendingEscapeTailAnsi ?? '')
     emulator.setCwd(snapshot.cwd)
     if (snapshot.lastTitle) {
       emulator.setLastTitle(snapshot.lastTitle)
     }
-    emulator.setRestoredOscLinks(snapshot.oscLinks)
+    // Why untrimmed only: seeded ranges keep pre-trim row indexes; trimmed replays collect the re-emitted OSC 8 instead.
+    if (opts.scrollbackRows === undefined) {
+      emulator.setRestoredOscLinks(snapshot.oscLinks)
+    }
     return emulator
   } catch (error) {
     emulator.dispose()
@@ -258,9 +225,12 @@ export async function serializeTerminalCheckpointWithinLimit(
     return direct
   }
 
-  const emulator = await replaySnapshot(snapshot)
+  const emulator = await replayTerminalSnapshot(snapshot)
   try {
-    const visibleOnly = emulator.getSnapshot({ scrollbackRows: 0 })
+    // Why carried, not re-derived: trimming rows cannot change who owned the
+    // terminal at this checkpoint's boundary.
+    const ownership = snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}
+    const visibleOnly = { ...emulator.getSnapshot({ scrollbackRows: 0 }), ...ownership }
     let bestJson = stringifyWithinLimit(checkpointFile(visibleOnly, metadata), maxBytes)
     if (bestJson === null) {
       throw new Error('Terminal checkpoint metadata exceeds byte limit')
@@ -270,7 +240,7 @@ export async function serializeTerminalCheckpointWithinLimit(
     let high = visibleOnly.scrollbackLines
     while (low <= high) {
       const rows = low + Math.floor((high - low) / 2)
-      const candidate = emulator.getSnapshot({ scrollbackRows: rows })
+      const candidate = { ...emulator.getSnapshot({ scrollbackRows: rows }), ...ownership }
       const candidateJson = stringifyWithinLimit(checkpointFile(candidate, metadata), maxBytes)
       if (candidateJson === null) {
         high = rows - 1

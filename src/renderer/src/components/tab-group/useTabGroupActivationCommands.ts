@@ -9,6 +9,7 @@ import {
 } from '../../runtime/web-runtime-session'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupActivationCommands({
@@ -51,7 +52,7 @@ export function useTabGroupActivationCommands({
         })
       }
       setActiveTab(terminalId)
-      setActiveTabType('terminal')
+      setActiveTabType('terminal', worktreeId)
       const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
       // Why: restore xterm focus to the store-active leaf so keyboard input can't drift to a sibling pane.
       focusTerminalTabSurface(terminalId, activeLeafId)
@@ -98,11 +99,11 @@ export function useTabGroupActivationCommands({
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
       if (item.contentType === 'simulator') {
-        setActiveTabType('simulator')
+        setActiveTabType('simulator', worktreeId)
         // simulator has no editor file entity
       } else {
-        setActiveFile(item.entityId)
-        setActiveTabType('editor')
+        setActiveFile(item.entityId, worktreeId)
+        setActiveTabType('editor', worktreeId)
       }
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveFile, setActiveTabType, worktreeId]
@@ -132,11 +133,24 @@ export function useTabGroupActivationCommands({
           environmentId: runtimeEnvironmentId
         })
       }
-      setActiveBrowserTab(browserTabId)
-      setActiveTabType('browser')
+      setActiveBrowserTab(browserTabId, worktreeId)
+      setActiveTabType('browser', worktreeId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
   )
 
-  return { activateTerminal, toggleTerminalPaneExpand, activateEditor, activateBrowser }
+  const activateAgentSession = useCallback(
+    (tabId: string) => {
+      activateStructuredAgentSessionTab({ worktreeId, tabId })
+    },
+    [worktreeId]
+  )
+
+  return {
+    activateTerminal,
+    toggleTerminalPaneExpand,
+    activateEditor,
+    activateBrowser,
+    activateAgentSession
+  }
 }

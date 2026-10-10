@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BoundedFileReader from '../../shared/node-bounded-file-reader'
-import type * as NodeFs from 'node:fs'
-import path from 'node:path'
 import {
   createBoundedFileReaderModuleMock,
   createFsPromisesModuleMock,
@@ -71,77 +69,25 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
-  it('opts status reads into direct WSL Git without changing mutation options', async () => {
+  it('preserves status admission through the direct WSL stream without changing mutation options', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
 
-    await getStatus('/repo', { wslDistro: 'Ubuntu' })
+    await getStatus('/repo', { wslDistro: 'Ubuntu', admissionTier: 'interactive' })
     await stageFile('/repo', 'src/file.ts', { wslDistro: 'Ubuntu' })
 
     expect(gitStreamOptionsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ preferWslDirectGit: true, wslDistro: 'Ubuntu' })
+      expect.objectContaining({
+        admissionTier: 'interactive',
+        preferWslDirectGit: true,
+        wslDistro: 'Ubuntu'
+      })
     )
     const addOptions = gitExecFileAsyncMock.mock.calls.find(([args]) =>
       (args as string[]).includes('add')
     )?.[1] as { preferWslDirectGit?: boolean } | undefined
     expect(addOptions).toBeDefined()
     expect(addOptions?.preferWslDirectGit).toBeUndefined()
-  })
-
-  it('benchmarks concurrent status burst subprocess pressure', async () => {
-    const benchPath = process.env.ORCA_GIT_STATUS_COALESCING_BENCH_JSON
-    if (!benchPath) {
-      return
-    }
-
-    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
-    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args.includes('status')) {
-        return Promise.resolve({ stdout: '' })
-      }
-      if (args.includes('--numstat')) {
-        return Promise.resolve({ stdout: '' })
-      }
-      return Promise.resolve({ stdout: '' })
-    })
-
-    const runBurst = async (withSignals: boolean): Promise<number> => {
-      gitExecFileAsyncMock.mockClear()
-      await Promise.all(
-        Array.from({ length: 10 }, () =>
-          getStatus('/repo', withSignals ? { signal: new AbortController().signal } : {})
-        )
-      )
-      return gitExecFileAsyncMock.mock.calls.filter(([args]) =>
-        (args as string[]).includes('status')
-      ).length
-    }
-
-    const startedAt = performance.now()
-    const unsignalledStatusCommandCalls = await runBurst(false)
-    const signalledStatusCommandCalls = await runBurst(true)
-    const durationMs = performance.now() - startedAt
-    const { mkdirSync, writeFileSync } = await vi.importActual<typeof NodeFs>('fs')
-    mkdirSync(path.dirname(benchPath), { recursive: true })
-    writeFileSync(
-      benchPath,
-      JSON.stringify({
-        scenario: 'git-status-concurrent-burst',
-        concurrentCalls: 10,
-        unsignalledStatusCommandCalls,
-        signalledStatusCommandCalls,
-        statusArgs: [
-          '-c',
-          'core.quotePath=false',
-          'status',
-          '--porcelain=v2',
-          '--branch',
-          '--untracked-files=all'
-        ],
-        durationMs
-      })
-    )
   })
 
   it('coalesces identical in-flight status reads without caching after settle', async () => {
@@ -290,16 +236,18 @@ describe('getStatus', () => {
       getStatus('/other-repo'),
       getStatus('/repo', { wslDistro: 'Ubuntu' }),
       getStatus('/repo', { includeIgnored: true }),
+      getStatus('/repo', { includeLineStats: false }),
       getStatus('/repo', { reuseLineStats: true }),
       getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true }),
       getStatus('/repo', { limit: 1 }),
-      getStatus('/repo', { sharedLinkPaths: ['node_modules'] })
+      getStatus('/repo', { sharedLinkPaths: ['node_modules'] }),
+      getStatus('/repo', { admissionTier: 'interactive' })
     ]
 
-    await vi.waitFor(() => expect(statusCommandCalls).toBe(8))
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(10))
     releases.splice(0).forEach((release) => release())
     await Promise.all(reads)
-    expect(statusCommandCalls).toBe(8)
+    expect(statusCommandCalls).toBe(10)
   })
 
   it('clears in-flight status reads when a mutation runs', async () => {

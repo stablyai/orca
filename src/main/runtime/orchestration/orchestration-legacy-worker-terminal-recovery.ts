@@ -1,6 +1,8 @@
+import { sessionIdFromStructuredWorkerIncarnation } from '../structured-worker-identity'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../../shared/pty-incarnation'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { LegacyWorkerTerminalRecoveryRow } from './types'
+import { WORKER_SETTLED_STATES } from './worker-terminal-ownership'
 
 export type LegacyWorkerTerminalRecoveryCandidate = {
   dispatchId: string
@@ -18,7 +20,6 @@ export type LegacyWorkerTerminalRecoveryCandidate = {
 }
 
 export type LegacyWorkerTerminalRecoveryPlan = {
-  blockedPanes: { worktreeId: string; paneKey: string; contractVersion: number }[]
   candidates: LegacyWorkerTerminalRecoveryCandidate[]
   ambiguousDispatchIds: string[]
 }
@@ -32,6 +33,11 @@ function parseProcessIncarnation(
   }
   const ptyId = value.slice(0, separator)
   const incarnationId = value.slice(separator + 1)
+  // A structured worker's incarnation names a session lineage, not a PTY; adopting it as one
+  // would hand a live chat session's dispatch to the PTY recovery path.
+  if (sessionIdFromStructuredWorkerIncarnation(value)) {
+    return null
+  }
   return ptyId && isPtyIncarnationId(incarnationId) ? { ptyId, incarnationId } : null
 }
 
@@ -50,21 +56,15 @@ function countCandidateKeys(
 export function planLegacyWorkerTerminalRecovery(
   rows: readonly LegacyWorkerTerminalRecoveryRow[]
 ): LegacyWorkerTerminalRecoveryPlan {
-  const blockedPanes = new Map<
-    string,
-    { worktreeId: string; paneKey: string; contractVersion: number }
-  >()
   const parsedCandidates: LegacyWorkerTerminalRecoveryCandidate[] = []
   for (const row of rows) {
     const worktreeId = row.worktree_id?.trim()
     const paneKey = row.assignee_pane_key?.trim()
     const pane = paneKey ? parsePaneKey(paneKey) : null
-    if (worktreeId && paneKey && pane) {
-      blockedPanes.set(`${worktreeId}\0${paneKey}`, {
-        worktreeId,
-        paneKey,
-        contractVersion: row.contract_version
-      })
+    const settled = WORKER_SETTLED_STATES.includes(row.worker_state)
+    // Settled dispatches need no adoption and must not make an active worker's identity ambiguous.
+    if (settled) {
+      continue
     }
     const terminalHandle = row.assignee_handle?.trim()
     const workerHandle = row.agent_terminal_handle?.trim()
@@ -112,7 +112,6 @@ export function planLegacyWorkerTerminalRecovery(
     return !ambiguous
   })
   return {
-    blockedPanes: [...blockedPanes.values()],
     candidates,
     ambiguousDispatchIds: [...ambiguousDispatchIds]
   }

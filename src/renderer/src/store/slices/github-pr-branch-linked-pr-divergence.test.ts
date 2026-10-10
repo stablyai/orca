@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { _clearGitHubPRRefreshStartedEntriesForTest } from './github'
+import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
   createTestStore,
   installLinkedPRClearStub,
@@ -86,6 +86,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       hostedReviewCache: {},
       prCache: {}
     } as unknown as Partial<AppState>)
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
     resolveRefresh({
       kind: 'found',
       pr: makePR({ number: 12, title: 'Stale exact linked PR' }),
@@ -93,6 +95,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
 
     await expect(request).resolves.toBeNull()
+    unsubscribe()
+    expect(subscriber).not.toHaveBeenCalled()
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
     expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toBeUndefined()
   })

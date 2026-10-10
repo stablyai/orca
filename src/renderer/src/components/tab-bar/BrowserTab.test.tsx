@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isValidElement } from 'react'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -32,6 +33,10 @@ vi.mock('react', async () => {
     }
   }
 })
+
+vi.mock('./use-tab-strip-slot-props', () => ({
+  useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
+}))
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -122,6 +127,12 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
+vi.mock('./TabHoverCard', () => ({
+  TabHoverCard: function TabHoverCard(props: { children?: unknown }) {
+    return props.children
+  }
+}))
+
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: function Tooltip(props: { children?: unknown }) {
     return { type: 'Tooltip', props }
@@ -134,7 +145,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => null
 }))
 
@@ -163,7 +174,7 @@ function baseBrowserTab(overrides: Partial<BrowserTabState> = {}): BrowserTabSta
   }
 }
 
-async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
+async function renderBrowserTab(tab: BrowserTabState, unifiedTabId = tab.id): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./BrowserTab')
   return module.default({
@@ -184,7 +195,7 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
       kind: 'tab',
       worktreeId: tab.worktreeId,
       groupId: 'group-1',
-      unifiedTabId: tab.id,
+      unifiedTabId,
       visibleTabId: tab.id,
       tabType: 'browser',
       label: tab.title
@@ -246,6 +257,24 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     vi.clearAllMocks()
   })
 
+  it('passes the workspace ID to Copy Tab ID instead of the browser content ID', async () => {
+    const { CopyTabIdMenuItem } = await import('./CopyTabIdMenuItem')
+    const tree = await renderBrowserTab(baseBrowserTab(), 'workspace-browser-1')
+    const visit = (node: unknown): ReactElementLike | undefined => {
+      if (Array.isArray(node)) {
+        return node.map(visit).find(Boolean)
+      }
+      if (!isValidElement<{ children?: unknown; unifiedTabId?: string }>(node)) {
+        return undefined
+      }
+      if (node.type === CopyTabIdMenuItem) {
+        return { type: node.type, props: node.props }
+      }
+      return visit(node.props.children)
+    }
+    expect(visit(tree)?.props.unifiedTabId).toBe('workspace-browser-1')
+  })
+
   it('renders the favicon image when faviconUrl is present', async () => {
     const iconUrl = 'https://example.com/favicon.ico'
     const element = await renderExpandedBrowserTab(baseBrowserTab({ faviconUrl: iconUrl }))
@@ -256,7 +285,9 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images[0].props.alt).toBe('')
     expect(images[0].props['aria-hidden']).toBe(true)
     expect(images[0].props.draggable).toBe(false)
-    expect(images[0].props.className).toContain('size-3 mr-1 shrink-0')
+    expect(images[0].props.className).toContain('size-3')
+    expect(images[0].props.className).toContain('mr-1')
+    expect(images[0].props.className).toContain('shrink-0')
     expect(images[0].props.className).toContain('object-contain')
     expect(images[0].props.className).toContain('drop-shadow-[0_0_1px_var(--foreground)]')
     expect(findElementsByType(element, 'Globe')).toHaveLength(0)
@@ -274,7 +305,9 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(findElementsByType(element, 'img')).toHaveLength(0)
     const globes = findElementsByType(element, 'Globe')
     expect(globes).toHaveLength(1)
-    expect(globes[0].props.className).toContain('size-3 mr-1 shrink-0')
+    expect(globes[0].props.className).toContain('size-3')
+    expect(globes[0].props.className).toContain('mr-1')
+    expect(globes[0].props.className).toContain('shrink-0')
     expect(globes[0].props.className).toContain('text-blue-500')
   })
 
@@ -308,5 +341,31 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images).toHaveLength(1)
     expect(images[0].props.src).toBe(nextIconUrl)
     expect(findElementsByType(resetRender, 'Globe')).toHaveLength(0)
+  })
+
+  it('retries a failed favicon after a navigation clears and restores the same url', async () => {
+    const iconUrl = 'https://example.com/favicon.ico'
+    const tab = baseBrowserTab({ faviconUrl: iconUrl })
+    const firstRender = await renderExpandedBrowserTab(tab)
+    const image = findElementsByType(firstRender, 'img')[0]
+
+    ;(image.props.onError as () => void)()
+    const failedRender = await renderExpandedBrowserTab(tab)
+    expect(findElementsByType(failedRender, 'Globe')).toHaveLength(1)
+
+    // A load clears the favicon, then the same site reports it again.
+    const loadingRender = await renderExpandedBrowserTab(
+      baseBrowserTab({ id: tab.id, faviconUrl: null })
+    )
+    expect(findElementsByType(loadingRender, 'Globe')).toHaveLength(1)
+
+    const retryRender = await renderExpandedBrowserTab(
+      baseBrowserTab({ id: tab.id, faviconUrl: iconUrl })
+    )
+
+    const images = findElementsByType(retryRender, 'img')
+    expect(images).toHaveLength(1)
+    expect(images[0].props.src).toBe(iconUrl)
+    expect(findElementsByType(retryRender, 'Globe')).toHaveLength(0)
   })
 })

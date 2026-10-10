@@ -15,6 +15,7 @@ import {
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
+import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -28,7 +29,7 @@ import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
+  parseRoutableExecutionHostId,
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -56,15 +57,8 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-
-const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
-// Why: a remote home with many agent roots routinely needs seconds to walk,
-// stat and parse. The old shared 3s bound emptied healthy SSH hosts in the
-// all-hosts view; the relay gets a real scan budget and the whole leg (relay
-// attempt plus any legacy crawl) stays bounded so one host can't hold the
-// merge open.
-const AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS = 15_000
-const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
+import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
+import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -92,24 +86,22 @@ async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
-  // Scope paths change the result set, so they must be part of the cache key.
-  // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
-  // can share a snapshot regardless of which worktree was selected first.
+  // Canonicalize bounded workspace sets so equivalent scopes share a scan.
   const scopePaths = args?.scopePaths ?? []
   const key = JSON.stringify({
     scopePaths:
       scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
-    executionHostScope
+    executionHostScope,
+    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)
-  const scanKey = JSON.stringify({ key, depth })
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers
   // one scan and only aborts it once every one of them has cancelled.
   return scanCoordinator.run({
-    key: scanKey,
+    key: JSON.stringify({ key, depth }),
     force: args?.force,
     signal: options.signal,
     start: (scanSignal) => {
@@ -157,8 +149,8 @@ async function scanAiVaultSessionsByHostScope(
           scan: () =>
             scanSshAiVaultSessions(hostInfo.targetId, args, {
               signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
+              timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScan,
+              relayTimeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScanRelay
             })
         })
       ),
@@ -173,7 +165,7 @@ async function scanAiVaultSessionsByHostScope(
               hostInfo,
               scanner: handlerOptions.scanRuntimeAiVaultSessions,
               listArgs: args,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS }
+              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan }
             })
         })
       )
@@ -185,7 +177,7 @@ async function scanAiVaultSessionsByHostScope(
     )
   }
 
-  const parsed = parseExecutionHostId(executionHostScope)
+  const parsed = parseRoutableExecutionHostId(executionHostScope)
   if (parsed?.kind === 'ssh') {
     return scanSshAiVaultSessions(parsed.targetId, args, { signal })
   }
@@ -208,14 +200,16 @@ async function scanAiVaultSessionsByHostScope(
   })
 }
 
-function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
+export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
   return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
   })
 }
 
-function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
+export function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{
+  targetId: string
+}> {
   return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
     path: 'SSH hosts',
     fallbackMessage: 'SSH hosts are unavailable.'
@@ -237,10 +231,14 @@ async function scanLocalAiVaultSessionsAsIssue(
     if (isAiVaultScanCancelledError(error)) {
       throw error
     }
+    // Raw supervision text ("restart circuit is open") means nothing to a user,
+    // so the row carries actionable copy and the log keeps the original.
+    const raw = error instanceof Error ? error.message : 'Local session scan failed.'
+    console.error('[ai-vault] local session scan failed:', raw)
     return aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
-      message: error instanceof Error ? error.message : 'Local session scan failed.'
+      message: describeAiVaultScanError(raw)
     })
   }
 }
@@ -252,15 +250,7 @@ async function scanLocalAiVaultSessions(
   // Why: the shared cache module owns codex-home/WSL sourcing and the local
   // scan cache, so the desktop IPC path and the runtime RPC method (mobile)
   // share one cache instance and one source of managed-Codex homes.
-  return listCachedLocalAiVaultSessions(
-    {
-      limit: args?.limit,
-      unlimited: args?.unlimited,
-      force: args?.force,
-      scopePaths: args?.scopePaths
-    },
-    { signal }
-  )
+  return listCachedLocalAiVaultSessions(args, { signal })
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
@@ -277,7 +267,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
         : undefined
     const controller = listCancellations.begin(event, requestToken)
     try {
-      return await listAiVaultSessions(args, { signal: controller?.signal })
+      await handlerOptions.ensureStructuredSessionOwnership?.()
+      const result = await listAiVaultSessions(args, { signal: controller?.signal })
+      return projectStructuredAiVaultSessions(result, true)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -312,8 +304,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
-  // DOM focus/visibility events don't fire in the renderer on macOS app
-  // activation, so refresh-on-refocus needs this main-process signal.
+  // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
       window.webContents.send('aiVault:windowFocused')

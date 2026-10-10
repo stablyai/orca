@@ -1,13 +1,15 @@
 // Coordinates the single main->renderer window-close-request subscription (owned
 // by the always-mounted App root) with the rich close-confirmation handler in
-// Terminal, which only mounts once a workspace exists. Without this, quitting on
-// the no-workspace landing page — where Terminal (and its listener) is not
-// mounted — sends 'window:close-requested' to a renderer with no handler, so
+// Terminal, which mounts once any workspace — the floating panel included — holds
+// tabs. Without this, quitting on the landing page with no tabs anywhere — where
+// Terminal (and its listener) is not mounted — sends 'window:close-requested' to a renderer with no handler, so
 // confirmWindowClose() is never called and the window never closes (#5144).
 //
 // It also runs pre-close guards: surfaces with unsaved work (e.g. the Settings
 // Git AI Author prompt editors) register a guard so quitting prompts the user to
 // save/discard instead of being silently vetoed by a beforeunload handler.
+
+import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 
@@ -16,6 +18,23 @@ export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 export type WindowCloseGuard = () => boolean | Promise<boolean>
 
 let activeHandler: WindowCloseRequestHandler | null = null
+// Why: lets the shutdown checkpoint tell an app-level quit/close (durable-session
+// degradation is acceptable — the alternative is a quit the user can only complete
+// with SIGKILL, #15352) from an arbitrary unload, where it must stay strict.
+let windowCloseCheckpointInProgress = false
+
+export function isWindowCloseCheckpointInProgress(): boolean {
+  return windowCloseCheckpointInProgress
+}
+
+export function runWithWindowCloseCheckpointScope<T>(fn: () => T): T {
+  windowCloseCheckpointInProgress = true
+  try {
+    return fn()
+  } finally {
+    windowCloseCheckpointInProgress = false
+  }
+}
 const closeGuards = new Set<WindowCloseGuard>()
 // Why: a guard can await a dialog; ignore re-entrant close requests (main resends
 // 'window:close-requested' on each attempt) so we don't stack duplicate prompts.
@@ -69,5 +88,12 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
     activeHandler(data)
     return
   }
-  window.api.ui.confirmWindowClose()
+  const accepted = runWithWindowCloseCheckpointScope(() =>
+    window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
+  )
+  if (accepted) {
+    window.api.ui.confirmWindowClose()
+    return
+  }
+  showShutdownCheckpointFailureToast()
 }

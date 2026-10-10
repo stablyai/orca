@@ -1,10 +1,56 @@
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import type { JiraCreateField } from '../../../shared/jira-types'
 
-const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
+// 'assignee' is system here because the dialog renders a dedicated picker for it.
+const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set([
+  'project',
+  'issuetype',
+  'summary',
+  'description',
+  'assignee'
+])
 
+/** Jira's own create screen defaults only this field to the authenticated user. */
+export const JIRA_REPORTER_FIELD_KEY = 'reporter'
+
+export const JIRA_ASSIGNEE_FIELD_KEY = 'assignee'
+
+// Jira rejects fields absent from the create screen.
+export function hasJiraAssigneeCreateField(fields: readonly JiraCreateField[]): boolean {
+  return fields.some((field) => field.key === JIRA_ASSIGNEE_FIELD_KEY)
+}
+
+/** True for required create fields the dialog must render (system fields excluded). */
 export function isVisibleJiraCreateField(field: JiraCreateField): boolean {
   return field.required && !JIRA_CREATE_SYSTEM_FIELD_KEYS.has(field.key)
+}
+
+/**
+ * True for any user-typed field, scalar or array. User pickers carry no
+ * allowedValues, so schema type is the only way to tell them from free text.
+ */
+export function isJiraUserCreateField(field: JiraCreateField): boolean {
+  return (
+    field.schema?.type === 'user' ||
+    (field.schema?.type === 'array' && field.schema?.items === 'user')
+  )
+}
+
+/**
+ * True only for single-user fields. `JiraUserPicker` holds one user, so
+ * array-of-user fields stay on the comma-separated text path until the dialog
+ * can collect and submit several.
+ */
+export function isJiraScalarUserCreateField(field: JiraCreateField): boolean {
+  return field.schema?.type === 'user'
+}
+
+/**
+ * Collects the user-typed field keys for the host to shape, which it cannot
+ * infer from the values alone since a user id is just a string.
+ */
+export function getJiraUserCreateFieldKeys(fields: readonly JiraCreateField[]): string[] {
+  return fields.filter(isJiraUserCreateField).map((field) => field.key)
 }
 
 export function getJiraCreateAllowedValueLabel(
@@ -77,4 +123,26 @@ export function buildJiraCreateCustomFields(
     }
   }
   return Object.keys(customFields).length > 0 ? customFields : undefined
+}
+
+// Only populated user fields require the remote user-field capability.
+export function buildJiraCreateSubmission(
+  fields: readonly JiraCreateField[],
+  values: Record<string, string>,
+  assigneeAccountId?: string | null
+): { customFields?: Record<string, unknown>; userFieldKeys?: string[] } {
+  const customFields = { ...buildJiraCreateCustomFields(fields, values) }
+  if (assigneeAccountId) {
+    customFields[JIRA_ASSIGNEE_FIELD_KEY] = assigneeAccountId
+  }
+  const userFieldKeys = getJiraUserCreateFieldKeys(fields).filter(
+    (key) => customFields[key] !== undefined
+  )
+  if (assigneeAccountId) {
+    userFieldKeys.push(JIRA_ASSIGNEE_FIELD_KEY)
+  }
+  return {
+    customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
+    userFieldKeys: userFieldKeys.length > 0 ? userFieldKeys : undefined
+  }
 }

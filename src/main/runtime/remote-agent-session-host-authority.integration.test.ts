@@ -1,3 +1,4 @@
+import '../daemon/mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -36,6 +37,7 @@ function createControlledSubprocess(): ControlledSubprocess {
     write: vi.fn(),
     resize: vi.fn(),
     kill: () => exit(0),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => exit(137),
     signal: vi.fn(),
     onData: vi.fn(),
