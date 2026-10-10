@@ -77,7 +77,8 @@ export function FloatingTerminalWindowControls({
       // Why: `agent-auto-ack-targets` relies on the floating panel's active tab never becoming the
       // global `activeTabId`; activating here would also flip the main view off an open editor.
       // This selects within the floating group below instead.
-      activate: false
+      activate: false,
+      freshNewTab: true
     })
     if (!result) {
       toast.error(

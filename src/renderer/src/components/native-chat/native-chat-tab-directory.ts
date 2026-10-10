@@ -1,8 +1,8 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { resolveWorkspaceDirectory, type WorkspaceDirectoryState } from '@/lib/workspace-directory'
 import type { StructuredSessionLaunchDirectory } from '@/store/slices/structured-session-launch-directories'
+import { isStructuredTab } from './structured-agent-session-tabs'
 
 type NativeChatDirectoryTab = {
   id: string
@@ -35,12 +35,9 @@ export function resolveNativeChatTabDirectoryResolution(
   executionHostId?: ExecutionHostId | null
 ): NativeChatTabDirectoryResolution {
   const structuredTab = isFloatingWorkspaceId(worktreeId)
-    ? // Same predicate as the status bridge that mirrors pins, so no tab waits on one never sent.
+    ? // The status bridge's own predicate, so no tab waits on a pin it never mirrors.
       state.unifiedTabsByWorktree?.[worktreeId]?.find(
-        (tab) =>
-          tab.id === tabId &&
-          tab.contentType === 'agent-session' &&
-          isAgentSessionHandleProvider(tab.agentSessionAgent)
+        (tab) => tab.id === tabId && isStructuredTab(tab)
       )
     : undefined
   if (!structuredTab) {

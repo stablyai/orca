@@ -15,27 +15,27 @@ const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
   'pointerUp'
 ])
 
-export const BROWSER_ROUTE_GUEST_POPUP_GESTURE_WINDOW_MS = 1_000
+export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 1_000
 
-export type BrowserRouteGuestPopupGesture = {
-  /** Single-use: one observed click cannot be replayed into a second popup. */
+export type BrowserGuestInputGesture = {
+  /** Single-use: one observed click cannot be replayed into a second window or tab. */
   consume: () => boolean
   dispose: () => void
 }
 
-export function trackBrowserRouteGuestPopupGesture(
+export function trackBrowserGuestInputGesture(
   guest: WebContents,
   now: () => number = () => Date.now()
-): BrowserRouteGuestPopupGesture {
+): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
-  const onInputEvent = (_event: unknown, input: { type?: string }): void => {
+  const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
     if (typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)) {
       lastGestureAt = now()
     }
   }
   let attached = false
   try {
-    guest.on('input-event', onInputEvent as never)
+    guest.on('input-event', onInputEvent)
     attached = true
   } catch {
     // Fail closed: an unobservable input stream never counts as a gesture.
@@ -47,7 +47,7 @@ export function trackBrowserRouteGuestPopupGesture(
       return (
         attached &&
         observedAt !== null &&
-        now() - observedAt <= BROWSER_ROUTE_GUEST_POPUP_GESTURE_WINDOW_MS
+        now() - observedAt <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
       )
     },
     dispose: () => {
@@ -57,7 +57,7 @@ export function trackBrowserRouteGuestPopupGesture(
       }
       attached = false
       try {
-        guest.off('input-event', onInputEvent as never)
+        guest.off('input-event', onInputEvent)
       } catch {}
     }
   }

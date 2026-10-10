@@ -148,6 +148,16 @@ describe('control flag channel', () => {
     })
   })
 
+  it('applies the fence and read-timeout switches within their bounds', async () => {
+    const google = fakeGoogle(cellObject(5, { rejectionFence: false, readTimeoutMarginMs: 4_000 }))
+    const channel = cellChannel(google.fetchImpl)
+    await channel.poll()
+    expect(channel.applied()).toEqual({
+      generation: 5,
+      flags: { ...CELL_FLAG_DEFAULTS, rejectionFence: false, readTimeoutMarginMs: 4_000 }
+    })
+  })
+
   it('ignores a generation below the applied one', async () => {
     const google = fakeGoogle(cellObject(9, { readinessLocal: true }))
     const channel = cellChannel(google.fetchImpl)
@@ -164,13 +174,21 @@ describe('control flag channel', () => {
     const google = fakeGoogle(cellObject(5, { readinessLocal: true, placer: 'memory' }))
     const channel = cellChannel(google.fetchImpl)
     await channel.poll()
-    expect(channel.applied().flags).toEqual({ ...CELL_FLAG_DEFAULTS, readinessLocal: true })
+    expect(channel.applied()).toEqual({
+      generation: 5,
+      flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true },
+      ignoredKeys: ['placer']
+    })
+    expect(appliedLines().at(-1)).toMatchObject({ ignoredKeys: ['placer'] })
     for (const [generation, object] of [
       [6, cellObject(6, { readinessLocal: false, ticketCheck: 'strict' })],
       [7, cellObject(7, { readinessLocal: false, admitMode: 'memory' })],
       [8, cellObject(8, { readinessLocal: false, intakePerSec: -1 })],
       [9, cellObject(9, { readinessLocal: 'no' })],
-      [10, cellObject(10, { readinessLocal: false }, 'production-gce-c8')]
+      [10, cellObject(10, { readTimeoutMarginMs: 500 })],
+      [11, cellObject(11, { readTimeoutMarginMs: 61_000 })],
+      [12, cellObject(12, { rejectionFence: 'off' })],
+      [13, cellObject(13, { readinessLocal: false }, 'production-gce-c8')]
     ] as const) {
       google.state.object = object
       await channel.poll()
@@ -223,6 +241,34 @@ describe('control flag channel', () => {
     next = () => streamed('{}', 200, 8)
     await channel.poll()
     expect(cancelled).toBe(4)
+  })
+
+  it('asks again for a generation whose body was cut off mid-read', async () => {
+    const object = cellObject(5, { readinessLocal: true })
+    const google = fakeGoogle(object)
+    let cut = true
+    const fetchImpl: typeof fetch = async (target, init) => {
+      const url = new URL(String(target))
+      if (url.hostname === 'metadata.google.internal' || !cut) return await google.fetchImpl(target, init)
+      cut = false
+      google.state.storageRequests.push(url)
+      const half = object.body.slice(0, 10)
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(half))
+            controller.error(new Error('connection reset'))
+          }
+        }),
+        { headers: { 'x-goog-generation': '5' } }
+      )
+    }
+    const channel = cellChannel(fetchImpl)
+    await channel.poll()
+    expect(channel.applied().generation).toBe(0)
+    await channel.poll()
+    expect(google.state.storageRequests[1]?.searchParams.get('ifGenerationNotMatch')).toBeNull()
+    expect(channel.applied()).toMatchObject({ generation: 5, flags: { readinessLocal: true } })
   })
 
   it('reads one at a time and on a jittered 5 s cadence', async () => {
