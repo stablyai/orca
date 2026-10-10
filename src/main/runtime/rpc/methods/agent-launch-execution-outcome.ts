@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/agent-launch-tab-closed'
 import type { RpcContext } from '../core'
 import { readsAgentLaunchTabClosed } from './agent-launch-replay'
+import { markAgentLaunchNothingRan } from './agent-launch-nothing-ran'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
 export class AgentLaunchExecutionError extends Error {
@@ -19,6 +20,10 @@ export class AgentLaunchExecutionError extends Error {
     readonly failedWithoutEffects: boolean
   ) {
     super('agent_session_operation_unknown', { cause })
+    if (failedWithoutEffects) {
+      // The cause is what reaches the caller, so it carries the fact.
+      markAgentLaunchNothingRan(cause)
+    }
   }
 }
 

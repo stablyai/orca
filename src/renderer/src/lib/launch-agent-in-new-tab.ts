@@ -29,6 +29,7 @@ import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import {
   launchOnceHostAnswered,
+  launchPickInWindow,
   routeNewTabLaunch
 } from '@/lib/launch-agent-in-new-tab-host-agents'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -99,12 +100,6 @@ export type LaunchAgentInNewTabResult = {
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
 } | null
-
-export function shouldQueueTerminalFocusAfterMenuClose(
-  result: NonNullable<LaunchAgentInNewTabResult>
-): boolean {
-  return result.surface.kind === 'host-published'
-}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -283,7 +278,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
       ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
-      ...(activate === false ? { activate: false } : {})
+      ...(activate === false ? { activate: false } : {}),
+      launchInWindow: () => launchPickInWindow(args, plan, launchAgentInNewTabInternal)
     })
     return { surface: { kind: 'local-terminal', tabId }, startupPlan, pasteDraftAfterLaunch: false }
   }

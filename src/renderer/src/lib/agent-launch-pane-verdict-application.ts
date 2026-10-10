@@ -43,7 +43,9 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
         state.closeTab(tabId, {
           reason: 'cleanup',
           recordInteraction: false,
-          captureRecentlyClosed: false
+          captureRecentlyClosed: false,
+          // A launch tab nothing ran in was never the user's: its workspace stays as the click left it.
+          preserveWorktreeSelection: true
         })
       } else {
         state.setTabAgentLaunchPane(tabId, undefined)

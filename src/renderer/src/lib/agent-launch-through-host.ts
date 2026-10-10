@@ -16,11 +16,13 @@ import {
   holdAgentLaunchPaneSpawn,
   isAgentLaunchPaneSpawnHeld
 } from '@/lib/agent-launch-pane-spawn-hold'
+import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { createAgentSessionOperationId } from '@/runtime/agent-session-operation-id'
 import { isAgentLaunchResult } from '../../../shared/agent-launch-intent'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
+import { isAgentLaunchNothingRanData } from '../../../shared/agent-launch-nothing-ran'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -55,11 +57,11 @@ export type HostAgentLaunchOutcome =
   /** The agent was started in this tab's pane, which is attached to it. */
   | { kind: 'started' }
   /** The pane shows how the launch ended: couldn't start, or couldn't confirm it started. */
-  | { kind: 'pane-says' }
+  | { kind: 'pane-says'; nothingRan?: true }
   /** The user closed the tab while it started, and with it the launch: nothing more to say. */
   | { kind: 'closed-by-user' }
   /** The tab is gone, so the window says it: nothing started, or whether it did is unknown. */
-  | { kind: 'not-started'; unconfirmed: boolean; code?: string }
+  | { kind: 'not-started'; unconfirmed: boolean; code?: string; nothingRan?: true }
 
 /** Refused at admission: nothing ran under this click, and the host takes back the tab it was shown. */
 const ADMISSION_REFUSAL_CODES = new Set([
@@ -73,9 +75,14 @@ function tabExists(worktreeId: string, tabId: string): boolean {
   return (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
 }
 
-function closeLaunchTab(worktreeId: string, tabId: string): void {
+/** A launch tab nothing ran in was never the user's: it is not reopened, and its workspace stays. */
+export function closeLaunchTab(worktreeId: string, tabId: string): void {
   if (tabExists(worktreeId, tabId)) {
-    useAppStore.getState().closeTab(tabId, { recordInteraction: false })
+    useAppStore.getState().closeTab(tabId, {
+      recordInteraction: false,
+      captureRecentlyClosed: false,
+      preserveWorktreeSelection: true
+    })
   }
 }
 
@@ -118,7 +125,14 @@ async function settleLaunch(
     return outcomeFromResult(await send)
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
-    if (code === AGENT_LAUNCH_TAB_CLOSED_CODE) {
+    // Only the host says this: a failure of the call itself proves nothing about the launch.
+    const nothingRan =
+      error instanceof RuntimeRpcCallError && isAgentLaunchNothingRanData(error.response.error.data)
+    // A launch that ran nothing must not start again another way once the user closed its pane.
+    if (
+      code === AGENT_LAUNCH_TAB_CLOSED_CODE ||
+      (nothingRan && wasAgentLaunchPaneClosedByUser(pane.tabId, pane.leafId))
+    ) {
       return { kind: 'closed-by-user' }
     }
     // The host took the pane once it showed the tab; a pane it never took would open as a shell,
@@ -129,13 +143,22 @@ async function settleLaunch(
       return {
         kind: 'not-started',
         unconfirmed: code === 'agent_session_operation_unknown',
-        ...(code ? { code } : {})
+        ...(code ? { code } : {}),
+        ...(nothingRan ? { nothingRan } : {})
       }
     }
-    return { kind: 'pane-says' }
+    return nothingRan ? { kind: 'pane-says', nothingRan } : { kind: 'pane-says' }
   } finally {
     releaseHold()
   }
+}
+
+/** The host proved it ran nothing: the one failure after which the window may start the agent
+ *  itself, as main does, without doubling it. Never an unconfirmed launch, which may be running. */
+export function hostLaunchRanNothing(outcome: HostAgentLaunchOutcome): boolean {
+  return (
+    (outcome.kind === 'not-started' || outcome.kind === 'pane-says') && outcome.nothingRan === true
+  )
 }
 
 /** Where the host could turn a launch into a chat (chat is the default), this window's paste has no

@@ -18,6 +18,7 @@ import {
 } from '../../../providers/ssh-pty-errors'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { markRuntimeSpawnHiddenBeforeSpawn } from './spawn-hidden-delivery'
+import { recordPtySpawnErrorTelemetry } from '../pane/spawn-telemetry'
 
 export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
   const args = ctx.args
@@ -271,6 +272,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     if (ctx.isNewDaemonSession && ctx.sessionId !== undefined) {
       clearProviderPtyState(ctx.sessionId)
     }
+    // A host-built agent launch fails as the window's own launch does.
+    recordPtySpawnErrorTelemetry(args.telemetry, spawnError, ctx.isClaudeLaunch)
     throw spawnError
   } finally {
     if (args.preAllocatedHandle) {

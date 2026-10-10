@@ -2,12 +2,15 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
 import {
+  closeLaunchTab,
+  hostLaunchRanNothing,
   launchAgentThroughHost,
   windowMakesHostLaunchTab,
   type HostAgentLaunchArgs,
   type HostAgentLaunchOutcome
 } from '@/lib/agent-launch-through-host'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
@@ -52,11 +55,37 @@ export function freshNewTabLaunchesThroughHost(
   )
 }
 
-/** Starts a no-prompt new tab through the host; a launch that never started says so in a notice. */
-export function launchFreshNewTabThroughHost(args: HostAgentLaunchArgs): string {
-  const { tabId, outcome } = launchAgentThroughHost(args)
-  void outcome.then((launched) => showLaunchNotStartedNotice(launched, args.prompt))
+/**
+ * Starts a no-prompt new tab through the host. A launch the host proves ran nothing (its record
+ * would not open, or it failed before its spawn left) starts in its place as main's window launch
+ * (`launchInWindow`, which returns its tab); any other that never started says so in a notice.
+ * Shared by every host route that has main's window launch to fall back to.
+ */
+export function launchFreshNewTabThroughHost(
+  args: HostAgentLaunchArgs & { launchInWindow: () => string | null }
+): string {
+  const { launchInWindow, ...launch } = args
+  const { tabId, outcome } = launchAgentThroughHost(launch)
+  void outcome.then((launched) => {
+    if (hostLaunchRanNothing(launched)) {
+      closeLaunchTab(args.worktreeId, tabId)
+      selectReplacementTab(args.worktreeId, launchInWindow())
+      return
+    }
+    showLaunchNotStartedNotice(launched, args.prompt)
+  })
   return tabId
+}
+
+/** Callers select and focus the tab they were handed, which this one replaces: it gets the same. */
+function selectReplacementTab(worktreeId: string, tabId: string | null): void {
+  if (!tabId) {
+    return
+  }
+  const state = useAppStore.getState()
+  state.setActiveTabForWorktree(worktreeId, tabId)
+  state.activateTab(tabId)
+  focusTerminalTabSurface(tabId)
 }
 
 /** The tab is gone, so the pane's own words go in a notice, with its prompt to copy if it had one. */

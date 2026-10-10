@@ -276,6 +276,7 @@ export function createTerminalTabCloseActions(
         if (workspaceItem) {
           get().closeUnifiedTab(workspaceItem.id, {
             recordInteraction: opts?.recordInteraction,
+            ...(opts?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
             terminalRetirementHandled: true
           })
         }

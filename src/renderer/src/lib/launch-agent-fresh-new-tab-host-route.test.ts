@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as HostModule from './agent-launch-through-host'
 import type { HostAgentLaunchOutcome } from './agent-launch-through-host'
 
 const host = vi.hoisted(() => ({
   launchAgentThroughHost: vi.fn(),
   windowMakesHostLaunchTab: vi.fn(() => true)
 }))
-vi.mock('@/lib/agent-launch-through-host', () => host)
+vi.mock('@/lib/agent-launch-through-host', async (importOriginal) => ({
+  hostLaunchRanNothing: (await importOriginal<typeof HostModule>()).hostLaunchRanNothing,
+  closeLaunchTab: vi.fn(),
+  ...host
+}))
 vi.mock('@/lib/launch-agent-tab-prompt-paste', () => ({
   pasteAgentLaunchPromptOnceReady: vi.fn()
 }))
@@ -16,7 +21,11 @@ const state = vi.hoisted(() => {
   } = { settings: { disabledTuiAgents: [] }, connectionId: null }
   return initial
 })
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ settings: state.settings }) } }))
+const selection = vi.hoisted(() => ({ setActiveTabForWorktree: vi.fn(), activateTab: vi.fn() }))
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ settings: state.settings, ...selection }) }
+}))
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => state.connectionId
 }))
@@ -78,12 +87,19 @@ describe('which plain new-tab launches start through the host', () => {
 })
 
 describe('a plain new tab started through the host', () => {
+  const launchInWindow = vi.fn(() => 'window-tab')
+
   function launch(outcome: HostAgentLaunchOutcome): string {
     host.launchAgentThroughHost.mockReturnValue({
       tabId: 'tab-1',
       outcome: Promise.resolve(outcome)
     })
-    return launchFreshNewTabThroughHost({ agent: 'claude', worktreeId: 'wt-1', prompt: '' })
+    return launchFreshNewTabThroughHost({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: '',
+      launchInWindow
+    })
   }
 
   it('says nothing once the agent started', async () => {
@@ -97,5 +113,19 @@ describe('a plain new tab started through the host', () => {
     launch({ kind: 'not-started', unconfirmed: false, code: 'worktree_not_found' })
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledOnce())
     expect(toast.error.mock.calls[0]?.[1]).toBeUndefined()
+    expect(launchInWindow).not.toHaveBeenCalled()
+  })
+
+  it('starts as main does, once and quietly, when the host recorded nothing', async () => {
+    launch({ kind: 'pane-says', nothingRan: true })
+    await vi.waitFor(() => expect(launchInWindow).toHaveBeenCalledOnce())
+    expect(selection.activateTab).toHaveBeenCalledExactlyOnceWith('window-tab')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('never starts again a launch that may be running', async () => {
+    launch({ kind: 'not-started', unconfirmed: true, code: 'agent_session_operation_unknown' })
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledOnce())
+    expect(launchInWindow).not.toHaveBeenCalled()
   })
 })

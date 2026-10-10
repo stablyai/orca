@@ -3,10 +3,8 @@ import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import {
-  launchAgentInNewTab,
-  shouldQueueTerminalFocusAfterMenuClose
-} from '@/lib/launch-agent-in-new-tab'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { shouldQueueTerminalFocusAfterMenuClose } from '@/lib/launch-agent-in-new-tab-host-agents'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '../../store'

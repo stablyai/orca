@@ -7,6 +7,7 @@ import {
   mapEmulatorError,
   mapRuntimeError
 } from './errors'
+import { withAgentLaunchNothingRan } from './methods/agent-launch-nothing-ran'
 
 export function invalidArgumentResponse(
   request: RpcRequest,
@@ -39,5 +40,5 @@ export function mapDispatcherError(
   if (request.method.startsWith('emulator.')) {
     return mapEmulatorError(request.id, meta, error)
   }
-  return mapRuntimeError(request.id, meta, error)
+  return withAgentLaunchNothingRan(mapRuntimeError(request.id, meta, error), error)
 }

@@ -89,3 +89,23 @@ export function launchOnceHostAnswered(
       : {})
   }
 }
+
+/** Main's own window launch of the same pick, in a tab of its own, for a host launch that ran
+ *  nothing: the route the click decided, never the host's. Returns that tab. */
+export function launchPickInWindow(
+  args: LaunchAgentInNewTabArgs,
+  plan: AgentSessionLaunchPlan | undefined,
+  relaunch: (args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult
+): string | null {
+  const pick = { ...args, freshNewTab: undefined, beforeSurfaceOpen: undefined }
+  const inWindow = relaunch(
+    plan ? { ...pick, requestId: undefined, agentSessionLaunchPlan: plan } : pick
+  )
+  return inWindow?.surface.kind === 'local-terminal' ? inWindow.surface.tabId : null
+}
+
+export function shouldQueueTerminalFocusAfterMenuClose(
+  result: NonNullable<LaunchAgentInNewTabResult>
+): boolean {
+  return result.surface.kind === 'host-published'
+}

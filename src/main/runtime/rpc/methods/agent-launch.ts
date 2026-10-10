@@ -212,7 +212,7 @@ async function executeReplaySafeAgentLaunch(
     )
   } catch (error) {
     early?.finish()
-    throw error
+    throw new AgentLaunchExecutionError(error, true)
   }
   if (admission.decision !== 'execute') {
     // Nothing runs under this request. A tab it made goes, unless an agent still runs in its pane
@@ -246,7 +246,7 @@ async function executeAdmittedAgentLaunch(
     intent = await resolveUnlaunchedIntent(params, context.runtime, view.early)
   } catch (error) {
     await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
-    throw error
+    throw new AgentLaunchExecutionError(error, true)
   }
   const terminalSpawn = trackTerminalSpawnDispatch()
   let result: AgentLaunchResult
