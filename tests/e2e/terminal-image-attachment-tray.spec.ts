@@ -221,7 +221,7 @@ test('captures real clipboard bytes and adds multiple images without submitting 
   const input = pane.locator('.xterm-helper-textarea')
   const paste = async () => {
     await input.focus()
-    await input.dispatchEvent('paste')
+    await input.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
     await expect(tray).toBeVisible()
   }
   await paste()
