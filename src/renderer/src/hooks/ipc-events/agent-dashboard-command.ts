@@ -1,4 +1,5 @@
 import type { AppState } from '../../store/types'
+import { resolveAgentDashboardMode } from '../../components/dashboard/agent-dashboard-open-mode'
 
 export function toggleAgentDashboardFromShortcut(
   state: Pick<
@@ -17,7 +18,7 @@ export function toggleAgentDashboardFromShortcut(
   ) {
     return
   }
-  if (state.settings.experimentalAgentDashboardMode === 'popout') {
+  if (resolveAgentDashboardMode(state.settings) === 'popout') {
     openPopout()
     return
   }

@@ -1134,7 +1134,8 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
+          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet.",
+          "webClientUnavailable": "Document previews aren't available in the web client."
         }
       },
       "clipboardWriteFailure": {

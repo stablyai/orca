@@ -17,6 +17,7 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
+import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
@@ -89,9 +90,12 @@ export function getRuntimeEnvironmentIdForWorktree(
     const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
     const parsedHost = parseExecutionHostId(owner.hostId)
     const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+    // Why: a row on a web client that names no server is still reached through its only one.
+    const onlyHost = getPairedWebClientEnvironmentId(state)
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
       return (
-        projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
+        projectedRuntimeOwner ||
+        (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : onlyHost)
       )
     }
     if (!hasDetectedOwner) {
@@ -105,7 +109,7 @@ export function getRuntimeEnvironmentIdForWorktree(
       ) {
         const repoHost = parseExecutionHostId(getRepoExecutionHostId(repoResolution.owner))
         if (repoHost) {
-          return repoHost.kind === 'runtime' ? repoHost.environmentId : null
+          return repoHost.kind === 'runtime' ? repoHost.environmentId : onlyHost
         }
       }
     }

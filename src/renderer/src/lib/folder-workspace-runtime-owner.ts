@@ -11,6 +11,7 @@ import {
   getSingleFocusedRuntimeEnvironmentId,
   type SingleRuntimeLegacyOwnerState
 } from './single-runtime-legacy-owner'
+import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
@@ -106,7 +107,7 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
     folderWorkspace?.connectionId?.trim() ||
     projectGroup?.connectionId?.trim()
   ) {
-    return null
+    return getPairedWebClientEnvironmentId(state)
   }
   const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
   if (restoredRuntimeHost) {
