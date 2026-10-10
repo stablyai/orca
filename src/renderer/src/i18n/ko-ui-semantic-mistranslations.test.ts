@@ -15,8 +15,6 @@ const correctedValues = {
   'auto.components.right.sidebar.SourceControl.a5e5a11090':
     '모든 변경 사항 취소 실패 — 취소 전에 파일의 스테이징을 해제하지 못했습니다.',
   'auto.components.right.sidebar.SourceControl.6d7f2a47e5': '폴더의 변경 사항 취소',
-  'auto.components.right.sidebar.source.control.discard.confirmation.40e9357b2a':
-    '이렇게 하면 HEAD에서 파일을 복원하고 파일 삭제를 취소합니다. 이 작업은 취소할 수 없습니다.',
   'auto.components.right.sidebar.source.control.primary.action.5a477d80cb':
     '모든 변경 사항 스테이징',
   'auto.components.settings.DeveloperPermissionsPane.f903bf20b5':

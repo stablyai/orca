@@ -29,10 +29,31 @@ describe('native-chat shared copy matches the English catalog', () => {
     }
   )
 
-  it.each(Object.entries(NATIVE_CHAT_TOOL_ACTIVITY_COPY))(
-    'tool.%s matches en.json',
-    (key, value) => {
-      expect(catalog.components['native-chat'].tool[key]).toBe(value)
+  // No desktop call site resolves these through i18n: mobile renders the running
+  // labels from the constant, desktop only matches labels with them, and
+  // `moreCalls` has no reader left. With no catalog entry, nothing can drift.
+  const uncataloguedToolActivityKeys = new Set([
+    'runningPreview',
+    'runningCommand',
+    'runningNamedPreview',
+    'runningNamed',
+    'moreCalls'
+  ])
+
+  it.each(
+    Object.entries(NATIVE_CHAT_TOOL_ACTIVITY_COPY).filter(
+      ([key]) => !uncataloguedToolActivityKeys.has(key)
+    )
+  )('tool.%s matches en.json', (key, value) => {
+    expect(catalog.components['native-chat'].tool[key]).toBe(value)
+  })
+
+  // Why: a desktop call site for one of these brings its catalog key back, and
+  // from then on it can drift. Failing here moves it out of the set above.
+  it.each([...uncataloguedToolActivityKeys])(
+    'tool.%s has no catalog entry to drift from',
+    (key) => {
+      expect(catalog.components['native-chat'].tool[key]).toBeUndefined()
     }
   )
 
