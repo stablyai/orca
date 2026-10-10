@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { useAppStore } from '../../store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   fetchProviderAccountsSnapshot,
   selectCodexProviderAccount
@@ -68,7 +68,8 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  // Why: the status bar has no host picker; it shows the default scope host's accounts.
+  const runtimeTarget = useMemo(() => defaultScopeHost(settings), [settings])
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find(
         (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()

@@ -266,7 +266,6 @@
 2 src/renderer/src/components/sidebar/worktree-list/listing/use-folder-path-statuses.ts
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-section-rows.ts
 1 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx
-1 src/renderer/src/components/skills/SkillsPage.tsx
 7 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/CodexSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/SshStatusSegment.tsx
@@ -361,10 +360,8 @@
 1 src/renderer/src/hooks/ipc-events/runtime-environment-subscription-selection.ts
 1 src/renderer/src/hooks/ipc-events/settings-sidebar-ipc-bridge.ts
 2 src/renderer/src/hooks/ipc-events/tab-lifecycle-ipc-bridge.ts
-3 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
-1 src/renderer/src/hooks/useActiveProjectSkillRuntime.ts
+2 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
 2 src/renderer/src/hooks/useEditorExternalWatch.ts
-1 src/renderer/src/hooks/useInstalledAgentSkills.ts
 1 src/renderer/src/hooks/useIpcEvents.ts
 1 src/renderer/src/hooks/useIssueMetadata.ts
 1 src/renderer/src/hooks/useLinearProviderConnected.ts

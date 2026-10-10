@@ -23,8 +23,6 @@
 1 src/renderer/src/components/settings/RepositoryIconPicker.tsx
 1 src/renderer/src/components/setup-guide/setup-guide-progress-readiness.ts
 1 src/renderer/src/components/sidebar/add-repo-runtime-owner.ts
-1 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
-1 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
 1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
 1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
 1 src/renderer/src/components/terminal-pane/terminal-file-path-mapping.ts
@@ -32,9 +30,6 @@
 1 src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts
 1 src/renderer/src/hooks/composer-state/provider-runtime-sync.ts
 1 src/renderer/src/hooks/composer-state/quick-creation-execution.ts
-1 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
-1 src/renderer/src/hooks/useIssueMetadata.ts
-1 src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 3 src/renderer/src/lib/activate-ai-vault-structured-session.ts
 1 src/renderer/src/lib/active-agent-note-send.ts
 1 src/renderer/src/lib/active-agent-note-target.ts
@@ -63,8 +58,6 @@
 10 src/renderer/src/runtime/runtime-git-sync-client.ts
 9 src/renderer/src/runtime/runtime-git-working-tree-client.ts
 3 src/renderer/src/runtime/runtime-hooks-client.ts
-1 src/renderer/src/runtime/runtime-jira-target.ts
-1 src/renderer/src/runtime/runtime-linear-client.ts
 3 src/renderer/src/runtime/runtime-repo-client.ts
 3 src/renderer/src/runtime/runtime-terminal-inspection.ts
 1 src/renderer/src/runtime/runtime-terminal-stream.ts

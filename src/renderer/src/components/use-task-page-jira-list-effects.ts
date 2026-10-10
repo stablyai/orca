@@ -8,6 +8,7 @@ import {
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page-jira-load-state'
 import { searchTaskPageJiraIssues } from '@/components/task-page-jira-search'
 import { JIRA_ITEM_LIMIT, TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-context'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {
     settings,
@@ -107,7 +108,7 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
           projectScope
         )
         void loadTaskPageJiraProjectStatusOrder(
-          jiraTaskSourceContext ?? settings,
+          jiraTaskSourceContext ?? defaultScopeSource(settings),
           jiraTaskSourceScopeKey,
           projectScope
         ).then((order) => {

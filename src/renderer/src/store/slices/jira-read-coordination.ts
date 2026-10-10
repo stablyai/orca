@@ -13,6 +13,8 @@ import {
 } from '../../../../shared/task-source-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { parseJiraStatusError } from '../../../../shared/jira-status-error'
+import { defaultScopeSource } from '@/lib/default-creation-host'
+import type { RowLessSource } from '@/lib/default-creation-host'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500
@@ -29,7 +31,7 @@ export type SharedJiraSummaryRequest = InflightJiraReadRequest<JiraIssue | null>
 }
 
 export type JiraReadScope = {
-  settings: AppState['settings'] | TaskSourceContext | null
+  settings: RowLessSource
   contextKey: string
   cachePrefix: string | null
   explicitSource: boolean
@@ -195,7 +197,8 @@ export function getJiraReadScope(
 ): JiraReadScope {
   if (!sourceContext) {
     return {
-      settings,
+      // Why: no Tasks source chosen yet; the default scope host is the row-less source's host.
+      settings: defaultScopeSource(settings),
       contextKey: getProviderRuntimeContextKey(settings),
       cachePrefix: null,
       explicitSource: false
@@ -214,11 +217,15 @@ export function scopedJiraCacheKey(scope: JiraReadScope, key: string): string {
   return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
 }
 
-function jiraConnectionRevisionContextKey(
-  settings: AppState['settings'] | TaskSourceContext | null
-): string {
+function jiraConnectionRevisionContextKey(source: RowLessSource): string {
   return getProviderRuntimeContextKey(
-    settings && 'kind' in settings ? getTaskSourceRuntimeSettings(settings) : settings
+    source.kind === 'default-scope'
+      ? source.settings
+      : source.kind === 'task-source'
+        ? getTaskSourceRuntimeSettings(source)
+        : {
+            activeRuntimeEnvironmentId: source.kind === 'environment' ? source.environmentId : null
+          }
   )
 }
 

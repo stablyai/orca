@@ -18,7 +18,13 @@ const IMPORT_EXPORT_LIST = /\b(?:import|export)\s+(?:type\s+)?\{[^}]*\}/g
 // Calls and value uses (`.map(helper)`); definitions and type queries are not routing.
 const FOCUS_ROUTING_USE = new RegExp(`(?<!(?:function|typeof)\\s+)\\b${HELPERS}\\b`, 'g')
 // Seed readers; every function that reads the setting or calls a reader joins them by discovery.
-const SEED_FOCUS_READERS = [...HELPER_NAMES.split('|'), 'defaultCreationHost']
+// The sanctioned readers are seeds too: their bodies reach the setting through a private helper.
+const SEED_FOCUS_READERS = [
+  ...HELPER_NAMES.split('|'),
+  'defaultCreationHost',
+  'defaultScopeHost',
+  'rowLessSourceTarget'
+]
 const FOCUS_SCAN_ROOTS = [SCAN_ROOT, 'src/shared']
 
 /** Imports and re-exports are not uses; an aliased one is reported by {@link hasFocusRoutingAlias}. */
