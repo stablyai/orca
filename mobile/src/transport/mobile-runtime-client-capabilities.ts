@@ -13,6 +13,7 @@ import {
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../src/shared/agent-launch-runtime-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
@@ -24,6 +25,8 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   // Pi's confirm/select/input/editor dialogs arrive as the approval and question cards drawn here.
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
+  // The model picker reads an options report with no model (OMP, or a chat at rest) as unknown.
+  AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   // Opts into the typed turn record; without it the host sends the legacy status carrier.
   AGENT_SESSION_TURN_ITEM_CAPABILITY,

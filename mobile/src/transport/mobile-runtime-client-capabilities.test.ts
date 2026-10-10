@@ -13,6 +13,7 @@ import {
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../src/shared/agent-launch-runtime-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-optional-model-capability'
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'
 
 /** Mirrors the host's `parseRuntimeClientCapabilities`, which returns an EMPTY list — silently
@@ -41,6 +42,13 @@ describe('mobile runtime client capabilities', () => {
         STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
         PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
       ])
+    )
+  })
+
+  it('reads an options report with no model', () => {
+    // Why: without it the host refuses `agentSession.options` for OMP and model-less chats at rest.
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY
     )
   })
 
