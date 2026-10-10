@@ -35,6 +35,8 @@ import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault
 import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault-host-scope'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
+import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 
 /** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
  *  the provider conversation its agent reported. */
@@ -83,7 +85,18 @@ export function canPaneOfferResumeInNewChat(
     getAiVaultResumeWorkspaceExecutionHostId(state, titleRequest.worktreeId),
     titleRequest.worktreeId
   ).defaultExecutionHostScope
-  return canHostOfferTabSessionMove('cli', hostScope)
+  // The row gate's launch-route half, so a project the chat route refuses (WSL, repair) hides it.
+  return (
+    canHostOfferTabSessionMove('cli', hostScope) &&
+    structuredAgentSessionLaunchFeasible(state, {
+      agent: titleRequest.agent,
+      workspace: {
+        kind: workspaceKindForWorktreeId(titleRequest.worktreeId),
+        worktreeId: titleRequest.worktreeId
+      },
+      settings: state.settings
+    })
+  )
 }
 
 export function resolveTabSessionHistorySubject(

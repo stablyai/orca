@@ -4,6 +4,8 @@ import type { AppState } from '@/store/types'
 import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   claimAiVaultForcedRescan,
   resetAiVaultForcedRescanThrottleForTest
@@ -24,9 +26,17 @@ import {
 const mocks = vi.hoisted(() => {
   const state: {
     resumeState: { blocked: boolean; worktreeId: string | null }
-  } = { resumeState: { blocked: false, worktreeId: 'repo-1::/repo/wt' } }
+    platform: string
+  } = { resumeState: { blocked: false, worktreeId: 'repo-1::/repo/wt' }, platform: 'darwin' }
   return { ...state, resumeInChat: vi.fn() }
 })
+
+// Staged host answers: its capabilities arrive over IPC at boot, and the platform from preload.
+vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readLocalRuntimeCapabilitiesOrUnknown: () => [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}))
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
 
 // Parity with the panel's real composition is pinned in tab-session-history-switch.parity.test.ts.
 vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
@@ -123,6 +133,7 @@ const cliSubject: TabSessionHistorySubject = {
 beforeEach(() => {
   resetAiVaultForcedRescanThrottleForTest()
   mocks.resumeState = { blocked: false, worktreeId: WORKTREE_ID }
+  mocks.platform = 'darwin'
   mocks.resumeInChat.mockReset()
 })
 
@@ -253,6 +264,21 @@ describe('one pane of a terminal tab', () => {
       resolveTabSessionHistorySubject(retained, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
     ).toEqual(cliSubject)
     expect(paneGate(retained, claudePane)).toBe(true)
+  })
+
+  it('offers nothing where the project runs in WSL, whose chat route is refused', () => {
+    mocks.platform = 'win32'
+    const onWindows = (
+      localWindowsRuntimeDefault: { kind: 'wsl'; distro: string } | { kind: 'windows-host' }
+    ) => {
+      makeState(liveClaudeEntry)
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('C:\\Users\\me'), localWindowsRuntimeDefault }
+      })
+      return useAppStore.getState()
+    }
+    expect(paneGate(onWindows({ kind: 'windows-host' }), claudePane)).toBe(true)
+    expect(paneGate(onWindows({ kind: 'wsl', distro: 'Ubuntu' }), claudePane)).toBe(false)
   })
 
   it('offers nothing over SSH', () => {
