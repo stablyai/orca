@@ -16,7 +16,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   store: AgentSessionRecordStore
   operationCallerKey: string
   envelope: AgentSessionMutationEnvelope
-  plan: MutationPlan<TValue>
+  plan: Exclude<MutationPlan<TValue>, { acceptsWithCommandReceipt: true }>
   context: AgentSessionTurnContext
 }): Promise<TurnOutcome<TValue>> {
   const operation = {

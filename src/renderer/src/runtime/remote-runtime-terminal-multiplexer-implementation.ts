@@ -7,9 +7,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalBinaryController } from './remote-runtime-terminal-binary-controller'
 import {
   CONTROL_STREAM_ID,
-  clearResyncTimer,
-  discardOutputAcknowledgements,
-  rejectPendingSnapshotRequest
+  disposeRemoteTerminalStreamState
 } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminal,
@@ -121,12 +119,10 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       serializeBufferOutcome: (opts) => this.requestSnapshotOutcome(state, opts),
       close: () => {
-        if (this.streams.get(streamId) === state) {
-          discardOutputAcknowledgements(state)
-          state.watchdog.dispose()
+        if (this.isRegisteredStream(state)) {
+          // Why after: a failed write closes the transport, whose message the pending snapshot must carry.
           this.sendFrame(streamId, TerminalStreamOpcode.Unsubscribe)
-          clearResyncTimer(state)
-          rejectPendingSnapshotRequest(state, 'Remote terminal stream closed.')
+          disposeRemoteTerminalStreamState(state, 'Remote terminal stream closed.')
           this.streams.delete(streamId)
           this.closeIfIdle()
         }

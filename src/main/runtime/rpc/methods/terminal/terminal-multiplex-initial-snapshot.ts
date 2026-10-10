@@ -4,9 +4,10 @@ import {
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
-import type {
-  MultiplexSubscribeRequest,
-  TerminalMultiplexConnection
+import {
+  isMultiplexStreamAttached,
+  type MultiplexSubscribeRequest,
+  type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
@@ -21,14 +22,14 @@ export async function publishMultiplexInitialSnapshot(
   request: MultiplexSubscribeRequest,
   stream: TerminalMultiplexStream
 ): Promise<MultiplexPublishedInitialState | null> {
-  const { runtime, streams, emit } = state
+  const { runtime, emit } = state
   const { ptyId } = stream
   const isMobile = stream.isMobile
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   let read = await runtime.readTerminal(request.terminal)
   let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
-  if (state.closed || streams.get(request.streamId) !== stream) {
+  if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
   let initialOutputOverflowed = forcedInitialSnapshotTruncated
@@ -38,7 +39,7 @@ export async function publishMultiplexInitialSnapshot(
     stream.pendingOutputOverflowed = false
     read = await runtime.readTerminal(request.terminal)
     serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
-    if (state.closed || streams.get(request.streamId) !== stream) {
+    if (!isMultiplexStreamAttached(state, stream)) {
       return null
     }
     if (stream.pendingOutputOverflowed) {

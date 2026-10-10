@@ -66,7 +66,8 @@ function ofTurn<T extends { turnId: string | null }>(fact: T | undefined, turnId
 
 function commandLive(
   command: Extract<CodexBackgroundCommandChange, { type: 'started' }>,
-  ownerId: string | null
+  ownerId: string | null,
+  stopsTerminals: boolean
 ) {
   const { task } = command
   return (observedAt: number): AgentChildWorkEvidence => ({
@@ -79,7 +80,8 @@ function commandLive(
       state: 'working',
       ...(task.description ? { description: task.description } : {}),
       ...(ownerId !== null ? { ownerId } : {}),
-      stoppable: false
+      // As the strip offers it: a backgrounded process this app-server can terminate.
+      stoppable: stopsTerminals && command.backgrounded && command.processId !== undefined
     }
   })
 }
@@ -91,8 +93,15 @@ export class CodexChildWorkEvidence {
   constructor(
     private readonly primaryThreadId: string,
     private readonly executions: CodexSubagentExecutions,
-    private readonly liveCommands: (threadId: string) => readonly CodexBackgroundCommandChange[]
+    private readonly liveCommands: (threadId: string) => readonly CodexBackgroundCommandChange[],
+    /** Whether this app-server proved it can terminate a background command. */
+    private readonly stopsTerminals: () => boolean = () => false
   ) {}
+
+  /** Restates these commands, as when whether they can be stopped changed. */
+  restateCommands(commands: readonly CodexBackgroundCommandChange[]): void {
+    this.queueCommands(commands)
+  }
 
   /** After the tracker applied the frame: which command processes it saw start or stop, and the
    *  child the frame is about. */
@@ -144,7 +153,7 @@ export class CodexChildWorkEvidence {
     for (const command of commands) {
       if (command.type === 'started') {
         const ownerId = command.threadId === this.primaryThreadId ? null : command.threadId
-        this.pending.push(commandLive(command, ownerId))
+        this.pending.push(commandLive(command, ownerId, this.stopsTerminals()))
         continue
       }
       const { taskId } = command

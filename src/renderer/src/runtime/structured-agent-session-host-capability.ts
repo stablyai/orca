@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   type RuntimeCapability
@@ -125,5 +126,16 @@ export function useStructuredAgentSessionHostQueuesCommands(target: RuntimeClien
   return useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the host edits a queued card in place and holds it from delivery while edited. Until
+ *  it says so, and against an older host, a card offers no Edit. */
+export function useStructuredAgentSessionHostEditsQueuedMessages(
+  target: RuntimeClientTarget
+): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY
   )
 }

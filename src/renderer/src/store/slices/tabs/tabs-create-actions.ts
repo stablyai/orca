@@ -3,9 +3,11 @@ import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-owne
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { buildSplitNode, replaceLeaf } from './tabs-layout'
 import {
-  dedupeTabOrder,
+  buildSplitNode,
+  replaceLeaf
+} from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import {
   ensureGroup,
   findGroupForTab,
   pushRecentTabId,
@@ -15,8 +17,9 @@ import {
 import {
   applyTabOrderSortValues,
   canReplacePreviewContentType,
+  dedupeTabOrder,
   insertTabIdIntoOrder
-} from './tabs-tab-order'
+} from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 

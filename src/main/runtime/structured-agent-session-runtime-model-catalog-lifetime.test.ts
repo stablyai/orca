@@ -50,7 +50,7 @@ describe('the host catalog lifetime', () => {
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' as const })
     })
     expect(service.prewarm).toHaveBeenCalledOnce()
     expect(service.stop).not.toHaveBeenCalled()

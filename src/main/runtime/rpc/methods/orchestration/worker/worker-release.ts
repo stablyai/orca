@@ -8,7 +8,10 @@ import {
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
 } from './worker-release-completion'
-import { WorkerDispatchParams, WorkerRetainParams } from './worker-release-schemas'
+import {
+  WorkerDispatchParams,
+  WorkerRetainParams
+} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
 import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [

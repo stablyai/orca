@@ -6,7 +6,7 @@ import { RemoteRuntimeTerminalFlowController } from './remote-runtime-terminal-f
 import {
   clearResyncTimer,
   clearSnapshot,
-  discardOutputAcknowledgements,
+  disposeRemoteTerminalStreamState,
   isTerminalDriverState,
   rejectPendingSnapshotRequest
 } from './remote-runtime-terminal-snapshot-state'
@@ -87,11 +87,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         stream.callbacks.onOutputPauseCapability?.()
       }
     } else if (event.type === 'end') {
-      discardOutputAcknowledgements(stream)
-      stream.watchdog.dispose()
-      clearSnapshot(stream)
-      clearResyncTimer(stream)
-      rejectPendingSnapshotRequest(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {

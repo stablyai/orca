@@ -80,7 +80,7 @@ export async function prepareAutomationDispatchWorkspace(args: {
     folderWorkspaceHost && automationWorktree
       ? folderWorkspaceConnectionId
         ? toSshExecutionHostId(folderWorkspaceConnectionId)
-        : folderWorkspaceHost.kind === 'local'
+        : folderWorkspaceHost.kind === 'local' || folderWorkspaceHost.kind === 'runtime'
           ? getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
           : null
       : null

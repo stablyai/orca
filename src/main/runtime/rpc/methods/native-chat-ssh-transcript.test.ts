@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { mergeNativeChatMessages } from '../../../../shared/native-chat-merge'
 import { foldToolMessages, pairToolBlocks } from '../../../../shared/native-chat-tool-fold'
 import type { IFilesystemProvider } from '../../../providers/types'
 import {
@@ -214,6 +215,111 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
     )
     expect(projected[1]).toMatchObject({ id: 'old-x', role: 'tool', blocks: [{ output: 'OLD X' }] })
     expect(foldToolMessages(projected)).toEqual(projected)
+  })
+
+  it('keeps remote page cursors and reattaches several outputs to their earlier named calls', async () => {
+    const records = [
+      {
+        type: 'user',
+        uuid: 'prompt',
+        message: { role: 'user', content: [{ type: 'text', text: 'remote question' }] }
+      },
+      ...['a', 'b'].map((id) => ({
+        type: 'assistant',
+        uuid: `call-${id}`,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id, name: 'Bash', input: { command: id } }]
+        }
+      })),
+      {
+        type: 'assistant',
+        uuid: 'backlog',
+        message: {
+          role: 'assistant',
+          content: Array.from({ length: 64 }, (_, index) => ({
+            type: 'tool_use',
+            id: `silent-${index}`,
+            name: 'Bash',
+            input: { command: `silent ${index}` }
+          }))
+        }
+      },
+      {
+        type: 'user',
+        uuid: 'outputs',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'a', content: 'output A' },
+            { type: 'tool_result', tool_use_id: 'b', content: 'output B', is_error: true }
+          ]
+        }
+      }
+    ]
+    const lines = records.map((record) => `${JSON.stringify(record)}\n`)
+    const cursor = Buffer.byteLength(lines.slice(0, 3).join(''))
+    registerSshFilesystemProvider(
+      CONNECTION_ID,
+      sshHost(new Map([[transcriptPath, lines.join('')]]))
+    )
+    const read = method('nativeChat.readSession')
+    if ('stream' in read) {
+      throw new Error('nativeChat.readSession is a stream')
+    }
+    const readPage = read.handler
+    async function page(limit: number, beforeOffset?: number) {
+      const result = await readPage(
+        { agent: 'claude', sessionId: SESSION_ID, transcriptPath, limit, beforeOffset },
+        phoneContext({})
+      )
+      if (
+        !result ||
+        typeof result !== 'object' ||
+        !('messages' in result) ||
+        !Array.isArray(result.messages) ||
+        !('beforeOffset' in result) ||
+        !('hasMore' in result)
+      ) {
+        throw new Error('nativeChat.readSession did not publish a page')
+      }
+      const messages: NativeChatMessage[] = result.messages
+      return { messages, beforeOffset: result.beforeOffset, hasMore: result.hasMore }
+    }
+    const tail = await page(2)
+    expect(tail.beforeOffset).toBe(cursor)
+    expect(tail.hasMore).toBe(true)
+    expect(tail.messages.map((row) => row.id)).toEqual(['backlog', 'outputs'])
+    expect(tail.messages.every((row) => !Object.hasOwn(row, 'unpairedToolResults'))).toBe(true)
+    const partial = foldToolMessages(tail.messages)
+    expect(partial[1]).toMatchObject({
+      id: 'outputs',
+      role: 'tool',
+      blocks: [{ output: 'output A' }, { output: 'output B', isError: true }]
+    })
+    expect(pairToolBlocks(partial[0]!.blocks).every((pair) => pair.result === undefined)).toBe(true)
+    expect(foldToolMessages(partial)).toEqual(partial)
+
+    const older = await page(100, cursor)
+    expect(older.beforeOffset).toBe(0)
+    expect(older.hasMore).toBe(false)
+    expect(older.messages.map((row) => row.id)).toEqual(['prompt', 'call-a', 'call-b'])
+    const raw = mergeNativeChatMessages(older.messages, tail.messages)
+    expect(raw.every((row) => !Object.hasOwn(row, 'unpairedToolResults'))).toBe(true)
+    const whole = foldToolMessages(raw)
+    expect(whole.some((row) => row.role === 'tool')).toBe(false)
+    expect(
+      whole.flatMap((row) =>
+        pairToolBlocks(row.blocks).flatMap((pair) =>
+          pair.result ? [[pair.call?.callId, pair.result.output]] : []
+        )
+      )
+    ).toEqual([
+      ['a', 'output A'],
+      ['b', 'output B']
+    ])
+    expect(foldToolMessages(whole)).toEqual(whole)
+    expect(tail.beforeOffset).toBe(cursor)
   })
 
   it('streams the SSH host history and its later turns to a subscribed phone', async () => {

@@ -15,6 +15,7 @@ import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { mintStructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 
 /** The same process, whatever Orca runtime the store stamped on its record (`runtime`): that stamp
  *  is about who holds the process, not which process it is. */
@@ -25,6 +26,23 @@ function sameOwnerProcess(
   const { runtime: _storedRuntime, ...storedProcess } = stored
   const { runtime: _acquiredRuntime, ...acquiredProcess } = acquired
   return isDeepStrictEqual(storedProcess, acquiredProcess)
+}
+
+/** Bookkeeping: a failure is logged, never the proven start's. */
+function handOverStartCatalogListing(
+  input: AttachFlowInput,
+  sessionId: string,
+  listing: AgentModelCatalogLiveListing
+): void {
+  try {
+    input.onStartCatalogListing?.(listing)
+  } catch (error) {
+    input.logger.warn('saving what a started provider listed failed', {
+      scope: 'provider-started-catalog',
+      sessionId,
+      error
+    })
+  }
 }
 
 /** A reservation with no process behind it is only a promise to spawn; the
@@ -113,6 +131,9 @@ export async function acquireOwner(
       now: input.now(),
       ...(options ? { options } : {})
     })
+    if (providerChildPhase === 'ready' && acquired.catalogListing) {
+      handOverStartCatalogListing(input, record.sessionId, acquired.catalogListing)
+    }
     return {
       record: proved,
       acquisitionGeneration: acquired.acquisitionGeneration ?? null,

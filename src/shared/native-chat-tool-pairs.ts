@@ -101,31 +101,35 @@ export function pairToolBlocks(
   blocks: readonly NativeChatBlock[],
   limit = Infinity
 ): NativeChatToolPair[] {
-  return pairToolBlocksReportingUnpaired(blocks, limit)
+  const pairs: NativeChatToolPair[] = []
+  pairToolBlocksReportingUnpaired(blocks, limit, pairs)
+  return pairs
 }
 
 export function unpairedToolResultIndices(blocks: readonly NativeChatBlock[]): ReadonlySet<number> {
   const unpaired = new Set<number>()
-  pairToolBlocksReportingUnpaired(blocks, Infinity, (index) => unpaired.add(index))
+  pairToolBlocksReportingUnpaired(blocks, Infinity, undefined, (index) => unpaired.add(index))
   return unpaired
 }
 
 function pairToolBlocksReportingUnpaired(
   blocks: readonly NativeChatBlock[],
   limit: number,
+  pairs?: NativeChatToolPair[],
   onUnpaired?: (index: number) => void
-): NativeChatToolPair[] {
-  const pairs: NativeChatToolPair[] = []
+): void {
+  let pairCount = 0
   const pending = new PendingToolCalls()
   for (let index = 0; index < blocks.length; index += 1) {
-    if (pairs.length >= limit && pending.empty) {
+    if (pairCount >= limit && pending.empty) {
       break
     }
     const block = blocks[index]
     if (block.type === 'tool-call') {
-      if (pairs.length < limit) {
-        pending.add(pairs.length, block.callId)
-        pairs.push({ call: block })
+      if (pairCount < limit) {
+        pending.add(pairCount, block.callId)
+        pairs?.push({ call: block })
+        pairCount += 1
       }
       continue
     }
@@ -135,12 +139,12 @@ function pairToolBlocksReportingUnpaired(
     const slot = pending.take(block.callId)
     if (slot === undefined) {
       onUnpaired?.(index)
-      if (pairs.length < limit) {
-        pairs.push({ result: block })
+      if (pairCount < limit) {
+        pairs?.push({ result: block })
+        pairCount += 1
       }
-    } else {
+    } else if (pairs) {
       pairs[slot]!.result = block
     }
   }
-  return pairs
 }

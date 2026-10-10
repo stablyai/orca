@@ -78,6 +78,8 @@ function controller(
   return {
     cards,
     queueCapable,
+    editCapable: true,
+    editor: undefined,
     pause,
     resume: vi.fn(async () => false),
     resuming: false,
@@ -121,7 +123,13 @@ function renderHeldQueue(
       isWorking: false,
       composerScopeKey: undefined,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list only awaits mutate; its answer is never read.
-      mutate: mutate as StructuredAgentSessionMutate
+      mutate: mutate as StructuredAgentSessionMutate,
+      editTransport: {
+        target: { kind: 'local' },
+        sessionId: 'session',
+        capable: false,
+        write: async () => ({ kind: 'dropped' })
+      }
     })
     return <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} />
   }
