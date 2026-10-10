@@ -645,7 +645,7 @@ describe('OrcaRuntimeService', () => {
         lineage: { parentWorktree: `id:${parentId}` }
       })
     ).rejects.toThrow(
-      'Parent worktree must belong to the same repository, execution host, and project.'
+      'Parent worktree must belong to the same repository and project; a different execution host is allowed only when both worktrees share the same project.'
     )
 
     expect(setWorktreeLineage).not.toHaveBeenCalled()

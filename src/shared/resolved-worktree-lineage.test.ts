@@ -72,11 +72,36 @@ describe('sharesWorktreeLineageBoundary', () => {
     expect(sharesWorktreeLineageBoundary(child, parent)).toBe(true)
   })
 
+  it('accepts a cross-host edge when both sides share the same defined project (#23290)', () => {
+    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ hostId: 'ssh:remote' }))).toBe(true)
+  })
+
+  it('rejects a cross-repo edge even across hosts within one project', () => {
+    expect(
+      sharesWorktreeLineageBoundary(
+        boundary(),
+        boundary({ repoId: 'other-repo', hostId: 'ssh:remote' })
+      )
+    ).toBe(false)
+  })
+
   it.each([
-    ['host', boundary({ hostId: 'ssh:remote' })],
-    ['project', boundary({ projectId: 'github:other/project' })]
-  ])('rejects a defined %s mismatch', (_label, parent) => {
-    expect(sharesWorktreeLineageBoundary(boundary(), parent)).toBe(false)
+    ['child unset', boundary({ projectId: undefined }), boundary({ hostId: 'ssh:remote' })],
+    ['parent unset', boundary(), boundary({ hostId: 'ssh:remote', projectId: undefined })],
+    [
+      'both unset',
+      boundary({ projectId: undefined }),
+      boundary({ hostId: 'ssh:remote', projectId: undefined })
+    ],
+    ['different', boundary(), boundary({ hostId: 'ssh:remote', projectId: 'github:a/b' })]
+  ])('rejects a defined host mismatch without a shared project (%s)', (_label, child, parent) => {
+    expect(sharesWorktreeLineageBoundary(child, parent)).toBe(false)
+  })
+
+  it('rejects a defined project mismatch', () => {
+    expect(
+      sharesWorktreeLineageBoundary(boundary(), boundary({ projectId: 'github:other/project' }))
+    ).toBe(false)
   })
 })
 
@@ -121,6 +146,21 @@ describe('projectResolvedWorktreeLineage', () => {
     expect(projected).toMatchObject([
       { id: 'child', parentWorktreeId: null, lineage: null },
       { id: 'parent', childWorktreeIds: [] }
+    ])
+  })
+
+  it('projects a cross-host edge when both sides share the same project (#23290)', () => {
+    const projectId = 'github:stablyai/orca'
+    const remoteChild = worktree('child', 'child-instance', { hostId: 'ssh:remote', projectId })
+    const localParent = worktree('parent', 'parent-instance', { hostId: 'local', projectId })
+
+    const projected = projectResolvedWorktreeLineage([remoteChild, localParent], {
+      child: lineage()
+    })
+
+    expect(projected).toMatchObject([
+      { id: 'child', parentWorktreeId: 'parent', lineage: lineage() },
+      { id: 'parent', childWorktreeIds: ['child'] }
     ])
   })
 

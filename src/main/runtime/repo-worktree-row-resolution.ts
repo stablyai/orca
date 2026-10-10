@@ -177,8 +177,10 @@ export async function resolveRepoWorktreeRows(
  * Resolve one `<repoId>::<path>` worktree id by scanning only its owning repo.
  *
  * Lineage edges are intra-repo by construction (`sharesResolvedWorktreeLineageBoundary` requires a
- * matching repoId), so projecting over one repo's rows yields the same parent and child ids the
- * fleet scan would. Returns `null` whenever that does not hold, and the caller falls back.
+ * matching repoId, even for #23290's same-project cross-host edges), and the fleet scan also
+ * projects each repo owner's rows on their own, so projecting over this one owner's rows yields
+ * the same parent and child ids the fleet scan would. Returns `null` whenever that does not hold,
+ * and the caller falls back.
  */
 export async function resolveScopedWorktreeIdRow(
   deps: RepoWorktreeRowDeps,

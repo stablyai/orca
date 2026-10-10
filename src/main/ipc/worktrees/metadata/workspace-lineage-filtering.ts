@@ -4,6 +4,8 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { parseExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { sharesWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { WorktreeLineage, WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import {
@@ -124,6 +126,43 @@ export function resolveWorkspaceLineageOwner(
   return owner
 }
 
+/**
+ * Whether an owned cross-host edge is one the creation boundary allows (#23290): the same repo and
+ * the same defined projectId, mirroring `sharesWorktreeLineageBoundary`. Folder endpoints carry no
+ * projectId, so a cross-host row touching a folder never qualifies.
+ */
+function isProjectScopedCrossHostEdge(
+  store: Store,
+  child: { worktreeId: string | null; hostId: ExecutionHostId },
+  parent: { worktreeId: string | null; hostId: ExecutionHostId }
+): boolean {
+  if (child.worktreeId === null || parent.worktreeId === null) {
+    return false
+  }
+  return sharesWorktreeLineageBoundary(
+    {
+      repoId: getRepoIdFromWorktreeId(child.worktreeId),
+      hostId: child.hostId,
+      projectId: store.getWorktreeMeta(child.worktreeId)?.projectId
+    },
+    {
+      repoId: getRepoIdFromWorktreeId(parent.worktreeId),
+      hostId: parent.hostId,
+      projectId: store.getWorktreeMeta(parent.worktreeId)?.projectId
+    }
+  )
+}
+
+function worktreeIdForWorkspaceKey(workspaceKey: string): string | null {
+  const workspace = parseWorkspaceKey(workspaceKey)
+  return workspace?.type === 'worktree' ? workspace.worktreeId : null
+}
+
+/**
+ * The lineage rows owned by `executionHostId`, or null when ownership cannot be proven. A row
+ * belongs to its child's host. A cross-host row is accepted only when it is project-scoped (see
+ * `isProjectScopedCrossHostEdge`); any other cross-host row nulls the whole host.
+ */
 export function filterLineageForHost(
   store: Store,
   executionHostId: ExecutionHostId
@@ -143,19 +182,21 @@ export function filterLineageForHost(
     if (parent.status === 'ambiguous' || parent.status === 'contradictory') {
       return null
     }
+    if (child.status !== 'owned' || parent.status !== 'owned') {
+      continue
+    }
     if (
-      child.status === 'owned' &&
-      parent.status === 'owned' &&
-      child.hostId === executionHostId &&
-      parent.hostId === executionHostId
-    ) {
-      worktreeLineageById[worktreeId] = structuredClone(lineage)
-    } else if (
-      child.status === 'owned' &&
-      parent.status === 'owned' &&
-      child.hostId !== parent.hostId
+      child.hostId !== parent.hostId &&
+      !isProjectScopedCrossHostEdge(
+        store,
+        { worktreeId, hostId: child.hostId },
+        { worktreeId: lineage.parentWorktreeId, hostId: parent.hostId }
+      )
     ) {
       return null
+    }
+    if (child.hostId === executionHostId) {
+      worktreeLineageById[worktreeId] = structuredClone(lineage)
     }
   }
   for (const [childKey, lineage] of Object.entries(store.getAllWorkspaceLineage())) {
@@ -167,19 +208,21 @@ export function filterLineageForHost(
     if (parent.status === 'ambiguous' || parent.status === 'contradictory') {
       return null
     }
+    if (child.status !== 'owned' || parent.status !== 'owned') {
+      continue
+    }
     if (
-      child.status === 'owned' &&
-      parent.status === 'owned' &&
-      child.hostId === executionHostId &&
-      parent.hostId === executionHostId
-    ) {
-      workspaceLineageByChildKey[childKey] = structuredClone(lineage)
-    } else if (
-      child.status === 'owned' &&
-      parent.status === 'owned' &&
-      child.hostId !== parent.hostId
+      child.hostId !== parent.hostId &&
+      !isProjectScopedCrossHostEdge(
+        store,
+        { worktreeId: worktreeIdForWorkspaceKey(childKey), hostId: child.hostId },
+        { worktreeId: worktreeIdForWorkspaceKey(lineage.parentWorkspaceKey), hostId: parent.hostId }
+      )
     ) {
       return null
+    }
+    if (child.hostId === executionHostId) {
+      workspaceLineageByChildKey[childKey] = structuredClone(lineage)
     }
   }
   return { worktreeLineageById, workspaceLineageByChildKey }

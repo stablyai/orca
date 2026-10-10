@@ -11,13 +11,24 @@ export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
  *  projected child, not a real Worktree — can check the same rule the projection enforces. */
 export type WorktreeLineageBoundary = Pick<Worktree, 'repoId' | 'hostId' | 'projectId'>
 
+/**
+ * Whether `parent` may be the lineage parent of `child`. Edges never cross repos, and a defined
+ * project mismatch is always rejected; an undefined host or project is compatible (legacy rows).
+ * Two defined, different execution hosts are allowed only when both sides carry the same defined
+ * projectId (#23290: one project spanning Local and SSH hosts). Keeping the repo requirement keeps
+ * every edge inside one repo's rows, which the per-repo projections and scoped lookups rely on.
+ */
 export function sharesWorktreeLineageBoundary(
   child: WorktreeLineageBoundary,
   parent: WorktreeLineageBoundary
 ): boolean {
+  const sharesDefinedProject = child.projectId !== undefined && child.projectId === parent.projectId
   return (
     child.repoId === parent.repoId &&
-    (child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId) &&
+    (sharesDefinedProject ||
+      child.hostId === undefined ||
+      parent.hostId === undefined ||
+      child.hostId === parent.hostId) &&
     (child.projectId === undefined ||
       parent.projectId === undefined ||
       child.projectId === parent.projectId)
