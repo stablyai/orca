@@ -116,6 +116,8 @@ export function writeDurableSecureJsonFile(targetPath: string, value: unknown): 
  * legitimately on FAT32, network paths and restricted tokens, and must not break a write — but
  * the outcome is now reported rather than assumed, so a caller storing a credential can react.
  *
+ * An optional publication predicate runs after staged hardening; false discards the staged file.
+ *
  * The return value covers the *file* only. The parent directory is hardened fire-and-forget — on
  * Windows that lane is async and answers `pending` regardless — so a `true` here says nothing
  * about the directory's ACL.
@@ -123,7 +125,7 @@ export function writeDurableSecureJsonFile(targetPath: string, value: unknown): 
 export function writeSecureFile(
   targetPath: string,
   contents: string,
-  options: { durable?: boolean } = {}
+  options: { durable?: boolean; shouldPublish?: () => boolean } = {}
 ): boolean {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
@@ -143,6 +145,11 @@ export function writeSecureFile(
     }
     // Why: writeFileSync mode is a no-op on Windows, so restrict the credential's ACL synchronously before the rename publishes it under inherited ACLs.
     const stagedOutcome = applySecurePathRestriction(tmpFile, false, process.platform, true)
+    // Recheck after hardening; the check and rename are separate, non-atomic operations.
+    if (options.shouldPublish && !options.shouldPublish()) {
+      rmSync(tmpFile, { force: true })
+      return false
+    }
     renameSync(tmpFile, targetPath)
     // Why: these hold auth credentials, so the published path must stay current-user only; cache only on confirmed success so failures retry.
     // The staged file's protected DACL survives the rename, so this pass usually just verifies it.
