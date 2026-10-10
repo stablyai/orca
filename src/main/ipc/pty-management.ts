@@ -16,6 +16,10 @@ import {
   resetFolderAccessForDaemon,
   type DaemonFolderAccessResetResult
 } from '../daemon/daemon-folder-access-reset'
+import {
+  getDaemonReplacementDeferral,
+  type DaemonReplacementDeferral
+} from '../daemon/daemon-replacement-deferral'
 import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
 import type { DaemonEndpointIdentity } from '../daemon/daemon-hello-protocol'
 import type { DaemonSessionInfo } from '../daemon/types'
@@ -71,12 +75,14 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:resetFolderAccess')
 
   // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491),
-  // and carries the folder-access evidence the notice needs (STA-7948) on the same focus-time poll.
+  // carries the folder-access evidence the notice needs (STA-7948) on the same focus-time poll,
+  // and says why Orca left the daemon in place instead of replacing it (#20007).
   ipcMain.handle(
     'pty:management:macTccAttribution',
     async (): Promise<{
       health: MacDaemonTccAttributionHealth
       folderAccessMismatch: DaemonFolderAccessMismatchNotice | null
+      deferredReplacement: DaemonReplacementDeferral | null
     }> => {
       // Why two guards: the two answers are independent evidence, and a failed health read must
       // not present as "the folder evidence is gone".
@@ -87,7 +93,11 @@ export function registerDaemonManagementHandlers(): void {
       // Why re-probe on the poll: the fix dialog's first step completes in System Settings, and
       // returning to Orca is the only moment anything can notice. The refresh owns when to skip.
       await refreshDaemonFolderAccessProbe(identity).catch(() => {})
-      return { health, folderAccessMismatch: getDaemonFolderAccessMismatch(identity) }
+      return {
+        health,
+        folderAccessMismatch: getDaemonFolderAccessMismatch(identity),
+        deferredReplacement: getDaemonReplacementDeferral()
+      }
     }
   )
 

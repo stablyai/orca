@@ -13,6 +13,10 @@ import { trackDaemonReplaced } from './daemon-lifecycle-event'
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
+import {
+  clearDaemonReplacementDeferral,
+  recordDaemonReplacementDeferral
+} from './daemon-replacement-deferral'
 import { getDaemonPidPath, type DaemonProcessHandle } from './daemon-spawner'
 import { killStaleDaemon } from './daemon-stale-kill'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -80,6 +84,7 @@ export async function prepareDaemonReplacement(
             ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
             : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
         )
+        recordDaemonReplacementDeferral('unhealthy_resolver', liveSessionCount)
         return preserveDaemon()
       }
       console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
@@ -101,15 +106,13 @@ export async function prepareDaemonReplacement(
         ))
       if (identity === 'mismatch' || stalePackagedBundle) {
         // Why: replacing a healthy daemon kills its child PTYs; defer code freshness until no live sessions would be lost.
-        const replacementLabel = stalePackagedBundle
-          ? 'launched before the current app bundle was installed'
-          : 'launched from a different app path'
+        const replacementReason = stalePackagedBundle ? 'stale_bundle' : 'different_app_path'
         if (
           await shouldPreserveDaemonWithLiveSessions(
             socketPath,
             tokenPath,
             recoveryDeadlineMs,
-            replacementLabel
+            replacementReason
           )
         ) {
           return preserveDaemon()
@@ -120,10 +123,7 @@ export async function prepareDaemonReplacement(
             : '[daemon] Replacing daemon launched from a different app path'
         )
         // liveSessionCount is 0: shouldPreserveDaemonWithLiveSessions() only falls through at exactly 0.
-        pendingReplacement = {
-          reason: stalePackagedBundle ? 'stale_bundle' : 'different_app_path',
-          liveSessionCount: 0
-        }
+        pendingReplacement = { reason: replacementReason, liveSessionCount: 0 }
         confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
           .cleaned
       } else {
@@ -142,12 +142,18 @@ export async function prepareDaemonReplacement(
           )
           if (liveSessionCount === 0) {
             console.warn(
-              '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
+              '[daemon] Replacing daemon whose macOS TCC attribution is severed (its executable or spawning app bundle no longer exists)'
             )
             pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
             confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
               .cleaned
           } else {
+            console.warn(
+              liveSessionCount === null
+                ? '[daemon] Preserving daemon whose macOS TCC attribution is severed because live session state could not be verified; restart it from Manage Sessions'
+                : `[daemon] Preserving daemon whose macOS TCC attribution is severed because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}; restart it from Manage Sessions`
+            )
+            recordDaemonReplacementDeferral('severed_tcc_attribution', liveSessionCount)
             return preserveDaemon()
           }
         } else {
@@ -232,6 +238,9 @@ export async function prepareDaemonReplacement(
     }
   }
   confirmedReplacement = killOutcome.killed || confirmedReplacement
+  if (confirmedReplacement) {
+    clearDaemonReplacementDeferral()
+  }
   // Why: rank by how well each reason is evidenced. A confirmed kill whose reason positively
   // identified the daemon outranks the attribution, so a stale bundle caught here is not billed
   // to the resolver. failed_health_check is the residual "couldn't tell" bucket though — it also
@@ -258,7 +267,7 @@ async function shouldPreserveDaemonWithLiveSessions(
   socketPath: string,
   tokenPath: string,
   recoveryDeadlineMs: number,
-  replacementLabel: string
+  reason: 'stale_bundle' | 'different_app_path'
 ): Promise<boolean> {
   const liveSessionCount = await getAliveDaemonSessionCount(
     socketPath,
@@ -268,10 +277,15 @@ async function shouldPreserveDaemonWithLiveSessions(
   if (liveSessionCount === 0) {
     return false
   }
+  const replacementLabel =
+    reason === 'stale_bundle'
+      ? 'launched before the current app bundle was installed'
+      : 'launched from a different app path'
   console.warn(
     liveSessionCount === null
       ? `[daemon] Preserving daemon ${replacementLabel} because live session state could not be verified`
       : `[daemon] Preserving daemon ${replacementLabel} because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
   )
+  recordDaemonReplacementDeferral(reason, liveSessionCount)
   return true
 }

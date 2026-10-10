@@ -137,6 +137,17 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(order).toEqual(['adapter-fanout', 'degraded-fanout', 'unbind'])
   })
 
+  it('forgets the declined replacement of the old daemon once the restart respawns it', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const deferral = await import('./daemon-replacement-deferral')
+    deferral.recordDaemonReplacementDeferral('severed_tcc_attribution', 3)
+
+    await mod.restartDaemon()
+
+    expect(deferral.getDaemonReplacementDeferral()).toBeNull()
+  })
+
   it('reuses the existing DaemonSpawner across restart (resetHandle + ensureRunning on same instance)', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
