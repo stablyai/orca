@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Wallet } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import { getDeepSeekAccountUsage } from '../components/deepseek-account-usage'
 import {
   getActiveProviderRateLimits,
   getUsageBarState,
@@ -8,7 +10,7 @@ import {
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { HostProfile } from '../transport/types'
 
 export function MobileHomeAccountUsageCards(props: {
@@ -30,6 +32,7 @@ export function MobileHomeAccountUsageCards(props: {
           snapshot.codex.accounts.find(
             (account) => account.id === snapshot.codex.activeAccountId
           ) ?? null
+        const deepSeekUsage = getDeepSeekAccountUsage(snapshot)
         return (
           <Pressable
             key={host.id}
@@ -82,6 +85,36 @@ export function MobileHomeAccountUsageCards(props: {
                 </View>
               )
             })}
+            {deepSeekUsage ? (
+              <View key="deepseek" style={styles.row}>
+                <View style={styles.icon}>
+                  <Wallet size={18} color={colors.textPrimary} />
+                </View>
+                <View style={styles.info}>
+                  <Text style={styles.email} numberOfLines={1}>
+                    DeepSeek API
+                  </Text>
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    style={styles.providerStatus}
+                    numberOfLines={1}
+                  >
+                    {deepSeekUsage.balanceLabel
+                      ? `Balance ${deepSeekUsage.balanceLabel}`
+                      : deepSeekUsage.statusLabel}
+                  </Text>
+                  {deepSeekUsage.balanceLabel && deepSeekUsage.status !== 'available' ? (
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={styles.providerStatus}
+                      numberOfLines={1}
+                    >
+                      {deepSeekUsage.statusLabel}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
           </Pressable>
         )
       })}
@@ -129,5 +162,6 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, minWidth: 0, gap: 2 },
   email: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  providerStatus: { fontSize: typography.metaSize, color: colors.textSecondary },
   bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 }
 })
