@@ -30,7 +30,10 @@ function createDb(): OrchestrationDb {
   return new OrchestrationDb(join(directory, 'orchestration.db'))
 }
 
-function createRuntime(db: OrchestrationDb): OrcaRuntimeService {
+function createRuntime(
+  db: OrchestrationDb,
+  incarnationId: string | null = 'audit-incarnation'
+): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService(null)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
@@ -41,7 +44,7 @@ function createRuntime(db: OrchestrationDb): OrcaRuntimeService {
   runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
-    incarnationId: 'audit-incarnation'
+    ...(incarnationId ? { incarnationId } : {})
   })
   runtime.registerPreAllocatedHandleForPty(PTY_ID, HANDLE)
   runtime.attachWindow(1)
@@ -305,5 +308,79 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     dispatchOnHandle(db, 'still running')
     const summary = await runtime.showTerminal(HANDLE)
     expect(summary.exitCause).toBeUndefined()
+  })
+
+  it('does not carry an operator close into a replacement incarnation', async () => {
+    const runtime = createRuntime(createDb())
+    runtime.markPtyStopRequested(PTY_ID)
+    await runtime.onPtyExit(PTY_ID, 0, 'audit-incarnation')
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'replacement-incarnation'
+    })
+    runtime.registerPreAllocatedHandleForPty(PTY_ID, 'term_replacement')
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Agent',
+          activeLeafId: LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        { tabId: TAB_ID, worktreeId: WORKTREE_ID, leafId: LEAF_ID, paneRuntimeId: 1, ptyId: PTY_ID }
+      ]
+    })
+    const summary = await runtime.showTerminal('term_replacement')
+    expect(summary.connected).toBe(true)
+    expect(summary.incarnationId).toBe('replacement-incarnation')
+    expect(summary.exitCause).toBeUndefined()
+    await runtime.onPtyExit(PTY_ID, -1, 'audit-incarnation', {
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
+    expect((await runtime.showTerminal('term_replacement')).exitCause).toBeUndefined()
+    await runtime.onPtyExit(PTY_ID, -1, 'replacement-incarnation', {
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
+    expect((await runtime.showTerminal('term_replacement')).exitCause).toEqual({
+      kind: 'unknown',
+      reason: 'stop_unverified'
+    })
+  })
+
+  it.each(['audit-incarnation', undefined])(
+    'keeps an unverified stop when reconnect identity is %s',
+    async (incarnationId) => {
+      const runtime = createRuntime(createDb())
+      await runtime.onPtyExit(PTY_ID, -1, 'audit-incarnation', {
+        cause: { kind: 'unknown', reason: 'stop_unverified' }
+      })
+      runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId
+      })
+      const summary = await runtime.showTerminal(HANDLE)
+      expect(summary.exitCause).toEqual({ kind: 'unknown', reason: 'stop_unverified' })
+    }
+  )
+
+  it('retains stop evidence when the predecessor incarnation was unknown', async () => {
+    const runtime = createRuntime(createDb(), null)
+    await runtime.onPtyExit(PTY_ID, -1, undefined, {
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'newly-observed-incarnation'
+    })
+    expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({
+      kind: 'unknown',
+      reason: 'stop_unverified'
+    })
   })
 })
