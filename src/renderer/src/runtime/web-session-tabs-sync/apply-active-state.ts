@@ -1,6 +1,8 @@
 import type { applyWorktreeRecordUpdates } from './apply-worktree-records'
+import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { withWorktreeEntry, sameStringArray } from './state-equality-core'
 import { toVisibleTabType } from './state-equality-files'
+import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 import {
   collectLayoutGroupIds,
   appendTabGroupLayout,
@@ -62,7 +64,22 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
 
   const nextLayoutByWorktree = (() => {
     if (!nextGroups) {
-      return state.layoutByWorktree
+      if (
+        options?.preserveLocalLayout ||
+        options?.contentScope === 'agent-session' ||
+        !hostSnapshotAffirmsWorktreeContents(snapshot)
+      ) {
+        return state.layoutByWorktree
+      }
+      // Why: a layout whose groups were removed hides the next locally opened file (#25240).
+      return withWorktreeEntry<TabGroupLayoutNode>(
+        state,
+        'layoutByWorktree',
+        worktreeId,
+        null,
+        tabGroupLayoutEqual,
+        context.batchContext
+      )
     }
     if (clientOwnedPlacement) {
       const clientLayout =
