@@ -175,6 +175,7 @@ export function getInitialGitHubPrStartPointSelection({
     return null
   }
   return {
+    kind: 'github-pr',
     repoId,
     item: { ...item, type: itemIdentity.type, number: itemIdentity.number }
   }
@@ -184,7 +185,7 @@ export function retargetGitHubPrStartPointSelection(
   selection: SmartGitHubPrStartPointSelection | null,
   repoId: string
 ): SmartGitHubPrStartPointSelection | null {
-  return selection ? { repoId, item: selection.item } : null
+  return selection ? { kind: 'github-pr', repoId, item: selection.item } : null
 }
 
 export function getMatchingLinkedTaskSourceContext(

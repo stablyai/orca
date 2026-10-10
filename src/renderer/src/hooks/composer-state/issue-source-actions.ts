@@ -28,7 +28,7 @@ type IssueSourceActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setStartFromResetHint'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback, useMemo } from 'react'
@@ -85,11 +85,12 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
 
   const handleSmartLinearIssueSelect = useCallback(
     (issue: LinearIssue): void => {
+      smartSourceSelectionRef.current = null
       if (isProjectGroupTarget) {
         const linkedItem = toLinearLinkedWorkItem(issue)
         setLinkedIssue('')
@@ -155,12 +156,14 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedPR,
       setLinkedTaskSourceContext,
       setLinkedWorkItem,
-      setName
+      setName,
+      smartSourceSelectionRef
     ]
   )
 
   const handleSmartJiraIssueSelect = useCallback(
     (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
+      smartSourceSelectionRef.current = null
       const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
       setLinkedIssue('')
       setLinkedPR(null)
@@ -211,12 +214,13 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedTaskSourceContext,
       setLinkedWorkItem,
       setName,
-      setPushTarget
+      setPushTarget,
+      smartSourceSelectionRef
     ]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
-    smartGitHubPrStartPointSelectionRef.current = null
+    smartSourceSelectionRef.current = null
     setLinkedIssue('')
     setLinkedPR(null)
     setLinkedGitLabIssue(null)
@@ -267,7 +271,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   ])
 
   const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>(() => {
