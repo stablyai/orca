@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 
 function deferred<T>() {

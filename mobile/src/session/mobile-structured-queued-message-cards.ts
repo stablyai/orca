@@ -30,7 +30,8 @@ export type MobileQueuedMessageCard = {
   paused: boolean
   /** Returned, or its own send failed: the row leads with an alert. */
   needsAttention: boolean
-  /** Status under the text; null for a card plainly waiting its turn, the paused queue's too. */
+  /** Status under the text; null for a card plainly waiting its turn, also behind an open
+   *  question or in a paused queue: the question and the pause row say why. */
   caption: string | null
   /** "From <name>" on another agent's card; null on the person's. */
   attribution: string | null
@@ -112,12 +113,10 @@ export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null,
   submissions: readonly Pick<AgentJournalSubmission, 'queuedMessageId' | 'dispatchState'>[],
   facts: {
-    pendingPrompt: boolean
-    queuePaused?: boolean
     agentWorking?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
-  }
+  } = {}
 ): MobileQueuedMessageCard[] {
   if (!queuedMessages || queuedMessages.length === 0) {
     return []
@@ -146,12 +145,7 @@ export function mobileQueuedMessageCards(
             )
           : behindReturned
             ? 'Waiting — a message ahead needs attention'
-            : facts.queuePaused
-              ? // The pause row says why and offers Resume; the card promises no send time.
-                null
-              : facts.pendingPrompt
-                ? 'Waiting for your answer'
-                : null
+            : null
     cards.push({
       messageId: draft.messageId,
       text: queuedMessageBodyText(draft.body),

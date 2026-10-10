@@ -10,7 +10,7 @@ import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-s
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 
-import { REMOTE_PTY_ID_PREFIX } from './pty-connect-limits'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'
 import type { PanePtyBinding } from './pane-pty-binding'
 
@@ -51,7 +51,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     if (
       !requestedPtyId ||
       requestedPtyId === session.handledExitPtyId ||
-      requestedPtyId.startsWith(REMOTE_PTY_ID_PREFIX) ||
+      isRemoteRuntimePtyId(requestedPtyId) ||
       session.transport.getConnectionId?.() != null
     ) {
       return

@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 it.skipIf(process.platform === 'win32')(
   'retains existing permissions when the process umask is stricter',
   async () => {

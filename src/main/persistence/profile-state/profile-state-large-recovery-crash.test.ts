@@ -24,7 +24,7 @@ const oldJson = JSON.stringify({ opaque: 'x'.repeat(8 * 1024 * 1024), revision: 
 const selectedJson = JSON.stringify({ opaque: 'y'.repeat(8 * 1024 * 1024), revision: 'selected' })
 let bundle: string
 beforeAll(() => {
-  bundle = buildRecoveryCrashProcess(suite)
+  bundle = buildRecoveryCrashProcess(suite).bundle
 })
 afterEach(() => {
   for (const root of roots.splice(0)) {

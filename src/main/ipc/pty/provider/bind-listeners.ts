@@ -1,4 +1,3 @@
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import {
@@ -92,7 +91,6 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
-        markClaudePtyExited(payload.id)
         if (syntheticExit) {
           session.runtime?.markPtyStopRequested(payload.id)
         }

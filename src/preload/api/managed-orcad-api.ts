@@ -6,6 +6,7 @@ import type {
   OrcadManagedCancelStopResult,
   OrcadManagedConversionResult,
   OrcadManagedDeployResult,
+  OrcadManagedForgetResult,
   OrcadManagedPendingMigrationRow,
   OrcadManagedRecoveryResult,
   OrcadManagedRollbackResult,
@@ -34,6 +35,7 @@ export type ManagedOrcadPreloadApi = {
   }) => Promise<OrcadManagedRecoveryResult>
   stop: (args: { selector: string }) => Promise<OrcadManagedStopResult>
   cancelStop: (args: { selector: string }) => Promise<OrcadManagedCancelStopResult>
+  forget: (args: { selector: string }) => Promise<OrcadManagedForgetResult>
   linkSshAccess: (args: RuntimeSshAccessLinkRequest) => Promise<PublicKnownRuntimeEnvironment>
   unlinkSshAccess: (args: RuntimeSshAccessUnlinkRequest) => Promise<PublicKnownRuntimeEnvironment>
   convertSshHost: (args: {
@@ -54,6 +56,7 @@ export const managedOrcadApi: ManagedOrcadPreloadApi = {
   recover: (args) => ipcRenderer.invoke('runtimeEnvironments:recoverOrcad', args),
   stop: (args) => ipcRenderer.invoke('runtimeEnvironments:stopOrcad', args),
   cancelStop: (args) => ipcRenderer.invoke('runtimeEnvironments:cancelOrcadStop', args),
+  forget: (args) => ipcRenderer.invoke('runtimeEnvironments:forgetOrcad', args),
   linkSshAccess: (args) => ipcRenderer.invoke('runtimeEnvironments:linkSshAccess', args),
   unlinkSshAccess: (args) => ipcRenderer.invoke('runtimeEnvironments:unlinkSshAccess', args),
   convertSshHost: (args) =>

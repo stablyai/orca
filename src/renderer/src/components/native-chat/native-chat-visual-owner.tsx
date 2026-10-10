@@ -6,7 +6,6 @@ import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 export type NativeChatVisualOwner = {
   target: RuntimeClientTarget
   sessionId: string
-  tabId: string
   worktreeId: string
 }
 
@@ -29,7 +28,7 @@ export function NativeChatVisualOwnerProvider({
   tabId: string
   children: ReactNode
 }): React.JSX.Element {
-  // Until the tab's workspace is known there is nothing to scope a sidebar visual to.
+  // Until the tab's workspace is known there is no workspace to open a visual's tab in.
   const worktreeId = useNativeChatTabOwnerWorktreeId(tabId)
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const owner = useMemo<NativeChatVisualOwner | null>(
@@ -39,11 +38,10 @@ export function NativeChatVisualOwnerProvider({
             target:
               environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
             sessionId,
-            tabId,
             worktreeId
           }
         : null,
-    [environmentId, sessionId, tabId, worktreeId]
+    [environmentId, sessionId, worktreeId]
   )
   return (
     <NativeChatVisualOwnerContext.Provider value={owner}>

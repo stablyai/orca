@@ -55,7 +55,7 @@ export function createWebOnboardingApi(): Partial<PreloadApi> {
         return next
       },
       // Why: the browser client has no local profile from before the upgrade, so it is never in the audience.
-      isInNativeChatUpgradeTipAudience: () => Promise.resolve(false)
+      getNativeChatUpgradeTipVariant: () => Promise.resolve('none')
     }
   }
 }

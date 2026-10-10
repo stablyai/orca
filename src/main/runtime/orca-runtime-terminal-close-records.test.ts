@@ -141,25 +141,17 @@ describe('close records', () => {
     )
   })
 
-  it('lets a close that removes a listed tab replace a record that tab already had', async () => {
+  // A write cannot list a tab its partition recorded as closed, so legacy rows beside a record go.
+  it('drops a listed tab its partition already recorded as closed, and keeps the record', async () => {
     const earlier = Date.now() - 24 * 60 * 60 * 1000
-    const { store, runtime } = createPersistedRuntime({
+    const record = { closedAt: earlier, worktreeId: WORKTREE_ID, reason: 'cleanup' as const }
+    const { store } = createPersistedRuntime({
       ...makeSession(),
-      closedTerminalTabTombstonesByTabId: {
-        [TAB_ID]: { closedAt: earlier, worktreeId: WORKTREE_ID, reason: 'cleanup' }
-      }
+      closedTerminalTabTombstonesByTabId: { [TAB_ID]: record }
     })
 
-    await runtime.closeTerminalSurfaceFromRenderer({
-      worktreeId: WORKTREE_ID,
-      target: { kind: 'tab', tabId: TAB_ID },
-      reason: 'user'
-    })
-
-    const record = store.getWorkspaceSession().closedTerminalTabTombstonesByTabId?.[TAB_ID]
     expect(store.getWorkspaceSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
-    expect(record?.reason).toBe('user')
-    expect(record?.closedAt).toBeGreaterThan(earlier)
+    expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId?.[TAB_ID]).toEqual(record)
   })
 
   it('admits a late spawn for a tab whose close record is past the TTL', async () => {

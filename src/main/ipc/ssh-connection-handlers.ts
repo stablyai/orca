@@ -1,6 +1,5 @@
-import { isLiveSshPtyLease } from '../../shared/ssh-pty-lease-liveness'
 import { ipcMain } from 'electron'
-import type { SshTarget } from '../../shared/ssh-types'
+import { isLiveSshPtyLease, type SshTarget } from '../../shared/ssh-types'
 import { toAppSshPtyId } from '../providers/ssh-pty-id'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
@@ -22,6 +21,7 @@ import { terminateSshTargetSessions } from './ssh-terminate-sessions'
 import { assertNotManagedServerHost } from './ssh-target-crud-handlers'
 import { moveSshHostToManagedServer } from './ssh-managed-server-move'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { errorMessage } from '../../shared/error-message'
 
 async function doResetRelay(targetId: string, target: SshTarget): Promise<void> {
   const inFlightConnect = connectInFlight.get(targetId)
@@ -181,10 +181,7 @@ export function registerSshConnectionHandlers(): void {
         const state = await inFlight.promise
         return { success: true, state }
       } catch (err) {
-        return {
-          success: false,
-          error: err instanceof Error ? err.message : String(err)
-        }
+        return { success: false, error: errorMessage(err) }
       }
     }
 
@@ -201,10 +198,7 @@ export function registerSshConnectionHandlers(): void {
     try {
       return { success: true, state: await probe }
     } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err)
-      }
+      return { success: false, error: errorMessage(err) }
     }
   })
 }

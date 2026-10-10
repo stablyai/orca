@@ -39,23 +39,6 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
   return fallbackOnly('unknown')
 }
 
-export function classifyClaudeCredentialAbsence(input: {
-  hasRefreshableCredentials: boolean
-  keychainUnavailable?: boolean
-  managedRefreshDeferredByLivePty?: boolean
-}): ClaudeUsageErrorClassification {
-  if (input.managedRefreshDeferredByLivePty) {
-    return terminal('deferred-by-live-session')
-  }
-  if (input.keychainUnavailable) {
-    return fallbackOnly('keychain-unavailable')
-  }
-  if (input.hasRefreshableCredentials) {
-    return recoverableAuth('refreshable-credentials-without-token')
-  }
-  return terminal('missing-credentials')
-}
-
 function recoverableAuth(failureKind: UsageRateLimitFailureKind): ClaudeUsageErrorClassification {
   return {
     failureKind,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Image as ImageIcon, ImageOff, Loader2, X } from 'lucide-react'
+import { FileText, Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
@@ -12,6 +12,7 @@ import {
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 type Props = {
   attachment: NativeChatComposerImageAttachment
@@ -218,7 +219,7 @@ function NativeChatImageThumbnail({
         </button>
         {isPending ? (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-chat-canvas/50">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <LoadingSpinner className="size-4 text-muted-foreground" />
           </span>
         ) : null}
         <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
@@ -244,7 +245,7 @@ function NativeChatImageThumbnail({
               <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
                 {isPending ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" />
+                    <LoadingSpinner className="size-4" />
                     {pendingLabel}
                   </>
                 ) : (

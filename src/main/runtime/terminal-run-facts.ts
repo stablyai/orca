@@ -18,7 +18,7 @@ export type TerminalRunFacts = {
 const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
 
 /** Input with no provenance that no person typed: a whole terminal reply or only focus reports. */
-function isUntypedTerminalInput(payload: string): boolean {
+export function isUntypedTerminalInput(payload: string): boolean {
   return isTerminalQueryReply(payload) || TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
 }
 

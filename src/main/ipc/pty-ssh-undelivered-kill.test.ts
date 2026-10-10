@@ -129,7 +129,7 @@ describe('undelivered SSH stops', () => {
         throw new Error('socket closed')
       })
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-a')
     const { kill, runtime } = install(store)
 
@@ -155,7 +155,7 @@ describe('undelivered SSH stops', () => {
   // tombstoned locally, and without the record the remote shell has nothing left to retire it.
   it('records the stop when no provider is registered to deliver it', async () => {
     const store = createKillStore()
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-b')
     const { kill } = install(store)
 
@@ -177,7 +177,7 @@ describe('undelivered SSH stops', () => {
       'ssh-1',
       sshProviderStub(async () => {})
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-c')
     const { kill } = install(store)
 
@@ -207,7 +207,7 @@ describe('undelivered SSH stops', () => {
         throw new Error('socket closed')
       })
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-e')
     const { stopAndWait } = install(store)
 
@@ -230,7 +230,7 @@ describe('undelivered SSH stops', () => {
         throw new Error('socket closed')
       })
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-r1')
     install(store)
 
@@ -251,7 +251,7 @@ describe('undelivered SSH stops', () => {
 
   it('records the stop when renderer pty:kill finds no provider to deliver it', async () => {
     const store = createKillStore()
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-r2')
     install(store)
 
@@ -276,7 +276,7 @@ describe('undelivered SSH stops', () => {
         throw new Error('socket closed')
       })
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-r3')
     install(store)
 
@@ -299,7 +299,7 @@ describe('undelivered SSH stops', () => {
         throw new Error('socket closed')
       })
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-f')
     const { kill, runtime } = install(store)
     const settleStop = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'reversible', null)
@@ -323,7 +323,7 @@ describe('undelivered SSH stops', () => {
         throw new Error('socket closed')
       })
     )
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-f')
     const { kill, runtime } = install(store)
     const settleSleep = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'reversible', null)
@@ -343,7 +343,7 @@ describe('undelivered SSH stops', () => {
 
   it('records nothing for a local PTY, which has no later host to ask', async () => {
     const store = createKillStore()
-    setPtyOwnership('local-pty', null)
+    setPtyOwnership('local-pty', 'local')
     restorePtyIncarnation('local-pty', 'inc-d')
     const { kill } = install(store)
 
@@ -365,7 +365,7 @@ describe('undelivered SSH stops', () => {
         throw new Error(`${SSH_SESSION_EXPIRED_ERROR}-transport`)
       })
     )
-    setPtyOwnership('ssh:ssh-1@@pty-8', 'ssh-1')
+    setPtyOwnership('ssh:ssh-1@@pty-8', 'ssh:ssh-1')
     const { kill } = install(store)
 
     try {
@@ -383,7 +383,7 @@ describe('undelivered SSH stops', () => {
   it('records the stop for an epoch-scoped id whose incarnation was never learned', () => {
     const store = createKillStore()
     const ptyId = 'ssh:ssh-1@@pty2:epoch-a:4'
-    setPtyOwnership(ptyId, 'ssh-1')
+    setPtyOwnership(ptyId, 'ssh:ssh-1')
     const { kill } = install(store)
 
     try {
@@ -401,7 +401,7 @@ describe('undelivered SSH stops', () => {
   it("records an explicit close's unconfirmed stop for an epoch-scoped id with no incarnation", () => {
     const store = createKillStore()
     const ptyId = 'ssh:ssh-1@@pty2:epoch-b:5'
-    setPtyOwnership(ptyId, 'ssh-1')
+    setPtyOwnership(ptyId, 'ssh:ssh-1')
     const { recordUnconfirmedStop } = install(store)
 
     try {
@@ -420,7 +420,7 @@ describe('undelivered SSH stops', () => {
   // so its receipt can promise the reconnect retry from the record itself.
   it("records an explicit close's unconfirmed stop and says so", () => {
     const store = createKillStore()
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-g')
     const { recordUnconfirmedStop } = install(store)
 
@@ -438,9 +438,9 @@ describe('undelivered SSH stops', () => {
 
   it('reports no recorded order for a local or reversibly stopped PTY', () => {
     const store = createKillStore()
-    setPtyOwnership('local-pty', null)
+    setPtyOwnership('local-pty', 'local')
     restorePtyIncarnation('local-pty', 'inc-h')
-    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh:ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-i')
     const { recordUnconfirmedStop, runtime } = install(store)
     const settleStop = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'reversible', null)

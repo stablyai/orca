@@ -104,6 +104,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     removeHandlerMock.mockReset()
     removeAllListenersMock.mockReset()
     sendRemoteRuntimeRequestMock.mockReset()
+    // A re-pair restarts status; left unanswered so it never settles mid-test.
+    sendRemoteRuntimeRequestMock.mockReturnValue(new Promise(() => {}))
     subscribeRemoteRuntimeRequestMock.mockReset()
     sendRemoteRuntimeConnectionRequestMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()

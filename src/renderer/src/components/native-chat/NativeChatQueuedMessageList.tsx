@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../../store'
@@ -6,6 +6,8 @@ import { translate } from '@/i18n/i18n'
 import { NativeChatQueuedMessageCard } from './NativeChatQueuedMessageCard'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
+import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 
 /**
  * Host-held drafts stacked between the transcript and the composer — never in
@@ -27,10 +29,11 @@ export function NativeChatQueuedMessageList({
   statedFailures?: readonly AgentSessionFailureFact[]
   /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
   steerHeld?: boolean
-  /** Where focus goes once Steer, Edit or Delete takes the focused card away. */
+  /** Where focus goes once Steer, Delete or a closing edit takes the focused card away. */
   focusComposer?: () => void
 }): React.JSX.Element {
   const updateSettings = useAppStore((store) => store.updateSettings)
+  const regionRef = useRef<HTMLDivElement>(null)
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards, pause } = controller
   const newest = cards.at(-1)
@@ -53,17 +56,29 @@ export function NativeChatQueuedMessageList({
     ? () => void updateSettings({ nativeChatQueueFollowUps: false })
     : undefined
   // Only when focus was on the queue (a card, or Resume) — never pull it from wherever the user
-  // moved on to.
+  // moved on to. A question or approval holding the composer's slot takes it instead.
   const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
       const active = document.activeElement
       if (!active || active === document.body || queueRef.current?.contains(active)) {
-        focusComposer?.()
+        const root = regionRef.current?.closest(NATIVE_CHAT_ROOT_SELECTOR)
+        if (!root || !focusNativeChatPromptCard(root, null)) {
+          focusComposer?.()
+        }
       }
     })
   }
+  const editingId = controller.editor?.messageId
+  const wasEditing = useRef(editingId)
+  useEffect(() => {
+    const closed = wasEditing.current !== undefined && editingId === undefined
+    wasEditing.current = editingId
+    if (closed) {
+      refocusAfter(Promise.resolve())
+    }
+  })
   return (
-    <div aria-live="polite">
+    <div ref={regionRef} aria-live="polite">
       {cards.length > 0 ? (
         <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
           {/* One box: the pause row, when shown, is its first row, and each card a row below it. */}
@@ -95,7 +110,13 @@ export function NativeChatQueuedMessageList({
                   steerHeld={steerHeld}
                   onSteer={() => refocusAfter(controller.steer(card.messageId))}
                   onDelete={() => refocusAfter(controller.remove(card.messageId))}
-                  onEdit={() => refocusAfter(controller.edit(card.messageId))}
+                  onEdit={
+                    controller.editCapable ? () => void controller.edit(card.messageId) : undefined
+                  }
+                  editor={
+                    controller.editor?.messageId === card.messageId ? controller.editor : undefined
+                  }
+                  editDisabled={controller.editor !== undefined}
                   onTurnOffQueueing={turnOffQueueing}
                 />
               ))}

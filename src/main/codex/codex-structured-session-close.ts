@@ -1,6 +1,6 @@
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
-import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
+import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import {
   cancelCodexAcquisitionAttempt,
   type CodexAcquisitionRegistry,

@@ -42,15 +42,17 @@ async function render(
   getStatus: () => Promise<OrcadManagedRuntimeStatus> = async () => rowStatus
 ) {
   const stop = vi.fn(async () => ({ outcome: 'unlinked' }))
+  const forget = vi.fn(async () => ({ outcome: 'forgotten' }))
   const recover = vi.fn(async (args: { acceptChangedState?: boolean }) =>
     args.acceptChangedState
       ? { outcome: 'none' }
       : { outcome: 'refused', verdict: 'unverifiable', code: 'orcad_recovery_changed_state' }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row calls only getStatus, stop and recover here.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row calls only getStatus, stop, forget and recover here.
   const api = {
     getStatus: vi.fn(getStatus),
     stop,
+    forget,
     recover
   } as unknown as ManagedOrcadPreloadApi
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only id and name.
@@ -62,7 +64,7 @@ async function render(
   await act(async () => {
     root.render(<ManagedServerRow api={api} environment={environment} onChanged={() => {}} />)
   })
-  return { container, stop, recover }
+  return { container, stop, forget, recover }
 }
 
 const button = (container: HTMLElement, label: string) =>
@@ -85,6 +87,20 @@ describe('managed server row', () => {
     expect(stop).not.toHaveBeenCalled()
     await act(async () => button(container, 'Stop and remove server')?.click())
     expect(stop).toHaveBeenCalledWith({ selector: 'env-1' })
+  })
+
+  it('offers Forget only for a host that did not answer, behind a confirmation (P1-E)', async () => {
+    const reachable = await render()
+    expect(button(reachable.container, 'Forget…')).toBeUndefined()
+
+    const gone = await render(status, async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:2841')
+    })
+    await act(async () => button(gone.container, 'Forget…')?.click())
+    expect(gone.forget).not.toHaveBeenCalled()
+    expect(gone.container.textContent).toContain('without contacting its host')
+    await act(async () => button(gone.container, 'Forget on this desktop')?.click())
+    expect(gone.forget).toHaveBeenCalledWith({ selector: 'env-1' })
   })
 
   it('restores a snapshot over changed state only after the operator accepts it', async () => {

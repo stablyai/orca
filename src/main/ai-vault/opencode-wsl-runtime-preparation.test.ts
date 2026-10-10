@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type * as preparationModule from './opencode-wsl-runtime-preparation'
 
 const mocks = vi.hoisted(() => ({

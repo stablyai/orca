@@ -43,7 +43,8 @@ function makeController(): {
     cloneRepo,
     invalidateResolvedWorktrees: vi.fn(),
     invalidateWorktreeScan: vi.fn(),
-    notifyReposChanged: vi.fn()
+    notifyReposChanged: vi.fn(),
+    countLiveTerminalsForRepo: () => 0
   })
   return {
     controller,

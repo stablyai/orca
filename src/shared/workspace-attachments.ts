@@ -1,3 +1,4 @@
+import { getWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import {
   WORKSPACE_ATTACHMENT_NUMBER_SLOTS,
   WORKSPACE_ATTACHMENT_LEGACY_FIELDS,
@@ -18,6 +19,16 @@ import {
   matchesWorkspaceAttachmentIdentity
 } from './workspace-attachment-normalization'
 
+export function matchesLegacyWorkspaceAttachment(
+  item: WorkspaceAttachment,
+  legacy: WorkspaceAttachment
+): boolean {
+  return (
+    getWorkspaceReferenceIdentity(item) === getWorkspaceReferenceIdentity(legacy) ||
+    matchesWorkspaceAttachmentIdentity(item, legacy)
+  )
+}
+
 export function getWorkspaceAttachments(
   meta: WorkspaceAttachmentMetadata | null | undefined
 ): WorkspaceAttachment[] {
@@ -26,7 +37,7 @@ export function getWorkspaceAttachments(
   }
   const items = normalizeWorkspaceAttachments(meta.linkedItems)
   for (const legacy of legacyWorkspaceAttachments(meta)) {
-    if (!items.some((item) => matchesWorkspaceAttachmentIdentity(item, legacy))) {
+    if (!items.some((item) => matchesLegacyWorkspaceAttachment(item, legacy))) {
       items.push(legacy)
     }
   }
@@ -132,7 +143,10 @@ export function normalizeWorkspaceAttachmentUpdate(
             getWorkspaceAttachments(existing),
             updates.linkedItems
           )
-    const normalized = { ...requested, ...synchronizeSelection(merged, items, requested) }
+    const normalized = {
+      ...requested,
+      ...synchronizeSelection(merged, items, requested)
+    }
     if (
       preserveSelection &&
       Object.hasOwn(updates, 'pushTarget') &&

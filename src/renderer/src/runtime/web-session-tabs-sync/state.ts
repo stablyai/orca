@@ -29,6 +29,10 @@ export type SessionTabsStreamEvent =
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
   | { type: 'end' }
 
+export function isSessionTabsStreamEnd(result: unknown): boolean {
+  return typeof result === 'object' && result !== null && 'type' in result && result.type === 'end'
+}
+
 export type SessionTabsListAllResult = {
   snapshots: RuntimeMobileSessionTabsResult[]
   authoritative?: boolean
@@ -136,7 +140,6 @@ export const latestReceivedSessionTabsInventoryFrameByEnvironment = new Map<stri
 export const sessionTabsRemovalWatermarkByWorktree = new Map<string, number>()
 export const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
 export const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
-export const sessionTabsTrackingGenerationByEnvironment = new Map<string, number>()
 export const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 export const MAX_TRACKED_SESSION_TABS_INVENTORY_OMISSIONS = 512
 export type SessionTabsInventoryOmissionObservation = {

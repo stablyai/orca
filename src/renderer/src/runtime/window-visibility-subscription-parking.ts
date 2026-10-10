@@ -14,6 +14,12 @@ const WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_JITTER_MS = 250
 
 export type WindowVisibilitySubscriptionContext = {
   visibilityGeneration: number
+  /**
+   * The host ended this stream while the window stayed visible (an end frame, an error response,
+   * or close). Drops it and resubscribes on the retry backoff. Never call it for a transport drop:
+   * reconnect replay owns that, and loss of contact is not an end.
+   */
+  ended: () => void
 }
 
 export type WindowVisibilitySubscriptionSpec = {
@@ -41,6 +47,9 @@ type SubscriptionEntry = {
   visibilityGeneration: number
   pending: Promise<void> | null
   retryAttempt: number
+  /** Consecutive short-lived streams; resets only once one stays up past the retry ceiling. */
+  endedStreak: number
+  establishedAt: number
   retryTimer: ReturnType<typeof setTimeout> | null
   startTimer: ReturnType<typeof setTimeout> | null
   unsubscribe: (() => void) | null
@@ -64,6 +73,8 @@ export function installWindowVisibilitySubscriptionParking(
     visibilityGeneration: 0,
     pending: null,
     retryAttempt: 0,
+    endedStreak: 0,
+    establishedAt: 0,
     retryTimer: null,
     startTimer: null,
     unsubscribe: null
@@ -112,6 +123,26 @@ export function installWindowVisibilitySubscriptionParking(
     }, exponentialDelay + jitter)
   }
 
+  function endEntry(
+    entry: SubscriptionEntry,
+    spec: WindowVisibilitySubscriptionSpec,
+    generation: number
+  ): void {
+    if (disposed || !entry.desired || entry.generation !== generation) {
+      return
+    }
+    // Why: the new generation fences the ended stream's late frames, and unsubscribing stops an
+    // error-response subscription from being replayed beside its replacement on reconnect.
+    entry.generation += 1
+    unsubscribeEntry(entry, spec)
+    const livedMs = entry.establishedAt > 0 ? Date.now() - entry.establishedAt : 0
+    entry.establishedAt = 0
+    entry.endedStreak =
+      livedMs >= WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_MAX_MS ? 0 : entry.endedStreak + 1
+    entry.retryAttempt = Math.max(0, entry.endedStreak - 1)
+    scheduleRetry(entry, spec)
+  }
+
   function startEntry(entry: SubscriptionEntry, spec: WindowVisibilitySubscriptionSpec): void {
     if (
       disposed ||
@@ -128,7 +159,8 @@ export function installWindowVisibilitySubscriptionParking(
     let subscription: Promise<{ unsubscribe: () => void }>
     try {
       subscription = spec.subscribe(isCurrent, {
-        visibilityGeneration: entry.visibilityGeneration
+        visibilityGeneration: entry.visibilityGeneration,
+        ended: () => endEntry(entry, spec, generation)
       })
     } catch (error) {
       if (isCurrent()) {
@@ -150,6 +182,7 @@ export function installWindowVisibilitySubscriptionParking(
         entry.pending = null
         if (isCurrent()) {
           entry.retryAttempt = 0
+          entry.establishedAt = Date.now()
           entry.unsubscribe = handle.unsubscribe
           return
         }

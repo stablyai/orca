@@ -2,6 +2,7 @@ import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-m
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
 import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
@@ -9,13 +10,13 @@ import {
   getOrphanTerminalIds
 } from '../slices/terminal-orphan-helpers'
 import {
-  dedupeTabOrder,
   ensureGroup,
   findTabByEntityInGroup,
   pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup
 } from '../slices/tab-group-state'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { ownsGlobalSelection } from '../global-selection-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -25,22 +26,6 @@ import {
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
-export function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
-  const usedOrdinals = new Set<number>()
-  for (const tab of tabs) {
-    const match = /^Terminal (\d+)$/.exec(tab.defaultTitle ?? tab.title)
-    if (!match) {
-      continue
-    }
-    usedOrdinals.add(Number(match[1]))
-  }
-  let nextOrdinal = 1
-  while (usedOrdinals.has(nextOrdinal)) {
-    nextOrdinal += 1
-  }
-  return nextOrdinal
-}
-
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
 function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {

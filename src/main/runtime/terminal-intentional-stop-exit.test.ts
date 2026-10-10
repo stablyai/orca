@@ -82,7 +82,7 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     leafId: LEAF_ID,
     incarnationId: INCARNATION_ID
   })
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   ptyIncarnationById.set(PTY_ID, INCARNATION_ID)
   let emitProviderExit:
     | ((payload: { id: string; code: number; incarnationId?: string }) => void)

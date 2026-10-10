@@ -161,7 +161,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }
         : {}),
       ...(meta.carriesNormalBuffer ? { carriesNormalBuffer: true } : {}),
-      ...(meta.keepsLocalScrollback ? { keepsLocalScrollback: true } : {})
+      ...(meta.carriesHistory ? { carriesHistory: true } : {})
     }
     session.scheduleReplayDataDrain()
   }
