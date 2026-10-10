@@ -22,6 +22,7 @@ import {
 } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { resolveAutoPlacementGroupId } from './lone-pane-split-source'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -29,6 +30,13 @@ export function createTabsCreateActions(
 ): Pick<TabsSlice, 'createUnifiedTab' | 'createUnifiedTabInSplit'> {
   return {
     createUnifiedTab: (worktreeId, contentType, init) => {
+      // Why: automatic placement — beside a lone pane, or opposite the focused one of two.
+      // Why afterTabId too: an anchor tab is placement intent of its own, like a named group.
+      const besideGroupId =
+        init?.placementFixed || init?.afterTabId
+          ? null
+          : resolveAutoPlacementGroupId(get(), worktreeId, init?.targetGroupId, contentType)
+      const targetGroupId = besideGroupId ?? init?.targetGroupId
       const id = init?.id ?? createBrowserUuid()
       let created!: Tab
       set((state) => {
@@ -37,7 +45,7 @@ export function createTabsCreateActions(
           groups: state.groupsByWorktree[worktreeId] ?? [],
           tabs: existingTabs,
           activeGroupId: state.activeGroupIdByWorktree[worktreeId],
-          targetGroupId: init?.targetGroupId,
+          targetGroupId,
           afterTabId: init?.afterTabId,
           executionHostId: init?.executionHostId,
           lookupWorktrees: () =>
@@ -136,6 +144,11 @@ export function createTabsCreateActions(
           }
         }
       })
+      // Why: the group was minted unfocused (a host snapshot reads an activated empty group as a
+      // pane), so focus lands here — focusGroup also emits the active-surface patch.
+      if (besideGroupId && (init?.activate ?? true)) {
+        get().focusGroup(worktreeId, besideGroupId)
+      }
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

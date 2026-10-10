@@ -7,7 +7,8 @@ import {
   makeTabGroup,
   makeUnifiedTab,
   makeWorktree,
-  seedStore
+  seedStore,
+  seedThreePaneLayout
 } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
@@ -424,6 +425,33 @@ describe('setActiveWorktree', () => {
     expect(s.activeBrowserTabIdByWorktree[backgroundWt]).toBe(browserTab.id)
   })
 
+  it('reopens a closed browser tab into its recorded group, not a second pane', () => {
+    // Why: Cmd+Shift+T returns a tab to where it was; it is replay, not a new pane.
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    store.getState().createBrowserTab(wt, 'https://first.example.com')
+    const groupId = store.getState().activeGroupIdByWorktree[wt]
+    const second = store.getState().createBrowserTab(wt, 'https://second.example.com', {
+      targetGroupId: groupId,
+      placementFixed: true
+    })
+    store.getState().closeBrowserTab(second.id)
+    store.getState().reopenClosedBrowserTab(wt)
+
+    const s = store.getState()
+    expect(s.groupsByWorktree[wt]).toHaveLength(1)
+    expect(s.layoutByWorktree[wt]?.type).toBe('leaf')
+    expect(new Set((s.unifiedTabsByWorktree[wt] ?? []).map((tab) => tab.groupId)).size).toBe(1)
+  })
+
   it('uses unified MRU selection when closing an active browser tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -435,6 +463,7 @@ describe('setActiveWorktree', () => {
       activeWorktreeId: wt
     })
 
+    seedThreePaneLayout(store, wt)
     const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com')
     store.getState().createBrowserTab(wt, 'https://neighbor.example.com')
     const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com')
@@ -458,6 +487,7 @@ describe('setActiveWorktree', () => {
       activeWorktreeId: wt
     })
 
+    seedThreePaneLayout(store, wt)
     store.getState().createTab(wt)
     const previous = store.getState().createTab(wt)
     const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com')

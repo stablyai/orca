@@ -16,6 +16,7 @@ type FileLinkHitTestDeps = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
+  sourceTabId?: string
   pathExistsCache?: Map<string, boolean>
   openWithSystemDefault?: boolean
 }

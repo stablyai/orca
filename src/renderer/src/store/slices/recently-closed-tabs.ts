@@ -153,7 +153,9 @@ export const createRecentlyClosedTabsSlice: StateCreator<
 
     const tab = get().createTab(worktreeId, snapshot.position?.groupId, snapshot.shellOverride, {
       ...(snapshot.startupCwd ? { startupCwd: snapshot.startupCwd } : {}),
-      activate: true
+      activate: true,
+      // Why: replay of a layout that already existed — restoring must not rearrange it.
+      placementFixed: true
     })
     if (snapshot.customTitle) {
       get().setTabCustomTitle(tab.id, snapshot.customTitle)

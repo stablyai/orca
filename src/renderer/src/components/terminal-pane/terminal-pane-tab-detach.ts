@@ -206,7 +206,9 @@ function applyMove(
           ...(args.sourcePaneCwd?.cwd ? { startupCwd: args.sourcePaneCwd.cwd } : {})
         }
       : { initialLeafId: leafId }),
-    recordInteraction: true
+    recordInteraction: true,
+    // Why: a dropped pane lands where it was dropped, never moved by automatic placement.
+    placementFixed: true
   })
   const afterCreateStore = args.getStore()
   moveCreatedTabToIndex({

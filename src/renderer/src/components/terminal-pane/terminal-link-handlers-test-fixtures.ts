@@ -1,5 +1,7 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
@@ -27,6 +29,10 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
+  layoutByWorktree: Record<string, TabGroupLayoutNode | undefined>
+  activeGroupIdByWorktree: Record<string, string | undefined>
+  groupsByWorktree: Record<string, TabGroup[]>
+  createEmptySplitGroup: Mock
 }
 
 export type TerminalLinkTestDoubles = {
@@ -42,6 +48,7 @@ export type TerminalLinkTestDoubles = {
   createBrowserTabMock: Mock
   setPendingEditorRevealMock: Mock
   setMarkdownViewModeMock: Mock
+  createEmptySplitGroupMock: Mock
   deps: { worktreeId: string; worktreePath: string }
   storeState: TerminalLinkStoreState
 }
@@ -60,6 +67,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const createBrowserTabMock = vi.fn()
   const setPendingEditorRevealMock = vi.fn()
   const setMarkdownViewModeMock = vi.fn()
+  const createEmptySplitGroupMock = vi.fn(() => 'g2')
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
   const storeState: TerminalLinkStoreState = {
@@ -72,7 +80,11 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     activeFileIdByWorktree: {} as Record<string, string | null>,
     openFiles: [] as { filePath: string; worktreeId: string }[],
     worktreesByRepo: {},
-    folderWorkspaces: [] as []
+    folderWorkspaces: [],
+    layoutByWorktree: {},
+    activeGroupIdByWorktree: {},
+    groupsByWorktree: {},
+    createEmptySplitGroup: createEmptySplitGroupMock
   }
 
   return {
@@ -88,6 +100,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     createBrowserTabMock,
     setPendingEditorRevealMock,
     setMarkdownViewModeMock,
+    createEmptySplitGroupMock,
     deps,
     storeState
   }

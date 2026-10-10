@@ -40,6 +40,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
+  /** This call's placement is already decided (replay); never redirect it beside a lone pane. */
+  placementFixed?: boolean
 }
 
 export type CreatedWebRuntimeSessionTerminal = {

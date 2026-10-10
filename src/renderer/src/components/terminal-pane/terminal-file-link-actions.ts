@@ -25,6 +25,8 @@ export type TerminalFileLinkActionDeps = {
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   onOpenFailure?: (failure: FileOpenFailure) => void
+  /** The terminal or chat tab the click came from; lets the file open beside it. */
+  sourceTabId?: string
 }
 
 export type FileLinkActions = Pick<

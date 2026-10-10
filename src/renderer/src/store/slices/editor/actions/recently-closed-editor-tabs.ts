@@ -39,7 +39,9 @@ export function createRecentlyClosedEditorTabs(
       const { position, reopenId, ...file } = next
       const restoredFileId = get().openFile(file, {
         targetGroupId: position?.groupId,
-        reopenId
+        reopenId,
+        // Why: replay of a layout that already existed — restoring must not rearrange it.
+        placementFixed: true
       })
       restoreRecentlyClosedTabPosition(get, worktreeId, restoredFileId, position)
       return true

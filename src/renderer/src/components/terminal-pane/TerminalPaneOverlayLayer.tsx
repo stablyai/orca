@@ -36,11 +36,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
   activationDeferredMountTabIds = null,
-  ownsNativeChatToggleShortcut = true
+  ownsNativeChatToggleShortcut = true,
+  tabAreaUnsplit = false
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
+  tabAreaUnsplit?: boolean
   coldParkTerminalPanes?: boolean
   /** Retention-budget force-park keeps eviction-exempt tabs mounted. */
   isForceParked?: boolean
@@ -142,6 +144,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
               key={terminalTab.id}
               groupId={assignment?.groupId}
               isVisible
+              data-tab-area-unsplit={tabAreaUnsplit ? '' : undefined}
               onFocusOwningGroup={focusOwningGroup}
             >
               <TerminalRestoringPlaceholder />
@@ -169,6 +172,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isVisible={isVisible}
             isActive={isActive}
             activityTerminalPortal={activityTerminalPortal}
+            tabAreaUnsplit={tabAreaUnsplit}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}
             captureEmptiedReaction={captureEmptiedReaction}

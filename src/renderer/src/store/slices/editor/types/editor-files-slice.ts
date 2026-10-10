@@ -47,9 +47,14 @@ export type EditorFilesSlice = {
       focusEditor?: boolean
       reopenId?: string
       selection?: EditorTabSelection
+      /** This call's placement is already decided (reopen replay); never redirect it beside a lone pane. */
+      placementFixed?: boolean
     }
   ) => string
-  openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewMarkdownInActiveWorkspace: (
+    groupId: string,
+    options?: { placementFixed?: boolean }
+  ) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,

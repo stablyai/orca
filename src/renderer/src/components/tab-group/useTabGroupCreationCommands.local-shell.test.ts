@@ -94,7 +94,9 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
     await vi.waitFor(() => expect(mocks.createTab).toHaveBeenCalled())
 
     expect(mocks.runtimeCall).not.toHaveBeenCalled()
-    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, GROUP_ID, 'powershell.exe')
+    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, GROUP_ID, 'powershell.exe', {
+      placementFixed: true
+    })
     expect(mocks.setActiveTab).toHaveBeenCalledWith('local-tab-1')
   })
 

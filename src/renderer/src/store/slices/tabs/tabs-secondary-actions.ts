@@ -28,7 +28,9 @@ export function createTabsSecondaryActions(
         color: init?.color ?? tab.color,
         isPinned: init?.isPinned ?? tab.isPinned,
         id: init?.id,
-        targetGroupId
+        targetGroupId,
+        // Why: the user dropped this copy onto a named group; honour it even when it is the only pane.
+        placementFixed: true
       })
     },
 

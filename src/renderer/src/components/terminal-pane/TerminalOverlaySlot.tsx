@@ -19,6 +19,7 @@ type TerminalOverlaySlotProps = {
   isVisible: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
+  tabAreaUnsplit?: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   /** Read when a close is requested; the returned reaction runs once it lands. */
@@ -36,6 +37,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isVisible,
   isActive,
   activityTerminalPortal,
+  tabAreaUnsplit = false,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
   captureEmptiedReaction
@@ -107,6 +109,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       measureWhileHidden={shouldMeasureHiddenStartup}
       fitTerminal
       data-terminal-overlay-tab-id={terminalTabId}
+      data-tab-area-unsplit={tabAreaUnsplit ? '' : undefined}
       onFocusOwningGroup={onFocusOwningGroup}
     >
       {terminalPane}
