@@ -66,15 +66,21 @@ function isRetainedTerminalTabRetirementIdentity(
   })
 }
 
-/** Whether two partitions hold the very same copy of a tab: same row, bindings and incarnations. */
-export function isSamePersistedTerminalTab(
-  a: WorkspaceSessionState,
-  b: WorkspaceSessionState,
+/** An immutable snapshot of one partition's copy of a tab: row, bindings and incarnations. */
+export type PersistedTerminalTabCopy = PersistedTerminalTabIdentity | null
+
+export function capturePersistedTerminalTabCopy(
+  session: WorkspaceSessionState | null | undefined,
   worktreeId: string,
   tabId: string
+): PersistedTerminalTabCopy {
+  return capturePersistedTerminalTabRetirementIdentity(session ?? null, worktreeId, tabId)
+}
+
+export function isSamePersistedTerminalTabCopy(
+  left: PersistedTerminalTabCopy,
+  right: PersistedTerminalTabCopy
 ): boolean {
-  const left = capturePersistedTerminalTabRetirementIdentity(a, worktreeId, tabId)
-  const right = capturePersistedTerminalTabRetirementIdentity(b, worktreeId, tabId)
   if (!left || !right) {
     return left === right
   }

@@ -8,6 +8,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 import { OrcaRuntimeService } from './orca-runtime'
 import { terminalSurfaceCloseMutation } from './terminal-surface-close'
+import { capturePersistedTerminalTabCopy } from './workspace-session-terminal-tab-retirement-identity'
 
 const REPO = {
   id: 'repo',
@@ -163,10 +164,16 @@ describe('terminal close across local and runtime session partitions (#18202)', 
       [SPILL_HOST_ID, sessionWithTab('target', 'target-pty')],
       ['runtime:env-0', sessionWithTab('target', 'target-pty')]
     ])
-    const requestedHolders = new Map(sessions)
-    const rebound = sessionWithTab('target', 'replacement-pty')
-    rebound.terminalPtyIncarnationsByPaneKey = { [`target:${LEAF}`]: 'replacement-incarnation' }
-    sessions.set('runtime:env-0', rebound)
+    const requestedHolders = new Map(
+      [...sessions].map(([hostId, session]) => [
+        hostId,
+        capturePersistedTerminalTabCopy(session, WORKTREE_ID, 'target')
+      ])
+    )
+    // In place, as the binding writer rebinds a session it holds.
+    const second = sessions.get('runtime:env-0')!
+    second.terminalLayoutsByTabId.target!.ptyIdsByLeafId = { [LEAF]: 'replacement-pty' }
+    second.terminalPtyIncarnationsByPaneKey = { [`target:${LEAF}`]: 'replacement-incarnation' }
     const setSession = vi.fn()
     const onClosed = vi.fn()
 
@@ -174,7 +181,7 @@ describe('terminal close across local and runtime session partitions (#18202)', 
       worktreeId: WORKTREE_ID,
       target: { kind: 'tab', tabId: 'target' },
       options: {},
-      requestedSession: requestedHolders.get(SPILL_HOST_ID),
+      requestedSession: sessions.get(SPILL_HOST_ID),
       requestedHolders,
       ownerMatches: () => true,
       hostIds: () => [...sessions.keys()],

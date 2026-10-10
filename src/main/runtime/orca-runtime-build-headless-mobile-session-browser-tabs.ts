@@ -11,6 +11,7 @@ import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { holdAgentSessionInventory } from './structured-agent-session-inventory-hold'
 import type { Tab } from '../../shared/tab-types'
 import {
+  captureTerminalCloseRequest,
   resolveTerminalCloseTarget,
   type PaneCloseResolution,
   type RendererTerminalClose,
@@ -130,17 +131,15 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         : null
     let ptyIdsToKill: string[] = []
     let refusal: Error | undefined
-    // Why by tab: one worktree's tabs can be split across local and runtime partitions (#18202).
     const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
-    const requested = new Map(hostIds().map((id) => [id, store.getWorkspaceSession(id)] as const))
+    const fenced = acknowledgeTabRetirement !== null
     try {
       refusal = await store.runDurableMutation(
         closeLeafOrTab({
           worktreeId,
           target,
           options,
-          requestedSession: requested.values().next().value ?? null,
-          ...(acknowledgeTabRetirement ? { requestedHolders: requested } : {}),
+          ...captureTerminalCloseRequest(worktreeId, target, hostIds(), store, fenced),
           ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
           hostIds,
           getSession: (hostId) => store.getWorkspaceSession(hostId),
