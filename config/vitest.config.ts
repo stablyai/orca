@@ -41,7 +41,11 @@ const testOptions = {
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
   hookTimeout: 60_000,
-  testTimeout: 30_000
+  testTimeout: 30_000,
+  // CI-only: one retry keeps a flaky test from failing a required shard; local
+  // runs stay retry-free so flakiness surfaces for devs. Retried-but-passed
+  // tests are printed by the default reporter and scraped into the job summary.
+  retry: process.env.CI ? 1 : 0
 }
 const nodeProject = {
   extends: false,

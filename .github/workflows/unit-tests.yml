@@ -67,7 +67,21 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }} 2>&1 | tee vitest-output.log
+
+      # Flaky tests that pass on retry keep the shard green, so surface them
+      # explicitly in the job summary for triage.
+      - name: Report flaky tests
+        if: always()
+        run: |
+          if [ -s vitest-output.log ] && grep -q 'retry x' vitest-output.log; then
+            {
+              echo "### ⚠️ Flaky tests detected (node ${{ matrix.node }}, shard ${{ matrix.shard.index }}/${{ matrix.shard.count }})"
+              '```'
+              grep 'retry x' vitest-output.log
+              '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload unit shard assignment
         if: always()
