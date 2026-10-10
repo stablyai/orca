@@ -132,6 +132,33 @@ describe('mobile + Codex tab creation routing', () => {
     expect(scope.scheduleDelayedAction).not.toHaveBeenCalled()
   })
 
+  it('creates a Claude Code terminal when the + menu asks for a terminal agent', async () => {
+    const client = clientReturning(terminalCreateResponse())
+    const scope = createScope(client)
+    // Why: a host that supports agent.launch would otherwise route this through agent.launch and
+    // honor the desktop's structured-chat default; the explicit mode must force a PTY.
+    scope.hostCapabilities = ['agent.launch.v2', 'agent.launch.replay.v1']
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('claude', { mode: 'terminal' })
+    })
+
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'claude' })
+    )
+    expect(client.sendRequest).not.toHaveBeenCalledWith('agent.launchReplay', expect.anything())
+    expect(client.sendRequest).not.toHaveBeenCalledWith('agentSession.create', expect.anything())
+    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
+  })
+
   it('keeps the legacy terminal path when structured support is disabled', async () => {
     const client = clientReturning(
       { ok: false, error: { code: 'structured_agent_session_unsupported', message: 'off' } },

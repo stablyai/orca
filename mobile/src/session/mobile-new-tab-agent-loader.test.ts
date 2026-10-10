@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  WORKSPACE_ON_OTHER_RUNTIME
+} from '../../../src/shared/protocol-version'
 import {
   loadMobileNewTabAgentOptions,
   MobileWorkspaceOnOtherRuntimeError
@@ -37,8 +40,8 @@ describe('mobile new-tab agent loading', () => {
         worktreeId: FLOATING_WORKSPACE_WORKTREE_ID
       })
     ).resolves.toEqual([
-      { agent: 'codex', label: 'Codex' },
-      { agent: 'claude', label: 'Claude' }
+      { agent: 'codex', label: 'Codex', mode: 'terminal' },
+      { agent: 'claude', label: 'Claude', mode: 'terminal' }
     ])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'preflight.detectAgents',
@@ -66,11 +69,41 @@ describe('mobile new-tab agent loading', () => {
         client,
         worktreeId: 'repo-1::/remote/worktree'
       })
-    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude', mode: 'terminal' }])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'repo.list',
       'settings.get',
       'preflight.detectRemoteAgents'
+    ])
+  })
+
+  it('adds a chat option for structured providers when native chat is enabled', async () => {
+    const client = createClient(async (method, params) => {
+      if (method === 'settings.get') {
+        return {
+          ok: true,
+          result: { settings: { experimentalNativeChat: true } }
+        }
+      }
+      if (method === 'repo.list') {
+        return { ok: true, result: { repos: [{ id: 'repo-1', connectionId: 'ssh-1' }] } }
+      }
+      if (method === 'preflight.detectRemoteAgents') {
+        expect(params).toEqual({ connectionId: 'ssh-1' })
+        return { ok: true, result: ['claude'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client,
+        worktreeId: 'repo-1::/remote/worktree',
+        hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+      })
+    ).resolves.toEqual([
+      { agent: 'claude', label: 'Claude', mode: 'terminal' },
+      { agent: 'claude', label: 'Claude Chat', mode: 'chat' }
     ])
   })
 
@@ -145,7 +178,7 @@ describe('mobile new-tab agent loading', () => {
         worktreeId: 'repo-1::/srv/worktree',
         hostRefusesOtherRuntime: true
       })
-    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude', mode: 'terminal' }])
     expect(answered.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'repo.list',
       'settings.get',

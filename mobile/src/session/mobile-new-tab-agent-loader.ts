@@ -47,6 +47,8 @@ export function hostRefusesOtherRuntimeWorkspace(
 type MobileAgentLaunchContextArgs = {
   client: RpcClient
   worktreeId: string
+  /** The host's advertised runtime capabilities; used to decide whether native chat is offered. */
+  hostCapabilities?: readonly string[] | null
   /** Whether the host refuses, rather than answers for, a workspace another runtime owns. */
   hostRefusesOtherRuntime?: boolean
 }
@@ -76,7 +78,8 @@ export async function loadMobileNewTabAgentOptions(
   return buildMobileNewTabAgentOptions(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
     context.settings as MobileNewTabAgentSettings | undefined,
-    context.detectedAgents
+    context.detectedAgents,
+    args.hostCapabilities ?? []
   )
 }
 
