@@ -23,6 +23,8 @@ export type NewWorktreeModalProps = {
   hostId?: string
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
+  /** A repo added from the phone moments ago; upserted and selected when the form opens. */
+  preselectedRepo?: MobileWorkspaceRepo | null
   openExternalUrl: (url: string) => void
   onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void

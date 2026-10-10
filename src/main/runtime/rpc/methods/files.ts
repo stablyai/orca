@@ -158,7 +158,10 @@ export const FILE_METHODS = [
     name: 'files.browseServerDir',
     permission: 'workspace',
     params: ServerDirectoryBrowse,
-    handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
+    handler: async (params, { runtime }) =>
+      params.sshConnectionId === undefined
+        ? runtime.browseServerDir(params.path)
+        : runtime.browseServerDir(params.path, params.sshConnectionId)
   }),
   ...FILE_MUTATION_METHODS,
   defineMethod({

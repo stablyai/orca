@@ -1,4 +1,4 @@
-import type { Store } from '../../persistence'
+import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import type { Repo } from '../../../shared/repo-types'
 import {
   isRuntimePathAbsolute,
@@ -13,7 +13,7 @@ import { addRemoteRepoFromPath } from './remote-repo-registration'
 import { resolveRemoteHomePath } from './remote-home-path'
 
 export async function createRemoteRepo(
-  store: Store,
+  store: RuntimeStore,
   args: {
     connectionId: string
     parentPath: string

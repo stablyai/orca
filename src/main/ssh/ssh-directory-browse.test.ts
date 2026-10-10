@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerSshBrowseHandler } from './ssh-browse'
+import { registerSshBrowseHandler } from '../ipc/ssh-browse'
 
 const { handleMock, removeHandlerMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -52,7 +52,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
     await Promise.resolve()
@@ -86,7 +86,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "/tmp/it's here" })
     await Promise.resolve()
@@ -116,7 +116,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users/alice' })
     await Promise.resolve()
@@ -172,7 +172,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/' })
     await Promise.resolve()
@@ -210,7 +210,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users' })
     await Promise.resolve()
@@ -244,7 +244,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "C:/O'Brien" })
     await Promise.resolve()
@@ -278,7 +278,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
     await Promise.resolve()
@@ -320,7 +320,7 @@ describe('registerSshBrowseHandler', () => {
       const getConnectionManager = () => ({
         getConnection: () => ({ exec })
       })
-      registerSshBrowseHandler(getConnectionManager as never)
+      registerSshBrowseHandler(getConnectionManager)
 
       const resultPromise = handler(null, { targetId: 'ssh-1', dirPath })
       await Promise.resolve()
@@ -351,7 +351,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/root/secret' })
     await Promise.resolve()
@@ -380,7 +380,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/missing' })
     await Promise.resolve()
@@ -406,7 +406,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
     await Promise.resolve()
@@ -432,7 +432,7 @@ describe('registerSshBrowseHandler', () => {
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
-    registerSshBrowseHandler(getConnectionManager as never)
+    registerSshBrowseHandler(getConnectionManager)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
     await Promise.resolve()
@@ -458,7 +458,7 @@ describe('registerSshBrowseHandler', () => {
       const getConnectionManager = () => ({
         getConnection: () => ({ exec })
       })
-      registerSshBrowseHandler(getConnectionManager as never)
+      registerSshBrowseHandler(getConnectionManager)
 
       const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/mnt/stalled' })
       let settled = false

@@ -93,7 +93,14 @@ export const hostSshTargetSummariesSchema = z
   .looseObject({
     targets: salvagedOptional(
       'targets',
-      salvagingArray(z.looseObject({ id: z.string(), label: z.string() }))
+      salvagingArray(
+        z.looseObject({
+          id: z.string(),
+          label: z.string(),
+          connected: salvagedOptional('connected', z.boolean()),
+          connectionStatus: salvagedOptional('connectionStatus', z.string())
+        })
+      )
     )
   })
   .transform((reply) => reply.targets ?? [])

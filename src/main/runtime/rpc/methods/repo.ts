@@ -121,7 +121,15 @@ export const REPO_METHODS = [
     params: RepoPath,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName),
+        await (params.displayName || params.sshConnectionId
+          ? context.runtime.addRepo(
+              params.path,
+              params.kind,
+              undefined,
+              params.displayName,
+              params.sshConnectionId
+            )
+          : context.runtime.addRepo(params.path, params.kind)),
         context
       )
     })
@@ -132,7 +140,14 @@ export const REPO_METHODS = [
     params: RepoCreate,
     handler: async (params, context) =>
       projectRepoResultVisibilityForClient(
-        await context.runtime.createRepo(params.parentPath, params.name, params.kind),
+        await (params.sshConnectionId
+          ? context.runtime.createRepo(
+              params.parentPath ?? undefined,
+              params.name,
+              params.kind,
+              params.sshConnectionId
+            )
+          : context.runtime.createRepo(params.parentPath ?? undefined, params.name, params.kind)),
         context
       )
   }),
@@ -148,7 +163,14 @@ export const REPO_METHODS = [
     params: RepoClone,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.cloneRepo(params.url, params.destination),
+        await (params.sshConnectionId
+          ? context.runtime.cloneRepo(
+              params.url,
+              params.destination ?? undefined,
+              undefined,
+              params.sshConnectionId
+            )
+          : context.runtime.cloneRepo(params.url, params.destination ?? undefined)),
         context
       )
     })

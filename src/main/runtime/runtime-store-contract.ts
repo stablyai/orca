@@ -4,6 +4,7 @@ import type { VoiceSettings } from '../../shared/speech-types'
 
 export type RuntimeStore = {
   getRepos: Store['getRepos']
+  getSshTarget?: Store['getSshTarget']
   getRepo: Store['getRepo']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']

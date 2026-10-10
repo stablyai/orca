@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import {
@@ -7,6 +8,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { resolveDefaultCreateProjectParent } from '../../shared/git/repo-default-locations'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepoAsync } from '../git/repo'
@@ -16,6 +18,8 @@ import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
+import { createRemoteRepo } from '../ipc/repos/remote-repo-creation'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -31,8 +35,22 @@ export class RuntimeRepositoryRegistrationController {
     path: string,
     kind: 'git' | 'folder' = 'git',
     executionHostId?: ExecutionHostId | null,
-    displayName?: string
+    displayName?: string,
+    sshConnectionId?: string
   ): Promise<Repo> {
+    if (sshConnectionId) {
+      const result = await addRemoteRepoFromPath(this.requireStore(), {
+        connectionId: sshConnectionId,
+        remotePath: path,
+        ...(displayName ? { displayName } : {}),
+        ...(kind ? { kind } : {})
+      })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      this.invalidate(result.repo.id)
+      return result.repo
+    }
     const store = this.requireStore()
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
@@ -87,13 +105,26 @@ export class RuntimeRepositoryRegistrationController {
   }
 
   async create(
-    parentPath: string,
+    parentPath: string | undefined,
     name: string,
-    kind: 'git' | 'folder' = 'git'
+    kind: 'git' | 'folder' = 'git',
+    sshConnectionId?: string
   ): Promise<{ repo: Repo } | { error: string }> {
+    if (sshConnectionId) {
+      const result = await createRemoteRepo(this.requireStore(), {
+        connectionId: sshConnectionId,
+        parentPath: parentPath ?? '',
+        name,
+        kind
+      })
+      if ('error' in result) {
+        return result
+      }
+      this.invalidate(result.repo.id)
+      return result
+    }
     const store = this.requireStore()
     const trimmedName = name.trim()
-    const trimmedParentPath = parentPath.trim()
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
     if (!trimmedName) {
       return { error: 'Name cannot be empty' }
@@ -101,6 +132,15 @@ export class RuntimeRepositoryRegistrationController {
     if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
       return { error: 'Name cannot contain slashes or be "." / ".."' }
     }
+    // Why: mobile callers cannot type host paths; an absent parent resolves to
+    // the same default policy the desktop create flow uses.
+    const trimmedParentPath = (
+      (parentPath ?? '').trim() ||
+      resolveDefaultCreateProjectParent({
+        settings: store.getSettings(),
+        home: homedir()
+      })
+    ).trim()
     if (!trimmedParentPath) {
       return { error: 'Parent directory is required' }
     }

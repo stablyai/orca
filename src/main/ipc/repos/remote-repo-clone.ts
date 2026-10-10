@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { Store } from '../../persistence'
+import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import {
@@ -14,7 +14,7 @@ import { getRepoSshConnectionId, toSshExecutionHostId } from '../../../shared/ex
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
-import { getActiveMultiplexer } from '../ssh'
+import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { addRemoteRepoFromPath } from './remote-repo-registration'
 import { resolveRemoteHomePath } from './remote-home-path'
@@ -29,8 +29,8 @@ let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 const remoteCloneInFlightByPath = new Set<string>()
 
 export async function cloneRemoteRepo(
-  store: Store,
-  mainWindow: BrowserWindow,
+  store: RuntimeStore,
+  mainWindow: BrowserWindow | null,
   args: {
     connectionId: string
     url: string
@@ -101,7 +101,7 @@ export async function cloneRemoteRepo(
         signal: controller.signal,
         timeoutMs: 10 * 60_000,
         onProgress: (progress) => {
-          if (!mainWindow.isDestroyed()) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('repos:clone-progress', progress)
           }
         }

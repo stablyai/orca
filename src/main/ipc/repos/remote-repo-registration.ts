@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -10,7 +10,7 @@ import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
 import { resolveRemoteHomePath } from './remote-home-path'
 
 export async function addRemoteRepoFromPath(
-  store: Store,
+  store: RuntimeStore,
   args: {
     connectionId: string
     remotePath: string
@@ -75,7 +75,7 @@ export async function addRemoteRepoFromPath(
   const folderName = getRemoteRepoFolderName(resolvedPath)
   let displayName = args.displayName || folderName
   if (!args.displayName && (args.remotePath === '~' || args.remotePath === '~/')) {
-    const sshTarget = store.getSshTarget(args.connectionId)
+    const sshTarget = store.getSshTarget?.(args.connectionId)
     if (sshTarget) {
       displayName = sshTarget.label
     }

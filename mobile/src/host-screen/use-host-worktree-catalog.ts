@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -13,8 +13,12 @@ import {
   retainLiveSleptWorktreeIdentities
 } from '../worktree/worktree-host-row-identity'
 import { savePinnedIds } from '../storage/preferences'
+import type { Worktree } from '../worktree/workspace-list-sections'
 import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
+
+type WorktreeFetchOptions = { allowDuringModal?: boolean }
+type FetchWorktrees = (options?: WorktreeFetchOptions) => Promise<Worktree[] | undefined>
 
 export function useHostWorktreeCatalog(args: {
   client: RpcClient | null
@@ -49,44 +53,67 @@ export function useHostWorktreeCatalog(args: {
     setWorktreesLoaded,
     worktreeCatalogRef
   } = state
+  const fetchWorktreesRef = useRef<FetchWorktrees | null>(null)
+  const hostIdRef = useRef(hostId)
+  hostIdRef.current = hostId
 
   const fetchWorktrees = useCallback(
-    async (options: { allowDuringModal?: boolean } = {}) => {
+    async (options: WorktreeFetchOptions = {}): Promise<Worktree[] | undefined> => {
       if (!client || connState !== 'connected' || !hostId) {
-        return
+        return undefined
       }
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
-        return
+        return undefined
       }
-      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
-      if (fetchWorktreesInFlightRef.current) {
-        return
+      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during
+      // polling; a concurrent caller awaits the shared in-flight request instead of returning
+      // empty-handed (the Add project handoff depends on getting the refreshed list back).
+      const inFlight = fetchWorktreesInFlightRef.current
+      if (inFlight) {
+        if (!options.allowDuringModal) {
+          return inFlight
+        }
+        const handoffClient = client
+        const handoffHostId = hostId
+        // A post-mutation handoff must observe a request that started after the mutation. Wait for
+        // the pre-mutation poll, then continue through this callback so its latest client/host and
+        // modal guards are applied to the fresh request.
+        await inFlight
+        if (clientRef.current !== handoffClient || hostIdRef.current !== handoffHostId) {
+          return undefined
+        }
+        if (fetchWorktreesInFlightRef.current === inFlight) {
+          fetchWorktreesInFlightRef.current = null
+        }
+        return fetchWorktreesRef.current?.({ allowDuringModal: true })
       }
-      fetchWorktreesInFlightRef.current = true
       const requestClient = client
       const requestHostId = hostId
 
-      try {
-        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
-        if (clientRef.current !== requestClient || hostId !== requestHostId) {
-          return
-        }
-        if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
-          return
-        }
-        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
-        // surface it so a broken remote host is diagnosable instead of looking empty.
-        if (fetched.kind === 'request_failed') {
-          setCatalogError(fetched.code)
-          return
-        }
-        if (fetched.pending.admission.kind === 'invalid') {
-          setCatalogError('invalid_response')
-        }
-        // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
-        // host truth over optimistic local edits regardless of payload size.
-        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
-        if (confirmed) {
+      const request = (async (): Promise<Worktree[] | undefined> => {
+        try {
+          const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+          if (clientRef.current !== requestClient || hostIdRef.current !== requestHostId) {
+            return undefined
+          }
+          if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
+            return undefined
+          }
+          // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
+          // surface it so a broken remote host is diagnosable instead of looking empty.
+          if (fetched.kind === 'request_failed') {
+            setCatalogError(fetched.code)
+            return undefined
+          }
+          if (fetched.pending.admission.kind === 'invalid') {
+            setCatalogError('invalid_response')
+          }
+          // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
+          // host truth over optimistic local edits regardless of payload size.
+          const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
+          if (!confirmed) {
+            return undefined
+          }
           setCatalogError(null)
           // A confirmed list is the host answering, which is the evidence a transient action
           // failure was about a moment that has passed.
@@ -122,22 +149,29 @@ export function useHostWorktreeCatalog(args: {
             }
             return serverPinned
           })
+          return confirmed
+        } catch (error) {
+          // Will retry on reconnect
+          if (clientRef.current === requestClient && hostIdRef.current === requestHostId) {
+            // Why the branch: this code is printed to the user verbatim, and a reply the reader
+            // refused is a host-payload defect, not a connectivity one (STA-3123).
+            setCatalogError(
+              error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
+            )
+          }
+          return undefined
         }
-      } catch (error) {
-        // Will retry on reconnect
-        if (clientRef.current === requestClient && hostId === requestHostId) {
-          // Why the branch: this code is printed to the user verbatim, and a reply the reader
-          // refused is a host-payload defect, not a connectivity one (STA-3123).
-          setCatalogError(
-            error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
-          )
-        }
+      })()
+      fetchWorktreesInFlightRef.current = request
+      try {
+        return await request
       } finally {
-        fetchWorktreesInFlightRef.current = false
+        fetchWorktreesInFlightRef.current = null
       }
     },
     [client, connState, hostId]
   )
+  fetchWorktreesRef.current = fetchWorktrees
 
   useFocusEffect(
     useCallback(() => {

@@ -15,6 +15,7 @@ import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 type Worktree = { worktreeId: string; repo: string; isPinned: boolean }
 
 const CONFIRMED: Worktree[] = [{ worktreeId: 'wt-1', repo: 'orca', isPinned: false }]
+const FRESH: Worktree[] = [{ worktreeId: 'wt-new', repo: 'new-project', isPinned: false }]
 
 /**
  * The clear the list depends on to stop showing a failure the host has since disproved.
@@ -22,10 +23,16 @@ const CONFIRMED: Worktree[] = [{ worktreeId: 'wt-1', repo: 'orca', isPinned: fal
  * A confirmed catalog is the host answering, which is the evidence that a transient action failure
  * was about a moment that has passed. Nothing else clears it but the user's own dismiss.
  */
-function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (string | null)[]) {
+function catalogHook(
+  fetched: unknown,
+  actionErrors: string[],
+  catalogErrors: (string | null)[],
+  catalogFetch?: () => Promise<unknown>,
+  admit: () => Worktree[] | null = () => (fetched === null && !catalogFetch ? null : CONFIRMED)
+) {
   const state = {
     clientRef: { current: {} },
-    fetchWorktreesInFlightRef: { current: false },
+    fetchWorktreesInFlightRef: { current: null },
     newWorktreeModalVisibleRef: { current: false },
     setActionError: (value: string) => actionErrors.push(value),
     setCatalogError: (value: string | null) => catalogErrors.push(value),
@@ -36,7 +43,10 @@ function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (s
     setWorktrees: () => {},
     setWorktreesLoaded: () => {},
     worktreeCatalogRef: {
-      current: { fetch: async () => fetched, admit: () => (fetched === null ? null : CONFIRMED) }
+      current: {
+        fetch: catalogFetch ?? (async () => fetched),
+        admit
+      }
     }
   }
   return {
@@ -60,7 +70,9 @@ async function fetchWith(fetched: unknown): Promise<{
   const args = catalogHook(fetched, actionErrors, catalogErrors) as unknown as Parameters<
     typeof useHostWorktreeCatalog
   >[0]
-  const held: { fetchWorktrees: (() => Promise<void>) | null } = { fetchWorktrees: null }
+  const held: {
+    fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+  } = { fetchWorktrees: null }
   function Probe(): null {
     held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
     return null
@@ -68,10 +80,13 @@ async function fetchWith(fetched: unknown): Promise<{
   await act(async () => {
     create(createElement(Probe))
   })
-  if (held.fetchWorktrees === null) {
+  const fetchWorktrees = held.fetchWorktrees
+  if (fetchWorktrees === null) {
     throw new Error('the catalog hook did not mount')
   }
-  await act(held.fetchWorktrees)
+  await act(async () => {
+    await fetchWorktrees()
+  })
   return { actionErrors, catalogErrors }
 }
 
@@ -92,5 +107,202 @@ describe('a catalog the host confirmed', () => {
     })
     expect(actionErrors).toEqual([])
     expect(catalogErrors).toEqual(['network_error'])
+  })
+})
+
+describe('the fetch a handoff awaits', () => {
+  it('drops an old request after a same-client host switch', async () => {
+    const releasers: Array<() => void> = []
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        releasers.push(() =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+        )
+      })
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    let renderer: ReturnType<typeof create> | null = null
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Probe))
+    })
+    const oldRequest = held.fetchWorktrees?.({ allowDuringModal: true })
+    expect(releasers).toHaveLength(1)
+
+    args.hostId = 'host-2'
+    await act(async () => {
+      renderer?.update(createElement(Probe))
+    })
+    releasers[0]?.()
+
+    await expect(oldRequest).resolves.toBeUndefined()
+    expect(actionErrors).toEqual([])
+    expect(catalogErrors).toEqual([])
+  })
+
+  it('returns the confirmed list, so callers needing the refreshed rows get them', async () => {
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    await expect(held.fetchWorktrees?.()).resolves.toEqual(CONFIRMED)
+  })
+
+  it('waits for a pre-mutation poll, then returns the fresh post-mutation rows', async () => {
+    // A holder, not a `let`: control flow would narrow a `let` to its null initializer here and
+    // call the later assignment — made inside the fetch callback — unreachable typing.
+    const releasers: Array<() => void> = []
+    const catalogCalls: number[] = []
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    let admits = 0
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        catalogCalls.push(catalogCalls.length)
+        releasers.push(() =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+        )
+      })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch,
+      () => (admits++ === 0 ? CONFIRMED : FRESH)
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    const first = held.fetchWorktrees?.({ allowDuringModal: true })
+    const second = held.fetchWorktrees?.({ allowDuringModal: true })
+    releasers[0]?.()
+    await expect(first).resolves.toEqual(CONFIRMED)
+    // The Add project handoff fires right after a poll tick can have started one; it must
+    // await that request's list, not resolve undefined and silently skip the session hop.
+    const secondRequest = releasers[1]
+    expect(secondRequest).toBeDefined()
+    secondRequest?.()
+    await expect(second).resolves.toEqual(FRESH)
+    expect(catalogCalls).toEqual([0, 1])
+  })
+
+  it('drops an old handoff after a host and client switch while its poll is pending', async () => {
+    const releasers: Array<() => void> = []
+    const catalogCalls: number[] = []
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        catalogCalls.push(catalogCalls.length)
+        releasers.push(() =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+        )
+      })
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    let renderer: ReturnType<typeof create> | null = null
+    await act(async () => {
+      renderer = create(createElement(Probe))
+    })
+    const oldPoll = held.fetchWorktrees?.()
+    const oldHandoff = held.fetchWorktrees?.({ allowDuringModal: true })
+    expect(releasers).toHaveLength(1)
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test only needs a distinct client identity; RPC methods are never called after the switch.
+    const newClient = {} as NonNullable<Parameters<typeof useHostWorktreeCatalog>[0]['client']>
+    args.client = newClient
+    args.state.clientRef.current = newClient
+    args.hostId = 'host-2'
+    await act(async () => {
+      renderer?.update(createElement(Probe))
+    })
+    releasers[0]?.()
+
+    await expect(oldPoll).resolves.toBeUndefined()
+    await expect(oldHandoff).resolves.toBeUndefined()
+    expect(catalogCalls).toEqual([0])
+  })
+
+  it('keeps ordinary concurrent polls joined to the existing request', async () => {
+    const releaser: { release: (() => void) | null } = { release: null }
+    const catalogCalls: number[] = []
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        catalogCalls.push(catalogCalls.length)
+        releaser.release = () =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+      })
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    const first = held.fetchWorktrees?.()
+    const second = held.fetchWorktrees?.()
+    releaser.release?.()
+    await expect(first).resolves.toEqual(CONFIRMED)
+    await expect(second).resolves.toEqual(CONFIRMED)
+    expect(catalogCalls).toEqual([0])
   })
 })
