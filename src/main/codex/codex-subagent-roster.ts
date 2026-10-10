@@ -33,7 +33,11 @@ import {
 import { readRecord } from './codex-item-field-readers'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { CodexSubagentLinkage } from './codex-subagent-linkage'
-import { codexSubagentGroupId, codexSubagentGroupIdentity } from './codex-subagent-roster-state'
+import {
+  codexSubagentGroupId,
+  codexSubagentGroupIdentity,
+  isCodexOutsideTurnGroup
+} from './codex-subagent-roster-state'
 import type { CodexThreadItem } from './codex-structured-item-translation'
 import { CodexThreadTokenTotals } from './codex-thread-token-totals'
 export { subagentGroupJournalBody as codexSubagentGroupBody } from '../native-chat/agent-session-journal/journal-subagent-group-body'
@@ -64,6 +68,7 @@ export class CodexSubagentRoster {
   constructor(private readonly deps: CodexSubagentRosterDeps) {
     this.tracker = new SubagentTracker({
       port: subagentRowSinkPort(deps.sink, codexSubagentGroupIdentity),
+      outsideTurn: isCodexOutsideTurnGroup,
       journaled: new JournaledSubagentGroups(
         () => deps.sink.journalLinkage?.() ?? null,
         codexSubagentGroupIdentity
@@ -230,8 +235,7 @@ export class CodexSubagentRoster {
       ownerThreadId === threadId ? turnId : (this.deps.activeTurn(ownerThreadId) ?? turnId)
     return {
       id: codexSubagentGroupId(ownerThreadId, ownerTurnId),
-      placement: () => this.deps.turnScopeFor(ownerThreadId, ownerTurnId),
-      outsideTurn: ownerTurnId === null
+      placement: () => this.deps.turnScopeFor(ownerThreadId, ownerTurnId)
     }
   }
 }

@@ -68,6 +68,7 @@ export class ClaudeSubagentRoster {
   constructor(private readonly deps: ClaudeSubagentRosterDeps) {
     this.tracker = new SubagentTracker({
       port: subagentRowSinkPort(deps.sink, claudeSubagentGroupIdentity),
+      outsideTurn: (groupId) => groupId === OUTSIDE_TURN,
       ...(deps.journaled ? { journaled: deps.journaled } : {}),
       ...(deps.now ? { now: deps.now } : {})
     })
@@ -214,11 +215,9 @@ export class ClaudeSubagentRoster {
   }
 
   private currentGroup(): SubagentReport<AgentJournalTurnScope>['group'] {
-    const key = this.deps.currentGroupKey()
     return {
-      id: key ?? OUTSIDE_TURN,
-      placement: this.deps.currentTurnScope,
-      outsideTurn: key === null
+      id: this.deps.currentGroupKey() ?? OUTSIDE_TURN,
+      placement: this.deps.currentTurnScope
     }
   }
 }

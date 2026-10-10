@@ -23,6 +23,7 @@ export class AcpSubagentTimeline {
   private at = 0
   private readonly tracker = new SubagentTracker<ProviderTimelineJoin>({
     // The host admits the events later and retries a refused one itself.
+    outsideTurn: (groupId) => groupId === OUTSIDE_TURN,
     port: {
       write: (group, { body }) => {
         if (body) {
@@ -120,11 +121,7 @@ export class AcpSubagentTimeline {
     this.at = at
     this.tracker.report({
       id: update.id,
-      group: {
-        id: turn ?? OUTSIDE_TURN,
-        placement: () => placement,
-        outsideTurn: turn === undefined
-      },
+      group: { id: turn ?? OUTSIDE_TURN, placement: () => placement },
       announces: update.knownOnly !== true,
       ...(update.label !== undefined ? { label: update.label } : {}),
       ...(update.state !== undefined ? { state: update.state } : {}),

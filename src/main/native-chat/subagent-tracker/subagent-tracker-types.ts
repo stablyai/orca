@@ -17,13 +17,7 @@ export type SubagentReport<Placement> = {
   run?: string
   /** The group of the turn this report happens in: where a new child is listed. A known child
    *  keeps its one entry, run after run. */
-  group: {
-    id: string
-    placement: () => Placement
-    /** No turn owns the group, so later reports can name it again: its row is never released,
-     *  or a later child would rewrite it from empty. */
-    outsideTurn?: boolean
-  }
+  group: { id: string; placement: () => Placement }
   /** Only an announcement creates a child or starts a run; anything else revises a known one. */
   announces: boolean
   label?: string | null
@@ -43,6 +37,9 @@ export type TrackedSubagent = {
   runs: string[]
   /** Which run of the child this is: 1, then one more per run started. */
   attempt: number
+  /** The group of the turn that started the current run, wherever the entry is listed: that turn's
+   *  end is what a foreground run cannot outlive. Null for a run an earlier provider process left. */
+  turn: string | null
   backgrounded: boolean
   /** The name before its ordinal suffix; a placeholder until an announcement names the child. */
   labelBase: string
@@ -56,7 +53,6 @@ export type SubagentGroup<Placement> = {
   placement: Placement
   /** Insertion order is the display order. */
   entries: Map<string, TrackedSubagent>
-  outsideTurn: boolean
   /** Lifetime admissions: bounds the labels a row retains even after removals. */
   admittedEntries: number
   /** Labels stay reserved after removal or renaming, so an ordinal is never reused. */

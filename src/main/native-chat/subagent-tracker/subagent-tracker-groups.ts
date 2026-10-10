@@ -33,13 +33,22 @@ export class SubagentTrackerGroups<Placement> {
         settledIdentity(entry.id, null),
         ...runs.map((run) => settledIdentity(entry.id, run))
       ]),
-    onEvict: (group) => this.onEvict?.(group)
+    onEvict: (group) => this.deps.onEvict?.(group)
   })
 
   constructor(
-    private readonly journaled: JournaledSubagentSource<Placement> | undefined,
-    private readonly onEvict?: (group: SubagentGroup<Placement>) => void
+    private readonly deps: {
+      journaled?: JournaledSubagentSource<Placement>
+      /** A group no turn owns: later reports name it again, so its row is never released, or a
+       *  later child would rewrite it from empty. */
+      outsideTurn: (groupId: string) => boolean
+      onEvict?: (group: SubagentGroup<Placement>) => void
+    }
   ) {}
+
+  private get journaled(): JournaledSubagentSource<Placement> | undefined {
+    return this.deps.journaled
+  }
 
   values(): Iterable<SubagentGroup<Placement>> {
     return this.groups.values()
@@ -65,13 +74,11 @@ export class SubagentTrackerGroups<Placement> {
   groupFor(group: SubagentReport<Placement>['group']): SubagentGroup<Placement> {
     const existing = this.groups.get(group.id) ?? this.inherit(group.id)
     if (existing) {
-      existing.outsideTurn ||= group.outsideTurn === true
       return existing
     }
     const created: SubagentGroup<Placement> = {
       groupId: group.id,
       placement: group.placement(),
-      outsideTurn: group.outsideTurn === true,
       entries: new Map(),
       admittedEntries: 0,
       claimedLabels: new Set(),
@@ -93,7 +100,7 @@ export class SubagentTrackerGroups<Placement> {
   trim(changed: Iterable<SubagentGroup<Placement>>, retainedGroupId?: string): void {
     this.retention.trim(
       changed,
-      (groupId) => groupId === retainedGroupId || this.groups.get(groupId)?.outsideTurn === true
+      (groupId) => groupId === retainedGroupId || this.deps.outsideTurn(groupId)
     )
   }
 
@@ -129,7 +136,6 @@ export class SubagentTrackerGroups<Placement> {
       groupId,
       // The row keeps the turn it was created beside; a later run's writes never move it.
       placement: row.placement,
-      outsideTurn: false,
       entries: new Map(),
       admittedEntries: row.entries.length,
       claimedLabels: new Set(row.entries.map((entry) => entry.label)),
@@ -141,6 +147,7 @@ export class SubagentTrackerGroups<Placement> {
         run: null,
         runs: [],
         attempt: this.journaled?.attempt?.(entry.id) ?? 1,
+        turn: null,
         // Each child outlived the run that spawned it, so none is tied to this run's turns.
         backgrounded: true,
         labelBase: entry.label,

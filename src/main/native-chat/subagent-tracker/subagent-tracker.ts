@@ -7,7 +7,6 @@
 // a later run reopens that entry. A child is released only when it settles (bounded settled
 // history) or the chat ends — never by count while it may still run.
 
-import { isTerminalSubagentState } from '../../../shared/native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
 import { writeSubagentRows } from './subagent-row-writes'
@@ -43,12 +42,14 @@ export class SubagentTracker<Placement> {
     private readonly deps: {
       port: SubagentRowPort<Placement>
       journaled?: JournaledSubagentSource<Placement>
+      /** Whether a group is the one no turn owns. */
+      outsideTurn: (groupId: string) => boolean
       onEvict?: (group: SubagentGroup<Placement>) => void
       now?: () => number
     }
   ) {
     this.now = deps.now ?? (() => Date.now())
-    this.groups = new SubagentTrackerGroups(deps.journaled, deps.onEvict)
+    this.groups = new SubagentTrackerGroups(deps)
   }
 
   report(report: SubagentReport<Placement>): StructuredAgentSessionSinkAdmission {
@@ -126,11 +127,23 @@ export class SubagentTracker<Placement> {
     this.groups.trim([group], group.groupId)
   }
 
-  /** The turn ended: a child it ran in the foreground can no longer report, and contact with it is
-   *  lost — not evidence it exited. A backgrounded child was told to outlive the turn. */
+  /** The turn ended: a run it started in the foreground can no longer report, wherever its child is
+   *  listed, and contact with it is lost — not evidence it exited. A backgrounded run was told to
+   *  outlive the turn. */
   settleTurn(groupId: string): StructuredAgentSessionSinkAdmission {
-    const group = this.groups.get(groupId)
-    return group ? this.sweep(group, false) : ADMITTED
+    const swept: SubagentGroup<Placement>[] = []
+    for (const group of this.groups.values()) {
+      let changed = false
+      for (const [id, tracked] of group.entries) {
+        if (tracked.turn === groupId && !tracked.backgrounded) {
+          changed = this.setState(group, id, tracked, 'unverifiable') || changed
+        }
+      }
+      if (changed || group.groupId === groupId) {
+        swept.push(group)
+      }
+    }
+    return this.write(...swept)
   }
 
   /** The provider is gone: nothing more arrives for any child. Every group is swept; the first
@@ -138,7 +151,7 @@ export class SubagentTracker<Placement> {
   settleSession(): StructuredAgentSessionSinkAdmission {
     let refused: StructuredAgentSessionSinkAdmission | null = null
     for (const group of this.groups.values()) {
-      const admission = this.sweep(group, true)
+      const admission = this.sweep(group)
       refused ??= admission.accepted ? null : admission
     }
     return refused ?? ADMITTED
@@ -188,6 +201,7 @@ export class SubagentTracker<Placement> {
       run,
       runs: run === null ? [] : [run],
       attempt: 1,
+      turn: report.group.id,
       backgrounded: report.backgrounded ?? false,
       labelBase: label ?? UNLABELLED_SUBAGENT,
       provisional: label === null,
@@ -220,6 +234,7 @@ export class SubagentTracker<Placement> {
       run,
       runs,
       attempt: tracked.attempt + 1,
+      turn: report.group.id,
       backgrounded: report.backgrounded ?? false,
       labelBase: named ? label : tracked.labelBase,
       provisional: tracked.provisional && !named,
@@ -260,23 +275,17 @@ export class SubagentTracker<Placement> {
     id: string,
     tracked: TrackedSubagent,
     state: NativeChatSubagentEntry['state']
-  ): void {
+  ): boolean {
     const next = withSubagentState(tracked, state, this.now())
     if (next) {
       group.entries.set(id, next)
     }
+    return next !== null
   }
 
-  private sweep(
-    group: SubagentGroup<Placement>,
-    includeBackgrounded: boolean
-  ): StructuredAgentSessionSinkAdmission {
+  private sweep(group: SubagentGroup<Placement>): StructuredAgentSessionSinkAdmission {
     for (const [id, tracked] of group.entries) {
-      if (!isTerminalSubagentState(tracked.entry.state)) {
-        if (includeBackgrounded || !tracked.backgrounded) {
-          this.setState(group, id, tracked, 'unverifiable')
-        }
-      }
+      this.setState(group, id, tracked, 'unverifiable')
     }
     // A null `lastSerialized` is a refused earlier write that nothing else may retry.
     return this.write(group)

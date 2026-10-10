@@ -25,6 +25,7 @@ function harness(journaled?: JournaledSubagentSource<string>) {
       }
     },
     ...(journaled ? { journaled } : {}),
+    outsideTurn: (groupId) => groupId.startsWith('outside'),
     now: () => clock
   })
   const report = (
@@ -124,20 +125,11 @@ describe('SubagentTracker', () => {
 
   it('never releases the row no turn owns, so a later child cannot rewrite it from empty', () => {
     const h = harness()
-    h.tracker.report({
-      id: 'loose',
-      announces: true,
-      state: 'completed',
-      group: { id: 'outside', placement: () => 'outside', outsideTurn: true }
-    })
+    h.report('outside', { id: 'loose', state: 'completed' })
     for (let turn = 0; turn < 40; turn++) {
       h.report(`turn-${turn}`, { id: `c${turn}`, state: 'completed' })
     }
-    h.tracker.report({
-      id: 'later',
-      announces: true,
-      group: { id: 'outside', placement: () => 'outside', outsideTurn: true }
-    })
+    h.report('outside', { id: 'later' })
     expect(h.row('outside')?.map((entry) => entry.id)).toEqual(['loose', 'later'])
   })
 
@@ -161,6 +153,40 @@ describe('SubagentTracker', () => {
     h.report('turn', { id: 'a', run: 'r0' })
     expect(h.row('turn')).toEqual([expect.objectContaining({ state: 'completed' })])
     expect(h.tracker.attempt('a')).toBe(20)
+  })
+
+  it('ends a foreground run with the turn that started it, wherever its child is listed', () => {
+    const h = harness()
+    h.report('turn-1', { id: 'x', run: 'r1' })
+    h.report('turn-1', { id: 'x', run: 'r1', state: 'completed', announces: false })
+    h.report('turn-5', { id: 'x', run: 'r2' })
+    h.tracker.settleTurn('turn-1')
+    expect(h.row('turn-1')).toEqual([expect.objectContaining({ state: 'working' })])
+    h.tracker.settleTurn('turn-5')
+    expect(h.row('turn-1')).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+  })
+
+  it('keeps an inherited no-turn row first reached through one of its children', () => {
+    let claimed = false
+    const h = harness({
+      groupOf: (id) => (id === 'a' ? 'outside-turn' : null),
+      claimGroup: (groupId) => {
+        if (groupId !== 'outside-turn' || claimed) {
+          return null
+        }
+        claimed = true
+        return {
+          entries: [{ id: 'a', label: 'One', state: 'completed', startedAt: 1, settledAt: 2 }],
+          placement: 'outside-turn'
+        }
+      }
+    })
+    h.report('outside-turn', { id: 'a', tokens: 3, announces: false })
+    for (let turn = 0; turn < 40; turn++) {
+      h.report(`turn-${turn}`, { id: `c${turn}`, state: 'completed' })
+    }
+    h.report('outside-turn', { id: 'b' })
+    expect(h.row('outside-turn')?.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 
   it('ends only foreground children with their turn, and every child with the session', () => {
