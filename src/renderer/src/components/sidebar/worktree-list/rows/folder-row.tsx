@@ -15,6 +15,7 @@ import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import WorktreeCard from '../../WorktreeCard'
+import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getFolderWorkspaceRowGeometry } from './indentation'
@@ -53,6 +54,7 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree,
     rowKey: string
   ) => void
+  getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
 }
 
 export function renderFolderWorkspaceVirtualRow(args: {
@@ -131,6 +133,11 @@ export function renderFolderWorkspaceVirtualRow(args: {
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}
+          lineageChildCount={row.attachedChildCount ?? 0}
+          lineageCollapsed={row.attachedCollapsed ?? false}
+          onLineageToggle={
+            row.attachedGroupKey ? ctx.getLineageToggleHandler(row.attachedGroupKey) : undefined
+          }
         />
         <div className="pointer-events-auto absolute right-3 top-1.5">
           <FolderPathStatusIndicator status={pathStatus} />
