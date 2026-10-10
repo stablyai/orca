@@ -169,8 +169,16 @@ export type AgentStatusSlice = {
   /** Dismiss all retained entries belonging to a worktree. */
   dismissRetainedAgentsByWorktree: (worktreeId: string) => void
 
-  /** Prune retained entries whose worktreeId is not in the given set. */
-  pruneRetainedAgents: (validWorktreeIds: Set<string>) => void
+  /** Prune retained entries whose worktreeId is not in the given set. When
+   *  `liveLeafIdsByTabId` is supplied, also prune an entry whose tab no
+   *  longer exists in it, or whose stable paneKey names a leaf absent from
+   *  that tab's known current leaves (a respawned pane reusing the tab). A
+   *  tab mapped to `null` means its layout has not hydrated yet — lenient,
+   *  not pruned on leaf grounds. */
+  pruneRetainedAgents: (
+    validWorktreeIds: Set<string>,
+    liveLeafIdsByTabId?: ReadonlyMap<string, ReadonlySet<string> | null>
+  ) => void
 
   /** Clear one-shot teardown suppressors after the retention sync declines to retain the row. */
   clearRetentionSuppressedPaneKeys: (paneKeys: string[]) => void

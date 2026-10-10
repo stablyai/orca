@@ -6,10 +6,14 @@ import type { DashboardAgentRow } from './useDashboardData'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import {
+  collectTerminalLayoutLeafIds,
+  createTerminalLayoutTopologySignature
+} from '@/lib/terminal-layout-leaf-topology'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
@@ -35,6 +39,10 @@ type RetainedAgentsSyncInputs = {
   folderWorkspaces: readonly FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  /** Optional: when supplied, pruning also drops a retained row whose leaf
+   *  no longer exists in its (still-live) tab, catching a pane respawned in
+   *  place after a crash — not just a tab that disappeared outright. */
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
 }
 
 type RetainedAgentsSyncSnapshotInputs = RetainedAgentsSyncInputs & {
@@ -60,12 +68,21 @@ function buildLiveTabIndex(args: {
   worktreesByRepo: Record<string, Worktree[]>
   folderWorkspaces: readonly FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
 }): {
   existingWorktreeIds: Set<string>
   tabIndex: Map<string, { tab: TerminalTab; worktreeId: string }>
+  liveLeafIdsByTabId: Map<string, Set<string> | null>
 } {
   const existingWorktreeIds = new Set<string>()
   const tabIndex = new Map<string, { tab: TerminalTab; worktreeId: string }>()
+  const liveLeafIdsByTabId = new Map<string, Set<string> | null>()
+
+  const indexTab = (tab: TerminalTab, worktreeId: string): void => {
+    tabIndex.set(tab.id, { tab, worktreeId })
+    const layout = args.terminalLayoutsByTabId?.[tab.id]
+    liveLeafIdsByTabId.set(tab.id, collectTerminalLayoutLeafIds(layout))
+  }
 
   for (const repo of args.repos) {
     const worktrees = args.worktreesByRepo[repo.id] ?? []
@@ -76,7 +93,7 @@ function buildLiveTabIndex(args: {
       existingWorktreeIds.add(worktree.id)
       const tabs = args.tabsByWorktree[worktree.id] ?? []
       for (const tab of tabs) {
-        tabIndex.set(tab.id, { tab, worktreeId: worktree.id })
+        indexTab(tab, worktree.id)
       }
     }
   }
@@ -88,23 +105,25 @@ function buildLiveTabIndex(args: {
     const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
     existingWorktreeIds.add(workspaceKey)
     for (const tab of args.tabsByWorktree[workspaceKey] ?? []) {
-      tabIndex.set(tab.id, { tab, worktreeId: workspaceKey })
+      indexTab(tab, workspaceKey)
     }
   }
 
-  return { existingWorktreeIds, tabIndex }
+  return { existingWorktreeIds, tabIndex, liveLeafIdsByTabId }
 }
 
 function agentStartedAt(entry: AgentStatusEntry): number {
   return entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
 }
 
+/** Projects live tabs/leaves and status entries into this sync tick's retention inputs. */
 export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshotInputs): {
   currentAgents: RetainedAgentSnapshot
   existingWorktreeIds: Set<string>
   tabIndex: Map<string, { tab: TerminalTab; worktreeId: string }>
+  liveLeafIdsByTabId: Map<string, Set<string> | null>
 } {
-  const { existingWorktreeIds, tabIndex } = buildLiveTabIndex(args)
+  const { existingWorktreeIds, tabIndex, liveLeafIdsByTabId } = buildLiveTabIndex(args)
   const currentAgents: RetainedAgentSnapshot = new Map()
 
   for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
@@ -133,42 +152,55 @@ export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshot
     })
   }
 
-  return { currentAgents, existingWorktreeIds, tabIndex }
+  return { currentAgents, existingWorktreeIds, tabIndex, liveLeafIdsByTabId }
 }
 
+/** Mounts the periodic effect that retains "done" rows on disappearance and prunes stale ones. */
 export function useRetainedAgentsSync(): void {
   const tabTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
     TerminalTab,
     TerminalTab
   > | null>(null)
   tabTopologyProjectionRef.current ??= createRetainedAgentsTabTopologyProjection()
+  const layoutTopologySignatureRef = useRef<ReturnType<
+    typeof createTerminalLayoutTopologySignature
+  > | null>(null)
+  layoutTopologySignatureRef.current ??= createTerminalLayoutTopologySignature()
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
-  const [repos, worktreesByRepo, folderWorkspaces, tabTopology, agentStatusEpoch] = useAppStore(
-    useShallow(
-      (s) =>
-        [
-          s.repos,
-          s.worktreesByRepo,
-          s.folderWorkspaces,
-          tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
-          s.agentStatusEpoch
-        ] as const
+  const [repos, worktreesByRepo, folderWorkspaces, tabTopology, agentStatusEpoch, layoutTopology] =
+    useAppStore(
+      useShallow(
+        (s) =>
+          [
+            s.repos,
+            s.worktreesByRepo,
+            s.folderWorkspaces,
+            tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
+            s.agentStatusEpoch,
+            // Why: setTabLayout can replace a tab's root leaf (a respawned
+            // pane) without touching tabsByWorktree or agentStatusEpoch, so
+            // without this the effect below would never re-run to sweep the
+            // now-stale retained row for the old leaf.
+            layoutTopologySignatureRef.current!.project(s.terminalLayoutsByTabId)
+          ] as const
+      )
     )
-  )
   const prevAgentsRef = useRef<RetainedAgentSnapshot>(new Map())
 
   useEffect(() => {
     const state = useAppStore.getState()
-    const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
-      repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
-      tabsByWorktree: state.tabsByWorktree,
-      agentStatusByPaneKey: state.agentStatusByPaneKey,
-      now: Date.now()
-    })
+    const { currentAgents, existingWorktreeIds, tabIndex, liveLeafIdsByTabId } =
+      buildRetainedAgentsSyncSnapshot({
+        repos: state.repos,
+        worktreesByRepo: state.worktreesByRepo,
+        folderWorkspaces: state.folderWorkspaces,
+        tabsByWorktree: state.tabsByWorktree,
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+        now: Date.now()
+      })
 
     // Why: read retention state via getState() after the cheap topology/epoch
     // gate fires. Building the full retention snapshot scans all agents, so
@@ -193,7 +225,12 @@ export function useRetainedAgentsSync(): void {
     retainAgents(toRetain)
 
     prevAgentsRef.current = currentAgents
-    pruneRetainedAgents(existingWorktreeIds)
+    // Why: a ghost "done" row outlives its tab/leaf when the teardown path
+    // never plants recentlyClosedAgentStatusTabIds — a crashed PTY, not just
+    // an explicit tab close. liveLeafIdsByTabId (same tick's tab index) is
+    // the only authority left to sweep it, independent of which card's
+    // `tabs` prop happens to render this entry (#6072's desktop analogue).
+    pruneRetainedAgents(existingWorktreeIds, liveLeafIdsByTabId)
     if (consumedSuppressedPaneKeys.length > 0) {
       clearRetentionSuppressedPaneKeys(consumedSuppressedPaneKeys)
     }
@@ -203,6 +240,7 @@ export function useRetainedAgentsSync(): void {
     folderWorkspaces,
     tabTopology,
     agentStatusEpoch,
+    layoutTopology,
     retainAgents,
     pruneRetainedAgents,
     clearRetentionSuppressedPaneKeys
