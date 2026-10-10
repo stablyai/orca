@@ -1,5 +1,5 @@
 // The one route every mutating agent-session call takes: recompute the fingerprint,
-// dispatch submission-accepting plans to their command receipt, otherwise admit
+// accept a plan that declares a command receipt through it, otherwise admit
 // through the ledger and check the lease. Methods cannot grow their own admission rules.
 //
 // Ledger-backed admission is two-phase when a call brings `prepareSession`. The ledger's
@@ -98,8 +98,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
-  if (plan.acceptsWithCommandReceipt) {
-    return admitCommandReceiptMutation(request, hostFingerprint)
+  if (plan.commandReceipt) {
+    return admitCommandReceiptMutation(request, hostFingerprint, plan.commandReceipt)
   }
   if (request.prepareSession) {
     const ledger = request.store.evaluateMutationOperation({

@@ -175,6 +175,16 @@ export class AgentSessionStoreTransactions {
     }
   }
 
+  /** A receipt no journal write carries (a command that changed nothing), in its own transaction. */
+  commitReceipt(receipt: JournalOperationReceipt): Promise<void> {
+    const run = this.queue.then(() => {
+      this.journalDatabase.transaction((db) => receipt.write(db))
+      receipt.committed()
+    })
+    this.queue = run.catch(() => {})
+    return run
+  }
+
   private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {
     const readOnly = this.journalDatabase.readOnly
     if (readOnly && !inMemoryWhenReadOnly) {

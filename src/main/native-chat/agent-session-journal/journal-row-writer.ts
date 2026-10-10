@@ -28,6 +28,21 @@ export function composeJournalOperationReceipts(
   }
 }
 
+/** `run`, with `receipt` written in its transaction only when `changed` says it wrote something. */
+export function writeReceiptIfChanged<T>(
+  run: (db: Database.Database) => T,
+  changed: (result: T) => boolean,
+  receipt?: JournalOperationReceipt
+): (db: Database.Database) => T {
+  return (db) => {
+    const result = run(db)
+    if (receipt && changed(result)) {
+      receipt.write(db)
+    }
+    return result
+  }
+}
+
 export type JournalRowWriterDeps = {
   sessionId: string
   now: () => number

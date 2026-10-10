@@ -1,8 +1,7 @@
-// `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete`, and
-// mutations of the conversation's queued drafts. Settling
-// operations stamp op-scoped tombstone receipts, so a lost acknowledgement
-// replays from the rows themselves — never from the operation ledger, which
-// records only that an operation happened. No mutation returns draft text:
+// `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete` / Resume: mutations of
+// the conversation's queued drafts. Each action's command receipt commits with the row it
+// changes, so a lost acknowledgement replays from that receipt and the rows it points at, never
+// from the operation ledger. No mutation returns draft text:
 // the published list is the one authority a client renders.
 
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -16,12 +15,14 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
-import {
-  isJournalWrittenByNewerOrca,
-  journalOpenRefusal
-} from '../agent-session-journal/journal-open-failure'
+import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
-import type { MutationPlan } from './structured-agent-session-mutation-plans'
+import {
+  journalRowReceiptResult,
+  type MutationPlan
+} from './structured-agent-session-mutation-plans'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
 import {
   resumeStructuredQueue,
@@ -52,6 +53,17 @@ function submissionFor(
   return ctx.journal.submissions().find((entry) => entry.clientMessageId === clientMessageId)
 }
 
+/** Where the journal wrote a hand-off's submission, so a replay answers with that one. */
+function submissionRowReceipt(
+  ctx: AgentSessionTurnContext,
+  submission: AgentJournalSubmission | undefined
+): CommandReceiptResult {
+  if (submission?.submittedSequence === undefined) {
+    throw new Error('an acknowledged hand-off requires its submission row')
+  }
+  return { kind: 'journal-row', epoch: ctx.journal.epoch, sequence: submission.submittedSequence }
+}
+
 /** One transaction, stamped with the operation's caller-scoped key so a replay
  *  answers "spent" from the receipts. Withdrawal retires any hold in the same
  *  UPDATE, and the store's commit notification publishes the change. */
@@ -62,12 +74,16 @@ export async function withdrawQueuedMessagesForOperation(
     messageIds: readonly string[]
     callerKey: string
     operationId: string
-  }
+  },
+  receipt?: JournalOperationReceipt
 ): Promise<QueuedMessageRow[]> {
-  return journal.queuedMessages.withdraw({
-    messageIds: input.messageIds,
-    settledByOp: agentSessionOperationKey(input.callerKey, input.operationId)
-  })
+  return journal.queuedMessages.withdraw(
+    {
+      messageIds: input.messageIds,
+      settledByOp: agentSessionOperationKey(input.callerKey, input.operationId)
+    },
+    receipt
+  )
 }
 
 /** Draft actions run like any mutation: admitted on the session's lane, the
@@ -85,20 +101,6 @@ export function mutateQueued<TValue>(
     { ...plan, run: (ctx) => refusingNewerOrcaJournal(plan.run(ctx)) },
     openForWrite(context, envelope)
   )
-}
-
-/** A newer Orca's journal refuses a draft write with the words a send gets there. */
-async function refusingNewerOrcaJournal<TValue>(
-  run: Promise<TurnOutcome<TValue>>
-): Promise<TurnOutcome<TValue>> {
-  try {
-    return await run
-  } catch (error) {
-    if (isJournalWrittenByNewerOrca(error)) {
-      return { ok: false, refusal: journalOpenRefusal(error) }
-    }
-    throw error
-  }
 }
 
 /**
@@ -119,13 +121,13 @@ export function sendQueuedStructuredAgentMessage(
     method: 'agentSession.queuedMessageSend',
     fields: { messageId },
     conversationWrite: true,
+    // Its own submission's row, or the row of the hand-off that already took the card.
+    commandReceipt: {
+      result: (row) => journalRowReceiptResult(row, 'submission'),
+      unwritten: (value, ctx) =>
+        submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
+    },
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
-      // A rerun of this operation after it consumed the card (its answer never
-      // settled): answer with the submission it made, never append it again.
-      const consumedHere = submissionFor(ctx, operationId)
-      if (consumedHere?.queuedMessageId === messageId) {
-        return { ok: true, value: { clientMessageId: operationId, submission: consumedHere } }
-      }
       // The one queue gate; Send-now's override set is exactly `working` (plus
       // FIFO order and the stored hold, which the consume below clears).
       const record = context.deps.store.getRecord(ctx.sessionId)
@@ -172,7 +174,8 @@ export function sendQueuedStructuredAgentMessage(
             expect: row.state,
             settledByOp: agentSessionOperationKey(ctx.resolvedBy, operationId),
             hostInstance: structuredAgentSessionHostInstance()
-          }
+          },
+          ctx.operationReceipt
         )
       } catch (error) {
         if (error instanceof QueuedMessageNotConsumableError) {
@@ -184,19 +187,17 @@ export function sendQueuedStructuredAgentMessage(
       if (!submission) {
         throw new Error('agent_session_submission_lost')
       }
-      context.wakeDelivery(ctx.sessionId)
       return { ok: true, value: { clientMessageId: submissionId, submission } }
     },
-    replay: (ctx) => {
-      const opKey = agentSessionOperationKey(ctx.resolvedBy, operationId)
-      const row = ctx.journal.queuedMessages
-        .receipts(opKey)
-        .find((receipt) => receipt.messageId === messageId)
-      if (!row || row.state !== 'dispatched') {
-        return null
-      }
-      const submission = row.consumedAs === null ? undefined : submissionFor(ctx, row.consumedAs)
-      return submission ? { clientMessageId: submission.clientMessageId, submission } : null
+    // The hand-off the receipt points at, never whichever one the card holds now.
+    replay: (ctx, _outcome, receipt) => {
+      const submission =
+        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
+          ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
+          : undefined
+      return submission?.queuedMessageId === messageId
+        ? { clientMessageId: submission.clientMessageId, submission }
+        : null
     }
   }
   return mutateQueued(context, caller, params.envelope, plan)
@@ -216,6 +217,17 @@ export function deleteQueuedStructuredAgentMessage(
     method: 'agentSession.queuedMessageDelete',
     fields: { messageId },
     conversationWrite: true,
+    // The withdrawn card, or a no-op's answer when there was nothing left to withdraw.
+    commandReceipt: {
+      result: () => ({ kind: 'queued-draft', messageId }),
+      unwritten: (value) =>
+        value.deleted
+          ? null
+          : {
+              kind: 'no-op',
+              outcome: { kind: 'queue-delete', messageId, disposition: value.disposition }
+            }
+    },
     run: async (ctx): Promise<TurnOutcome<AgentSessionQueuedMessageDeleteResult>> => {
       const row = ctx.journal.queuedMessages.get(messageId)
       if (!row) {
@@ -230,21 +242,26 @@ export function deleteQueuedStructuredAgentMessage(
       // The withdrawal notifies through the journal's commit listener, which
       // also re-derives the drain — deleting a returned card can unblock the
       // drafts behind it.
-      const withdrawn = await withdrawQueuedMessagesForOperation(ctx.journal, {
-        sessionId: ctx.sessionId,
-        messageIds: [messageId],
-        callerKey: ctx.resolvedBy,
-        operationId
-      })
+      const withdrawn = await withdrawQueuedMessagesForOperation(
+        ctx.journal,
+        {
+          sessionId: ctx.sessionId,
+          messageIds: [messageId],
+          callerKey: ctx.resolvedBy,
+          operationId
+        },
+        ctx.operationReceipt
+      )
       return withdrawn.length > 0
         ? { ok: true, value: { deleted: true, messageId } }
         : { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
     },
-    replay: (ctx) => {
-      const replayed = ctx.journal.queuedMessages
-        .receipts(agentSessionOperationKey(ctx.resolvedBy, operationId))
-        .some((row) => row.messageId === messageId && row.state === 'withdrawn')
-      return replayed ? { deleted: true, messageId } : null
+    // The receipt alone answers, so a pruned tombstone cannot lose it.
+    replay: (_ctx, _outcome, receipt) => {
+      if (receipt?.kind === 'no-op' && receipt.outcome.kind === 'queue-delete') {
+        return { deleted: false, messageId, disposition: receipt.outcome.disposition }
+      }
+      return receipt?.kind === 'queued-draft' ? { deleted: true, messageId } : null
     }
   }
   return mutateQueued(context, caller, params.envelope, plan)
@@ -262,11 +279,17 @@ export function resumeStructuredAgentQueue(
     method: 'agentSession.queuedMessagesResume',
     fields: {},
     conversationWrite: true,
+    commandReceipt: {
+      result: (row) => journalRowReceiptResult(row, 'tombstone'),
+      unwritten: () => ({ kind: 'no-op', outcome: { kind: 'queue-resume', resumed: false } })
+    },
     // The Resume row notifies through the journal's commit listener, which publishes the
     // lifted pause and wakes the drain.
     run: async (ctx) => ({
       ok: true,
-      value: { resumed: await resumeStructuredQueue(ctx.journal, ctx.fence) }
+      value: {
+        resumed: await resumeStructuredQueue(ctx.journal, ctx.fence, ctx.operationReceipt)
+      }
     }),
     // Like Stop's replay: the Resume already ran, so this one lifts nothing.
     replay: () => ({ resumed: false })

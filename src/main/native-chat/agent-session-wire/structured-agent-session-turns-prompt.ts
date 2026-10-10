@@ -23,6 +23,8 @@ import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
 } from './structured-agent-session-adapter'
+import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
@@ -132,7 +134,9 @@ export async function performPrompt(
           identity,
           { ...prompt, resolution },
           // A revision: the prompt keeps the turn it was raised in.
-          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
+          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() },
+          // The answer's identity commits here, before the adapter tells the provider.
+          ctx.operationReceipt
         )
       }
     })
@@ -166,4 +170,50 @@ export async function performPrompt(
     ok: true,
     value: { itemId: appended.itemId, revision: appended.revision, resolution }
   }
+}
+
+/** The answer a resolved prompt row carries, the one its writer was accepted with. */
+export function promptRowAnswer(row: JournalRow | undefined): AgentSessionPromptResult {
+  const body = row?.kind === 'item' ? row.body : undefined
+  if (row?.kind !== 'item' || (body?.kind !== 'approval' && body?.kind !== 'question')) {
+    throw new Error('an accepted prompt answer requires its prompt row')
+  }
+  return { itemId: row.itemId, revision: row.revision, resolution: body.resolution }
+}
+
+/** What a receipt keeps of an accepted answer: everything its replay says, so the journal's
+ *  later revisions or a rewind never change it. */
+export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandReceiptResult {
+  const { state, selectedOptionId, answers, resolvedBy, resolvedAt } = answer.resolution
+  if (state !== 'resolved') {
+    throw new Error('an accepted prompt answer is resolved')
+  }
+  return {
+    kind: 'prompt-answer',
+    itemId: answer.itemId,
+    revision: answer.revision,
+    resolution: {
+      state,
+      selectedOptionId,
+      ...(answers
+        ? {
+            answers: answers.map(({ questionId, optionIds, other }) => ({
+              questionId,
+              optionIds,
+              ...(other === undefined ? {} : { other })
+            }))
+          }
+        : {}),
+      resolvedBy,
+      resolvedAt
+    }
+  }
+}
+
+export function acceptedPromptAnswer(
+  receipt: CommandReceiptResult | undefined
+): AgentSessionPromptResult | null {
+  return receipt?.kind === 'prompt-answer'
+    ? { itemId: receipt.itemId, revision: receipt.revision, resolution: receipt.resolution }
+    : null
 }

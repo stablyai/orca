@@ -18,7 +18,7 @@ export function commandReceiptScope(
   return operationIdScope === 'global' ? { kind: 'global' } : { kind: 'caller', callerKey }
 }
 
-/** The pointer locates the result; if its row is gone, the command stays spent: read what remains, else unknown, never rerun. */
+/** What a replay answers from: a pointer (if its row is gone the command stays spent: read what remains, else unknown, never rerun), or the outcome itself. */
 export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('journal-row'),
@@ -29,6 +29,28 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
     kind: z.literal('queued-draft'),
     messageId: z.string().min(1)
   }),
+  /** An accepted prompt answer, kept whole: no rewind or later revision changes its replay. Its
+   *  values are the resolution the prompt's row holds, bounded as that row is. */
+  z.strictObject({
+    kind: z.literal('prompt-answer'),
+    itemId: z.string().min(1),
+    revision: z.int().positive(),
+    resolution: z.strictObject({
+      state: z.literal('resolved'),
+      selectedOptionId: z.string().nullable(),
+      answers: z
+        .array(
+          z.strictObject({
+            questionId: z.string(),
+            optionIds: z.array(z.string()),
+            other: z.string().optional()
+          })
+        )
+        .optional(),
+      resolvedBy: z.string().nullable(),
+      resolvedAt: z.number().nullable()
+    })
+  }),
   z.strictObject({
     kind: z.literal('no-op'),
     outcome: z.discriminatedUnion('kind', [
@@ -37,7 +59,12 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
         cancelled: z.literal(false),
         turnId: z.string().optional()
       }),
-      z.strictObject({ kind: z.literal('queue-resume'), resumed: z.literal(false) })
+      z.strictObject({ kind: z.literal('queue-resume'), resumed: z.literal(false) }),
+      z.strictObject({
+        kind: z.literal('queue-delete'),
+        messageId: z.string().min(1),
+        disposition: z.enum(['dispatched', 'withdrawn', 'missing'])
+      })
     ])
   })
 ])
