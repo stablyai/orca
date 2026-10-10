@@ -6,7 +6,7 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import type { OpenCodeTranscriptItem } from './transcript-opencode-sqlite-query'
-import { openCodeTranscriptDefaultDeps, type OpenCodeTranscriptDeps } from './transcript-opencode'
+import { bindOpenCodeTranscriptDeps, type OpenCodeTranscriptDeps } from './transcript-opencode'
 import {
   openCodeTranscriptPageLimit,
   OPENCODE_TRANSCRIPT_MAX_WINDOW
@@ -31,23 +31,13 @@ export const pruneOpenCodeFingerprintCacheForTest = pruneOpenCodeFingerprintCach
 export function subscribeOpenCodeNativeChatTranscript(
   args: SubscribeNativeChatTranscriptArgs,
   setupSignal?: AbortSignal,
-  deps: OpenCodeTranscriptDeps = {}
+  deps: OpenCodeTranscriptDeps = {},
+  // When 'zcode': discovery probes ZCode's database, reads drop hidden rows.
+  agent?: 'zcode'
 ): NativeChatTranscriptSubscription {
   setupSignal?.throwIfAborted()
   const controller = new AbortController()
-  const resolveDbPath = () =>
-    (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
-      args.sessionId,
-      controller.signal
-    )
-  const readSignal = (dbPath: string, sessionId: string) =>
-    (deps.readSignal ?? openCodeTranscriptDefaultDeps.readSignal)(
-      dbPath,
-      sessionId,
-      controller.signal
-    )
-  const readPage = (page: Parameters<NonNullable<OpenCodeTranscriptDeps['readPage']>>[0]) =>
-    (deps.readPage ?? openCodeTranscriptDefaultDeps.readPage)(page, controller.signal)
+  const bound = bindOpenCodeTranscriptDeps(deps, controller.signal, agent)
   const pollMs = args.resolvePollIntervalMs ?? OPENCODE_POLL_MS
   const initialLimit = openCodeTranscriptPageLimit(
     args.initialLimit && args.initialLimit > 0 ? args.initialLimit : DESKTOP_READ_WINDOW
@@ -117,7 +107,7 @@ export function subscribeOpenCodeNativeChatTranscript(
       return
     }
     try {
-      dbPath ??= await resolveDbPath()
+      dbPath ??= await bound.resolveDbPath()
       if (closed) {
         return
       }
@@ -126,7 +116,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      const signal = await readSignal(dbPath, args.sessionId)
+      const signal = await bound.readSignal(dbPath, args.sessionId)
       if (closed) {
         return
       }
@@ -141,7 +131,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      const page = await readPage({
+      const page = await bound.readPage({
         dbPath,
         sessionId: args.sessionId,
         limit: firstSnapshot
@@ -193,7 +183,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         const displaced = [...fingerprints.keys()].filter((rowid) => rowid < oldest)
         if (displaced.length > 0) {
           // Verify the displaced fringe: cap eviction and a real deletion look identical in the tail.
-          const older = await readPage({
+          const older = await bound.readPage({
             dbPath,
             sessionId: args.sessionId,
             limit: displaced.length,
@@ -267,14 +257,14 @@ export function subscribeOpenCodeNativeChatTranscript(
   // overlap, so the gap retries instead of dropping rows.
   async function replaceWithBridgedWindow(
     db: string,
-    page: Awaited<ReturnType<typeof readPage>>,
+    page: Awaited<ReturnType<typeof bound.readPage>>,
     shrinking = false
   ): Promise<boolean> {
     let limit = Math.max(windowLimit, page?.items.length ?? 0)
     for (;;) {
       const replacement =
         page ??
-        (await readPage({
+        (await bound.readPage({
           dbPath: db,
           sessionId: args.sessionId,
           limit

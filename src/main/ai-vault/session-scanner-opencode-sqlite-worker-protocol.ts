@@ -50,6 +50,8 @@ export type OpenCodeNativeChatReadRequest = {
   sessionId: string
   limit?: number
   beforeMessageRowId?: number
+  /** When 'zcode', reads apply ZCode's hidden-transcript filter. */
+  agent?: 'zcode'
 }
 
 export type OpenCodeNativeChatReadValue = OpenCodeTranscriptPage | OpenCodeTranscriptSignal | null

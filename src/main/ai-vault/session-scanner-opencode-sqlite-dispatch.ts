@@ -25,7 +25,7 @@ export async function handleOpenCodeSqliteRequest(
     if (request.kind === 'native-page' || request.kind === 'native-signal') {
       const value =
         request.kind === 'native-signal'
-          ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId)
+          ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId, request.agent)
           : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
       return { id: request.id, ok: true, value }
     }

@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
@@ -13,9 +14,17 @@ import {
   listOpenCodeDatabasesInDirectory
 } from '../opencode-usage/opencode-database-discovery'
 
+// ZCode's CLI keeps its OpenCode-v1-shaped history in its own database, so a
+// zcode transcript must never be claimed by an unrelated OpenCode install (the
+// same separation the AI Vault scanner draws in session-scanner-zcode-sources).
+function zcodeTranscriptDatabasePaths(wslHomeDirs: readonly string[]): string[] {
+  return [homedir(), ...wslHomeDirs].map((home) => join(home, '.zcode', 'cli', 'db', 'db.sqlite'))
+}
+
 export async function discoverOpenCodeTranscriptDatabase(
   sessionId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  agent?: 'zcode'
 ): Promise<string | null> {
   signal?.throwIfAborted()
   const deadline = new AbortController()
@@ -47,7 +56,10 @@ export async function discoverOpenCodeTranscriptDatabase(
       try {
         if (
           await waitForPromiseWithSignal(
-            readOpenCodeTranscriptSignalViaWorker({ dbPath, sessionId }, boundedSignal),
+            readOpenCodeTranscriptSignalViaWorker(
+              { dbPath, sessionId, ...(agent ? { agent } : {}) },
+              boundedSignal
+            ),
             boundedSignal
           )
         ) {
@@ -61,6 +73,32 @@ export async function discoverOpenCodeTranscriptDatabase(
     return null
   }
   try {
+    // A zcode transcript only ever lives in a ZCode database: probe those first
+    // and never fall through to OpenCode installs that cannot hold the session.
+    if (agent === 'zcode') {
+      const homes = await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)
+      const native = await findSession(zcodeTranscriptDatabasePaths([]))
+      if (native) {
+        return native
+      }
+      const readerRoots = homes
+      if (readerRoots.length > 0) {
+        const readers = await waitForPromiseWithSignal(
+          prepareOpenCodeWslReaders(readerRoots),
+          boundedSignal
+        )
+        boundedSignal.throwIfAborted()
+        configureOpenCodeWslReaders(readers)
+      }
+      const wsl = await findSession(zcodeTranscriptDatabasePaths(homes))
+      if (wsl) {
+        return wsl
+      }
+      if (refusals[0]) {
+        throw refusals[0]
+      }
+      return null
+    }
     const primary = await waitForPromiseWithSignal(
       listOpenCodeDatabases(onRefusal, undefined, boundedSignal),
       boundedSignal
