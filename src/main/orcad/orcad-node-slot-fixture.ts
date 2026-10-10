@@ -73,10 +73,11 @@ export async function writeNodeSlotFixture(
   return { slotDir, runtime }
 }
 
-/** Hard-links the built `out/orcad` slot under `<root>/orcad-test` with its pinned runtime beside it. */
+/** Installs a built or materialized slot under `<root>/orcad-test` with its pinned runtime beside it. */
 export function installPackagedOrcadSlotForTests(
   root: string,
-  pinnedNode: string
+  pinnedNode: string,
+  sourceDir = resolve('out/orcad')
 ): { slotDir: string; runtime: string } {
   const linkOrCopy = (from: string, to: string): void => {
     try {
@@ -96,7 +97,7 @@ export function installPackagedOrcadSlotForTests(
     }
   }
   const slotDir = join(root, 'orcad-test')
-  installTree(resolve('out/orcad'), slotDir)
+  installTree(sourceDir, slotDir)
   const target = hostServerTarget()
   const runtime = resolve(
     slotDir,

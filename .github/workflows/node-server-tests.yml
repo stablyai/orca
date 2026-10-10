@@ -198,6 +198,12 @@ jobs:
         env:
           ORCA_BUN_ORCAD_SLOT: ${{ steps.bun-orcad.outputs.slot }}
           BUN_EXECUTABLE: ${{ steps.bun-orcad.outputs.executable }}
+      - name: Build the host-target desktop server template
+        if: runner.os == 'Linux'
+        run: node config/scripts/build-orcad-template.mjs --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
+      - name: Verify a structured chat from the desktop server template
+        if: runner.os == 'Linux'
+        run: pnpm test:node-server --artifact src/main/orcad/orcad-packaged-structured-chat.integration.test.ts --maxWorkers=2
       # Only a Windows runner compiles it; arm64 cross-compiles here, as release-cut does for the relay.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
       - name: Build the Windows process-table addons for the desktop template
