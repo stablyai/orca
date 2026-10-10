@@ -200,7 +200,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
-          onPaneFocus: () => () => {}
+          onPaneFocus: () => () => {},
+          onGuestKeyboardFocusRequest: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -428,7 +429,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
-          onPaneFocus: () => () => {}
+          onPaneFocus: () => () => {},
+          onGuestKeyboardFocusRequest: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -651,7 +653,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onOpenLinkInOrcaTab: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
-          onPaneFocus: () => () => {}
+          onPaneFocus: () => () => {},
+          onGuestKeyboardFocusRequest: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),

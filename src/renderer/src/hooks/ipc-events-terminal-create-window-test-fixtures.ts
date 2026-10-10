@@ -163,7 +163,8 @@ export function buildTerminalCreateWindow(args: {
         onOpenLinkInOrcaTab: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {},
-        onPaneFocus: () => () => {}
+        onPaneFocus: () => () => {},
+        onGuestKeyboardFocusRequest: () => () => {}
       },
       rateLimits: {
         get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),

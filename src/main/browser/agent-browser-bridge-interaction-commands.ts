@@ -15,6 +15,7 @@ import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
+import { requestBrowserGuestKeyboardFocus } from './browser-guest-keyboard-focus'
 
 export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeCaptureCommands {
   async hover(
@@ -167,6 +168,17 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     })
   }
 
+  // Why: a key sent to an unfocused guest lands in whatever the Orca window has focused,
+  // usually a terminal, so the agent that ran keypress types into its own PTY.
+  private async focusGuestForKeys(wc: Electron.WebContents, browserPageId: string): Promise<void> {
+    if ((await requestBrowserGuestKeyboardFocus(wc)) === 'not-on-screen') {
+      throw new BrowserError(
+        'browser_error',
+        `Browser page ${browserPageId} is not on screen, so it cannot take keyboard focus. Show it first, e.g. orca tab switch --page ${browserPageId} --focus`
+      )
+    }
+  }
+
   async keypress(
     key: string,
     worktreeId?: string,
@@ -182,6 +194,10 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           // report success — route it to the helper, creating its session only now so
           // the direct path never pays for it.
           await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+          const helperWc = this.getWebContents(target.webContentsId)
+          if (helperWc && !helperWc.isDestroyed()) {
+            await this.focusGuestForKeys(helperWc, target.browserPageId)
+          }
           return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
         }
         const wc = this.getWebContents(target.webContentsId)
@@ -199,6 +215,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           modifiers: parsed.modifiers,
           location: parsed.location
         }
+        await this.focusGuestForKeys(wc, target.browserPageId)
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release

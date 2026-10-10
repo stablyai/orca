@@ -100,6 +100,7 @@ export function buildWindowApi(args: {
       browser: {
         onGuestLoadFailed: () => () => {},
         onPaneFocus: () => () => {},
+        onGuestKeyboardFocusRequest: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {}
