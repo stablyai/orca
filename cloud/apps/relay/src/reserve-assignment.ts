@@ -71,6 +71,11 @@ export class ReserveAssignment {
     this.summaryAt = this.now()
   }
 
+  // What this director actually does; the deploy guard reads it through runtime-status.
+  get placementMode(): ReservePlacementMode {
+    return this.input.mode
+  }
+
   private now(): number {
     return (this.input.now ?? Date.now)()
   }

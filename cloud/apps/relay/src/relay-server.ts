@@ -172,9 +172,12 @@ export function createRelayServer(
     observeGrace: (event) => observability.recordReadinessGrace(event)
   })
   const ready = readiness.check
+  // Set once placement is built: a director configured `on` that could not build it (no map or
+  // no rehome credential) books nothing, so it must not keep a reserve cell's dead-man fed.
+  const placing = { on: false }
   const shadowSeatPoller = startShadowSeatPoller(config, {
     listCells: () => assignments.seatFeedCells(),
-    reserver: () => config.reservePlacement === 'on'
+    reserver: () => placing.on
   })
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
@@ -205,16 +208,22 @@ export function createRelayServer(
           random: options.random
         })
       : undefined
-  // Turning placement off while a cell is in reserve mode strands that cell's hosts on its
-  // memory: its dead-man flips it back, and this says so loudly until then.
+  placing.on = reservePlacement?.placementMode === 'on'
+  // A director that is not placing while a cell is in reserve mode strands that cell's hosts on
+  // its memory: its dead-man flips it back, and this says so loudly until then.
   const offWithReserveTimer =
-    config.role === 'director' && shadowSeatPoller && (config.reservePlacement ?? 'off') === 'off'
+    config.role === 'director' && shadowSeatPoller && !placing.on
       ? setInterval(() => {
           const { directory } = shadowSeatPoller
           const cells = directory.cellIds().filter((cellId) => directory.admitModeOf(cellId) === 'reserve')
           if (cells.length === 0) return
           console.error(
-            JSON.stringify({ event: 'orca_relay_reserve_placement_off_with_reserve_cells', cells })
+            JSON.stringify({
+              event: 'orca_relay_reserve_placement_off_with_reserve_cells',
+              cells,
+              placement: reservePlacement?.placementMode ?? 'off',
+              configured: config.reservePlacement ?? 'off'
+            })
           )
         }, 60_000)
       : null
