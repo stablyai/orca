@@ -19,6 +19,13 @@ type PowerSaveBlocker = {
   isStarted: (id: number) => boolean
 }
 
+// Windows maps app-suspension to ExecutionRequired, which doesn't hold the system on Modern Standby.
+function blockerTypeForPlatform(
+  platform: NodeJS.Platform
+): 'prevent-app-suspension' | 'prevent-display-sleep' {
+  return platform === 'win32' ? 'prevent-display-sleep' : 'prevent-app-suspension'
+}
+
 type PlatformAwakeAssertion = {
   start: (reason: string) => boolean | void
   stop: (reason: string) => void
@@ -190,7 +197,7 @@ export class AgentAwakeService {
       }
     }
     try {
-      const id = this.blocker.start('prevent-display-sleep')
+      const id = this.blocker.start(blockerTypeForPlatform(this.platform))
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {
