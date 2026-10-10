@@ -54,7 +54,9 @@ export const spacing = {
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 24
+  xl: 24,
+  chatBubbleHorizontal: 14,
+  chatBubbleVertical: 10
 } as const
 
 export const radii = {

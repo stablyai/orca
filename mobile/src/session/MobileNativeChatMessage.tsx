@@ -80,8 +80,7 @@ function Prose({
         </Text>
       )
     }
-    // Inverted (user) bubbles use a fixed dark-on-light text rather than the
-    // markdown renderer's light-on-dark palette.
+    // Preserve the user's literal prompt instead of rendering Markdown.
     if (invert) {
       return (
         <Text
@@ -185,7 +184,7 @@ function MobileNativeChatMessageImpl({
   const isReasoning = message.role === 'reasoning'
   // Separate the agent's words from its tool activity: prose renders first, the
   // tool calls fold into a collapsible run beneath. The user's own messages get
-  // an inverted (filled accent) bubble so they stand apart from agent prose.
+  // a subdued bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
   const activeCall = structuredActivityUi
     ? selectActiveToolCall(tools, { activeTurnIsWorking })
