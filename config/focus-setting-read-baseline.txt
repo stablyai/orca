@@ -1,12 +1,15 @@
-# Renderer reads of the Active Server setting (`.activeRuntimeEnvironmentId`), the
-# focus-routing helpers and defaultCreationHost(, per file.
+# Renderer reads of the Active Server setting (member, element and destructuring reads of
+# activeRuntimeEnvironmentId) plus helpers that read it for the caller, per file.
 # This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read
 # the default host, through defaultCreationHost. Everything else routes by the owner.
 # Prune after removing reads: pnpm check:owner-routing-ratchet --prune
 1 src/renderer/src/components/LinearIssueWorkspace.tsx
+2 src/renderer/src/components/activity/activity-thread-actions.ts
+1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 2 src/renderer/src/components/agent/AgentSettingsDialog.tsx
 1 src/renderer/src/components/automations/automation-host-client.ts
 2 src/renderer/src/components/automations/use-automations-page-setup-state.ts
+1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-stream-activation.ts
 1 src/renderer/src/components/cmd-j/quick-action-context.ts
 2 src/renderer/src/components/editor/EditorPanel.tsx
 1 src/renderer/src/components/editor/ExternalFileChangeBanner.tsx
@@ -57,6 +60,7 @@
 1 src/renderer/src/components/right-sidebar/use-git-status-upstream-ref-watch.ts
 1 src/renderer/src/components/right-sidebar/useFileExplorerHandlers.ts
 1 src/renderer/src/components/right-sidebar/useFileExplorerInlineInput.ts
+1 src/renderer/src/components/settings/BrowserPane.tsx
 1 src/renderer/src/components/settings/CliSkillRuntimeSetup.tsx
 1 src/renderer/src/components/settings/GeneralPane.tsx
 2 src/renderer/src/components/settings/RepositoryGitHubAccountSection.tsx
@@ -68,12 +72,20 @@
 1 src/renderer/src/components/settings/use-settings-store-model.ts
 1 src/renderer/src/components/setup-guide/setup-guide-progress-readiness.ts
 2 src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx
+1 src/renderer/src/components/sidebar/WorktreeList.tsx
 1 src/renderer/src/components/sidebar/add-repo-runtime-owner.ts
 1 src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts
+1 src/renderer/src/components/sidebar/rendered-sidebar-worktree-order.ts
 2 src/renderer/src/components/sidebar/sidebar-host-options.ts
 1 src/renderer/src/components/sidebar/sidebar-project-drop.ts
+1 src/renderer/src/components/sidebar/use-add-repo-host-selection.ts
+1 src/renderer/src/components/sidebar/use-visible-workspace-kanban-worktree-ids.ts
+1 src/renderer/src/components/sidebar/visible-worktree-options-from-state.ts
+2 src/renderer/src/components/sidebar/visible-worktrees.ts
 1 src/renderer/src/components/sidebar/worktree-card-secondary-rows.tsx
-1 src/renderer/src/components/sidebar/worktree-list/listing/use-folder-path-statuses.ts
+1 src/renderer/src/components/sidebar/worktree-filter-visibility.ts
+2 src/renderer/src/components/sidebar/worktree-list/listing/use-filters.ts
+2 src/renderer/src/components/sidebar/worktree-list/listing/use-folder-path-statuses.ts
 5 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/SshStatusSegment.tsx
 2 src/renderer/src/components/status-bar/provider-account-sync-key.ts
@@ -98,6 +110,8 @@
 2 src/renderer/src/components/terminal-pane/terminal-path-existence-batch.ts
 1 src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts
 1 src/renderer/src/components/use-task-page-github-issue-draft.ts
+1 src/renderer/src/components/use-task-page-source-availability.ts
+1 src/renderer/src/components/use-worktree-jump-palette-filter.ts
 2 src/renderer/src/components/use-worktree-jump-palette-quick-actions.ts
 3 src/renderer/src/hooks/composer-state/attachment-drop-state.ts
 1 src/renderer/src/hooks/composer-state/composer-navigation-actions.ts
@@ -109,7 +123,7 @@
 1 src/renderer/src/hooks/ipc-events/app-lifetime-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/runtime-environment-subscription-selection.ts
 1 src/renderer/src/hooks/ipc-events/settings-sidebar-ipc-bridge.ts
-1 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
+3 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
 2 src/renderer/src/hooks/useGitHubRepoMetadata.ts
 4 src/renderer/src/hooks/useGitHubSlugMetadata.ts
 1 src/renderer/src/hooks/useIssueMetadata.ts
@@ -124,6 +138,7 @@
 1 src/renderer/src/lib/codex-pane-selection-lane.ts
 1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
 1 src/renderer/src/lib/file-search-result-owner.ts
+2 src/renderer/src/lib/folder-workspace-runtime-owner.ts
 1 src/renderer/src/lib/github-pr-start-point.ts
 1 src/renderer/src/lib/github-source-runtime-context.ts
 1 src/renderer/src/lib/hosted-review-repo-read.ts
@@ -133,17 +148,19 @@
 2 src/renderer/src/lib/local-file-access.ts
 1 src/renderer/src/lib/local-preflight-context.ts
 2 src/renderer/src/lib/provider-runtime-context.ts
-1 src/renderer/src/lib/repo-runtime-owner.ts
+2 src/renderer/src/lib/repo-runtime-owner.ts
 1 src/renderer/src/lib/repo-slug-cache.ts
 1 src/renderer/src/lib/repo-slug-index.ts
 1 src/renderer/src/lib/resolve-owner.ts
 1 src/renderer/src/lib/runtime-session-mirror-owners.ts
 1 src/renderer/src/lib/single-runtime-legacy-owner.ts
 1 src/renderer/src/lib/structured-agent-session-tab-activation.ts
-2 src/renderer/src/lib/unread-badge-count-selector.ts
+2 src/renderer/src/lib/terminal-worktree-route.ts
+3 src/renderer/src/lib/unread-badge-count-selector.ts
 1 src/renderer/src/lib/workspace-file-host-routing.ts
 1 src/renderer/src/lib/worktree-creation-flow-startup.ts
 1 src/renderer/src/lib/worktree-operation-route.ts
+1 src/renderer/src/lib/worktree-runtime-owner.ts
 1 src/renderer/src/runtime/mobile-markdown-bridge.ts
 1 src/renderer/src/runtime/runtime-client-target.ts
 1 src/renderer/src/runtime/runtime-file-import-client.ts
@@ -167,7 +184,7 @@
 3 src/renderer/src/runtime/runtime-terminal-inspection.ts
 1 src/renderer/src/runtime/runtime-terminal-stream.ts
 1 src/renderer/src/runtime/runtime-terminal-verified-input.ts
-2 src/renderer/src/runtime/use-runtime-session-mirror-environment-key.ts
+3 src/renderer/src/runtime/use-runtime-session-mirror-environment-key.ts
 1 src/renderer/src/runtime/web-runtime-browser-creation.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
@@ -183,7 +200,8 @@
 1 src/renderer/src/store/github/project-actions.ts
 1 src/renderer/src/store/github/project-field-mutations.ts
 2 src/renderer/src/store/github/project-row-actions.ts
-1 src/renderer/src/store/github/repository-routing.ts
+2 src/renderer/src/store/github/repository-routing.ts
+1 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
 1 src/renderer/src/store/github/work-item-mutation-actions.ts
 6 src/renderer/src/store/project-groups/nested-repository-operations.ts
 2 src/renderer/src/store/project-groups/project-group-catalog-actions.ts
@@ -196,28 +214,33 @@
 1 src/renderer/src/store/repos/repo-removal.ts
 1 src/renderer/src/store/repos/repo-update.ts
 2 src/renderer/src/store/repos/runtime-repo-catalog-actions.ts
+1 src/renderer/src/store/slices/browser/browser-host-state.ts
 1 src/renderer/src/store/slices/diff-comment-persistence.ts
 1 src/renderer/src/store/slices/editor/actions/markdown-link-action.ts
 1 src/renderer/src/store/slices/editor/actions/markdown-preview-actions.ts
 1 src/renderer/src/store/slices/editor/actions/open-file-apply.ts
 1 src/renderer/src/store/slices/github-cache-key.ts
+1 src/renderer/src/store/slices/hosted-review-cache-identity.ts
 4 src/renderer/src/store/slices/hosted-review.ts
 1 src/renderer/src/store/slices/preflight.ts
 1 src/renderer/src/store/slices/project-group-owner-routing.ts
+1 src/renderer/src/store/slices/repo-host-identity.ts
+1 src/renderer/src/store/slices/repo-reorder-host-split.ts
 1 src/renderer/src/store/slices/runtime-status.ts
-1 src/renderer/src/store/slices/settings.ts
+3 src/renderer/src/store/slices/settings.ts
 1 src/renderer/src/store/slices/worktree-visibility-owner-settings.ts
 3 src/renderer/src/store/slices/worktree-visibility-settings-write.ts
 1 src/renderer/src/store/slices/worktrees/create/create-worktree.ts
 1 src/renderer/src/store/slices/worktrees/create/prefetch-worktree-create-base.ts
 2 src/renderer/src/store/slices/worktrees/listing/detected-worktree-provider-request.ts
 1 src/renderer/src/store/slices/worktrees/listing/detected-worktree-refresh.ts
-1 src/renderer/src/store/slices/worktrees/listing/fetch-worktrees.ts
+2 src/renderer/src/store/slices/worktrees/listing/fetch-worktrees.ts
+1 src/renderer/src/store/slices/worktrees/listing/worktree-host-ownership.ts
 1 src/renderer/src/store/slices/worktrees/listing/worktree-owner-settings.ts
 2 src/renderer/src/store/slices/worktrees/metadata/hosted-review-push-target.ts
 1 src/renderer/src/store/slices/worktrees/metadata/update-worktree-meta.ts
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-actions.ts
-3 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-refresh.ts
+5 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-refresh.ts
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-meta-persist.ts
 1 src/renderer/src/store/slices/worktrees/teardown/force-delete-preserved-branch.ts
 1 src/renderer/src/store/slices/worktrees/teardown/missing-worktree-terminal-teardown.ts

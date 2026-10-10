@@ -47,18 +47,40 @@ describe('countFocusSettingReads', () => {
       "import { defaultCreationHost } from './default-creation-host'",
       'const a = settings?.activeRuntimeEnvironmentId',
       'const b = state.settings.activeRuntimeEnvironmentId',
-      'const c = getActiveRuntimeTarget(settings)',
-      'const d = defaultCreationHost(settings)',
+      "const c = settings['activeRuntimeEnvironmentId']",
+      'const d = getActiveRuntimeTarget(settings)',
+      'const e = defaultCreationHost(settings)',
       'export function defaultCreationHost(settings) {}'
     ].join('\n')
-    expect(countFocusSettingReads(src)).toBe(4)
+    expect(countFocusSettingReads(src)).toBe(5)
   })
 
-  it('does not count writes, keys or type positions', () => {
+  it('counts a shared focus helper, so wrapping one in an owner transport lowers nothing', () => {
+    expect(
+      countFocusSettingReads(
+        'const t = runtimeTargetForOwnerHostId(getSettingsFocusedExecutionHostId(s))'
+      )
+    ).toBe(1)
+    expect(countFocusSettingReads('const id = getSingleFocusedRuntimeEnvironmentId(state)')).toBe(1)
+  })
+
+  it('counts destructuring reads', () => {
+    expect(countFocusSettingReads('const { activeRuntimeEnvironmentId } = s')).toBe(1)
+    expect(
+      countFocusSettingReads(
+        "const { theme, activeRuntimeEnvironmentId: id }: Pick<GlobalSettings, 'theme'> = s"
+      )
+    ).toBe(1)
+  })
+
+  it('does not count writes, keys, props or type positions', () => {
     const src = [
       'const owner = { activeRuntimeEnvironmentId: id }',
+      'settings = { ...settings, activeRuntimeEnvironmentId: null }',
       "type T = GlobalSettings['activeRuntimeEnvironmentId']",
-      'updateSettings({ activeRuntimeEnvironmentId: null })'
+      'updateSettings({ activeRuntimeEnvironmentId: null })',
+      'const f = ({ activeRuntimeEnvironmentId }) => activeRuntimeEnvironmentId',
+      'if (a === b) { x = { activeRuntimeEnvironmentId } }'
     ].join('\n')
     expect(countFocusSettingReads(src)).toBe(0)
   })
@@ -73,6 +95,9 @@ describe('hasFocusRoutingAlias', () => {
       hasFocusRoutingAlias("export {\n  settingsForRuntimeOwner as owner\n} from './target'")
     ).toBe(true)
     expect(hasFocusRoutingAlias("import { defaultCreationHost as host } from './d'")).toBe(true)
+    expect(
+      hasFocusRoutingAlias("import { getSettingsFocusedExecutionHostId as h } from './e'")
+    ).toBe(true)
     expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget } from './rpc'")).toBe(false)
   })
 })

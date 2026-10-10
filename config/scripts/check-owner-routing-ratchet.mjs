@@ -8,8 +8,9 @@ import { pathToFileURL } from 'node:url'
 // instead of by the resource's own host. Per-file counts may only go down.
 // - Owner routing: the three focus-routing helpers, counted together so renaming one into another
 //   never lowers the count.
-// - Focus reads: every read of the setting, including the helpers and `defaultCreationHost`, so
-//   swapping a helper for a direct read or for the creation default never lowers it either.
+// - Focus reads: every read of the setting, including helpers that read it for the caller
+//   (`defaultCreationHost`, `getSettingsFocusedExecutionHostId`, …), so swapping one form for
+//   another never lowers it either.
 
 const SCAN_ROOT = 'src/renderer/src'
 const HELPER_NAMES = 'getActiveRuntimeTarget|legacyRouteFromSettings|settingsForRuntimeOwner'
@@ -17,22 +18,42 @@ const HELPERS = `(?:${HELPER_NAMES})`
 const IMPORT_EXPORT_LIST = /\b(?:import|export)\s+(?:type\s+)?\{[^}]*\}/g
 // Calls and value uses (`.map(helper)`); definitions and type queries are not routing.
 const FOCUS_ROUTING_USE = new RegExp(`(?<!(?:function|typeof)\\s+)\\b${HELPERS}\\b`, 'g')
-const FOCUS_ROUTING_ALIAS = new RegExp(`\\b(?:${HELPER_NAMES}|defaultCreationHost)\\s+as\\b`)
-const FOCUS_SETTING_READ = /\??\.activeRuntimeEnvironmentId\b/g
-const DEFAULT_CREATION_HOST_USE = /(?<!(?:function|typeof)\s+)\bdefaultCreationHost\b/g
+// Helpers that read the setting on the caller's behalf, counted as reads by the focus ratchet.
+const FOCUS_READER_NAMES = new Set([
+  ...HELPER_NAMES.split('|'),
+  'defaultCreationHost',
+  'getSettingsFocusedExecutionHostId',
+  'getSingleFocusedRuntimeEnvironmentId'
+])
+const FOCUS_ROUTING_ALIAS = new RegExp(`\\b(?:${[...FOCUS_READER_NAMES].join('|')})\\s+as\\b`)
 
 /** Imports and re-exports are not uses; an aliased one is reported by {@link hasFocusRoutingAlias}. */
 export function countFocusRoutingCalls(sourceText) {
   return sourceText.replace(IMPORT_EXPORT_LIST, '').match(FOCUS_ROUTING_USE)?.length ?? 0
 }
 
-/** Member reads of the setting plus every helper that reads it on the caller's behalf. */
+const FOCUS_READER_USE = new RegExp(
+  `(?<!(?:function|typeof)\\s+)\\b(?:${[...FOCUS_READER_NAMES].join('|')})\\b`,
+  'g'
+)
+// Element reads after a PascalCase name or `>` are indexed types (`GlobalSettings['…']`), not reads.
+const SETTING_MEMBER_READ =
+  /\??\.\s*activeRuntimeEnvironmentId\b|(?<!(?:\b[A-Z][\w$]*|>)\s*)\[\s*['"]activeRuntimeEnvironmentId['"]\s*\]/g
+// `const { activeRuntimeEnvironmentId } = s` or `{ activeRuntimeEnvironmentId: id }: T = s`;
+// object literals and `({ … }) =>` parameters are not reads of the setting.
+const SETTING_DESTRUCTURE_READ =
+  /\{[^{}]*\bactiveRuntimeEnvironmentId\b[^{}]*\}\s*(?::[^=;{}]*)?=(?![=>])/g
+
+/**
+ * Reads of the setting (member, element and destructuring reads) plus every helper that reads it
+ * on the caller's behalf. Object-literal keys are writes and are not counted.
+ */
 export function countFocusSettingReads(sourceText) {
   const body = sourceText.replace(IMPORT_EXPORT_LIST, '')
   return (
-    (body.match(FOCUS_SETTING_READ)?.length ?? 0) +
-    (body.match(DEFAULT_CREATION_HOST_USE)?.length ?? 0) +
-    countFocusRoutingCalls(sourceText)
+    (body.match(SETTING_MEMBER_READ)?.length ?? 0) +
+    (body.match(SETTING_DESTRUCTURE_READ)?.length ?? 0) +
+    (body.match(FOCUS_READER_USE)?.length ?? 0)
   )
 }
 
@@ -60,8 +81,8 @@ export const RATCHETS = [
     baselinePath: 'config/focus-setting-read-baseline.txt',
     count: countFocusSettingReads,
     header: [
-      '# Renderer reads of the Active Server setting (`.activeRuntimeEnvironmentId`), the',
-      '# focus-routing helpers and defaultCreationHost(, per file.',
+      '# Renderer reads of the Active Server setting (member, element and destructuring reads of',
+      '# activeRuntimeEnvironmentId) plus helpers that read it for the caller, per file.',
       '# This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read',
       '# the default host, through defaultCreationHost. Everything else routes by the owner.',
       '# Prune after removing reads: pnpm check:owner-routing-ratchet --prune'
