@@ -21,6 +21,7 @@ import {
 } from '../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import { resolvePersistedFilterAgentIds } from '../../../shared/workspace-agent-filter'
 
 /** Normalizes legacy UI payloads and marks one-time migrations for saving without replacing explicit user choices. */
 export function normalizeLoadedUiState(
@@ -196,13 +197,23 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+  const rawUi = stripMainOwnedTelemetryMarkerFromUI(parsed.ui)
+  // Why: leftovers must not survive the defaults spread; defaults.ui already
+  // has filterAgentIds: null, so resolve from the raw payload first.
+  delete rawUi.filterAgentId
+  delete rawUi.filterHarnessId
+  const filterAgentIds = resolvePersistedFilterAgentIds(parsed.ui ?? {})
+  if (parsed.ui?.filterAgentId !== undefined || parsed.ui?.filterHarnessId !== undefined) {
+    markNeedsSave()
+  }
   return {
     ...defaults.ui,
     // Why: missing card properties follow the persisted layout mode; explicit choices are preserved below.
     worktreeCardProperties: getWorktreeCardModeProperties(
       loadedCompactWorktreeCards ? 'Compact' : 'Default'
     ),
-    ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
+    ...rawUi,
+    filterAgentIds,
     // Why: migrate once from the retired Appearance setting only when no explicit chrome preference exists yet.
     rightSidebarOpen,
     rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),

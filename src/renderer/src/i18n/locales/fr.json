@@ -5600,14 +5600,27 @@
           "3e102f111c": "Tous les hôtes",
           "visibleHostsCount": "{{value0}} hôtes"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "Tous les agents",
+          "visibleAgentsCount": "{{value0}} agents"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "Agent"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "{{value0}} visible(s)",
+          "backToAll": "Tous les agents"
+        },
         "SidebarHostScopeStrip": {
           "scopedTo": "{{value0}} visible(s)",
           "backToAll": "Tous les hôtes"
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hôtes",
+          "agents": "Agent",
           "showSection": "Afficher",
           "allHostsDetail": "Afficher tous les hôtes",
+          "allAgentsDetail": "Afficher tous les agents",
           "configuredSshHost": "SSH configuré",
           "projectSshHost": "SSH du projet",
           "activeRuntimeHost": "Serveur actif",
@@ -6259,7 +6272,8 @@
           "b6c7d8e9f0": "La synchronisation du statut des tâches n'a pas pu aboutir.",
           "c7d8e9f0a1": "{{value0}} mis à jour",
           "d8e9f0a1b2": "{{value0}} ignoré",
-          "e9f0a1b2c3": "{{value0}} a échoué"
+          "e9f0a1b2c3": "{{value0}} a échoué",
+          "noWorkspacesMatchFilters": "Aucun espace de travail ne correspond aux filtres actuels"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Échec de la définition du worktree parent",

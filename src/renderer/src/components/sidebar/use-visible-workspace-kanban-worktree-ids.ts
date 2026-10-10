@@ -13,6 +13,7 @@ import {
 } from './workspace-creator-visibility'
 import { getStructuredChatWorktreeIds } from './visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { collectAgentTypesByWorktree } from './workspace-agent-filter-evidence'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -47,7 +48,46 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
+  const filterAgentIds = useAppStore((s) => s.filterAgentIds)
+  const needsAgentFilterMaps = filterAgentIds != null
+  const tabsByWorktree = useAppStore((s) =>
+    !showSleepingWorkspaces || needsAgentFilterMaps ? s.tabsByWorktree : null
+  )
+  const agentStatusByPaneKey = useAppStore((s) =>
+    needsAgentFilterMaps ? s.agentStatusByPaneKey : null
+  )
+  const retainedAgentsByPaneKey = useAppStore((s) =>
+    needsAgentFilterMaps ? s.retainedAgentsByPaneKey : null
+  )
+  const sleepingAgentSessionsByPaneKey = useAppStore((s) =>
+    needsAgentFilterMaps ? s.sleepingAgentSessionsByPaneKey : null
+  )
+  const agentTypesByWorktree = useMemo(
+    () =>
+      needsAgentFilterMaps
+        ? collectAgentTypesByWorktree({
+            agentStatusByPaneKey,
+            retainedAgentsByPaneKey,
+            sleepingAgentSessionsByPaneKey,
+            tabsByWorktree,
+            worktrees: allWorktrees
+          })
+        : null,
+    [
+      agentStatusByPaneKey,
+      allWorktrees,
+      needsAgentFilterMaps,
+      retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey,
+      tabsByWorktree
+    ]
+  )
+  const runtimePaneTitlesByTabId = useAppStore((s) =>
+    needsAgentFilterMaps ? s.runtimePaneTitlesByTabId : null
+  )
+  const terminalLayoutsByTabId = useAppStore((s) =>
+    needsAgentFilterMaps ? s.terminalLayoutsByTabId : null
+  )
   const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
@@ -96,6 +136,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
           ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
           : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
         alwaysShowDefaultBranchWorkspace,
+        filterAgentIds,
+        agentTypesByWorktree,
+        runtimePaneTitlesByTabId,
+        terminalLayoutsByTabId,
         repoMap,
         workspaceHostScope,
         visibleWorkspaceHostIds,
@@ -116,6 +160,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
+    filterAgentIds,
+    agentTypesByWorktree,
+    runtimePaneTitlesByTabId,
+    terminalLayoutsByTabId,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,

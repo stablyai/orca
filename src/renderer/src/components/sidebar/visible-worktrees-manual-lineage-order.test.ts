@@ -30,6 +30,7 @@ function scenario(hostId: ExecutionHostId) {
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     pairedDeviceIdsByEnvironment: new Map(),
+    filterAgentIds: null,
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: 'local',

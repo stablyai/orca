@@ -23,6 +23,13 @@ import {
 } from '../../workspace-creator-visibility'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getAllWorktreesFromState } from '@/store/selectors'
+import { worktreePassesSidebarFilters } from '../../worktree-filter-visibility'
+import {
+  collectAgentTypesByWorktree,
+  collidingWorktreeIds,
+  resolveRevealFilterAgentIds
+} from '../../workspace-agent-filter-evidence'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
@@ -41,6 +48,7 @@ export function useSidebarWorktreeFilters() {
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
+  const filterAgentIds = useAppStore((s) => s.filterAgentIds)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 
@@ -56,6 +64,7 @@ export function useSidebarWorktreeFilters() {
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const setFilterAgentIds = useAppStore((s) => s.setFilterAgentIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
   const revealWorkspaceFilters = useCallback((worktree: Worktree) => {
@@ -141,6 +150,38 @@ export function useSidebarWorktreeFilters() {
         state.setShowSleepingWorkspaces(true)
       }
     }
+    if (state.filterAgentIds) {
+      const worktrees = getAllWorktreesFromState(state)
+      const lookup = {
+        tabsByWorktree: state.tabsByWorktree,
+        agentTypesByWorktree: collectAgentTypesByWorktree({
+          agentStatusByPaneKey: state.agentStatusByPaneKey,
+          retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+          sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+          tabsByWorktree: state.tabsByWorktree,
+          worktrees
+        }),
+        runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+        collidingWorktreeIds: collidingWorktreeIds(worktrees)
+      }
+      // Why: listing visibility, not a parallel match, decides whether Agent still hides it.
+      const next = resolveRevealFilterAgentIds(
+        state.filterAgentIds,
+        worktree,
+        lookup,
+        !worktreePassesSidebarFilters(worktree.id, targetHostId)
+      )
+      if (next !== state.filterAgentIds) {
+        state.setFilterAgentIds(next)
+      }
+      if (
+        useAppStore.getState().filterAgentIds &&
+        !worktreePassesSidebarFilters(worktree.id, targetHostId)
+      ) {
+        useAppStore.getState().setFilterAgentIds(null)
+      }
+    }
   }, [])
 
   // Why: count hideDefaultBranchWorkspace as a filter so the Clear Filters escape hatch stays reachable when it alone empties the list.
@@ -154,6 +195,7 @@ export function useSidebarWorktreeFilters() {
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
+      filterAgentIds,
       visibleWorkspaceHostIds,
       workspaceHostScope
     }),
@@ -166,6 +208,7 @@ export function useSidebarWorktreeFilters() {
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
+      filterAgentIds,
       visibleWorkspaceHostIds,
       workspaceHostScope
     ]
@@ -197,6 +240,9 @@ export function useSidebarWorktreeFilters() {
     if (actions.resetAlwaysShowDefaultBranchWorkspace) {
       setAlwaysShowDefaultBranchWorkspace(true)
     }
+    if (actions.resetFilterAgentIds) {
+      setFilterAgentIds(null)
+    }
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }
@@ -209,6 +255,7 @@ export function useSidebarWorktreeFilters() {
     setHideDetachedHeadWorkspaces,
     setHideWorkspacesFromOtherDevices,
     setAlwaysShowDefaultBranchWorkspace,
+    setFilterAgentIds,
     setVisibleWorkspaceHostIds,
     filterState
   ])

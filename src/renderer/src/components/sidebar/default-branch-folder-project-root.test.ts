@@ -73,6 +73,7 @@ function visibleWithHideDefault(
       hideDetachedHeadWorkspaces: false,
       hideWorkspacesFromOtherDevices: false,
       pairedDeviceIdsByEnvironment: new Map(),
+      filterAgentIds: null,
       repoMap: new Map(repos.map((repo) => [repo.id, repo])),
       workspaceHostScope: 'all',
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
