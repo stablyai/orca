@@ -337,4 +337,119 @@ describe('LinuxLidSleepAssertion', () => {
     expect(logger.warn).toHaveBeenCalledTimes(2)
     expect(logger.debug).toHaveBeenCalledTimes(1)
   })
+
+  describe('when systemd-inhibit starts but exits immediately (no usable logind)', () => {
+    function createRetryingAssertion() {
+      const logger = createLogger()
+      const children: FakeSystemdInhibitProcess[] = []
+      const spawnTimes: number[] = []
+      const spawn = vi.fn(() => {
+        const child = new FakeSystemdInhibitProcess()
+        children.push(child)
+        spawnTimes.push(Date.now())
+        return child
+      })
+      const assertion: LinuxLidSleepAssertion = new LinuxLidSleepAssertion({
+        logger,
+        now: () => Date.now(),
+        // Mirrors AgentAwakeService: every failure or retry tick re-runs start().
+        onUnexpectedFailure: (reason) => assertion.start(reason),
+        platform: 'linux',
+        spawn
+      })
+      const failLatestChild = (): void => {
+        const child = children.at(-1)
+        child?.emit('exit', 1, null)
+        child?.emit('close', 1, null)
+      }
+      const spawnGaps = (): number[] =>
+        spawnTimes.slice(1).map((time, index) => time - spawnTimes[index])
+      return { assertion, failLatestChild, logger, spawn, spawnGaps }
+    }
+
+    it('warns once instead of on every retry', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawn } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 10; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+
+        expect(spawn).toHaveBeenCalledTimes(11)
+        expect(logger.warn).toHaveBeenCalledTimes(1)
+        expect(logger.debug).toHaveBeenCalledTimes(9)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('backs off exponentially up to a cap instead of retrying every 30 s', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, spawnGaps } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 8; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+
+        expect(spawnGaps()).toEqual([
+          30_000, 60_000, 120_000, 240_000, 480_000, 960_000, 1_800_000, 1_800_000
+        ])
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('starts over at the base delay after an intentional stop', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawnGaps } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 4; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+        assertion.stop('status-change')
+        assertion.start('status-change')
+        failLatestChild()
+        vi.advanceTimersToNextTimer()
+
+        expect(spawnGaps().at(-1)).toBe(LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        expect(logger.warn).toHaveBeenCalledTimes(2)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('treats an inhibitor that held for a full retry interval as recovered', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawnGaps } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 4; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+        vi.advanceTimersByTime(LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        failLatestChild()
+        vi.advanceTimersToNextTimer()
+
+        expect(spawnGaps().at(-1)).toBe(2 * LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        expect(logger.warn).toHaveBeenCalledTimes(2)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })
