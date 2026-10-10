@@ -208,6 +208,7 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       if (session) {
         session.activeCapture = true
       }
+      this.attachPopupCapturesForSession(sessionName)
       return result
     })
   }
@@ -226,6 +227,7 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       if (session) {
         session.activeCapture = false
       }
+      this.stopPopupCapturesForSession(sessionName)
       return result
     })
   }
@@ -246,10 +248,11 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
     browserPageId?: string
   ): Promise<BrowserNetworkLogResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
+      const result = (await this.execAgentBrowser(sessionName, [
         'network',
         'requests'
       ])) as BrowserNetworkLogResult
+      return this.mergePopupNetworkEntries(sessionName, result)
     })
   }
 

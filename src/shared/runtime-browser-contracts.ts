@@ -172,7 +172,21 @@ export type BrowserNetworkEntry = {
   timestamp: number
 }
 
-export type BrowserNetworkLogResult = { entries: BrowserNetworkEntry[]; truncated: boolean }
+// Why: agent-browser 0.27 `network requests` returns {requests:[...]}, not the
+// {entries,truncated} shape Orca assumed. This is that actual wire shape:
+// epoch-ms timestamps, optional fields for in-flight requests.
+export type BrowserNetworkRequestItem = {
+  requestId?: string
+  url: string
+  method: string
+  headers?: Record<string, string>
+  timestamp: number
+  resourceType?: string
+  status?: number
+  mimeType?: string
+}
+
+export type BrowserNetworkLogResult = { requests: BrowserNetworkRequestItem[] }
 export type BrowserCaptureStartResult = { capturing: boolean }
 export type BrowserCaptureStopResult = { stopped: boolean }
 export type BrowserTabCreateResult = { browserPageId: string }

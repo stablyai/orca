@@ -250,4 +250,70 @@ describe('browserManager popup child policies', () => {
     expect(childOffMock).toHaveBeenCalledWith('will-navigate', expect.any(Function))
     expect(childOffMock).toHaveBeenCalledWith('will-redirect', expect.any(Function))
   })
+
+  it('notifies popup capture observers on popup open and retire', () => {
+    const rendererSendMock = vi.fn()
+    const childOnMock = vi.fn()
+    const childGuest = {
+      id: 4140,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: childOnMock,
+      off: vi.fn(),
+      openDevTools: vi.fn()
+    }
+    const guest = {
+      id: 414,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-9',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    const observer = { onPopupOpened: vi.fn(), onPopupClosed: vi.fn() }
+    browserManager.setPopupCaptureObserver(observer)
+    try {
+      const didCreateWindowHandler = guestOnMock.mock.calls.find(
+        ([event]) => event === 'did-create-window'
+      )?.[1] as ((window: { webContents: typeof childGuest }) => void) | undefined
+      didCreateWindowHandler?.({ webContents: childGuest })
+      expect(observer.onPopupOpened).toHaveBeenCalledWith('browser-9', childGuest)
+
+      // Retiring the popup itself releases its capture.
+      const childDestroyedHandler = childOnMock.mock.calls.find(
+        ([event]) => event === 'destroyed'
+      )?.[1] as (() => void) | undefined
+      childDestroyedHandler?.()
+      expect(observer.onPopupClosed).toHaveBeenCalledWith(childGuest.id)
+
+      // Retiring the owner releases still-open owned popups with it.
+      const secondChildGuest = { ...childGuest, id: 4141, on: vi.fn() }
+      didCreateWindowHandler?.({ webContents: secondChildGuest })
+      expect(observer.onPopupOpened).toHaveBeenCalledWith('browser-9', secondChildGuest)
+      browserManager.unregisterGuest('browser-9')
+      expect(observer.onPopupClosed).toHaveBeenCalledWith(secondChildGuest.id)
+    } finally {
+      browserManager.setPopupCaptureObserver(null)
+    }
+  })
 })

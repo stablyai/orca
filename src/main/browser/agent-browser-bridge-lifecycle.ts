@@ -1,11 +1,11 @@
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
-import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'
+import { AgentBrowserBridgePopupCapture } from './agent-browser-bridge-popup-capture'
 import type { AgentBrowserCleanupOptions } from './agent-browser-bridge-types'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 
-export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
+export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgePopupCapture {
   async onTabClosed(webContentsId: number): Promise<void> {
     const browserPageId = this.resolveTabIdSafe(webContentsId)
     const owningWorktreeId = browserPageId
@@ -41,6 +41,9 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     await this.destroySession(sessionName)
     this.pendingInterceptRestore.delete(sessionName)
+    // Why: opener retirement is the end of its popups' readable entries — the
+    // manager's per-popup close notices already detached them.
+    this.releasePopupCapturesForSession(sessionName)
   }
 
   async onProcessSwap(
@@ -150,6 +153,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         // Creation failures are handled by the original caller; teardown still rejects queued work below.
       }
     }
+
+    // Why: a destroyed session stops popup recording, but a still-open popup
+    // stays registered — the manager's close notice owns registration lifetime,
+    // so a transient daemon reset cannot silently drop a live popup.
+    this.detachPopupCapturesForSession(sessionName)
 
     const session = this.sessions.get(sessionName)
     if (!session) {
