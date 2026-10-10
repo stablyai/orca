@@ -92,7 +92,10 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   }
 })
 
-import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
+import { countWorkItems } from './client/list/count-work-items'
+import { getWorkItem } from './client/fetch/get-work-item'
+import { listWorkItems } from './client/list/list-work-items'
+import { _resetOwnerRepoCache } from './gh-utils'
 
 const PR_LIST_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'

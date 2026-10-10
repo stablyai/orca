@@ -54,6 +54,13 @@ export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
   return `ssh:${encodeURIComponent(targetId)}`
 }
 
+/** Legacy `connectionId` spelling: absent means this machine, present means that SSH target. */
+export function getConnectionExecutionHostId(
+  connectionId: string | null | undefined
+): ExecutionHostId {
+  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+}
+
 export function toRuntimeExecutionHostId(environmentId: string): `runtime:${string}` {
   return `runtime:${encodeURIComponent(environmentId)}`
 }
@@ -165,8 +172,7 @@ export function getRepoExecutionHostId(repo: {
   if (executionHostId) {
     return executionHostId
   }
-  const connectionId = normalizeHostPart(repo.connectionId)
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  return getConnectionExecutionHostId(normalizeHostPart(repo.connectionId))
 }
 
 export function getSshTargetIdForExecutionHost(

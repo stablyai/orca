@@ -1,7 +1,7 @@
 import type * as Monaco from 'monaco-editor'
 import { INITIAL, Registry } from 'vscode-textmate'
 import type { IGrammar, IOnigLib, IRawGrammar, StateStack } from 'vscode-textmate'
-import onigurumaWasmUrl from 'vscode-oniguruma/release/onig.wasm?url'
+import { loadOniguruma } from '../syntax-highlighting/oniguruma'
 
 type TextMateTokensProvider = Monaco.languages.TokensProvider
 
@@ -13,24 +13,12 @@ export type TextMateTokensProviderOptions = {
   loadOniguruma?: () => Promise<IOnigLib>
 }
 
-let browserOnigurumaPromise: Promise<IOnigLib> | undefined
-
 async function loadBrowserOniguruma(): Promise<IOnigLib> {
-  browserOnigurumaPromise ??= (async () => {
-    const oniguruma = await import('vscode-oniguruma')
-    const response = await fetch(onigurumaWasmUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to load TextMate regex engine from ${onigurumaWasmUrl}`)
-    }
-
-    await oniguruma.loadWASM(response)
-    return {
-      createOnigScanner: oniguruma.createOnigScanner,
-      createOnigString: oniguruma.createOnigString
-    }
-  })()
-
-  return browserOnigurumaPromise
+  const oniguruma = await loadOniguruma()
+  return {
+    createOnigScanner: oniguruma.createOnigScanner,
+    createOnigString: oniguruma.createOnigString
+  }
 }
 
 class TextMateTokenizerState implements Monaco.languages.IState {

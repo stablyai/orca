@@ -53,7 +53,8 @@ export type ProviderTimelineAssembler = {
   /** The host already wrote this command's running turn; the provider ends that same row. */
   beginCommand(command: StructuredAgentSessionCommandRun): void
   forgetCommand(turnId: string): void
-  apply(event: ProviderTimelineEvent): ProviderTimelineApplyResult
+  /** Observes this event's own transition, never a preliminary settlement or dropped event. */
+  apply(event: ProviderTimelineEvent, onPublished?: () => void): ProviderTimelineApplyResult
   /** The turn id of the open turn, as its row and a client's Stop name it. */
   readonly openTurnId: string | null
   /** Writes the text the coalescing window holds. */
@@ -116,7 +117,8 @@ export function createProviderTimelineAssembler(
 
   const applyDecided = (
     event: ProviderTimelineDecidedEvent,
-    journal: ProviderTimelineTextHost['journal']
+    journal: ProviderTimelineTextHost['journal'],
+    onPublished?: () => void
   ): ProviderTimelineApplyResult => {
     const serials = state.serials()
     const decision = decideProviderTimelineEvent(
@@ -144,7 +146,7 @@ export function createProviderTimelineAssembler(
     ) {
       plan.onAdmitted(() => deps.sink.setActivity?.(null))
     }
-    return { admission: plan.submit(deps.sink) }
+    return { admission: plan.submit(deps.sink, onPublished) }
   }
 
   /** The open turn another writer settled (a person's Stop) ends here first, as one transition
@@ -160,7 +162,10 @@ export function createProviderTimelineAssembler(
     return applyDecided({ type: 'turn.settled', turn: open }, journal)
   }
 
-  const apply = (event: ProviderTimelineEvent): ProviderTimelineApplyResult => {
+  const apply = (
+    event: ProviderTimelineEvent,
+    onPublished?: () => void
+  ): ProviderTimelineApplyResult => {
     const journal = deps.sink.journalItems()
     const settled = journal ? endSettledTurn(journal) : null
     if (settled && !settled.admission.accepted) {
@@ -192,7 +197,7 @@ export function createProviderTimelineAssembler(
       case 'context.usage':
       case 'provider.frame':
       case 'session.ended':
-        return applyDecided(event, journal)
+        return applyDecided(event, journal, onPublished)
     }
   }
 

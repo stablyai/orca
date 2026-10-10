@@ -69,7 +69,9 @@ const fileNode: TreeNode = {
 }
 
 function renderRevealItem(
-  owner: Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId'> = {}
+  owner: Partial<
+    Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId' | 'node'>
+  > = {}
 ): ItemProps | undefined {
   renderToStaticMarkup(
     <FileExplorerRowContextMenu
@@ -104,7 +106,7 @@ function showsLocalOnlyHint(item: ItemProps | undefined): boolean {
   return renderToStaticMarkup(<>{item?.children}</>).includes('Local only')
 }
 
-describe('FileExplorerRowContextMenu reveal in file manager', () => {
+describe('FileExplorerRowContextMenu host capabilities', () => {
   beforeEach(() => {
     items.list = []
     storeState.activeWorktreeId = 'wt-1'
@@ -112,6 +114,22 @@ describe('FileExplorerRowContextMenu reveal in file manager', () => {
     storeState.settings.activeRuntimeEnvironmentId = null
     revealInFileManager.mockReset()
   })
+
+  it.each(['runtime:remote', 'ssh:nested'] as const)(
+    'keeps runtime-owned file Copy out of a %s row while retaining path copy',
+    (executionHostId) => {
+      renderRevealItem({
+        node: {
+          ...fileNode,
+          operationOwner: { kind: 'runtime', environmentId: 'remote', executionHostId }
+        }
+      })
+      const labels = items.list.flatMap((item) => React.Children.toArray(item.children))
+      expect(labels).not.toContain('Copy')
+      expect(labels).toContain('Copy Path')
+      expect(labels).toContain('Copy Relative Path')
+    }
+  )
 
   it('reveals a local row through the shared reveal action', () => {
     const reveal = renderRevealItem()

@@ -1,6 +1,5 @@
 // The queue's pause is a pure function of the journal: a Stop and a Resume are rows, an accepted
-// turn is a row, and a /clear's carried card names its source. Nothing is stored beside
-// them, so nothing has to retire.
+// turn is a row, and /clear records the exact waiting cards. No separate pause state is stored.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,7 +16,7 @@ import {
   liveTestJournalRows,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
-import { QueuedMessageNotConsumableError } from './journal-queued-messages'
+import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { parseJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
@@ -57,14 +56,21 @@ function open(): Promise<AgentSessionJournal> {
   })
 }
 
-function queueDraft(journal: AgentSessionJournal, messageId: string, carriedFrom?: string) {
+function queueDraft(journal: AgentSessionJournal, messageId: string) {
   return journal.queuedMessages.insert({
     messageId,
     body: message(messageId),
     fingerprint: `fp-${messageId}`,
-    hostInstance: HOST,
-    ...(carriedFrom ? { carriedFrom } : {})
+    hostInstance: HOST
   })
+}
+
+function clearContext(journal: AgentSessionJournal) {
+  return journal.context.clear(
+    { operationId: `clear-${++clock}`, afterFence: 0, clearedAt: clock },
+    { write: () => {}, committed: () => {} },
+    `caller-clear-${clock}`
+  )
 }
 
 /** A turn sent, then accepted by the provider. */
@@ -202,9 +208,10 @@ describe("the queue's pause, derived from the journal", () => {
     expect(pauseTables()).toBe(0)
   })
 
-  it("a card /clear carried in pauses the replacement 'cleared' until a Resume there", async () => {
+  it('a card kept by /clear stays paused until Resume in the same journal', async () => {
     let journal = await open()
-    await queueDraft(journal, 'carried', 'source-session')
+    await queueDraft(journal, 'carried')
+    await clearContext(journal)
     expect(reason(journal)).toBe('cleared')
     await journal.close()
     journal = await open()
@@ -214,9 +221,10 @@ describe("the queue's pause, derived from the journal", () => {
     expect(pauseTables()).toBe(0)
   })
 
-  it("any accepted turn on the replacement lifts 'cleared', a launch prompt Orca sent included", async () => {
+  it('any accepted turn after /clear lifts its pause, a launch prompt Orca sent included', async () => {
     const journal = await open()
-    await queueDraft(journal, 'carried', 'source-session')
+    await queueDraft(journal, 'carried')
+    await clearContext(journal)
     await turn(journal, 'launch', false)
     expect(reason(journal)).toBe('cleared')
     await acceptTurn(journal, 'launch')
@@ -376,7 +384,8 @@ describe("the queue's pause, derived from the journal", () => {
     ['a Resume', (journal: AgentSessionJournal) => journal.appendQueueResume(0)]
   ])('a /clear pause %s already lifted stays lifted across a rewind', async (_name, lift) => {
     const journal = await open()
-    await queueDraft(journal, 'carried', 'source-session')
+    await queueDraft(journal, 'carried')
+    await clearContext(journal)
     await lift(journal)
     expect(reason(journal)).toBeNull()
     await journal.replaceEpochItems('handle_forked', 0, [])
@@ -385,7 +394,8 @@ describe("the queue's pause, derived from the journal", () => {
 
   it('a lifted /clear pause and a later Stop are both restated, the Stop still in force', async () => {
     const journal = await open()
-    await queueDraft(journal, 'carried', 'source-session')
+    await queueDraft(journal, 'carried')
+    await clearContext(journal)
     await turn(journal, 'typed')
     await userStop(journal)
     await journal.replaceEpochItems('handle_forked', 0, [])
@@ -466,10 +476,11 @@ describe('which cards a pause holds', () => {
     expect(journal.queuedMessages.get('newer')?.state).toBe('waiting')
   })
 
-  it("'cleared' holds the carried cards, not one typed after them", async () => {
+  it("'cleared' holds the cards already queued, not one typed after it", async () => {
     const journal = await open()
-    await queueDraft(journal, 'carried-1', 'source-session')
-    await queueDraft(journal, 'carried-2', 'source-session')
+    await queueDraft(journal, 'carried-1')
+    await queueDraft(journal, 'carried-2')
+    await clearContext(journal)
     await queueDraft(journal, 'typed-here')
     expect(held(journal)).toEqual([
       ['carried-1', true],
@@ -638,19 +649,22 @@ describe('which cards the pauses in force hold', () => {
 
   function card(messageId: string, queuedAfter: number, fields: Partial<Card> = {}): Card {
     const queuedAt = { epoch: 'epoch-1', sequence: queuedAfter + 1 }
-    const base = { state: 'waiting', holdReason: null, carriedFrom: null }
+    const base = { state: 'waiting', holdReason: null }
     return { messageId, ...base, queuedAt, ...fields }
   }
 
   /** A Stop at sequence 5 unless `stopped` is 0; this handle opened at `opened` and could not mark
    *  it (0: nothing to mark); no turn, Resume or reopen mark since. */
-  function pausesOver(cards: readonly Card[], stopped = 5, opened = 0) {
+  function pausesOver(cards: readonly Card[], stopped = 5, opened = 0, clearedIds?: string[]) {
     return deriveQueuePauses({
       epoch: 'epoch-1',
       marks: {
         latestStop: stopped ? { sequence: stopped, event: { reason: 'user-stop', at: 0 } } : null,
         resumedSequence: 0,
-        reopenedSequence: 0
+        reopenedSequence: 0,
+        ...(clearedIds
+          ? { cleared: { sequence: 4, operationId: 'clear', messageIds: clearedIds } }
+          : {})
       },
       latestAcceptedTurnSequence: 0,
       cards,
@@ -717,15 +731,15 @@ describe('which cards the pauses in force hold', () => {
   })
 
   it("a /clear's pause that holds nothing never hides a reopen's", () => {
-    const cards = [
-      card('carried', 1, { carriedFrom: 'source-session', holdReason: 'send_failed' }),
-      card('typed', 2)
-    ]
-    expect(pausesOver(cards, 0, 4).map((pause) => pause.reason)).toEqual(['cleared', 'restarted'])
-    expect(holding(cards, 0, 4)).toEqual([
-      ['carried', null],
+    const cards = [card('cleared', 1, { holdReason: 'send_failed' }), card('typed', 2)]
+    const pauses = pausesOver(cards, 0, 4, ['cleared'])
+    expect(pauses.map((pause) => pause.reason)).toEqual(['cleared', 'restarted'])
+    expect(
+      cards.map((each) => [each.messageId, queuePauseHolding(pauses, each)?.reason ?? null])
+    ).toEqual([
+      ['cleared', null],
       ['typed', 'restarted']
     ])
-    expect(nextSendableQueuedCard(pausesOver(cards, 0, 4), cards)).toBeNull()
+    expect(nextSendableQueuedCard(pauses, cards)).toBeNull()
   })
 })

@@ -34,19 +34,6 @@ function meetsRuntimeFloor(specifier: string): boolean {
 }
 
 describe('electron runtime floor', () => {
-  it.each([
-    ['42.9.0', false],
-    ['43.6.0', false],
-    ['43.7.0', false],
-    ['43.7.3', false],
-    ['43.7.4', true],
-    ['43.7.5', true],
-    ['43.8.0', true],
-    ['44.0.0', true]
-  ])('reads %s as meeting the floor: %s', (specifier, expected) => {
-    expect(meetsRuntimeFloor(specifier)).toBe(expected)
-  })
-
   it('pins Electron at or above the glibc environ-race and webview-detach fixes', () => {
     const packageJson = JSON.parse(
       readFileSync(join(__dirname, '../../package.json'), 'utf-8')

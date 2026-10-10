@@ -1,4 +1,4 @@
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 import type { RenderRow } from '../listing/render-row'
 import {
   getWorktreeExecutionHostId,
@@ -33,7 +33,7 @@ export function getRenderRowOptionId(
     return getWorktreeOptionId(row.rowKey)
   }
   if (row.type === 'folder-workspace') {
-    return getWorktreeOptionId(folderWorkspaceKey(row.folderWorkspace.id))
+    return getWorktreeOptionId(getFolderWorkspaceHostIdentity(row.folderWorkspace))
   }
   return undefined
 }

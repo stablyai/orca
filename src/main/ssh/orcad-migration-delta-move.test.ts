@@ -523,7 +523,7 @@ describe('a retained source is never deleted', () => {
     [
       'a folder workspace on a folder-only host',
       () => {
-        store.removeProject('repo-1')
+        store.removeProjectForHost('repo-1', `ssh:${TARGET.id}`)
         const group = store.createProjectGroup({
           name: 'folders',
           parentPath: '/srv/folders',
@@ -640,7 +640,7 @@ describe('a delta move against a rollback of an update taken before it', () => {
 
   it('protects a folder-only delta the same way', async () => {
     await convertedThenChangedOnOlderBuild()
-    store.removeProject('repo-2')
+    store.removeProjectForHost('repo-2', `ssh:${TARGET.id}`)
     const group = store.createProjectGroup({
       name: 'folders',
       parentPath: '/srv/folders',

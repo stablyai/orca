@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, matchesGlob, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { shouldRunMobileReleaseChecks } from './mobile-release-check-scope.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -172,6 +172,17 @@ describe.skipIf(process.platform === 'win32')('the Linux workflow detector comma
     repo.write('mobile/src/view.tsx', 'export const view = 2\n')
     repo.commit()
     expect(repo.detect()).toBe('should_run=false\n')
+  })
+
+  it('skips reliability metadata alone and retains mixed Fastfile changes', () => {
+    const repo = fixture()
+    repo.write('config/reliability-gates.jsonc', '{"gates": []}\n')
+    repo.commit()
+    expect(repo.detect()).toBe('should_run=false\n')
+    repo.write('config/reliability-gates.jsonc', '{"gates": [1]}\n')
+    repo.write('mobile/fastlane/Fastfile', 'default_platform(:android)\n')
+    repo.commit()
+    expect(repo.detect()).toBe('should_run=false\nshould_run=true\n')
   })
 
   it('keeps a deleted release input when a rename moves it into an excluded directory', () => {

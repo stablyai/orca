@@ -130,12 +130,3 @@ export function getSshTargetStateOperations(owner: SshProfileOperations): SshTar
     scheduleSave: () => scheduleSave(owner[sshProfileOperationsContext].scheduling)
   }
 }
-
-export function installSshProfileOperationsContext(
-  target: SshProfileOperations,
-  source: SshProfileOperations
-): void {
-  Object.defineProperty(target, sshProfileOperationsContext, {
-    value: source[sshProfileOperationsContext]
-  })
-}

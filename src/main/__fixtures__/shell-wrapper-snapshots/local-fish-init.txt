@@ -40,11 +40,7 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
       return 1
     end
     test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
-    set -l headers
-    if string match -irq 'authorization|x-api-key|api-key|bearer' -- "$ANTHROPIC_CUSTOM_HEADERS"
-      set headers -u ANTHROPIC_CUSTOM_HEADERS
-    end
-    env $headers -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u AWS_BEARER_TOKEN_BEDROCK CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+    env CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
   end
 end
 set -e __orca_claude_type

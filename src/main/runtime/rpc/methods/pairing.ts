@@ -7,6 +7,7 @@ import {
 export const PAIRING_METHODS = [
   defineMethod({
     name: 'pairing.getEndpoints',
+    permission: 'pairing-admin',
     params: PairingGetEndpointsParamsSchema,
     handler: async (params, ctx) => {
       if (!ctx.pairing) {
@@ -17,6 +18,7 @@ export const PAIRING_METHODS = [
   }),
   defineMethod({
     name: 'pairing.provisionRelay',
+    permission: 'pairing-admin',
     params: PairingProvisionRelayParamsSchema,
     handler: async (params, ctx) => {
       if (!ctx.pairing) {

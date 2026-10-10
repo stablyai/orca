@@ -53,17 +53,27 @@ export function sendWorktreeStartupFollowupWhenReady(
   handle: string,
   followup: WorktreeStartupFollowup
 ): void {
-  void waitForWorktreeStartupFollowup(host, handle, followup.expectedProcess)
-    .then((ptyId) => {
-      if (!ptyId) {
-        console.warn('[worktree-create] agent did not become ready for follow-up prompt')
-        return
-      }
-      host.write(ptyId, `${followup.prompt}\r`, 'launch')
-    })
-    .catch((error) =>
-      console.warn('[worktree-create] failed to send startup follow-up prompt:', error)
-    )
+  void deliverWorktreeStartupFollowup(host, handle, followup)
+}
+
+/** Types the follow-up once the agent process is in front; true when it was written. */
+export async function deliverWorktreeStartupFollowup(
+  host: WorktreeStartupReadinessHost,
+  handle: string,
+  followup: WorktreeStartupFollowup
+): Promise<boolean> {
+  try {
+    const ptyId = await waitForWorktreeStartupFollowup(host, handle, followup.expectedProcess)
+    if (!ptyId) {
+      console.warn('[worktree-create] agent did not become ready for follow-up prompt')
+      return false
+    }
+    host.write(ptyId, `${followup.prompt}\r`, 'launch')
+    return true
+  } catch (error) {
+    console.warn('[worktree-create] failed to send startup follow-up prompt:', error)
+    return false
+  }
 }
 
 export async function waitForWorktreeStartupFollowup(

@@ -130,6 +130,7 @@ function TabBarItemRow({
         onActivate={actions.activateAgentSession}
         onToggleExpand={() => {}}
         canSplitTerminal={false}
+        structuredSessionId={item.data.entityId}
       />
     )
   }

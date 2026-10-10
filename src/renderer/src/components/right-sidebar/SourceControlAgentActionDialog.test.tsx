@@ -234,9 +234,7 @@ describe('SourceControlAgentActionDialog', () => {
     resetStore(
       {
         ...settingsWithGlobalRecipe(null),
-        experimentalNativeChat: true,
-        experimentalStructuredNativeChat: true,
-        openAgentTabsInChatByDefault: true
+        experimentalNativeChat: true
       },
       [repoWithSavedRecipe('--model saved', 'build-box', 'ssh:build-box')]
     )
@@ -264,9 +262,7 @@ describe('SourceControlAgentActionDialog', () => {
     resetStore(
       {
         ...settingsWithGlobalRecipe(recipe),
-        experimentalNativeChat: true,
-        experimentalStructuredNativeChat: true,
-        openAgentTabsInChatByDefault: true
+        experimentalNativeChat: true
       },
       []
     )

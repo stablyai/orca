@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawnProcessMock }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawnProcessMock }))
 
 import { prewarmJcodeDaemon, resetJcodeDaemonPrewarmForTests } from './daemon-prewarm'
 

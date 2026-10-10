@@ -7,9 +7,6 @@ import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tryMakePaneKey } from './agent-status-routing'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { useAppStore } from '../../store'
@@ -104,15 +101,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                     ? {
                         launchAgent,
                         // Why: a paired client resolved explicit mode before PTY materialization; only omitted mode uses host defaults.
-                        ...(viewMode
-                          ? { viewMode }
-                          : initialAgentTabViewModeProps(store.settings, {
-                              agent: launchAgent,
-                              nativeChatTranscriptIsLocalReadable:
-                                isNativeChatTranscriptLocalReadable(
-                                  getConnectionIdFromState(store, worktreeId)
-                                )
-                            }))
+                        ...(viewMode ? { viewMode } : {})
                       }
                     : {}),
                   ...(cwd ? { startupCwd: cwd } : {}),

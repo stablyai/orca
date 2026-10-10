@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../src/shared/agent-status-child-work-view'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
-import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 import {
   backgroundTaskRowMeta,
   buildBackgroundTaskGroupsFromViews
@@ -102,7 +101,7 @@ describe('mobile structured session background tasks', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    resetMobileStructuredSendOperationJournalForTests()
+
     sendRequest.mockImplementation(async (method) =>
       method === 'agentSession.cancel'
         ? mutationOk({})

@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,7 +29,11 @@ vi.mock('../macos-keychain/generic-password', () => ({
   }
 }))
 
-import { readClaudeFolderLogin, removeClaudeAccountFolder } from './claude-account-folder'
+import {
+  readClaudeFolderLogin,
+  readClaudeFolderLoginAsync,
+  removeClaudeAccountFolder
+} from './claude-account-folder'
 import { claudeKeychainService } from './keychain'
 
 const roots: string[] = []
@@ -63,6 +75,25 @@ describe('claude account folder', () => {
     writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test!' } }))
     expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
     expect(readClaudeFolderLogin(stateFile)?.email).toBe('b@example.test!')
+  })
+
+  it('rereads a state file over a share only when its mtime or size changes', async () => {
+    const { home } = fixture()
+    const stateFile = join(home, '.claude.json')
+    await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
+    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
+    // Whole seconds, which every filesystem stores exactly.
+    const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
+    utimesSync(stateFile, mtime, mtime)
+    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
+    // Same size and mtime: the cached answer, so the file was not read again.
+    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
+    utimesSync(stateFile, mtime, mtime)
+    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
+    utimesSync(stateFile, mtime, new Date(mtime.getTime() + 2_000))
+    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('b@example.test')
+    rmSync(stateFile)
+    await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
   })
 
   // A real symlink needs Developer Mode on Windows (EPERM otherwise).

@@ -49,7 +49,7 @@ vi.stubGlobal('URL', {
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 
 type HookApi = ReturnType<typeof useNativeChatComposerPaste>
-type Chip = { id: string; path: string; pending: boolean; hidden?: true }
+type Chip = { id: string; path: string; pending: boolean }
 
 const sessionOwner: NativeChatAttachmentOwner = {
   kind: 'runtime-session',
@@ -87,20 +87,18 @@ async function renderPaste(args: {
       setCaret: () => {},
       resolveAttachmentOwner: () => sessionOwner,
       attachResolvedPaths: args.attachResolvedPaths ?? (() => {}),
-      beginPendingImageAttachment: (_preview, _name, options) => {
+      beginPendingImageAttachment: () => {
         counter += 1
         chips.push({
           id: `chip-${counter}`,
           path: '',
-          pending: true,
-          ...(options?.hidden ? { hidden: true } : {})
+          pending: true
         })
         return `chip-${counter}`
       },
       revealPendingImageAttachment: (id) => {
         const chip = chips.find((candidate) => candidate.id === id)
         if (chip) {
-          delete chip.hidden
           revealed += 1
         }
       },
@@ -151,7 +149,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.readClipboardText.mockResolvedValue('')
   mocks.readClipboardImageThumbnail.mockResolvedValue(null)
-  mocks.clipboardHasImage.mockResolvedValue(false)
+  mocks.clipboardHasImage.mockResolvedValue(true)
   mocks.readClipboardFilePaths.mockResolvedValue([])
   mocks.prepareNativeChatSessionAttachmentUpload.mockResolvedValue({
     ok: true,
@@ -195,11 +193,12 @@ describe('pasting into a structured chat on a paired server', () => {
     expect(probe.chips).toEqual([{ id: 'chip-1', path: storedPath, pending: false }])
   })
 
-  it('attaches the server path when no placeholder chip was shown', async () => {
+  it('settles the server path when no thumbnail was shown', async () => {
     const attachResolvedPaths = vi.fn()
     const probe = await renderPaste({ attachResolvedPaths })
     await act(async () => probe.api().pasteFromClipboard())
-    expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith([storedPath], null)
+    expect(probe.chips).toEqual([{ id: 'chip-1', path: storedPath, pending: false }])
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 
   it('refuses on a server without the attachment store and saves nothing', async () => {
@@ -236,7 +235,7 @@ describe('pasting into a structured chat on a paired server', () => {
     await act(async () => probe.api().handlePaste(imagePasteEvent('caption')))
     expect(insertTypedText).toHaveBeenCalledWith('caption')
     expect(setNotice).not.toHaveBeenCalledWith('needs newer server')
-    // The image was owed to the message only out of sight: no chip showed, so none flashed.
+    // The operation ends quietly when this server cannot store its image.
     expect(probe.begun()).toBe(1)
     expect(probe.revealed()).toBe(0)
     expect(probe.chips).toEqual([])

@@ -20,13 +20,16 @@ import {
   pinnedRelayAddonFiles,
   pinnedRelayNodePath,
   planPinnedNodeRelay,
-  recordPinnedRuntimeRefusal,
   RELAY_RUNTIME_REF_PREFIX,
-  resetPinnedRuntimeRefusalsForTests,
   resolveSshRemoteRuntime,
   SSH_REMOTE_RUNTIME_ENV,
   stagePinnedRelayAddons
 } from './ssh-relay-pinned-node'
+import {
+  MUTABLE_PINNED_REFUSAL_REPLAY_MS,
+  recordPinnedRuntimeRefusal,
+  resetPinnedRuntimeRefusalsForTests
+} from './ssh-relay-pinned-refusal-cache'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn() }))
@@ -65,37 +68,23 @@ afterEach(() => {
 })
 
 describe('remote runtime setting', () => {
-  it('defaults to legacy, lets the host setting win, and accepts only known env values', () => {
-    expect(resolveSshRemoteRuntime(undefined, {})).toBe('legacy')
-    expect(resolveSshRemoteRuntime({}, { [SSH_REMOTE_RUNTIME_ENV]: 'pinned-node' })).toBe(
-      'pinned-node'
-    )
-    expect(resolveSshRemoteRuntime({}, { [SSH_REMOTE_RUNTIME_ENV]: 'bun' })).toBe('legacy')
+  it('defaults to the pinned ladder, lets the host setting win, and accepts only known env values', () => {
+    expect(resolveSshRemoteRuntime(undefined, {})).toBe('pinned-node')
+    expect(resolveSshRemoteRuntime({}, {})).toBe('pinned-node')
+    expect(resolveSshRemoteRuntime({}, { [SSH_REMOTE_RUNTIME_ENV]: 'legacy' })).toBe('legacy')
+    expect(resolveSshRemoteRuntime({}, { [SSH_REMOTE_RUNTIME_ENV]: 'bun' })).toBe('pinned-node')
     expect(
       resolveSshRemoteRuntime(
         { remoteRuntime: 'legacy' },
         { [SSH_REMOTE_RUNTIME_ENV]: 'pinned-node' }
       )
     ).toBe('legacy')
-  })
-
-  it('runs the pinned ladder where managed orcad was found unable to run, unless the host opts out', () => {
-    const unavailable = { reason: 'runtime_self_test', appVersion: '1.0.0' }
-    expect(resolveSshRemoteRuntime({ managedServerUnavailable: unavailable }, {})).toBe(
-      'pinned-node'
-    )
     expect(
       resolveSshRemoteRuntime(
-        { managedServerUnavailable: unavailable, remoteRuntime: 'legacy' },
-        {}
-      )
-    ).toBe('legacy')
-    expect(
-      resolveSshRemoteRuntime(
-        { managedServerUnavailable: unavailable },
+        { remoteRuntime: 'pinned-node' },
         { [SSH_REMOTE_RUNTIME_ENV]: 'legacy' }
       )
-    ).toBe('legacy')
+    ).toBe('pinned-node')
   })
 })
 
@@ -236,7 +225,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad: () => Promise.reject(new Error('template has no win32-x64'))
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'artifacts_unavailable' })
+    ).rejects.toMatchObject({ reason: 'artifacts_unavailable', remembered: false })
   })
 
   it('refuses a glibc below the pinned Node floor without uploading anything', async () => {
@@ -250,7 +239,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'libc_floor' })
+    ).rejects.toMatchObject({ reason: 'libc_floor', remembered: false })
     expect(materializeOrcad).not.toHaveBeenCalled()
   })
 
@@ -263,7 +252,7 @@ describe('planPinnedNodeRelay', () => {
         baseVersion: base,
         targetId: 't'
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'target_unresolved' })
+    ).rejects.toMatchObject({ reason: 'target_unresolved', remembered: false })
   })
 
   it('does not descend when the libc probe itself is lost', async () => {
@@ -288,7 +277,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad: () => Promise.reject(new Error('template missing'))
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'artifacts_unavailable' })
+    ).rejects.toMatchObject({ reason: 'artifacts_unavailable', remembered: false })
   })
 
   it('remembers a host refusal for the session', async () => {
@@ -303,8 +292,48 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'noexec', remembered: true })
+    ).rejects.toMatchObject({ reason: 'noexec', remembered: true })
     expect(materializeOrcad).not.toHaveBeenCalled()
+  })
+
+  it('re-proves a repaired Windows host once a security-software refusal has aged out', async () => {
+    vi.useFakeTimers()
+    try {
+      recordPinnedRuntimeRefusal('t', 'win32-x64', 'security_software')
+      const plan = (): ReturnType<typeof planPinnedNodeRelay> =>
+        planPinnedNodeRelay({
+          conn,
+          host: getRemoteHostPlatform('win32-x64'),
+          baseVersion: base,
+          targetId: 't',
+          materializeOrcad: async (target) => fakeOrcadSlot(target)
+        })
+      await expect(plan()).rejects.toMatchObject({ remembered: true })
+      vi.advanceTimersByTime(MUTABLE_PINNED_REFUSAL_REPLAY_MS)
+      await expect(plan()).resolves.toMatchObject({ kind: 'pinned-node', target: 'win32-x64' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps replaying an immutable refusal past the mutable window', async () => {
+    vi.useFakeTimers()
+    try {
+      recordPinnedRuntimeRefusal('t', 'linux-x64-glibc', 'illegal_instruction')
+      vi.advanceTimersByTime(MUTABLE_PINNED_REFUSAL_REPLAY_MS * 10)
+      vi.mocked(execCommand).mockResolvedValue('ldd (GNU libc) 2.31')
+      await expect(
+        planPinnedNodeRelay({
+          conn,
+          host: getRemoteHostPlatform('linux-x64'),
+          baseVersion: base,
+          targetId: 't',
+          materializeOrcad: vi.fn()
+        })
+      ).rejects.toMatchObject({ reason: 'illegal_instruction', remembered: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('plans a pinned relay with a runtime-folded version for a supported host', async () => {
@@ -369,7 +398,7 @@ describe('planPinnedNodeRelay', () => {
           compat,
           materializeOrcad: vi.fn()
         })
-      ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'libc_floor' })
+      ).rejects.toMatchObject({ reason: 'libc_floor', remembered: false })
     })
 
     it('remembers compat refusals apart from the default runtime', async () => {
@@ -385,7 +414,7 @@ describe('planPinnedNodeRelay', () => {
           compat,
           materializeOrcad: vi.fn()
         })
-      ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'missing_lib', remembered: true })
+      ).rejects.toMatchObject({ reason: 'missing_lib', remembered: true })
     })
   })
 })

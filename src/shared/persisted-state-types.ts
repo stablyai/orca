@@ -9,6 +9,7 @@ import type { Automation, AutomationRun } from './automations-types'
 import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
+import type { NativeChatUpgradeTipAudience } from './native-chat-upgrade-tip-audience'
 import type { DiffComment } from './diff-comment-types'
 import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
 import type { GlobalSettings } from './global-settings-types'
@@ -123,4 +124,6 @@ export type PersistedState = {
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
+  /** Main-owned, decided once on the first load of the upgrade; never derived from live settings. */
+  nativeChatUpgradeTipAudience?: NativeChatUpgradeTipAudience
 }

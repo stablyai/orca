@@ -123,6 +123,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         : {}),
       ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
       ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
+      ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
       ...(request.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
         : {}),

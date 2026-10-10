@@ -6,16 +6,13 @@ import {
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { ShellSwitchPendingScreen } from '../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
-import { useShellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
+import { shellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The file explorer, from the desktop's bundle or from this app.
  *
  * The shell decides, not this switch: it renders the page only for a route the bundle lists with
  * grants this app implements, and answers `native-route` otherwise, which is what `fallback` is.
- * A flag read still settling is a third answer and paints neither renderer; see
- * `shell-switch-decision.ts`.
  *
  * Encoded, not interpolated raw, for the reason `web.tsx` states: an id carrying `?`, `#` or
  * whitespace would build a pathname the page refuses and mount nothing.
@@ -47,11 +44,8 @@ export default function MobileFileExplorerScreen() {
         })
       : null
 
-  const decision = useShellSwitchDecision(route)
+  const decision = shellSwitchDecision(route)
 
-  if (decision.kind === 'pending') {
-    return <ShellSwitchPendingScreen />
-  }
   if (decision.kind === 'native') {
     return native
   }

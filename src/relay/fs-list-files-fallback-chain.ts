@@ -1,4 +1,4 @@
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { listFilesWithRg } from './fs-handler-utils'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'

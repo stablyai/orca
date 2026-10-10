@@ -28,7 +28,6 @@ export type TabBarItemSurfaceRuntime = Pick<
   | 'resolvedGroupId'
   | 'generatedTabTitlesEnabled'
   | 'unifiedTabByVisibleId'
-  | 'nativeChatEnabled'
   | 'tabAgentTypesByTabId'
   | 'nativeChatTabWideFallbackUnsafeTabsById'
   | 'nativeChatTranscriptIsLocalReadable'
@@ -66,7 +65,6 @@ export function renderTabBarItems({
     resolvedGroupId,
     generatedTabTitlesEnabled,
     unifiedTabByVisibleId,
-    nativeChatEnabled,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
     nativeChatTranscriptIsLocalReadable,
@@ -114,7 +112,6 @@ export function renderTabBarItems({
       canToggleViewMode =
         unifiedTabForItem !== undefined &&
         canToggleNativeChat({
-          experimentalNativeChatEnabled: nativeChatEnabled,
           contentType: 'terminal',
           launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
           detectedAgent,
@@ -122,7 +119,7 @@ export function renderTabBarItems({
           nativeChatTranscriptIsLocalReadable,
           isChatViewMode: unifiedTabForItem.viewMode === 'chat'
         })
-      isChatView = nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'
+      isChatView = unifiedTabForItem?.viewMode === 'chat'
       viewModeTabId = unifiedTabForItem?.id
     }
     return (
@@ -145,9 +142,7 @@ export function renderTabBarItems({
         viewModeTabId={viewModeTabId}
         canDuplicate={item.type === 'browser' && managedBrowserCreationEnabled}
         gitStatus={
-          item.type === 'editor'
-            ? resolveEditorTabGitStatus(item.data.relativePath, statusByRelativePath)
-            : null
+          item.type === 'editor' ? resolveEditorTabGitStatus(item.data, statusByRelativePath) : null
         }
       />
     )

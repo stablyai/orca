@@ -1,5 +1,5 @@
 import { isAbsolute, win32 as pathWin32 } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'

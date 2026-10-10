@@ -32,7 +32,6 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'gitlab'],
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
-      experimentalStructuredNativeChat: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
@@ -71,7 +70,7 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('settings.update', { experimentalStructuredNativeChat: true })
+      makeRequest('settings.update', { experimentalNativeChat: true })
     )
 
     expect(response).toMatchObject({

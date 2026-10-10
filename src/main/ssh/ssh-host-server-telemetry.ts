@@ -13,15 +13,11 @@ import { track } from '../telemetry/client'
 import type { HostServerConnectEvent } from './ssh-host-server-connect-events'
 import type { SshHostPlatformFacts } from './ssh-host-platform-memo'
 import type { OrcadTunnelTransport } from './orcad-tunnel-transport-memo'
-import { durationBucket } from './ssh-remote-runtime-telemetry'
+import { durationBucket, pick } from './ssh-remote-runtime-telemetry'
 
 type HostProps = Pick<EventProps<'ssh_host_server_decided'>, 'host_os' | 'host_arch' | 'host_libc'>
 type FailureCode = (typeof SSH_HOST_SERVER_FAILURE_VALUES)[number]
 type RefusalCode = (typeof SSH_HOST_SERVER_REFUSAL_VALUES)[number]
-
-function pick<T extends string>(values: readonly T[], value: string, fallback: T): T {
-  return values.find((candidate) => candidate === value) ?? fallback
-}
 
 function hostProps(facts: SshHostPlatformFacts | null): HostProps {
   return facts

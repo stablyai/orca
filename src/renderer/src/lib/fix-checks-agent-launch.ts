@@ -141,7 +141,12 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
   const attachedWorkspace =
     args.worktreeId || !args.item
       ? null
-      : findGithubPrWorkspaceAttachment(store.allWorktrees(), args.repoId, args.item.number)
+      : findGithubPrWorkspaceAttachment(
+          store.allWorktrees(),
+          args.repoId,
+          args.item.number,
+          args.item.url
+        )
   const targetWorktreeId = args.worktreeId ?? attachedWorkspace?.id ?? null
   if (targetWorktreeId) {
     const targetWorktree = store.allWorktrees().find((worktree) => worktree.id === targetWorktreeId)

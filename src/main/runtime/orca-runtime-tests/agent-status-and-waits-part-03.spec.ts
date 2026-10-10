@@ -81,15 +81,24 @@ describe('OrcaRuntimeService', () => {
 
     const [terminal] = (await runtime.listTerminals()).terminals
 
-    await expect(
-      runtime.sendTerminal(
-        terminal.handle,
-        { text: 'notes', enter: true },
-        { inputKind: 'driving', beforeWrite, afterWrite }
-      )
-    ).rejects.toThrow('terminal_not_writable')
-    expect(writes).toEqual(['notes', '\r'])
-    expect(beforeWrite).toHaveBeenCalledTimes(2)
-    expect(afterWrite).toHaveBeenCalledOnce()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+    try {
+      await Promise.all([
+        expect(
+          runtime.sendTerminal(
+            terminal.handle,
+            { text: 'notes', enter: true },
+            { inputKind: 'driving', beforeWrite, afterWrite }
+          )
+        ).rejects.toThrow('terminal_not_writable'),
+        vi.runAllTimersAsync()
+      ])
+      expect(writes).toEqual(['notes', '\r'])
+      expect(beforeWrite).toHaveBeenCalledTimes(2)
+      expect(afterWrite).toHaveBeenCalledOnce()
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 })

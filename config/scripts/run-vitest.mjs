@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const root = resolve(import.meta.dirname, '../..')
 try {

@@ -25,6 +25,8 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { sameProviderChild } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionExpiredStartup } from './structured-agent-session-startup-attempt'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
   typeof createStructuredAgentSessionConversationLifetime
@@ -57,7 +59,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     if (await releaseLeaseOfEndedStructuredAgentSessionChild(host.context(), sessionId)) {
       return false
     }
-    return closeStructuredAgentSessionConversationUnderSerialize(
+    const closed = await closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
         closeStatus: (id) => {
@@ -69,6 +71,10 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       sessionId,
       atRest
     )
+    if (closed) {
+      host.context().runtimeState.optionRevisions.forget(sessionId)
+    }
+    return closed
   }
 
   const idleSweep = new StructuredAgentSessionIdleSweep({
@@ -100,10 +106,35 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   return {
     idleSweep,
     stopAgent,
+    /** A host stop of the child the expired attempt published, if it is still that one and still
+     *  starting: its end fails what is queued, as the idle sweep's stop of a start does. */
+    expireStartup: ({ sessionId, child: expired }: StructuredAgentSessionExpiredStartup): void => {
+      void serialize(sessionId, async () => {
+        const child = sessions.get(sessionId)?.child
+        if (
+          !expired ||
+          !child ||
+          child.phase !== 'starting' ||
+          !sameProviderChild(child, expired)
+        ) {
+          return
+        }
+        await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
+          cause: 'host-stop'
+        })
+      }).catch((error: unknown) =>
+        deps().logger.warn('stopping an agent past its startup limit failed', {
+          scope: 'startup-limit',
+          sessionId,
+          error
+        })
+      )
+    },
     /** Quit has begun: nothing opens a conversation or sweeps one after this. */
     dispose: (): void => {
       disposed = true
       idleSweep.dispose()
+      host.context().runtimeState.startupAttempts.dispose()
     },
     /**
      * The only way any code reaches a session. An open conversation answers without the lock, so

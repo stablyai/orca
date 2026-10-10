@@ -42,22 +42,16 @@ export async function resolveClaudeChildEnvSources(
 
 // Why the overlay merges onto the inherited env rather than replacing it: the child
 // still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
-// derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
-// inherited half only when a managed account owns the credential; a system-auth
-// user's own key is their sign-in and must reach the child.
+// derives PATH from what it is handed. The shell's Anthropic auth reaches the child on
+// every account, as it does in a terminal.
 export function claudeChildEnv(
   sources: ClaudeChildEnvSources,
-  stripAuthEnv: boolean,
   decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
 ): Record<string, string> {
   return withCliRuntimeOnPath(
     sources.command,
     decorateEnv({
-      ...applyClaudeEnvPatch(
-        withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-        {},
-        { stripAuthEnv, platform: process.platform }
-      ),
+      ...withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
       ...sources.overlay
     }),
     { platform: process.platform }
@@ -69,7 +63,7 @@ export function claudeChildEnv(
  *  a version needs none of. Everything else is what this same binary receives at launch anyway. */
 export function claudeProbeEnv(sources: ClaudeChildEnvSources): Record<string, string> {
   return applyClaudeEnvPatch(
-    claudeChildEnv(sources, true),
+    claudeChildEnv(sources),
     {},
     {
       stripAuthEnv: true,

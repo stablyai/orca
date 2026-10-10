@@ -3,6 +3,10 @@ import {
   isValidResolvedWorktreeLineageEdge
 } from '../../../../shared/resolved-worktree-lineage'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
@@ -170,6 +174,52 @@ export function getWorktreeLineageAncestors(
     }
     ancestors.push(lineage.parent)
     current = lineage.parent
+  }
+  return ancestors
+}
+
+/**
+ * The row a worktree nests under in the sidebar: its lineage parent on the worktree's own host,
+ * where a row with no host id (older metadata) nests only under a parent with none either.
+ */
+export function getSidebarLineageParent(
+  worktree: Worktree,
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  rowsByHostIdentity: ReadonlyMap<string, Worktree>
+): Worktree | undefined {
+  const projected = getProjectedWorktreeLineage(worktree, lineageById)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolved rows may carry an inline lineage the Worktree type omits; it is only read, never trusted over a matching projection.
+  const inline = (worktree as WorktreeWithResolvedLineage).lineage
+  const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+  if (!lineage) {
+    return undefined
+  }
+  const parent = rowsByHostIdentity.get(
+    composeWorktreeHostIdentity(worktree.hostId, lineage.parentWorktreeId)
+  )
+  return parent && isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)
+    ? parent
+    : undefined
+}
+
+/** The rows a worktree nests under in the sidebar, nearest first; a lineage cycle nests nothing. */
+export function getSidebarLineageAncestors(
+  worktree: Worktree,
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  rowsByHostIdentity: ReadonlyMap<string, Worktree>,
+  cyclicLineageIds: ReadonlySet<string>
+): Worktree[] {
+  const ancestors: Worktree[] = []
+  const seen = new Set([getWorktreeHostIdentity(worktree)])
+  let current = worktree
+  while (!cyclicLineageIds.has(current.id)) {
+    const parent = getSidebarLineageParent(current, lineageById, rowsByHostIdentity)
+    if (!parent || seen.has(getWorktreeHostIdentity(parent))) {
+      break
+    }
+    seen.add(getWorktreeHostIdentity(parent))
+    ancestors.push(parent)
+    current = parent
   }
   return ancestors
 }

@@ -40,7 +40,7 @@ describe('settings navigation metadata', () => {
         isMac: false,
         isWindows: false,
         isWebClient: false,
-        experimentalStructuredNativeChat: enabled,
+        nativeChatEnabled: enabled,
         repos: []
       })
       expect(sections.some((section) => section.id === 'chat')).toBe(false)
@@ -60,7 +60,7 @@ describe('settings navigation metadata', () => {
       isMac: false,
       isWindows: false,
       isWebClient: false,
-      experimentalStructuredNativeChat: true,
+      nativeChatEnabled: true,
       repos: []
     })
     const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')

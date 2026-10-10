@@ -149,7 +149,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)
   })
 
   it('returns the selected parent directory after the local picker applies it', async () => {
@@ -187,7 +187,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
       requireAuthoritative: true
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)
     expect(mocks.stateSetters[STATE_ERROR_MESSAGE]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )

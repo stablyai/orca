@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { Worker } from 'node:worker_threads'
 import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
 import type { CursorDesktopProfileReadResult } from './cursor-profile-result'
@@ -40,9 +41,22 @@ export function readCursorDesktopProfile(dbPath: string): Promise<CursorDesktopP
  * @param cursor - Store position the binder has handled up to.
  * @returns Rows oldest first; `[]` when the store or the worker cannot answer.
  */
-export function readOpenCodeBinderSessions(
+export async function readOpenCodeBinderSessions(
   dbPath: string,
   cursor: OpenCodeSessionCursor
 ): Promise<BinderSessionRow[]> {
+  try {
+    // Missing stores must not keep an otherwise unused reader worker alive on every binder poll.
+    await stat(dbPath)
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    ) {
+      return []
+    }
+    // The worker still owns reporting other failures and checking for changes after this probe.
+  }
   return getSharedClient().readOpenCodeBinderSessions(dbPath, cursor)
 }

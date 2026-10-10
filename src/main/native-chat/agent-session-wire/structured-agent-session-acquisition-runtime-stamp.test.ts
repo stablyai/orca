@@ -114,6 +114,7 @@ it('starts a chat whose recorded owner carries the runtime stamp', async () => {
       probe: { outcome: 'reservation-unused' }
     },
     callerKey: 'client-1',
+    optionRevision: () => 0,
     params: attachParams(),
     now: () => NOW,
     onAttached: () => {}

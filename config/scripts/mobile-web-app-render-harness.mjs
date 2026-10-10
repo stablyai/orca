@@ -265,7 +265,8 @@ export function installShellDouble({
   replies,
   streams = [],
   windowCaps = null,
-  safeAreaInsets = null
+  safeAreaInsets = null,
+  ownsHostArea = false
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -325,6 +326,8 @@ export function installShellDouble({
     storage,
     // Omitted when a check names none, which is every shell before the field.
     ...(safeAreaInsets === null ? {} : { safeAreaInsets }),
+    // Only the wide host-area session sends it, so every other check runs without.
+    ...(ownsHostArea ? { ownsHostArea: true } : {}),
     ...patch
   })
   globalThis.__orcaRenderCheckResendInit = (patch) => {

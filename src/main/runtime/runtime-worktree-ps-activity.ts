@@ -5,7 +5,7 @@ import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execu
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
+import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 import {
   getLatestPtyTitle,
   getLeafDisplayRecord,
@@ -18,13 +18,6 @@ import {
 } from './runtime-worktree-status-projection'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
-type SummaryLookup = (
-  summaries: Map<string, RuntimeWorktreePsSummary>,
-  pathIndex: RuntimeWorktreeSummaryPathIndex,
-  missingIds: Set<string>,
-  worktreeId: string
-) => RuntimeWorktreePsSummary | null
-
 export type RuntimeWorkingTerminalEvidence = {
   paneKey: string | null
   ptyId: string | null
@@ -32,9 +25,6 @@ export type RuntimeWorkingTerminalEvidence = {
 }
 
 export function applyRuntimeWorktreePsTerminalActivity(args: {
-  summaries: Map<string, RuntimeWorktreePsSummary>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingIds: Set<string>
   freshPtyLiveness: ReadonlySet<string> | null
   /** Filled with every PTY this pass counts as live. */
   countedPtyIds: Set<string>
@@ -44,7 +34,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
   session: WorkspaceSessionState | null | undefined
   getPaneKey: (leaf: RuntimeLeafRecord) => string
   getTitleDisplayClear: (ptyId: string) => TitleDisplayClear | null
-  getSummary: SummaryLookup
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): Map<string, RuntimeWorkingTerminalEvidence[]> {
   const workingEvidence = new Map<string, RuntimeWorkingTerminalEvidence[]>()
   const savedTabOwnerById = new Map<string, { worktreeId: string; title: string }>()
@@ -78,12 +68,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     ) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingIds,
-      leaf.worktreeId
-    )
+    const summary = args.getSummary(leaf.worktreeId)
     if (!summary) {
       continue
     }
@@ -146,12 +131,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (!owner) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingIds,
-      owner.worktreeId
-    )
+    const summary = args.getSummary(owner.worktreeId)
     if (!summary) {
       continue
     }
@@ -197,13 +177,11 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   store: RuntimeStore | null
   summaries: Map<string, RuntimeWorktreePsSummary>
   repoById: ReadonlyMap<string, Repo>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingIds: Set<string>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   /** Non-minting: a listing must not issue handles, only recognise the ones already bound. */
   getTerminalHandlesForPty: (ptyId: string) => readonly string[]
-  getSummary: SummaryLookup
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): {
   mirroredWorktreeIdByTabId: Map<string, string>
   connectedPtyEvidence: {
@@ -229,7 +207,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       if (tabs.length === 0) {
         continue
       }
-      const summary = args.getSummary(args.summaries, args.pathIndex, args.missingIds, worktreeId)
+      const summary = args.getSummary(worktreeId)
       if (summary && tabs.some((tab) => tab.ptyId && args.ptysById.get(tab.ptyId)?.connected)) {
         summary.hasHostSidebarActivity = true
       }
@@ -238,18 +216,13 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       if (tabs.length === 0) {
         continue
       }
-      const summary = args.getSummary(args.summaries, args.pathIndex, args.missingIds, worktreeId)
+      const summary = args.getSummary(worktreeId)
       if (summary) {
         summary.hasHostSidebarActivity = true
       }
     }
     if (session.activeWorktreeId) {
-      const summary = args.getSummary(
-        args.summaries,
-        args.pathIndex,
-        args.missingIds,
-        session.activeWorktreeId
-      )
+      const summary = args.getSummary(session.activeWorktreeId)
       if (summary) {
         summary.isActive = true
       }

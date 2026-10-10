@@ -2,11 +2,7 @@
 import { OrcaRuntimeWithResolveKnownWorkspaceFileTarget } from './orca-runtime-resolve-known-workspace-file-target'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../shared/execution-host'
+import { getConnectionExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {
   protected invalidateAllHandlesForPty(ptyId: string, preserveHandle?: string): Set<string> {
@@ -128,8 +124,7 @@ export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithRe
     }
     const connection =
       connectionId === undefined ? this.ptysById.get(ptyId)?.connectionId : connectionId
-    const providerKey =
-      hostId ?? (connection ? toSshExecutionHostId(connection) : LOCAL_EXECUTION_HOST_ID)
+    const providerKey = hostId ?? getConnectionExecutionHostId(connection)
     // A pending census predates this admission or exit, including legacy IDs without an incarnation.
     this.ptyControllerInventoryGenerationByProvider.set(providerKey, generation)
   }

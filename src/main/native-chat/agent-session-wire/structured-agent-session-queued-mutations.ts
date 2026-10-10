@@ -1,5 +1,5 @@
 // `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete`, and
-// /clear's carry of the source's drafts to its replacement session. Settling
+// mutations of the conversation's queued drafts. Settling
 // operations stamp op-scoped tombstone receipts, so a lost acknowledgement
 // replays from the rows themselves — never from the operation ledger, which
 // records only that an operation happened. No mutation returns draft text:
@@ -15,7 +15,7 @@ import type {
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
+import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import {
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
@@ -23,12 +23,10 @@ import {
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   resumeStructuredQueue,
   structuredAgentSessionHostInstance
 } from './structured-agent-session-queued-pause'
-import { unsettledQueuedMessages } from './structured-agent-session-queued-stop'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -136,7 +134,7 @@ export async function carryQueuedMessagesToClearReplacement(
 
 /** Draft actions run like any mutation: admitted on the session's lane, the
  *  conversation opened for the write. */
-function mutateQueued<TValue>(
+export function mutateQueued<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
@@ -213,6 +211,11 @@ export function sendQueuedStructuredAgentMessage(
         return submission
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
+      }
+      // A command never steers: handed over mid-turn it would only be refused. Clients offer its
+      // Send only while the agent is idle; this answers an older one that offers it mid-turn.
+      if (hold === 'working' && row.body.command) {
+        return invalid("A command can't be sent while the agent is working.")
       }
       const submissionId = operationId
       try {

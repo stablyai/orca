@@ -9,6 +9,10 @@ import {
   DISPATCH_REJECTED_HOST_RESTARTED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { rejectedDraftSettlement } from './journal-dispatch-settlement'
+import {
+  journalPendingSubmissionResolutions,
+  type JournalPendingSubmission
+} from './journal-pending-submission-recovery'
 
 function settle(kind: SubmissionRejectionKind) {
   return rejectedDraftSettlement(
@@ -17,6 +21,41 @@ function settle(kind: SubmissionRejectionKind) {
 }
 
 describe('what a rejection does to the draft it was consumed from', () => {
+  it('keeps recovered and queued sends out of terminal verdicts and preserves a sharper doubt reason', () => {
+    const submissions: JournalPendingSubmission[] = [
+      { clientMessageId: 'pending', dispatchState: 'pending' },
+      { clientMessageId: 'doubt', dispatchState: 'unknown', reason: 'write outcome unknown' },
+      { clientMessageId: 'settled', dispatchState: 'unknown', recovered: true as const },
+      { clientMessageId: 'queued', dispatchState: 'pending', handoverRecorded: true as const },
+      { clientMessageId: 'accepted', dispatchState: 'accepted' }
+    ]
+    expect(journalPendingSubmissionResolutions(submissions, 7, { reason: 'owner exited' })).toEqual(
+      [
+        {
+          clientMessageId: 'pending',
+          state: 'unknown',
+          reason: 'owner exited',
+          fence: 7,
+          recovered: true
+        },
+        {
+          clientMessageId: 'doubt',
+          state: 'unknown',
+          reason: 'write outcome unknown',
+          fence: 7,
+          recovered: true
+        }
+      ]
+    )
+    const rejection = agentSessionFailureWords(agentSessionFailureFact('startFailed'), {
+      surface: 'rejection'
+    })
+    expect(journalPendingSubmissionResolutions(submissions, 7, { rejection })).toEqual([
+      { clientMessageId: 'pending', state: 'rejected', ...rejection, fence: 7, recovered: true },
+      { clientMessageId: 'doubt', state: 'rejected', ...rejection, fence: 7, recovered: true }
+    ])
+  })
+
   it("a Stop's withdrawal sends it back to waiting, under the queue's pause rather than a hold of its own", () => {
     expect(settle('cancelled')).toEqual({ state: 'waiting' })
     expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_CANCELLED })).toEqual({

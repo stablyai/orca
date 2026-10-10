@@ -1,32 +1,24 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   pathnames: string[]
   hostId: string | string[]
   nativeRenders: number
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   pathnames: [],
   hostId: 'host-1',
   nativeRenders: 0
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
@@ -68,12 +60,14 @@ async function renderRoute(): Promise<void> {
 
 describe('the native worktree-list route that hands off to the shell', () => {
   beforeEach(() => {
-    dependencies.storage.clear()
     dependencies.pathnames.length = 0
     dependencies.nativeRenders = 0
     dependencies.hostId = 'host-1'
-    Object.assign(globalThis, { __DEV__: true })
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('encodes the host id into the pathname, like the shell route already does', async () => {

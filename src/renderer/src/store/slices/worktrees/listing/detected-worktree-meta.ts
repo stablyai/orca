@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
@@ -28,6 +29,7 @@ let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null 
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -48,7 +50,7 @@ export function applyDetectedWorktreeUpdates(
       }
       repoChanged = true
       changed = true
-      const next = { ...worktree, ...updates }
+      const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
       if (updates.displayNameIsPinned !== undefined) {
         next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
         if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
@@ -146,84 +148,45 @@ export function findKnownWorktreeById(
 }
 
 export function getFolderWorkspaceMetaUpdates(
-  updates: Partial<WorktreeMeta>
-): Partial<
-  Pick<
-    FolderWorkspace,
-    | 'name'
-    | 'comment'
-    | 'isArchived'
-    | 'isUnread'
-    | 'isPinned'
-    | 'sortOrder'
-    | 'manualOrder'
-    | 'lastActivityAt'
-    | 'workspaceStatus'
-    | 'createdWithAgent'
-    | 'pendingFirstAgentMessageRename'
-    | 'firstAgentMessageRenameError'
-    | 'diffComments'
-  >
-> {
-  const next: Partial<
-    Pick<
-      FolderWorkspace,
-      | 'name'
-      | 'comment'
-      | 'isArchived'
-      | 'isUnread'
-      | 'isPinned'
-      | 'sortOrder'
-      | 'manualOrder'
-      | 'lastActivityAt'
-      | 'workspaceStatus'
-      | 'createdWithAgent'
-      | 'pendingFirstAgentMessageRename'
-      | 'firstAgentMessageRenameError'
-      | 'diffComments'
-    >
-  > = {}
+  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+) {
+  const next: Partial<FolderWorkspace> & WorkspaceAttachmentMutation = Object.fromEntries(
+    (
+      [
+        'comment',
+        'isArchived',
+        'isUnread',
+        'isPinned',
+        'sortOrder',
+        'manualOrder',
+        'lastActivityAt',
+        'workspaceStatus',
+        'createdWithAgent',
+        'pendingFirstAgentMessageRename',
+        'firstAgentMessageRenameError',
+        'diffComments',
+        'linkedItems',
+        'linkedItemsBase',
+        'linkedItemsSelectionChanged',
+        'linkedTaskSourceContext'
+      ] as const
+    )
+      .filter((field) => updates[field] !== undefined)
+      .map((field) => [field, updates[field]])
+  )
   if (updates.displayName !== undefined) {
     next.name = updates.displayName
-    next.pendingFirstAgentMessageRename = false
-    next.firstAgentMessageRenameError = null
+    next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename ?? false
+    next.firstAgentMessageRenameError =
+      updates.firstAgentMessageRenameError === undefined
+        ? null
+        : updates.firstAgentMessageRenameError
   }
-  if (updates.comment !== undefined) {
-    next.comment = updates.comment
+  if (updates.comment !== undefined && updates.lastActivityAt === undefined) {
     next.lastActivityAt = Date.now()
   }
-  if (updates.isArchived !== undefined) {
-    next.isArchived = updates.isArchived
-  }
-  if (updates.isUnread !== undefined) {
-    next.isUnread = updates.isUnread
-  }
-  if (updates.isPinned !== undefined) {
-    next.isPinned = updates.isPinned
-  }
-  if (updates.sortOrder !== undefined) {
-    next.sortOrder = updates.sortOrder
-  }
-  if (updates.manualOrder !== undefined) {
-    next.manualOrder = updates.manualOrder
-  }
-  if (updates.lastActivityAt !== undefined) {
-    next.lastActivityAt = updates.lastActivityAt
-  }
-  if (updates.workspaceStatus !== undefined) {
-    next.workspaceStatus = updates.workspaceStatus
-  }
-  if (updates.createdWithAgent !== undefined) {
-    next.createdWithAgent = updates.createdWithAgent
-  }
-  if (updates.pendingFirstAgentMessageRename !== undefined) {
-    next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
-  }
-  if (updates.firstAgentMessageRenameError !== undefined) {
-    next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
-  }
-  if (updates.diffComments !== undefined) {
-    next.diffComments = updates.diffComments
+  if (updates.linkedWorkItem !== undefined) {
+    next.linkedTask = updates.linkedWorkItem
   }
   return next
 }

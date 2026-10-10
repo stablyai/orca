@@ -16,10 +16,7 @@ export const pendingAcpResolution = {
   resolvedAt: null
 } as const
 
-export function acpPermissionPresentation(
-  params: unknown,
-  dialect: AcpDialect
-): AcpRequestPresentation {
+export function acpPermissionPresentation(params: unknown): AcpRequestPresentation {
   // The runtime already read this request and reported any field it dropped.
   const request = readAcpPermissionRequest(params, () => {})
   if (!request) {
@@ -33,7 +30,7 @@ export function acpPermissionPresentation(
       detail: null,
       options: options.map((option) => ({
         id: option.optionId,
-        label: dialect.permissionOptionLabel?.(option) ?? option.name
+        label: option.name
       })),
       resolution: pendingAcpResolution
     },
@@ -109,7 +106,7 @@ export function translateAcpRequest(
   }
   const presentation =
     method === 'session/request_permission'
-      ? acpPermissionPresentation(params, options.dialect)
+      ? acpPermissionPresentation(params)
       : options.dialect.request?.(method, params)
   if (!presentation) {
     // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x

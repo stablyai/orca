@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 
 const executionProgram = `
 const fs = require('node:fs');

@@ -25,6 +25,15 @@ export function useNativeChatComposerAttachmentPreviews(
   const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(NO_PREVIEWS)
   // Read by callbacks between renders; only they change it, always together with the state.
   const previewsRef = useRef(previews)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      previewsRef.current.forEach(releasePreviewUrl)
+      previewsRef.current = NO_PREVIEWS
+    }
+  }, [])
   const updatePreviews = useCallback((next: ReadonlyMap<string, string>) => {
     previewsRef.current = next
     setPreviews(next)
@@ -47,6 +56,10 @@ export function useNativeChatComposerAttachmentPreviews(
 
   const setPreview = useCallback(
     (id: string, previewUrl: string | undefined) => {
+      if (!mountedRef.current) {
+        releasePreviewUrl(previewUrl)
+        return
+      }
       if (previewUrl) {
         updatePreviews(new Map(previewsRef.current).set(id, previewUrl))
       }

@@ -15,6 +15,7 @@ import { clientReadsStructuredSessionAgent } from './structured-agent-session-po
 export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
   defineMethod({
     name: AGENT_SESSION_AGENTS_METHOD,
+    permission: 'workspace',
     params: AgentsParams,
     // Read from the registrations the host is built from, as createSupport is: the answer is
     // fixed for this build, so it never waits on, or fails with, installing the host.

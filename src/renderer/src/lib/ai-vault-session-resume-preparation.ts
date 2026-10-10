@@ -9,10 +9,22 @@ import {
 } from '../../../shared/execution-host'
 import type { AiVaultResumeCommandSession } from './ai-vault-resume-command'
 
-export async function prepareAiVaultSessionForResume(
-  session: AiVaultSession
+export function prepareAiVaultSessionForResume(session: AiVaultSession): Promise<AiVaultSession> {
+  return session.structuredSession
+    ? Promise.resolve(session)
+    : prepareAiVaultSessionHome(session, false)
+}
+
+/** Picks the Codex home a fork of `session` runs under, the same way a resume picks it. */
+export function prepareAiVaultSessionForFork(session: AiVaultSession): Promise<AiVaultSession> {
+  return prepareAiVaultSessionHome(session, true)
+}
+
+async function prepareAiVaultSessionHome(
+  session: AiVaultSession,
+  fork: boolean
 ): Promise<AiVaultSession> {
-  if (session.structuredSession || !aiVaultSessionNeedsResumePreparation(session)) {
+  if (!aiVaultSessionNeedsResumePreparation(session)) {
     return session
   }
   const result = await window.api.aiVault.prepareSessionResume({
@@ -20,7 +32,8 @@ export async function prepareAiVaultSessionForResume(
     sessionId: session.sessionId,
     filePath: session.filePath,
     codexHome: session.codexHome,
-    executionHostId: session.executionHostId
+    executionHostId: session.executionHostId,
+    ...(fork ? { fork: true } : {})
   })
   if (result.useRealCodexHome) {
     return { ...session, codexHome: null }

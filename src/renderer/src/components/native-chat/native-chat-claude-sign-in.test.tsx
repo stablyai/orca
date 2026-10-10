@@ -61,7 +61,7 @@ describe('a Claude chat that failed for want of a sign-in', () => {
       { initialProps: 0 }
     )
     const notice = launchNotice('notSignedIn', result.current)
-    expect(notice?.text).toContain('Claude is not signed in for the selected account.')
+    expect(notice?.text).toContain("Claude isn't signed in.")
     expect(notice?.action?.label).toBe('Sign in')
     await act(async () => notice?.action?.onClick())
     expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'a' })

@@ -10,12 +10,10 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
-  loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   mobileShellBuildKind,
-  mobileWebShellFlagCanBeOn,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
@@ -510,16 +508,6 @@ describe('terminal link open mode preference', () => {
   })
 })
 
-/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
- *  the test says which build kind it is running as without asserting a type on `globalThis`. */
-function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
-  if (isDevelopmentBuild === undefined) {
-    Reflect.deleteProperty(globalThis, '__DEV__')
-    return
-  }
-  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
-}
-
 /** The build-time constant the release workflow sets. Under Metro this name is inlined before the
  *  bundle is written, so these cases measure the answer the inlined value produces, not the read. */
 function setShellBuildSwitch(value: string | undefined): void {
@@ -552,102 +540,5 @@ describe('the mobile shell build kind', () => {
     setShellBuildSwitch('ota')
 
     expect(mobileShellBuildKind()).toBe('ota')
-  })
-})
-
-describe('whether the hybrid shell flag can be on', () => {
-  beforeEach(() => {
-    setDevelopmentBuild(undefined)
-    setShellBuildSwitch(undefined)
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('cannot be on in %s with no switch set', (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-
-    expect(mobileWebShellFlagCanBeOn()).toBe(false)
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('can be on in %s built with the switch set to ota', (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    setShellBuildSwitch('ota')
-
-    expect(mobileWebShellFlagCanBeOn()).toBe(true)
-  })
-
-  it('can be on in a development build whatever the switch says', () => {
-    setDevelopmentBuild(true)
-
-    expect(mobileWebShellFlagCanBeOn()).toBe(true)
-  })
-})
-
-describe('hybrid shell flag', () => {
-  beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    setDevelopmentBuild(undefined)
-    setShellBuildSwitch(undefined)
-  })
-
-  it('reads the developer toggle in a development build', async () => {
-    setDevelopmentBuild(true)
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
-  })
-
-  it('is off in a development build until the toggle writes it on', async () => {
-    setDevelopmentBuild(true)
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('is off in %s even with the key left on, and never reads it', async (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    // The value a development build, or an OTA build this one was installed over, left behind in
-    // a container the install-over kept. The ability comes from the build, so the key cannot
-    // revive it — this is the case a native build shipped over an OTA build has to survive.
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('is on in %s built for ota with the key never written', async (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    setShellBuildSwitch('ota')
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
-  })
-
-  it('obeys an explicit off written by the Troubleshoot toggle in an ota build', async () => {
-    setDevelopmentBuild(false)
-    setShellBuildSwitch('ota')
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-  })
-
-  it('is off in an ota build whose store cannot be read at all', async () => {
-    setDevelopmentBuild(false)
-    setShellBuildSwitch('ota')
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('no store'))
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
   })
 })

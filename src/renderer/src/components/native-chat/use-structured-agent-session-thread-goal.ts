@@ -22,14 +22,22 @@ export type StructuredAgentSessionThreadGoal = {
 export function useStructuredAgentSessionThreadGoal(args: {
   journalItems: readonly AgentJournalRenderItem[]
   support: AgentSessionOptionsResult['threadGoal']
+  journalEpoch?: string | null
   mutate: StructuredAgentSessionMutate
 }): StructuredAgentSessionThreadGoal | null {
-  const { journalItems, mutate, support } = args
+  const { journalItems, mutate, support, journalEpoch } = args
   const [pending, setPending] = useState(false)
   const pendingRef = useRef(false)
   // The loaded window reaches the live head, so a goal row in it is newer than the
   // host's whole-journal answer; that answer covers only rows older than the window.
-  const loaded = useMemo(() => currentAgentSessionThreadGoal(journalItems), [journalItems])
+  const floor =
+    support?.contextFloor && (!journalEpoch || support.contextFloor.epoch === journalEpoch)
+      ? support.contextFloor.sequence
+      : 0
+  const loaded = useMemo(
+    () => currentAgentSessionThreadGoal(journalItems, floor),
+    [journalItems, floor]
+  )
   const goal = loaded === undefined ? (support?.current ?? null) : loaded
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {

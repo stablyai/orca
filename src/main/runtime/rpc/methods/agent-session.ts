@@ -61,6 +61,7 @@ function assertOperationTimestampWithinFutureSkew(clientOperationId: string): vo
 export const AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
+    permission: 'workspace',
     params: EnsureAgentSessionParams,
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) =>
       (runtime as AgentSessionRuntime).ensureAgentSession(
@@ -70,6 +71,7 @@ export const AGENT_SESSION_METHODS = [
   }),
   defineMethod({
     name: 'terminal.createAgentSession',
+    permission: 'workspace',
     params: CreateAgentSessionParams,
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)

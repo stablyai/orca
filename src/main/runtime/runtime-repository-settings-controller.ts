@@ -105,22 +105,11 @@ export class RuntimeRepositorySettingsController {
 
   async remove(repoSelector: string): Promise<{ removed: true }> {
     const store = this.deps.getStore()
-    if (!store?.removeProject) {
+    if (!store?.removeProjectForHost) {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.deps.resolveRepo(repoSelector)
-    const hostId = getRepoExecutionHostId(repo)
-    const idExistsOnOtherHost = store
-      .getRepos()
-      .some((entry) => entry.id === repo.id && getRepoExecutionHostId(entry) !== hostId)
-    if (idExistsOnOtherHost) {
-      if (!store.removeProjectForHost) {
-        throw new Error('runtime_unavailable')
-      }
-      store.removeProjectForHost(repo.id, hostId)
-    } else {
-      store.removeProject(repo.id)
-    }
+    store.removeProjectForHost(repo.id, getRepoExecutionHostId(repo))
     this.deps.forgetTerminalTopology(repo.id)
     this.deps.invalidateResolvedWorktrees()
     this.deps.invalidateWorktreeScan(repo.id)

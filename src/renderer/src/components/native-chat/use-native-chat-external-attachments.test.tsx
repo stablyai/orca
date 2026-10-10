@@ -587,9 +587,9 @@ describe('useNativeChatExternalAttachments', () => {
         '/srv/agent-session-attachments/u1/shot.png',
         null
       )
-      expect(chips.drop).toHaveBeenCalledExactlyOnceWith('chip-2')
+      expect(chips.drop).not.toHaveBeenCalled()
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u2/notes.md'
+        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
       ])
       // The client never reads its own disk for these paths: the server stores the bytes.
       expect(mocks.stat).not.toHaveBeenCalled()
@@ -653,11 +653,11 @@ describe('useNativeChatExternalAttachments', () => {
         )
       )
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u1/notes.md'
+        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/notes.md' }
       ])
     })
 
-    it('does not insert a file whose chip the user removed while it uploaded', async () => {
+    it('keeps each file operation ID through reference settlement, including removed chips', async () => {
       const upload = deferred<AgentSessionAttachmentPathUploadResult>()
       mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)
       const chips = trackingChips()
@@ -681,7 +681,8 @@ describe('useNativeChatExternalAttachments', () => {
       )
 
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u2/notes.md'
+        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/report.pdf' },
+        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
       ])
     })
 
@@ -709,7 +710,7 @@ describe('useNativeChatExternalAttachments', () => {
 
       expect(chips.drop).toHaveBeenCalledWith('chip-1')
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u2/notes.md'
+        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
       ])
       // The cause, the size limit here, rides in the same notice.
       expect(notices).toEqual([

@@ -20,7 +20,7 @@ vi.mock('./orcad-remote-record-file', async (importOriginal) => ({
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
-import { decommissionRemoteOrcad } from './orcad-remote-stop'
+import { decommissionRemoteOrcad } from './orcad-remote-decommission'
 import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
 import { parseOrcadActivationRecord } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'

@@ -9,9 +9,9 @@ import { shellEscape } from './ssh-connection-utils'
 import { removeRemoteFileCommand } from './ssh-remote-commands'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
-import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
-import { RELAY_REMOTE_DIR } from './relay-protocol'
+import { isWindowsRemoteHost } from './ssh-remote-platform'
 import {
+  orcadRemoteBaseDir,
   orcadWindowsHostOpCommand,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
@@ -30,7 +30,7 @@ function windowsBaseDir(target: OrcadRemoteExecTarget): string {
       'orcad host records on Windows need the remote home to find the pinned node.exe'
     )
   }
-  return joinRemotePath(target.host, target.remoteHome, RELAY_REMOTE_DIR)
+  return orcadRemoteBaseDir(target.host, target.remoteHome)
 }
 
 export async function readBoundedOrcadRemoteRecord(

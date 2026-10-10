@@ -538,8 +538,8 @@ describe("the queue's next card on a history page", () => {
 })
 
 describe('where the host would refuse the send', () => {
-  /** An idle source a /clear replaced, still holding a card: a crash before the carry leaves it. */
-  async function cardLeftOnAClearedSource() {
+  /** A new card in the same conversation after /clear inherits no earlier pause. */
+  async function cardAddedAfterClear() {
     await rig.settleAccepted(await rig.workingSend(), 'a')
     const fields = { command: 'clear' as const }
     const cleared = await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
@@ -549,12 +549,12 @@ describe('where the host would refuse the send', () => {
     expect(cleared).toMatchObject({ ok: true })
     const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
     if (!journal) {
-      throw new Error('expected the source open')
+      throw new Error('expected the conversation open')
     }
     const card = 'left-behind'
     await journal.queuedMessages.insert({
       messageId: card,
-      body: hostTestMessage('left on the source'),
+      body: hostTestMessage('queued after clear'),
       fingerprint: 'fp-left-behind',
       hostInstance: structuredAgentSessionHostInstance()
     })
@@ -565,17 +565,17 @@ describe('where the host would refuse the send', () => {
     return { card, journal, record, fence: record.lease.runtimeFence }
   }
 
-  it('a source a /clear replaced names no next card; the same idle state with no block names it', async () => {
-    const { card, journal, record, fence } = await cardLeftOnAClearedSource()
+  it('a card queued after clear is sendable with the completed clear record still present', async () => {
+    const { card, journal, record, fence } = await cardAddedAfterClear()
     const gate = structuredQueueSendGate(rig.store, HOST_TEST_SESSION)
-    expect(readQueuePublication(journal, gate).nextQueuedMessageId).toBeNull()
+    expect(readQueuePublication(journal, gate).nextQueuedMessageId).toBe(card)
     const { conversationCommand: _cleared, ...unblocked } = record
     const next = readQueuePublication(journal, () => ({ record: unblocked, fence }))
     expect(next.nextQueuedMessageId).toBe(card)
   })
 
   it('a rewind whose outcome is unknown names no next card', async () => {
-    const { journal, record, fence } = await cardLeftOnAClearedSource()
+    const { journal, record, fence } = await cardAddedAfterClear()
     const { conversationCommand: _cleared, ...unblocked } = record
     const rewind = {
       operationId: hostTestOperationId(),

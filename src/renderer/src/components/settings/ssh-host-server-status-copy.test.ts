@@ -33,7 +33,7 @@ describe('SSH host server status line', () => {
     ).not.toMatch(/\d/)
   })
 
-  it('shows a stopped server starting, and why one could not be started', () => {
+  it('shows startup progress and preserves the cause of unverifiable server contact', () => {
     expect(
       sshHostServerStatusLine(plain, { managedServer: { kind: 'setting-up', phase: 'starting' } })
         ?.text
@@ -49,7 +49,28 @@ describe('SSH host server status line', () => {
       })
     ).toEqual({
       tone: 'warning',
-      text: 'The managed Orca server isn’t running and couldn’t be started.',
+      text: 'Orca couldn’t confirm that the managed server is answering.',
+      detail
+    })
+  })
+
+  it.each([
+    'The managed Orca server process is live but is not answering.',
+    'SSH operation was cancelled',
+    'SSH transport closed before the server answered'
+  ])('does not infer process exit from unverifiable contact: %s', (detail) => {
+    expect(
+      sshHostServerStatusLine(plain, {
+        managedServer: {
+          kind: 'managed',
+          environmentId: 'e',
+          serving: { state: 'unverifiable', detail },
+          update: { state: 'deferred', detail: 'Terminals are running.' }
+        }
+      })
+    ).toEqual({
+      tone: 'warning',
+      text: 'Orca couldn’t confirm that the managed server is answering.',
       detail
     })
   })
