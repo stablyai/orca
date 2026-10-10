@@ -8,6 +8,7 @@ import {
 export const ORCAD_TERMINAL_CENSUS_METHODS = [
   defineMethod({
     name: ORCAD_TERMINAL_CENSUS_METHOD,
+    permission: 'host-admin',
     params: OrcadTerminalCensusParamsSchema,
     handler: async (params, { runtime }) => {
       // Why lazy: the census reaches the daemon modules, whose xterm polyfill defines a global

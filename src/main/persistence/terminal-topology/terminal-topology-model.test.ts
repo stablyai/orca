@@ -6,11 +6,19 @@ import { mulberry32 } from '../../../shared/agent-tui-ansi-fuzz-stream'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { projectTerminalTopologySlice } from '../../runtime/terminal-topology-projection'
+import { retireTerminalSurfaceFromPersistence } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import type { Store } from '../loading-store/store'
+import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
-import { collectTerminalLeafOwners, isSameTerminal } from './terminal-owner-invariants'
+import type { TerminalSurfaceCloseOptions } from '../../runtime/terminal-surface-close'
+import { leafIds, WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
+import {
+  checkWorkspaceLayoutRules,
+  type WorkspaceLayoutPartition,
+  type WorkspaceLayoutRule,
+  type WorkspaceLayoutViolation
+} from '../../../shared/workspace-layout/workspace-layout-rules'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
   emptyTerminalSessionProfile,
@@ -59,25 +67,6 @@ function makeIds(random: () => number) {
   }
 }
 
-function leafIds(node: TerminalPaneLayoutNode | null | undefined): string[] {
-  if (!node) {
-    return []
-  }
-  return node.type === 'leaf' ? [node.leafId] : [...leafIds(node.first), ...leafIds(node.second)]
-}
-
-function withoutLeaf(node: TerminalPaneLayoutNode, leafId: string): TerminalPaneLayoutNode | null {
-  if (node.type === 'leaf') {
-    return node.leafId === leafId ? null : node
-  }
-  const first = withoutLeaf(node.first, leafId)
-  const second = withoutLeaf(node.second, leafId)
-  if (!first || !second) {
-    return first ?? second
-  }
-  return { ...node, first, second }
-}
-
 function sleepingRecord(
   worktreeId: string,
   tabId: string,
@@ -97,109 +86,31 @@ function sleepingRecord(
   }
 }
 
-/** The desktop window's copy of the session: it authors tabs and layouts and saves them whole. */
-class WindowSession {
-  constructor(public session: WorkspaceSessionState) {}
-
-  addTab(worktreeId: string, tabId: string, leafId: string): void {
-    const tabs = this.session.tabsByWorktree[worktreeId] ?? []
-    const tab: TerminalTab = {
-      id: tabId,
-      ptyId: null,
-      worktreeId,
-      title: `Terminal ${tabs.length + 1}`,
-      customTitle: null,
-      color: null,
-      sortOrder: tabs.length,
-      createdAt: 1
-    }
-    this.session.tabsByWorktree = { ...this.session.tabsByWorktree, [worktreeId]: [...tabs, tab] }
-    this.setLayout(tabId, { type: 'leaf', leafId }, {})
-  }
-
-  setLayout(tabId: string, root: TerminalPaneLayoutNode, ptyIdsByLeafId: Record<string, string>) {
-    this.session.terminalLayoutsByTabId = {
-      ...this.session.terminalLayoutsByTabId,
-      [tabId]: {
-        root,
-        activeLeafId: leafIds(root)[0] ?? null,
-        expandedLeafId: null,
-        ptyIdsByLeafId
-      }
-    }
-  }
-
-  bind(tabId: string, leafId: string, ptyId: string): void {
-    const layout = this.session.terminalLayoutsByTabId[tabId]
-    if (layout?.root) {
-      this.setLayout(tabId, layout.root, { ...layout.ptyIdsByLeafId, [leafId]: ptyId })
-    }
-    this.setTabPtyId(tabId, ptyId)
-  }
-
-  /** `clearTabPtyId` on exit: the tab's live id goes; the layout keeps the binding as a resume hint. */
-  setTabPtyId(tabId: string, ptyId: string | null): void {
-    this.session.tabsByWorktree = Object.fromEntries(
-      Object.entries(this.session.tabsByWorktree).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.map((tab) => (tab.id === tabId ? { ...tab, ptyId } : tab))
-      ])
-    )
-  }
-
-  removeTab(tabId: string): void {
-    this.session.tabsByWorktree = Object.fromEntries(
-      Object.entries(this.session.tabsByWorktree).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.filter((tab) => tab.id !== tabId)
-      ])
-    )
-    const { [tabId]: _removed, ...layouts } = this.session.terminalLayoutsByTabId
-    void _removed
-    this.session.terminalLayoutsByTabId = layouts
-    this.setSleeping(
-      Object.fromEntries(
-        Object.entries(this.session.sleepingAgentSessionsByPaneKey ?? {}).filter(
-          ([paneKey]) => !paneKey.startsWith(`${tabId}:`)
-        )
-      )
-    )
-  }
-
-  setSleeping(records: Record<string, SleepingAgentSessionRecord>): void {
-    this.session.sleepingAgentSessionsByPaneKey = records
-  }
-
-  snapshot(): WorkspaceSessionState {
-    return structuredClone(this.session)
-  }
+function layoutViolations(
+  session: WorkspaceSessionState,
+  previous: WorkspaceSessionState | null
+): WorkspaceLayoutViolation[] {
+  const partition = (state: WorkspaceSessionState): WorkspaceLayoutPartition[] => [
+    { hostId: LOCAL_EXECUTION_HOST_ID, session: state }
+  ]
+  return checkWorkspaceLayoutRules(partition(session), previous ? partition(previous) : undefined)
 }
 
-/** Fails on a terminal bound to two leaves or a leaf in two tabs, naming both owners. */
-function expectOwnerInvariants(session: WorkspaceSessionState, context: string): void {
-  const owners = collectTerminalLeafOwners({ hostId: LOCAL_EXECUTION_HOST_ID, session })
-  const describe = (owner: (typeof owners)[number]): string =>
-    `${owner.worktreeId} ${owner.tab.id}:${owner.leafId} → ${owner.ptyId ?? 'unbound'}`
-  const breaches: string[] = []
-  for (const [index, left] of owners.entries()) {
-    for (const right of owners.slice(index + 1)) {
-      if (left.leafId === right.leafId && left.tab.id !== right.tab.id) {
-        breaches.push(`leaf in two tabs: ${describe(left)} | ${describe(right)}`)
-      } else if (left.leafId !== right.leafId && isSameTerminal(left, right)) {
-        breaches.push(`terminal on two leaves: ${describe(left)} | ${describe(right)}`)
-      }
-    }
-  }
-  expect(breaches, context).toEqual([])
+/** Fails on any structural breach in main's layout, or an id that changed since the last step. */
+function expectLayoutRules(
+  session: WorkspaceSessionState,
+  previous: WorkspaceSessionState | null,
+  context: string
+): void {
+  expect(layoutViolations(session, previous), context).toEqual([])
 }
 
-/** Main's projected slices, reduced to what the model states. */
+/** Main's persisted topology per worktree, reduced to what the model states. */
 function projectedTopology(session: WorkspaceSessionState) {
   return Object.fromEntries(
     WORKTREES.map((worktreeId) => {
-      const slice = projectTerminalTopologySlice(session, LOCAL_EXECUTION_HOST_ID, worktreeId)
-      const tabs = slice.tabs.map((tab) => {
-        const layout = slice.layouts[tab.id]
+      const tabs = (session.tabsByWorktree?.[worktreeId] ?? []).map((tab) => {
+        const layout = session.terminalLayoutsByTabId?.[tab.id]
         return {
           tabId: tab.id,
           leaves: Object.fromEntries(
@@ -207,7 +118,11 @@ function projectedTopology(session: WorkspaceSessionState) {
           )
         }
       })
-      return [worktreeId, { tabs, sleeping: Object.keys(slice.sleeping).sort() }]
+      const sleeping = Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})
+        .filter(([, record]) => record.worktreeId === worktreeId)
+        .map(([paneKey]) => paneKey)
+        .sort()
+      return [worktreeId, { tabs, sleeping }]
     })
   )
 }
@@ -244,6 +159,9 @@ type Op =
   | 'wake'
   | 'restart'
   | 'quit_restart'
+  | 'client_close_tab'
+  | 'client_split'
+  | 'exit_retire'
 
 const OPS: readonly Op[] = [
   'new_tab',
@@ -258,8 +176,53 @@ const OPS: readonly Op[] = [
   'sleep',
   'wake',
   'restart',
-  'quit_restart'
+  'quit_restart',
+  'client_close_tab',
+  'client_split',
+  'exit_retire'
 ]
+
+/** Who made a workspace-session write, so a breach names its writer. */
+type Writer =
+  | 'load'
+  | 'window save'
+  | 'stale window save'
+  | 'quit stage'
+  | 'spawn bind'
+  | 'close commit'
+  | 'leaf move'
+  | 'client close'
+  | 'host split'
+  | 'exit retire'
+
+/**
+ * Mid-step breaches main has today by design; each must heal by the step's end, where nothing is
+ * exempt. Main mints a terminal tab row (a spawn that beats the window's save, a pane drag-out) but
+ * only the window writes the tab bar, so the row lacks a tab-bar entry until the window's next save.
+ */
+const TWO_WRITER_TRANSIENTS: readonly { rule: WorkspaceLayoutRule; op: Op; writer: Writer }[] = [
+  { rule: 'tab_bar_missing', op: 'new_tab', writer: 'spawn bind' },
+  { rule: 'tab_lists_disagree', op: 'new_tab', writer: 'spawn bind' },
+  { rule: 'tab_lists_disagree', op: 'move_pane', writer: 'leaf move' }
+]
+
+function isTwoWriterTransient(violation: WorkspaceLayoutViolation, op: Op, writer: Writer) {
+  return TWO_WRITER_TRANSIENTS.some(
+    (allowed) => allowed.rule === violation.rule && allowed.op === op && allowed.writer === writer
+  )
+}
+
+/** Main's PTY-exit retirement (`stageTerminalSurfaceRetirements`): in memory now, durable after. */
+async function retireExitedPane(
+  store: Store,
+  surface: { worktreeId: string; parentTabId: string; leafId: string; ptyId: string }
+): Promise<void> {
+  const current = store.getWorkspaceSession()
+  const next = retireTerminalSurfaceFromPersistence(current, surface)
+  expect(next).not.toBe(current)
+  store.setWorkspaceSession(next)
+  await store.runDurableMutation(() => ({ value: undefined, persist: 'if-dirty' }))
+}
 
 async function runSeed(seed: number): Promise<string[]> {
   const random = mulberry32(seed)
@@ -272,7 +235,46 @@ async function runSeed(seed: number): Promise<string[]> {
   const window = new WindowSession(structuredClone(store.getWorkspaceSession()))
   const model: Model = new Map()
   const log: string[] = []
-  const save = (): void => store.setWorkspaceSession(window.snapshot())
+  let previous: WorkspaceSessionState | null = null
+  let op: Op = OPS[0]!
+  let writer: Writer = 'load'
+  // Every in-memory session write, not only each step's end, must hold the rules.
+  const writeBreaches: string[] = []
+  let lastWritten = structuredClone(store.getWorkspaceSession())
+  const watchWrites = (): (() => void) =>
+    store.onWorkspaceSessionWritten(() => {
+      // Why try: a throw here would break main's write path instead of failing the seed.
+      try {
+        const session = store.getWorkspaceSession()
+        for (const violation of layoutViolations(session, lastWritten)) {
+          if (!isTwoWriterTransient(violation, op, writer)) {
+            writeBreaches.push(`${writer}: ${violation.rule}: ${violation.detail}`)
+          }
+        }
+        lastWritten = structuredClone(session)
+      } catch (error) {
+        writeBreaches.push(`write check threw: ${String(error)}`)
+      }
+    })
+  let unwatchWrites = watchWrites()
+  const save = (): void => {
+    writer = 'window save'
+    store.setWorkspaceSession(window.snapshot())
+  }
+  /** A save the window built before it learned of a concurrent change, landing `ticks` turns later. */
+  const staleSave = async (stale: WorkspaceSessionState, ticks: number): Promise<void> => {
+    for (let tick = 0; tick < ticks; tick++) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    writer = 'stale window save'
+    store.setWorkspaceSession(stale)
+  }
+  const labeled =
+    <T>(label: Writer, mutate: () => DurableProfileStateMutation<T>) =>
+    (): DurableProfileStateMutation<T> => {
+      writer = label
+      return mutate()
+    }
   const panes = () =>
     [...model].flatMap(([tabId, tab]) =>
       [...tab.leaves].map(([leafId, pane]) => ({ tabId, leafId, tab, pane }))
@@ -280,39 +282,77 @@ async function runSeed(seed: number): Promise<string[]> {
   const splitTabs = () => [...model].filter(([, tab]) => tab.leaves.size > 1)
 
   const bind = async (worktreeId: string, tabId: string, leafId: string, ptyId: string) => {
-    await expect(store.persistPtyBinding({ worktreeId, tabId, leafId, ptyId })).resolves.toBe(true)
+    const args = { worktreeId, tabId, leafId, ptyId }
+    await expect(
+      store.persistPtyBinding(() => {
+        writer = 'spawn bind'
+        return args
+      })
+    ).resolves.toBe(true)
     window.bind(tabId, leafId, ptyId)
     model.get(tabId)!.leaves.set(leafId, { ptyId, sleeping: false })
   }
 
+  const closeMutation = (
+    worktreeId: string,
+    target: TerminalSurfaceCloseTarget,
+    options: TerminalSurfaceCloseOptions
+  ) =>
+    closeLeafOrTab({
+      worktreeId,
+      target,
+      options,
+      requestedSession: store.getWorkspaceSession(),
+      ownerMatches: () => true,
+      hostIds: () => [LOCAL_EXECUTION_HOST_ID],
+      getSession: (hostId) => store.getWorkspaceSession(hostId),
+      setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
+      onClosed: () => {}
+    })
+
   /** `closeTerminalSurfaceFromRenderer`: the window removed the surface; main commits the close. */
   const commitClose = async (worktreeId: string, target: TerminalSurfaceCloseTarget) => {
     const refusal = await store.runDurableMutation(
-      closeLeafOrTab({
-        worktreeId,
-        target,
-        options: { allowMissing: true, force: true, closedByLayoutOwner: true, reason: 'user' },
-        requestedSession: store.getWorkspaceSession(),
-        ownerMatches: () => true,
-        hostId: () => LOCAL_EXECUTION_HOST_ID,
-        getSession: (hostId) => store.getWorkspaceSession(hostId),
-        setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
-        onClosed: () => {}
-      })
+      labeled(
+        'close commit',
+        closeMutation(worktreeId, target, {
+          allowMissing: true,
+          force: true,
+          closedByLayoutOwner: true,
+          reason: 'user'
+        })
+      )
     )
     expect(refusal).toBeUndefined()
   }
 
+  /** Drops a pane from the window's copy, with its sleeping record. */
+  const windowDropsPane = (tabId: string, leafId: string): void => {
+    const layout = window.session.terminalLayoutsByTabId[tabId]!
+    const { [leafId]: _closed, ...bindings } = layout.ptyIdsByLeafId ?? {}
+    void _closed
+    window.setLayout(tabId, withoutLeaf(layout.root!, leafId)!, bindings)
+    const { [`${tabId}:${leafId}`]: _record, ...sleeping } =
+      window.session.sleepingAgentSessionsByPaneKey ?? {}
+    void _record
+    window.setSleeping(sleeping)
+  }
+
   const reopen = async (stageQuit: boolean): Promise<void> => {
     if (stageQuit) {
+      writer = 'quit stage'
       store.stageWorkspaceSessionBeforeUnload(window.snapshot())
     }
+    writer = 'load'
+    unwatchWrites()
     store = await reopenTopologyStore(store, directory)
+    lastWritten = structuredClone(store.getWorkspaceSession())
+    unwatchWrites = watchWrites()
     window.session = structuredClone(store.getWorkspaceSession())
   }
 
   for (let step = 0; step < OPS_PER_SEED; step++) {
-    const op = pick(OPS)!
+    op = pick(OPS)!
     switch (op) {
       case 'new_tab': {
         const worktreeId = pick(WORKTREES)!
@@ -370,14 +410,7 @@ async function runSeed(seed: number): Promise<string[]> {
           continue
         }
         log.push(`${op} ${tabId}:${leafId}`)
-        const layout = window.session.terminalLayoutsByTabId[tabId]!
-        const { [leafId]: _closed, ...bindings } = layout.ptyIdsByLeafId ?? {}
-        void _closed
-        window.setLayout(tabId, withoutLeaf(layout.root!, leafId)!, bindings)
-        const { [`${tabId}:${leafId}`]: _record, ...sleeping } =
-          window.session.sleepingAgentSessionsByPaneKey ?? {}
-        void _record
-        window.setSleeping(sleeping)
+        windowDropsPane(tabId, leafId)
         tab.leaves.delete(leafId)
         await commitClose(tab.worktreeId, { kind: 'pane', tabId, leafId })
         save()
@@ -405,6 +438,7 @@ async function runSeed(seed: number): Promise<string[]> {
         const targetTabId = ids.tab()
         const pane = source.leaves.get(leafId)!
         log.push(`${op} ${sourceTabId}:${leafId} → ${targetTabId}`)
+        writer = 'leaf move'
         await expect(
           store.moveTerminalLeafToNewTab({
             worktreeId: source.worktreeId,
@@ -484,6 +518,98 @@ async function runSeed(seed: number): Promise<string[]> {
         save()
         break
       }
+      case 'client_close_tab': {
+        const tabId = pick([...model.keys()])
+        if (!tabId) {
+          continue
+        }
+        const ticks = Math.floor(random() * 4)
+        log.push(`${op} ${tabId} stale-save+${ticks}`)
+        const { worktreeId } = model.get(tabId)!
+        // A paired client's close (`closeTerminalSurface`, not the layout owner's) races a window
+        // save built while it still showed the tab.
+        const [refusal] = await Promise.all([
+          store.runDurableMutation(
+            labeled(
+              'client close',
+              closeMutation(worktreeId, { kind: 'tab', tabId }, { reason: 'user' })
+            )
+          ),
+          staleSave(window.snapshot(), ticks)
+        ])
+        expect(refusal).toBeUndefined()
+        window.removeTab(tabId)
+        model.delete(tabId)
+        save()
+        break
+      }
+      case 'client_split': {
+        const target = pick(panes().filter(({ pane }) => pane.ptyId))
+        if (!target) {
+          continue
+        }
+        const { worktreeId } = target.tab
+        const leafId = ids.leaf()
+        const ptyId = ids.pty(worktreeId)
+        const ticks = Math.floor(random() * 4)
+        log.push(`${op} ${target.tabId}:${target.leafId} → ${leafId} ${ptyId} stale-save+${ticks}`)
+        // `terminal.split` from a client or the CLI: main mints the pane while the window's
+        // in-flight save lacks it.
+        const [bound] = await Promise.all([
+          store.persistPtyBinding(() => {
+            writer = 'host split'
+            return {
+              worktreeId,
+              tabId: target.tabId,
+              leafId,
+              ptyId,
+              hostAdmittedMembership: true,
+              expectedSourceBinding: {
+                tabId: target.tabId,
+                leafId: target.leafId,
+                ptyId: target.pane.ptyId!
+              }
+            }
+          }),
+          staleSave(window.snapshot(), ticks)
+        ])
+        expect(bound).toBe(true)
+        // The window then shows the pane main created.
+        const layout = store.getWorkspaceSession().terminalLayoutsByTabId[target.tabId]!
+        window.setLayout(target.tabId, layout.root!, layout.ptyIdsByLeafId ?? {})
+        target.tab.leaves.set(leafId, { ptyId, sleeping: false })
+        save()
+        break
+      }
+      case 'exit_retire': {
+        // A sleeping pane has no process left to exit.
+        const target = pick(panes().filter(({ pane }) => pane.ptyId && !pane.sleeping))
+        if (!target) {
+          continue
+        }
+        const ticks = Math.floor(random() * 4)
+        log.push(`${op} ${target.tabId}:${target.leafId} stale-save+${ticks}`)
+        writer = 'exit retire'
+        await Promise.all([
+          retireExitedPane(store, {
+            worktreeId: target.tab.worktreeId,
+            parentTabId: target.tabId,
+            leafId: target.leafId,
+            ptyId: target.pane.ptyId!
+          }),
+          staleSave(window.snapshot(), ticks)
+        ])
+        // The window then drops the exited pane, and its tab with its last pane.
+        target.tab.leaves.delete(target.leafId)
+        if (target.tab.leaves.size === 0) {
+          window.removeTab(target.tabId)
+          model.delete(target.tabId)
+        } else {
+          windowDropsPane(target.tabId, target.leafId)
+        }
+        save()
+        break
+      }
       case 'restart':
       case 'quit_restart': {
         log.push(op)
@@ -492,16 +618,20 @@ async function runSeed(seed: number): Promise<string[]> {
       }
     }
     const context = `seed ${seed}, step ${step}:\n${log.join('\n')}`
+    expect(writeBreaches, context).toEqual([])
     const session = store.getWorkspaceSession()
-    expectOwnerInvariants(session, context)
+    expectLayoutRules(session, previous, context)
+    previous = structuredClone(session)
     expect(projectedTopology(session), context).toEqual(expectedTopology(model))
   }
 
   // The saved profile, read back cold, holds the same layout.
   await reopen(false)
   const context = `seed ${seed}, after reopen:\n${log.join('\n')}`
-  expectOwnerInvariants(store.getWorkspaceSession(), context)
+  expectLayoutRules(store.getWorkspaceSession(), previous, context)
   expect(projectedTopology(store.getWorkspaceSession()), context).toEqual(expectedTopology(model))
+  expect(writeBreaches, context).toEqual([])
+  unwatchWrites()
   await store.freezeWritesAsync()
   return log
 }

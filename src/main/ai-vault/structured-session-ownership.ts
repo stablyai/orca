@@ -99,7 +99,8 @@ function ownershipLookup():
 }
 
 export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResumeArgs): void {
-  const ownership = findResumeOwnership(args)
+  // A fork writes a new conversation, and preparing its home never writes this one.
+  const ownership = args.fork ? null : findResumeOwnership(args)
   if (ownership) {
     refuseLegacyWriter(ownership)
   }
@@ -202,6 +203,10 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
   }
   const provider = /codex(?:\.exe)?$/i.test(normalized[executableIndex]!) ? 'codex' : 'claude'
   const args = normalized.slice(executableIndex + 1)
+  // `codex fork` already falls through below: it carries no `resume` marker.
+  if (provider === 'claude' && isClaudeForkInvocation(args)) {
+    return null
+  }
   // `--continue`/`-c` resume the most recent session and never take an id, so a
   // following token is a prompt, not a target — they are always target-less.
   const targetlessFlags = provider === 'codex' ? [] : ['--continue', '-c']
@@ -228,6 +233,19 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
     provider,
     target: candidate && !candidate.startsWith('-') ? candidate : null
   }
+}
+
+/** A fork reads the conversation and writes a new one, so it is no second writer. Not when
+ *  `--session-id` names the id it writes under, and nothing after `--` is an option. */
+function isClaudeForkInvocation(args: readonly string[]): boolean {
+  const terminatorIndex = args.indexOf('--')
+  const options = (terminatorIndex === -1 ? args : args.slice(0, terminatorIndex)).map((token) =>
+    token.toLowerCase()
+  )
+  return (
+    options.includes('--fork-session') &&
+    !options.some((token) => token === '--session-id' || token.startsWith('--session-id='))
+  )
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

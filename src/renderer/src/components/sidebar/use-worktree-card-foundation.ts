@@ -65,6 +65,21 @@ export function useWorktreeCardFoundation({
     [worktree, openModal]
   )
 
+  const handleManageLinks = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation()
+      openModal('edit-meta', {
+        worktreeId: worktree.id,
+        repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
+        currentDisplayName: worktree.displayName,
+        currentComment: worktree.comment,
+        focus: 'links'
+      })
+    },
+    [worktree, openModal]
+  )
+
   const handleEditComment = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -220,6 +235,7 @@ export function useWorktreeCardFoundation({
     newCardStyle,
     compactCards,
     handleEditIssue,
+    handleManageLinks,
     handleEditComment,
     handleOpenAutomation,
     handleOpenAutomationRun,

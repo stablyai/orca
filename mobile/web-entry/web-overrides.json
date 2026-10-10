@@ -30,10 +30,6 @@
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
-      "file": "src/platform/native-chat-image-fingerprint.web.ts",
-      "reason": "The web image uploader uses WebCrypto SHA-256 when available to reduce JavaScript hashing of large images. Native keeps the synchronous portable fingerprint; unavailable or failed web crypto uses that same portable fallback."
-    },
-    {
       "file": "src/platform/host-os.web.ts",
       "reason": "Platform.OS is web inside the shell's page, but the keyboard the page lifts over is the phone's, reported in that OS's own terms: iOS counts the home indicator. Keyboard and inset arithmetic branches on the host OS, so this answers the phone's OS from the WebView's user agent, and the page computes what the native screen computes."
     },
@@ -180,6 +176,10 @@
     {
       "file": "src/mobile-web-shell/catch-all-page-route.web.tsx",
       "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
+    },
+    {
+      "file": "src/mobile-web-shell/page-owns-host-area.web.ts",
+      "reason": "Natively there is no `init` and the shell layout decides who draws the host sidebar. Inside the page the only answer is the `ownsHostArea` init fact, never the page's own width, because a detail-route page on a wide iPad sits beside the shell's sidebar."
     },
     {
       "file": "src/session/use-notification-pane-navigation.web.ts",

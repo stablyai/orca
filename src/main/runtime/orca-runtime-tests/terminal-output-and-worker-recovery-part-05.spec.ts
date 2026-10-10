@@ -151,7 +151,7 @@ describe('OrcaRuntimeService', () => {
       deferredDispatchIds: ['dispatch-missing', 'dispatch-ambiguous']
     })
     expect(listProcesses).toHaveBeenCalledOnce()
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(getForegroundProcess).not.toHaveBeenCalled()
     await runtime.refreshPtyForegroundAgentFromController('pty-ambiguous')
     expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-ambiguous')
@@ -263,7 +263,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
       ptyId: 'pty-folder-legacy',
       title: 'Folder worker',
@@ -400,7 +400,7 @@ describe('OrcaRuntimeService', () => {
     expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
     expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith(`ssh:${connectionId}`, LIST_PROVIDER_DEADLINE)
     expect(sshSession.tabsByWorktree[TEST_FOLDER_WORKSPACE_KEY]).toContainEqual(
       expect.objectContaining({
         id: 'legacy-ssh-folder-worker',

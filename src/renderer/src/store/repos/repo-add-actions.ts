@@ -5,7 +5,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
@@ -18,9 +17,9 @@ import { ERROR_TOAST_DURATION } from './repo-state'
 import {
   fetchRuntimeAddProjectPathStatus,
   getAddRepoPathRouteSettings,
-  getRuntimeEnvironmentDisplayName,
-  repoWithFetchedOwner
+  getRuntimeEnvironmentDisplayName
 } from './owner-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
@@ -91,7 +90,7 @@ export function createRepoAddActions(
           })
           return null
         }
-        repo = repoWithFetchedOwner(repo, target)
+        repo = adoptFromEndpoint(target, { kind: 'repo', row: repo })
         const repoIdentity = getRepoHostIdentity(repo)
         const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
         if (alreadyAdded) {
@@ -194,10 +193,7 @@ export function createRepoAddActions(
             store: get(),
             onboarding,
             hasExistingProject: hadProjectBeforeAdd,
-            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID,
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              repo.connectionId
-            )
+            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID
           })
           await revealOnboardingFolderWithAgentLaunch({
             worktreeId: folderWorktree.id,

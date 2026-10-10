@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { buildOrcadEntry, ORCAD_COMMONJS_MODULE_OPTIONS } from './orcad-entry-build.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const directory = mkdtempSync(join(tmpdir(), 'orca-structured-provider-build-'))
 const bundle = join(directory, 'orcad-server.js')

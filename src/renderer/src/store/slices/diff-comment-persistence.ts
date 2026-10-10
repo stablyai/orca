@@ -12,6 +12,8 @@ import {
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
+import { callHostRoute } from '@/runtime/host-route-call'
+import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
@@ -65,21 +67,23 @@ async function persist(
       scope.folderWorkspaceId,
       executionHostId
     )
-    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
-    const updated =
-      target.kind === 'local'
-        ? await window.api.folderWorkspaces.update({
-            folderWorkspaceId: scope.folderWorkspaceId,
-            updates: { diffComments }
-          })
-        : (
-            await callRuntimeRpc<{ folderWorkspace: FolderWorkspace | null }>(
-              target,
-              'folderWorkspace.update',
-              { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
-              { timeoutMs: 15_000 }
-            )
-          ).folderWorkspace
+    const updated = runtimeEnvironmentId
+      ? (
+          await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
+            // Why local: the folder's catalog row lives on the server even when it names an SSH target.
+            hostRouteForAuthority({
+              endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
+              at: 'local'
+            }),
+            'folderWorkspace.update',
+            { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
+            { timeoutMs: 15_000 }
+          )
+        ).folderWorkspace
+      : await window.api.folderWorkspaces.update({
+          folderWorkspaceId: scope.folderWorkspaceId,
+          updates: { diffComments }
+        })
     if (!updated?.diffComments) {
       throw new Error('Failed to persist folder workspace review notes')
     }

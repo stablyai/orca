@@ -8,7 +8,10 @@ import {
   claudeRootExitObserved,
   settleClaudeExitedSession
 } from './claude-structured-session-close'
-import { failClaudeStartup } from './claude-structured-session-startup-state'
+import {
+  claudeStartupFailureCause,
+  failClaudeStartup
+} from './claude-structured-session-startup-state'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -96,7 +99,7 @@ export function settleClaudeUnexpectedExit(
       // blames the provider; an Orca fault that closed it is Orca's.
       failure:
         exit.session.startup.state !== 'proven'
-          ? providerStartupFailureFact(exit.session.startup.failure ?? exit.error)
+          ? providerStartupFailureFact(claudeStartupFailureCause(exit.session, exit.error))
           : providerExitObserved(exit.error)
             ? agentSessionFailureFact('providerExited', {
                 detail: providerDiagnosticOf(exit.error)

@@ -401,8 +401,8 @@ describe('SSH OpenCode runtime setup', () => {
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'failed'
     )
-    // Includes the store-lock round trips (mkdir, acquire, re-probe, release) around promotion.
-    expect(mocks.exec).toHaveBeenCalledTimes(11)
+    // Includes the store-lock round trips (mkdir, acquire, re-probe+promote, release) around promotion.
+    expect(mocks.exec).toHaveBeenCalledTimes(10)
     expect(mocks.write).not.toHaveBeenCalled()
   })
 

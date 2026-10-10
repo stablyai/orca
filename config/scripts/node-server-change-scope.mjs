@@ -31,9 +31,15 @@ const ALWAYS_FILES = new Set([
   '.github/workflows/node-server-tests.yml',
   'config/scripts/node-server-change-scope.mjs',
   'config/scripts/node-server-change-scope.test.mjs',
+  'config/scripts/workspace-source-exports.mjs',
+  'config/scripts/workspace-source-exports.test.mjs',
   'config/scripts/headless-detector-compiler-cache.mjs',
   'config/scripts/node-server-qualification.mjs',
-  'config/scripts/node-server-qualification.test.mjs'
+  'config/scripts/node-server-qualification.test.mjs',
+  // The source graph sees process-host source, not the build that emits the dist servers load.
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json'
 ])
 const ALWAYS_PREFIXES = [
   '.github/actions/install-node-dependencies/',
@@ -56,7 +62,7 @@ const ALWAYS_PREFIXES = [
 ]
 
 export function discoverNodeServerTests(root = ROOT) {
-  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true })
+  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true, template: true })
   return globSync(
     ['src/**/*.test.{ts,tsx}', 'config/scripts/**/*.test.{ts,mjs}', 'tests/e2e/**/*.unit.test.ts'],
     { cwd: root }
@@ -74,8 +80,28 @@ export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {})
       ORCAD_CHILD_ENTRY_POINTS,
       ORCAD_ENTRY_POINT,
       ORCAD_LAUNCHER_ENTRY_POINT
+    },
+    { createWorkspaceSourceResolver }
+  ] = await Promise.all([
+    import('esbuild'),
+    import('./orcad-entry-build.mjs'),
+    import('./workspace-source-exports.mjs')
+  ])
+  const workspace = createWorkspaceSourceResolver(root)
+  const manifests = new Set()
+  const workspaceSources = {
+    name: 'workspace-source-exports',
+    setup(pluginBuild) {
+      pluginBuild.onResolve({ filter: /^[^./]/ }, ({ path }) => {
+        const source = workspace.resolve(path)
+        if (!source) {
+          return null
+        }
+        manifests.add(source.manifest)
+        return { path: source.path }
+      })
     }
-  ] = await Promise.all([import('esbuild'), import('./orcad-entry-build.mjs')])
+  }
   const entries = entryPoints ?? [
     ORCAD_ENTRY_POINT,
     ORCAD_LAUNCHER_ENTRY_POINT,
@@ -94,17 +120,26 @@ export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {})
     splitting: true,
     packages: 'external',
     loader: { '.svg': 'empty', '.png': 'empty', '.webp': 'empty', '.css': 'empty' },
-    plugins: [externalNativeAddons],
+    plugins: [workspaceSources, externalNativeAddons],
     metafile: true,
     logLevel: 'silent'
   })
   if (result.warnings.length > 0) {
     throw new Error(result.warnings.map((warning) => warning.text).join('\n'))
   }
-  return new Set(
-    Object.keys(result.metafile.inputs).map((file) =>
+  return new Set([
+    ...manifests,
+    ...Object.keys(result.metafile.inputs).map((file) =>
       file.replaceAll('\\', '/').replace(/\?.*$/, '')
     )
+  ])
+}
+
+function isSourceUnitTest(file) {
+  return (
+    /^src\/(?:[^/]+\/)*[^/]+\.test\.(?:ts|tsx)$/.test(file) &&
+    !file.includes('/../') &&
+    !file.includes('/./')
   )
 }
 
@@ -116,11 +151,11 @@ export async function classifyNodeServerChanges(
   if (changedFiles.length === 0) {
     return { shouldRun: true, reason: 'No complete changed-file evidence' }
   }
-  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true })
+  const selectors = nodeServerTestPaths({ artifact: true, crossRuntime: true, template: true })
   const forced = changedFiles.find(
     (file) =>
       ALWAYS_FILES.has(file) ||
-      ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+      (ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) && !isSourceUnitTest(file)) ||
       /^config\/scripts\/[^/]*orcad[^/]*$/.test(file) ||
       selectors.some((selector) => file.includes(selector))
   )

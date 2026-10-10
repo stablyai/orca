@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 
@@ -25,6 +26,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+    resetMobileNativeChatDraftStoreForTests()
     renderer = null
     state = null
   })
@@ -85,6 +87,20 @@ describe('useMobileNativeChatDrafts launch draft', () => {
         createElement(Harness, { tabId: 'a', launchDraft: 'https://github.com/o/r/issues/12' })
       )
     )
+    expect(state?.composerText).toBe('')
+  })
+
+  it('does not resurrect a cleared prefill after the chat screen remounts', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId: 'a', launchDraft: 'issue link' }))
+    })
+    expect(state?.composerText).toBe('issue link')
+    act(() => state?.setComposerText(''))
+    act(() => renderer?.unmount())
+
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId: 'a', launchDraft: 'issue link' }))
+    })
     expect(state?.composerText).toBe('')
   })
 

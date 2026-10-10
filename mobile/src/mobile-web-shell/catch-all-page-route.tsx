@@ -3,8 +3,7 @@ import { firstParam } from '../navigation/route-param-reader'
 import { shellScreenRoute, shellScreenRouteKey } from './shell-screen-route'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
-import { ShellSwitchPendingScreen } from './ShellSwitchPendingScreen'
-import { useShellSwitchDecision } from './shell-switch-decision'
+import { shellSwitchDecision } from './shell-switch-decision'
 
 /**
  * Any host-scoped pathname this app has no route file for, handed to the shell.
@@ -61,11 +60,8 @@ export default function MobileWebPageCatchAllScreen() {
         })
       : null
 
-  const decision = useShellSwitchDecision(route)
+  const decision = shellSwitchDecision(route)
 
-  if (decision.kind === 'pending') {
-    return <ShellSwitchPendingScreen />
-  }
   if (decision.kind === 'native') {
     return refusal
   }

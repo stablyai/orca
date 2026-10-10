@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandle
@@ -64,7 +68,7 @@ function resolver(
   return {
     searched,
     resolve: createAcpStructuredLaunchResolver(GROK, {
-      store: { getRecord: () => record },
+      store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
       readJournal,
       resolveWorkspacePath: async () => '/repo/worktree',
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
@@ -94,6 +98,18 @@ describe('ACP launch resolution', () => {
       GROK_EXTRA: '1'
     })
     expect(searched[0]).toContain('/home/user/.grok-work/bin')
+  })
+
+  it('creates a new ACP session after clear instead of probing the old session', async () => {
+    const value = grokRecord({
+      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
+      providerHandleChain: []
+    })
+    const readJournal = () => {
+      throw new Error('old history must not be sampled for resume')
+    }
+    const launch = await resolver(value, false, readJournal).resolve({ identity })
+    expect(launch.resume).toBeNull()
   })
 
   it('asks the agent to approve everything only under full access', async () => {
@@ -286,5 +302,64 @@ describe('Grok status: the structured session is the only producer', () => {
     )
     expect(Object.keys(spec.env).filter((key) => key.startsWith('ORCA_'))).toEqual([])
     expect(spec.env).toMatchObject({ PATH: '/usr/bin', GROK_HOME: '/home/user/.grok' })
+  })
+})
+
+describe('ACP launch folder of a floating chat', () => {
+  const floating = (launchDirectory?: string) =>
+    grokRecord({
+      location: { ...grokRecord().location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
+      ...(launchDirectory ? { launchDirectory } : {})
+    })
+  const resolveIn = (record: AgentSessionRecord, currentSetting: string) => {
+    const resolveWorkspacePath = vi.fn(async () => currentSetting)
+    const pinLaunchDirectory = vi.fn()
+    const resolve = createAcpStructuredLaunchResolver(GROK, {
+      store: { getRecord: () => record, pinLaunchDirectory },
+      readJournal: () => null,
+      resolveWorkspacePath,
+      resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
+      resolveCommand: (command) => `/resolved/${command}`
+    })
+    return { resolve, resolveWorkspacePath, pinLaunchDirectory }
+  }
+
+  it('launches in the folder the chat was pinned to after the floating setting moved', async () => {
+    const pinned = mkdtempSync(join(tmpdir(), 'orca-acp-floating-'))
+    try {
+      const { resolve, resolveWorkspacePath } = resolveIn(floating(pinned), '/floating/moved')
+      await expect(resolve({ identity })).resolves.toMatchObject({ cwd: pinned })
+      expect(resolveWorkspacePath).not.toHaveBeenCalled()
+    } finally {
+      rmSync(pinned, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses with the folder-missing reason when the pinned folder is gone', async () => {
+    const gone = join(tmpdir(), 'orca-acp-floating-gone-never-created')
+    const { resolve } = resolveIn(floating(gone), '/floating/moved')
+    await expect(resolve({ identity })).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchFolderMissing'
+    })
+  })
+
+  it('pins an unpinned floating record to the folder its first launch runs in', async () => {
+    const { resolve, pinLaunchDirectory } = resolveIn(floating(), '/floating/start')
+    await expect(resolve({ identity })).resolves.toMatchObject({ cwd: '/floating/start' })
+    expect(pinLaunchDirectory).toHaveBeenCalledExactlyOnceWith(
+      identity.sessionId,
+      '/floating/start'
+    )
+  })
+
+  it('keeps resolving a worktree chat by its workspace, ignoring any recorded folder', async () => {
+    const { resolve, resolveWorkspacePath, pinLaunchDirectory } = resolveIn(
+      grokRecord({ launchDirectory: '/somewhere/else' }),
+      '/repo/worktree'
+    )
+    await expect(resolve({ identity })).resolves.toMatchObject({ cwd: '/repo/worktree' })
+    expect(resolveWorkspacePath).toHaveBeenCalledWith('workspace-1')
+    expect(pinLaunchDirectory).not.toHaveBeenCalled()
   })
 })

@@ -3,6 +3,7 @@ import { useAppStore, type AppState } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
 import { getConnectionId } from '@/lib/connection-context'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
@@ -84,12 +85,9 @@ export function useChecksPanelControllerState() {
   const addPRReviewCommentReply = useAppStore((s) => s.addPRReviewCommentReply)
   const setPRCommentReaction = useAppStore((s) => s.setPRCommentReaction)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
-  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  const remoteDetectedAgentIds = useAppStore((s) => {
-    return typeof activeConnectionId === 'string'
-      ? (s.remoteDetectedAgentIds[activeConnectionId] ?? null)
-      : null
-  })
+  const detectedAgentIds = useAppStore((s) =>
+    activeWorktreeId ? readDetectedAgentsForWorktree(s, activeWorktreeId) : s.detectedAgentIds
+  )
 
   const [checks, setChecks] = useState<PRCheckDetail[]>([])
   const [checksLoading, setChecksLoading] = useState(false)
@@ -294,7 +292,6 @@ export function useChecksPanelControllerState() {
     setPRCommentReaction,
     resolveReviewThread,
     detectedAgentIds,
-    remoteDetectedAgentIds,
     checks,
     setChecks,
     checksLoading,

@@ -134,6 +134,28 @@ ORCA worktree create --name task --run-hooks --json
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `ORCA terminal create --worktree <selector> --command "<requested-agent>"` and `ORCA terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA terminal create --worktree active --command "codex" --json`.
 
+## Review and issue references
+
+```text
+ORCA reference list --worktree name:api --json
+ORCA reference add https://github.com/acme/api/pull/5123 https://linear.app/acme/issue/STA-1234 --worktree name:api --json
+ORCA reference remove https://github.com/acme/api/pull/5123 --worktree name:api --json
+ORCA reference remove --key <key-from-list> --worktree name:api --json
+ORCA worktree create --name fix --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
+ORCA reference find STA-1234 --json
+```
+
+- Add/remove require explicit `--worktree`, including `current` or a folder selector. Writes accept full URLs; `remove --key` also accepts opaque keys from list for URL-less entries. Source-unknown legacy links cannot match exact URLs; stored native issue keys remain searchable. Duplicate adds and absent removals do nothing; unrelated links and selection survive concurrent edits. Unsupported older hosts refuse writes.
+- Repeat create `--reference` to seed links before setup/agent startup. Do not combine it with legacy `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, or `--gitlab-mr` flags. Legacy `worktree set --pr` still appends/selects; `linkedItems` remains the worktree output field.
+- Find accepts a full URL or native issue key such as `STA-1234`; no bare numbers or custom shorthand. It searches stored links across sources, not conversation text (`ORCA search`). Narrow with `--worktree` or `--repo`; optionally `--include-archived`, `--limit` (default 50 workspaces). Check `truncated` before assuming complete coverage. Remote selectors refer to the execution host; never use local `current` for a paired host.
+- Find returns all known agents in each matching workspace. `linked: true` requires recorded reference/session evidence; `linked: false` means ownership is unknown. Check `liveness` (`live`, `unverifiable`, `exited`) and choose the intended agent; never infer ownership merely from workspace membership.
+- Send through the returned exact `terminal` handle or `mailbox` (`dispatch:<id>` / `orca_session_id:<id>`). A `run:<id>` targets a coordinator. Find does not send, and adding links from a shell records no agent ownership.
+
+```text
+ORCA terminal send --terminal <terminal-from-find> --text "Status?" --enter --json
+ORCA orchestration send --to <mailbox-from-find> --subject "Status?" --type question --json
+```
+
 ## Worktree Comments
 
 A worktree comment is the short status line on the workspace card. Update it at meaningful checkpoints:

@@ -39,6 +39,7 @@ export type NativeChatComposerActionsProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  focusComposer?: () => void
   /** Present while the composer is in goal mode; the chip calls it to leave. */
   onExitGoalMode?: () => void
   /** Absent until the session has reported or the transcript can estimate. */
@@ -67,7 +68,8 @@ export function NativeChatComposerActions({
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
-  contextUsage
+  contextUsage,
+  focusComposer
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const stops = primaryAction === 'stop'
   const resumes = primaryAction === 'resume'
@@ -149,6 +151,7 @@ export function NativeChatComposerActions({
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
+          focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
         <Tooltip>

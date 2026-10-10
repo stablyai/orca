@@ -17,6 +17,7 @@ import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, journalRowBase } from './journal-row-builders'
 import {
   buildJournalQueueReopenRow,
+  buildJournalQueueClearRow,
   buildJournalQueueResumeRow,
   buildJournalStopEventRow
 } from './journal-stop-and-resume-rows'
@@ -92,6 +93,11 @@ export function replaceJournalEpoch(input: {
   }
   if (reopened) {
     const row = buildJournalQueueReopenRow(place())
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  if (input.queuePause.cleared) {
+    const row = buildJournalQueueClearRow({ ...place(), clear: input.queuePause.cleared })
     applyJournalRow(state, row)
     rows.push(row)
   }

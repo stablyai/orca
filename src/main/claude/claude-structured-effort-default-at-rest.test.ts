@@ -1,5 +1,6 @@
-// A Claude chat at rest shows the effort its next start will run: a live child teaches the host
-// catalog what the CLI runs for each model when no effort is sent, and the resting read answers it.
+// A Claude chat at rest shows the effort its next start will run: a live child with nothing picked
+// teaches the host catalog the configured model and effort at its start, and the resting read
+// answers it.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -111,8 +112,7 @@ async function startChild(
     openConnection: settingsWithNoOverride(cli.runs, cli.lists).openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    persistHandle: async () => {},
-    modelCatalog: store
+    persistHandle: async () => {}
   })
   await adapter.acquire({
     identity: identityFor(SESSION),
@@ -122,6 +122,20 @@ async function startChild(
     ...(options ? { options } : {})
   })
   await claudeStartupSettled(adapter, SESSION)
+  // As the host does: the start's settings readback says once what the config resolved, and every
+  // live options read's listing becomes the account's too.
+  const reported = events.find((event) => event.type === 'options-reported')
+  const { catalogListing } = await adapter.readOptions({ sessionId: SESSION, fence: 7 })
+  for (const listing of [
+    reported && 'catalogListing' in reported ? reported.catalogListing : undefined,
+    catalogListing
+  ]) {
+    if (listing) {
+      catalogService(store, restingRecord({})).recordLiveListing(SESSION, listing)
+    }
+  }
+  // The configured default lands after the workspace check.
+  await new Promise((resolve) => setTimeout(resolve, 0))
   return adapter
 }
 
@@ -142,18 +156,25 @@ function catalogDefault(store: AgentModelCatalogStore, model: string): string | 
   return entry?.models.find((row) => row.id === model)?.defaultEffort
 }
 
-/** The options a client reads for the chat once its child is gone. */
-function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
-  const modelCatalog = createAgentModelCatalogService({
+function catalogService(store: AgentModelCatalogStore, record: AgentSessionRecord) {
+  return createAgentModelCatalogService({
     store,
     getRecord: () => record,
     drivesRecord: () => true,
-    resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME })
+    resolveAccountHome: async () => ({ variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME }),
+    // The chat ran in a workspace with no Claude settings of its own: its config is the account's.
+    recordWorkspacePath: async () => '/work/repo',
+    workspaceMayOverrideDefaultModel: async () => false
   })
+}
+
+/** The options a client reads for the chat once its child is gone. */
+function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
+  const modelCatalog = catalogService(store, record)
   const resting = {
     child: null,
     params: { provider: 'claude' },
-    journal: { threadGoal: () => null, contextUsage: () => null }
+    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
   const context = {
@@ -261,18 +282,22 @@ describe('Claude effort default at rest', () => {
             { value: 'high', label: 'High' }
           ]
         }
-      ],
-      fastModeTierByModel: new Map<string, string>()
+      ]
     }
-    store.recordSuccess(agentModelCatalogFingerprintForRecord(record), 'codex', {
-      ...listing,
-      origin: 'live-session'
-    })
+    store.recordSuccess(
+      agentModelCatalogFingerprintForRecord(record),
+      'codex',
+      {
+        ...listing,
+        origin: 'live-session'
+      },
+      'discovery'
+    )
 
     const resting = await readAtRest(store, record)
     const live = composeCodexSessionOptionCatalog(listing, {
       current: { model: 'gpt-unlisted', effort: 'high' }
-    }).result
+    })
 
     expect(resting.models).toEqual(live.models)
     expect(live.models.find((entry) => entry.id === 'gpt-unlisted')).toMatchObject({ efforts: [] })
@@ -307,7 +332,7 @@ describe('Claude effort default at rest', () => {
     const resting = await readAtRest(new AgentModelCatalogStore(), restingRecord({}))
 
     // The built-in list's default is a guess, not this account's: nothing to name.
-    expect(resting.current.model).toBe('')
+    expect(resting.current).not.toHaveProperty('model')
     const seed = getAgentSessionOptionCatalog('claude')!
     const state = [live, resting].reduce(
       (current, answer) => applyStructuredAgentSessionOptions(current, seed, answer),
@@ -342,22 +367,26 @@ describe('Claude effort default at rest', () => {
       location: { wslDistro: null },
       options: { model: 'gpt-5.5' }
     } as unknown as AgentSessionRecord
-    store.recordSuccess(agentModelCatalogFingerprintForRecord(record), 'codex', {
-      models: [
-        {
-          id: 'gpt-5.5',
-          label: 'GPT-5.5',
-          isDefault: true,
-          defaultEffort: 'medium',
-          efforts: [
-            { value: 'medium', label: 'Medium' },
-            { value: 'high', label: 'High' }
-          ]
-        }
-      ],
-      fastModeTierByModel: new Map(),
-      origin: 'live-session'
-    })
+    store.recordSuccess(
+      agentModelCatalogFingerprintForRecord(record),
+      'codex',
+      {
+        models: [
+          {
+            id: 'gpt-5.5',
+            label: 'GPT-5.5',
+            isDefault: true,
+            defaultEffort: 'medium',
+            efforts: [
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ],
+        origin: 'live-session'
+      },
+      'discovery'
+    )
 
     const result = await readAtRest(store, record)
 

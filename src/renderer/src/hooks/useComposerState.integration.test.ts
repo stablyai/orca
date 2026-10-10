@@ -11,15 +11,12 @@ let originalApiDescriptor: PropertyDescriptor | undefined
 
 beforeEach(() => {
   originalApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
-  const ui = {
-    onFileDrop: vi.fn<Window['api']['ui']['onFileDrop']>()
-  } satisfies Pick<Window['api']['ui'], 'onFileDrop'>
   const preflight = {
     detectAgents: vi.fn<Window['api']['preflight']['detectAgents']>().mockResolvedValue([])
   } satisfies Pick<Window['api']['preflight'], 'detectAgents'>
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { preflight, ui }
+    value: { preflight }
   })
 })
 
@@ -83,10 +80,8 @@ describe('useComposerState integrated lifecycle', () => {
     expect(first.result.current.cardProps.parentWorktreeId).toBe('repo-1::/parent')
     expect(first.result.current.cardProps.onNativeFileDrop).toBeUndefined()
     expect(second.result.current.cardProps.onNativeFileDrop).toBeUndefined()
-    expect(window.api.ui.onFileDrop).not.toHaveBeenCalled()
 
     second.unmount()
     first.unmount()
-    expect(window.api.ui.onFileDrop).not.toHaveBeenCalled()
   })
 })

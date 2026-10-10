@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
@@ -24,7 +24,6 @@ vi.mock('electron', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-import { installNativeFileDropHandlers } from '../../../../preload/preload-runtime-support'
 
 const prepare = vi.fn(async ({ paths }: { paths: string[] }) => ({ paths, failures: [] }))
 function Composer({
@@ -117,7 +116,6 @@ function WorkspaceWithoutPath({ attach }: { attach: () => Promise<void> }) {
   })
   return <div ref={owner} className="workspace-card" />
 }
-beforeAll(() => installNativeFileDropHandlers())
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('api', {
@@ -158,11 +156,9 @@ describe('element-owned native chat drops', () => {
     expect(view.queryByText('Drop to attach to this chat')).toBeNull()
     expect(attach).toHaveBeenCalledExactlyOnceWith(['/drop/a.png'])
   })
-  it('claims a portaled chat inside a legacy terminal while the terminal outside stays legacy exactly once', async () => {
+  it('claims a portaled chat while refusing the unowned container around it', async () => {
     const attach = vi.fn()
     const terminal = document.createElement('div')
-    terminal.dataset.nativeFileDropTarget = 'terminal'
-    terminal.dataset.terminalTabId = 'terminal-a'
     document.body.append(terminal)
     const terminalDrop = vi.fn()
     terminal.addEventListener('drop', terminalDrop)
@@ -173,11 +169,7 @@ describe('element-owned native chat drops', () => {
       expect(terminalDrop).not.toHaveBeenCalled()
       expect(electron.send).not.toHaveBeenCalled()
       await drop(terminal)
-      expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
-        target: 'terminal',
-        tabId: 'terminal-a',
-        paths: ['/drop/a.png']
-      })
+      expect(electron.send).not.toHaveBeenCalled()
       expect(attach).toHaveBeenCalledOnce()
     } finally {
       terminal.remove()
@@ -188,7 +180,7 @@ describe('element-owned native chat drops', () => {
     async (disabled) => {
       const attach = vi.fn()
       const view = render(
-        <div data-native-file-drop-target="terminal">
+        <div>
           <NativeChatPaneFileDropSurface className="chat">
             {disabled ? <Composer attach={attach} disabled /> : <span>Question</span>}
           </NativeChatPaneFileDropSurface>
@@ -210,10 +202,10 @@ describe('element-owned native chat drops', () => {
       expect(electron.send).not.toHaveBeenCalled()
     }
   )
-  it('keeps a workspace card without a path silent and out of the legacy terminal relay', async () => {
+  it('keeps a workspace card without a path silent', async () => {
     const attach = vi.fn(async () => {})
     const view = render(
-      <div data-native-file-drop-target="terminal">
+      <div>
         <WorkspaceWithoutPath attach={attach} />
       </div>
     )

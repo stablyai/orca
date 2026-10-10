@@ -3,12 +3,14 @@
 
 import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../src/shared/agent-child-row-model'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import { agentChildRowContextForSessionStream } from '../../../src/shared/agent-child-row-stream-context'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import {
   structuredSessionBackgroundTasksView,
   type StructuredSessionBackgroundTasksView
 } from '../../../src/shared/structured-session-background-tasks-view'
+import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 
 export type MobileStructuredBackgroundTasks = {
@@ -19,7 +21,7 @@ export type MobileStructuredBackgroundTasks = {
    *  host clock offset also moves the rows' host-stamped clocks onto the phone's. */
   rowContext: AgentChildRowContext
   /** One child by its provider id, or, with none, every background task the host can stop. */
-  stop: (taskId?: string) => Promise<unknown>
+  stop: (taskId?: string) => Promise<StructuredAgentSessionMutationResult<AgentSessionCancelResult>>
 }
 
 /** Coarser than one frame's delivery latency, finer than any clock a row shows. */
@@ -53,7 +55,7 @@ export function useMobileStructuredBackgroundTasks(args: {
   )
   const stop = useCallback(
     (taskId?: string) =>
-      mutate('agentSession.cancel', 'agentSession.cancel', {
+      mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
         scope: 'background-tasks',
         ...(taskId ? { taskId } : {})

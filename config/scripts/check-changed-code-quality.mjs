@@ -232,11 +232,12 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
   // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
   // often deleted or renamed away. Deleted paths never reach the changed-file list
   // (it filters to ACMRTUB), so read every path the diff touches, deletions included.
+  // --no-renames: a rename otherwise lists only its new path, which the base lacks.
   const paths =
     files ??
-    splitNullDelimited(runGit(root, ['diff', '--name-only', '-z', comparisonBase, '--'])).filter(
-      (file) => SOURCE_FILE_PATTERN.test(file)
-    )
+    splitNullDelimited(
+      runGit(root, ['diff', '--name-only', '--no-renames', '-z', comparisonBase, '--'])
+    ).filter((file) => SOURCE_FILE_PATTERN.test(file))
   const blocks = []
   for (const file of paths) {
     const result = spawnSync('git', ['show', `${comparisonBase}:${file}`], {

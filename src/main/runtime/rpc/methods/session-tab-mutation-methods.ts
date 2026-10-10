@@ -6,11 +6,17 @@ import {
   translateProjectedSessionTabMove
 } from './session-tab-browser-placement-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
-import { ActivateTab, MoveTab, SetTabProps, UpdatePaneLayout } from './session-tabs-schemas'
+import {
+  ActivateTab,
+  MoveTab,
+  SetTabProps,
+  UpdatePaneLayout
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 
 export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.activate',
+    permission: 'workspace',
     params: ActivateTab,
     handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
       if (clientKind) {
@@ -41,6 +47,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'session.tabs.move',
+    permission: 'workspace',
     params: MoveTab,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
@@ -73,6 +80,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'session.tabs.updatePaneLayout',
+    permission: 'workspace',
     params: UpdatePaneLayout,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       await assertVisibleMutationTab(
@@ -94,6 +102,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   }),
   defineMethod({
     name: 'session.tabs.setTabProps',
+    permission: 'workspace',
     params: SetTabProps,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       await assertVisibleMutationTab(

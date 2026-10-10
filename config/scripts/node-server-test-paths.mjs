@@ -7,7 +7,16 @@ export const CROSS_RUNTIME_TEST_PATHS = [
   'src/main/persistence/profile-state/profile-state-cross-runtime.integration.test.ts'
 ]
 
-export function nodeServerTestPaths({ artifact = false, crossRuntime = false } = {}) {
+// Need the built desktop server template; CI runs them by path after build-orcad-template.mjs.
+export const TEMPLATE_TEST_PATHS = [
+  'src/main/orcad/orcad-packaged-structured-chat.integration.test.ts'
+]
+
+export function nodeServerTestPaths({
+  artifact = false,
+  crossRuntime = false,
+  template = false
+} = {}) {
   return [
     'src/main/persistence/profile-state',
     'src/main/persistence/loading-store/profile-state',
@@ -38,6 +47,7 @@ export function nodeServerTestPaths({ artifact = false, crossRuntime = false } =
           'config/scripts/zip-extractor-command.test.mjs'
         ]
       : []),
-    ...(crossRuntime ? CROSS_RUNTIME_TEST_PATHS : [])
+    ...(crossRuntime ? CROSS_RUNTIME_TEST_PATHS : []),
+    ...(template ? TEMPLATE_TEST_PATHS : [])
   ]
 }

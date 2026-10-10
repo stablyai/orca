@@ -1,4 +1,4 @@
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import type { GitHandlerOperationSet } from './git-handler-operation-set'
 
 export function registerGitHandlers(

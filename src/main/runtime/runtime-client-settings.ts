@@ -42,8 +42,6 @@ export type RuntimeClientSettings = Pick<
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
   | 'experimentalNativeChat'
-  | 'openAgentTabsInChatByDefault'
-  | 'experimentalStructuredNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -55,6 +53,9 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
 > & {
+  /** Older clients still read these; neither is persisted or accepted as an update. */
+  openAgentTabsInChatByDefault?: boolean
+  experimentalStructuredNativeChat?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }
@@ -125,11 +126,10 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      // The three that decide whether a new agent tab -- and so an orchestration worker -- is a
-      // structured chat session rather than a terminal agent.
       experimentalNativeChat: settings.experimentalNativeChat === true,
-      openAgentTabsInChatByDefault: settings.openAgentTabsInChatByDefault === true,
-      experimentalStructuredNativeChat: settings.experimentalStructuredNativeChat === true,
+      // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
+      openAgentTabsInChatByDefault: false,
+      experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',

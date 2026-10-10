@@ -14,9 +14,10 @@ import {
   resolveAiVaultSessionResumeInChatEligibility,
   type AiVaultResumeInChatEligibility
 } from './ai-vault-session-resume-in-chat'
-import type {
-  AiVaultSessionResumeState,
-  AiVaultSessionResumeTargetState
+import {
+  resolveAiVaultHistorySessionResumeState,
+  type AiVaultSessionResumeState,
+  type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
 
 export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
@@ -59,4 +60,26 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
         STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
       ) === true
   })
+}
+
+/** A history row's resume target and its resume-in-chat eligibility, composed once so every surface
+ *  offering the row's moves (the Session History panel, the tab menu) asks the same questions. */
+export function resolveAiVaultHistoryRowResume(
+  args: Parameters<typeof resolveAiVaultHistorySessionResumeState>[0] & {
+    targetState: AiVaultSessionResumeTargetState
+    settings: AgentSessionStructuredFeasibilityRequest['settings']
+  }
+): { resumeState: AiVaultSessionResumeState; resumeInChat: AiVaultResumeInChatEligibility } {
+  const { settings, ...resumeArgs } = args
+  const resumeState = resolveAiVaultHistorySessionResumeState(resumeArgs)
+  return {
+    resumeState,
+    resumeInChat: resolveAiVaultSessionResumeInChatForWorkspace({
+      session: args.session,
+      resumeState,
+      activeWorkspaceId: args.activeWorktreeId,
+      targetState: args.targetState,
+      settings
+    })
+  }
 }

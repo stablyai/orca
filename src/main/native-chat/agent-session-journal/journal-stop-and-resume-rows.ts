@@ -23,6 +23,18 @@ const JOURNAL_QUEUE_REOPEN_ITEM_ID = agentJournalItemKey({
 
 type RowPlace = { state: JournalReducerState; seq: number; fence: number; ts: number }
 
+export function buildJournalQueueClearRow(
+  input: RowPlace & { clear: NonNullable<JournalTombstoneRow['queueClear']> }
+): JournalTombstoneRow {
+  return {
+    kind: 'tombstone',
+    itemId: agentJournalItemKey({ provider: 'orca', clientMessageId: 'queue-context-clear' }),
+    revision: 1,
+    queueClear: input.clear,
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
+  }
+}
+
 export function buildJournalStopEventRow(
   input: RowPlace & { event: JournalStopEvent }
 ): JournalTombstoneRow {

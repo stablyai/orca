@@ -88,6 +88,7 @@ const HOST_SUPPORT = {
   promptCancel: true,
   questionAnswers: true,
   queuedMessages: true,
+  queuedCommands: false,
   statusFeed: true,
   quietRepeatedStop: true
 }

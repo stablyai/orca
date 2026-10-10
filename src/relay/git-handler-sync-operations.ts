@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, runPullWithDivergenceFallback } from '../shared/git-remote-error'

@@ -301,7 +301,7 @@ describe('repo slice host identity routing', () => {
     ])
   })
 
-  it('removes only the focused host row and worktrees for duplicate repo ids', async () => {
+  it('removes only the named host row and worktrees for duplicate repo ids', async () => {
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo'
@@ -345,7 +345,7 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
 
     expect(store.getState().repos).toEqual([remoteDuplicate])
     // Current contract: bare-ID UI selections clear even though the sibling host row survives.
@@ -404,13 +404,13 @@ describe('repo slice host identity routing', () => {
   it('allows two removals of the same owner row to overlap', async () => {
     const { promise: firstRemoval, resolve: resolveFirstRemoval } = Promise.withResolvers<void>()
     const { promise: secondRemoval, resolve: resolveSecondRemoval } = Promise.withResolvers<void>()
-    reposRemove.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
+    reposRemoveForHost.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
     const store = createTestStore()
     store.setState({ repos: [localDuplicate] })
 
-    const first = store.getState().removeProject(localDuplicate.id)
-    const second = store.getState().removeProject(localDuplicate.id)
-    expect(reposRemove).toHaveBeenCalledTimes(2)
+    const first = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
+    const second = store.getState().removeProject(localDuplicate.id, { hostId: 'local' })
+    expect(reposRemoveForHost).toHaveBeenCalledTimes(2)
 
     resolveSecondRemoval()
     resolveFirstRemoval()
@@ -553,7 +553,7 @@ describe('repo slice host identity routing', () => {
       }
     })
 
-    await store.getState().removeProject('same-repo')
+    await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
 
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])

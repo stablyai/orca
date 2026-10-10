@@ -7,6 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import { refuseUnclassified } from '../../../shared/agent-session-wire-refusals'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type { AgentSessionCancelOutcome } from './structured-agent-session-adapter'
 import {
@@ -194,19 +195,29 @@ async function cancelAndNote(
   let stoppedTurn: string | undefined
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
+    const background =
+      input.scope && !stoppedBefore
+        ? await ctx.adapter.stopBackgroundTasks?.({
+            sessionId: ctx.sessionId,
+            fence: ctx.fence,
+            taskIds: agentChildWorkStopTargets(input.childWork?.(), input.taskId)
+          })
+        : undefined
+    // A background Stop writes no row, so a task the agent shows still running after it goes back
+    // to the client that pressed it.
+    if (background?.stillRunning) {
+      return {
+        ok: false,
+        refusal: refuseUnclassified(
+          'agent_session_operation_invalid',
+          'a background task still runs after its stop'
+        )
+      }
+    }
     const outcome: AgentSessionCancelOutcome = stoppedBefore
       ? { cancelled: false }
       : input.scope
-        ? {
-            cancelled:
-              (
-                await ctx.adapter.stopBackgroundTasks?.({
-                  sessionId: ctx.sessionId,
-                  fence: ctx.fence,
-                  taskIds: agentChildWorkStopTargets(input.childWork?.(), input.taskId)
-                })
-              )?.cancelled === true
-          }
+        ? { cancelled: background?.cancelled === true }
         : await ctx.adapter.cancelTurn({
             sessionId: ctx.sessionId,
             ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
@@ -237,6 +248,16 @@ async function cancelAndNote(
   } catch (error) {
     if (input.prompt) {
       throw error
+    }
+    // A timeout or lost contact proves nothing about the task: unconfirmed, never "not stopped".
+    if (input.scope) {
+      return {
+        ok: false,
+        refusal: refuseUnclassified(
+          'agent_session_operation_unknown',
+          `background task stop unconfirmed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
     }
     interruptFailed = true
     // The adapter's error is Orca's; the row says only that the stop is unconfirmed.

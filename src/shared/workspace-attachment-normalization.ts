@@ -5,6 +5,7 @@ import {
 import type { WorkspaceAttachment, WorkspaceLinkedItem } from './worktree/types'
 import { getTaskSourceCacheScope, normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
+import { getProvenWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 
 function nonEmpty(value: unknown): string | undefined {
@@ -134,6 +135,17 @@ export function getWorkspaceAttachmentUrlScope(item: WorkspaceAttachment): strin
   }
 }
 
+/** One entry per proven external reference and source context; local repo IDs never split it. */
+export function getWorkspaceAttachmentDedupeKey(item: WorkspaceAttachment): string {
+  const reference = getProvenWorkspaceReferenceIdentity(item)
+  return reference
+    ? JSON.stringify([
+        reference,
+        item.taskSourceContext ? getTaskSourceCacheScope(item.taskSourceContext) : ''
+      ])
+    : getWorkspaceAttachmentKey(item)
+}
+
 export function normalizeWorkspaceAttachments(value: unknown): WorkspaceAttachment[] {
   if (!Array.isArray(value)) {
     return []
@@ -144,48 +156,105 @@ export function normalizeWorkspaceAttachments(value: unknown): WorkspaceAttachme
     if (!item) {
       continue
     }
-    const key = getWorkspaceAttachmentKey(item)
+    const key = getWorkspaceAttachmentDedupeKey(item)
     const previous = items.get(key)
     items.set(key, {
       ...previous,
       ...item,
+      // Why: the collapse pass compares repoId, so a conflict must resolve independently of input order.
+      ...(previous?.repoId && item.repoId && previous.repoId < item.repoId
+        ? { repoId: previous.repoId }
+        : {}),
       ...(previous?.origins || item.origins
         ? { origins: mergeWorkspaceAttachmentOrigins(previous?.origins, item.origins) }
         : {})
     })
   }
-  let normalized = [...items.values()]
-  while (true) {
-    const retained = normalized.filter((item) => {
-      const richer = normalized.filter(
-        (candidate) =>
-          getWorkspaceAttachmentKey(candidate) !== getWorkspaceAttachmentKey(item) &&
-          matchesWorkspaceAttachmentIdentity(candidate, item)
-      )
-      return richer.length !== 1
-    })
-    const retainedItems = new Set(retained)
-    for (const candidate of normalized) {
-      if (retainedItems.has(candidate)) {
-        continue
-      }
-      const matches = retained.filter((item) => matchesWorkspaceAttachmentIdentity(item, candidate))
-      const enriched = matches.length === 1 ? matches[0] : undefined
-      if (enriched) {
-        Object.assign(enriched, {
-          ...candidate,
-          ...enriched,
-          ...(candidate.origins || enriched.origins
-            ? { origins: mergeWorkspaceAttachmentOrigins(candidate.origins, enriched.origins) }
-            : {})
-        })
-      }
+  const normalized = [...items.values()]
+  const groups = new Map<string, WorkspaceAttachment[]>()
+  for (const item of normalized) {
+    const identity = attachmentIdentity(item)
+    const group = groups.get(identity)
+    if (group) {
+      group.push(item)
+    } else {
+      groups.set(identity, [item])
     }
-    if (retained.length === normalized.length) {
-      return retained
-    }
-    normalized = retained
   }
+  const retained = new Set<WorkspaceAttachment>()
+  for (const group of groups.values()) {
+    for (const item of group.length === 1 ? group : collapseAttachmentIdentityGroup(group)) {
+      retained.add(item)
+    }
+  }
+  return normalized.filter((item) => retained.has(item))
+}
+
+function collapseAttachmentIdentityGroup(normalized: WorkspaceAttachment[]): WorkspaceAttachment[] {
+  while (true) {
+    const absorbers = new Map<WorkspaceAttachment, WorkspaceAttachment>()
+    for (const item of normalized) {
+      const richer = normalized.filter(
+        (candidate) => candidate !== item && absorbsWorkspaceAttachment(candidate, item)
+      )
+      if (richer.length === 1) {
+        absorbers.set(item, richer[0])
+      }
+    }
+    // Mutual absorbers would erase each other, so keep every member of a cycle.
+    const cyclic = [...absorbers.keys()].filter((item) => absorberChain(absorbers, item).cyclic)
+    for (const item of cyclic) {
+      absorbers.delete(item)
+    }
+    if (absorbers.size === 0) {
+      return normalized
+    }
+    // Fold chain tails first so absorbed data reaches the final survivor, nearer links winning.
+    const removed = [...absorbers]
+      .map(([candidate, enriched]) => ({
+        candidate,
+        enriched,
+        depth: absorberChain(absorbers, candidate).depth
+      }))
+      .sort((a, b) => b.depth - a.depth)
+    for (const { candidate, enriched } of removed) {
+      Object.assign(enriched, {
+        ...candidate,
+        ...enriched,
+        ...(candidate.origins || enriched.origins
+          ? { origins: mergeWorkspaceAttachmentOrigins(candidate.origins, enriched.origins) }
+          : {})
+      })
+    }
+    normalized = normalized.filter((item) => !absorbers.has(item))
+  }
+}
+
+function absorberChain(
+  absorbers: Map<WorkspaceAttachment, WorkspaceAttachment>,
+  item: WorkspaceAttachment
+): { depth: number; cyclic: boolean } {
+  const seen = new Set<WorkspaceAttachment>([item])
+  let current = absorbers.get(item)
+  let depth = 1
+  while (current && absorbers.has(current)) {
+    if (seen.has(current)) {
+      return { depth, cyclic: current === item }
+    }
+    seen.add(current)
+    current = absorbers.get(current)
+    depth++
+  }
+  return { depth, cyclic: false }
+}
+
+function absorbsWorkspaceAttachment(rich: WorkspaceAttachment, item: WorkspaceAttachment): boolean {
+  if (matchesWorkspaceAttachmentIdentity(rich, item)) {
+    return true
+  }
+  // A context-less copy of a proven URL belongs to the unique source that owns that URL.
+  const reference = item.taskSourceContext ? undefined : getProvenWorkspaceReferenceIdentity(item)
+  return reference !== undefined && reference === getProvenWorkspaceReferenceIdentity(rich)
 }
 
 export function matchesWorkspaceAttachmentIdentity(

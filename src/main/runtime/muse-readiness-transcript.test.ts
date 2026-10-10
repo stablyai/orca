@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane } from './agent-transcript-pane-test-harness'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -9,6 +10,17 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
+
+let machineNameStartSpy: { mockRestore(): void } | undefined
+
+beforeEach(() => {
+  machineNameStartSpy = vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  machineNameStartSpy?.mockRestore()
+  machineNameStartSpy = undefined
+})
 
 describe('Muse readiness from captured terminal bytes', () => {
   it('recognizes a ready folder workspace without a skills summary', async () => {
@@ -24,8 +36,9 @@ describe('Muse readiness from captured terminal bytes', () => {
       launchAgent: 'muse',
       data
     })
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 10_000 })
-    ).resolves.toMatchObject({ satisfied: true })
+    await runtime.readTerminal(handle, { screen: true })
+    await expect(waitForTranscriptIdle({ runtime, handle }, 10_000)).resolves.toMatchObject({
+      satisfied: true
+    })
   }, 15_000)
 })

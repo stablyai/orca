@@ -3,7 +3,7 @@
  * would run it: a separate process that finds the app through its userData directory.
  */
 import path from 'node:path'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 export type OrcaCliResult = {
   args: string[]

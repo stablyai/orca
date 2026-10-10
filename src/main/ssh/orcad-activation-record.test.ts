@@ -6,6 +6,7 @@ import {
   parseOrcadActivationRecord,
   serializeOrcadActivationRecord,
   withActivatedVersion,
+  withDeactivatedVersionCommitted,
   withRolledBackVersion,
   type OrcadStateSnapshot
 } from './orcad-activation-record'
@@ -133,6 +134,25 @@ describe('orcad activation record', () => {
     expect(withActivatedVersion(rolledBack, '0.3.0+cc01', null, NOW, '1.6.0')).not.toHaveProperty(
       'rolledBackFrom'
     )
+  })
+
+  it('names no previous app version when activating over a stopped host', () => {
+    const served = withActivatedVersion(
+      emptyOrcadActivationRecord(),
+      '0.1.0+aa01',
+      null,
+      NOW,
+      '1.5.0'
+    )
+    const stopped = withDeactivatedVersionCommitted(served)
+    expect(stopped).toMatchObject({
+      active: null,
+      previous: '0.1.0+aa01',
+      activeAppVersion: '1.5.0'
+    })
+    const redeployed = withActivatedVersion(stopped, '0.2.0+bb01', null, NOW, '1.6.0')
+    expect(redeployed).toMatchObject({ previous: null, activeAppVersion: '1.6.0' })
+    expect(redeployed).not.toHaveProperty('previousAppVersion')
   })
 
   it('matches a journal from a build that drops the advisory fields', () => {

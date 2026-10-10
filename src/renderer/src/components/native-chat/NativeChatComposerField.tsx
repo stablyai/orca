@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
-import { useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
@@ -100,8 +100,6 @@ export type NativeChatComposerImageAttachment = {
   pending?: boolean
   /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
   pendingName?: string
-  /** Owed to the message but not shown yet: a rich-text paste's image while its server is asked. */
-  hidden?: true
   /** Set on an image the draft names but can't send: the file to attach again. */
   unavailableName?: string
 }
@@ -174,7 +172,6 @@ export function NativeChatComposerField({
   sessionOptionsPickerRequest,
   goalMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
-  const shownAttachments = imageAttachments.filter((attachment) => !attachment.hidden)
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const optionCount =
     autocomplete.mode === 'slash'
@@ -222,6 +219,8 @@ export function NativeChatComposerField({
     sendDisabled: sendButtonDisabled
   })
   const { resume } = primary
+  // Stable so the memoized option pickers keep their identity.
+  const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // The button disables while resuming, which drops its focus; typing is what comes next.
   const resumeQueue = (): void => {
     resume?.()
@@ -282,9 +281,9 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
-            {shownAttachments.length > 0 ? (
+            {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
-                {shownAttachments.map((attachment) => (
+                {imageAttachments.map((attachment) => (
                   <NativeChatImageAttachmentPreview
                     key={attachment.id}
                     attachment={attachment}
@@ -381,16 +380,14 @@ export function NativeChatComposerField({
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
+                focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
               />
             </div>
           </div>
         </div>
       </div>
-      <NativeChatQueueSendConfirmDialog
-        confirm={queueSendConfirm}
-        focusComposer={() => textareaRef.current?.focus()}
-      />
+      <NativeChatQueueSendConfirmDialog confirm={queueSendConfirm} focusComposer={focusComposer} />
     </div>
   )
 }

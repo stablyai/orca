@@ -4,7 +4,7 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, open, readdir, rm, stat } from 'node:fs/promises'
+import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   publishFileWithoutOverwrite,
@@ -80,7 +80,7 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
  */
 export async function writeTempFileDurable(
   tmpPath: string,
-  payload: string,
+  payload: string | Uint8Array,
   mode?: number
 ): Promise<void> {
   const handle = await open(tmpPath, 'w', mode)
@@ -92,47 +92,11 @@ export async function writeTempFileDurable(
   }
 }
 
-/**
- * Copy `sourcePath` onto `finalPath` durably: a fresh inode, fsynced, then renamed into place. A
- * plain copyFile can be interrupted and leave a torn destination — fatal when the destination is
- * the backup someone will fall back to. Returns false when the source does not exist.
- */
-export async function copyFileDurable(sourcePath: string, finalPath: string): Promise<boolean> {
-  const tmpPath = durableWriteTempPath(finalPath)
-  let renamed = false
-  try {
-    try {
-      // copyFile stays in the kernel — and clones the extents outright on APFS and btrfs — so
-      // this does not pull the whole file through the process on every commit.
-      await copyFile(sourcePath, tmpPath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return false
-      }
-      throw error
-    }
-    const handle = await open(tmpPath, 'r+')
-    try {
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
-    renamed = true
-    await syncDirectory(dirname(finalPath))
-    return true
-  } finally {
-    if (!renamed) {
-      await rm(tmpPath, { force: true }).catch(() => {})
-    }
-  }
-}
-
 /** Write `payload` to `tmpPath`, fsync it, then rename onto `finalPath` and fsync the directory. */
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string
+  payload: string | Uint8Array
 ): Promise<void> {
   await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
 }
@@ -146,7 +110,7 @@ export async function writeFileDurable(
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
-  payload: string,
+  payload: string | Uint8Array,
   isCurrent: () => boolean
 ): Promise<boolean> {
   let renamed = false
@@ -167,29 +131,38 @@ export async function writeFileDurableIfCurrent(
 }
 
 /** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */
-export function durableWriteTempPath(finalPath: string): string {
-  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+export function durableWriteTempPath(finalPath: string, owner?: string): string {
+  const ownerSuffix = owner === undefined ? '' : `.owner-${owner}`
+  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}${ownerSuffix}.tmp`
 }
 
 /**
  * Sweep temp files orphaned by a death between write and rename — for multi-MB payloads they would
  * otherwise accumulate forever. Callers can require a minimum age to spare another live instance's
- * write. This process's own temps are always skipped because deleting one would fail its rename.
+ * write. This process's own temps are skipped unless their owner is known to have exited.
  */
 export async function removeStaleDurableWriteTempFiles(
   finalPath: string,
-  options: { minimumAgeMs?: number } = {}
+  options: { minimumAgeMs?: number; retiredOwner?: string } = {}
 ): Promise<void> {
   const directory = dirname(finalPath)
   const prefix = `${basename(finalPath)}.`
   const ownPrefix = `${prefix}${process.pid}.`
+  const retiredOwnerSuffix =
+    options.retiredOwner === undefined ? null : `.owner-${options.retiredOwner}.tmp`
   try {
     const names = await readdir(directory)
     await Promise.all(
       names
-        .filter(
-          (name) => name.startsWith(prefix) && name.endsWith('.tmp') && !name.startsWith(ownPrefix)
-        )
+        .filter((name) => {
+          if (!name.startsWith(prefix) || !name.endsWith('.tmp')) {
+            return false
+          }
+          // The caller must await owner exit before reclaiming its current-process files.
+          return retiredOwnerSuffix === null
+            ? !name.startsWith(ownPrefix)
+            : name.startsWith(ownPrefix) && name.endsWith(retiredOwnerSuffix)
+        })
         .map(async (name) => {
           const path = join(directory, name)
           if (options.minimumAgeMs) {

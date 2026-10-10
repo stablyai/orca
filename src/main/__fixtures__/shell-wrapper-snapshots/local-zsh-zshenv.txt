@@ -247,7 +247,7 @@ __orca_deferred_init() {
       case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
       # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
       [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-      ( unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; case "${ANTHROPIC_CUSTOM_HEADERS:-}" in *[aA][uU][tT][hH][oO][rR][iI][zZ][aA][tT][iI][oO][nN]*|*[xX]-[aA][pP][iI]-[kK][eE][yY]*|*[aA][pP][iI]-[kK][eE][yY]*|*[bB][eE][aA][rR][eE][rR]*) unset ANTHROPIC_CUSTOM_HEADERS ;; esac; export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+      ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
     }
   fi
   unset __orca_claude_binary

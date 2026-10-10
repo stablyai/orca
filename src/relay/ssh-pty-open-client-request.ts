@@ -1,5 +1,5 @@
 import type { PtyConsumerSessionHello } from '../shared/pty-consumer-session'
-import type { RelayClientSessionIdentity, RequestContext } from './dispatcher'
+import type { RelayClientSessionIdentity, RequestContext } from '../wsl-guest/dispatcher'
 
 export type OpenClientParams = PtyConsumerSessionHello & {
   protocolVersion: number

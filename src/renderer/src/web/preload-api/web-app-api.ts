@@ -8,6 +8,9 @@ import { UI_STORAGE_KEY, writeJson } from './web-storage'
 export function createWebAppApi(): Partial<PreloadApi> {
   return {
     app: {
+      // Browser preferences do not use the desktop profile writer.
+      isProfileStateSaveDelayed: () => Promise.resolve(false),
+      onProfileStateSaveDelayChanged: () => () => undefined,
       getIdentity: () =>
         Promise.resolve({
           name: 'Orca',

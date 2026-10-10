@@ -2,14 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const launchAgentInNewTab = vi.hoisted(() => vi.fn())
 const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
-const connectionId = vi.hoisted(() => ({ value: null as string | null }))
-const runtimeEnvironmentId = vi.hoisted(() => ({ value: null as string | null }))
+const ensureDetectedAgentsForWorktree = vi.hoisted(() => vi.fn())
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
-const store = vi.hoisted(() => ({
-  settings: { disabledTuiAgents: [] as string[] },
-  ensureDetectedAgents: vi.fn(async () => ['claude', 'codex']),
-  ensureRemoteDetectedAgents: vi.fn(async () => ['claude', 'codex']),
-  ensureRuntimeDetectedAgents: vi.fn(async () => ['claude', 'codex'])
+const store: { settings: { disabledTuiAgents: string[] } } = vi.hoisted(() => ({
+  settings: { disabledTuiAgents: [] }
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
@@ -17,12 +13,7 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude')
 }))
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionIdFromState: () => connectionId.value
-}))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => runtimeEnvironmentId.value
-}))
+vi.mock('@/lib/agent-detection-target-inventory', () => ({ ensureDetectedAgentsForWorktree }))
 vi.mock('sonner', () => ({ toast }))
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
@@ -35,12 +26,8 @@ vi.mock('@/i18n/i18n', () => ({
 describe('launchAgentSessionContinuation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    connectionId.value = null
-    runtimeEnvironmentId.value = null
     store.settings.disabledTuiAgents = []
-    store.ensureDetectedAgents.mockResolvedValue(['claude', 'codex'])
-    store.ensureRemoteDetectedAgents.mockResolvedValue(['claude', 'codex'])
-    store.ensureRuntimeDetectedAgents.mockResolvedValue(['claude', 'codex'])
+    ensureDetectedAgentsForWorktree.mockResolvedValue(['claude', 'codex'])
     launchAgentInNewTab.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
@@ -80,27 +67,16 @@ describe('launchAgentSessionContinuation', () => {
     )
   })
 
-  it('detects the target Agent on the SSH host that owns the workspace', async () => {
-    connectionId.value = 'ssh-1'
+  it("detects the target Agent in the workspace host's inventory", async () => {
     const { detectAgentSessionContinuationAgents } =
       await import('./launch-agent-session-continuation')
 
     await expect(detectAgentSessionContinuationAgents('wt-1')).resolves.toEqual(['claude', 'codex'])
-    expect(store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(store.ensureDetectedAgents).not.toHaveBeenCalled()
-  })
-
-  it('detects local Agents in the target worktree runtime', async () => {
-    const { detectAgentSessionContinuationAgents } =
-      await import('./launch-agent-session-continuation')
-
-    await detectAgentSessionContinuationAgents('wt-1')
-
-    expect(store.ensureDetectedAgents).toHaveBeenCalledWith('wt-1')
+    expect(ensureDetectedAgentsForWorktree).toHaveBeenCalledWith(store, 'wt-1')
   })
 
   it('stops before launch when the selected Agent is unavailable', async () => {
-    store.ensureDetectedAgents.mockResolvedValue(['claude'])
+    ensureDetectedAgentsForWorktree.mockResolvedValue(['claude'])
     const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
 
     await expect(

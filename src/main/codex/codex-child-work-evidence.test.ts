@@ -124,7 +124,7 @@ describe('Codex child-work evidence', () => {
         residency: 'background',
         description: 'audit_build',
         invocation: { invocationId: 'c1', generation: 1 },
-        stoppable: false
+        stoppable: true
       })
     ])
     const aliases = store.getAliasesForChild(records()[0]!.childWorkId)
@@ -411,14 +411,20 @@ describe('Codex child-work evidence', () => {
       expect.objectContaining({
         membership: 'live',
         description: 'npm run dev',
-        residency: 'background',
+        residency: 'foreground',
         parentChildWorkId: agent!.childWorkId,
         firstObservedAt: 1_040
       })
     ])
     send(turn('turn/completed', CHILD, 'c1'))
     expect(byKind('agent')[0]).toMatchObject({ membership: 'settled', outcome: 'succeeded' })
-    expect(byKind('command')).toEqual([expect.objectContaining({ membership: 'live' })])
+    expect(byKind('command')).toEqual([
+      expect.objectContaining({
+        membership: 'live',
+        residency: 'background',
+        firstObservedAt: 1_040
+      })
+    ])
     expect(display(agent!.childWorkId)).toBe('monitoring')
     send(
       item('item/completed', CHILD, 'c1', {
@@ -553,7 +559,7 @@ describe('Codex child-work evidence', () => {
     expect(records()).toEqual([
       expect.objectContaining({ kind: 'agent', membership: 'settled', outcome: 'succeeded' })
     ])
-    // One edge when each shell starts and one when it exits, as the strip republishes today.
+    // Raw status evidence keeps every start and exit, including foreground processes.
     expect(
       log
         .slice(before)

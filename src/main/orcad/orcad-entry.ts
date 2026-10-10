@@ -11,17 +11,22 @@
  * Chromium proves available at startup.
  */
 import process from 'node:process'
-import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import {
+  getAppEnvironment,
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
+import { getOrcadCliLauncherPath, prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
   startOrcadWithHost
 } from './orcad-lifecycle'
-import { parseArgs } from './orcad-command-arguments'
+import { ORCAD_USAGE, parseArgs } from './orcad-command-arguments'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 import { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
@@ -32,6 +37,7 @@ import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
+import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 
 export { parseArgs }
 
@@ -66,6 +72,7 @@ function createNodeAppEnvironment(): AppEnvironment {
     // posture. Layout questions must ask whether the app root is an asar archive
     // instead (see parcel-watcher-entry-path.ts).
     isPackaged: () => true,
+    getCliLauncherPath: getOrcadCliLauncherPath,
     onWillQuit: (handler) => quitHandlers.push(handler),
     exit: (code = 0) => process.exit(code),
     // Why []: there are no Chromium processes on this host to measure.
@@ -104,6 +111,8 @@ export type OrcadOptions = {
   pairingAddress?: string
   /** Desktop `orca serve` parity: a mobile-scoped offer with a terminal QR. */
   mobilePairing?: boolean
+  /** Lets the paired runtime client drive this machine's desktop (computer.*). */
+  grantDesktopControl?: boolean
   /** Desktop `orca serve` parity: print only the ephemeral-VM recipe line. */
   recipeJson?: boolean
   projectRoot?: string
@@ -125,6 +134,8 @@ export type OrcadHandle = {
  */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
+  // Why: an orcad started from an Orca terminal must not fence its own CLI children to that Orca.
+  stampRuntimeSourceEnv(process.env, null)
   const { readiness, instance, stop } = await startOrcadWithHost(
     resolveUserDataPath(),
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
@@ -138,7 +149,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
       }
     }
   )
-  const version = process.env.ORCA_VERSION ?? '0.0.0-orcad'
+  const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
 }
 
@@ -154,7 +165,7 @@ async function startOrcadRuntime(
   const { installOrcadObservability } = await import('./orcad-observability')
   closeOrcadObservability = installOrcadObservability()
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
-  const { assertServeProjectRoot } = await import('../server/serve-pairing-output')
+  const { servePublishMode } = await import('../server/serve-pairing-readiness')
   const { buildOrcadServeReadiness } = await import('./orcad-serve-readiness')
   const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
@@ -197,6 +208,10 @@ async function startOrcadRuntime(
   const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
+  // A missing `orca` command must never keep the server from starting.
+  await prepareOrcadCliLauncher().catch((error: unknown) => {
+    console.warn('[orcad] Could not prepare the profile CLI launcher', error)
+  })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
     await createOrcadProfileStateStartup(runtimeUserDataPath)
@@ -374,12 +389,7 @@ async function startOrcadRuntime(
       )
   })
 
-  await new ServeReadinessPublisher().publish(
-    readiness,
-    options.recipeJson && options.projectRoot
-      ? { mode: 'recipe-json', projectRoot: assertServeProjectRoot(options.projectRoot) }
-      : { mode: options.json ? 'json' : 'human' }
-  )
+  await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
 
   await idleExitStartup.start({
     rpc,
@@ -391,26 +401,13 @@ async function startOrcadRuntime(
   return { readiness }
 }
 
-/**
- * Exit codes a supervisor can act on. Closed set — see docs/reference/orcad-operations.md.
- *
- * `ORCAD_EXIT_CONFIGURATION` is the load-bearing one: a data root owned by someone else, or
- * held by another orcad, is not fixed by restarting. Restarting on it is the crash-loop the
- * supervision contract has to prevent, so systemd's `RestartPreventExitStatus` needs a code
- * that means "do not retry" and nothing else does.
- */
-export {
-  ORCAD_EXIT_OK,
-  ORCAD_EXIT_FAILED,
-  ORCAD_EXIT_CONFIGURATION,
-  resolveOrcadExitCode
-} from './orcad-exit-code'
-
-/** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
-export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
-
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const startup = startOrcad(parseArgs(argv))
+  const options = parseArgs(argv)
+  if (options.help) {
+    console.log(ORCAD_USAGE)
+    return
+  }
+  const startup = startOrcad(options)
   const requestShutdown = installOrcadShutdownSignals(async () => (await startup).stop())
   const handle = await startup
   // Why after startup: a managed request must name the runtime and instance this run became.

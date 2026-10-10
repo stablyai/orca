@@ -11,6 +11,7 @@ import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { holdAgentSessionInventory } from './structured-agent-session-inventory-hold'
 import type { Tab } from '../../shared/tab-types'
 import {
+  captureTerminalCloseRequest,
   resolveTerminalCloseTarget,
   type PaneCloseResolution,
   type RendererTerminalClose,
@@ -93,9 +94,9 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   }
 
   protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
-    const originalHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    const originalHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
     return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
-      const resolvedHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const resolvedHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
       const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
       // Emptying the last tab may reroute the worktree to its catalog host.
       const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
@@ -130,15 +131,17 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         : null
     let ptyIdsToKill: string[] = []
     let refusal: Error | undefined
+    const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
+    const fenced = acknowledgeTabRetirement !== null
     try {
       refusal = await store.runDurableMutation(
         closeLeafOrTab({
           worktreeId,
           target,
           options,
-          requestedSession: this.getWorkspaceSessionForWorktree(worktreeId),
+          ...captureTerminalCloseRequest(worktreeId, target, hostIds(), store, fenced),
           ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
-          hostId: () => this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+          hostIds,
           getSession: (hostId) => store.getWorkspaceSession(hostId),
           setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
           onClosed: (closedPtyIds) => {

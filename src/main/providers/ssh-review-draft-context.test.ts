@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { ReviewDraftContextError } from '../../shared/review-draft-context-error'
 import { RelayContext } from '../../relay/context'
-import { RelayDispatcher } from '../../relay/dispatcher'
+import { RelayDispatcher } from '../../wsl-guest/dispatcher'
 import { GitHandler } from '../../relay/git-handler'
 import { createGitTempDir, removeGitTempDir } from '../../relay/git-handler-test-harness'
 import { gitCommit, gitInit } from '../../relay/git-handler-test-setup'
@@ -13,7 +13,7 @@ import {
   FrameDecoder,
   MessageType,
   parseJsonRpcMessage
-} from '../../relay/protocol'
+} from '../../wsl-guest/protocol'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { SshGitProvider } from './ssh-git-provider'

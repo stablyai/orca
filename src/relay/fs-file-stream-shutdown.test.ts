@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import { readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { RelayStreamRegistry } from './fs-stream-registry'
-import { STREAM_CHUNK_SIZE } from './protocol'
+import { STREAM_CHUNK_SIZE } from '../wsl-guest/protocol'
 
 let directory: string
 let filePath: string

@@ -79,7 +79,7 @@ describe('previous relay terminals', () => {
 
     await expect(startPreviousRelayCensus(conn, 'target-1', deployed)).resolves.toMatchObject({
       endpoints: [OLD_SOCK],
-      complete: true,
+      status: 'complete',
       bridgeable: true
     })
 
@@ -97,7 +97,7 @@ describe('previous relay terminals', () => {
     execCommand.mockResolvedValue('')
     await expect(startPreviousRelayCensus(conn, 'target-1', deployed)).resolves.toMatchObject({
       endpoints: [],
-      complete: true
+      status: 'complete'
     })
     expect(probeRelayEndpointIncumbent).not.toHaveBeenCalled()
   })
@@ -119,8 +119,7 @@ describe('previous relay terminals', () => {
 
     expect(census).toMatchObject({
       endpoints: [expect.stringMatching(/relay-0\.1\.0\+aaa$/)],
-      complete: true,
-      unverifiable: false,
+      status: 'complete',
       bridgeable: false
     })
     expect(probeRelayVersionDirLiveness).toHaveBeenCalledTimes(2)
@@ -186,22 +185,20 @@ describe('previous relay terminals', () => {
     startPreviousRelayCensus(conn, 'target-1', input)
 
     await expect(previousRelayCensus('target-1')).resolves.toMatchObject({
-      complete: false,
-      unverifiable: true
+      status: 'unverifiable'
     })
     await expect(isReattachHeldByPreviousRelay('target-1', notFound)).resolves.toBe(true)
   })
 
   it('marks a census complete only when every endpoint of an enumerable host was censused', async () => {
-    await expect(previousRelayCensus('target-1')).resolves.toMatchObject({ complete: false })
+    await expect(previousRelayCensus('target-1')).resolves.toMatchObject({ status: 'none' })
 
     execCommand.mockResolvedValue('')
     startPreviousRelayCensus(conn, 'target-1', deployed)
     await expect(previousRelayCensus('target-1')).resolves.toEqual({
       endpoints: [],
       nodePath: deployed.nodePath,
-      complete: true,
-      unverifiable: false,
+      status: 'complete',
       bridgeable: true
     })
   })
@@ -212,8 +209,8 @@ describe('previous relay terminals', () => {
     const newer = startPreviousRelayCensus(conn, 'target-1', deployed)
 
     clearPreviousRelayCensus('target-1', older)
-    await expect(previousRelayCensus('target-1')).resolves.toMatchObject({ complete: true })
+    await expect(previousRelayCensus('target-1')).resolves.toMatchObject({ status: 'complete' })
     clearPreviousRelayCensus('target-1', newer)
-    await expect(previousRelayCensus('target-1')).resolves.toMatchObject({ complete: false })
+    await expect(previousRelayCensus('target-1')).resolves.toMatchObject({ status: 'none' })
   })
 })

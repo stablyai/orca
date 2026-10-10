@@ -74,6 +74,7 @@ import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
+import { JournalContextController } from './journal-context-controller'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -98,6 +99,7 @@ export class AgentSessionJournal {
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
+  readonly context: JournalContextController
 
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
@@ -121,8 +123,10 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (row) => {
-        applyJournalRow(this.state, row)
+      commit: (rows, savedAt) => {
+        for (const row of rows) {
+          applyJournalRow(this.state, row, savedAt)
+        }
         this.onCommitted?.()
       },
       notifyCommitted: () => this.onCommitted?.(),
@@ -138,6 +142,11 @@ export class AgentSessionJournal {
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
     this.restore = collaborators.restore
+    this.context = new JournalContextController({
+      state: () => this.state,
+      writer: this.rowWriter,
+      cards: this.queuedMessages
+    })
   }
 
   get epoch(): string {
@@ -172,6 +181,7 @@ export class AgentSessionJournal {
   /** Refuses every later write and resolves once the admitted ones have landed. Holds no
    *  connection, so there is nothing to release and nothing that can fail. */
   close(): Promise<void> {
+    this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()
   }
@@ -239,6 +249,10 @@ export class AgentSessionJournal {
 
   /** Fence of the writer that created the item, while it is in the timeline. */
   itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
+
+  /** Latest saved output at this fence, excluding client actions and recovery bookkeeping. */
+  lastProviderActivityAt = (fence: number): number | undefined =>
+    this.state.providerActivityAt.get(fence)
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 

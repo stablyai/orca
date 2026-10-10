@@ -5,6 +5,12 @@ import type {
   AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
 import type { NativeChatSubagentEntry } from '../../shared/native-chat-types'
+import { isTerminalSubagentState } from '../../shared/native-chat-subagent-summary'
+import { SubagentRosterRetention } from '../native-chat/subagent-roster-retention'
+import {
+  MAX_CODEX_SUBAGENT_GROUPS,
+  MAX_CODEX_SUBAGENTS_PER_GROUP
+} from './codex-structured-journal-limits'
 
 /** The turn a group belongs to when Codex reports activity outside any turn.
  *  Mirrors the generic-frame bucket name so the two read alike in the journal. */
@@ -20,6 +26,41 @@ export type RosterGroup = {
   labelCounts: Map<string, number>
   /** Last body written, so an idempotent replay writes no new revision. */
   lastSerialized: string | null
+}
+
+/** A reused child thread starts a new execution only when its turn id changes. */
+export function codexSubagentExecutionIdentity(threadId: string, turnId: string): string {
+  return JSON.stringify([threadId, turnId])
+}
+
+export function retainSupersededCodexExecution(
+  group: RosterGroup,
+  threadId: string,
+  nextTurnId: string | null,
+  retention: SubagentRosterRetention<RosterGroup>
+): void {
+  const previousTurnId = group.executionTurns.get(threadId)
+  const previous = group.entries.get(threadId)
+  if (
+    typeof previousTurnId === 'string' &&
+    previousTurnId !== nextTurnId &&
+    previous &&
+    isTerminalSubagentState(previous.state)
+  ) {
+    retention.rememberSettled(codexSubagentExecutionIdentity(threadId, previousTurnId))
+  }
+}
+
+export function createCodexSubagentRosterRetention(groups: Map<string, RosterGroup>) {
+  return new SubagentRosterRetention(groups, {
+    maxGroups: MAX_CODEX_SUBAGENT_GROUPS,
+    maxSettledIdentities: MAX_CODEX_SUBAGENT_GROUPS * MAX_CODEX_SUBAGENTS_PER_GROUP,
+    entries: (group) => group.entries.values(),
+    identities: (group) =>
+      [...group.executionTurns].flatMap(([threadId, turnId]) =>
+        turnId === null ? [] : [codexSubagentExecutionIdentity(threadId, turnId)]
+      )
+  })
 }
 
 /** Group identity: the parent turn that spawned the children. `agentPath` is a

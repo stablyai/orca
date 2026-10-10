@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as LocalCommandResolver from './command-path-resolver'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
@@ -15,7 +16,7 @@ const {
   runProcessMock: vi.fn()
 }))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 vi.mock('./preflight-local-env', () => ({ buildLocalPreflightEnv: () => undefined }))
 
@@ -102,6 +103,16 @@ describe('findRunnableLocalCommand', () => {
     pathBefore = process.env.PATH ?? ''
     execFileAsyncMock.mockReset()
     runProcessMock.mockReset()
+    runProcessMock.mockImplementation(async (spec: ProcessSpec) => ({
+      ...(await execFileAsyncMock(spec.program, spec.args, {
+        encoding: 'utf-8',
+        timeout: spec.timeoutMs,
+        windowsHide: true,
+        ...(spec.env ? { env: spec.env } : {})
+      })),
+      code: 0,
+      timedOut: false
+    }))
     listLocalCommandPathsMock.mockReset()
     listLocalCommandPathsMock.mockResolvedValue([shim, second, third])
   })
@@ -140,22 +151,25 @@ describe('findRunnableLocalCommand', () => {
     })
   })
 
-  it('stops at a timed-out copy instead of paying the timeout once per copy', async () => {
+  it('recovers a working copy after a killed launcher', async () => {
     execFileAsyncMock.mockImplementation(async (command: string) => {
       if (command === second) {
         throw Object.assign(new Error('Timed out'), { killed: true, code: null })
+      }
+      if (command === third) {
+        return { stdout: 'gh version fixture', stderr: '' }
       }
       throw Object.assign(new Error('cannot execute'), { code: 126 })
     })
 
     await expect(findRunnableLocalCommand('gh')).resolves.toEqual({
-      status: 'timeout',
-      binary: second
+      status: 'available',
+      binary: third
     })
-    expect(spawnedCommands()).toEqual([shim, second])
+    expect(spawnedCommands()).toEqual([shim, second, third])
   })
 
-  it('stops on the ETIMEDOUT shape as well as the killed shape', async () => {
+  it('reports a timeout when no later copy works', async () => {
     execFileAsyncMock.mockImplementation((command: string) =>
       command === second
         ? Promise.reject(Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' }))
@@ -166,7 +180,7 @@ describe('findRunnableLocalCommand', () => {
       status: 'timeout',
       binary: second
     })
-    expect(spawnedCommands()).toEqual([shim, second])
+    expect(spawnedCommands()).toEqual([shim, second, third])
   })
 
   it('reads a rejection that is not an object as an ordinary failure', async () => {
@@ -195,14 +209,17 @@ describe('findRunnableLocalCommand', () => {
   })
 
   it('probes a relative PATH entry as the absolute directory cwd gives it', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    const shimDir = path.resolve('shims')
+    const localShim = path.join(shimDir, 'gh')
     const relativeDir = path.join('.', 'tools')
-    process.env.PATH = [shim.replace('/gh', ''), relativeDir].join(path.delimiter)
+    process.env.PATH = [shimDir, relativeDir].join(path.delimiter)
     const absoluteDir = path.resolve(relativeDir)
-    const hidden = `${absoluteDir}/gh`
-    const absolutePath = [shim.replace('/gh', ''), absoluteDir].join(path.delimiter)
+    const hidden = path.join(absoluteDir, 'gh')
+    const absolutePath = [shimDir, absoluteDir].join(path.delimiter)
     listLocalCommandPathsMock.mockImplementation(
       async (_command: string, options?: { env?: NodeJS.ProcessEnv }) =>
-        options?.env?.PATH === absolutePath ? [shim, hidden] : []
+        options?.env?.PATH === absolutePath ? [localShim, hidden] : []
     )
     execFileAsyncMock.mockImplementation(async (command: string) => {
       if (command === hidden) {
@@ -215,7 +232,7 @@ describe('findRunnableLocalCommand', () => {
       status: 'available',
       binary: hidden
     })
-    expect(spawnedCommands()).toEqual([shim, hidden])
+    expect(spawnedCommands()).toEqual([localShim, hidden])
   })
 
   it('does not pay for the bare name when every PATH entry is absolute', async () => {
@@ -258,7 +275,7 @@ describe('findRunnableLocalCommand', () => {
     const command = path.win32.join('C:\\tools', 'gh.cmd')
     const working = path.win32.join('C:\\working', 'gh.exe')
     listLocalCommandPathsMock.mockResolvedValue([command, working])
-    runProcessMock.mockResolvedValue({
+    runProcessMock.mockResolvedValueOnce({
       code: 126,
       stdout: '',
       stderr: 'broken shim',
@@ -270,40 +287,72 @@ describe('findRunnableLocalCommand', () => {
       status: 'available',
       binary: working
     })
-    expect(runProcessMock).toHaveBeenCalledOnce()
+    expect(runProcessMock).toHaveBeenCalledTimes(2)
     expect(spawnedCommands()).toEqual([working])
   })
 
-  it('stops on a shared runner timeout', async () => {
+  it('recovers after a shared runner timeout', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const command = path.win32.join('C:\\tools', 'gh.cmd')
     listLocalCommandPathsMock.mockResolvedValue([command, third])
-    runProcessMock.mockResolvedValue({ code: null, stdout: '', stderr: '', timedOut: true })
+    runProcessMock
+      .mockResolvedValueOnce({ code: null, stdout: '', stderr: '', timedOut: true })
+      .mockResolvedValueOnce({ code: 0, stdout: 'gh version fixture', stderr: '', timedOut: false })
 
     await expect(findRunnableLocalCommand('gh')).resolves.toEqual({
-      status: 'timeout',
-      binary: command
+      status: 'available',
+      binary: third
     })
     expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('shares the five second timeout across failed candidates', async () => {
+  it('allows one bounded recovery budget after a launcher times out', async () => {
     let now = 1000
     vi.spyOn(Date, 'now').mockImplementation(() => now)
     execFileAsyncMock.mockImplementation(async (command: string) => {
-      if (command === shim) {
-        now += 4000
-        throw Object.assign(new Error('cannot execute'), { code: 126 })
-      }
+      now += command === shim ? 5000 : 2500
       throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })
     })
 
     await expect(findRunnableLocalCommand('gh')).resolves.toEqual({
       status: 'timeout',
-      binary: second
+      binary: third
     })
     expect(execFileAsyncMock.mock.calls.map(([, , options]) => options.timeout)).toEqual([
-      5000, 1000
+      5000, 2500, 2500
     ])
+  })
+
+  it('shares the original five seconds across ordinary failures', async () => {
+    let now = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    execFileAsyncMock.mockImplementation(async (command: string) => {
+      if (command === third) {
+        return { stdout: 'gh version fixture', stderr: '' }
+      }
+      now += command === shim ? 4000 : 500
+      throw Object.assign(new Error('cannot execute'), { code: 126 })
+    })
+
+    await expect(findRunnableLocalCommand('gh')).resolves.toEqual({
+      status: 'available',
+      binary: third
+    })
+    expect(execFileAsyncMock.mock.calls.map(([, , options]) => options.timeout)).toEqual([
+      5000, 1000, 500
+    ])
+  })
+
+  it('gives an explicit binary the full timeout without trying another copy', async () => {
+    execFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' })
+    )
+
+    await expect(findRunnableLocalCommand(shim)).resolves.toEqual({
+      status: 'timeout',
+      binary: shim
+    })
+    expect(spawnedCommands()).toEqual([shim])
+    expect(execFileAsyncMock.mock.calls[0][2].timeout).toBe(5000)
   })
 })

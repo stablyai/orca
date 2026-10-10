@@ -5,6 +5,7 @@ import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-code
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import {
   RelayConnectionOpenMessageSchema,
+  RelayControlErrorMessageSchema,
   RelayDrainMessageSchema,
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
@@ -38,6 +39,8 @@ export class RelayControlClient {
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
   private connectTimer: ReturnType<typeof setTimeout> | null = null
+  // The relay's own reason for the close that usually follows an unanswered control-error.
+  private controlErrorCode: string | null = null
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
@@ -190,6 +193,17 @@ export class RelayControlClient {
       this.failProtocol('invalid control JSON')
       return
     }
+    const controlError = RelayControlErrorMessageSchema.safeParse(message)
+    // Why every state: in proving it used to fail the proof (4401, blaming the credential).
+    if (controlError.success) {
+      if (!this.requests.resolveMessage(message)) {
+        this.controlErrorCode = /^[a-z0-9_]{1,48}$/.test(controlError.data.code)
+          ? controlError.data.code
+          : 'unrecognized'
+        console.warn(`[relay] control-error code=${this.controlErrorCode} state=${this.state}`)
+      }
+      return
+    }
     if (this.state === 'proving') {
       this.handleProofMessage(message)
       return
@@ -293,7 +307,13 @@ export class RelayControlClient {
     this.state = 'closed'
     this.liveness.stop()
     if (wasConnecting) {
-      this.connectReject?.(new Error(`relay_control_closed_${code}`))
+      this.connectReject?.(
+        new Error(
+          this.controlErrorCode
+            ? `relay_control_error_${this.controlErrorCode}`
+            : `relay_control_closed_${code}`
+        )
+      )
       this.clearConnectPromise()
     }
     this.requests.rejectAll(new Error(`relay_control_closed_${code}`))

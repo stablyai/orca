@@ -10,7 +10,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
-import { repoWithFetchedOwner } from './owner-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
@@ -37,7 +37,7 @@ export async function fetchRepoCatalogForTarget(
             reuseRecentCompatibilityFailure: true
           })
         ).repos
-  const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
+  const repos = fetchedRepos.map((repo) => adoptFromEndpoint(target, { kind: 'repo', row: repo }))
   return {
     repos,
     projectHostSetupCompatibility: await fetchProjectHostSetupCompatibility(target, repos),

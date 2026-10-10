@@ -16,11 +16,13 @@ import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
+import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
@@ -48,14 +50,15 @@ export function EditorPanelHeaderPath({
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
   const canCopyHeaderPath = headerCopyState.copyText !== null
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
-  const isVirtualEditorTab = activeFile.mode === 'check-details'
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
+  const isVirtualEditorTab = isVirtualEditorFile(activeFile)
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, activeFile.worktreeId, {
       connectionId:
         activeFile.externalSshTargetId ?? getConnectionIdFromState(s, activeFile.worktreeId),
       runtimeEnvironmentId: activeFile.runtimeEnvironmentId
     })
   )
+  const revealBlocked = isLocalPathOpenBlocked(revealOwner)
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
     canRename,
@@ -214,7 +217,7 @@ export function EditorPanelHeaderPath({
           {!isVirtualEditorTab && (
             <DropdownMenuItem
               disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(activeFile.filePath)}
+              onSelect={() => void revealInFileManager(activeFile.filePath, revealOwner)}
             >
               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
               {getRevealInFileManagerLabel()}

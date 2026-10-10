@@ -16,6 +16,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'dry-run',
   'enter',
   'focus',
+  'grant-desktop-control',
   'force',
   'fresh',
   'full',

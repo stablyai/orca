@@ -273,12 +273,3 @@ function committedCatalogState(receipt: OrcadMigrationImportReceipt): OrcadMigra
     receipt: structuredClone(receipt)
   }
 }
-
-export function installOrcadCatalogImportPersistenceContext(
-  target: OrcadCatalogImportPersistence,
-  source: OrcadCatalogImportPersistence
-): void {
-  Object.defineProperty(target, orcadCatalogImportContext, {
-    value: source[orcadCatalogImportContext]
-  })
-}

@@ -1,5 +1,5 @@
 import { createConnection } from 'node:net'
-import { DispatcherClientWriter } from './dispatcher-client-writer'
+import { DispatcherClientWriter } from '../wsl-guest/dispatcher-client-writer'
 import { pickRemoteCliEnv } from './remote-cli-env'
 import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 import { prepareRemoteArtifactCliInput } from './remote-artifact-cli-input'
@@ -14,7 +14,7 @@ import {
   parseJsonRpcMessage,
   type DecodedFrame,
   type JsonRpcResponse
-} from './protocol'
+} from '../wsl-guest/protocol'
 import { readLaunchVersion, runConnectHandshake } from './relay-handshake'
 
 const CONNECT_TIMEOUT_MS = 5_000

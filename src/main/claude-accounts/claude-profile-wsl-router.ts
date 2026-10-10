@@ -14,14 +14,20 @@ import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from './claude-profile-paths'
+import type { ClaudeProfileRouterSettings } from './claude-profile-router'
+import { claudeProfileMissing, claudeProfileSetupFailed } from './claude-profile-launch-errors'
 import {
-  claudeProfileMissing,
-  claudeProfileSetupFailed,
-  type ClaudeProfileRouterSettings
-} from './claude-profile-router'
+  isSameClaudeLogin,
+  readClaudeFolderLoginAsync,
+  type ClaudeFolderLogin
+} from './claude-account-folder'
 import { wslClaudeProfile, wslClaudeProfilePointer } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
-import { getClaudeWslSelectionKey, getSelectedClaudeAccountIdForTarget } from './runtime-selection'
+import {
+  findClaudeAccount,
+  getClaudeWslSelectionKey,
+  getSelectedClaudeAccountIdForTarget
+} from './runtime-selection'
 
 type WslSetup = (distro: string, guestHome: string, accountId: string) => Promise<void>
 
@@ -63,7 +69,23 @@ export class ClaudeWslProfileRouter {
     if (!home?.startsWith('/')) {
       throw new Error(`Could not read the home folder of WSL distro ${distro}.`)
     }
-    return { home, profile: this.selectedProfile(home, distro) }
+    const selected = this.selectedProfile(home, distro)
+    return { home, selected, profile: await this.routed(distro, home, selected) }
+  }
+
+  /** The host router's fallback: an account with no login of its own runs on the guest's ~/.claude
+   *  while that is signed in to the same email. */
+  private async routed(
+    distro: string,
+    home: string,
+    selected: ClaudeProfileDescriptor | null
+  ): Promise<ClaudeProfileDescriptor | null> {
+    if (!selected || (await guestLogin(distro, posix.join(selected.home, '.claude.json')))) {
+      return selected
+    }
+    const saved = findClaudeAccount(this.args.getSettings(), selected.accountId)
+    const systemDefault = await guestLogin(distro, posix.join(home, '.claude.json'))
+    return saved && systemDefault && isSameClaudeLogin(saved, systemDefault) ? null : selected
   }
 
   private selectedProfile(home: string, distro: string): ClaudeProfileDescriptor | null {
@@ -80,7 +102,7 @@ export class ClaudeWslProfileRouter {
 
   /** Pointer first, then setup in the background, as on the host. No accounts here means no pointer. */
   async publish(distro: string): Promise<void> {
-    const { home, profile } = await this.resolve(distro)
+    const { home, selected, profile } = await this.resolve(distro)
     if (!this.accountIn(distro)) {
       await runGuest(distro, {
         script: 'rm -f -- "$1"',
@@ -90,15 +112,19 @@ export class ClaudeWslProfileRouter {
       return
     }
     await writePointer(distro, this.pointerIn(home), profile?.home ?? '')
-    // Why even a missing folder: setup creates it without a login, for Claude's own first run.
-    if (profile) {
-      this.setUp(distro, home, profile.accountId).catch((error: unknown) => {
-        console.warn('[claude-profile] WSL account setup failed:', error)
-      })
+    // Why even a missing or covered folder: setup creates it without a login, for a sign-in.
+    if (selected) {
+      this.setUpInBackground(distro, home, selected.accountId)
     }
   }
 
-  /** Waits for a first setup that never finished, running or not; otherwise launches at once. */
+  private setUpInBackground(distro: string, home: string, accountId: string): void {
+    this.setUp(distro, home, accountId).catch((error: unknown) => {
+      console.warn('[claude-profile] WSL account setup failed:', error)
+    })
+  }
+
+  /** Waits for a first setup that never finished, running or not; otherwise refreshes alongside. */
   async prepareLaunch(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
     const { home, profile } = await this.resolve(distro)
     // Why the marker: setup writes it last, so a missing folder is set up too. A re-run of a
@@ -108,14 +134,40 @@ export class ClaudeWslProfileRouter {
         console.warn('[claude-profile] WSL account setup failed:', error)
         throw claudeProfileSetupFailed()
       })
+    } else if (profile) {
+      // Why in the background: a guest refresh starts a guest Node, too slow for every launch.
+      this.setUpInBackground(distro, home, profile.accountId)
     }
     // Why: a missing or stale guest pointer would run the pane's `claude` under another account.
     // Re-read the selection: one made during setup has already published its own pointer.
     if (this.accountIn(distro)) {
-      const selected = this.selectedProfile(home, distro)
-      await writePointer(distro, this.pointerIn(home), selected?.home ?? '')
+      const current = await this.routed(distro, home, this.selectedProfile(home, distro))
+      await writePointer(distro, this.pointerIn(home), current?.home ?? '')
     }
     return this.preparationFor(distro, home, profile)
+  }
+
+  /** The host router's old-terminal check for a pane in this distro; null with no account selected. */
+  async systemDefaultRunsAnotherAccount(distro: string): Promise<boolean | null> {
+    const { home, selected } = await this.resolve(distro)
+    if (!selected) {
+      return null
+    }
+    const login =
+      (await guestLogin(distro, posix.join(selected.home, '.claude.json'))) ??
+      findClaudeAccount(this.args.getSettings(), selected.accountId)
+    const systemDefault = await guestLogin(distro, posix.join(home, '.claude.json'))
+    return !login || !systemDefault || !isSameClaudeLogin(login, systemDefault)
+  }
+
+  /** Where an unselected account's usage is read in the guest: where its launches would run. */
+  async accountUsagePreparation(
+    distro: string,
+    accountId: string
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    const { home } = await this.resolve(distro)
+    const { profile } = wslClaudeProfile(home, distro, accountId)
+    return this.preparationFor(distro, home, await this.routed(distro, home, profile))
   }
 
   async preparation(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
@@ -171,7 +223,6 @@ export class ClaudeWslProfileRouter {
           ? { CLAUDE_CONFIG_DIR: profile.home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: profile.home }
           : {})
       },
-      stripAuthEnv: true,
       provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`
     }
   }
@@ -188,6 +239,11 @@ export class ClaudeWslProfileRouter {
     this.setups.set(accountId, run)
     return run
   }
+}
+
+/** The login a guest state file names, read over the share like the marker. */
+function guestLogin(distro: string, stateFile: string): Promise<ClaudeFolderLogin | null> {
+  return readClaudeFolderLoginAsync(toWindowsWslPath(stateFile, distro))
 }
 
 // Why over the distro's share: a launch must not wait on a guest process for two stats.

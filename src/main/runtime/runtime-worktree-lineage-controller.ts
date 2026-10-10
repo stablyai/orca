@@ -1,4 +1,5 @@
 import type { WorktreeLineage, WorkspaceLineage } from '../../shared/worktree/lineage-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceKey } from '../../shared/folder-workspace-types'
 import {
   folderWorkspaceKey,
@@ -11,6 +12,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import {
   RuntimeLineageError,
+  enforceCreateLineageHostBoundary,
   resolveRuntimeWorktreeCreateLineage,
   type ResolvedWorkspaceParent,
   type WorktreeLineageCandidate,
@@ -30,8 +32,11 @@ type RuntimeWorktreeLineageDependencies = {
 export class RuntimeWorktreeLineageController {
   constructor(private readonly deps: RuntimeWorktreeLineageDependencies) {}
 
-  async resolveCreate(input?: WorktreeLineageInput): Promise<WorktreeLineageResolution> {
-    return resolveRuntimeWorktreeCreateLineage(input, {
+  async resolveCreate(
+    input?: WorktreeLineageInput,
+    childHostId?: ExecutionHostId
+  ): Promise<WorktreeLineageResolution> {
+    const resolution = await resolveRuntimeWorktreeCreateLineage(input, {
       resolveParent: (selector) => this.resolveParent(selector),
       resolveWorktreeParent: (selector) => this.resolveWorktreeParent(selector),
       resolveTaskCandidate: (taskId) => this.resolveTaskCandidate(taskId),
@@ -48,6 +53,7 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
+    return enforceCreateLineageHostBoundary(resolution, childHostId)
   }
 
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {

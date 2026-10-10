@@ -73,18 +73,6 @@ export class ExternalAutomationScopeError extends Error {
   }
 }
 
-const SCOPE_CODE_VALUES: readonly ExternalAutomationScopeCode[] = Object.values(
-  EXTERNAL_AUTOMATION_SCOPE_CODES
-)
-
-export function isExternalAutomationScopeCode(
-  value: unknown
-): value is ExternalAutomationScopeCode {
-  return (
-    typeof value === 'string' && SCOPE_CODE_VALUES.includes(value as ExternalAutomationScopeCode)
-  )
-}
-
 /** The captured incarnation no longer matches the current SSH registration. */
 export function externalAutomationHostChangedError(): AutomationOwnerConflictError {
   return new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)

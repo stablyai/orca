@@ -7,7 +7,7 @@ import {
   RelayAgentProcessLifetime
 } from './relay-agent-process-lifetime'
 import { createFakeChild, requestContext } from './agent-exec-handler-test-harness'
-import type { MethodHandler, RelayDispatcher } from './dispatcher'
+import type { MethodHandler, RelayDispatcher } from '../wsl-guest/dispatcher'
 
 // Why an untyped mock: the fake child stubs only what AgentExecHandler reads from a ChildProcess.
 const { spawnMock, loginShellMock } = vi.hoisted(() => ({
@@ -124,8 +124,10 @@ it('kills a child tracked after the fence instead of throwing', async () => {
   const lifetime = new RelayAgentProcessLifetime()
   void lifetime.dispose()
   const child = createFakeChild()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: track reads only pid, kill and the close/error events the fake emits.
-  expect(() => lifetime.track(child as unknown as Parameters<typeof lifetime.track>[0])).not.toThrow()
+  expect(() =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: track reads only pid, kill and the close/error events the fake emits.
+    lifetime.track(child as unknown as Parameters<typeof lifetime.track>[0])
+  ).not.toThrow()
   if (process.platform !== 'win32') {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   }

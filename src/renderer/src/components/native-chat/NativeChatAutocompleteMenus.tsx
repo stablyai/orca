@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react'
-import { Loader2, Package, RotateCcw } from 'lucide-react'
+import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
@@ -7,6 +7,7 @@ import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -72,7 +73,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       {showSkillsHeading ? <PickerGroupHeading kind="skills" /> : null}
       {autocomplete.skillStatus === 'loading' ? (
         <PickerStatus>
-          <Loader2 className="size-3.5 animate-spin" />
+          <LoadingSpinner className="size-3.5" />
           {translate('components.native-chat.composer.loadingSkills', 'Loading skills...')}
         </PickerStatus>
       ) : null}
@@ -180,6 +181,12 @@ function PickerOption({
   onChoose: (item: NativeChatPickerItem) => void
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
+  const description =
+    item.kind === 'command' &&
+    item.name === 'clear' &&
+    item.description === 'Clear conversation context'
+      ? translate('components.native-chat.composer.clearDescription', 'Clear conversation context')
+      : item.description
   return (
     <PickerOptionButton
       id={`${listboxId}-option-${index}`}
@@ -199,8 +206,8 @@ function PickerOption({
             </span>
           ) : null}
         </span>
-        {item.description ? (
-          <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
+        {description ? (
+          <span className="block truncate text-xs text-muted-foreground">{description}</span>
         ) : null}
         {annotation ? (
           <span className="block truncate text-[11px] text-muted-foreground">{annotation}</span>
@@ -347,7 +354,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
       })}
       {statusText ? (
         <PickerStatus>
-          {mention.loading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}
           {statusText}
         </PickerStatus>
       ) : null}

@@ -32,7 +32,7 @@ it('shares one setup and runs the unchanged compiler after static checks finish'
     'node config/scripts/ci-unit-plan.mjs'
   ])
   expect(plan.env.ORCA_UNIT_SELECTION_MODE).toContain('vars.ORCA_UNIT_SELECTION_MODE')
-  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '10' }}")
+  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}")
   expect(steps.indexOf(plan)).toBeLessThan(steps.indexOf(compiler))
   expect(steps.indexOf(compiler)).toBeGreaterThan(
     steps.findIndex((step) => step.wait?.includes('localization-extraction'))
@@ -199,6 +199,7 @@ it('pins every foreground and background step to its selected phase', () => {
     ['Enforce max-lines ratchet', staticPhase],
     ['Enforce ts-nocheck ratchet', staticPhase],
     ['Enforce runtime Electron-import ratchet', staticPhase],
+    ['Enforce owner-routing ratchet', staticPhase],
     ['Check Node runtime pin', staticPhase],
     ['Boot orcad and round-trip a terminal', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
@@ -218,6 +219,7 @@ it('pins every foreground and background step to its selected phase', () => {
       .filter((step) => step.background)
       .map((step) => [step.id, step.env.PREFLIGHT_PHASE_SELECTED])
   ).toEqual([
+    ['process-host-imports', `\${{ ${staticPhase} }}`],
     ['root-lint', `\${{ ${staticPhase} }}`],
     ['native-code-quality', `\${{ ${staticPhase} }}`],
     ['changed-code-quality', `\${{ ${staticPhase} }}`],

@@ -15,6 +15,10 @@ export function setRuntimeEnvironmentCatalogRefresher(refresher: CatalogRefreshe
   refreshCatalog = refresher
 }
 
+export function runtimeEnvironmentPairingChangedError(): Error {
+  return new Error(`${PAIRING_CHANGED_MESSAGE}; refresh and try again`)
+}
+
 export function isRuntimeEnvironmentPairingChangedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   return message.includes(PAIRING_CHANGED_MESSAGE)
@@ -22,7 +26,14 @@ export function isRuntimeEnvironmentPairingChangedError(error: unknown): boolean
 
 /** Re-reads the catalog once per burst of refusals; resolves when the new revisions are in. */
 export function refreshRuntimeEnvironmentsAfterPairingChange(error: unknown): Promise<void> {
-  if (!refreshCatalog || !isRuntimeEnvironmentPairingChangedError(error)) {
+  return isRuntimeEnvironmentPairingChangedError(error)
+    ? refreshRuntimeEnvironmentCatalog()
+    : Promise.resolve()
+}
+
+/** One catalog re-read for every caller that learned of a new pairing at the same time. */
+export function refreshRuntimeEnvironmentCatalog(): Promise<void> {
+  if (!refreshCatalog) {
     return Promise.resolve()
   }
   inFlight ??= refreshCatalog()

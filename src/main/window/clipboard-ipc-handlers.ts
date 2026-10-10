@@ -25,7 +25,6 @@ import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
-  clipboardFormatsIncludeImage,
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 import {
@@ -41,6 +40,7 @@ import {
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { uploadPastedImageToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
@@ -141,7 +141,7 @@ export function registerClipboardHandlers(store: Store): void {
   })
   ipcMain.handle('clipboard:hasImage', (event): boolean => {
     assertTrustedClipboardSender(event)
-    return clipboardFormatsIncludeImage(clipboard.availableFormats())
+    return readClipboardImageSource(clipboard) !== null
   })
   // Why: a file-manager copy also carries the files' names as text, which a paste must not type.
   ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
@@ -155,21 +155,19 @@ export function registerClipboardHandlers(store: Store): void {
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
+      const source = readClipboardImageSource(clipboard)
+      if (!source) {
+        return null
+      }
       const image = clipboard.readImage()
       if (image.isEmpty()) {
-        if (process.platform !== 'win32') {
+        if (!source.windowsFileFormats) {
           return null
         }
-        const copiedFilePng = await readWindowsClipboardImageFileAsPng(
-          {
-            fileNameW: clipboard.readBuffer('FileNameW'),
-            shellIdListArray: clipboard.readBuffer('Shell IDList Array')
-          },
-          {
-            createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-            openFile: (filePath) => open(filePath, 'r')
-          }
-        )
+        const copiedFilePng = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
+          createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+          openFile: (filePath) => open(filePath, 'r')
+        })
         return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())

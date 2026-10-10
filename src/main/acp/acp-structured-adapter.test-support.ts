@@ -107,8 +107,8 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   override close(error?: Error): Promise<boolean> {
     this.closes += 1
     this.closing ||= !this.gone
-    super.close(error)
-    return this.proveClose()
+    this.drainNotifications(error)
+    return this.proveClose().finally(() => super.close(error))
   }
   /** The agent process ends on its own (or Orca's close landed). */
   exit(): void {
@@ -175,7 +175,7 @@ export async function openAcpAdapterRig(
     resolveLaunch: async () => ({
       spec,
       command: `/opt/bin/${spec.command}`,
-      args: spec.args({ fullAccess: false }),
+      args: spec.args({ fullAccess: false, pluginDir: null }),
       cwd: '/workspace/project',
       env: { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' },
       envToDelete: [],
@@ -188,6 +188,12 @@ export async function openAcpAdapterRig(
       const child = new FakeAcpChild(launch, connectionOptions)
       current = child
       const { agent } = child
+      agent.on('_x.ai/subagent/cancel', (frame) =>
+        agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `subagentId`')
+      )
+      agent.on('_x.ai/task/kill', (frame) =>
+        agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `sessionId`')
+      )
       agent.on('initialize', (frame) => {
         spawned.push('initialize')
         agent.reply(frame, {

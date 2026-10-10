@@ -1,4 +1,3 @@
-import type { TabContentType } from '../../../../shared/tab-types'
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute
@@ -7,13 +6,7 @@ import { closeWebRuntimeSessionTab, isWebRuntimeSessionActive } from '@/runtime/
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
-
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details'
-])
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type TerminalTabBulkActionState = ReturnType<typeof useAppStore.getState>
 
@@ -111,7 +104,7 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
       continue
     }
     const unifiedTab = (state.unifiedTabsByWorktree?.[activeWorktreeId] ?? []).find(
-      (tab) => tab.entityId === id && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType)
+      (tab) => tab.entityId === id && isEditorTabContentType(tab.contentType)
     )
     if (!unifiedTab?.isPinned) {
       useAppStore.getState().closeFile(id)

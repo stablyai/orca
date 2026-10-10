@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
 
 function createRuntime() {
   const linearSaveIssue = vi.fn(async (request: unknown) => ({
@@ -29,6 +30,7 @@ describe('SSH remote Linear save issue', () => {
   it('forwards update fields, clears, stdin, and SSH context without losing types', async () => {
     const { runtime, linearSaveIssue } = createRuntime()
     const result = await runRemoteOrcaCli(runtime, {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: [
         'linear',
         'save-issue',
@@ -83,6 +85,7 @@ describe('SSH remote Linear save issue', () => {
   it('forwards the team and title required for create mode', async () => {
     const { runtime, linearSaveIssue } = createRuntime()
     const result = await runRemoteOrcaCli(runtime, {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['linear', 'save-issue', '--team', 'ENG', '--title', 'New issue', '--json'],
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
@@ -97,6 +100,7 @@ describe('SSH remote Linear save issue', () => {
   it('rejects remote body paths instead of reading from the wrong filesystem', async () => {
     const { runtime, linearSaveIssue } = createRuntime()
     const result = await runRemoteOrcaCli(runtime, {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['linear', 'save-issue', 'ENG-123', '--body-file', 'body.md', '--json'],
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }

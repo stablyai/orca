@@ -10,7 +10,7 @@ on:
       - 'src/main/startup/main-process-quit*'
       - 'src/main/window/main-window-state-lifecycle*'
       - 'src/main/window/dashboard-popout-window*'
-      - 'src/shared/child-process/**'
+      - 'src/packages/process-host/**'
       - 'src/shared/update-status-types.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:

@@ -1,6 +1,7 @@
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
+import { adoptFromEndpoint } from '../../store/adopt-from-endpoint'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -38,10 +39,9 @@ export function registerProjectCatalogIpcBridge(
         // focus changes; otherwise an unbound repo can refresh from the wrong host.
         // A folder rename changes the worktree id; handleWorktreesChanged re-keys
         // state and shields it from the deletion diff.
-        worktreeChangeRefreshQueue.enqueue({
-          ...data,
-          forceLocalOwner: true
-        })
+        worktreeChangeRefreshQueue.enqueue(
+          adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })
+        )
       }
     )
   )

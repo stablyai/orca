@@ -2,7 +2,7 @@ import { basename, extname, resolve } from 'node:path'
 import type { RemoteArtifactInput } from '../shared/artifact-cli-bridge'
 import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../shared/artifacts'
 import { readArtifactFileWithinLimit } from '../shared/artifact-file-read'
-import { MAX_MESSAGE_SIZE } from './protocol'
+import { MAX_MESSAGE_SIZE } from '../wsl-guest/protocol'
 
 export type PreparedRemoteArtifactCliInput = {
   stdin?: string

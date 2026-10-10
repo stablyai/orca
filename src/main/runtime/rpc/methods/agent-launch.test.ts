@@ -548,8 +548,8 @@ describe('the terminal factory', () => {
 
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
       startupAgent: 'claude',
-      // The host derives the tab's first view by the window's rule; chat view is on by default here.
-      viewMode: 'chat',
+      // A refused structured session opens its fallback tab as a terminal.
+      viewMode: 'terminal',
       // A paired device's launch never moves the desktop window.
       surfaceOwner: false,
       onPtySpawnDispatched: expect.any(Function)

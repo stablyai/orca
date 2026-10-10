@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   journalRowSchemaVersion
 } from '../../../shared/agent-session-journal-types'
-import { partitionJournalLifecycleMutations } from './journal-lifecycle-batch-partition'
+import {
+  journalLifecycleMutationFitsOneBatch,
+  partitionJournalLifecycleMutations
+} from './journal-lifecycle-batch-partition'
 import { createJournalReducerState } from './journal-reducer'
 import {
   journalLifecycleBatchRowBuilder,
   journalLifecycleMutationRow,
+  journalLifecycleMutationItemId,
   type JournalLifecycleMutationInput
 } from './journal-row-builders'
 import {
@@ -53,7 +56,7 @@ function previousProbe(settlementId: string, mutations: readonly JournalLifecycl
           mutation.body.outcome === undefined
           ? { ...mutation, body: { ...mutation.body, outcome: 'cancellation' } }
           : mutation,
-        agentJournalItemKey(mutation.identity),
+        journalLifecycleMutationItemId(mutation),
         Number.MAX_SAFE_INTEGER
       )
     )
@@ -97,7 +100,7 @@ function previousPartition(
 afterEach(() => vi.restoreAllMocks())
 
 describe('journal lifecycle batch partitioning', () => {
-  it('leaves empty and singleton batches uninspected, including an oversized singleton', () => {
+  it('leaves singleton partitioning intact and identifies an oversized item for the row writer', () => {
     const oversized = item(0, 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES))
     const stringify = vi.spyOn(JSON, 'stringify')
     expect(partitionJournalLifecycleMutations('one', [])).toEqual([])
@@ -105,6 +108,7 @@ describe('journal lifecycle batch partitioning', () => {
       { settlementId: 'one', mutations: [oversized] }
     ])
     expect(stringify).not.toHaveBeenCalled()
+    expect(journalLifecycleMutationFitsOneBatch('one', oversized, { recovered: true })).toBe(false)
   })
 
   it('preserves the mutation cap and the oversized leading mutation rule', () => {
@@ -171,8 +175,10 @@ describe('journal lifecycle batch partitioning', () => {
             }
           }
           return {
-            ...item(index, text),
+            kind: 'item',
             identity,
+            body: item(index, text).body,
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE,
             linkage: {
               agentId: 'child',
               parentAgentId: 'parent',
@@ -210,5 +216,74 @@ describe('journal lifecycle batch partitioning', () => {
     vi.restoreAllMocks()
     expect(chunks.flatMap((chunk) => chunk.mutations)).toEqual(mutations)
     expect(serializedBytes).toBeLessThan(payloadBytes * 3)
+  })
+
+  it.each(['tool-call', 'turn'] as const)(
+    'includes UTF-8, schema version and recovered overhead at the exact %s boundary',
+    (kind) => {
+      const settlementId = 'boundary:界😀'
+      const state = createJournalReducerState('session', EPOCH)
+      const mutation = (text: string): JournalLifecycleMutationInput => ({
+        ...item(0, text),
+        body:
+          kind === 'turn'
+            ? { kind: 'turn', turnId: text, state: 'interrupted', outcome: 'cancellation' }
+            : item(0, text).body
+      })
+      state.tombstones.set(journalLifecycleMutationItemId(item(0, '')), Number.MAX_SAFE_INTEGER - 1)
+      const build = (text: string, recovered?: true) =>
+        journalLifecycleBatchRowBuilder(() => state, settlementId, [mutation(text)], {
+          fence: Number.MAX_SAFE_INTEGER,
+          recovered
+        })(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+      const available =
+        MAX_JOURNAL_LIFECYCLE_BATCH_BYTES - Buffer.byteLength(serializeJournalRow(build(''))) - 1
+      const utf8Text = (bytes: number) =>
+        `${'界😀'.repeat(Math.floor(bytes / 7))}${'x'.repeat(bytes % 7)}`
+      const text = utf8Text(available)
+      expect(journalLifecycleMutationFitsOneBatch(settlementId, mutation(text))).toBe(true)
+      expect(
+        journalLifecycleMutationFitsOneBatch(settlementId, mutation(text), { recovered: true })
+      ).toBe(false)
+      const recoveredText = utf8Text(available - 17)
+      const row = build(recoveredText, true)
+      expect(row.v).toBe(kind === 'turn' ? 3 : 2)
+      expect(Buffer.byteLength(serializeJournalRow(row)) + 1).toBe(
+        MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+      )
+      expect(parseJournalRow(serializeJournalRow(row)).ok).toBe(true)
+      expect(
+        journalLifecycleMutationFitsOneBatch(settlementId, mutation(recoveredText), {
+          recovered: true
+        })
+      ).toBe(true)
+      expect(
+        journalLifecycleMutationFitsOneBatch(settlementId, mutation(`${recoveredText}x`), {
+          recovered: true
+        })
+      ).toBe(false)
+    }
+  )
+
+  it('counts recovered overhead when splitting several near-boundary mutations', () => {
+    const mutations = [item(0, ''), item(1, '')]
+    const available = MAX_JOURNAL_LIFECYCLE_BATCH_BYTES - previousProbe('boundary:2/2', mutations)
+    const nearBoundary = [item(0, 'x'.repeat(available)), item(1, '')]
+    expect(partitionJournalLifecycleMutations('boundary', nearBoundary)).toHaveLength(1)
+    const chunks = partitionJournalLifecycleMutations('boundary', nearBoundary, { recovered: true })
+    expect(chunks).toHaveLength(2)
+    const state = createJournalReducerState('session', EPOCH)
+    for (const chunk of chunks) {
+      const row = journalLifecycleBatchRowBuilder(
+        () => state,
+        chunk.settlementId,
+        chunk.mutations,
+        {
+          fence: Number.MAX_SAFE_INTEGER,
+          recovered: true
+        }
+      )(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+      expect(parseJournalRow(serializeJournalRow(row)).ok).toBe(true)
+    }
   })
 })

@@ -41,44 +41,26 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(startup).toBeUndefined()
   })
 
-  it('omits native-chat preferences from terminal-default folder launches', () => {
-    const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
-      defaultTuiAgent: 'codex',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: false,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+  it.each([false, true])(
+    'keeps Chat UI model preferences out of the terminal folder launch (Chat UI %s)',
+    (experimentalNativeChat) => {
+      const startup = buildOnboardingFolderAgentStartup({
+        ...getDefaultSettings('/tmp/orca-workspaces'),
+        defaultTuiAgent: 'codex',
+        experimentalNativeChat,
+        nativeChatSessionOptions: {
+          codex: {
+            model: 'gpt-5.2-codex',
+            valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+          }
         }
-      }
-    })
+      })
 
-    expect(startup?.command).not.toContain("'-m'")
-    expect(startup?.sessionOptions).toBeUndefined()
-  })
-
-  it('applies native-chat preferences to chat-default folder launches', () => {
-    const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
-      defaultTuiAgent: 'codex',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      nativeChatSessionOptions: {
-        codex: {
-          model: 'gpt-5.2-codex',
-          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
-        }
-      }
-    })
-
-    expect(startup?.command).toContain("'-m' 'gpt-5.2-codex'")
-    expect(startup?.sessionOptions).toEqual({
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
-  })
+      expect(startup?.command).not.toContain("'-m'")
+      expect(startup?.command).not.toContain('model_reasoning_effort=')
+      expect(startup).not.toHaveProperty('sessionOptions')
+    }
+  )
 
   it('does not infer an agent from auto mode', () => {
     const startup = buildOnboardingFolderAgentStartup({

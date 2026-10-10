@@ -6,12 +6,32 @@ import { RemoteRuntimeTerminalFlowController } from './remote-runtime-terminal-f
 import {
   clearResyncTimer,
   clearSnapshot,
-  discardOutputAcknowledgements,
+  disposeRemoteTerminalStreamState,
   isTerminalDriverState,
   rejectPendingSnapshotRequest
 } from './remote-runtime-terminal-snapshot-state'
 import type { TerminalMultiplexEvent } from './remote-runtime-terminal-multiplexer-types'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+
+type SubscribedCapabilities = {
+  ackOutputSourceRanges: boolean
+  outputPause: boolean
+  inputAck: boolean
+}
+
+// Why parse: the frame comes off the wire, so a malformed or legacy capabilities value must read as "unsupported".
+function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
+  if (typeof value !== 'object' || value === null) {
+    return { ackOutputSourceRanges: false, outputPause: false, inputAck: false }
+  }
+  const record: { ackOutputSourceRanges?: unknown; outputPause?: unknown; inputAck?: unknown } =
+    value
+  return {
+    ackOutputSourceRanges: record.ackOutputSourceRanges === 1,
+    outputPause: record.outputPause === 1,
+    inputAck: record.inputAck === 1
+  }
+}
 
 export abstract class RemoteRuntimeTerminalResponseController extends RemoteRuntimeTerminalFlowController {
   protected handleResponse(response: RuntimeRpcResponse<unknown>): void {
@@ -45,28 +65,29 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       return
     }
     if (event.type === 'subscribed') {
-      const capabilities =
-        typeof event.capabilities === 'object' && event.capabilities !== null
-          ? (event.capabilities as { ackOutputSourceRanges?: unknown; outputPause?: unknown })
-          : null
+      const capabilities = parseSubscribedCapabilities(event.capabilities)
       if (
-        capabilities?.ackOutputSourceRanges === 1 &&
+        capabilities.ackOutputSourceRanges &&
         typeof event.streamGeneration === 'string' &&
         event.streamGeneration.length > 0
       ) {
         stream.acknowledgeOutputSourceRanges = true
         stream.streamGeneration = event.streamGeneration
       }
-      stream.supportsOutputPause = capabilities?.outputPause === 1
+      stream.supportsOutputPause = capabilities.outputPause
+      // Why require the ledger id: without it a runtime restart could not be told apart, and replay would run input twice.
+      stream.inputLedgerId =
+        capabilities.inputAck &&
+        typeof event.inputLedgerId === 'string' &&
+        event.inputLedgerId.length > 0
+          ? event.inputLedgerId
+          : null
+      stream.supportsInputAck = stream.inputLedgerId !== null
       if (stream.supportsOutputPause) {
         stream.callbacks.onOutputPauseCapability?.()
       }
     } else if (event.type === 'end') {
-      discardOutputAcknowledgements(stream)
-      stream.watchdog.dispose()
-      clearSnapshot(stream)
-      clearResyncTimer(stream)
-      rejectPendingSnapshotRequest(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {
@@ -103,7 +124,10 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           event.mode !== 'remote-desktop-fit' &&
           event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
-        typeof event.rows !== 'number'
+        typeof event.rows !== 'number' ||
+        // Why: a restarted host that has not learned the grid yet publishes a 0x0 hold; parking
+        // xterm there shrinks the pane to one cell, so keys typed into it never reach the shell.
+        (event.mode !== 'desktop-fit' && (event.cols <= 0 || event.rows <= 0))
       ) {
         return
       }

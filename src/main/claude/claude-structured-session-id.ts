@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto'
 
 /** A stable UUID (v4 layout) for the Claude conversation behind an Orca chat. */
-export function claudeSessionIdForOrcaSession(sessionId: string): string {
-  const bytes = createHash('sha256').update(`orca-claude:${sessionId}`).digest().subarray(0, 16)
+export function claudeSessionIdForOrcaSession(
+  sessionId: string,
+  clearOperationId?: string
+): string {
+  const identity = clearOperationId
+    ? `orca-claude:${sessionId}:context-clear:${clearOperationId}`
+    : `orca-claude:${sessionId}`
+  const bytes = createHash('sha256').update(identity).digest().subarray(0, 16)
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
   const hex = bytes.toString('hex')

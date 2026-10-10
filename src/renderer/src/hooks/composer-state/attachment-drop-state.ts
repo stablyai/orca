@@ -11,7 +11,10 @@ type AttachmentDropStateInput = Pick<
   | 'selectedRepoSettings'
   | 'setAgentPrompt'
   | 'setAttachmentPaths'
->
+> & {
+  /** The selected repo's main worktree id; null for a folder project with no worktree yet. */
+  selectedWorktreeId: string | null
+}
 
 import { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -51,6 +54,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     promptTextareaRef,
     selectedRepoPath,
     selectedRepoSettings,
+    selectedWorktreeId,
     setAgentPrompt,
     setAttachmentPaths
   } = input
@@ -124,6 +128,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       targetSettings = selectedRepoSettings,
       targetConnectionId: string | null | undefined = connectionId,
       targetRepoPath: string | null | undefined = selectedRepoPath,
+      targetWorktreeId: string | null | undefined = selectedWorktreeId,
       canReportFailure: () => boolean = () => true
     ): Promise<{ filePaths: string[]; folderPaths: string[] } | null> => {
       if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
@@ -171,7 +176,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       const { results } = await importExternalPathsToRuntime(
         {
           settings: targetSettings,
-          worktreeId: targetRepoPath,
+          worktreeId: targetWorktreeId ?? targetRepoPath,
           worktreePath: targetRepoPath,
           connectionId: targetConnectionId ?? undefined,
           ...sshExpectation
@@ -190,7 +195,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       }
       return { filePaths: uploadResult.filePaths, folderPaths: uploadResult.folderPaths }
     },
-    [connectionId, selectedRepoPath, selectedRepoSettings]
+    [connectionId, selectedRepoPath, selectedRepoSettings, selectedWorktreeId]
   )
 
   const handleAddAttachment = useCallback(async (): Promise<void> => {
@@ -259,6 +264,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
             selectedRepoSettings,
             connectionId,
             selectedRepoPath,
+            selectedWorktreeId,
             isCurrentOwner
           ),
         applyLocalPaths: applyLocalComposerDrop,
@@ -275,6 +281,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       insertComposerFolderPaths,
       selectedRepoPath,
       selectedRepoSettings,
+      selectedWorktreeId,
       uploadComposerPaths
     ]
   )

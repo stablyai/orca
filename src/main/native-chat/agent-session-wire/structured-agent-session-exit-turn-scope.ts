@@ -7,8 +7,10 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import {
+  journalLifecycleMutationItemId,
+  type JournalLifecycleMutationInput
+} from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 
 /** The turn the exit ended: still running, or already ended at the exit's instant by the child's
@@ -34,7 +36,7 @@ export function settledRootTurnScope(
   items: readonly AgentJournalRenderItem[],
   turnEnds: readonly JournalLifecycleMutationInput[]
 ): AgentJournalTurnScope {
-  const ended = new Set(turnEnds.map((mutation) => agentJournalItemKey(mutation.identity)))
+  const ended = new Set(turnEnds.map(journalLifecycleMutationItemId))
   const settled = items.findLast((item) => isRootAgentJournalItem(item) && ended.has(item.itemId))
   return settled ? { kind: 'turn', turnItemId: settled.itemId } : AGENT_JOURNAL_THREAD_SCOPE
 }

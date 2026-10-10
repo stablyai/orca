@@ -141,7 +141,11 @@ export type AddRepoPathOptions = {
   displayName?: string
 }
 
-export type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
+export type RuntimeCatalogFetchOptions = {
+  runtimeEnvironmentId?: string | null
+  /** Conversion must retain its source rows until every destination catalog loads. */
+  throwOnError?: boolean
+}
 
 export type RepoSlice = {
   repos: readonly Repo[]
@@ -253,11 +257,11 @@ export type RepoSlice = {
     groupId: string | null,
     order?: number
   ) => Promise<boolean>
-  // options.hostId disambiguates which host's row to remove when the id exists on multiple hosts; else the focused host is assumed.
+  // options.hostId is required: a bare id can resolve to another host's row (#13071). Removes nothing when that host has no row.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
   removeProject: (
     projectId: string,
-    options?: { hostId?: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+    options: { hostId: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
   ) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.

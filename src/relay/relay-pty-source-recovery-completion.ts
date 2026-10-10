@@ -1,4 +1,4 @@
-import type { RelayDispatcher, SinkWriteSettlement } from './dispatcher'
+import type { RelayDispatcher, SinkWriteSettlement } from '../wsl-guest/dispatcher'
 import type { RelayPtySourceDeliveryRecord } from './relay-pty-source-send-scheduler'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 

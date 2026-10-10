@@ -6,7 +6,8 @@ import {
 } from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../shared/ssh-types'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
+import { errorMessage } from '../shared/error-message'
 
 type RelayGraceLifecycleOptions = {
   dispatcher: RelayDispatcher
@@ -139,9 +140,7 @@ export class RelayGraceLifecycle {
       .catch((error) => {
         this.shutdownInFlight = false
         this.options.reopenOwnedProcesses()
-        relayLogLine(
-          `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
-        )
+        relayLogLine(`[relay] Shutdown deferred: ${errorMessage(error)}`)
         if (this.options.readSocketClientCount() === 0) {
           this.start('shutdown deferred', { retryDeferredShutdown: true })
         }

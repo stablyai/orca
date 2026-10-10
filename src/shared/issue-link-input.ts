@@ -11,10 +11,6 @@ export const ISSUE_LINK_PROVIDERS = [
 
 export type IssueLinkProvider = (typeof ISSUE_LINK_PROVIDERS)[number]
 
-export function isIssueLinkProvider(value: unknown): value is IssueLinkProvider {
-  return ISSUE_LINK_PROVIDERS.includes(value as IssueLinkProvider)
-}
-
 /** URL input only. Linear and Jira issue keys are byte-identical in shape, so a
  *  bare `STA-335` can never decide a provider — it would override the chip. */
 export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | null {

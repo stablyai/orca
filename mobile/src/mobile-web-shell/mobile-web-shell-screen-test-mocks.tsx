@@ -50,7 +50,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
       },
       Text: 'Text',
-      View: 'View'
+      View: 'View',
+      useWindowDimensions: () => ({ width: 390, height: 844 })
     }),
     // Reaching the real one imports the Expo runtime this test does not have. The screen only passes
     // the handler through; what it does with a verb is `native-clipboard.test.ts`.
@@ -106,7 +107,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       // Read by the pop latch, which clears on the route this shell is mounted at changing.
       usePathname: () => dependencies.pathname,
       // The screen's own place on the stack, which is where the iOS swipe-back is taken away.
-      useNavigation: () => ({ setOptions: dependencies.setScreenOptions })
+      useNavigation: () => ({ setOptions: dependencies.setScreenOptions }),
+      useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
     }),
     // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
     // and a mount/unmount log is the only thing that can tell a remount from a prop update.

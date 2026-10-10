@@ -16,7 +16,7 @@ import {
   type DecodedFrame,
   type HandshakeMessage,
   MessageType
-} from './protocol'
+} from '../wsl-guest/protocol'
 import { relayTestSocketPath } from './relay-test-socket-path'
 
 // Why: --connect normally calls process.exit on mismatch / fatal handshake
