@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
@@ -10,6 +10,7 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from './drop-indicator'
+import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
@@ -107,7 +108,12 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
-  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const orderedIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  // Why: dnd-kit re-renders every tab when this array's identity changes, and the items rebuild on any tab write.
+  const [sortableIds, setSortableIds] = useState(orderedIds)
+  if (!sameStringArray(sortableIds, orderedIds)) {
+    setSortableIds(orderedIds)
+  }
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(

@@ -49,8 +49,9 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
   place workers. A Task is work. A Dispatch is one authoritative Task attempt.
 - Lifecycle authority comes from the active Dispatch, not a terminal title,
   copied ID, old database row, provider transcript, or visible pane.
-- Workers use the exact executable, handle, capability, Task ID, and Dispatch ID
-  in the live preamble. Never reconstruct, translate, or broaden those arguments.
+- Workers use the exact executable, handle, Task ID, and Dispatch ID in the live
+  preamble, plus any other flag it carries. Never reconstruct, translate, or
+  broaden those arguments.
 - After remote start, address the worker by Dispatch ID. The execution host owns
   process, filesystem, transcript, stop, and cleanup facts. Preserve the verdicts
   `live` / `unverifiable` / `exited`; contact loss is not process death.
@@ -65,6 +66,7 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 - Use the executable you used to run `skills get` for the entire run. In the
   examples below, replace `ORCA` with it; do not create a shell variable or run
   `ORCA` literally. If it fails, report that exact error instead of switching.
+- `ORCA status --json` shows your Orca session ID as `caller.orcaSessionId` when you have one.
 - A successful `orchestration send` proves durable enqueue; its wake or nudge is
   best-effort attention only and does not prove the recipient read or accepted it.
 
@@ -132,6 +134,7 @@ After three consecutive empty waits, stop waiting blindly and enumerate with
 `ORCA orchestration worker-list --include-remote --json` (defaults to the bound
 Run; `--run <run_id>` overrides; the receipt's `scope` names which), acting on
 each row's `projection.attention` categories, `projection.attention.requiresAction`, and literal `projection.nextAction` argv.
+Rows come newest first and page at 100: while `page.hasMore`, follow `page.nextCursor` with `--cursor <value>`.
 A `none` `nextAction` has no argv to run: read `liveness.reason` and keep waiting
 with `check --wait`. Absence never earns an argv; settlement and pending work still do.
 Leave the wait only on positive proof the agent stopped: `exited` liveness, the

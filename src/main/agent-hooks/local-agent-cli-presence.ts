@@ -135,11 +135,17 @@ function isPlatformAbsolutePath(candidate: string, platform: NodeJS.Platform): b
 }
 
 async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
-  if (!options.shouldHydrateShellPath) {
-    return
+  if (options.shouldHydrateShellPath) {
+    await hydrateAgentCliShellPath(options.hydratePath)
   }
+}
+
+/** Merges the login shell's PATH into this process once (cached), as CLI detection does. */
+export async function hydrateAgentCliShellPath(
+  hydratePath: () => Promise<HydrationResult> = hydrateShellPath
+): Promise<void> {
   try {
-    const result = await (options.hydratePath ?? hydrateShellPath)()
+    const result = await hydratePath()
     if (result.ok) {
       mergePathSegments(result.segments)
     }

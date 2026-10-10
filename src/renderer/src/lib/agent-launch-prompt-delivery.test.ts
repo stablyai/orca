@@ -45,21 +45,6 @@ describe('seedNativeChatLaunchDraftForAgentTab', () => {
       createdAt: expect.any(Number)
     })
   })
-
-  it('seeds single-line text', () => {
-    seedNativeChatLaunchDraftForAgentTab({
-      tabId: 'issue-tab',
-      agent: 'codex',
-      text: 'https://github.com/o/r/issues/12'
-    })
-
-    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
-      tabId: 'issue-tab',
-      agent: 'codex',
-      text: 'https://github.com/o/r/issues/12',
-      createdAt: expect.any(Number)
-    })
-  })
 })
 
 describe('deliverLaunchPromptToAgentTab', () => {
@@ -138,25 +123,6 @@ describe('deliverLaunchPromptToAgentTab', () => {
       createdAt: expect.any(Number)
     })
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
-  })
-
-  it('seeds a launch draft for multi-line content', async () => {
-    // Note+URL launches join with a blank line, so this shape is common too.
-    const content = 'Forked from session\n\nhttps://example.test/context'
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'fork-tab',
-      agent: 'codex',
-      content,
-      submit: false,
-      forcePaste: false
-    })
-
-    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
-      tabId: 'fork-tab',
-      agent: 'codex',
-      text: content,
-      createdAt: expect.any(Number)
-    })
   })
 
   it('does not seed a launch draft for submitted, unsupported, or empty content', async () => {

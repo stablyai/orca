@@ -1,6 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveKnownWorkspaceFileTarget } from './orca-runtime-resolve-known-workspace-file-target'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
+import { getConnectionExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {
   protected invalidateAllHandlesForPty(ptyId: string, preserveHandle?: string): Set<string> {
@@ -110,11 +112,29 @@ export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithRe
     return false
   }
 
+  protected invalidatePtyControllerInventoryForLifecycle(
+    ptyId: string,
+    connectionId?: string | null
+  ): void {
+    const generation = ++this.ptyControllerInventorySequence
+    const hostId = getPtyExecutionHost(ptyId)
+    if (hostId === 'foreign' || (hostId && parseExecutionHostId(hostId)?.kind === 'runtime')) {
+      this.ptyControllerAggregateInventoryGeneration = generation
+      return
+    }
+    const connection =
+      connectionId === undefined ? this.ptysById.get(ptyId)?.connectionId : connectionId
+    const providerKey = hostId ?? getConnectionExecutionHostId(connection)
+    // A pending census predates this admission or exit, including legacy IDs without an incarnation.
+    this.ptyControllerInventoryGenerationByProvider.set(providerKey, generation)
+  }
+
   onPtySpawned(
     ptyId: string,
     incarnationId?: PtyIncarnationId,
     options: { awaitsRegistration?: boolean } = {}
   ): void {
+    this.invalidatePtyControllerInventoryForLifecycle(ptyId)
     const existingPty = this.ptysById.get(ptyId)
     if (
       existingPty &&

@@ -1,0 +1,15 @@
+{
+  "id": "omp",
+  "engineVersion": 1,
+  "profile": { "hooks": "authoritative" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "idle_title",
+      "why": "Its `π - <session>` rest title is Pi's title anchor (pi.json), which every pane reads. Orca writes an explicit `OMP ready` title at rest, while a shell auto-title names OMP from launch, mid-turn too, so a bare name counts only once quiet (#6011).",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": true }
+    }
+  ]
+}

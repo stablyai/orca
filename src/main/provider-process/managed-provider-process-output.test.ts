@@ -1,0 +1,56 @@
+import { PassThrough } from 'node:stream'
+import { describe, expect, it, vi } from 'vitest'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import { spawnManagedProviderProcess } from './managed-provider-process'
+
+function launchWithOutput(onOutput: () => void) {
+  const child = Object.assign(createFakePipedChild(), {
+    pid: 9_999_999,
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn(() => true)
+  })
+  const managed = spawnManagedProviderProcess(
+    { command: 'fixture-provider', args: [] },
+    {
+      spawnImpl: () => child,
+      platform: 'win32',
+      site: 'fixture-provider-teardown',
+      onOutput
+    }
+  )
+  return { child, managed }
+}
+
+const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
+describe('managed provider process output', () => {
+  it('reports stderr and stdout chunks as output', async () => {
+    const onOutput = vi.fn()
+    const { child } = launchWithOutput(onOutput)
+    child.stdout.on('data', () => {})
+    await tick()
+
+    child.stderr.write('migrating\n')
+    child.stdout.write('{"id":1}\n')
+    await tick()
+
+    expect(onOutput).toHaveBeenCalledTimes(2)
+  })
+
+  it('never starts stdout before its reader subscribes, so a late reader loses nothing', async () => {
+    const onOutput = vi.fn()
+    const { child } = launchWithOutput(onOutput)
+    child.stdout.write('early frame\n')
+    await tick()
+    expect(onOutput).not.toHaveBeenCalled()
+
+    const read: string[] = []
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => read.push(chunk))
+    await tick()
+
+    expect(read.join('')).toBe('early frame\n')
+    expect(onOutput).toHaveBeenCalledTimes(1)
+  })
+})

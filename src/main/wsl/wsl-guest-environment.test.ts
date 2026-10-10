@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 vi.mock('./wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
 
 import {
@@ -14,8 +14,8 @@ import {
 function respondWithPayload(payload: string, code = 0): void {
   runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
     const script = spec.args.at(-1) ?? ''
-    const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-    const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
+    const begin = (/__ORCA_WSL_CAPTURE_BEGIN_ [a-z0-9]+__/.exec(script)?.[0] ?? '').replace(' ', '')
+    const end = (/__ORCA_WSL_CAPTURE_END_ [a-z0-9]+__/.exec(script)?.[0] ?? '').replace(' ', '')
     return {
       code,
       signal: null,
@@ -27,12 +27,6 @@ function respondWithPayload(payload: string, code = 0): void {
 }
 
 const GOOD = ['/home/u/.nvm/bin:/usr/bin', '/home/u', '/usr/bin/env'].join('\0')
-const CLAUDE_CONFIGURED = [
-  '/home/u/.nvm/bin:/usr/bin',
-  '/home/u',
-  '/usr/bin/env',
-  '/home/u/.claude-alt'
-].join('\0')
 
 beforeEach(() => {
   runProcessMock.mockReset()
@@ -41,20 +35,29 @@ beforeEach(() => {
 afterEach(() => invalidateWslGuestEnvironment(undefined, true))
 
 describe('probing', () => {
+  it('preserves an absolute CLAUDE_CONFIG_DIR from the guest login environment', async () => {
+    respondWithPayload(`${GOOD}\0/home/u/.claude-alt`)
+    await expect(getWslGuestEnvironment('Ubuntu')).resolves.toMatchObject({
+      claudeConfigDir: '/home/u/.claude-alt'
+    })
+  })
+
+  it('rejects invalid Claude directories without disabling unrelated guest tools', async () => {
+    for (const configDir of ['relative', '/tmp/config\nother']) {
+      invalidateWslGuestEnvironment(undefined, true)
+      respondWithPayload(`${GOOD}\0${configDir}`)
+      await expect(getWslGuestEnvironment('Ubuntu')).resolves.toMatchObject({
+        path: '/home/u/.nvm/bin:/usr/bin',
+        claudeConfigDir: null
+      })
+    }
+  })
   it('reads PATH, HOME and env out of a banner-polluted stdout', async () => {
     respondWithPayload(GOOD)
     expect(await getWslGuestEnvironment('Ubuntu')).toEqual({
       path: '/home/u/.nvm/bin:/usr/bin',
       home: '/home/u',
       envBinary: '/usr/bin/env'
-    })
-  })
-
-  it('reads Claude config dir from the login-shell environment', async () => {
-    respondWithPayload(CLAUDE_CONFIGURED)
-
-    await expect(getWslGuestEnvironment('Ubuntu')).resolves.toMatchObject({
-      claudeConfigDir: '/home/u/.claude-alt'
     })
   })
 

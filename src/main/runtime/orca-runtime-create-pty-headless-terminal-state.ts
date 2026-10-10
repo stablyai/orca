@@ -6,6 +6,7 @@ import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-que
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 
 export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** Shared factory for the per-PTY runtime emulators (seed, hydration, and
@@ -45,7 +46,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           // pending and flushes at the ready marker or the 15s
           // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
           // reply is delayed at most that bound, not lost.
-          this.ptyController?.write(ptyId, reply)
+          this.ptyController?.write(ptyId, reply, 'query-reply')
         }
       }
     })
@@ -112,8 +113,11 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     this.headlessTerminals.set(ptyId, state)
     state.writeChain = state.writeChain
       .then(async () => {
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         const snapshot = await this.serializeProviderTerminalBuffer(ptyId)
-        if (!snapshot) {
+        if (this.headlessTerminals.get(ptyId) !== state || !snapshot) {
           return
         }
         const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
@@ -123,6 +127,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           this.recordOsc7MetadataForPty(ptyId, data)
         }
         await state.emulator.write(data)
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
           if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
@@ -141,7 +148,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
-        this.providerSnapshotPreferredPtys.delete(ptyId)
+        if (this.headlessTerminals.get(ptyId) === state) {
+          this.providerSnapshotPreferredPtys.delete(ptyId)
+        }
       })
   }
 
@@ -149,6 +158,11 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
+    }
+    const unpainted = state.unrepaintedReflowGrid
+    // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
+    if (unpainted && (unpainted.cols !== cols || unpainted.rows !== rows)) {
+      state.unrepaintedReflowGrid = undefined
     }
     // Why: terminal reflow is a parser operation. It must sit in the same
     // per-PTY stream as output bytes or restore snapshots can bake in wraps
@@ -171,7 +185,16 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     if (cols <= 0 || rows <= 0) {
       return
     }
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    const applied = state.emulator.getAppliedSize()
     this.resizeHeadlessTerminal(ptyId, cols, rows)
+    // Why: nothing resized the PTY, so the TUI does not repaint and its cells keep the old grid.
+    if (applied.cols !== cols || applied.rows !== rows) {
+      state.unrepaintedReflowGrid = { cols, rows }
+    }
   }
 
   // Public: desktop-initiated clears (ipc/pty.ts) must also drop this mobile
@@ -186,5 +209,22 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     // clear request and repopulate mobile scrollback.
     state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
     await state.writeChain
+  }
+
+  // Public: Reset Terminal must ground this model too; park/reveal and mobile restore from it.
+  async resetHeadlessTerminalInputModes(ptyId: string): Promise<void> {
+    // Why now, not on the chain: onPtyData scans live bytes into these on arrival.
+    // Focus is outside their model, so the plain ground is exact.
+    this.scanProviderModeTrackers(ptyId, PROCESS_BOUNDARY_GROUND)
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    // Why on the chain: the ground must land after every PTY chunk already queued.
+    const completion = state.writeChain.then(async () => {
+      await state.emulator.write(state.ownership.groundInputModes())
+    })
+    state.writeChain = completion.catch(() => {})
+    await completion
   }
 }

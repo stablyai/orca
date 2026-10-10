@@ -146,15 +146,20 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) => {
-    const repo = assertRegisteredGitHubRepo(args, store)
-    return dispatchWorkItem(
-      args,
-      repo,
-      getWorkItemDetails,
-      getGitHubLocalGitOptionArgs(store, repo)[0]
-    )
-  })
+  ipcMain.handle(
+    'gh:workItemDetails',
+    (_event, args: WorkItemArgs & { ownerRepo?: GitHubOwnerRepo }) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      return dispatchWorkItem(
+        args,
+        repo,
+        args.ownerRepo
+          ? (...params) => getWorkItemDetails(...params, args.ownerRepo)
+          : getWorkItemDetails,
+        getGitHubLocalGitOptionArgs(store, repo)[0]
+      )
+    }
+  )
 
   ipcMain.handle(
     'gh:notifyWorkItemMutated',

@@ -17,10 +17,6 @@ describe('SshPtyProvider', () => {
     provider = new SshPtyProvider('conn-1', mux as never)
   })
 
-  it('returns the connectionId', () => {
-    expect(provider.getConnectionId()).toBe('conn-1')
-  })
-
   it('reports that SSH panes cannot restore from authoritative provider snapshots', () => {
     expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(false)
   })
@@ -234,6 +230,13 @@ describe('SshPtyProvider', () => {
   it('clearBuffer sends pty.clearBuffer request', async () => {
     await provider.clearBuffer(scopedPty1)
     expectRequest(mux.request, 'pty.clearBuffer', { id: 'pty-1' })
+  })
+
+  it('pushes host colours as a notification an older relay can ignore', () => {
+    const colors = { foreground: '#ffffff', background: '#282c34' }
+    provider.setColorQueryReplyColors(colors)
+    expect(mux.notify).toHaveBeenCalledWith('pty.setColorQueryReplyColors', { colors })
+    expect(mux.request).not.toHaveBeenCalledWith('pty.setColorQueryReplyColors', expect.anything())
   })
 
   it('acknowledgeDataEvent sends pty.ackData notification', () => {

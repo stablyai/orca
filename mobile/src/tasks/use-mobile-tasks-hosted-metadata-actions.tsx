@@ -50,11 +50,7 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubPullRequestUpdate.interpret(reply) as {
-          ok?: boolean
-          error?: string
-        }
+        const result = githubPullRequestUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub pull request')
         }
@@ -146,10 +142,8 @@ export function useMobileTasksHostedMetadataActions(model: GitlabGithubStatusAct
                   { timeoutMs: 30_000 }
                 )
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = updated as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         const nextLabels = [
           ...new Set([

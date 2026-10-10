@@ -47,7 +47,7 @@ export function createLinearIssueListActions(
     searchLinearIssues: async (query: string, limit = 20, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
-      const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+      const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       const cacheKey = scopedLinearCacheKey(scope, linearSearchCacheKey(workspaceId, query, limit))
       const cached = get().linearSearchCache[cacheKey]
       if (!options?.force && isFresh(cached)) {
@@ -92,6 +92,7 @@ export function createLinearIssueListActions(
         .catch((error) => {
           console.warn('[linear] searchLinearIssues failed:', error)
           if (
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
               contextKey,
@@ -113,6 +114,7 @@ export function createLinearIssueListActions(
             inflightSearchRequests.delete(cacheKey)
           }
           if (
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
               contextKey,
@@ -140,7 +142,7 @@ export function createLinearIssueListActions(
     listLinearIssues: async (args: LinearIssueListReadArgs, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
-      const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+      const workspaceId = getSelectedWorkspaceId(get().linearStatus, options)
       const filter = args.filter ?? 'assigned'
       const effectiveLimit = clampLinearIssueListLimit(args.limit)
       const attributeFilter = normalizeListAttributeFilter(args.attributeFilter)
@@ -202,6 +204,7 @@ export function createLinearIssueListActions(
             throw error
           }
           if (
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
               contextKey,
@@ -223,6 +226,7 @@ export function createLinearIssueListActions(
             inflightListRequests.delete(cacheKey)
           }
           if (
+            !(scope.explicitSource && options?.workspaceId !== undefined) &&
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
               contextKey,

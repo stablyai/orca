@@ -1,15 +1,32 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  _getSshGitProviderGenerationCacheSize,
+  getSshGitProvider,
   getSshGitProviderGeneration,
   registerSshGitProvider,
+  requireSshGitProvider,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE,
   unregisterSshGitProvider
 } from './ssh-git-dispatch'
+import { clearSshPlainSshMode, setSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
 
 describe('SSH Git provider registry', () => {
   const connectionId = 'ssh-generation-test'
 
   afterEach(() => {
     unregisterSshGitProvider(connectionId)
+  })
+
+  it('names the plain SSH reason instead of a dropped connection when git is relay-only', () => {
+    expect(() => requireSshGitProvider(connectionId)).toThrow(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    setSshPlainSshMode(connectionId, { reason: 'no_runtime', message: 'm' })
+    try {
+      expect(() => requireSshGitProvider(connectionId)).toThrow(
+        'Git needs the Orca remote server, which is not running on this host (no_runtime).'
+      )
+    } finally {
+      clearSshPlainSshMode(connectionId)
+    }
   })
 
   it('keeps provider generations monotonic across unregister and re-register', () => {
@@ -24,5 +41,38 @@ describe('SSH Git provider registry', () => {
     expect(registered).toBe(before + 1)
     expect(unregistered).toBe(registered + 1)
     expect(reRegistered).toBe(unregistered + 1)
+  })
+
+  it('bounds retired connection generations', () => {
+    registerSshGitProvider(connectionId, {} as never)
+    const provider = getSshGitProvider(connectionId)
+    if (!provider) {
+      throw new Error('test provider was not registered')
+    }
+    for (let index = 0; index < 600; index += 1) {
+      const id = `retired-${index}`
+      registerSshGitProvider(id, provider)
+      unregisterSshGitProvider(id)
+    }
+
+    expect(_getSshGitProviderGenerationCacheSize()).toBeLessThanOrEqual(512)
+  })
+
+  it('does not reuse a generation after the target leaves both bounded maps', () => {
+    registerSshGitProvider(connectionId, {} as never)
+    const provider = getSshGitProvider(connectionId)
+    if (!provider) {
+      throw new Error('test provider was not registered')
+    }
+    const beforeChurn = getSshGitProviderGeneration(connectionId)
+    for (let index = 0; index < 1_100; index += 1) {
+      const id = `churn-${index}`
+      registerSshGitProvider(id, provider)
+      unregisterSshGitProvider(id)
+    }
+    unregisterSshGitProvider(connectionId)
+    registerSshGitProvider(connectionId, {} as never)
+
+    expect(getSshGitProviderGeneration(connectionId)).toBeGreaterThan(beforeChurn)
   })
 })

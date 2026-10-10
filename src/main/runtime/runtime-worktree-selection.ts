@@ -39,6 +39,8 @@ export type RemoveManagedWorktreeOptions = {
   /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
   allowFailedArchiveHook?: boolean
   hostId?: string
+  /** Reply with the finished delete's result; otherwise a background delete replies on acceptance. */
+  waitForBackgroundRemoval?: boolean
 }
 
 export function getRuntimeWorktreeRemovalOptionsKey(

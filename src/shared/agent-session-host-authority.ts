@@ -111,6 +111,7 @@ export type RuntimeEnsureAgentSessionRequest =
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata
       ompResumeFilePath?: string
+      terminalKittyKeyboardProtocol?: boolean
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
@@ -125,6 +126,7 @@ export type RuntimeEnsureAgentSessionResult = {
 
 export type RuntimeCreateAgentSessionRequest = {
   clientOperationId: string
+  terminalKittyKeyboardProtocol?: boolean
   worktree: string
   agent: TuiAgent
   prompt?: string

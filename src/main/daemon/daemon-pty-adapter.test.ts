@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Core IPtyProvider surface of DaemonPtyAdapter: spawn, io, sizing, teardown. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'

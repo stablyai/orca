@@ -27,6 +27,27 @@ function gitmodulesExec(paths: string[]): { git: GitExec; calls: () => number } 
 }
 
 describe('listSubmodulePathsCached', () => {
+  it.each([
+    new DOMException('Canceled', 'AbortError'),
+    Object.assign(new Error('Deadline exceeded'), { timedOut: true }),
+    Object.assign(new Error('Child terminated'), { killed: true })
+  ])('does not cache an interrupted catalog read: %s', async (error) => {
+    let calls = 0
+    const git: GitExec = async () => {
+      if (++calls === 1) {
+        throw error
+      }
+      return { stdout: 'submodule.lib.path vendor/lib\n', stderr: '' }
+    }
+    const cache = createSubmodulePathsCache()
+    await expect(listSubmodulePathsCached(git, '/repo', cache, 1_000)).rejects.toBe(error)
+    expect(getSubmodulePathsCacheCount(cache)).toBe(0)
+    await expect(listSubmodulePathsCached(git, '/repo', cache, 1_001)).resolves.toEqual([
+      'vendor/lib'
+    ])
+    expect(calls).toBe(2)
+  })
+
   it('reads .gitmodules once for repeated diffs on the same worktree within TTL', async () => {
     const { git, calls } = gitmodulesExec(['vendor/lib'])
     const cache = createSubmodulePathsCache()

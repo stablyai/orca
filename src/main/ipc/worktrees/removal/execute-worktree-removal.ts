@@ -1,6 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
+import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
@@ -10,7 +11,9 @@ import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
 import { isPrunableGitFileWorktree } from '../../../worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
+import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
+import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
 import { runHook } from '../../../hooks'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
@@ -31,6 +34,8 @@ import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredRemoteWorktree } from './remove-registered-remote-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
+import { retryFailedLocalWorktreeRemoval } from './retry-failed-local-worktree-removal'
+import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-table'
 
 export async function executeWorktreeRemoval(
   context: WorktreeIpcContext,
@@ -44,6 +49,7 @@ export async function executeWorktreeRemoval(
   if (isFolderRepo(repo)) {
     return removeFolderWorkspace(context, args, repo, repoId, removalHostId)
   }
+  assertRemovalHostMatchesRepoRow(repo, repoId, removalHostId)
   const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
   const localWorktreeGitOptions = repo.connectionId
     ? {}
@@ -59,8 +65,22 @@ export async function executeWorktreeRemoval(
   const registeredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     worktreePath,
-    registeredWorktrees
+    registeredWorktrees,
+    resolveWorktreeRemovalHomeForHost(removalHostId)
   )
+  if (args.expectedCheckout) {
+    assertNestedWorktreeRemovalApproval(registeredWorktree ? [registeredWorktree] : [], [
+      args.expectedCheckout
+    ])
+  }
+  if (
+    !repo.connectionId &&
+    retryFailedRemovalUnlessRegistered(args.worktreeId, worktreePath, registeredWorktrees, () =>
+      retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+    )
+  ) {
+    return { removing: true }
+  }
   if (!registeredWorktree) {
     return removeUnregisteredWorktree(
       context,

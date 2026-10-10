@@ -69,6 +69,9 @@ jobs:
       DIRECTOR_SERVICE_NAME: orca-cloud-relay-staging
       DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
       CELL_ORIGIN: https://c3.relay-staging.onorca.dev
+      # These drains are unpaced, but restart-safe still needs a quiet runtime for the production
+      # pace window, the same one the same-cap drain uses.
+      RESTART_SAFE_PACE_WINDOW_MS: '300000'
       TARGET_CELL_ID: staging-gce-c3
       FALLBACK_CELL_ORIGIN: https://c2.relay-staging.onorca.dev
       FALLBACK_CELL_ID: staging-gce-c2
@@ -268,7 +271,8 @@ jobs:
                 --heartbeat either \
                 --admission migration-only \
                 --draining required \
-                --activity restart-safe
+                --activity restart-safe \
+                --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" --timeout-ms 480000
               TRANSITION_PHASE=director-ready
             fi
           else
@@ -377,7 +381,8 @@ jobs:
             --heartbeat either \
             --admission migration-only \
             --draining required \
-            --activity restart-safe
+            --activity restart-safe \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" --timeout-ms 480000
 
       - name: Verify current capacity
         if: ${{ inputs.mode == 'verify' }}
@@ -451,7 +456,8 @@ jobs:
             --heartbeat "${HEARTBEAT_EXPECTATION}" \
             --admission migration-only \
             --draining required \
-            --activity restart-safe
+            --activity restart-safe \
+            --pace-window-ms "${RESTART_SAFE_PACE_WINDOW_MS}" --timeout-ms 480000
 
       - name: Plan and apply only the exact empty cell
         if: ${{ inputs.mode == 'apply' }}

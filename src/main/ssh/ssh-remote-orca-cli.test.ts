@@ -16,6 +16,7 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
+import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
 
 // Why: pointing the passthrough at a missing CLI entry forces the legacy
 // in-process fallback, which is what these dispatch tests exercise.
@@ -84,6 +85,7 @@ describe('runRemoteOrcaCli', () => {
       getActiveDispatchForIdentity: vi.fn(() => undefined),
       getActiveDispatchMailboxOwners: vi.fn(() => []),
       getCurrentRunForPane: vi.fn(() => undefined),
+      getCurrentRunForCoordinator: vi.fn(() => undefined),
       getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
@@ -167,7 +169,7 @@ describe('runRemoteOrcaCli', () => {
 
       const result = await runRemoteOrcaCli(
         runtime,
-        { argv, cwd: '/home/alice/repo', env: {} },
+        { callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE, argv, cwd: '/home/alice/repo', env: {} },
         LEGACY_FALLBACK_OPTIONS
       )
 
@@ -196,7 +198,12 @@ describe('runRemoteOrcaCli', () => {
 
     const result = await runRemoteOrcaCli(
       runtime,
-      { argv: ['status', '--json'], cwd: '/home/alice/repo', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['status', '--json'],
+        cwd: '/home/alice/repo',
+        env: {}
+      },
       LEGACY_FALLBACK_OPTIONS
     )
 
@@ -216,6 +223,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
         cwd: '/home/alice/repo',
         env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
@@ -244,6 +252,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'send', '--to', 'term_windows', '--subject', 'ping', '--json'],
         cwd: '/home/alice/repo',
         env: {
@@ -279,6 +288,7 @@ describe('runRemoteOrcaCli', () => {
       const result = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: [
             'orchestration',
             'send',
@@ -337,6 +347,7 @@ describe('runRemoteOrcaCli', () => {
       const result = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: [
             'orchestration',
             'send',
@@ -375,7 +386,7 @@ describe('runRemoteOrcaCli', () => {
     }
   })
 
-  it('carries the Dispatch capability through the SSH envelope', async () => {
+  it("still accepts an older host's --dispatch-capability through the SSH bridge", async () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -395,7 +406,7 @@ describe('runRemoteOrcaCli', () => {
       taskId: task.id,
       startOptions: {}
     })
-    const capability = db.prepareStartingWorkerAuthority({
+    db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_ssh',
       paneKey: 'tab_ssh:leaf_ssh',
@@ -410,6 +421,7 @@ describe('runRemoteOrcaCli', () => {
       const result = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: [
             'orchestration',
             'send',
@@ -424,7 +436,7 @@ describe('runRemoteOrcaCli', () => {
             '--outcome',
             'succeeded',
             '--dispatch-capability',
-            capability,
+            'dcap_from_an_old_host',
             '--json'
           ],
           cwd: '/home/alice/repo',
@@ -450,6 +462,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: [
           'orchestration',
           'send',
@@ -481,6 +494,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: [
           'orchestration',
           'send',
@@ -516,6 +530,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: [
           'orchestration',
           'send',
@@ -550,6 +565,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'check', '--all', '--json'],
         cwd: '/home/alice/repo',
         env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
@@ -573,6 +589,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'check', '--all', '--json'],
         cwd: '/home/alice/repo',
         env: {
@@ -584,7 +601,9 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(db.getCurrentRunForPane).toHaveBeenCalledWith('tab_ssh:leaf_ssh')
+    expect(db.getCurrentRunForCoordinator).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: 'tab_ssh:leaf_ssh' })
+    )
     expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith(
       'term_stale_ssh',
       'tab_ssh:leaf_ssh'
@@ -597,6 +616,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['orchestration', 'check', '--terminal', 'term_legacy_worker', '--all', '--json'],
         cwd: '/home/alice/repo',
         env: {
@@ -608,7 +628,7 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
-    expect(db.getCurrentRunForPane).not.toHaveBeenCalled()
+    expect(db.getCurrentRunForCoordinator).not.toHaveBeenCalled()
     expect(db.getActiveDispatchForIdentity).toHaveBeenCalledWith('term_legacy_worker', undefined)
   })
 
@@ -620,6 +640,7 @@ describe('runRemoteOrcaCli', () => {
     const resultPromise = runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['worktree', 'create', '--repo', 'orca', '--branch', 'fix/x', '--json'],
         cwd: '/home/alice/repo',
         env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
@@ -658,7 +679,12 @@ describe('runRemoteOrcaCli', () => {
 
     const result = await runRemoteOrcaCli(
       runtime,
-      { argv: ['serve'], cwd: '/home/alice', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['serve'],
+        cwd: '/home/alice',
+        env: {}
+      },
       { ...LEGACY_FALLBACK_OPTIONS, spawn: spawn as never }
     )
 
@@ -674,7 +700,12 @@ describe('runRemoteOrcaCli', () => {
 
     const addResult = await runRemoteOrcaCli(
       runtime,
-      { argv: ['account', 'add'], cwd: '/home/alice', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['account', 'add'],
+        cwd: '/home/alice',
+        env: {}
+      },
       { ...LEGACY_FALLBACK_OPTIONS, spawn: spawn as never }
     )
 
@@ -686,7 +717,12 @@ describe('runRemoteOrcaCli', () => {
     spawn.mockReturnValueOnce(child)
     const listPromise = runRemoteOrcaCli(
       runtime,
-      { argv: ['account', 'list'], cwd: '/home/alice', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['account', 'list'],
+        cwd: '/home/alice',
+        env: {}
+      },
       {
         ...LEGACY_FALLBACK_OPTIONS,
         entryExists: () => true,
@@ -712,7 +748,12 @@ describe('runRemoteOrcaCli', () => {
 
     const resultPromise = runRemoteOrcaCli(
       runtime,
-      { argv: ['account', 'add', '--help'], cwd: '/home/alice', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['account', 'add', '--help'],
+        cwd: '/home/alice',
+        env: {}
+      },
       {
         ...LEGACY_FALLBACK_OPTIONS,
         entryExists: () => true,
@@ -736,7 +777,12 @@ describe('runRemoteOrcaCli', () => {
 
     const result = await runRemoteOrcaCli(
       runtime,
-      { argv: ['serve', '--json'], cwd: '/home/alice', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['serve', '--json'],
+        cwd: '/home/alice',
+        env: {}
+      },
       LEGACY_FALLBACK_OPTIONS
     )
 
@@ -754,7 +800,12 @@ describe('runRemoteOrcaCli', () => {
 
     const result = await runRemoteOrcaCli(
       runtime,
-      { argv: ['worktree', 'list'], cwd: '/home/alice', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['worktree', 'list'],
+        cwd: '/home/alice',
+        env: {}
+      },
       LEGACY_FALLBACK_OPTIONS
     )
 
@@ -769,6 +820,7 @@ describe('runRemoteOrcaCli', () => {
     const result = await runRemoteOrcaCli(
       runtime,
       {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         argv: ['emulator', 'launch', 'com.acme.app', '--activity', '.MainActivity'],
         cwd: '/home/alice',
         env: {}

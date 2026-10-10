@@ -168,6 +168,7 @@ export async function handleAutomationDispatchRequest({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
+      ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,
@@ -223,7 +224,10 @@ export async function handleAutomationDispatchRequest({
       if (focusBeforeDispatch.activeTabId) {
         currentState.setActiveTab(focusBeforeDispatch.activeTabId)
       }
-      currentState.setActiveTabType(focusBeforeDispatch.activeTabType)
+      currentState.setActiveTabType(
+        focusBeforeDispatch.activeTabType,
+        focusBeforeDispatch.activeWorktreeId
+      )
     }
   } catch (error) {
     releaseTerminalOwnership()

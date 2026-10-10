@@ -2,6 +2,7 @@ import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
 } from '../../../../shared/runtime-host-status'
+import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
 import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
 import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
@@ -18,6 +19,8 @@ import { translate } from '@/i18n/i18n'
 
 export const webRuntimeState: {
   activeEnvironment: StoredWebRuntimeEnvironment | null
+  zcodePlanSiteRuntimeOwner: string | null
+  zcodePlanSiteRuntimeValue: ZcodePlanSite | null
   worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
   activeClient: WebRuntimeClient | null
@@ -26,6 +29,8 @@ export const webRuntimeState: {
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
 } = {
   activeEnvironment: readStoredWebRuntimeEnvironment(),
+  zcodePlanSiteRuntimeOwner: null,
+  zcodePlanSiteRuntimeValue: null,
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,
   worktreeVisibilityDefaultsRuntimeValue: null,
   activeClient: null,
@@ -85,6 +90,10 @@ export function getClientForEnvironment(
 ): WebRuntimeClient {
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     throw new Error('runtime_manually_disconnected')
+  }
+  // Why: a request captured before a re-pair must not reopen a client with the replaced token.
+  if (!isActivePairing(environment)) {
+    throw new Error(PAIRING_CHANGED_MESSAGE)
   }
   if (
     !webRuntimeState.activeClient ||
@@ -168,17 +177,32 @@ export function requireActiveEnvironmentOrNull(): StoredWebRuntimeEnvironment | 
   return webRuntimeState.activeEnvironment
 }
 
+const PAIRING_CHANGED_MESSAGE = 'The paired Orca server changed while the request was in progress.'
+
 export function assertActiveEnvironment(environmentId: string): void {
   if (requireActiveEnvironment().id !== environmentId) {
-    throw new Error('The paired Orca server changed while the request was in progress.')
+    throw new Error(PAIRING_CHANGED_MESSAGE)
   }
+}
+
+function pairingRevisionOf(environment: StoredWebRuntimeEnvironment): number {
+  return environment.pairingRevision ?? environment.createdAt
+}
+
+/** Re-pairing the same server keeps its id, so only the revision tells the pairings apart. */
+function isActivePairing(environment: StoredWebRuntimeEnvironment): boolean {
+  const active = webRuntimeState.activeEnvironment
+  return (
+    active?.id === environment.id && pairingRevisionOf(active) === pairingRevisionOf(environment)
+  )
 }
 
 export function updateEnvironmentFromResponse(
   environment: StoredWebRuntimeEnvironment,
   response: RuntimeRpcResponse<unknown>
 ): void {
-  if (webRuntimeState.activeEnvironment?.id !== environment.id) {
+  const active = webRuntimeState.activeEnvironment
+  if (!active || !isActivePairing(environment)) {
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
@@ -189,8 +213,9 @@ export function updateEnvironmentFromResponse(
     typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
       ? (response.result as { pairedDeviceId: string }).pairedDeviceId
       : undefined
+  // Why the active record: the captured one may predate another reply's update of this pairing.
   webRuntimeState.activeEnvironment = updateStoredEnvironmentRuntimeId(
-    environment,
+    active,
     runtimeId,
     pairedDeviceId
   )

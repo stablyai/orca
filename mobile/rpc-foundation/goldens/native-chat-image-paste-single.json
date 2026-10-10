@@ -1,24 +1,15 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "nativeChat.image-paste",
   "family": "nativeChat.image-paste",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
-  "scenarioSha256": "a330bd18a22c002ac04d0fa043561740c5cea627516bbf965fc1bd52533c2e35",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "098c51e345e3": {
       "name": "terminal.send#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "1846c2972b5d": {
+    "0f4e2985db74": {
       "name": "terminal.send#2",
       "ordinal": 3,
       "args": [
@@ -35,7 +26,7 @@
             },
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~ "
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~ "
           }
         },
         {
@@ -66,6 +57,11 @@
         "$rpc": "null"
       },
       "pasted": true
+    },
+    "5ccdcd32156d": {
+      "name": "terminal.send#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "7e7356ce5972": {
       "name": "terminal.send#1",
@@ -115,11 +111,6 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": true
-    },
-    "a02ea7e47c8e": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     }
   },
   "recording": {
@@ -128,8 +119,8 @@
       {
         "id": "pasted",
         "observation": {
-          "sender": ["7e7356ce5972", "1846c2972b5d"],
-          "payloads": ["098c51e345e3", "a02ea7e47c8e"],
+          "sender": ["7e7356ce5972", "0f4e2985db74"],
+          "payloads": ["098c51e345e3", "5ccdcd32156d"],
           "settlements": {
             "one": "84e5ca07cb7a"
           },

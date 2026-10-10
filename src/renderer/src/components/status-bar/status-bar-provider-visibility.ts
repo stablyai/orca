@@ -10,14 +10,20 @@ export type UsageProviderSettings = Pick<
 > & {
   // Why: Antigravity has no separate persisted usage credential in Orca. The
   // checked status-bar item is the durable user signal; StatusBar only sets
-  // this after PATH detection says the agent is available. Durability further
-  // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
-  // which never yields data while that opt-in is off.
+  // this after PATH detection says the agent is available. No Gemini OAuth
+  // gate — the snapshot comes from the `agy` CLI probe, not the Gemini fetch.
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
+  // Why: the GLM Coding Plan key lives in its own safeStorage file; main
+  // reports presence so the ZCode bar survives reloads before the first poll.
+  zcodePlanApiKeyConfigured: boolean
+  // Why: the OpenCode Go key can live in OPENCODE_API_KEY or in OpenCode's own
+  // store, neither of which the renderer can see; main reports presence.
+  opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -29,6 +35,8 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor: ProviderRateLimits | null | undefined
+  zcode?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -75,11 +83,13 @@ export function hasUsageProviderSettings(
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
-    // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
-    // already covered by the gemini term above.
+    settings?.opencodeGoApiKeyConfigured === true ||
+    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true ||
+    settings?.zcodePlanApiKeyConfigured === true
   )
 }
 
@@ -100,19 +110,27 @@ export function hasUsageProviderSettingsForProvider(
     return settings.geminiCliOAuthEnabled === true
   }
   if (providerId === 'opencode-go') {
-    return Boolean(settings.opencodeSessionCookie?.trim())
+    return (
+      Boolean(settings.opencodeSessionCookie?.trim()) ||
+      settings.opencodeGoApiKeyConfigured === true
+    )
   }
   if (providerId === 'antigravity') {
-    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
-    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
-    // gate the default-on checked item would pin a permanently dead bar.
-    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+    // Why no Gemini OAuth gate: the snapshot comes from the `agy` CLI probe, so
+    // the checked item (PATH-gated above) is the whole durable signal.
+    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
+  }
+  if (providerId === 'zcode') {
+    return settings.zcodePlanApiKeyConfigured === true
   }
   return false
 }
@@ -123,7 +141,11 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     session: null,
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
-    ...(providerId === 'gemini' ? { buckets: [] } : {}),
+    // Why antigravity joins these: it reports one pool per model group, so its pending skeleton
+    // has to be bucket-shaped too or the segment changes shape once the first reading lands.
+    ...(providerId === 'gemini' || providerId === 'cursor' || providerId === 'antigravity'
+      ? { buckets: [] }
+      : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
@@ -167,7 +189,9 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.cursor) ||
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
   ) {
     return false
   }
@@ -180,6 +204,8 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.cursor) &&
+    !isProviderConfigured(providers.zcode)
   )
 }

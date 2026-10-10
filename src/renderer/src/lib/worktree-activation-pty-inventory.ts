@@ -12,19 +12,7 @@ import {
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 
-/** Main rejects a scoped list with this prefix when the relay is detached (pty/provider/registry.ts). */
-const DETACHED_PROVIDER_REJECTION = 'No PTY provider for connection'
-
-/**
- * The one provider that owns this workspace's PTYs, or `undefined` when the client cannot name a
- * provider it could reach.
- *
- * Why `undefined` rather than a throw: a paired-runtime workspace is never in this client's PTY
- * registry at all, so refusing to answer turns a healthy peer workspace into a `blocked` gate, and
- * activation then leaves it with no surface whatsoever. Falling back to the unscoped diagnostic
- * inventory reproduces the shipped answer for exactly those workspaces while the scoped fast path
- * still covers local, folder and attached-SSH ones.
- */
+/** Only a reachable execution-owner route can authorize activation from its inventory. */
 export function resolveActivationPtyListScope(
   state: WorktreeOperationRouteState,
   worktreeId: string
@@ -61,27 +49,14 @@ export function resolveActivationPtyListScope(
   return { connectionId: host.kind === 'ssh' ? host.targetId : null }
 }
 
-/**
- * Activation's PTY census, scoped to the owning host whenever the client can name one.
- *
- * A detached relay is loss of contact, not evidence about the host, and it must not strand the
- * workspace: fall back to the same unscoped inventory that shipped so the gate still reaches a
- * verdict. Every other rejection is a real answer from the selected host and propagates.
- */
+/** An unavailable execution host cannot be replaced with the client's diagnostic inventory. */
 export async function listActivationPtySessions(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): Promise<PtyListedSession[]> {
   const scope = resolveActivationPtyListScope(state, worktreeId)
   if (!scope) {
-    return window.api.pty.listSessions()
+    throw new Error('Activation PTY inventory is unverifiable: no execution-owner route')
   }
-  try {
-    return await window.api.pty.listSessions(scope)
-  } catch (error) {
-    if (!String((error as Error)?.message ?? error).includes(DETACHED_PROVIDER_REJECTION)) {
-      throw error
-    }
-    return window.api.pty.listSessions()
-  }
+  return window.api.pty.listSessions(scope)
 }

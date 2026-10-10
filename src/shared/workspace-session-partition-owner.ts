@@ -5,35 +5,21 @@ import {
 } from './execution-host'
 
 /**
- * Where an SSH-owned worktree's durable session state lives.
+ * The one partition a worktree's durable session state lives in: its own execution host.
  *
- * This is the single axis on which the renderer and the main-process runtime disagree today
- * (stablyai/orca#12723). Both sides now compute their partition through this function so the
- * divergence is one argument in one place instead of two independently drifting owner maps:
+ * This used to answer differently depending on who asked (stablyai/orca#12723). The renderer
+ * mapped SSH worktrees to the `local` blob while the main-process runtime read-modify-wrote
+ * `ssh:<targetId>`, so one workspace's session was split across two stores and neither reader
+ * reunited them. Whatever landed on the unread side did not read as unknown — it round-tripped as
+ * absence, and the replace-session upload converted that into deletion (#12721, #18173).
  *
- * - `local-partition` — the renderer's shipping model. SSH worktrees keep their session state in
- *   the `local` partition; partitioning them would double-own the data.
- * - `host-partition` — the runtime's shipping model (#12671). Pane retirement, windowless PTY
- *   handoff and orchestration fences read-modify-write `ssh:<targetId>`.
- *
- * Both partitions hold real data written by shipping builds, so neither side can simply adopt the
- * other's answer: flipping a resolver orphans whichever store it stops reading. Converging needs a
- * read-both transition (generalize `workspaceSessionPartitionIdsForHost`) and should converge on
- * `host-partition`, since Orca Remote — SSH's successor — is already partitioned as `runtime:*`.
- * Until then this function preserves today's behaviour exactly on both sides.
+ * There is no second model now: `runtime:*` and `ssh:*` each own their partition, `local` owns the
+ * legacy `workspaceSession` blob. Rows a shipping build left in `local` for an SSH worktree are
+ * still real, so the read side folds them back in — see `adoptStrandedHostPartitionSession` — and
+ * the next write returns the unified result to the owning partition.
  */
-export type WorkspaceSessionSshOwnership = 'local-partition' | 'host-partition'
-
 export function workspaceSessionPartitionHostId(
-  executionHostId: string | null | undefined,
-  sshOwnership: WorkspaceSessionSshOwnership
+  executionHostId: string | null | undefined
 ): ExecutionHostId {
-  const parsed = parseExecutionHostId(executionHostId)
-  if (parsed?.kind === 'runtime') {
-    return parsed.id
-  }
-  if (parsed?.kind === 'ssh') {
-    return sshOwnership === 'host-partition' ? parsed.id : LOCAL_EXECUTION_HOST_ID
-  }
-  return LOCAL_EXECUTION_HOST_ID
+  return parseExecutionHostId(executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
 }

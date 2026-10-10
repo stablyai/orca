@@ -46,7 +46,10 @@ export function resolveWorkerThreadEntryPath(
 export function currentWorkerEntryLayout(moduleDir: string): WorkerEntryLayout {
   return {
     isPackaged: hasAppEnvironment() && getAppEnvironment().isPackaged(),
-    resourcesPath: process.resourcesPath,
+    resourcesPath:
+      'resourcesPath' in process && typeof process.resourcesPath === 'string'
+        ? process.resourcesPath
+        : undefined,
     moduleDir
   }
 }

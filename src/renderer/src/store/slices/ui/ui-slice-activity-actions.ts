@@ -1,4 +1,5 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
+import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -21,7 +22,8 @@ type ActivityActions = Pick<
 export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
   return {
     acknowledgedAgentsByPaneKey: {},
-    acknowledgeAgents: (paneKeys) => {
+    acknowledgeAgents: (paneKeys, reads, intent) => {
+      emitAgentSubjectReads(paneKeys, reads, intent)
       const notificationIdsToDismiss = new Set<string>()
       set((s) => {
         if (paneKeys.length === 0) {
@@ -86,9 +88,10 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       })
-      const ids = [...notificationIdsToDismiss]
-      if (ids.length > 0 && typeof window !== 'undefined') {
-        void window.api?.notifications?.dismiss?.(ids)
+      // Why: main retires what it announced for these subjects; the ids rebuilt above from the row
+      // as it stands now are the fallback after a restart emptied that record.
+      if (paneKeys.length > 0 && typeof window !== 'undefined') {
+        void window.api?.notifications?.dismiss?.([...notificationIdsToDismiss], paneKeys)
       }
     },
     unacknowledgeAgents: (paneKeys) =>

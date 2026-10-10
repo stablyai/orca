@@ -72,7 +72,7 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     }
     closeRenameSession()
     setRenamingPaneId(null)
-    persistLayoutSnapshot()
+    persistLayoutSnapshot('gesture')
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [closeRenameSession, renamingPaneId, renameValue, removePaneTitle, persistLayoutSnapshot])
   const handleRenameCancel = useCallback(() => {

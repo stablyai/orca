@@ -1,13 +1,11 @@
+import { quotePowerShellLiteral } from '../../src/shared/powershell-native-argument'
+
 function quotePosixShellArg(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
-function quotePowerShellArg(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 function quoteTerminalArg(value: string): string {
-  return process.platform === 'win32' ? quotePowerShellArg(value) : quotePosixShellArg(value)
+  return process.platform === 'win32' ? quotePowerShellLiteral(value) : quotePosixShellArg(value)
 }
 
 export function nodeTerminalCommand(args: readonly string[]): string {

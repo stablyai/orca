@@ -18,7 +18,6 @@ export type ChecksPanelReviewStateInput = Pick<
   | 'prRefreshStateNow'
   | 'prCachedHasPR'
   | 'prNumber'
-  | 'refreshContextKey'
 > &
   Pick<
     ChecksPanelControllerState,

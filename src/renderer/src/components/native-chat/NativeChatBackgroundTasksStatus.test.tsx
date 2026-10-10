@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Profiler, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 afterEach(() => {
@@ -96,8 +97,98 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
     expect(screen.getByLabelText('Stop backgrounded subagent')).toBeInTheDocument()
   })
 
+  it('stops a backgrounded Codex command by its own id, and offers none on the subagent beside it', () => {
+    const view = (overrides: Partial<AgentChildWorkView>): AgentChildWorkView => ({
+      id: 'child',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: Date.now() - 65_000,
+      observedAt: Date.now() - 1_000,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 },
+      ...overrides
+    })
+    const onStop = vi.fn()
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[
+          view({
+            id: 'agent',
+            providerId: 'codex-agent:child-1',
+            description: 'count_a',
+            stoppable: false
+          }),
+          view({
+            id: 'cmd',
+            kind: 'command',
+            providerId: 'codex-command:exec-1',
+            description: 'pnpm dev'
+          })
+        ]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={onStop}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Stop pnpm dev'))
+    expect(onStop).toHaveBeenCalledWith('codex-command:exec-1')
+  })
+
+  it('stops a Grok background command and the Grok subagent beside it by their own ids', () => {
+    const view = (overrides: Partial<AgentChildWorkView>): AgentChildWorkView => ({
+      id: 'child',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: Date.now() - 65_000,
+      observedAt: Date.now() - 1_000,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 },
+      ...overrides
+    })
+    const onStop = vi.fn()
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[
+          view({ id: 'agent', providerId: 'subagent-1', description: 'Review the diff' }),
+          view({
+            id: 'cmd',
+            kind: 'command',
+            providerId: 'acp-task:01a10366',
+            description: 'Run the dev server'
+          })
+        ]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={onStop}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    fireEvent.click(screen.getByLabelText('Stop Run the dev server'))
+    fireEvent.click(screen.getByLabelText('Stop Review the diff'))
+    expect(onStop.mock.calls).toEqual([['acp-task:01a10366'], ['subagent-1']])
+    expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
+  })
+
   it('offers no stop at all when the provider exposes none', () => {
-    // Codex: a Stop button here would be a control that cannot act.
+    // An older Codex: a Stop button here would be a control that cannot act.
     renderStrip({ supportsTaskStop: false, supportsStopAll: false })
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
@@ -204,6 +295,31 @@ describe('background-tasks strip header', () => {
     expect(header.textContent).toBe('1 agent · 1 shell')
   })
 
+  describe('on a narrow strip', () => {
+    const wideWindow = window.innerWidth
+    afterEach(() => {
+      window.innerWidth = wideWindow
+    })
+
+    it('totals a breakdown across kinds', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent' },
+        { id: 'c1', kind: 'command' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 background tasks')
+    })
+
+    it('keeps one kind in its attention form', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent', state: 'waiting' },
+        { id: 'a2', kind: 'agent', state: 'waiting' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 agents waiting — needs approval')
+    })
+  })
+
   it('carries no icon on a collapsed total, which spans kinds', () => {
     const header = renderHeader([
       { id: 'a1', kind: 'agent' },
@@ -281,7 +397,7 @@ describe('background-task row reasons', () => {
     return screen.getAllByRole('listitem')
   }
 
-  // `unverifiable` is the SSH verdict for "no contact"; a row that hides it reads
+  // `unverifiable` is the SSH verdict for lost contact; a row that hides it reads
   // like a working child. `blocked` is the same class of loss.
   it('names the reason on every attention state, not only on waiting', () => {
     const rows = expandedRows([
@@ -291,7 +407,7 @@ describe('background-task row reasons', () => {
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
     expect(rows).toHaveLength(4)
-    expect(rows[0].textContent).toContain('ssh child · no contact')
+    expect(rows[0].textContent).toContain('ssh child · status unavailable')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
     // A running row has nothing to explain.
@@ -333,5 +449,49 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
   act(() => vi.advanceTimersByTime(1_000))
   expect(committed).toHaveBeenCalled()
   unmount()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('lets the 1 Hz tick sleep while every row has settled, with each run frozen', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
+  const committed = vi.fn()
+  const finished = (id: string, firstObservedAt: number, settledAt: number) => ({
+    id,
+    providerId: `task-${id}`,
+    kind: 'agent' as const,
+    description: `child ${id}`,
+    state: 'done' as const,
+    membership: 'settled' as const,
+    outcome: 'succeeded' as const,
+    firstObservedAt,
+    observedAt: settledAt,
+    settledAt,
+    stoppable: false,
+    invocation: { invocationId: `spawn-${id}`, generation: 1 }
+  })
+  render(
+    <Profiler id="strip" onRender={committed}>
+      <NativeChatBackgroundTasksStatus
+        expanded
+        onExpandedChange={() => {}}
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[finished('a', 400_000, 520_000), finished('b', 700_000, 760_000)]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={() => {}}
+      />
+    </Profiler>
+  )
+  const rows = screen.getAllByRole('listitem').map((row) => row.textContent)
+  expect(rows).toEqual(['child a · Agent2m 0s', 'child b · Agent1m 0s'])
+  committed.mockClear()
+  act(() => vi.advanceTimersByTime(5_000))
+  expect(committed).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })

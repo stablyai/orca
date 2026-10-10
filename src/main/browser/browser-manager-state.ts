@@ -9,7 +9,7 @@ import type { BrowserLoadError } from '../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
 import type {
   ActiveDownload,
-  AuthUserAgentOverrideState,
+  CdpUserAgentOverrideState,
   PendingMainFrameNavigation,
   PendingPermissionEvent,
   PendingPopupEvent,
@@ -75,7 +75,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   ): void
   protected abstract cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void
   protected abstract hasActiveGrabOp(browserTabId: string): boolean
-  protected abstract unregisterGuest(browserTabId: string): void
+  protected abstract unregisterGuest(
+    browserTabId: string,
+    reason?: 'page-closed' | 'guest-destroyed'
+  ): void
   protected abstract cancelDownloadInternal(downloadId: string, reason: string): void
   protected abstract bindDownloadToTab(downloadId: string, browserTabId: string): void
   protected abstract flushDownloadSnapshot(downloadId: string): void
@@ -122,14 +125,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly sessionProfileIdByPageId = new Map<string, string | null>()
   // Why: serialize per-tab setViewportOverride so rapid toggles don't interleave CDP commands and leave emulation in a wrong state.
   protected readonly viewportOpsByTabId = new Map<string, Promise<unknown>>()
-  // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
-  // can re-issue it against the target URL's identity.
-  protected readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
   // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
   // ordered without claiming a failed write was installed.
-  protected readonly authUserAgentOverrideStateByGuestId = new Map<
+  protected readonly cdpUserAgentOverrideStateByGuestId = new Map<
     number,
-    AuthUserAgentOverrideState
+    CdpUserAgentOverrideState
   >()
   // Why: the in-flight main-frame navigation target, held only until commit or failure — getURL()
   // still reports the outgoing page until then. See resolveTabNavigationUrl.
@@ -188,12 +188,15 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.settingsResolver = resolver
   }
 
-  // Why: a debugger detach clears every CDP override Chromium holds, including the Google auth-host
-  // UA override, so the confirmed-override record must be dropped or the next auth navigation
-  // believes the identity is still installed and skips the write.
-  protected trackDebuggerDetachForAuthUserAgent(guest: Electron.WebContents): () => void {
+  // Why: a debugger detach clears every CDP override Chromium holds, including the UA override and
+  // device metrics, so both records must be dropped or navigation believes they still stand.
+  protected trackDebuggerDetachForCdpOverrides(guest: Electron.WebContents): () => void {
     const onDetach = (): void => {
-      this.authUserAgentOverrideStateByGuestId.delete(guest.id)
+      this.cdpUserAgentOverrideStateByGuestId.delete(guest.id)
+      const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+      if (browserTabId) {
+        this.recordAppliedViewportOverride(browserTabId, guest.id, null)
+      }
     }
     try {
       guest.debugger.on('detach', onDetach)

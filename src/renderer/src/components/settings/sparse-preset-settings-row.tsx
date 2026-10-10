@@ -76,6 +76,7 @@ export function SparsePresetSettingsRow({
               'Edit {{value0}}',
               { value0: preset.name }
             )}
+            data-edit-preset={preset.id}
             onClick={() => onEdit(preset)}
             disabled={submitting || deletingPresetId !== null}
           >

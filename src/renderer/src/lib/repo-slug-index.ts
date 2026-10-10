@@ -31,6 +31,7 @@ import {
   type SlugIndex
 } from './repo-slug-cache'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
+import { createBoundedGenerationMap } from './bounded-generation-map'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
 
@@ -42,11 +43,11 @@ const slugResolutionInFlight = new Map<string, Promise<string | null>>()
 // stale slug would repopulate the cache after invalidation. Bump the key's
 // generation on every invalidation and commit a result only if the generation
 // it started with is still current.
-const slugResolutionGeneration = new Map<string, number>()
+const slugResolutionGenerations = createBoundedGenerationMap(1024)
 
 function invalidateSlugResolution(cacheKey: string): void {
   slugResolutionInFlight.delete(cacheKey)
-  slugResolutionGeneration.set(cacheKey, (slugResolutionGeneration.get(cacheKey) ?? 0) + 1)
+  slugResolutionGenerations.advance(cacheKey)
 }
 
 // Why: clear after remove/remote-change so the next index build re-resolves.
@@ -84,12 +85,15 @@ async function resolveRepoSlug(
   if (inFlight) {
     return inFlight
   }
-  const generation = slugResolutionGeneration.get(cacheKey) ?? 0
+  const generation = slugResolutionGenerations.get(cacheKey)
   const resolution = (async () => {
     // Why: only write the resolved value if this key wasn't invalidated
     // mid-flight; otherwise a stale slug would repopulate the cache.
     const commit = (value: string | null): string | null => {
-      if ((slugResolutionGeneration.get(cacheKey) ?? 0) === generation) {
+      if (
+        slugResolutionInFlight.get(cacheKey) === resolution &&
+        slugResolutionGenerations.get(cacheKey) === generation
+      ) {
         rememberRepoSlug(cacheKey, value)
       }
       return value

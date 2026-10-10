@@ -94,8 +94,4 @@ describe('client-hosted reconciliation hold on published session tabs', () => {
       (await runtime.listMobileSessionTabs(`id:${WT}`, DEVICE_B)).clientHostedPagesUnreconciled
     ).toBe(undefined)
   })
-
-  // The fan-out sites (`emitMobileSessionTabsSnapshot`, the notify loops) share this one seam, and
-  // the projection census in client-hosted-page-reconciliation-window.test.ts is what keeps them
-  // from growing a second, unheld path.
 })

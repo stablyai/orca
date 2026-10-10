@@ -1,3 +1,7 @@
+import {
+  setupTelemetryClientTest,
+  cleanupTelemetryClientTest
+} from '../telemetry/client-test-harness'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -5,6 +9,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
+import {
+  splitUsageCacheFile,
+  type UsageCacheSplitRequest,
+  type UsageCacheSplitResult,
+  type UsageSourceCacheRef
+} from './usage-source-cache-file'
 
 const { writeProbe } = vi.hoisted(() => ({
   writeProbe: {
@@ -52,11 +62,12 @@ type TestState = {
   dailyAggregates: TestDailyAggregate[]
   scanState: TestScanState
 }
-type TestScanResult = Pick<TestState, 'processedSources' | 'sessions' | 'dailyAggregates'>
+type TestScanResult = Pick<TestState, 'sessions' | 'dailyAggregates'>
 type TestScan = (
   worktrees: UsageScanWorktreeRef[],
-  previous: TestSource[]
+  sourceCache: UsageSourceCacheRef
 ) => Promise<TestScanResult>
+type TestSplit = (request: UsageCacheSplitRequest) => Promise<UsageCacheSplitResult>
 
 const NOW = Date.parse('2026-04-10T16:00:00.000Z')
 const EMPTY_WORKTREE_FINGERPRINT = '[]'
@@ -83,7 +94,7 @@ function makeState(
 }
 
 function emptyScanResult(): TestScanResult {
-  return { processedSources: [], sessions: [], dailyAggregates: [] }
+  return { sessions: [], dailyAggregates: [] }
 }
 
 function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -99,22 +110,42 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
   TestState,
   'hasAnyTestData'
 > {
-  private writeOverride: (() => Promise<void>) | null = null
+  private writeOverride: (() => Promise<void>) | undefined
 
-  constructor(cacheFile: string, scan: TestScan) {
+  setWriteOverride(write: () => Promise<void>): void {
+    this.writeOverride = write
+  }
+
+  protected override writeToDisk(): Promise<void> {
+    return this.writeOverride ? this.writeOverride() : super.writeToDisk()
+  }
+
+  constructor(cacheFile: string, scan: TestScan, splitCacheFile: TestSplit) {
     super(
       {
         getRepos: () => [],
         getAllWorktreeMeta: () => ({})
       },
       {
+        tokenUsage: {
+          provider: 'claude',
+          selectSessions: (state) =>
+            state.sessions.map((session) => ({
+              providerSessionId: session.id,
+              input_tokens: 10,
+              output_tokens: 2,
+              cached_input_tokens: 3,
+              cache_write_input_tokens: 1
+            }))
+        },
         logTag: '[test-usage]',
         resolveCacheFile: () => cacheFile,
         createDefaultState: makeState,
         normalizeState: (state) => state,
         sourceKey: 'processedSources',
         dataPresenceKey: 'hasAnyTestData',
-        scan
+        scan,
+        splitCacheFile
       }
     )
   }
@@ -126,25 +157,18 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
   getState(): TestState {
     return this.state
   }
-
-  setWriteOverride(writeOverride: () => Promise<void>): void {
-    this.writeOverride = writeOverride
-  }
-
-  protected override writeToDisk(): Promise<void> {
-    return this.writeOverride?.() ?? super.writeToDisk()
-  }
 }
 
 describe('UsageProviderStoreLifecycle', () => {
   let tempDirectory: string
   let stores: TestUsageStore[]
   let scan: ReturnType<typeof vi.fn<TestScan>>
+  let split: ReturnType<typeof vi.fn<TestSplit>>
 
   function createStore(
     cacheFile = join(tempDirectory, `usage-${stores.length}.json`)
   ): TestUsageStore {
-    const store = new TestUsageStore(cacheFile, scan)
+    const store = new TestUsageStore(cacheFile, scan, split)
     stores.push(store)
     return store
   }
@@ -157,6 +181,8 @@ describe('UsageProviderStoreLifecycle', () => {
     writeProbe.blocked = false
     writeProbe.waiters = []
     scan = vi.fn<TestScan>().mockResolvedValue(emptyScanResult())
+    // The real split, in-process: the worker only adds the thread around it.
+    split = vi.fn<TestSplit>(splitUsageCacheFile)
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
   })
 
@@ -164,6 +190,77 @@ describe('UsageProviderStoreLifecycle', () => {
     await Promise.all(stores.map((store) => store.flush()))
     rmSync(tempDirectory, { recursive: true, force: true })
     vi.restoreAllMocks()
+  })
+
+  it('reports enabled scans and preserves revisions when the usage cache is rebuilt', async () => {
+    const telemetry = setupTelemetryClientTest()
+    try {
+      const cacheFile = join(tempDirectory, 'provider.json')
+      scan.mockResolvedValue({ ...emptyScanResult(), sessions: [{ id: 'provider-session' }] })
+      const original = createStore(cacheFile)
+      await original.refresh(true)
+      expect(telemetry.mock.capture).not.toHaveBeenCalled()
+      await original.setEnabled(true)
+      await original.refresh(true)
+      const first = telemetry.mock.capture.mock.calls[0]?.[0]
+      expect(first).toMatchObject({
+        event: 'agent_token_usage',
+        properties: { revision: 1, input_tokens: 10 }
+      })
+      await original.flush()
+      rmSync(cacheFile)
+      const rebuilt = createStore(cacheFile)
+      await rebuilt.setEnabled(true)
+      await rebuilt.refresh(true)
+      expect(telemetry.mock.capture.mock.calls[1]?.[0]).toEqual(first)
+    } finally {
+      cleanupTelemetryClientTest(telemetry.envStash)
+    }
+  })
+
+  it('persists identities for a whole first scan with one write', async () => {
+    const telemetry = setupTelemetryClientTest()
+    try {
+      const sessions = Array.from({ length: 20 }, (_, index) => ({ id: `session-${index}` }))
+      scan.mockResolvedValue({ ...emptyScanResult(), sessions })
+      const store = createStore(join(tempDirectory, 'provider.json'))
+      await store.setEnabled(true)
+      writeProbe.opens = 0
+      await store.refresh(true)
+      // Usage cache, identity file, and token-usage snapshot: one write each.
+      expect(writeProbe.opens).toBe(3)
+      expect(telemetry.mock.capture).toHaveBeenCalledTimes(sessions.length)
+    } finally {
+      cleanupTelemetryClientTest(telemetry.envStash)
+    }
+  })
+
+  it('keeps analytics identity separate from usage cache rebuilds and never puts it in snapshots', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    const identityFile = join(tempDirectory, 'provider-analytics-session-ids.json')
+    const original = createStore(cacheFile)
+    expect(existsSync(identityFile)).toBe(false)
+    const [id] = await original.getAnalyticsSessionIds(['provider-session'])
+    expect(existsSync(identityFile)).toBe(true)
+    await original.setEnabled(true)
+    await original.refresh(true)
+    await original.flush()
+    expect(JSON.stringify(original.getState())).not.toContain(id)
+    expect(readFileSync(cacheFile, 'utf8')).not.toContain(id)
+    rmSync(cacheFile)
+    const rebuilt = createStore(cacheFile)
+    expect(await rebuilt.getAnalyticsSessionIds(['provider-session'])).toEqual([id])
+    expect(await createStore().getAnalyticsSessionIds(['provider-session'])).not.toEqual([id])
+  })
+
+  it('flush waits for queued analytics identity creation', async () => {
+    const store = createStore()
+    const identity = store.getAnalyticsSessionIds(['session'])
+    await store.flush()
+    const [id] = await identity
+    expect(
+      readFileSync(join(tempDirectory, 'usage-0-analytics-session-ids.json'), 'utf8')
+    ).toContain(id)
   })
 
   it('skips disabled and fresh matching states', async () => {
@@ -185,27 +282,153 @@ describe('UsageProviderStoreLifecycle', () => {
 
   it('invalidates prior sources on fingerprint changes and reuses them for forced scans', async () => {
     const store = createStore()
-    const refreshedSources = [{ id: 'refreshed' }]
-    scan.mockResolvedValueOnce({
-      processedSources: refreshedSources,
-      sessions: [],
-      dailyAggregates: []
-    })
+    const sourceCache = {
+      path: join(tempDirectory, 'usage-0-sources.json'),
+      schemaVersion: 1,
+      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT
+    }
     store.replaceState(
       makeState({
         worktreeFingerprint: 'outdated',
-        processedSources: [{ id: 'stale' }],
         scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
       })
     )
 
     await store.refresh()
-    expect(scan).toHaveBeenLastCalledWith([], [])
+    expect(scan).toHaveBeenLastCalledWith([], { ...sourceCache, reuse: false })
 
     scan.mockClear()
     await store.refresh(true)
 
-    expect(scan).toHaveBeenCalledWith([], refreshedSources)
+    expect(scan).toHaveBeenCalledWith([], { ...sourceCache, reuse: true })
+  })
+
+  it('keeps per-source records out of the report main writes', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    const store = createStore(cacheFile)
+    await store.setEnabled(true)
+    scan.mockResolvedValueOnce({ sessions: [{ id: 'session' }], dailyAggregates: [] })
+
+    await store.refresh(true)
+    await store.flush()
+
+    const persisted = readFileSync(cacheFile, 'utf-8')
+    expect(JSON.parse(persisted)).not.toHaveProperty('processedSources')
+    expect(JSON.parse(persisted).sessions).toEqual([{ id: 'session' }])
+    // Compact: the report is rewritten after every scan.
+    expect(persisted).not.toContain('\n')
+  })
+
+  it('preserves a small legacy cache for the next warm scan', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+          processedSources: [{ id: 'inline' }],
+          sessions: [{ id: 'session' }]
+        })
+      )
+    )
+
+    const store = createStore(cacheFile)
+
+    await store.whenLoaded()
+    expect(split).toHaveBeenCalledWith({ cacheFile, sourceKey: 'processedSources' })
+    expect(store.getState().sessions).toEqual([{ id: 'session' }])
+    expect(store.getState().processedSources).toEqual([])
+    expect(
+      JSON.parse(readFileSync(join(tempDirectory, 'provider-sources.json'), 'utf-8'))
+    ).toMatchObject({
+      sources: [{ id: 'inline' }]
+    })
+  })
+
+  it('splits a large legacy cache on the worker before any reader or writer sees it', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    // Past the main-thread parse ceiling, the shape a pre-sidecar Claude history has.
+    const processedSources = Array.from({ length: 9_000 }, (_, index) => ({
+      id: `source-${index}-${'x'.repeat(1_000)}`
+    }))
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+          processedSources,
+          sessions: [{ id: 'session' }],
+          scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
+        }),
+        null,
+        2
+      )
+    )
+
+    const store = createStore(cacheFile)
+    // A write racing the load must not clobber the history being loaded.
+    const disabled = store.setEnabled(false)
+
+    await Promise.resolve()
+    expect(split).toHaveBeenCalledWith({ cacheFile, sourceKey: 'processedSources' })
+    await store.whenLoaded()
+    await disabled
+    await store.flush()
+    expect(store.getState().sessions).toEqual([{ id: 'session' }])
+    expect(store.getState().processedSources).toEqual([])
+    const report = JSON.parse(readFileSync(cacheFile, 'utf-8'))
+    expect(report).not.toHaveProperty('processedSources')
+    expect(report).toMatchObject({ sessions: [{ id: 'session' }], scanState: { enabled: false } })
+    const sidecar = JSON.parse(readFileSync(join(tempDirectory, 'provider-sources.json'), 'utf-8'))
+    expect(sidecar).toEqual({
+      schemaVersion: 1,
+      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+      sources: processedSources
+    })
+  })
+
+  it('reads a large cache on the main thread when the worker cannot split it', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          sessions: [{ id: 'session' }],
+          processedSources: [{ id: 'x'.repeat(9 * 1024 * 1024) }]
+        })
+      )
+    )
+    split.mockRejectedValueOnce(new Error('worker unavailable'))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const store = createStore(cacheFile)
+    await store.whenLoaded()
+
+    expect(store.getState().sessions).toEqual([{ id: 'session' }])
+    expect(store.getState().processedSources).toEqual([])
+  })
+
+  it('flush waits for a pending migration and its report rewrite', async () => {
+    const cacheFile = join(tempDirectory, 'provider.json')
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(makeState({ processedSources: [{ id: 'inline' }] })) +
+        ' '.repeat(9 * 1024 * 1024)
+    )
+    const pendingSplit = createDeferred<UsageCacheSplitResult>()
+    split.mockReturnValueOnce(pendingSplit.promise)
+    const store = createStore(cacheFile)
+    let flushed = false
+    const flushing = store.flush().then(() => {
+      flushed = true
+    })
+
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(flushed).toBe(false)
+    pendingSplit.resolve({ reportText: JSON.stringify(makeState()), migrated: true })
+    await flushing
+
+    expect(JSON.parse(readFileSync(cacheFile, 'utf-8'))).not.toHaveProperty('processedSources')
   })
 
   it('shares one in-flight scan and exposes its live state', async () => {
@@ -228,7 +451,6 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(writeProbe.opens).toBe(0)
 
     pendingScan.resolve({
-      processedSources: [{ id: 'source' }],
       sessions: [{ id: 'session' }],
       dailyAggregates: []
     })
@@ -240,68 +462,47 @@ describe('UsageProviderStoreLifecycle', () => {
       hasAnyTestData: true
     })
     expect(writeProbe.opens).toBe(1)
-    expect(store.getState().processedSources).toEqual([{ id: 'source' }])
+    expect(store.getState().sessions).toEqual([{ id: 'session' }])
   })
 
-  it('queues one follow-up scan when a target-changing refresh arrives during a scan', async () => {
+  it('queues one follow-up scan when the selected profile changes during a scan', async () => {
     const firstScan = createDeferred<TestScanResult>()
     const secondScan = createDeferred<TestScanResult>()
     scan.mockReturnValueOnce(firstScan.promise).mockReturnValueOnce(secondScan.promise)
     const store = createStore()
     store.replaceState(makeState({ scanState: { enabled: true } }))
-
-    const firstRefresh = store.refresh(true)
-    const targetRefresh = store.refresh(true, { rerunIfScanning: true })
+    const first = store.refresh(true)
     await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(1))
-
-    firstScan.resolve({
-      processedSources: [{ id: 'old-target' }],
-      sessions: [{ id: 'old-target' }],
-      dailyAggregates: []
-    })
+    const updated = store.refresh(true, { rerunIfScanning: true })
+    const duplicate = store.refresh(true, { rerunIfScanning: true })
+    await Promise.resolve()
+    firstScan.resolve({ sessions: [{ id: 'old-profile' }], dailyAggregates: [] })
     await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
-
-    secondScan.resolve({
-      processedSources: [{ id: 'new-target' }],
-      sessions: [{ id: 'new-target' }],
-      dailyAggregates: []
-    })
-    await Promise.all([firstRefresh, targetRefresh])
-
-    expect(store.getState().processedSources).toEqual([{ id: 'new-target' }])
+    secondScan.resolve({ sessions: [{ id: 'new-profile' }], dailyAggregates: [] })
+    await Promise.all([first, updated, duplicate])
+    expect(store.getState().sessions).toEqual([{ id: 'new-profile' }])
+    expect(scan).toHaveBeenCalledTimes(2)
   })
 
-  it('does not drop a target refresh queued between scan completion and cleanup', async () => {
+  it('retains a profile refresh arriving between scan completion and cleanup', async () => {
     const writeGate = createDeferred<void>()
     const writeOverride = vi.fn(() => writeGate.promise)
     scan
-      .mockResolvedValueOnce({
-        processedSources: [{ id: 'old-target' }],
-        sessions: [{ id: 'old-target' }],
-        dailyAggregates: []
-      })
-      .mockResolvedValueOnce({
-        processedSources: [{ id: 'new-target' }],
-        sessions: [{ id: 'new-target' }],
-        dailyAggregates: []
-      })
+      .mockResolvedValueOnce({ sessions: [{ id: 'old-profile' }], dailyAggregates: [] })
+      .mockResolvedValueOnce({ sessions: [{ id: 'new-profile' }], dailyAggregates: [] })
     const store = createStore()
     store.setWriteOverride(writeOverride)
     store.replaceState(makeState({ scanState: { enabled: true } }))
-
-    const firstRefresh = store.refresh(true)
+    const first = store.refresh(true)
     await vi.waitFor(() => expect(writeOverride).toHaveBeenCalledTimes(1))
-
-    let targetRefresh: Promise<unknown> | undefined
+    let updated: Promise<unknown> | undefined
     writeGate.resolve()
     queueMicrotask(() => {
-      targetRefresh = store.refresh(true, { rerunIfScanning: true })
+      updated = store.refresh(true, { rerunIfScanning: true })
     })
-
     await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
-    await Promise.all([firstRefresh, targetRefresh])
-
-    expect(store.getState().processedSources).toEqual([{ id: 'new-target' }])
+    await Promise.all([first, updated])
+    expect(store.getState().sessions).toEqual([{ id: 'new-profile' }])
   })
 
   it('vetoes a superseded generation before rename', async () => {
@@ -337,7 +538,6 @@ describe('UsageProviderStoreLifecycle', () => {
     const store = createStore()
     const previousState = makeState({
       worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
-      processedSources: [{ id: 'source' }],
       sessions: [{ id: 'session' }],
       dailyAggregates: [{ day: '2026-04-09' }],
       scanState: { enabled: true, lastScanCompletedAt: NOW - 1_000 }
@@ -353,7 +553,6 @@ describe('UsageProviderStoreLifecycle', () => {
 
     expect(store.getState()).toMatchObject({
       worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
-      processedSources: previousState.processedSources,
       sessions: previousState.sessions,
       dailyAggregates: previousState.dailyAggregates
     })

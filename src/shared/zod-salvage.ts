@@ -86,11 +86,30 @@ function recordEntryKeys(raw: unknown): string[] | null {
  * instead of rejecting the reply. A non-string stays fatal, so this widens the vocabulary without
  * also accepting the wrong type. Not `.catch()`, which would swallow absence too.
  */
-export function openEnum<T extends readonly [string, ...string[]], F extends T[number] | undefined>(
+// `readonly string[]` rather than a non-empty tuple so a hostUnionArms list can feed it; z.enum
+// takes the same, so the tuple constraint only excluded callers zod itself accepts. `const` keeps a
+// bare literal's arms, which the parsed type is built from.
+export function openEnum<const T extends readonly string[], F extends T[number] | undefined>(
   values: T,
   fallback: F
 ): z.ZodType<T[number] | F, unknown> {
   return z.enum(values).or(z.string().transform(() => fallback))
+}
+
+/**
+ * The arms of a closed enum, spelled as a coverage record over the host's own union so tsc holds
+ * the schema to that union both ways: an arm the host adds is a missing property here, one it drops
+ * is an excess property. `NoInfer` keeps U from being read off the record, so omitting the type
+ * argument leaves it at its `never` default and the parameter becomes `never` — the call fails to
+ * compile rather than pinning the record only to itself. It belongs in the schema module rather
+ * than its test because the list is what feeds `z.enum`: the coverage record and the arms the
+ * schema actually accepts are then one object, and a test-side copy could drift from it.
+ */
+export function hostUnionArms<U extends string = never>(
+  coverage: [U] extends [never] ? never : Readonly<Record<NoInfer<U>, true>>
+): readonly U[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mapped parameter type makes every key exactly a U; Object.keys only loses that at the type level.
+  return Object.keys(coverage) as U[]
 }
 
 /** Array that drops the elements it cannot parse instead of failing.

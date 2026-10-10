@@ -10,7 +10,6 @@ import {
 
 export type { CodexManagedHookInstallMaterial } from './codex-hook-definition'
 export { getCodexManagedHookInstallMaterial } from './codex-hook-definition'
-export { setSystemCodexHomeHookSweepSuppressed } from './codex-hook-legacy-cleanup'
 export { CodexHookService }
 export {
   createCodexWslRuntimeHookInstallPlan,

@@ -1,10 +1,10 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { markdownTabDocumentSchema } from './session-read-reply-schema'
+import { terminalSendAcceptedSchema } from '../terminal/terminal-reply-schema'
 import {
   sessionCreatedTerminalTabSchema,
-  sessionWriteUnreadReplySchema,
-  terminalSendAcceptedSchema
+  sessionWriteUnreadReplySchema
 } from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
 

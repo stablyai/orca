@@ -1,11 +1,13 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 import {
   GenerationScopedRequestOwner,
   type LoadedRequest,
+  type RequestCurrency,
   type RequestScope
 } from './generation-scoped-request-owner'
 
@@ -277,6 +279,81 @@ describe('owner boundaries', () => {
   })
 })
 
+describe('currency probe', () => {
+  it('flips under a request still in flight when a reset retires it', async () => {
+    const owner: Owner = new GenerationScopedRequestOwner()
+    const scope = scopeAt('w1', 1)
+    const request = pending()
+    const probes: RequestCurrency[] = []
+    const loaded = owner.load(scope, QUERY, (currency) => {
+      probes.push(currency)
+      return request.start()
+    })
+    expect(probes[0]?.isCurrent()).toBe(true)
+
+    owner.reset()
+    expect(probes[0]?.isCurrent()).toBe(false)
+
+    // The probe answers the question `commit` asks, so a loader that ignored it lands here instead.
+    request.resolve(['stale.ts'])
+    const stale = await settled(loaded)
+    expect(owner.commit(stale.lease, stale.value)).toBe('retired-generation')
+  })
+
+  it('flips when the next load enters on a scope the owner has not seen', async () => {
+    const owner: Owner = new GenerationScopedRequestOwner()
+    const request = pending()
+    const probes: RequestCurrency[] = []
+    const loaded = owner.load(scopeAt('A', 1), QUERY, (currency) => {
+      probes.push(currency)
+      return request.start()
+    })
+    expect(probes[0]?.isCurrent()).toBe(true)
+
+    void owner.load(scopeAt('B', 1), QUERY, () => pending().start())
+    expect(probes[0]?.isCurrent()).toBe(false)
+
+    request.resolve(['a.ts'])
+    const stale = await settled(loaded)
+    expect(owner.commit(stale.lease, stale.value)).toBe('retired-generation')
+  })
+
+  it('publishes nothing and sends nothing further for a loader that stops on it', async () => {
+    const owner: Owner = new GenerationScopedRequestOwner()
+    const scope = scopeAt('w1', 1)
+    let sent = 0
+    const firstLeg = pending()
+    const secondLeg = pending()
+    // Two legs, as the compare site has: the probe sits between them, so a superseded attempt never
+    // reaches the second one.
+    const attempt =
+      (leg: { start: () => Promise<string[] | null> }) =>
+      async (currency: RequestCurrency): Promise<string[] | null> => {
+        await leg.start()
+        if (!currency.isCurrent()) {
+          return null
+        }
+        sent++
+        return ['sent.ts']
+      }
+
+    const superseded = owner.load(scope, QUERY, attempt(firstLeg))
+    owner.reset()
+    const live = owner.load(scope, QUERY, attempt(secondLeg))
+
+    firstLeg.resolve([])
+    expect(await superseded).toBeNull()
+    expect(sent).toBe(0)
+    expect(owner.read(scope, QUERY)).toBeUndefined()
+
+    secondLeg.resolve([])
+    const lease = await settled(live)
+    expect(sent).toBe(1)
+    expect(owner.commit(lease.lease, lease.value)).toBe('committed')
+    expect(owner.read(scope, QUERY)).toEqual(['sent.ts'])
+  })
+})
+
 const mobileRoot = fileURLToPath(new URL('../..', import.meta.url))
 const ownerModule = join(mobileRoot, 'src', 'transport', 'generation-scoped-request-owner')
 
@@ -291,16 +368,6 @@ function importsOwner(path: string, source: string): boolean {
       specifier.text.startsWith('.') &&
       resolve(path, '..', specifier.text) === ownerModule
     )
-  })
-}
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
   })
 }
 
@@ -416,7 +483,7 @@ function loaderWrites(path: string, source: string): string[] {
 describe('loader write fence', () => {
   const holders = ['app', 'src']
     .map((directory) => join(mobileRoot, directory))
-    .flatMap(sourceFiles)
+    .flatMap(censusSourceFiles)
     .filter((path) => ['.ts', '.tsx'].includes(extname(path)))
     .filter((path) => !/\.test\.tsx?$/.test(path))
     .map((path) => ({ path, source: readFileSync(path, 'utf8') }))

@@ -9,6 +9,7 @@ const {
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
+const { PE_MACHINE, readPeMachine } = require('./scripts/windows-pe-machine.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -17,6 +18,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
+  '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
   'i18next',
@@ -24,8 +26,6 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'node-pty',
   'posthog-node',
   'proper-lockfile',
-  // serve-sim (for CLI JS entry + closure + state/middleware + to make packaged require('serve-sim') + its internal relatives work; mirrors other runtime JS like ws/yaml/zod. Natives/dylibs still via extraResources + the node_modules/serve-sim copy in resources from builder. Client if added too.
-  'serve-sim',
   'qrcode',
   'ssh2',
   'tweetnacl',
@@ -33,6 +33,9 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'yaml',
   'zod'
 ]
+// Why macOS only: serve-sim drives the iOS Simulator, and its native addon is a Mach-O that
+// Windows signing rejects as a PE file.
+const DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS = ['serve-sim']
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
   '@orca/windows-registry'
@@ -179,6 +182,7 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
   // Why: cross-builds must select native dependencies from the artifact target, not the build host.
   const packageRoots = [
     ...PACKAGED_RUNTIME_PACKAGE_ROOTS,
+    ...(electronPlatformName === 'darwin' ? DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS : []),
     ...(electronPlatformName === 'win32' ? WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS : [])
   ]
   for (const packageName of packageRoots) {
@@ -211,8 +215,53 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
   return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
     from: packageDir,
-    to: join('node_modules', ...packageName.split('/'))
+    to: join('node_modules', ...packageName.split('/')),
+    ...(packageName === '@orca/process-host' ? { filter: ['package.json', 'dist/**/*'] } : {})
   }))
+}
+
+function listProcessHostModules(directory, extension, prefix = '') {
+  if (!existsSync(directory)) {
+    return []
+  }
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${prefix}${entry.name}`
+    if (entry.isDirectory()) {
+      return entry.name === '__fixtures__'
+        ? []
+        : listProcessHostModules(join(directory, entry.name), extension, `${relativePath}/`)
+    }
+    return entry.name.endsWith(extension) && !entry.name.endsWith(`.test${extension}`)
+      ? [relativePath.slice(0, -extension.length)]
+      : []
+  })
+}
+
+// Why: the resource filter copies whatever dist holds, so a missing, partial, or stale build
+// would ship a package main cannot load. Mirrors the package tsconfig include/exclude.
+function assertProcessHostOutputBuilt(packageDir = readPackage('@orca/process-host').packageDir) {
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+  const publicTargets = [
+    manifest.main,
+    ...Object.values(manifest.exports ?? {}).map((target) =>
+      typeof target === 'string' ? target : target?.default
+    )
+  ].filter((target) => typeof target === 'string')
+  const sources = listProcessHostModules(join(packageDir, 'src'), '.ts')
+  const sourceSet = new Set(sources)
+  const missing = [
+    ...new Set([...publicTargets, ...sources.map((module) => `./dist/${module}.js`)])
+  ].filter((target) => !existsSync(join(packageDir, target)))
+  const stale = listProcessHostModules(join(packageDir, 'dist'), '.js')
+    .filter((module) => !sourceSet.has(module))
+    .map((module) => `./dist/${module}.js`)
+  if (missing.length > 0 || stale.length > 0) {
+    throw new Error(
+      `@orca/process-host output in ${packageDir} does not match its source ` +
+        `(missing: ${missing.join(', ') || 'none'}; stale: ${stale.join(', ') || 'none'}). ` +
+        'Run `pnpm build:packages` before packaging.'
+    )
+  }
 }
 
 function normalizeAsarEntryPath(entry) {
@@ -367,6 +416,16 @@ function ensurePackagedNodePtyConptyRuntime(nodePtyDir, electronArch) {
   }
 }
 
+/** Whether node-pty's source build holds a conpty.node the `electronArch` slice could load. */
+function conptyTargetsArch(nodePtyDir, electronArch) {
+  const releaseAddon = join(nodePtyDir, 'build', 'Release', 'conpty.node')
+  if (!existsSync(releaseAddon)) {
+    return false
+  }
+  // Null (not a PE) counts as unloadable, so a truncated or quarantined build keeps the fallback.
+  return readPeMachine(releaseAddon) === PE_MACHINE[normalizeNodePtyWindowsArch(electronArch)]
+}
+
 function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) {
   const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
   if (!existsSync(nodePtyDir)) {
@@ -388,14 +447,14 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
   // require, and its caller resolves null with silent: true), and removes the
   // winpty backend that node-pty still selects below Windows build 18309.
   //
-  // Why the arch check: a cross-arch package copies the host's build/Release,
-  // so its mere presence does not mean it matches electronArch -- deleting the
-  // target-arch prebuild would then remove the only loadable binary.
-  if (
-    electronPlatformName === 'win32' &&
-    electronArch === process.arch &&
-    existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))
-  ) {
+  // Why the arch check: a cross-HOST package can copy a build/Release that is not a Windows
+  // binary at all, so its mere presence does not mean the target can load it -- deleting the
+  // target-arch prebuild would then remove the only loadable binary. This used to approximate
+  // that with `electronArch === process.arch`, which also skipped the arm64 slice cross-built on
+  // an x64 Windows host -- a rebuild that DOES emit a correct arm64 addon. That slice kept the
+  // unpatched prebuild as a reachable fallback for any later load failure of build/Release.
+  // Read the PE header instead of guessing.
+  if (electronPlatformName === 'win32' && conptyTargetsArch(nodePtyDir, electronArch)) {
     const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)
     for (const staleFallback of ['conpty.node', 'conpty.pdb']) {
       rmSync(join(prebuildDir, staleFallback), { force: true })
@@ -604,9 +663,11 @@ function pruneMatchingFiles(directory, shouldPrune) {
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,
+  normalizeNodePtyWindowsArch,
   packageNameFromSpecifier,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,

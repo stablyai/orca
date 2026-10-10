@@ -41,5 +41,7 @@ ORCA skills get linear-tickets
 
 Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
 not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
-and retry. If `skills get` is unknown, explain that updating Orca restores the guide; use
-`--help` for read-only discovery and do not guess unsupported commands.
+and retry. If it fails with `runtime_access_denied`, your sandbox blocked the connection:
+re-run it with escalated permissions, and do not run `ORCA open` or restart Orca. If
+`skills get` is unknown, explain that updating Orca restores the guide; use `--help` for
+read-only discovery and do not guess unsupported commands.

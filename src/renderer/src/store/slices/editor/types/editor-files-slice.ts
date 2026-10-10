@@ -3,6 +3,7 @@ import type {
   CheckRunDetailsTabPatch,
   OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
+import type { OpenChatVisualTabState } from '@/components/native-chat/native-chat-visual-tab'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -18,6 +19,7 @@ import type {
   ConflictReviewEntry,
   ConflictReviewState,
   EditorOpenTargetOptions,
+  EditorTabSelection,
   OpenFile
 } from './open-file'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
@@ -33,7 +35,7 @@ export type EditorFilesSlice = {
   activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
   activeTabType: WorkspaceVisibleTabType
-  setActiveTabType: (type: WorkspaceVisibleTabType, worktreeId?: string) => void
+  setActiveTabType: (type: WorkspaceVisibleTabType, worktreeId: string | null) => void
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: {
@@ -44,6 +46,7 @@ export type EditorFilesSlice = {
       forceContentReload?: boolean
       focusEditor?: boolean
       reopenId?: string
+      selection?: EditorTabSelection
     }
   ) => string
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -77,7 +80,9 @@ export type EditorFilesSlice = {
   /** Most recently closed editor tabs per worktree (for Cmd/Ctrl+Shift+T). */
   recentlyClosedEditorTabsByWorktree: Record<string, ClosedEditorTabSnapshot[]>
   reopenClosedEditorTab: (worktreeId: string) => boolean
-  setActiveFile: (fileId: string) => void
+  /** Activation uses the file's workspace unless a target is supplied; global selection
+   *  moves only when that workspace is active. */
+  setActiveFile: (fileId: string, targetWorktreeId?: string) => void
   reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
@@ -101,7 +106,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
   ) => void
   openBranchDiff: (
     worktreeId: string,
@@ -159,6 +164,7 @@ export type EditorFilesSlice = {
     state: CheckRunDetailsTabPatch
   ) => void
   reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
+  openChatVisualTab: (worktreeId: string, visual: OpenChatVisualTabState) => void
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,

@@ -7,6 +7,7 @@ import {
 import { relayLogLine } from './relay-diagnostic-log'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../shared/ssh-types'
 import type { RelayDispatcher } from './dispatcher'
+import { errorMessage } from '../shared/error-message'
 
 type RelayGraceLifecycleOptions = {
   dispatcher: RelayDispatcher
@@ -18,6 +19,10 @@ type RelayGraceLifecycleOptions = {
   hasAcceptedSocketClient: () => boolean
   ownsSocketPath: () => boolean
   disposeOwnedProcesses: () => Promise<void>
+  /** Lifts the admission fences disposal raised, for a relay that stays up after a deferral. */
+  reopenOwnedProcesses: () => void
+  /** Never rejects; runs only after nothing can defer the exit. */
+  disposeExitOnlyServices: () => Promise<void>
   disposeRuntime: () => void
 }
 
@@ -120,10 +125,13 @@ export class RelayGraceLifecycle {
     this.graceDeadlineAt = null
     this.graceReason = null
     this.graceBranch = null
-    void this.options.ptyHandler
-      .dispose()
+    // Why owned processes first: their disposal can defer, and a deferral must leave the PTYs intact,
+    // because a disposed PTY handler kills every terminal and refuses new ones.
+    void this.options
+      .disposeOwnedProcesses()
       .then(async () => {
-        await this.options.disposeOwnedProcesses()
+        await this.options.ptyHandler.dispose()
+        await this.options.disposeExitOnlyServices()
         this.stopPoolWatch()
         this.stopPoolActiveWatch()
         this.options.disposeRuntime()
@@ -131,9 +139,8 @@ export class RelayGraceLifecycle {
       })
       .catch((error) => {
         this.shutdownInFlight = false
-        relayLogLine(
-          `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
-        )
+        this.options.reopenOwnedProcesses()
+        relayLogLine(`[relay] Shutdown deferred: ${errorMessage(error)}`)
         if (this.options.readSocketClientCount() === 0) {
           this.start('shutdown deferred', { retryDeferredShutdown: true })
         }

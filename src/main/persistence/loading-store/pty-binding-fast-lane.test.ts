@@ -71,6 +71,7 @@ describe('evaluatePtyBindingFastLane', () => {
       )
     ).toEqual(['layout_missing'])
     expect(miss({ incarnationId: 'a' })).toEqual(['incarnation'])
+    expect(miss({}, session({ activeWorktreeIdsOnShutdown: [] }))).toEqual(['inactive_worktree'])
     expect(miss({}, session({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'a' } }))).toEqual([
       'incarnation'
     ])

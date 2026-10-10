@@ -39,6 +39,25 @@ function fakeChild(process: FakeProcess): ChildProcess {
 }
 
 describe('WSL transcript filesystem process client', () => {
+  it('retains bigint inode precision for a pinned snapshot and rejects stat after close', async () => {
+    const child = new FakeProcess()
+    const client = new WslTranscriptFsProcessClient(() => fakeChild(child))
+    const signal = new AbortController().signal
+    const opening = client.open(String.raw`\\wsl.localhost\Ubuntu\file`, signal)
+    child.respond({ id: child.sent[0].id, ok: true, value: 17 })
+    const handle = await opening
+    const pending = client.stat(handle, signal)
+    expect(child.sent[1]).toMatchObject({ operation: 'fstatBigInt', handleId: 17 })
+    const snapshot = { dev: 1n, ino: 9007199254740993n, size: 16n, mtimeNs: 10n, ctimeNs: 11n }
+    child.respond({ id: child.sent[1].id, ok: true, value: structuredClone(snapshot) })
+    await expect(pending).resolves.toEqual(snapshot)
+    const closing = client.close(handle)
+    child.respond({ id: child.sent[2].id, ok: true, value: true })
+    await closing
+    await expect(client.stat(handle, signal)).rejects.toMatchObject({ code: 'EBADF' })
+    client.dispose()
+  })
+
   it('reuses a healthy process for sequential operations', async () => {
     const child = new FakeProcess()
     const factory = vi.fn(() => fakeChild(child))

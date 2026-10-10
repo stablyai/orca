@@ -1,3 +1,9 @@
+import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
+import {
+  SshResponsePendingFrames,
+  boundedSshResponseDiagnostic
+} from './ssh-response-pending-frames'
+import { SshResponsePayload } from './ssh-response-payload'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { createSshDisposalError } from './ssh-channel-multiplexer'
 import { RelayErrorCode, isGitResponseStreamMarker } from './relay-protocol'
@@ -10,23 +16,12 @@ const SENTINEL_STREAM_ID = -1
  * responseEnd) while the SSH channel stays up would hang the client forever. */
 const STREAM_INACTIVITY_TIMEOUT_MS = 30_000
 
-/** Bound transient buffering of other concurrent streams' chunks while this
- * reader awaits its sentinel: every reader sees all git.responseChunk frames
- * and can't filter by streamId until its own sentinel resolves. Foreign frames
- * are dropped on drain anyway; this just caps the pre-sentinel backlog. */
-const MAX_PENDING_FRAMES = 64
-
 export class GitResponseStreamError extends Error {
   readonly code = RelayErrorCode.StreamProtocolError
   constructor(message: string) {
     super(message)
   }
 }
-
-type PendingFrame =
-  | { kind: 'chunk'; params: Record<string, unknown> }
-  | { kind: 'end'; params: Record<string, unknown> }
-  | { kind: 'error'; params: Record<string, unknown> }
 
 /**
  * Request a git method that may return a large payload, opting into response
@@ -49,6 +44,7 @@ export function requestGitStreamable(
     /** Bounds only the sentinel request (forwarded to mux.request), like today. */
     timeoutMs?: number
     /** Bounds the post-sentinel reassembly stall; resets on each chunk. */
+    maxResponseBytes?: number
     inactivityTimeoutMs?: number
   }
 ): Promise<unknown> {
@@ -69,14 +65,13 @@ export function requestGitStreamable(
   }
 
   return new Promise<unknown>((resolve, reject) => {
-    const parts: Buffer[] = []
+    let payload: SshResponsePayload | undefined
     let expectedSeq = 0
-    let receivedBytes = 0
     let totalBytes = 0
     let chunkCount = 0
     let settled = false
     let metadataReady = false
-    const pending: PendingFrame[] = []
+    const pending = new SshResponsePendingFrames(options?.maxResponseBytes)
 
     const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_INACTIVITY_TIMEOUT_MS
     let inactivityTimer: ReturnType<typeof setTimeout> | null = null
@@ -118,6 +113,8 @@ export function requestGitStreamable(
         return
       }
       settled = true
+      payload?.clear()
+      pending.clear()
       clearInactivity()
       cancel()
       cleanup()
@@ -128,6 +125,8 @@ export function requestGitStreamable(
         return
       }
       settled = true
+      payload?.clear()
+      pending.clear()
       clearInactivity()
       cleanup()
       resolve(value)
@@ -137,8 +136,8 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
-      const seq = p.seq as number
-      const data = p.data as string
+      const seq = p.seq
+      const data = p.data
       if (typeof seq !== 'number' || typeof data !== 'string') {
         fail(new GitResponseStreamError(`Malformed chunk for git stream ${streamIdRef.current}`))
         return
@@ -151,9 +150,12 @@ export function requestGitStreamable(
         )
         return
       }
-      const decoded = Buffer.from(data, 'base64')
-      parts.push(decoded)
-      receivedBytes += decoded.length
+      try {
+        payload?.append(data)
+      } catch (error) {
+        fail(new GitResponseStreamError(String(error)))
+        return
+      }
       expectedSeq += 1
       armInactivity()
       // Why: credit-based flow control — the relay caps unacked chunks so a big
@@ -171,20 +173,20 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
-      if (expectedSeq !== chunkCount || receivedBytes !== totalBytes) {
+      if (expectedSeq !== chunkCount || payload?.receivedBytes !== totalBytes) {
         fail(
           new GitResponseStreamError(
-            `Git stream ${streamIdRef.current} incomplete: chunks ${expectedSeq}/${chunkCount}, bytes ${receivedBytes}/${totalBytes}`
+            `Git stream ${streamIdRef.current} incomplete: chunks ${expectedSeq}/${chunkCount}, bytes ${payload?.receivedBytes}/${totalBytes}`
           )
         )
         return
       }
       try {
-        succeed(JSON.parse(Buffer.concat(parts).toString('utf-8')))
+        succeed(JSON.parse(payload?.takeString() ?? ''))
       } catch (err) {
         fail(
           new GitResponseStreamError(
-            `Git stream ${streamIdRef.current} JSON parse failed: ${String(err)}`
+            `Git stream ${streamIdRef.current} JSON parse failed: ${boundedSshResponseDiagnostic(String(err), options?.maxResponseBytes)}`
           )
         )
       }
@@ -194,12 +196,12 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
-      fail(new Error((p.message as string | undefined) ?? 'git response stream error'))
+      fail(new Error(boundedSshResponseDiagnostic(p.message, options?.maxResponseBytes)))
     }
 
     const drainPending = (): void => {
-      while (!settled && pending.length > 0) {
-        const frame = pending.shift()!
+      let frame = pending.shift()
+      while (!settled && frame) {
         if (frame.kind === 'chunk') {
           handleChunk(frame.params)
         } else if (frame.kind === 'end') {
@@ -207,25 +209,14 @@ export function requestGitStreamable(
         } else {
           handleStreamError(frame.params)
         }
-      }
-    }
-
-    // Why: pre-sentinel we cannot filter by streamId (our id is unknown yet), so
-    // every concurrent reader transiently buffers all readers' chunks. Cap the
-    // backlog by dropping the oldest; foreign frames are dropped on drain anyway,
-    // and if our own seq-0 were ever dropped the seq check fails loudly rather
-    // than corrupting. The sentinel normally resolves long before this cap.
-    const pushPending = (frame: PendingFrame): void => {
-      pending.push(frame)
-      if (pending.length > MAX_PENDING_FRAMES) {
-        pending.shift()
+        frame = pending.shift()
       }
     }
 
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseChunk', (p) => {
         if (!metadataReady) {
-          pushPending({ kind: 'chunk', params: p })
+          pending.push('chunk', p)
           return
         }
         handleChunk(p)
@@ -234,7 +225,7 @@ export function requestGitStreamable(
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseEnd', (p) => {
         if (!metadataReady) {
-          pushPending({ kind: 'end', params: p })
+          pending.push('end', p)
           return
         }
         handleEnd(p)
@@ -243,7 +234,7 @@ export function requestGitStreamable(
     unsubscribers.push(
       mux.onNotificationByMethod('git.responseError', (p) => {
         if (!metadataReady) {
-          pushPending({ kind: 'error', params: p })
+          pending.push('error', p)
           return
         }
         handleStreamError(p)
@@ -285,10 +276,18 @@ export function requestGitStreamable(
     void requestPromise
       .then((result) => {
         if (settled) {
+          if (isGitResponseStreamMarker(result) && !mux.isDisposed()) {
+            mux.notify('git.cancelResponseStream', {
+              streamId: result.__orcaGitResponseStream.streamId
+            })
+          }
           return
         }
         // Old relay / small result: plain single-frame value, no stream follows.
         if (!isGitResponseStreamMarker(result)) {
+          if (options?.maxResponseBytes !== undefined) {
+            stringifyJsonWithinByteLimit(result, options.maxResponseBytes)
+          }
           succeed(result)
           return
         }
@@ -296,6 +295,15 @@ export function requestGitStreamable(
         totalBytes = marker.totalBytes
         chunkCount = marker.chunkCount
         streamIdRef.current = marker.streamId
+        if (pending.lostFrames(marker.streamId)) {
+          fail(
+            new GitResponseStreamError(
+              'Filesystem response exceeds the retention budget before metadata'
+            )
+          )
+          return
+        }
+        payload = new SshResponsePayload(totalBytes, chunkCount, options?.maxResponseBytes)
         metadataReady = true
         // Why: start the inactivity deadline now — mux.request's timeout only
         // covered the sentinel; the reassembly phase needs its own guard.

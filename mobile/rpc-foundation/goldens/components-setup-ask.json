@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "components.setup-script",
   "family": "components.setup-script",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
-  "scenarioSha256": "d4052f119c7ed68dc922c8beeb0074701f1532b10e48e284fb71aa165a17e437",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "2bf6d40fe6a5": {
       "name": "repo.hooks#1",

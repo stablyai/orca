@@ -1,3 +1,4 @@
+import { githubReadExecutionScope } from './github-read-execution-scope'
 import { ghExecFileAsync } from '../git/runner'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
@@ -18,12 +19,10 @@ import {
 } from './github-remote-identity-parsing'
 import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshGitProviderGeneration
-} from '../providers/ssh-git-dispatch'
+import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
@@ -31,7 +30,8 @@ export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 // host `gh auth status` reports as logged-in is definitively a GitHub host. This
 // mirrors the `glab auth status` signal GitLab self-hosted detection uses, so a
 // GHES remote is not left to fall through to Gitea (#8312).
-const HOST_AUTH_TTL_MS = 60_000
+const HOST_AUTH_TTL_MS = 15 * 60_000
+const HOST_AUTH_MISS_TTL_MS = 60_000
 const HOST_AUTH_CACHE_MAX_ENTRIES = 512
 
 type HostAuthCacheEntry = {
@@ -145,7 +145,7 @@ async function resolveAuthenticatedGitHubHost(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}`
+  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}\0${githubReadExecutionScope({ ghAccount: localGitOptions.ghAccount })}`
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -179,7 +179,7 @@ async function resolveAuthenticatedGitHubHost(
     }
     hostAuthCache.set(cacheKey, {
       authenticatedHost,
-      expiresAt: Date.now() + HOST_AUTH_TTL_MS
+      expiresAt: Date.now() + (authenticatedHost ? HOST_AUTH_TTL_MS : HOST_AUTH_MISS_TTL_MS)
     })
     pruneHostAuthCache(Date.now())
     return authenticatedHost
@@ -235,8 +235,8 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
 ): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
   const localGitOptions = getHostedReviewLocalGitOptions(options)
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  if (requireVerifiedSshProbe && connectionId && !getSshGitProvider(connectionId)) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  if (requireVerifiedSshProbe) {
+    requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   }
   let remoteUrl: string | null
   try {
@@ -247,8 +247,8 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
     }
     return null
   }
-  if (requireVerifiedSshProbe && connectionId && !remoteUrl && !getSshGitProvider(connectionId)) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  if (requireVerifiedSshProbe && !remoteUrl) {
+    requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
   if (!identity) {

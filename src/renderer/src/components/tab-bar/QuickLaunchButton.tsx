@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Loader2, Settings as SettingsIcon } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
@@ -8,7 +8,7 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
@@ -16,7 +16,8 @@ import {
   filterEnabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
-import { useStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -37,6 +38,10 @@ export type QuickLaunchAgentMenuItemsProps = {
   launchSource?: LaunchSource
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
+  /** Given the launch's own delivery result while the prompt is still on its way. */
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
+  /** Nothing to send: e.g. every note is already on its way, so no agent is started. */
+  disabled?: boolean
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -103,14 +108,16 @@ function QuickLaunchAgentMenuItemsInner({
   prompt,
   promptDelivery,
   launchSource,
-  onPromptDelivered
+  onPromptDelivered,
+  onPromptHandedOff,
+  disabled = false
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: resolving only the SSH connectionId here made paired-runtime
   // worktrees fall back to LOCAL detection, listing the client's agents
   // instead of the remote server's. Use the same ssh/runtime/local owner
   // resolution as the rest of the tab bar.
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
+  const { detectedIds, needsServerUpdate } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
@@ -118,12 +125,6 @@ function QuickLaunchAgentMenuItemsInner({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
-  // One hook per structured provider: the launch registry is keyed by agent, and hooks cannot run
-  // inside the agent list's render loop.
-  const structuredLaunchStatusByAgent = {
-    claude: useStructuredAgentLaunchStatus(worktreeId, 'claude'),
-    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex')
-  }
 
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -132,16 +133,23 @@ function QuickLaunchAgentMenuItemsInner({
 
   const runLaunch = useCallback(
     (agent: TuiAgent) => {
+      if (disabled) {
+        return
+      }
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
         agent,
         worktreeId,
         groupId,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
-        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
+        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
+        // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
+        ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {}),
+        freshNewTab: true
       })
       if (!result) {
         toast.error(
@@ -152,6 +160,26 @@ function QuickLaunchAgentMenuItemsInner({
           )
         )
         return
+      }
+      if (onPromptHandedOff && result.promptDeliveryResult) {
+        const outcome = newAgentPromptOutcome({ delivery: result.promptDeliveryResult })
+        onPromptHandedOff(outcome)
+        // The notes keep the text, so they say once why it did not go, as a send to a chat does.
+        void outcome.then(({ failure }) => {
+          if (failure) {
+            toast.error(
+              translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
+                value0: label
+              }),
+              {
+                description: activeAgentNotesSendFailureMessage(failure.status, {
+                  explicitTarget: true,
+                  code: failure.code
+                })
+              }
+            )
+          }
+        })
       }
       if (result.surface.kind !== 'local-terminal') {
         return
@@ -179,7 +207,17 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+    [
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered,
+      onPromptHandedOff,
+      disabled
+    ]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
@@ -192,25 +230,31 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          {detectedIds && detectedIds.length > 0
-            ? translate('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
-            : translate(
-                'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                'No agents detected'
-              )}
+          {needsServerUpdate
+            ? translate(
+                'auto.components.tab.bar.QuickLaunchButton.needsServerUpdate',
+                'Update Orca on this server to list this workspace’s agents'
+              )
+            : detectedIds && detectedIds.length > 0
+              ? translate(
+                  'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
+                  'No enabled agents'
+                )
+              : translate(
+                  'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
+                  'No agents detected'
+                )}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
-        const isStructuredLaunchPending =
-          isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
           <DropdownMenuItem
             key={agent}
-            disabled={isStructuredLaunchPending}
+            disabled={disabled}
             onSelect={() => runLaunch(agent)}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             title={translate(
@@ -219,11 +263,7 @@ function QuickLaunchAgentMenuItemsInner({
               { value0: label }
             )}
           >
-            {isStructuredLaunchPending ? (
-              <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
-            ) : (
-              <AgentIcon agent={agent} size={14} />
-            )}
+            <AgentIcon agent={agent} size={14} />
             <span className="flex-1">{label}</span>
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
 const WORKTREE_ID = 'repo-1::/worktree'
 const GROUP_ID = 'group-1'
@@ -12,6 +13,8 @@ function structuredTab(sessionId: string, sortOrder: number): Tab {
     entityId: sessionId,
     groupId: GROUP_ID,
     worktreeId: WORKTREE_ID,
+    // Stamped by the mirror of the server that published it.
+    executionHostId: 'runtime:environment-1',
     contentType: 'agent-session',
     agentSessionAgent: 'codex',
     label: 'Codex Chat',

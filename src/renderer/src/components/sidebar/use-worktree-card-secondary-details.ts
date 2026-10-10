@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -227,15 +228,17 @@ export function useWorktreeCardSecondaryDetails({
     },
     [linearIssue, openTaskPage]
   )
-  const hasDetails = hasWorktreeCardDetails({
-    issue: metaIssue,
-    linearIssue: metaLinearIssue,
-    jiraIssue: metaJiraIssue,
-    review: newCardStyle ? null : metaReview,
-    comment: metaComment,
-    automationProvenance: metaAutomationProvenance,
-    cliProvenance: metaCliProvenance
-  })
+  const hasDetails =
+    getWorkspaceAttachments(worktree).length > 0 ||
+    hasWorktreeCardDetails({
+      issue: metaIssue,
+      linearIssue: metaLinearIssue,
+      jiraIssue: metaJiraIssue,
+      review: newCardStyle ? null : metaReview,
+      comment: metaComment,
+      automationProvenance: metaAutomationProvenance,
+      cliProvenance: metaCliProvenance
+    })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
   // Why: derived from the settings the card already subscribes to — a third store

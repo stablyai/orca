@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../shared/pty-delivery-diagnostics'
 import {
@@ -26,7 +27,6 @@ import {
   shouldWritePtyOutputForeground,
   consumeInactiveForegroundImmediateBudget
 } from './foreground-output-scan'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -151,6 +151,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       session.hiddenDeliverySyncedPtyId = null
     }
     if (
+      !ptyId ||
       !session.isHiddenDeliveryGateManagedPty(ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {

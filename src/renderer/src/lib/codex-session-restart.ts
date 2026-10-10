@@ -28,9 +28,9 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
 // Why launchAgent: pty:spawn runs the managed-auth readiness gate and Codex
-// launch prep (project trust pre-mark) only for launchAgent 'codex', so without
-// it a restart respawn could race the account handoff and record a launch
-// account the pane does not actually read.
+// launch prep only for launchAgent 'codex', so without it a restart respawn
+// could race the account handoff and record a launch account the pane does not
+// actually read.
 export const CODEX_ACCOUNT_RESTART_STARTUP = {
   command: 'codex',
   startupCommandDelivery: 'shell-ready',
@@ -255,8 +255,7 @@ export async function markLiveCodexSessionsForRestart(args: {
             previousAccountLabel: args.previousAccountLabel,
             nextAccountLabel: args.nextAccountLabel,
             previousAccountId: stalePane.launchAccountId,
-            nextAccountId: stalePane.activeAccountId,
-            homeRouteChanged: stalePane.reason === 'home-route-change'
+            nextAccountId: stalePane.activeAccountId
           }
         ]
       }
@@ -319,8 +318,7 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
       // Why the ids: main decided staleness by id, and the labels can collide.
       // Passing only labels hands the store a question it cannot answer.
       previousAccountId: pane.launchAccountId,
-      nextAccountId: pane.activeAccountId,
-      ...(pane.reason === 'home-route-change' ? { homeRouteChanged: true as const } : {})
+      nextAccountId: pane.activeAccountId
     }))
   )
   // Why not every stale pane: the bind sweep suppresses a "notified" pane for the

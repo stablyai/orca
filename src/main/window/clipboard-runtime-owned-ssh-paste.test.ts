@@ -15,13 +15,14 @@ const PNG = Buffer.from([0, 1, 2, 3])
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
   clipboard: {
+    availableFormats: () => ['image/png'],
     readImage: () => ({
       getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => PNG
     }),
     readText: vi.fn(),
-    readBuffer: vi.fn(),
+    readBuffer: vi.fn(() => Buffer.alloc(0)),
     writeText: vi.fn(),
     writeImage: vi.fn(),
     writeBuffer: vi.fn()
@@ -39,12 +40,11 @@ vi.mock('node:fs/promises', () => ({
   stat: vi.fn(),
   realpath: vi.fn(),
   writeFile: fsWriteFileMock,
-  default: { writeFile: fsWriteFileMock }
+  default: { writeFile: fsWriteFileMock, mkdir: vi.fn() }
 }))
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE: 'denied',
-  resolveAuthorizedPath: vi.fn(),
-  authorizeExternalPath: vi.fn()
+  resolveAuthorizedPath: vi.fn()
 }))
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock

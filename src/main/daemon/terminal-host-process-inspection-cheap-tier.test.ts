@@ -7,7 +7,7 @@ const { execFileMock, runProcessMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn()
 }))
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import { resetCheapProcessTableSnapshotForTests } from '../../shared/cheap-process-table-snapshot-reader'
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'

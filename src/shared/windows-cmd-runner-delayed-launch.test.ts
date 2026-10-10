@@ -33,4 +33,11 @@ describe('buildWindowsCmdRunnerDelayedLaunchCommand', () => {
     expect(script).toContain("$runner = 'C:\\work (x86)\\se&tup.cmd'")
     expect(script).toContain('/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""')
   })
+
+  it('doubles typographic single quotes in the runner path literal', () => {
+    const script = decodePayload(
+      buildWindowsCmdRunnerDelayedLaunchCommand('C:\\O\u2019Brien\\setup.cmd')
+    )
+    expect(script).toContain("$runner = 'C:\\O\u2019\u2019Brien\\setup.cmd'")
+  })
 })

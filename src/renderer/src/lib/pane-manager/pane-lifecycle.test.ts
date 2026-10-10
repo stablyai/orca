@@ -44,10 +44,12 @@ function createPane(): ManagedPaneInternal {
     id: 1,
     leafId,
     stablePaneId: leafId,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stand-in for xterm's Terminal exposing only the members these lifecycle paths touch.
     terminal: {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      onRender: vi.fn(() => ({ dispose: vi.fn() })),
       cols: 80,
       rows: 24
     } as never,
@@ -71,6 +73,7 @@ function createPane(): ManagedPaneInternal {
     ligaturesAddon: null,
     webLinksAddon: {} as never,
     webglAddon: null,
+    imageAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
@@ -578,6 +581,7 @@ describe('openTerminal — addon and provider wiring', () => {
       ligaturesAddon: null,
       webLinksAddon,
       webglAddon: null,
+      imageAddon: null,
       compositionHandler: null,
       pendingSplitScrollState: null,
       debugLabel: null
@@ -601,7 +605,7 @@ describe('openTerminal — addon and provider wiring', () => {
     pane.terminalGpuAcceleration = 'auto'
     pane.gpuRenderingEnabled = true
 
-    openTerminal(pane, true)
+    openTerminal(pane, { ligatures: true })
     expect(pane.ligaturesAddon).not.toBeNull()
     expect(pane.webglAddon).not.toBeNull()
     const addons = vi.mocked(pane.terminal.loadAddon).mock.calls.map(([addon]) => addon)

@@ -4,7 +4,6 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
 import {
   getBrowserLinkRoutingDescription,
-  getTerminalLinkActionsDescription,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
 } from './browser-link-routing-copy'
@@ -59,6 +58,11 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
       'auto.components.settings.browser.search.terminalLinkActions.disable',
       'disable'
     ),
+    'link click behavior',
+    'open directly',
+    'modifier-click only',
+    'middle click',
+    'mouse 3',
     platform.isMac ? 'cmd' : 'ctrl'
   ]
 }
@@ -187,9 +191,12 @@ export function getBrowserPaneSearchEntries(
     {
       title: translate(
         'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
-        'Show link actions'
+        'Terminal URL clicks'
       ),
-      description: getTerminalLinkActionsDescription(platform),
+      description: translate(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.descriptionV2',
+        'Control clicks on detected URLs printed in terminal panes and chat transcripts.'
+      ),
       keywords: getTerminalLinkActionSearchKeywords(platform)
     },
     {

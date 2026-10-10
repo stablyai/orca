@@ -159,70 +159,92 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
 
   const firstAnnotation = annotations[0]
   const first = firstAnnotation.payload
-  const lines: string[] = [
-    `## Design Feedback: ${formatPageHeading(first)}`,
-    '',
-    `**URL:** ${first.page.sanitizedUrl}`,
-    `**Browser tab id:** ${firstAnnotation.browserPageId}`,
-    `**Viewport:** ${first.page.viewportWidth}x${first.page.viewportHeight}`,
-    ''
-  ]
-
+  const groups = new Map<string, { annotation: BrowserPageAnnotation; index: number }[]>()
   annotations.forEach((annotation, index) => {
-    const { payload } = annotation
-    const { target } = payload
-    const rect = target.rectViewport
-    const styleLines = formatStyles(target.computedStyles)
-
-    lines.push(`### ${index + 1}. ${annotationElementLabel(payload)}`)
-    lines.push(`**Intent:** ${annotation.intent}`)
-    lines.push(`**Selector:** ${inlineCode(target.selector)}`)
-    if (target.elementPath) {
-      lines.push(`**Location:** ${inlineCode(target.elementPath)}`)
-    }
-    if (target.sourceFile) {
-      lines.push(`**Source:** ${inlineText(target.sourceFile)}`)
-    }
-    if (target.reactComponents) {
-      lines.push(`**React:** ${inlineText(target.reactComponents)}`)
-    }
-    lines.push(
-      `**Bounds:** x=${Math.round(rect.x)}, y=${Math.round(rect.y)}, ${Math.round(rect.width)}x${Math.round(rect.height)}`
-    )
-    if (target.cssClasses) {
-      lines.push(`**Classes:** ${inlineCode(target.cssClasses)}`)
-    }
-    if (target.selectedText) {
-      lines.push(`**Selected text:** "${inlineText(target.selectedText)}"`)
-    } else if (target.textSnippet) {
-      lines.push(`**Text:** "${inlineText(target.textSnippet)}"`)
-    }
-    if (payload.nearbyText.length > 0) {
-      lines.push('**Nearby text:**')
-      for (const text of payload.nearbyText) {
-        lines.push(`- ${inlineText(text)}`)
-      }
-    }
-    if (target.nearbyElements?.length) {
-      lines.push('**Nearby elements:**')
-      for (const element of target.nearbyElements) {
-        lines.push(`- ${inlineText(element)}`)
-      }
-    }
-    if (styleLines.length > 0) {
-      lines.push('**Computed styles:**')
-      lines.push(...styleLines)
-    }
-    if (target.fullPath) {
-      lines.push(`**Full DOM path:** ${inlineCode(target.fullPath)}`)
-    }
-    if (target.htmlSnippet) {
-      lines.push('**HTML:**')
-      lines.push(...fence('html', target.htmlSnippet))
-    }
-    lines.push(`**Feedback:** ${inlineText(annotation.comment)}`)
-    lines.push('')
+    const url = annotation.payload.page.sanitizedUrl
+    const entries = groups.get(url) ?? []
+    entries.push({ annotation, index })
+    groups.set(url, entries)
   })
+  const mixedPages = groups.size > 1
+  const lines: string[] = mixedPages
+    ? ['## Design Feedback across pages', '']
+    : [
+        `## Design Feedback: ${formatPageHeading(first)}`,
+        '',
+        `**URL:** ${first.page.sanitizedUrl}`,
+        `**Browser tab id:** ${firstAnnotation.browserPageId}`,
+        `**Viewport:** ${first.page.viewportWidth}x${first.page.viewportHeight}`,
+        ''
+      ]
+
+  for (const [url, entries] of groups) {
+    if (mixedPages) {
+      lines.push(
+        `## Design Feedback: ${inlineText(formatPageHeading(entries[0].annotation.payload))}`
+      )
+      lines.push('', `**URL:** ${inlineCode(inlineText(url))}`, '')
+    }
+    entries.forEach(({ annotation, index }) => {
+      const { payload } = annotation
+      const { target } = payload
+      const rect = target.rectViewport
+      const styleLines = formatStyles(target.computedStyles)
+
+      lines.push(`### ${index + 1}. ${annotationElementLabel(payload)}`)
+      if (mixedPages) {
+        lines.push(`**Browser tab id:** ${inlineCode(inlineText(annotation.browserPageId))}`)
+        lines.push(`**Viewport:** ${payload.page.viewportWidth}x${payload.page.viewportHeight}`)
+      }
+      lines.push(`**Intent:** ${annotation.intent}`)
+      lines.push(`**Selector:** ${inlineCode(target.selector)}`)
+      if (target.elementPath) {
+        lines.push(`**Location:** ${inlineCode(target.elementPath)}`)
+      }
+      if (target.sourceFile) {
+        lines.push(`**Source:** ${inlineText(target.sourceFile)}`)
+      }
+      if (target.reactComponents) {
+        lines.push(`**React:** ${inlineText(target.reactComponents)}`)
+      }
+      lines.push(
+        `**Bounds:** x=${Math.round(rect.x)}, y=${Math.round(rect.y)}, ${Math.round(rect.width)}x${Math.round(rect.height)}`
+      )
+      if (target.cssClasses) {
+        lines.push(`**Classes:** ${inlineCode(target.cssClasses)}`)
+      }
+      if (target.selectedText) {
+        lines.push(`**Selected text:** "${inlineText(target.selectedText)}"`)
+      } else if (target.textSnippet) {
+        lines.push(`**Text:** "${inlineText(target.textSnippet)}"`)
+      }
+      if (payload.nearbyText.length > 0) {
+        lines.push('**Nearby text:**')
+        for (const text of payload.nearbyText) {
+          lines.push(`- ${inlineText(text)}`)
+        }
+      }
+      if (target.nearbyElements?.length) {
+        lines.push('**Nearby elements:**')
+        for (const element of target.nearbyElements) {
+          lines.push(`- ${inlineText(element)}`)
+        }
+      }
+      if (styleLines.length > 0) {
+        lines.push('**Computed styles:**')
+        lines.push(...styleLines)
+      }
+      if (target.fullPath) {
+        lines.push(`**Full DOM path:** ${inlineCode(target.fullPath)}`)
+      }
+      if (target.htmlSnippet) {
+        lines.push('**HTML:**')
+        lines.push(...fence('html', target.htmlSnippet))
+      }
+      lines.push(`**Feedback:** ${inlineText(annotation.comment)}`)
+      lines.push('')
+    })
+  }
 
   return lines.join('\n').trimEnd()
 }

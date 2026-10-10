@@ -1,6 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
+import { z } from 'zod'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
@@ -8,8 +10,6 @@ import { waitForTerminalPtyDataInjector } from './helpers/terminal-pty-injection
 
 // Repro commands:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "active OpenTUI-style"
-//   git clone https://github.com/anomalyco/opencode.git .tmp/opencode
-//   node tests/e2e/capture-opencode-tui-repro.mjs
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "captured OpenCode/OpenTUI" --reporter=json
 // The captured replay uses an artificial OpenCode source-tree harness that
 // imports OpenCode's spinner frames and emits real OpenTUI <=2KB redraw chunks.
@@ -61,7 +61,17 @@ const TIMER_SAMPLE_MS = 16
 const MAX_RENDERER_TIMER_DRIFT_MS = 500
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
 const OPENCODE_CAPTURE_REPLAY_CHARS = FOREGROUND_IMMEDIATE_BUDGET_CHARS * 64
-const OPENCODE_CAPTURE_PATH = path.join(process.cwd(), '.tmp', 'opencode-tui-capture.txt')
+const OPENCODE_CAPTURE_PATH = path.join(
+  process.cwd(),
+  'tests',
+  'e2e',
+  'fixtures',
+  'opencode-small-redraw-capture.json'
+)
+const openCodeCaptureSchema = z.object({
+  capture: z.string().min(1),
+  provenance: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/i) })
+})
 
 async function resetSchedulerDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -297,10 +307,9 @@ async function disposeActivePaneRefreshProbe(page: Page): Promise<void> {
 }
 
 function loadCapturedOpenCodeSmallRedrawFrames(): string[] {
-  if (!existsSync(OPENCODE_CAPTURE_PATH)) {
-    return []
-  }
-  const capture = readFileSync(OPENCODE_CAPTURE_PATH, 'utf8')
+  const rawCapture: unknown = JSON.parse(readFileSync(OPENCODE_CAPTURE_PATH, 'utf8'))
+  const { capture, provenance } = openCodeCaptureSchema.parse(rawCapture)
+  expect(createHash('sha256').update(capture, 'utf8').digest('hex')).toBe(provenance.sha256)
   const smallFrames = capture
     .split('\x1b[?2026h')
     .slice(1)
@@ -424,10 +433,10 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     orcaPage
   }, testInfo) => {
     const frames = loadCapturedOpenCodeSmallRedrawFrames()
-    test.skip(
-      frames.length === 0,
-      `OpenCode PTY capture missing; run "git clone https://github.com/anomalyco/opencode.git .tmp/opencode" then "node tests/e2e/capture-opencode-tui-repro.mjs" to generate ${OPENCODE_CAPTURE_PATH}`
-    )
+    expect(
+      frames.length,
+      'committed OpenCode capture must contain small redraw frames'
+    ).toBeGreaterThan(0)
 
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)

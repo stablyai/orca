@@ -25,10 +25,6 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       )
       return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
-    remove: async ({ repoId }) => {
-      await callRuntimeResult('repo.rm', { repo: repoId })
-      invalidateRuntimeWorktreeCaches()
-    },
     // Why: host-scoped forget targets a desktop-owned SSH host; a paired web client has one runtime and no ghost-host state.
     removeForHost: () => {
       throw new Error('Forgetting a host is unavailable in paired web clients.')

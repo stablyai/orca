@@ -15,7 +15,7 @@ import {
   type WorkspaceCreateTaskItem
 } from './workspace-create-params'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
-import type { WorktreeCreateAgentLaunch } from './agent-launch-worktree-create'
+import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 
 // The agent bundle the modal resolved: `choice` drives launch resolution — the
@@ -35,7 +35,7 @@ export type CreateWorkspaceFromComposerArgs = {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   /** Whether the host can settle the surface itself; false keeps the agent-first create. */
-  agentLaunchSupported: boolean | Promise<boolean>
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -52,7 +52,7 @@ export async function createWorkspaceFromComposerSource(
 
 function resolveComposerAgentLaunch(
   agentId: TuiAgent | undefined,
-  supported: boolean | Promise<boolean>
+  supported: WorktreeCreateAgentLaunch['supported']
 ): WorktreeCreateAgentLaunch | undefined {
   return agentId ? { agent: agentId, supported } : undefined
 }
@@ -168,7 +168,7 @@ async function createBranchWorkspace(args: {
   nameIsAutoManaged?: boolean
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  agentLaunchSupported: boolean | Promise<boolean>
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -259,7 +259,7 @@ async function createNewBranchWorkspace(args: {
   nameIsAutoManaged?: boolean
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  agentLaunchSupported: boolean | Promise<boolean>
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }): Promise<WorktreeCreateResult> {
   const {
     client,

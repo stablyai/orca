@@ -311,7 +311,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
       acquireFileWatcherRemoval: vi.fn().mockResolvedValue({
         finish: vi.fn().mockResolvedValue(undefined)
-      })
+      }),
+      publishWorktreeRemovalChange: vi.fn((repoId: string) =>
+        mainWindow.webContents.send('worktrees:changed', { repoId })
+      )
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })

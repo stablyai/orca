@@ -1,123 +1,88 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as FsPromises from 'node:fs/promises'
-import type * as WslTranscriptFsAccess from '../native-chat/wsl-transcript-fs-access'
+import { mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  aggregateClaudeUsageMock,
-  attributeClaudeUsageTurnsMock,
-  buildWorktreeLookupMock,
-  finalizeClaudeSessionsMock,
-  listClaudeTranscriptFilesMock,
-  mergeClaudeDailyAggregatesMock,
-  mergeClaudeSessionsMock,
-  readClaudeUsageScanFileMock,
-  statMock,
-  wslGatedStatMock
-} = vi.hoisted(() => ({
-  aggregateClaudeUsageMock: vi.fn(),
-  attributeClaudeUsageTurnsMock: vi.fn(),
-  buildWorktreeLookupMock: vi.fn(),
-  finalizeClaudeSessionsMock: vi.fn(),
-  listClaudeTranscriptFilesMock: vi.fn(),
-  mergeClaudeDailyAggregatesMock: vi.fn(),
-  mergeClaudeSessionsMock: vi.fn(),
-  readClaudeUsageScanFileMock: vi.fn(),
-  statMock: vi.fn(),
-  wslGatedStatMock: vi.fn()
+const access = vi.hoisted(() => ({
+  path: '',
+  open: vi.fn(),
+  read: vi.fn(),
+  close: vi.fn(),
+  stat: vi.fn(),
+  handleStat: vi.fn()
 }))
-
+vi.mock('../native-chat/wsl-transcript-fs-access', () => ({
+  WSL_TRANSCRIPT_READ_CHUNK_BYTES: 1024 * 1024,
+  openTranscriptFile: access.open,
+  readTranscriptFile: access.read,
+  closeTranscriptHandle: access.close
+}))
+vi.mock('../native-chat/wsl-transcript-fs-snapshot', () => ({
+  wslGatedBigIntStat: access.stat,
+  wslGatedHandleStat: access.handleStat
+}))
 vi.mock('./transcript-file-discovery', () => ({
-  listClaudeTranscriptFiles: listClaudeTranscriptFilesMock
-}))
-
-vi.mock('./transcript-record-parser', () => ({
-  readClaudeUsageScanFile: readClaudeUsageScanFileMock,
-  stripClaudeSourceMetadata: (turn: unknown) => turn
-}))
-
-vi.mock('./worktree-attribution', () => ({
-  attributeClaudeUsageTurns: attributeClaudeUsageTurnsMock,
-  buildWorktreeLookup: buildWorktreeLookupMock
-}))
-
-vi.mock('./usage-aggregation', () => ({
-  aggregateClaudeUsage: aggregateClaudeUsageMock,
-  finalizeClaudeSessions: finalizeClaudeSessionsMock,
-  mergeClaudeDailyAggregates: mergeClaudeDailyAggregatesMock,
-  mergeClaudeSessions: mergeClaudeSessionsMock
-}))
-
-vi.mock('fs/promises', async () => ({
-  ...(await vi.importActual<typeof FsPromises>('fs/promises')),
-  stat: statMock
-}))
-
-vi.mock('../native-chat/wsl-transcript-fs-access', async () => ({
-  ...(await vi.importActual<typeof WslTranscriptFsAccess>(
-    '../native-chat/wsl-transcript-fs-access'
-  )),
-  wslGatedStat: wslGatedStatMock
+  listClaudeTranscriptFiles: async () => [access.path]
 }))
 
 const WSL_FILE = String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude\projects\repo\session.jsonl`
-const WSL_CONFIG = String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude-alt`
 
-const WSL_MISSING_FILE = WSL_FILE.replace('session.jsonl', 'missing.jsonl')
-
-describe('scanClaudeUsageFiles WSL paths', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    listClaudeTranscriptFilesMock.mockReset().mockResolvedValue([WSL_FILE])
-    readClaudeUsageScanFileMock.mockReset().mockResolvedValue({
-      processedFile: { path: WSL_FILE, mtimeMs: 123, size: 10, lineCount: 1 },
-      turns: []
-    })
-    statMock.mockReset().mockRejectedValue(new Error('native stat must not read WSL paths'))
-    wslGatedStatMock.mockReset().mockResolvedValue({ mtimeMs: 123, size: 10 })
-    buildWorktreeLookupMock.mockReset().mockResolvedValue(new Map())
-    attributeClaudeUsageTurnsMock.mockReset().mockResolvedValue([])
-    aggregateClaudeUsageMock.mockReset().mockReturnValue({ sessions: [], dailyAggregates: [] })
-    finalizeClaudeSessionsMock.mockReset().mockReturnValue([])
-    mergeClaudeDailyAggregatesMock.mockReset()
-    mergeClaudeSessionsMock.mockReset()
+describe('WSL usage with snapshot checkpoints', () => {
+  let root: string
+  let source: string
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-wsl-usage-'))
+    source = join(root, 'session.jsonl')
+    access.path = WSL_FILE
+    access.open.mockImplementation(() => open(source, 'r'))
+    access.read.mockImplementation((handle, _path, buffer, offset, length, position) =>
+      handle.read(buffer, offset, length, position)
+    )
+    access.close.mockImplementation((handle) => handle.close())
+    access.stat.mockImplementation(() => stat(source, { bigint: true }))
+    access.handleStat.mockImplementation((handle) => handle.stat({ bigint: true }))
   })
-
-  it('uses the gated stat before deciding whether a WSL transcript can be reused', async () => {
-    const { scanClaudeUsageFiles } = await import('./scanner')
-
-    await expect(scanClaudeUsageFiles([])).resolves.toMatchObject({
-      processedFiles: [{ path: WSL_FILE, mtimeMs: 123, size: 10 }]
-    })
-
-    expect(wslGatedStatMock).toHaveBeenCalledWith(WSL_FILE, 'scan')
-    expect(statMock).not.toHaveBeenCalled()
+  afterEach(async () => {
+    vi.clearAllMocks()
+    await rm(root, { recursive: true, force: true })
   })
+  const row = (id: string) =>
+    `${JSON.stringify({
+      type: 'assistant',
+      sessionId: 'session',
+      timestamp: '2026-10-10T12:00:00Z',
+      message: { id, model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 2 } },
+      padding: 'x'.repeat(14000)
+    })}\n`
 
-  it('continues scanning when one discovered WSL transcript cannot be statted', async () => {
-    listClaudeTranscriptFilesMock.mockResolvedValue([WSL_MISSING_FILE, WSL_FILE])
-    wslGatedStatMock.mockImplementation(async (filePath) => {
-      if (filePath === WSL_MISSING_FILE) {
-        throw new Error('WSL transcript disappeared')
-      }
-      return { mtimeMs: 123, size: 10 }
+  it('reads a pinned WSL handle and resumes only the appended suffix', async () => {
+    const { readClaudeUsageScanFile } = await import('./transcript-record-parser')
+    await writeFile(source, row('first'))
+    const first = await readClaudeUsageScanFile(WSL_FILE)
+    expect(first.turns).toHaveLength(1)
+    expect(first.checkpoint?.physicalFileId).toBeTruthy()
+    expect(access.open).toHaveBeenCalledWith(WSL_FILE, 'scan')
+    expect(access.handleStat).toHaveBeenCalled()
+    expect(access.close).toHaveBeenCalledTimes(1)
+    if (!first.checkpoint) {
+      throw new Error('Expected a resumable checkpoint')
+    }
+    await writeFile(source, (await readFile(source, 'utf8')) + row('second'))
+    const second = await readClaudeUsageScanFile(WSL_FILE, {
+      ...first.checkpoint,
+      lineCount: first.committedLineCount,
+      ownedTokenMaxima: [],
+      projections: [],
+      encounterOrder: []
     })
-    const { scanClaudeUsageFiles } = await import('./scanner')
-
-    await expect(scanClaudeUsageFiles([])).resolves.toMatchObject({
-      processedFiles: [{ path: WSL_FILE, mtimeMs: 123, size: 10 }]
-    })
-    expect(readClaudeUsageScanFileMock).toHaveBeenCalledWith(WSL_FILE)
-    expect(readClaudeUsageScanFileMock).not.toHaveBeenCalledWith(WSL_MISSING_FILE)
+    expect(second.resumed).toBe(true)
+    expect(second.turns).toHaveLength(1)
+    expect(second.turns[0].dedupeKey).toBe('msg:second')
+    expect(access.close).toHaveBeenCalledTimes(2)
   })
-
-  it('passes the selected config directory to transcript discovery', async () => {
+  it('does not turn an unavailable WSL snapshot into empty usage', async () => {
     const { scanClaudeUsageFiles } = await import('./scanner')
-    const progress = vi.fn()
-
-    await scanClaudeUsageFiles([], [], { configDir: WSL_CONFIG }, progress)
-
-    expect(listClaudeTranscriptFilesMock).toHaveBeenCalledWith({ configDir: WSL_CONFIG })
-    expect(progress).toHaveBeenNthCalledWith(1, 1)
-    expect(progress).toHaveBeenNthCalledWith(2, 1)
+    access.stat.mockRejectedValueOnce(new Error('WSL temporarily unavailable'))
+    await expect(scanClaudeUsageFiles([])).rejects.toThrow('WSL temporarily unavailable')
   })
 })

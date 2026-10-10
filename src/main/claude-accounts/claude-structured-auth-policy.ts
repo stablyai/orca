@@ -1,11 +1,13 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { shouldStripClaudeAuthEnvForAccount } from './environment'
+import { getClaudeProfileRouter } from './claude-profile-installed-router'
+import { isHostManagedClaudeAccount } from './environment'
 import { getSelectedClaudeAccountIdForTarget } from './runtime-selection'
 
-/** The structured mirror of the terminal preflight's `prepareClaudeAuth` result:
- *  the one field a launch resolution needs from the managed-account state. */
+/** What a structured launch needs from the managed-account state: which login a failed
+ *  sign-in names. A chat keeps the shell's Anthropic auth on every account, as terminals do. */
 export type ClaudeStructuredAuthPolicy = {
-  stripAuthEnv: boolean
+  account: AgentSessionAccountKind
 }
 
 /**
@@ -28,10 +30,13 @@ export function claudeStructuredAuthPolicyForSettings(
     | 'activeClaudeManagedAccountIdsByRuntime'
   >
 ): ClaudeStructuredAuthPolicy {
-  return {
-    stripAuthEnv: shouldStripClaudeAuthEnvForAccount(
-      settings.claudeManagedAccounts,
-      getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
-    )
-  }
+  // Why the router first: it decides whether the account or System default runs, as for terminals.
+  const router = getClaudeProfileRouter()
+  const managed = router
+    ? router.routesToAccount()
+    : isHostManagedClaudeAccount(
+        settings.claudeManagedAccounts,
+        getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
+      )
+  return { account: managed ? 'managed' : 'system' }
 }

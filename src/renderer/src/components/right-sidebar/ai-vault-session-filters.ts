@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
-import { translate } from '@/i18n/i18n'
-import type { AiVaultSession, AiVaultGroup } from '../../../../shared/ai-vault-types'
+import type { AiVaultGroup, AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   filterAiVaultSessions,
   groupAiVaultSessions,
@@ -25,6 +24,13 @@ export {
   isAiVaultSessionFilterQueryTooLarge,
   parseVaultQuery
 } from '../../../../shared/ai-vault-session-filters'
+
+/** What the list renders: a null label is a group of rows with no header of its own. */
+export type AiVaultSessionListGroup = {
+  key: string
+  label: string | null
+  sessions: AiVaultSession[]
+}
 
 export function useAiVaultPanelSessions(
   sessions: readonly AiVaultSession[],
@@ -71,18 +77,13 @@ export function useAiVaultPanelSessions(
       hideEmptySessions
     ]
   )
-  const groups = useMemo(
+  const groups = useMemo<AiVaultSessionListGroup[]>(
     () =>
       searching
         ? filteredSessions.length === 0
           ? []
-          : [
-              {
-                key: 'search-results',
-                label: translate('sessionSearch.panel.rankedResults', 'Best matches'),
-                sessions: [...filteredSessions]
-              }
-            ]
+          : // The results bar above the list carries the count, so this group only holds rows.
+            [{ key: 'search-results', label: null, sessions: [...filteredSessions] }]
         : groupAiVaultSessions(filteredSessions, group, { sessionProjectById, projectLabelByKey }),
     [searching, filteredSessions, group, projectLabelByKey, sessionProjectById]
   )

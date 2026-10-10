@@ -333,12 +333,17 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
 
     setSession(getDefaultWorkspaceSession())
-    runtimeStore.persistPtyBinding.mockReturnValue(false)
+    runtimeStore.persistPtyBinding.mockResolvedValue(false)
     resolveSpawn({ id: 'rejected-split-pty' })
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(spawn.mock.calls[0]?.[0]).toMatchObject({
       persistHostSessionBinding: true,
+      placement: {
+        kind: 'split',
+        parentLeafId: HEADLESS_LEAF_ID,
+        direction: 'vertical'
+      },
       expectedSourceBinding: {
         worktreeId: TEST_WORKTREE_ID,
         tabId,

@@ -2,8 +2,12 @@ import {
   createNativeChatFileHref,
   routeNativeChatHref
 } from '../../../../shared/native-chat-href-routing'
-import { parseFileLinkLocation } from '../../../../shared/file-link-location'
+import {
+  formatFileLinkLocation,
+  parseFileLinkLocation
+} from '../../../../shared/file-link-location'
 import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
+import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 
 type MarkdownNode = {
   type: string
@@ -14,17 +18,37 @@ type MarkdownNode = {
 
 const ROOTED_PATH_PREFIX_PATTERN = /^(?:~[\\/]|\.{1,2}[\\/]|[\\/]|[A-Za-z]:[\\/])/
 
-function isLinkifiableFile(link: ParsedTerminalFileLink, requireSeparator: boolean): boolean {
+/** Whether a detected path names a file on the chat's host; the terminal's own check. */
+export type FileLinkExists = (link: ParsedTerminalFileLink) => boolean
+
+// Why: a link is underlined only when it names a path; a bare `name.md` resolves nowhere
+// reliable, so underlining it promises a click that cannot open anything.
+function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
   const hasRootedPrefix = ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)
   const hasLineSuffix = link.line !== null || link.column !== null
   const hasAlphabeticExtension = /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   const hasPathExtension = /\.[\p{L}\p{N}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   return (
-    (!requireSeparator || /[\\/]/.test(link.pathText)) &&
-    (hasRootedPrefix ||
-      hasLineSuffix ||
-      (requireSeparator ? hasPathExtension : hasAlphabeticExtension)) &&
+    /[\\/]/.test(link.pathText) &&
+    (hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)) &&
     routeNativeChatHref(link.displayText).kind === 'file'
+  )
+}
+
+// Why: path-shaped candidates are underlined only once the host confirms them; overlapping
+// candidates (a rooted spaced span vs. its tokens) resolve to the longest that exists.
+function selectExistingLinks(
+  candidates: ParsedTerminalFileLink[],
+  exists: FileLinkExists
+): ParsedTerminalFileLink[] {
+  return preferLongestNonOverlappingMatches(
+    candidates.filter((link) => exists(link)),
+    {
+      length: (link) => link.endIndex - link.startIndex,
+      overlaps: (left, right) =>
+        left.startIndex < right.endIndex && right.startIndex < left.endIndex,
+      compareStart: (left, right) => left.startIndex - right.startIndex
+    }
   )
 }
 
@@ -72,43 +96,69 @@ function hasPartialPathBoundary(value: string, link: ParsedTerminalFileLink): bo
   )
 }
 
-function createFileLinkNode(value: string, child: MarkdownNode): MarkdownNode {
+// Why: wrap the parsed location, not the display text; a `file://` URI must not reach the literal href.
+function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): MarkdownNode {
   return {
     type: 'link',
-    url: createNativeChatFileHref(value),
+    url: createNativeChatFileHref(formatFileLinkLocation(link)),
     children: [child]
   }
+}
+
+function isTrailingPunctuation(token: string, endIndex: number): boolean {
+  return isSafeTrailingBoundary(token, endIndex) && /^\p{P}+$/u.test(token.slice(endIndex))
+}
+
+/** `endsSentence`: a token may end in sentence punctuation, which stays outside the link. */
+function linkableTokens(
+  link: ParsedTerminalFileLink,
+  endsSentence: boolean
+): ParsedTerminalFileLink[] {
+  const tokenLinks: ParsedTerminalFileLink[] = []
+  for (const match of link.displayText.matchAll(/\S+/g)) {
+    const token = match[0]
+    const exactLink = extractTerminalFileLinks(token).find(
+      (candidate) =>
+        candidate.startIndex === 0 &&
+        (candidate.endIndex === token.length ||
+          (endsSentence && isTrailingPunctuation(token, candidate.endIndex)))
+    )
+    if (exactLink && isLinkifiableFile(exactLink, true)) {
+      const startIndex = link.startIndex + (match.index ?? 0)
+      tokenLinks.push({ ...exactLink, startIndex, endIndex: startIndex + exactLink.endIndex })
+    }
+  }
+  return tokenLinks
 }
 
 // Why: the terminal extractor spans "src/a.ts and src/b.ts" as one spaced path.
 // An unrooted span holding a bare word or several linkable tokens is prose
 // joining paths, so link the tokens on their own; a spaced folder name keeps
-// every token path-shaped and stays one link.
+// every token path-shaped and stays one link. A rooted span also offers its
+// tokens: a real spaced path still wins as the longest that exists.
 function splitProseJoinedLinks(link: ParsedTerminalFileLink): ParsedTerminalFileLink[] {
-  if (ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)) {
+  if (!/\s/.test(link.displayText)) {
     return [link]
   }
-  const tokens = Array.from(link.displayText.matchAll(/\S+/g))
-  const tokenLinks: ParsedTerminalFileLink[] = []
-  for (const match of tokens) {
-    const token = match[0]
-    const exactLink = extractTerminalFileLinks(token).find(
-      (candidate) => candidate.startIndex === 0 && candidate.endIndex === token.length
-    )
-    if (exactLink && isLinkifiableFile(exactLink, true)) {
-      const startIndex = link.startIndex + (match.index ?? 0)
-      tokenLinks.push({ ...exactLink, startIndex, endIndex: startIndex + token.length })
-    }
+  if (ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)) {
+    return [link, ...linkableTokens(link, true)]
   }
-  const hasBareWord = tokens.some((match) => !/[\\/.]/.test(match[0]))
+  // Why: main never split sentence punctuation off an unrooted span's tokens; doing so would add links.
+  const tokenLinks = linkableTokens(link, false)
+  const hasBareWord = Array.from(link.displayText.matchAll(/\S+/g)).some(
+    (match) => !/[\\/.]/.test(match[0])
+  )
   return hasBareWord || tokenLinks.length > 1 ? tokenLinks : [link]
 }
 
-function splitTextSegment(value: string): MarkdownNode[] {
-  const links = extractTerminalFileLinks(value)
-    .filter((link) => !hasPartialPathBoundary(value, link))
-    .filter((link) => isLinkifiableFile(link, true))
-    .flatMap(splitProseJoinedLinks)
+function splitTextSegment(value: string, exists: FileLinkExists): MarkdownNode[] {
+  const links = selectExistingLinks(
+    extractTerminalFileLinks(value)
+      .filter((link) => !hasPartialPathBoundary(value, link))
+      .filter((link) => isLinkifiableFile(link, true))
+      .flatMap(splitProseJoinedLinks),
+    exists
+  )
   if (links.length === 0) {
     return [{ type: 'text', value }]
   }
@@ -116,13 +166,10 @@ function splitTextSegment(value: string): MarkdownNode[] {
   const children: MarkdownNode[] = []
   let cursor = 0
   for (const link of links) {
-    if (link.startIndex < cursor) {
-      continue
-    }
     if (link.startIndex > cursor) {
       children.push({ type: 'text', value: value.slice(cursor, link.startIndex) })
     }
-    children.push(createFileLinkNode(link.displayText, { type: 'text', value: link.displayText }))
+    children.push(createFileLinkNode(link, { type: 'text', value: link.displayText }))
     cursor = link.endIndex
   }
   if (cursor < value.length) {
@@ -131,7 +178,7 @@ function splitTextSegment(value: string): MarkdownNode[] {
   return children
 }
 
-function splitUnquotedText(value: string): MarkdownNode[] {
+function splitUnquotedText(value: string, exists: FileLinkExists): MarkdownNode[] {
   const children: MarkdownNode[] = []
   let cursor = 0
   for (const match of value.matchAll(SENTENCE_PATH_PUNCTUATION_PATTERN)) {
@@ -139,25 +186,25 @@ function splitUnquotedText(value: string): MarkdownNode[] {
     if (!isSafeTrailingBoundary(value, punctuationIndex)) {
       continue
     }
-    children.push(...splitTextSegment(value.slice(cursor, punctuationIndex)))
+    children.push(...splitTextSegment(value.slice(cursor, punctuationIndex), exists))
     children.push({ type: 'text', value: value[punctuationIndex] })
     cursor = punctuationIndex + 1
   }
   if (cursor === 0) {
-    return splitTextSegment(value)
+    return splitTextSegment(value, exists)
   }
-  children.push(...splitTextSegment(value.slice(cursor)))
+  children.push(...splitTextSegment(value.slice(cursor), exists))
   return children
 }
 
-function exactFileLink(value: string, allowSpacedRelative: boolean): ParsedTerminalFileLink | null {
+function exactFileLink(value: string, exists: FileLinkExists): ParsedTerminalFileLink | null {
   const exactLink = extractTerminalFileLinks(value).find(
     (link) => link.startIndex === 0 && link.endIndex === value.length
   )
   if (exactLink && isLinkifiableFile(exactLink, false)) {
-    return exactLink
+    return exists(exactLink) ? exactLink : null
   }
-  if (!allowSpacedRelative || !/\s/.test(value)) {
+  if (!/\s/.test(value)) {
     return null
   }
   const parsed = parseFileLinkLocation(value)
@@ -177,44 +224,48 @@ function exactFileLink(value: string, allowSpacedRelative: boolean): ParsedTermi
     endIndex: value.length,
     displayText: value
   }
-  return isLinkifiableFile(explicitLink, false) ? explicitLink : null
+  return isLinkifiableFile(explicitLink, false) && exists(explicitLink) ? explicitLink : null
 }
 
-function splitTextNode(value: string): MarkdownNode[] {
+function splitTextNode(value: string, exists: FileLinkExists): MarkdownNode[] {
   const children: MarkdownNode[] = []
   let cursor = 0
   for (const match of value.matchAll(QUOTED_TEXT_PATTERN)) {
     const content = match[1] ?? match[2]
-    if (!content || !exactFileLink(content, true)) {
+    const link = content ? exactFileLink(content, exists) : null
+    if (!content || !link) {
       continue
     }
     const matchIndex = match.index ?? 0
     const quote = match[0][0]
-    children.push(...splitUnquotedText(value.slice(cursor, matchIndex)))
+    children.push(...splitUnquotedText(value.slice(cursor, matchIndex), exists))
     children.push({ type: 'text', value: quote })
-    children.push(createFileLinkNode(content, { type: 'text', value: content }))
+    children.push(createFileLinkNode(link, { type: 'text', value: content }))
     children.push({ type: 'text', value: quote })
     cursor = matchIndex + match[0].length
   }
   if (cursor === 0) {
-    return splitUnquotedText(value)
+    return splitUnquotedText(value, exists)
   }
-  children.push(...splitUnquotedText(value.slice(cursor)))
+  children.push(...splitUnquotedText(value.slice(cursor), exists))
   return children
 }
 
-function inlineCodeFileLink(node: MarkdownNode): MarkdownNode | null {
+function inlineCodeFileLink(node: MarkdownNode, exists: FileLinkExists): MarkdownNode | null {
   const value = node.value?.trim()
   if (!value) {
     return null
   }
-  return exactFileLink(value, true) ? createFileLinkNode(value, node) : null
+  const link = exactFileLink(value, exists)
+  return link ? createFileLinkNode(link, node) : null
 }
 
-function transformFileLinks(node: MarkdownNode): void {
+function transformFileLinks(node: MarkdownNode, exists: FileLinkExists): void {
   if (node.type === 'link') {
-    if (node.url && routeNativeChatHref(node.url).kind === 'file') {
-      node.url = createNativeChatFileHref(node.url)
+    const route = routeNativeChatHref(node.url)
+    if (route.kind === 'file') {
+      // Why: the wrapped href carries literal location text, so URL syntax is resolved here, once.
+      node.url = createNativeChatFileHref(formatFileLinkLocation(route))
     }
     return
   }
@@ -225,19 +276,22 @@ function transformFileLinks(node: MarkdownNode): void {
   const children: MarkdownNode[] = []
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
-      children.push(...splitTextNode(child.value))
+      children.push(...splitTextNode(child.value, exists))
       continue
     }
     if (child.type === 'inlineCode') {
-      children.push(inlineCodeFileLink(child) ?? child)
+      children.push(inlineCodeFileLink(child, exists) ?? child)
       continue
     }
-    transformFileLinks(child)
+    transformFileLinks(child, exists)
     children.push(child)
   }
   node.children = children
 }
 
-export function remarkNativeChatFileLinks(): (tree: MarkdownNode) => void {
-  return (tree) => transformFileLinks(tree)
+/** Explicit markdown links stay links; detected paths link only once `exists` confirms them. */
+export function remarkNativeChatFileLinks(
+  exists: FileLinkExists
+): () => (tree: MarkdownNode) => void {
+  return () => (tree) => transformFileLinks(tree, exists)
 }

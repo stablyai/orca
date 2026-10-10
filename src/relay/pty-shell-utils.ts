@@ -1,4 +1,4 @@
-import { execFile as execFileCb, execFileSync } from 'node:child_process'
+import { execFile as execFileCb } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
@@ -21,31 +21,9 @@ import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground
 } from '../main/providers/windows-agent-foreground-process'
+import { readOpenSshDefaultShell } from '../shared/openssh-default-shell'
 
 const execFile = promisify(execFileCb)
-
-const OPENSSH_REGISTRY_KEY = 'HKLM\\SOFTWARE\\OpenSSH'
-let openSshDefaultShell: string | undefined
-
-export function readOpenSshDefaultShell(): string {
-  if (openSshDefaultShell !== undefined) {
-    return openSshDefaultShell
-  }
-
-  try {
-    const output = execFileSync('reg.exe', ['query', OPENSSH_REGISTRY_KEY, '/v', 'DefaultShell'], {
-      encoding: 'utf8',
-      timeout: 3000,
-      windowsHide: true
-    })
-    const match = output.match(/^\s*DefaultShell\s+REG_\w+\s+(.+?)\s*$/im)
-    openSshDefaultShell = match?.[1] ?? ''
-  } catch {
-    openSshDefaultShell = ''
-  }
-
-  return openSshDefaultShell
-}
 
 export function resolveWindowsDefaultShell(
   env: NodeJS.ProcessEnv = process.env,
@@ -184,9 +162,15 @@ function collectDescendants(
   rootPid: number
 ): (ProcessTableRow & { depth: number })[] {
   const descendants: (ProcessTableRow & { depth: number })[] = []
+  const seen = new Set<number>([rootPid])
   const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
+    // Process snapshots can contain duplicate PIDs or cycles during reparenting.
+    if (seen.has(row.pid)) {
+      continue
+    }
+    seen.add(row.pid)
     descendants.push({ ...row, depth })
     for (const child of index.childrenByPpid.get(row.pid) ?? []) {
       stack.push({ row: child, depth: depth + 1 })

@@ -31,19 +31,10 @@ export function useAiVaultExecutionHostScope(args: {
     () => getAiVaultResumeWorkspaceExecutionHostId(args.resumeTargetState, args.activeWorktreeId),
     [args.activeWorktreeId, args.resumeTargetState]
   )
-  const activeExecutionHost = parseExecutionHostId(activeExecutionHostId)
-  const activeExecutionHostScope: ExecutionHostId | null =
-    activeExecutionHost?.kind === 'ssh' || activeExecutionHost?.kind === 'runtime'
-      ? activeExecutionHost.id
-      : null
-  // Why: a named workspace whose host the client store cannot place is `unverifiable`, not local.
-  // Defaulting it to local scanned the desktop's own history and reported "No agent sessions found"
-  // for a user whose sessions all live on an SSH host (#13713). Widen to every host instead of
-  // asserting one. A local workspace still resolves to `local` and is unaffected.
-  const workspaceHostUnresolved = args.activeWorktreeId !== null && activeExecutionHostId === null
-  const defaultExecutionHostScope: ExecutionHostScope =
-    activeExecutionHostScope ??
-    (workspaceHostUnresolved ? ALL_EXECUTION_HOSTS_SCOPE : LOCAL_EXECUTION_HOST_ID)
+  const { activeExecutionHostScope, defaultExecutionHostScope } = resolveAiVaultHostScopeDefaults(
+    activeExecutionHostId,
+    args.activeWorktreeId
+  )
   const [executionHostScope, setExecutionHostScope] =
     useState<ExecutionHostScope>(defaultExecutionHostScope)
 
@@ -84,6 +75,31 @@ export function useAiVaultExecutionHostScope(args: {
     executionHostScope,
     activeExecutionHostScope,
     onExecutionHostScopeChange: handleExecutionHostScopeChange
+  }
+}
+
+export function resolveAiVaultHostScopeDefaults(
+  activeExecutionHostId: ExecutionHostId | null,
+  activeWorktreeId: string | null
+): {
+  activeExecutionHostScope: ExecutionHostId | null
+  defaultExecutionHostScope: ExecutionHostScope
+} {
+  const activeExecutionHost = parseExecutionHostId(activeExecutionHostId)
+  const activeExecutionHostScope: ExecutionHostId | null =
+    activeExecutionHost?.kind === 'ssh' || activeExecutionHost?.kind === 'runtime'
+      ? activeExecutionHost.id
+      : null
+  // Why: a named workspace whose host the client store cannot place is `unverifiable`, not local.
+  // Defaulting it to local scanned the desktop's own history and reported "No agent sessions found"
+  // for a user whose sessions all live on an SSH host (#13713). Widen to every host instead of
+  // asserting one. A local workspace still resolves to `local` and is unaffected.
+  const workspaceHostUnresolved = activeWorktreeId !== null && activeExecutionHostId === null
+  return {
+    activeExecutionHostScope,
+    defaultExecutionHostScope:
+      activeExecutionHostScope ??
+      (workspaceHostUnresolved ? ALL_EXECUTION_HOSTS_SCOPE : LOCAL_EXECUTION_HOST_ID)
   }
 }
 

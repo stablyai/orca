@@ -1,10 +1,21 @@
 import { basename } from 'node:path'
-import { stat } from 'node:fs/promises'
+import { readJsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
 import { createReadStream } from 'node:fs'
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
-import type { ClaudeUsageParsedTurn, ClaudeUsageProcessedFile } from './types'
+import type {
+  ClaudeUsageParseResumeState,
+  ClaudeUsageParsedTurn,
+  ClaudeUsageProcessedFile
+} from './types'
+import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
+import {
+  buildJsonlFileCheckpoint,
+  jsonlPhysicalFileId,
+  openJsonlFileReader,
+  resolveJsonlFileCheckpoint,
+  validateJsonlFileReader,
+  type JsonlFileCheckpoint
+} from '../usage/jsonl-file-checkpoint'
 
 type ClaudeUsageSourceRecord = {
   type?: string
@@ -77,7 +88,7 @@ function dedupeClaudeUsageTurns(
       }
     }
 
-    deduped.push({ ...turn })
+    deduped.push(turn)
     if (turn.dedupeKey) {
       dedupeIndexByKey.set(turn.dedupeKey, deduped.length - 1)
     }
@@ -174,19 +185,6 @@ function buildClaudeUsageDedupeKey(parsed: ClaudeUsageSourceRecord): string | nu
   return null
 }
 
-async function statClaudeUsageFile(filePath: string): Promise<{ mtimeMs: number; size: number }> {
-  const fileStat = isWslUncPath(filePath)
-    ? await wslGatedStat(filePath, 'scan')
-    : await stat(filePath)
-  return { mtimeMs: fileStat.mtimeMs, size: fileStat.size }
-}
-
-function createClaudeUsageReadStream(filePath: string): NodeJS.ReadableStream {
-  return isWslUncPath(filePath)
-    ? openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan')
-    : createReadStream(filePath, { encoding: 'utf-8' })
-}
-
 export function parseClaudeUsageRecord(line: string): ClaudeUsageParsedTurn | null {
   const parsed = parseClaudeUsageSourceRecord(line)
   return parsed ? stripClaudeSourceMetadata(parsed) : null
@@ -196,7 +194,7 @@ export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsag
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
   const lines = createInterface({
-    input: createClaudeUsageReadStream(filePath),
+    input: createReadStream(filePath, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
 
@@ -210,34 +208,86 @@ export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsag
   return dedupeClaudeUsageTurns(turns).map(stripClaudeSourceMetadata)
 }
 
-export async function readClaudeUsageScanFile(filePath: string): Promise<{
+export type ClaudeUsageScanFile = {
   processedFile: ClaudeUsageProcessedFile
   turns: ClaudeUsageParsedSourceTurn[]
-}> {
-  const fileStat = await statClaudeUsageFile(filePath)
-  let lineCount = 0
-  const turns: ClaudeUsageParsedSourceTurn[] = []
-  const fallbackSessionId = basename(filePath, '.jsonl')
-  const lines = createInterface({
-    input: createClaudeUsageReadStream(filePath),
-    crlfDelay: Infinity
-  })
+  resumed: boolean
+  checkpoint: JsonlFileCheckpoint | null
+  committedLineCount: number
+}
 
-  for await (const line of lines) {
-    lineCount++
-    const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
-    if (parsed) {
-      turns.push(parsed)
+export async function readClaudeUsageScanFile(
+  filePath: string,
+  resume?: ClaudeUsageParseResumeState | null
+): Promise<ClaudeUsageScanFile> {
+  let candidate = resume
+  while (true) {
+    const reader = await openJsonlFileReader(filePath)
+    let read: ClaudeUsageScanFile
+    try {
+      const verifiedResume =
+        candidate && (await resolveJsonlFileCheckpoint(filePath, candidate, reader))
+      const startOffset = verifiedResume?.parsedBytes ?? 0
+      let lineCount = verifiedResume && candidate ? candidate.lineCount : 0
+      let committedLineCount = lineCount
+      let parsedBytes = startOffset
+      let partialTailProducedTurn = false
+      const turns: ClaudeUsageParsedSourceTurn[] = []
+      const fallbackSessionId = basename(filePath, '.jsonl')
+      for await (const { line, endOffset, terminated } of readJsonlLinesFromOffset(
+        filePath,
+        startOffset,
+        reader
+      )) {
+        lineCount++
+        const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
+        if (terminated) {
+          parsedBytes = endOffset
+          committedLineCount = lineCount
+        } else if (parsed) {
+          partialTailProducedTurn = true
+        }
+        if (parsed) {
+          turns.push(parsed)
+        }
+      }
+      const checkpoint = partialTailProducedTurn
+        ? null
+        : await buildJsonlFileCheckpoint(filePath, parsedBytes, null, reader)
+      if (!(await validateJsonlFileReader(reader, verifiedResume))) {
+        candidate = null
+        continue
+      }
+      read = {
+        processedFile: {
+          path: filePath,
+          mtimeMs: reader.stats.mtimeMs,
+          size: reader.stats.size,
+          lineCount,
+          physicalFileId: jsonlPhysicalFileId(reader.stats),
+          ctimeMs: reader.stats.ctimeMs
+        },
+        turns,
+        resumed: Boolean(verifiedResume),
+        checkpoint,
+        committedLineCount
+      }
+    } finally {
+      await reader.handle.close()
     }
+    return { ...read, turns: dedupeClaudeUsageTurns(read.turns) }
   }
+}
 
+export async function getClaudeUsageProcessedFileStat(
+  filePath: string
+): Promise<Omit<ClaudeUsageProcessedFile, 'lineCount'> & { physicalFileId: string | null }> {
+  const fileStat = await readJsonlFileSnapshot(filePath)
   return {
-    processedFile: {
-      path: filePath,
-      mtimeMs: fileStat.mtimeMs,
-      size: fileStat.size,
-      lineCount
-    },
-    turns: dedupeClaudeUsageTurns(turns)
+    path: filePath,
+    mtimeMs: fileStat.mtimeMs,
+    size: fileStat.size,
+    physicalFileId: jsonlPhysicalFileId(fileStat),
+    ctimeMs: fileStat.ctimeMs
   }
 }

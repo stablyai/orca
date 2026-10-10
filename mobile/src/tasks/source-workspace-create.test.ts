@@ -322,7 +322,7 @@ describe('createWorkspaceFromComposerSource', () => {
       selection,
       ...baseArgs,
       agent: { choice: 'claude' },
-      agentLaunchSupported: true
+      agentLaunchSupported: { replay: false }
     })
 
     expect(result).toEqual({ worktreeId: 'wt-branch-launch', name: 'topic' })
@@ -350,7 +350,7 @@ describe('createWorkspaceFromComposerSource', () => {
       selection,
       ...baseArgs,
       agent: { choice: 'codex' },
-      agentLaunchSupported: true
+      agentLaunchSupported: { replay: false }
     })
 
     expect(calls.map((call) => call.method)).toEqual(['agent.launch'])
@@ -369,7 +369,7 @@ describe('createWorkspaceFromComposerSource', () => {
       selection,
       ...baseArgs,
       agent: { choice: 'claude' },
-      agentLaunchSupported: true
+      agentLaunchSupported: { replay: false }
     })
 
     expect(calls[0]!.method).toBe('agent.launch')
@@ -402,7 +402,7 @@ describe('createWorkspaceFromComposerSource', () => {
       selection,
       ...baseArgs,
       agent: { choice: 'claude' },
-      agentLaunchSupported: true
+      agentLaunchSupported: { replay: false }
     })
 
     expect(calls.map((call) => call.method)).toEqual(['worktree.create'])
@@ -440,7 +440,7 @@ describe('createWorkspaceFromComposerSource', () => {
       client,
       selection,
       ...baseArgs,
-      agentLaunchSupported: true
+      agentLaunchSupported: { replay: false }
     })
 
     expect(calls[0]!.method).toBe('worktree.create')

@@ -40,6 +40,15 @@ describe('WSL transcript filesystem process operations', () => {
         position: 0,
         length: 64
       })
+      const pinnedStat = await operations.execute({ id: 4, operation: 'fstatBigInt', handleId })
+      const pathStat = await operations.execute({
+        id: 5,
+        operation: 'statBigInt',
+        path: transcriptPath
+      })
+      expect(pinnedStat).toMatchObject({ size: BigInt(Buffer.byteLength('original transcript')) })
+      expect(pathStat).toMatchObject({ size: BigInt(Buffer.byteLength('replacement bytes')) })
+      expect(pinnedStat).not.toMatchObject({ ino: Reflect.get(Object(pathStat), 'ino') })
       await operations.execute({ id: 3, operation: 'close', handleId })
 
       expect(Buffer.from(body as Buffer).toString('utf8')).toBe('original transcript')

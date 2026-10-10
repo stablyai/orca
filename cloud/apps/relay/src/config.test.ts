@@ -8,6 +8,11 @@ import {
   RELAY_PUBLIC_RESOLVE_CONCURRENCY,
   RELAY_PUBLIC_RESOLVE_WAIT_MS
 } from './config.js'
+import {
+  RELAY_MAX_READINESS_GRACE_MS,
+  RELAY_READINESS_JWKS_GRACE_MS,
+  RELAY_READINESS_SQL_GRACE_MS
+} from './relay-readiness.js'
 
 function cellEnvironment(capacity: number): NodeJS.ProcessEnv {
   return {
@@ -34,6 +39,35 @@ describe('GCE relay capacity configuration', () => {
       env.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT = invalid
       expect(() => loadRelayConfig(env)).toThrow()
     }
+  })
+
+  it('defaults readiness grace to fifteen minutes for JWKS and three for SQL', () => {
+    const env = cellEnvironment(4_000)
+    expect(loadRelayConfig(env)).toMatchObject({
+      readinessJwksGraceMs: RELAY_READINESS_JWKS_GRACE_MS,
+      readinessSqlGraceMs: RELAY_READINESS_SQL_GRACE_MS
+    })
+    expect(RELAY_READINESS_SQL_GRACE_MS).toBeLessThan(RELAY_READINESS_JWKS_GRACE_MS)
+    env.ORCA_RELAY_READINESS_JWKS_GRACE_MS = '0'
+    env.ORCA_RELAY_READINESS_SQL_GRACE_MS = String(RELAY_MAX_READINESS_GRACE_MS)
+    expect(loadRelayConfig(env)).toMatchObject({
+      readinessJwksGraceMs: 0,
+      readinessSqlGraceMs: RELAY_MAX_READINESS_GRACE_MS
+    })
+    for (const invalid of ['-1', String(RELAY_MAX_READINESS_GRACE_MS + 1), '1.5', 'soon']) {
+      env.ORCA_RELAY_READINESS_JWKS_GRACE_MS = invalid
+      expect(() => loadRelayConfig(env)).toThrow()
+    }
+  })
+
+  it('reads an unset readiness grace variable as the default, never as zero', () => {
+    const env = cellEnvironment(4_000)
+    env.ORCA_RELAY_READINESS_JWKS_GRACE_MS = ''
+    env.ORCA_RELAY_READINESS_SQL_GRACE_MS = ''
+    expect(loadRelayConfig(env)).toMatchObject({
+      readinessJwksGraceMs: RELAY_READINESS_JWKS_GRACE_MS,
+      readinessSqlGraceMs: RELAY_READINESS_SQL_GRACE_MS
+    })
   })
 
   it('requires distinct dedicated admin identities and accepts omitted values', () => {

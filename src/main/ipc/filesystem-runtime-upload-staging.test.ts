@@ -6,7 +6,6 @@ import type * as RuntimeImportLimits from './runtime-import-limits'
 
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits
 
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 // Why: real ceilings are gigabytes, and truncate() is not sparse on NTFS, so a
 // literal over-limit fixture would allocate that much on Windows CI.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
@@ -61,16 +60,6 @@ describe('stageOneSourceForRuntimeUpload', () => {
           modifiedAtMs: stat.mtimeMs
         }
       ]
-    })
-  })
-
-  it('stages a file with no cap error, where the old buffering path refused', async () => {
-    const filePath = join(workDir, 'big.bin')
-    await writeFile(filePath, Buffer.alloc(3 * 1024))
-
-    await expect(stageOneSourceForRuntimeUpload(filePath)).resolves.toMatchObject({
-      status: 'staged',
-      entries: [{ kind: 'file', byteLength: 3 * 1024 }]
     })
   })
 

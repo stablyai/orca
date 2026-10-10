@@ -153,6 +153,85 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
+/**
+ * Codex-shaped echo probe: same sidecar contract as the plain probe, but each
+ * keystroke repaint is wrapped in a DEC 2026 synchronized frame and split so the
+ * closing `\x1b[?2026l` leaves the process in a SEPARATE write from the frame
+ * body. That is what a real Codex draw looks like on the wire (codex-rs
+ * tui.rs `stdout().sync_update(...)`, up to 120 FPS), and it is the shape the
+ * plain probe misses — it emits one unwrapped ~50 byte line per key, so it can
+ * never leave xterm's synchronized-output latch open.
+ *
+ * `frameRows` pads the frame body to a realistic repaint size; `splitDelayMs`
+ * is the gap between body and close, i.e. how long the latch stays open at the
+ * source before Orca's delivery adds any of its own.
+ */
+function codexEchoProbeScript(
+  runId: string,
+  arrivalSidecarPath: string,
+  frameRows: number,
+  splitDelayMs: number
+): string {
+  return `
+import { appendFileSync } from 'node:fs'
+
+process.stdin.setEncoding('utf8')
+if (process.stdin.isTTY) process.stdin.setRawMode(true)
+process.stdin.resume()
+let seq = 0
+const interrupt = String.fromCharCode(3)
+const rows = ${frameRows}
+const splitDelayMs = ${splitDelayMs}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const write = (data) =>
+  new Promise((resolve) => {
+    if (process.stdout.write(data)) resolve()
+    else process.stdout.once('drain', resolve)
+  })
+process.stdout.write('${'MWT_TYPING_READY_'}${runId}\\r\\n')
+let queue = Promise.resolve()
+process.stdin.on('data', (chunk) => {
+  const atMs = Date.now()
+  if (chunk.includes(interrupt)) process.exit(0)
+  for (const char of chunk) {
+    if (char === '\\r' || char === '\\n') continue
+    seq += 1
+    const mySeq = seq
+    appendFileSync(
+      ${JSON.stringify(arrivalSidecarPath)},
+      JSON.stringify({ seq: mySeq, atMs, char }) + '\\n'
+    )
+    queue = queue.then(async () => {
+      // Frame body: open the latch, repaint rows, but do NOT close yet.
+      let body = '\\x1b[?2026h'
+      for (let row = 1; row <= rows; row++) {
+        body += '\\x1b[' + row + ';1H\\x1b[2Kcodex frame row ' + row + ' seq ' + mySeq
+      }
+      body +=
+        '\\x1b[' + (rows + 1) + ';1H\\x1b[2Kmwt prompt ' +
+        mySeq + ': ' + char + ' ${'MWT_KEY_'}${runId}_' + mySeq
+      await write(body)
+      if (splitDelayMs > 0) await sleep(splitDelayMs)
+      await write('\\x1b[?2026l')
+    })
+  }
+})
+`
+}
+
+export function writeCodexEchoProbeScript(
+  scriptPath: string,
+  runId: string,
+  arrivalSidecarPath: string,
+  options: { frameRows: number; splitDelayMs: number }
+): void {
+  mkdirSync(path.dirname(scriptPath), { recursive: true })
+  writeFileSync(
+    scriptPath,
+    codexEchoProbeScript(runId, arrivalSidecarPath, options.frameRows, options.splitDelayMs)
+  )
+}
+
 export function writeSustainedAgentLoadScript(
   scriptPath: string,
   runId: string,

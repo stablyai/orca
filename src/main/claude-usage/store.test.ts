@@ -15,7 +15,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanClaudeUsageFilesViaWorker: vi.fn()
+  scanClaudeUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
@@ -94,7 +95,6 @@ describe('ClaudeUsageStore', () => {
     initClaudeUsagePath()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-      processedFiles: [],
       sessions: [],
       dailyAggregates: []
     })
@@ -105,6 +105,20 @@ describe('ClaudeUsageStore', () => {
   afterEach(() => {
     vi.useRealTimers()
     rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('resolves the current profile roots before dispatching the worker scan', async () => {
+    const resolveProfileDirs = vi
+      .fn()
+      .mockResolvedValue(['selected/projects', 'selected/transcripts'])
+    const store = new ClaudeUsageStore(createBackingStore(), resolveProfileDirs)
+    await store.setEnabled(true)
+    await store.refresh(true)
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ reuse: false }),
+      ['selected/projects', 'selected/transcripts']
+    )
   })
 
   it('defaults a null legacy opt-in while invalidating the cache', () => {
@@ -693,7 +707,7 @@ describe('ClaudeUsageStore', () => {
     expect(usage.unavailableReason).toBe('scan_failed')
   })
 
-  it('adapts Claude scans to pretty-printed cache persistence', async () => {
+  it('hands Claude scans the worker-owned source cache and persists a compact report', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -705,19 +719,17 @@ describe('ClaudeUsageStore', () => {
     })
 
     await store.refresh(true)
+    await store.flush()
 
-    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [])
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
-  })
-
-  it('passes the current runtime target into Claude transcript scans', async () => {
-    const target = { configDir: '/selected/.claude' }
-    const store = new ClaudeUsageStore(createBackingStore(), async () => target)
-    await store.setEnabled(true)
-
-    await store.refresh(true)
-
-    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [], target)
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
+      path: join(tempUserData, 'orca-claude-usage-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: false
+    })
+    const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
+    expect(persisted).not.toContain('\n')
+    expect(JSON.parse(persisted)).not.toHaveProperty('processedFiles')
   })
 
   it('joins a scan that is already in flight when the run finished before it started', async () => {
@@ -732,7 +744,6 @@ describe('ClaudeUsageStore', () => {
     })
     // Prime the worktree fingerprint so an unforced refresh can return early.
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-      processedFiles: [],
       sessions: [],
       dailyAggregates: []
     })
@@ -753,7 +764,6 @@ describe('ClaudeUsageStore', () => {
       startScan()
       await scanFinished
       return {
-        processedFiles: [],
         sessions: [createWorktreeUsageSession(worktreeId)],
         dailyAggregates: []
       }

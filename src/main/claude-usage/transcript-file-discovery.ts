@@ -1,28 +1,25 @@
-import { readdir } from 'node:fs/promises'
+import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join, win32 } from 'node:path'
+import { readdir } from 'node:fs/promises'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 const CLAUDE_TRANSCRIPTS_DIR = join(homedir(), '.claude', 'transcripts')
 
-type ClaudeTranscriptDiscoveryOptions = {
-  platform?: NodeJS.Platform
-  configDir?: string
-  includeWslHomes?: boolean
-  listWslHomeDirs?: () => Promise<string[]>
-}
-
-function joinConfigPath(configDir: string, child: string): string {
-  return isWslUncPath(configDir) ? win32.join(configDir, child) : join(configDir, child)
-}
-
 async function walkJsonlFiles(dirPath: string): Promise<string[]> {
-  const entries = isWslUncPath(dirPath)
-    ? await wslGatedReaddir(dirPath, 'scan')
-    : await readdir(dirPath, { withFileTypes: true })
+  const entries = await (
+    isWslUncPath(dirPath)
+      ? wslGatedReaddir(dirPath, 'scan')
+      : readdir(dirPath, { withFileTypes: true })
+  ).catch((error: unknown) => {
+    if (isDefinitiveAbsence(error)) {
+      return []
+    }
+    throw error
+  })
   const files: string[] = []
 
   for (const entry of entries) {
@@ -42,51 +39,30 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
 }
 
 function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
-  // Why: long-lived transcript directories can exceed V8's argument limit if child file arrays are spread into push().
+  // Why: long-lived transcript directories can exceed V8's argument limit if
+  // child file arrays are spread into push().
   for (const filePath of source) {
     target.push(filePath)
   }
 }
 
-async function defaultListWslHomeDirs(): Promise<string[]> {
-  const homes = await Promise.allSettled(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
-  )
-  return homes
-    .filter(
-      (result): result is PromiseFulfilledResult<string | null> => result.status === 'fulfilled'
-    )
-    .map((result) => result.value)
-    .filter((home): home is string => Boolean(home))
+/** Resolved by the host process: a scan worker has no account router of its own. */
+export function claudeProfileTranscriptDirs(): string[] {
+  return [
+    CLAUDE_PROJECTS_DIR,
+    CLAUDE_TRANSCRIPTS_DIR,
+    ...claudeProfileHistoryDirs('projects'),
+    ...claudeProfileHistoryDirs('transcripts')
+  ]
 }
 
 export async function listClaudeTranscriptFiles(
-  options: ClaudeTranscriptDiscoveryOptions = {}
+  profileDirs = claudeProfileTranscriptDirs()
 ): Promise<string[]> {
-  const roots = options.configDir
-    ? [
-        joinConfigPath(options.configDir, 'projects'),
-        joinConfigPath(options.configDir, 'transcripts')
-      ]
-    : [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR]
-  if (
-    options.includeWslHomes ||
-    (!options.configDir && (options.platform ?? process.platform) === 'win32')
-  ) {
-    const wslHomeDirs = await (options.listWslHomeDirs ?? defaultListWslHomeDirs)().catch(() => [])
-    for (const homeDir of wslHomeDirs) {
-      roots.push(win32.join(homeDir, '.claude', 'projects'))
-      roots.push(win32.join(homeDir, '.claude', 'transcripts'))
-    }
-  }
-  const files = await Promise.all(
-    roots.map(async (root) => {
-      try {
-        return await walkJsonlFiles(root)
-      } catch {
-        return []
-      }
-    })
-  )
+  // Empty lists retain the legacy host-only worker contract.
+  const roots = [
+    ...new Set(profileDirs.length ? profileDirs : [CLAUDE_PROJECTS_DIR, CLAUDE_TRANSCRIPTS_DIR])
+  ]
+  const files = await Promise.all(roots.map((root) => walkJsonlFiles(root)))
   return [...new Set(files.flat())].sort()
 }

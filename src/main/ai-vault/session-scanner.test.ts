@@ -5,7 +5,38 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
+import { KIRO_FIXTURE_SESSION_ID } from './session-scanner-kiro-fixtures'
 import { writeEveryAgentVault } from './session-scanner-every-agent-fixture'
+
+// Why: the SQLite worker bundle does not exist in the test runtime; route the
+// v1/v2 worker calls to their synchronous implementations so scanning stays
+// end-to-end without spawning a real worker thread.
+vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
+  const v1List = await import('./session-scanner-opencode-sqlite-list')
+  const v1Parse = await import('./session-scanner-opencode-sqlite')
+  const v2List = await import('./session-scanner-opencode2-sqlite-list')
+  const v2Parse = await import('./session-scanner-opencode2-sqlite')
+  return {
+    listOpenCodeSqliteSessionsViaWorker: (
+      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+    ) => v1List.listOpenCodeSqliteSessions(args),
+    listZcodeSqliteSessionsViaWorker: (
+      args: Parameters<typeof v1List.listOpenCodeSqliteSessions>[0]
+    ) => v1List.listOpenCodeSqliteSessions({ ...args, agent: 'zcode' }),
+    parseOpenCodeSqliteSessionViaWorker: (
+      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+    ) => v1Parse.parseOpenCodeSqliteSession(args),
+    parseZcodeSqliteSessionViaWorker: (
+      args: Parameters<typeof v1Parse.parseOpenCodeSqliteSession>[0]
+    ) => v1Parse.parseOpenCodeSqliteSession({ ...args, agent: 'zcode' }),
+    listOpenCode2SqliteSessionsViaWorker: (
+      args: Parameters<typeof v2List.listOpenCode2SqliteSessions>[0]
+    ) => v2List.listOpenCode2SqliteSessions(args),
+    parseOpenCode2SqliteSessionViaWorker: (
+      args: Parameters<typeof v2Parse.parseOpenCode2SqliteSession>[0]
+    ) => v2Parse.parseOpenCode2SqliteSession(args)
+  }
+})
 
 let tempRoots: string[] = []
 
@@ -371,13 +402,19 @@ describe('scanAiVaultSessions', () => {
     const { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile } =
       await writeEveryAgentVault(root)
 
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+    // Why the headroom: the limit is a newest-first cap, so a limit equal to the
+    // agent count silently drops one agent as soon as any fixture writes a second
+    // session — which is how adding jcode's fixture knocked Claude out of this set.
+    const result = await scanAiVaultSessions({
+      ...roots,
+      platform: 'darwin',
+      limit: AI_VAULT_AGENTS.length * 2
+    })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
       new Set(AI_VAULT_AGENTS)
     )
-
     const commandByAgent = new Map(
       result.sessions.map((session) => [session.agent, session.resumeCommand])
     )
@@ -396,6 +433,10 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('opencode')).toBe(
       "cd '/tmp/opencode' && opencode --session 'opencode-session'"
     )
+    expect(commandByAgent.get('opencode2')).toBe(
+      "cd '/tmp/opencode2' && opencode2 --standalone --session 'opencode2-session'"
+    )
+    expect(commandByAgent.get('zcode')).toBe("cd '/tmp/zcode' && zcode --resume 'zcode-session'")
     expect(commandByAgent.get('grok')).toBe("cd '/tmp/grok' && grok --resume 'grok-session'")
     expect(commandByAgent.get('hermes')).toBe(
       "cd '/tmp/hermes' && hermes --resume 'hermes-session'"
@@ -416,8 +457,15 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('cline')).toBe("cd '/tmp/cline' && cline --id 'cline-session'")
     expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
+    expect(commandByAgent.get('muse')).toBe("cd '/tmp/muse' && muse resume 'muse-session'")
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
+    )
+    expect(commandByAgent.get('jcode')).toBe(
+      "cd '/tmp/jcode' && jcode --resume 'session_jcode-session'"
+    )
+    expect(commandByAgent.get('kiro')).toBe(
+      `cd '/tmp/kiro' && kiro-cli chat --tui --resume-id '${KIRO_FIXTURE_SESSION_ID}'`
     )
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')

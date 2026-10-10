@@ -48,51 +48,66 @@ export type FollowIntent = {
   /** Whether the scroll event matches an offset the application registered. */
   programmatic: boolean
   geometry: ScrollGeometry
+  /** Distance from the end at the previous scroll event. */
+  previousDistanceFromEnd: number
+  /** Whether a jump to a row is still travelling there. Rows it passes measure
+   *  shorter than estimated, the content shrinks, and the browser clamps the view
+   *  onto the end: that is the end arriving, not the reader. */
+  settling: boolean
 }
 
-/** Whether the transcript should still follow the end after this offset.
- *
- *  Application writes preserve intent even when their delayed events arrive
- *  after the end moved. Reader events detach away from the end and reattach at
- *  it — against the re-arm band, never the wider near-bottom one. */
+/** Passive offsets preserve following; detached views rearm only while closing on the actual tail. */
 export function nextFollowingEnd(intent: FollowIntent): boolean {
-  if (intent.programmatic) {
+  if (intent.following || intent.programmatic || intent.settling) {
     return intent.following
+  }
+  if (distanceFromBottom(intent.geometry) > intent.previousDistanceFromEnd) {
+    return false
   }
   return isNearBottom(intent.geometry, NATIVE_CHAT_FOLLOW_REARM_PX)
 }
 
-/** Distance from the top within which the transcript pages in older history. */
-export const NATIVE_CHAT_LOAD_EARLIER_THRESHOLD_PX = 80
+/** A reader input that can move the transcript, reduced to what decides following. */
+export type ReaderGesture =
+  | { kind: 'wheel'; deltaY: number; zoom: boolean }
+  | { kind: 'touch-drag' }
+  | { kind: 'scrollbar-press' }
+  | { kind: 'content-press' }
+  | { kind: 'key'; key: string; shift?: boolean }
 
-export type LoadEarlierIntent = {
-  geometry: ScrollGeometry
-  /** Offset at the previous scroll event; a prepend or a bottom pin moves down. */
-  previousScrollTop: number
-  hasMore: boolean
-  loadingEarlier: boolean
-  itemCount: number
-  /** Item count when the last page was asked for, or null if none has been. */
-  requestedAtItemCount: number | null
+const KEYS_AWAY_FROM_END = new Set(['PageUp', 'Home', 'ArrowUp'])
+const KEYS_TOWARD_END = new Set(['PageDown', 'End', 'ArrowDown'])
+
+/** The direction a gesture scrolls: -1 up, 1 down, 0 when it does not scroll. */
+export function readerGestureDirection(gesture: ReaderGesture): -1 | 0 | 1 {
+  if (gesture.kind === 'wheel') {
+    return gesture.zoom || gesture.deltaY === 0 ? 0 : gesture.deltaY < 0 ? -1 : 1
+  }
+  if (gesture.kind === 'key') {
+    if (gesture.key === ' ') {
+      return gesture.shift ? -1 : 1
+    }
+    return KEYS_AWAY_FROM_END.has(gesture.key) ? -1 : KEYS_TOWARD_END.has(gesture.key) ? 1 : 0
+  }
+  return 0
 }
 
-/** Whether reaching this offset should page in older history.
- *
- *  Windowing makes the naive "am I near the top?" test unsafe: every row that
- *  resolves its real height changes the content height and re-fires the
- *  observers that ask. So the answer also requires the view to have moved
- *  *upwards* — measurement settling and the bottom pin both move it down — and
- *  requires new items since the last request, which caps a stuck near-top view at
- *  one request per page rather than one per measurement. */
-export function shouldLoadEarlier(intent: LoadEarlierIntent): boolean {
-  if (!intent.hasMore || intent.loadingEarlier) {
-    return false
+/** Gestures that cannot leave the tail must not strand a following view without a scroll event. */
+export function readerGestureLeavesEnd(gesture: ReaderGesture, geometry: ScrollGeometry): boolean {
+  const contentAbove = geometry.scrollTop > 0
+  const awayFromEnd = !isNearBottom(geometry, NATIVE_CHAT_FOLLOW_REARM_PX)
+  switch (gesture.kind) {
+    case 'wheel':
+      return readerGestureDirection(gesture) < 0 && contentAbove
+    case 'scrollbar-press':
+      return contentAbove
+    // A touch's direction is not observable; it leaves once its drag has carried the view away.
+    case 'touch-drag':
+    case 'content-press':
+      return awayFromEnd
+    case 'key': {
+      const direction = readerGestureDirection(gesture)
+      return direction < 0 ? contentAbove : direction > 0 && awayFromEnd
+    }
   }
-  if (intent.geometry.scrollTop >= NATIVE_CHAT_LOAD_EARLIER_THRESHOLD_PX) {
-    return false
-  }
-  if (intent.geometry.scrollTop > intent.previousScrollTop) {
-    return false
-  }
-  return intent.requestedAtItemCount !== intent.itemCount
 }

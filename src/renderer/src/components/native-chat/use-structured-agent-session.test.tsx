@@ -6,15 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
   operationId: vi.fn(),
-  enqueueSettingsWrite: vi.fn()
+  enqueueSettingsWrite: vi.fn(),
+  toastError: vi.fn()
 }))
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 let fence = 3
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
 let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -38,14 +42,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: mocks.operationId,
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
-    blockedClientMessageId: null,
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: mocks.operationId
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: vi.fn(),
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -255,7 +260,12 @@ describe('useStructuredAgentSession options', () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(false)
     })
 
-    expect(result.current.error).toBe('provider rejected option')
+    // Said once, without the transport's text, and without claiming an outcome the failure
+    // cannot prove; nothing stays behind under the composer.
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "Orca couldn't confirm what happened. Check the chat."
+    )
+    expect(result.current.error).toBeNull()
     expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')).toMatchObject({
       settable: true
     })
@@ -314,7 +324,7 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual(['operation-1', 'operation-2'])
   })
 
-  it('reuses an option operation after a pending admission refusal', async () => {
+  it('sends the pick again as a new operation after a pending admission refusal', async () => {
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
       if (method !== 'agentSession.setOption') {
@@ -371,14 +381,13 @@ describe('useStructuredAgentSession options', () => {
         ([, , params]) =>
           (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
       )
-    ).toEqual(['operation-1', 'operation-1'])
+    ).toEqual(['operation-1', 'operation-2'])
     expect(
       mutations.map(
         ([, , params]) =>
           (params as { envelope: { expectedRuntimeFence: number } }).envelope.expectedRuntimeFence
       )
     ).toEqual([3, 4])
-    expect(mocks.operationId).toHaveBeenCalledTimes(1)
   })
 
   it('ignores an option failure from a superseded fence', async () => {
@@ -386,8 +395,11 @@ describe('useStructuredAgentSession options', () => {
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
     })
+    // Only the option write fails; a refused hold would surface on `error` for its own reason.
     mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : pending
+      method === 'agentSession.options' || method === 'agentSession.hold'
+        ? Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
+        : pending
     )
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({
@@ -411,6 +423,7 @@ describe('useStructuredAgentSession options', () => {
     })
 
     expect(result.current.error).toBeNull()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('includes one background task id in the cancel fingerprint and payload', async () => {

@@ -6,12 +6,9 @@ import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { Worker } from 'node:worker_threads'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
-import {
-  UsageScanWorkerClient,
-  scanClaudeUsageOnWorker,
-  scanCodexUsageOnWorker
-} from './usage-scan-worker-client'
+import { UsageScanWorkerClient, scanCodexUsageOnWorker } from './usage-scan-worker-client'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
+import { readUsageSourceCache, type UsageSourceCacheRef } from './usage-source-cache-file'
 
 // Why this test exists: "the scan no longer blocks the main process" is not a
 // stopwatch claim. It measures the *calling* thread's event-loop active time —
@@ -189,34 +186,57 @@ afterAll(() => {
 })
 
 describe('usage scan worker event-loop occupancy', () => {
-  it('scans only the selected Claude config directory through the real worker', async () => {
-    const configDir = join(corpusRoot, 'selected-claude')
-    const projectsDir = join(configDir, 'projects', 'repo')
-    mkdirSync(projectsDir, { recursive: true })
-    const transcriptPath = join(projectsDir, 'selected.jsonl')
-    writeFileSync(
-      transcriptPath,
+  it('keeps a selected Claude profile isolated through the real worker source-cache path', async () => {
+    const selected = join(corpusRoot, 'selected-claude', 'projects')
+    const unrelated = join(corpusRoot, '.claude', 'projects')
+    mkdirSync(selected, { recursive: true })
+    mkdirSync(unrelated, { recursive: true })
+    const line = (sessionId: string) =>
       JSON.stringify({
         type: 'assistant',
-        sessionId: 'selected-session',
-        timestamp: '2026-04-09T10:00:00.000Z',
-        cwd: WORKTREES[0].path,
+        sessionId,
+        timestamp: '2026-10-10T12:00:00Z',
         message: {
+          id: sessionId,
           model: 'claude-sonnet-4-6',
-          usage: { input_tokens: 100, output_tokens: 20 }
+          usage: { input_tokens: 10, output_tokens: 2 }
         }
       })
-    )
-    const client = createWorkerClient()
-    const result = await withCorpusEnv(() =>
-      scanClaudeUsageOnWorker((body) => client.scan(body), WORKTREES, [], {
-        configDir,
-        includeWslHomes: false
-      })
-    )
-    expect(result.source.map((file) => file.path)).toEqual([transcriptPath])
-    expect(result.sessions).toHaveLength(1)
-    expect(result.sessions[0].sessionId).toBe('selected-session')
+    writeFileSync(join(selected, 'selected.jsonl'), `${line('selected')}\n`)
+    writeFileSync(join(unrelated, 'unrelated.jsonl'), `${line('unrelated')}\n`)
+    const workers: Worker[] = []
+    const client = new UsageScanWorkerClient({
+      workerFactory: () => {
+        const worker = new Worker(workerEntryPath)
+        workers.push(worker)
+        return worker
+      },
+      log: () => {}
+    })
+    const sourceCache: UsageSourceCacheRef = {
+      path: join(corpusRoot, 'selected-claude-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
+    try {
+      const result = await withCorpusEnv(() =>
+        client.scan({
+          operation: 'scan',
+          providerId: 'claude',
+          profileDirs: [selected],
+          worktrees: [],
+          sourceCache
+        })
+      )
+      expect(result).toMatchObject({ providerId: 'claude', sessions: [{ sessionId: 'selected' }] })
+      if (result.operation !== 'scan' || result.providerId !== 'claude') {
+        throw new Error('Expected Claude worker response')
+      }
+      expect(result.sessions).toHaveLength(1)
+    } finally {
+      await Promise.all(workers.map((worker) => worker.terminate()))
+    }
   })
 
   it('costs the calling thread a fraction of the JS time the same scan does inline', async () => {
@@ -230,16 +250,25 @@ describe('usage scan worker event-loop occupancy', () => {
     expect(caller.value.dailyAggregates[0]?.eventCount).toBe(EXPECTED_EVENTS)
 
     const client = createWorkerClient()
+    const sourceCache: UsageSourceCacheRef = {
+      path: join(corpusRoot, 'orca-codex-usage-sources.json'),
+      schemaVersion: 1,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
     const worker = await measureCallerOccupancy(() =>
-      withCorpusEnv(() => scanCodexUsageOnWorker((body) => client.scan(body), WORKTREES, []))
+      withCorpusEnv(() =>
+        scanCodexUsageOnWorker((body) => client.scan(body), WORKTREES, sourceCache)
+      )
     )
-    expect(worker.value.source).toHaveLength(FILE_COUNT)
+    // The per-source records stay on the worker's side of the boundary.
+    expect(await readUsageSourceCache(sourceCache)).toHaveLength(FILE_COUNT)
     expect(worker.value.sessions).toHaveLength(FILE_COUNT)
     expect(worker.value.dailyAggregates).toHaveLength(1)
     expect(worker.value.dailyAggregates[0]?.eventCount).toBe(EXPECTED_EVENTS)
 
-    // The caller still pays to post the request and structured-clone a
-    // 600-file result back, so this is a fifth, not a rout. Measured margin is
+    // The caller still pays to post the request and structured-clone 600
+    // sessions back, so this is a fifth, not a rout. Measured margin is
     // ~50x idle and ~90x under CPU contention.
     expect(
       worker.occupancy.activeMs,

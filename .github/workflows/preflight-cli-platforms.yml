@@ -1,0 +1,58 @@
+name: Preflight CLI platforms
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/ipc/preflight*'
+      - 'src/main/ipc/agent-detection-shell-path.ts'
+      - 'src/main/ipc/command-path-resolver*'
+      - 'src/main/preflight/**'
+      - 'src/main/startup/*shell*'
+      - 'src/packages/process-host/**'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/workflows/preflight-cli-platforms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preflight-cli-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  preflight:
+    name: Preflight CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-2022]
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          cache-electron-package: 'true'
+      - name: Check native CLI execution and shell PATH discovery
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=2
+          src/main/ipc/preflight-command-exec.test.ts
+          src/main/ipc/preflight-host-cli-status.test.ts
+          src/main/ipc/preflight-runnable-local-cli.test.ts
+          src/main/ipc/preflight-agent-detection.test.ts
+          src/main/ipc/preflight-agent-refresh.test.ts
+          src/main/ipc/preflight-wsl-agent-detection.test.ts
+          src/main/ipc/preflight-windows-path-refresh.repro.test.ts
+          src/main/startup/hydrate-shell-path.test.ts
+          src/main/startup/hydrate-shell-path.windows.test.ts
+          src/main/startup/login-shell-environment.test.ts
+          src/main/runtime/rpc/methods/preflight.test.ts
+          src/packages/process-host/src/process-tree-termination.test.ts
+          src/packages/process-host/src/run-process.test.ts
+          src/packages/process-host/src/run-process-termination-failure.test.ts

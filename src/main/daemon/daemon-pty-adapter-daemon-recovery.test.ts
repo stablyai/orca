@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Dead-endpoint write handling and daemon respawn after the daemon dies. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, rmSync } from 'node:fs'

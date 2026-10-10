@@ -5,22 +5,18 @@ type BeginArgs = { beforeOpen: (sessionId: string) => boolean | void }
 
 const mocks = vi.hoisted(() => ({
   beginStructuredAgentSessionProvisionalLaunch:
-    vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>(),
-  preflightAgentTrust: vi.fn<(args: unknown) => Promise<void>>()
+    vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>()
 }))
 
 vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
 }))
-vi.mock('@/lib/agent-trust-preflight', () => ({ preflightAgentTrust: mocks.preflightAgentTrust }))
 
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
-import {
-  beginDirectWorkItemStructuredLaunch,
-  markDirectWorkItemAgentTrusted
-} from './launch-work-item-direct-agent-routing'
+import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 
 const structuredPlan: AgentSessionLaunchPlan = adoptAgentSessionLaunchVerdict({
+  requestId: 'request-1',
   route: 'structured-native-chat',
   agent: 'codex',
   worktreeId: 'worktree-1',
@@ -31,7 +27,6 @@ const structuredPlan: AgentSessionLaunchPlan = adoptAgentSessionLaunchVerdict({
 describe('beginDirectWorkItemStructuredLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.preflightAgentTrust.mockResolvedValue(undefined)
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
       args.beforeOpen('session-1')
       return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
@@ -75,39 +70,14 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
   it('skips structured opening for non-structured routes', () => {
     expect(
       beginDirectWorkItemStructuredLaunch({
-        plan: adoptAgentSessionLaunchVerdict({ ...structuredPlan, route: 'legacy-native-chat' }),
+        plan: adoptAgentSessionLaunchVerdict({
+          ...structuredPlan,
+          route: 'terminal-tui'
+        }),
         primaryTabId: null,
         beforeOpen: vi.fn()
       })
     ).toEqual({ completed: false, structuredLaunch: false, primaryTabId: null })
     expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
-  })
-})
-
-describe('markDirectWorkItemAgentTrusted', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('preflights trust only for the legacy terminal route', async () => {
-    await markDirectWorkItemAgentTrusted({
-      structuredLaunch: false,
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: 'ssh-1'
-    })
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: 'ssh-1'
-    })
-  })
-
-  it('leaves trust to the structured provider', async () => {
-    await markDirectWorkItemAgentTrusted({
-      structuredLaunch: true,
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: null
-    })
-    expect(mocks.preflightAgentTrust).not.toHaveBeenCalled()
   })
 })

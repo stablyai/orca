@@ -2,12 +2,12 @@ import { homedir } from 'node:os'
 import { getWslHome } from '../wsl'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
-  type ExecutionHostId,
+  getConnectionExecutionHostId,
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId
+  type ExecutionHostId
 } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { IPtyProvider } from '../providers/types'
@@ -124,7 +124,7 @@ export function folderExecutionHostId(folder: {
 }): ExecutionHostId {
   return (
     normalizeExecutionHostId(folder.executionHostId) ??
-    (folder.connectionId ? toSshExecutionHostId(folder.connectionId) : LOCAL_EXECUTION_HOST_ID)
+    getConnectionExecutionHostId(folder.connectionId)
   )
 }
 

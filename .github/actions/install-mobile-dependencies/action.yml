@@ -1,0 +1,22 @@
+name: Install mobile dependencies
+description: Frozen pnpm install for the mobile/ project, whose node_modules the mobile web bundle build and the mobile-aware lint passes resolve React Native and Expo from.
+
+runs:
+  using: composite
+  steps:
+    # Why a separate install: mobile is its own pnpm project, so the root install leaves
+    # mobile/node_modules empty and every mobile import resolves to nothing.
+    # Why no --ignore-scripts, unlike the root install: mobile's postinstall generates the
+    # gitignored terminal/mermaid webview engine modules that tracked source imports.
+    # The drift guard mirrors the root install so a stale mobile lockfile fails by name --
+    # mobile's lockfile carries patchedDependencies that a silent rewrite would drop.
+    - name: Install mobile dependencies
+      shell: bash
+      working-directory: mobile
+      run: |
+        pnpm install --frozen-lockfile
+        # Job containers can run composite steps from a source mirror without .git.
+        if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+          git -C "$GITHUB_WORKSPACE" diff --exit-code -- \
+            mobile/package.json mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml
+        fi

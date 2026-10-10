@@ -1,6 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import type { EditorTabContentType } from '../tabs/editor-tab-content-type'
 import {
   EDITOR_FOCUS_REQUEST_TTL_MS,
   takeNextEditorFocusRequestToken
@@ -15,17 +16,17 @@ export function createOpenFileAction(
     openFile: (file, options) => {
       const editorItemWorktreeId = file.worktreeId
       const editorItemLabel = file.relativePath
-      const editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
-        file.mode === 'conflict-review'
-          ? 'conflict-review'
-          : file.mode === 'check-details'
-            ? 'check-details'
-            : file.mode === 'diff'
-              ? 'diff'
-              : 'editor'
+      const editorItemContentType: EditorTabContentType =
+        file.mode === 'conflict-review' ||
+        file.mode === 'check-details' ||
+        file.mode === 'chat-visual' ||
+        file.mode === 'diff'
+          ? file.mode
+          : 'editor'
       const scratch = {
         editorItemFileId: file.filePath,
-        editorItemTargetGroupId: options?.targetGroupId
+        editorItemTargetGroupId: options?.targetGroupId,
+        editorItemIsPreview: false
       }
       set((s) => applyOpenFileToState(s, file, options, scratch))
       const editorItemViewStateId = openWorkspaceEditorItem(
@@ -34,8 +35,9 @@ export function createOpenFileAction(
         editorItemWorktreeId,
         editorItemLabel,
         editorItemContentType,
-        options?.preview ?? false,
-        scratch.editorItemTargetGroupId
+        scratch.editorItemIsPreview,
+        scratch.editorItemTargetGroupId,
+        options?.selection
       )
       if (options?.focusEditor) {
         set({

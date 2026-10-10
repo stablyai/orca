@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  mobileNativeChatComposerPlaceholder,
   useMobileNativeChatInputLease,
   useSettledMobileNativeChatInputLock
 } from './use-mobile-native-chat-input-lease'
@@ -33,7 +34,9 @@ describe('useMobileNativeChatInputLease', () => {
     expect(lease?.ready).toBe(true)
     expect(lease?.lockReason).toBeNull()
 
-    act(() => lease?.clear())
+    act(() => {
+      lease?.clear()
+    })
     expect(lease?.ready).toBe(false)
     act(() => lease?.markReady('terminal'))
     expect(lease?.ready).toBe(true)
@@ -86,18 +89,47 @@ describe('useSettledMobileNativeChatInputLock', () => {
       renderer = create(createElement(Harness, { reason: 'waiting' }))
     })
     expect(settled).toBeNull()
-    act(() => vi.advanceTimersByTime(600))
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(settled).toBe('waiting')
 
     // A brief unlock that reverts inside the settle window never reaches the composer.
     act(() => renderer?.update(createElement(Harness, { reason: null })))
-    act(() => vi.advanceTimersByTime(300))
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     act(() => renderer?.update(createElement(Harness, { reason: 'disconnected' })))
-    act(() => vi.advanceTimersByTime(600))
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(settled).toBe('disconnected')
 
     act(() => renderer?.update(createElement(Harness, { reason: null })))
-    act(() => vi.advanceTimersByTime(600))
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(settled).toBeNull()
+  })
+})
+
+describe("the phone chat composer's placeholder", () => {
+  it('says a message runs after the stop while the chat reads Stopping', () => {
+    expect(mobileNativeChatComposerPlaceholder(null, 'queue')).toBe(
+      'Queue a message to run after the stop'
+    )
+    // Where the host does not queue sends, it holds the message until the stop lands.
+    expect(mobileNativeChatComposerPlaceholder(null, 'send')).toBe(
+      'Send a message to run after the stop'
+    )
+  })
+
+  it('reads as usual otherwise', () => {
+    expect(mobileNativeChatComposerPlaceholder(null, undefined)).toBe('Message, @files, /commands')
+  })
+
+  it('says why the composer is locked first', () => {
+    expect(mobileNativeChatComposerPlaceholder('disconnected', 'queue')).toBe('Reconnecting…')
+    expect(mobileNativeChatComposerPlaceholder('waiting', 'queue')).toBe('Waiting for terminal…')
   })
 })

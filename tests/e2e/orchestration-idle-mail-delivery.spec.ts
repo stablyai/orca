@@ -250,7 +250,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', state.activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
   await expect.poll(() => getActiveTabId(page), { timeout: 5_000 }).toBe(tabId)

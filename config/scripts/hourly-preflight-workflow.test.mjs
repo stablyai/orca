@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const workflow = parse(
   readFileSync(new URL('../../.github/workflows/hourly-mac-build.yml', import.meta.url), 'utf8')
@@ -62,7 +62,7 @@ describe('hourly build preflight', () => {
     expect(
       preflight.steps.find((step) => step.id === 'app_token').with['permission-contents']
     ).toBe('read')
-    expect(build.needs).toBe('preflight')
+    expect(build.needs).toEqual(['preflight', 'relay-windows-process-tree'])
     expect(build.if).toBe("needs.preflight.outputs.should_build == 'true'")
     expect(build.steps.find((step) => step.name === 'Checkout').with.ref).toBe(
       build.outputs.head_sha

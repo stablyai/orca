@@ -4,6 +4,7 @@ import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { formatNativeChatFileReference } from './native-chat-composer-target'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import { nativeChatAttachmentOwnerChangedNotice } from './native-chat-attachment-upload'
 import {
   nativeChatWorkspaceAttachmentMismatchNotice,
   type NativeChatResolvedPathOptions
@@ -12,10 +13,11 @@ import {
 type ResolvedAttachmentPath = {
   path: string
   connectionId?: string | null
-  targetOwnerIsCurrent?: () => boolean
-}
+} & NativeChatResolvedPathOptions
 
 type Args = {
+  /** False when the agent takes no image input: an image is then referenced by path like any file. */
+  acceptsImages?: boolean
   appendImageAttachments: (paths: { path: string; connectionId?: string | null }[]) => void
   attachmentTargetBlocked: (targetOwned?: boolean) => boolean
   caret: number
@@ -29,6 +31,7 @@ type Args = {
 }
 
 export function useNativeChatResolvedPathAttachments({
+  acceptsImages = true,
   appendImageAttachments,
   attachmentTargetBlocked,
   caret,
@@ -48,26 +51,31 @@ export function useNativeChatResolvedPathAttachments({
   disabledRef: RefObject<boolean>
   flushPendingAttachments: () => void
 } {
-  const pendingResolvedPathsRef = useRef<ResolvedAttachmentPath[]>([])
+  const pendingResolvedBatchesRef = useRef<ResolvedAttachmentPath[][]>([])
   const pendingPathLimitRejectedRef = useRef(false)
   const disabledRef = useRef(disabled)
 
   useLayoutEffect(() => {
     disabledRef.current = disabled
     if (disabled) {
-      pendingResolvedPathsRef.current = []
+      pendingResolvedBatchesRef.current = []
       pendingPathLimitRejectedRef.current = false
     }
   }, [disabled])
 
   const insertFileReferences = useCallback(
     (paths: string[]) => {
-      const references = paths.map(formatNativeChatFileReference).join(' ')
-      if (references.length === 0) {
+      if (paths.length === 0) {
         return
       }
-      const insertion = `${references} `
-      const caretAtInsert = textareaRef.current?.selectionStart ?? caret
+      const input = textareaRef.current
+      // The editor shows each file as a pill and reports the new draft and caret itself.
+      if (input?.insertFileReferences) {
+        input.insertFileReferences(paths)
+        return
+      }
+      const insertion = `${paths.map(formatNativeChatFileReference).join(' ')} `
+      const caretAtInsert = input?.selectionStart ?? caret
       setDraft((prev) => {
         const before = prev.slice(0, caretAtInsert)
         const after = prev.slice(caretAtInsert)
@@ -78,15 +86,24 @@ export function useNativeChatResolvedPathAttachments({
     [caret, setCaret, setDraft, textareaRef]
   )
 
-  const applyResolvedPaths = useCallback(
-    (resolvedPaths: ResolvedAttachmentPath[], focus: boolean, preserveNotice = false) => {
-      if (resolvedPaths.length === 0) {
-        return
+  const resolvedBatchIsCurrent = useCallback(
+    (resolvedPaths: ResolvedAttachmentPath[]): boolean => {
+      if (resolvedPaths.some(({ destinationIsCurrent }) => destinationIsCurrent?.() === false)) {
+        setNotice(nativeChatAttachmentOwnerChangedNotice())
+        return false
       }
-      // A failed ownership verdict refuses the whole completion (see the limit
-      // rejection below): an ordered batch is never partially applied.
       if (resolvedPaths.some(({ targetOwnerIsCurrent }) => targetOwnerIsCurrent?.() === false)) {
         setNotice(nativeChatWorkspaceAttachmentMismatchNotice())
+        return false
+      }
+      return true
+    },
+    [setNotice]
+  )
+
+  const applyResolvedPaths = useCallback(
+    (resolvedPaths: ResolvedAttachmentPath[], focus: boolean, preserveNotice = false) => {
+      if (resolvedPaths.length === 0 || !resolvedBatchIsCurrent(resolvedPaths)) {
         return
       }
       // Ownership is per path, so the verdict is too: a queued batch can mix a
@@ -107,9 +124,11 @@ export function useNativeChatResolvedPathAttachments({
         noteAttachmentTargetBlocked()
         return
       }
-      const imagePaths = attachable.filter(({ path }) => isNativeChatImageAttachmentPath(path))
+      const attachesAsImage = (path: string): boolean =>
+        acceptsImages && isNativeChatImageAttachmentPath(path)
+      const imagePaths = attachable.filter(({ path }) => attachesAsImage(path))
       const filePaths = attachable
-        .filter(({ path }) => !isNativeChatImageAttachmentPath(path))
+        .filter(({ path }) => !attachesAsImage(path))
         .map(({ path }) => path)
       // Images ride along on submit so chips and the TUI input cannot diverge.
       appendImageAttachments(imagePaths.map(({ path, connectionId }) => ({ path, connectionId })))
@@ -124,10 +143,12 @@ export function useNativeChatResolvedPathAttachments({
       }
     },
     [
+      acceptsImages,
       appendImageAttachments,
       attachmentTargetBlocked,
       insertFileReferences,
       noteAttachmentTargetBlocked,
+      resolvedBatchIsCurrent,
       setNotice,
       textareaRef
     ]
@@ -142,6 +163,10 @@ export function useNativeChatResolvedPathAttachments({
       if (paths.length === 0 || disabledRef.current) {
         return
       }
+      if (options.destinationIsCurrent?.() === false) {
+        setNotice(nativeChatAttachmentOwnerChangedNotice())
+        return
+      }
       const targetOwnerIsCurrent = options.targetOwnerIsCurrent?.()
       if (targetOwnerIsCurrent === false) {
         setNotice(nativeChatWorkspaceAttachmentMismatchNotice())
@@ -152,7 +177,11 @@ export function useNativeChatResolvedPathAttachments({
         return
       }
       if (isComposing()) {
-        if (paths.length > NATIVE_FILE_DROP_MAX_PATHS - pendingResolvedPathsRef.current.length) {
+        const pendingCount = pendingResolvedBatchesRef.current.reduce(
+          (count, batch) => count + batch.length,
+          0
+        )
+        if (paths.length > NATIVE_FILE_DROP_MAX_PATHS - pendingCount) {
           // Reject the whole completion so ordered path batches are never partially applied.
           pendingPathLimitRejectedRef.current = true
           setNotice(
@@ -163,11 +192,11 @@ export function useNativeChatResolvedPathAttachments({
           )
           return
         }
-        pendingResolvedPathsRef.current.push(
-          ...paths.map((path) => ({
+        pendingResolvedBatchesRef.current.push(
+          paths.map((path) => ({
             path,
             connectionId,
-            targetOwnerIsCurrent: options.targetOwnerIsCurrent
+            ...options
           }))
         )
         return
@@ -176,7 +205,7 @@ export function useNativeChatResolvedPathAttachments({
         paths.map((path) => ({
           path,
           connectionId,
-          targetOwnerIsCurrent: options.targetOwnerIsCurrent
+          ...options
         })),
         true
       )
@@ -191,15 +220,22 @@ export function useNativeChatResolvedPathAttachments({
   )
 
   const flushPendingAttachments = useCallback(() => {
-    const paths = pendingResolvedPathsRef.current
-    const preserveNotice = pendingPathLimitRejectedRef.current
-    pendingResolvedPathsRef.current = []
+    const batches = pendingResolvedBatchesRef.current
+    let preserveNotice = pendingPathLimitRejectedRef.current
+    pendingResolvedBatchesRef.current = []
     pendingPathLimitRejectedRef.current = false
-    if (paths.length === 0 || disabledRef.current) {
+    if (batches.length === 0 || disabledRef.current) {
       return
     }
+    const paths = batches.flatMap((batch) => {
+      if (resolvedBatchIsCurrent(batch)) {
+        return batch
+      }
+      preserveNotice = true
+      return []
+    })
     applyResolvedPaths(paths, false, preserveNotice)
-  }, [applyResolvedPaths])
+  }, [applyResolvedPaths, resolvedBatchIsCurrent])
 
   return { attachResolvedPaths, disabledRef, flushPendingAttachments }
 }

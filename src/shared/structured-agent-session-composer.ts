@@ -18,7 +18,7 @@ const EFFORT_COMMAND: SlashCommandSuggestion = {
 }
 
 const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'clear', description: 'Start a fresh conversation' },
+  { name: 'clear', description: 'Clear conversation context' },
   { name: 'compact', description: 'Compact conversation context' }
 ]
 
@@ -36,13 +36,27 @@ export type StructuredAgentSessionComposerOptions = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   runConversationCommand?: (
     command: AgentSessionConversationCommand
-  ) => Promise<{ accepted: boolean; error: string | null }>
+  ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
+  /** Present only where the host can set this session's goal; otherwise `/goal`
+   *  stays message text the agent acts on itself. */
+  setThreadGoalObjective?: (objective: string) => Promise<boolean>
 }
+
+/** What the chat shows a refused command waiting on: the agent working, a pending prompt, its
+ *  background tasks, a message of this window's still being sent, or one showing its Retry. */
+export type StructuredAgentSessionCommandRefusalCause =
+  | 'working'
+  | 'prompt'
+  | 'background'
+  | 'sending'
+  | 'retry'
 
 export type StructuredAgentSessionCommandOutcome = {
   handled: boolean
   accepted: boolean
   error: string | null
+  /** The refusal is said only while this still holds. */
+  refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
 function commandParts(text: string): { name: string; argument: string } | null {
@@ -102,6 +116,44 @@ export function isStructuredAgentSessionComposerCommand(
   )
 }
 
+/** `/clear` or `/compact` alone: a conversation command with nothing after it. */
+export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
+  const command = commandParts(text.trim())
+  return Boolean(
+    command &&
+    command.argument === '' &&
+    CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
+  )
+}
+
+/** `/goal …`, which the host answers only where it can set this session's goal. */
+export function isStructuredAgentSessionGoalCommand(text: string): boolean {
+  return commandParts(text)?.name === 'goal'
+}
+
+/** `/clear`, `/compact` and `/goal …` change the conversation; option and picker commands do not. */
+export function structuredAgentSessionCommandChangesConversation(text: string): boolean {
+  const command = commandParts(text)
+  return (
+    command?.name === 'clear' ||
+    command?.name === 'compact' ||
+    (command?.name === 'goal' && command.argument !== '')
+  )
+}
+
+/** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
+export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
+  const command = commandParts(text)
+  return command?.name === 'goal' && command.argument === ''
+}
+
+/** The objective a goal-mode draft names. A `/goal …` typed there out of habit
+ *  names the same objective it would outside goal mode, never the literal command. */
+export function structuredAgentSessionGoalObjective(text: string): string {
+  const command = commandParts(text)
+  return command?.name === 'goal' ? command.argument : text.trim()
+}
+
 function unavailable(name: string): StructuredAgentSessionCommandOutcome {
   return {
     handled: true,
@@ -115,6 +167,17 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   controller: StructuredAgentSessionComposerOptions
 ): Promise<StructuredAgentSessionCommandOutcome> {
   const command = commandParts(text)
+  if (command?.name === 'goal' && controller.setThreadGoalObjective) {
+    if (!command.argument) {
+      return { handled: true, accepted: false, error: 'Describe the goal after /goal.' }
+    }
+    // A refusal reaches the user through the session's own error surface.
+    return {
+      handled: true,
+      accepted: await controller.setThreadGoalObjective(command.argument),
+      error: null
+    }
+  }
   if (!command || !isStructuredAgentSessionComposerCommand(text, controller.agent)) {
     return { handled: false, accepted: false, error: null }
   }

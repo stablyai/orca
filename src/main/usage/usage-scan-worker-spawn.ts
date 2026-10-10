@@ -1,26 +1,21 @@
+import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { existsSync } from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
-import type {
-  ClaudeUsageDailyAggregate,
-  ClaudeUsagePersistedFile,
-  ClaudeUsageSession
-} from '../claude-usage/types'
-import type {
-  CodexUsageDailyAggregate,
-  CodexUsagePersistedFile,
-  CodexUsageSession
-} from '../codex-usage/types'
-import type {
-  OpenCodeUsageDailyAggregate,
-  OpenCodeUsagePersistedDatabase,
-  OpenCodeUsageSession
-} from '../opencode-usage/types'
+import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-usage/types'
+import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
+import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
+import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
-import type { ClaudeUsageScanTarget } from '../claude-usage/scanner'
+import type {
+  UsageCacheSplitRequest,
+  UsageCacheSplitResult,
+  UsageSourceCacheRef
+} from './usage-source-cache-file'
 import {
   scanClaudeUsageOnWorker,
   scanCodexUsageOnWorker,
+  scanMuseUsageOnWorker,
   scanOpenCodeUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
@@ -54,79 +49,80 @@ function getSharedClient(): UsageScanWorkerClient {
 /**
  * Scan Claude usage transcripts through the shared worker client.
  * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-file cache.
- * @returns The same projection `scanClaudeUsageFiles` returns, computed off the main thread.
+ * @param sourceCache - Where the worker keeps that provider's per-source cache.
+ * @returns The session and daily projections, computed off the main thread.
  */
-export async function scanClaudeUsageFilesViaWorker(
+export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  previous: ClaudeUsagePersistedFile[] = [],
-  target?: ClaudeUsageScanTarget
+  sourceCache: UsageSourceCacheRef,
+  profileDirs = claudeProfileTranscriptDirs()
 ): Promise<{
-  processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
-  const value = await scanClaudeUsageOnWorker(
-    (body) => getSharedClient().scan(body),
+  return scanClaudeUsageOnWorker(
+    (body) =>
+      getSharedClient().scan(body.providerId === 'claude' ? { ...body, profileDirs } : body),
     worktrees,
-    previous,
-    target
+    sourceCache
   )
-  return {
-    processedFiles: value.source,
-    sessions: value.sessions,
-    dailyAggregates: value.dailyAggregates
-  }
 }
 
 /**
  * Scan Codex rollouts through the shared worker client.
  * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-file cache.
- * @returns The same projection `scanCodexUsageFiles` returns, computed off the main thread.
+ * @param sourceCache - Where the worker keeps that provider's per-source cache.
+ * @returns The session and daily projections, computed off the main thread.
  */
-export async function scanCodexUsageFilesViaWorker(
+export function scanCodexUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  previous: CodexUsagePersistedFile[] = []
+  sourceCache: UsageSourceCacheRef
 ): Promise<{
-  processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
 }> {
-  const value = await scanCodexUsageOnWorker(
-    (body) => getSharedClient().scan(body),
-    worktrees,
-    previous
-  )
-  return {
-    processedFiles: value.source,
-    sessions: value.sessions,
-    dailyAggregates: value.dailyAggregates
-  }
+  return scanCodexUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
 /**
  * Scan OpenCode usage databases through the shared worker client.
  * @param worktrees - Worktree refs used to attribute usage.
- * @param previous - Last scan's per-database cache.
- * @returns The same projection `scanOpenCodeUsageDatabases` returns, computed off the main thread.
+ * @param sourceCache - Where the worker keeps that provider's per-source cache.
+ * @returns The session and daily projections, computed off the main thread.
  */
-export async function scanOpenCodeUsageDatabasesViaWorker(
+export function scanOpenCodeUsageDatabasesViaWorker(
   worktrees: UsageScanWorktreeRef[],
-  previous: OpenCodeUsagePersistedDatabase[] = []
+  sourceCache: UsageSourceCacheRef
 ): Promise<{
-  processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
-  const value = await scanOpenCodeUsageOnWorker(
-    (body) => getSharedClient().scan(body),
-    worktrees,
-    previous
-  )
-  return {
-    processedDatabases: value.source,
-    sessions: value.sessions,
-    dailyAggregates: value.dailyAggregates
-  }
+  return scanOpenCodeUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+/**
+ * Scan Muse Code session logs through the shared worker client.
+ * @param worktrees - Worktree refs used to attribute usage.
+ * @param sourceCache - Where the worker keeps that provider's per-source cache.
+ * @returns The session and daily projections, computed off the main thread.
+ */
+export function scanMuseUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<{
+  sessions: MuseUsageSession[]
+  dailyAggregates: MuseUsageDailyAggregate[]
+}> {
+  return scanMuseUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+/**
+ * Split a usage cache that still carries its per-source records, through the shared worker client.
+ * @param request - The cache file and the key its per-source records sit under.
+ * @returns The report alone, as JSON text, and whether a split happened.
+ */
+export function splitUsageCacheFileViaWorker(
+  request: UsageCacheSplitRequest
+): Promise<UsageCacheSplitResult> {
+  return getSharedClient().splitCacheFile(request)
 }

@@ -7,6 +7,8 @@ import { app as electronApp, type BrowserWindow } from 'electron'
  *
  * ORCA_BACKGROUND_LAUNCH=1 keeps automation off screen. Native-focus specs
  * can use ORCA_E2E_FOREGROUND=1 only without an explicit background request.
+ * The hosted-Xvfb terminal benchmark explicitly presents after startup; see tests/AGENTS.md.
+ * This policy still suppresses its automatic reveals and foreground activation.
  */
 
 type ActivationPolicyApp = {
@@ -28,7 +30,7 @@ export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
   return env.ORCA_E2E_HEADLESS === '1' || env.ORCA_E2E_HEADFUL === '1'
 }
 
-/** True when no window should reach the screen at all (background or headless E2E; Playwright drives via CDP). */
+/** Suppresses automatic presentation on launch; this is not a query of current window visibility. */
 export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
   return (
     env.ORCA_BACKGROUND_LAUNCH === '1' ||
