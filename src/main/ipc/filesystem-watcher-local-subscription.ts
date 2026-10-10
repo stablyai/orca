@@ -188,6 +188,8 @@ async function subscribeWhileRemovalAllowed(
 
 export function unsubscribeLocalWatcher(worktreePath: string, senderId: number): void {
   const { key: rootKey } = getLocalWatcherRoot(worktreePath)
+  // Closing and reopening a failed root must allow a fresh install.
+  watcherLifecycleState.unwatchableRoots.delete(rootKey)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
   suspended?.listeners.delete(senderId)
   if (suspended?.listeners.size === 0) {
