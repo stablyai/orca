@@ -22,6 +22,7 @@ it.each([
   'config/i18next.config.ts',
   'config/scripts/verify-localization-extraction.mjs',
   'config/scripts/localization-extraction-change-scope.mjs',
+  'config/scripts/find-orphaned-catalog-keys.mjs',
   'config/patches/i18next-cli.patch',
   'package.json',
   'pnpm-lock.yaml',
