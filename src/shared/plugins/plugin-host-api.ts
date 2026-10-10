@@ -21,6 +21,7 @@ export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
 export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
 export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
+export const PLUGIN_PANEL_COMMAND_RESULT_MAX_BYTES = 1024 * 1024
 
 const workspaceReadContextParams = z.object({}).strict().optional()
 const workspaceReadContextResult = z
@@ -50,6 +51,22 @@ const terminalSendTextParams = z.object({
   enter: z.boolean().default(false)
 })
 const terminalSendTextResult = z.object({ accepted: z.boolean() })
+const commandInvokeParams = z
+  .object({
+    commandId: z.string().min(1).max(128),
+    args: z.json().optional()
+  })
+  .strict()
+const commandInvokeResult = z.json().refine((value) => {
+  try {
+    return (
+      new TextEncoder().encode(JSON.stringify(value)).byteLength <=
+      PLUGIN_PANEL_COMMAND_RESULT_MAX_BYTES
+    )
+  } catch {
+    return false
+  }
+}, 'command result exceeds the panel response limit')
 
 const notificationsShowParams = z.object({
   title: z.string().min(1).max(120),
@@ -139,6 +156,16 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: true,
     params: terminalSendTextParams,
     result: terminalSendTextResult
+  }),
+  spec({
+    name: 'commands.invoke',
+    since: '1.0',
+    scope: 'plugin-private',
+    capability: 'commands:invoke',
+    mutation: false,
+    panel: true,
+    params: commandInvokeParams,
+    result: commandInvokeResult
   }),
   spec({
     name: 'notifications.show',

@@ -260,6 +260,8 @@ export class PluginService {
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
               pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
+              invokePluginCommand: (pluginId, commandId, args) =>
+                this.invokeCommand(pluginId, commandId, args),
               subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
             })
           : null,

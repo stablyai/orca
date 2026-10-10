@@ -33,9 +33,10 @@ export type PluginRuntimeDelegate = {
 export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
+  invokePluginCommand: (pluginId: string, commandId: string, args?: unknown) => Promise<unknown>
   subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
 }): PluginHostServices {
-  const { delegate, pluginsDataDir, subscribeEvents } = input
+  const { delegate, pluginsDataDir, invokePluginCommand, subscribeEvents } = input
   return {
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
@@ -65,6 +66,8 @@ export function bindPluginHostServices(input: {
       return { accepted: result.accepted }
     },
     dispatchPluginNotification: (notification) => delegate.dispatchPluginNotification(notification),
+    invokePluginCommand: (pluginId, commandId, args) =>
+      invokePluginCommand(pluginId, commandId, args),
     storage: {
       get: (key, itemKey) => new PluginKvStore(pluginsDataDir, key, 'storage.json').get(itemKey),
       set: (key, itemKey, value) =>

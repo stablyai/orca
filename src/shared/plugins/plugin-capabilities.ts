@@ -18,6 +18,7 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'notifications:show',
   'storage',
   'secrets',
+  'commands:invoke',
   'events:subscribe',
   'settings:own'
 ] as const
@@ -38,6 +39,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
   storage: "Store data in the plugin's own storage folder",
   secrets: "Store and read secrets in the plugin's own encrypted vault",
+  'commands:invoke': "Invoke this plugin's contributed commands from its own panels",
   'events:subscribe':
     'Get notified when worktrees are created or removed and when agent status changes',
   'settings:own': "Read and change the plugin's own settings"

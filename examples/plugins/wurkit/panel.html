@@ -1,0 +1,321 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        color: var(--foreground);
+        background: var(--background);
+        font:
+          13px Geist,
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 14px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+      button,
+      input,
+      select {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 34px;
+        margin: 4px 0;
+        padding: 7px 9px;
+        color: inherit;
+        background: var(--background);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button.primary {
+        color: var(--primary-foreground);
+        background: var(--primary);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+      .row > * {
+        flex: 1;
+        min-width: 0;
+      }
+      .muted,
+      #status {
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+      #tickets {
+        list-style: none;
+        padding: 0;
+        margin: 12px 0;
+      }
+      #tickets li {
+        margin: 6px 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .ticket {
+        width: 100%;
+        padding: 10px;
+        text-align: left;
+        border: 0;
+      }
+      .ticket[aria-pressed='true'] {
+        outline: 2px solid var(--ring);
+      }
+      .title {
+        display: block;
+        margin: 4px 0;
+        font-weight: 600;
+      }
+      .meta {
+        display: block;
+        color: var(--muted-foreground);
+        font-size: 11px;
+      }
+      #key-form[hidden],
+      #send[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Wurkit tickets</h1>
+    <div id="key-form" hidden>
+      <label for="api-key">Read-only Wurkit API key</label>
+      <input
+        id="api-key"
+        type="password"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Paste key with projects.read, packages.read, and agents.read"
+      />
+      <button id="save-key" class="primary" type="button">Save key securely</button>
+    </div>
+    <div id="ticket-controls" hidden>
+      <button id="edit-key" type="button">Change API key</button>
+      <select id="project-filter" aria-label="Filter by project">
+        <option value="">All projects</option>
+      </select>
+      <button id="refresh" type="button">Refresh tickets</button>
+      <ul id="tickets" aria-label="Open Wurkit tickets"></ul>
+      <label for="agent-terminal">Send to agent terminal</label>
+      <select id="agent-terminal" aria-label="Agent terminal">
+        <option value="">Select a terminal</option>
+      </select>
+      <button id="send" class="primary" type="button" hidden>Wurk this</button>
+    </div>
+    <p id="status" role="status">Connecting to Orca…</p>
+    <script>
+      'use strict'
+      var pending = Object.create(null)
+      var nextId = 0
+      var selectedTicket = null
+      var projectFilter = document.getElementById('project-filter')
+      var ticketList = document.getElementById('tickets')
+      var keyForm = document.getElementById('key-form')
+      var controls = document.getElementById('ticket-controls')
+      var statusEl = document.getElementById('status')
+      var terminals = []
+
+      function call(method, params) {
+        return new Promise(function (resolve) {
+          var requestId = 'wurkit-' + ++nextId
+          pending[requestId] = resolve
+          window.parent.postMessage(
+            {
+              type: 'orca-panel-action',
+              requestId: requestId,
+              action: method,
+              params: params || {}
+            },
+            '*'
+          )
+        })
+      }
+
+      window.addEventListener('message', function (event) {
+        var data = event.data
+        if (!data || data.type !== 'orca-panel-action-result') return
+        var resolve = pending[data.requestId]
+        if (!resolve) return
+        delete pending[data.requestId]
+        resolve(data)
+      })
+
+      function hostValue(result, label) {
+        if (!result.ok) throw new Error(result.error || result.errorCode || label + ' failed')
+        return result.value
+      }
+
+      function showError(error) {
+        statusEl.textContent = error instanceof Error ? error.message : String(error)
+      }
+
+      function showKeyForm(message) {
+        keyForm.hidden = false
+        controls.hidden = true
+        statusEl.textContent = message
+      }
+
+      function renderTickets(data) {
+        keyForm.hidden = true
+        controls.hidden = false
+        ticketList.textContent = ''
+        selectedTicket = null
+        document.getElementById('send').hidden = true
+        data.tickets.forEach(function (ticket) {
+          var item = document.createElement('li')
+          var button = document.createElement('button')
+          button.type = 'button'
+          button.className = 'ticket'
+          button.setAttribute('aria-pressed', 'false')
+          var id = document.createElement('span')
+          id.className = 'meta'
+          id.textContent = ticket.identifier + ' · ' + ticket.status + ' · ' + ticket.priority
+          var title = document.createElement('span')
+          title.className = 'title'
+          title.textContent = ticket.title
+          var assignee = document.createElement('span')
+          assignee.className = 'meta'
+          assignee.textContent = ticket.assignee
+          button.appendChild(id)
+          button.appendChild(title)
+          button.appendChild(assignee)
+          button.addEventListener('click', function () {
+            Array.prototype.forEach.call(ticketList.querySelectorAll('.ticket'), function (node) {
+              node.setAttribute('aria-pressed', 'false')
+            })
+            button.setAttribute('aria-pressed', 'true')
+            selectedTicket = ticket
+            document.getElementById('send').hidden =
+              !document.getElementById('agent-terminal').value
+          })
+          item.appendChild(button)
+          ticketList.appendChild(item)
+        })
+        var notes = []
+        if (data.truncatedStatuses.length) {
+          notes.push('limited to 100 in: ' + data.truncatedStatuses.join(', '))
+        }
+        if (data.projectsTruncated) notes.push('project list limited to 100')
+        var summary = data.tickets.length
+          ? 'Loaded ' +
+            data.tickets.length +
+            ' open tickets · updated ' +
+            new Date(data.refreshedAt).toLocaleTimeString()
+          : 'No open tickets for this project.'
+        statusEl.textContent = notes.length ? summary + ' · ' + notes.join(' · ') : summary
+      }
+
+      function loadTickets() {
+        statusEl.textContent = 'Loading Wurkit tickets…'
+        call('commands.invoke', {
+          commandId: 'wurkit.load',
+          args: { projectId: projectFilter.value }
+        })
+          .then(function (result) {
+            var data = hostValue(result, 'Loading tickets')
+            var current = projectFilter.value
+            projectFilter.textContent = ''
+            var all = document.createElement('option')
+            all.value = ''
+            all.textContent = 'All projects'
+            projectFilter.appendChild(all)
+            data.projects.forEach(function (project) {
+              var option = document.createElement('option')
+              option.value = project.id
+              option.textContent = (project.identifierSlug || project.slug) + ' · ' + project.name
+              projectFilter.appendChild(option)
+            })
+            projectFilter.value = current
+            renderTickets(data)
+          })
+          .catch(function (error) {
+            var message = error instanceof Error ? error.message : String(error)
+            if (/key first|API key|unauthorized|unauthenticated|HTTP 401/i.test(message)) {
+              showKeyForm(
+                'Save a Wurkit API key with projects.read, packages.read, and agents.read.'
+              )
+            } else {
+              showError(error)
+            }
+          })
+      }
+
+      call('workspace.readContext', {})
+        .then(function (result) {
+          var context = hostValue(result, 'Reading the active worktree')
+          if (!context) {
+            statusEl.textContent = 'Open a worktree before sending a ticket to an agent.'
+            return
+          }
+          var select = document.getElementById('agent-terminal')
+          terminals = context.terminals
+          terminals.forEach(function (terminal, index) {
+            var option = document.createElement('option')
+            option.value = terminal.id
+            option.textContent = 'Agent terminal ' + (index + 1)
+            select.appendChild(option)
+          })
+          select.addEventListener('change', function () {
+            document.getElementById('send').hidden = !selectedTicket || !select.value
+          })
+          keyForm.hidden = false
+          controls.hidden = false
+          loadTickets()
+        })
+        .catch(showError)
+
+      document.getElementById('save-key').addEventListener('click', function () {
+        var input = document.getElementById('api-key')
+        var apiKey = input.value.trim()
+        if (!apiKey) {
+          statusEl.textContent = 'Paste a Wurkit API key first.'
+          return
+        }
+        statusEl.textContent = 'Saving key to Orca’s encrypted secrets vault…'
+        call('commands.invoke', { commandId: 'wurkit.save-key', args: { apiKey: apiKey } })
+          .then(function (result) {
+            hostValue(result, 'Saving the key')
+            input.value = ''
+            keyForm.hidden = true
+            controls.hidden = false
+            loadTickets()
+          })
+          .catch(showError)
+      })
+
+      document.getElementById('edit-key').addEventListener('click', function () {
+        keyForm.hidden = false
+        statusEl.textContent =
+          'Replace the Wurkit API key. The saved key stays in Orca’s encrypted vault until overwritten.'
+      })
+
+      document.getElementById('refresh').addEventListener('click', loadTickets)
+      projectFilter.addEventListener('change', loadTickets)
+      document.getElementById('send').addEventListener('click', function () {
+        var terminalId = document.getElementById('agent-terminal').value
+        if (!selectedTicket || !terminalId) return
+        call('terminal.sendText', {
+          terminalId: terminalId,
+          text: 'Wurk ' + selectedTicket.identifier + ' in Wurkit.',
+          enter: true
+        })
+          .then(function (result) {
+            hostValue(result, 'Sending ticket to agent')
+            statusEl.textContent =
+              'Sent ' + selectedTicket.identifier + ' to the selected terminal.'
+          })
+          .catch(showError)
+      })
+    </script>
+  </body>
+</html>

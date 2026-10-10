@@ -38,6 +38,7 @@ function createServices(): PluginHostServices {
       .mockResolvedValue([{ id: TERMINAL_ID, title: '/home/private/orca' }]),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
+    invokePluginCommand: vi.fn().mockResolvedValue({ ok: true }),
     storage: {
       get: vi.fn().mockReturnValue('stored'),
       set: vi.fn().mockReturnValue({ ok: true }),
@@ -107,6 +108,7 @@ function createAdapters(
 const successParams: Record<string, unknown> = {
   'workspace.readContext': {},
   'terminal.sendText': { terminalId: TERMINAL_ID, text: 'echo hi', enter: true },
+  'commands.invoke': { commandId: 'demo.run', args: { value: 1 } },
   'notifications.show': { title: 'Hello' },
   'storage.get': { key: 'alpha' },
   'storage.set': { key: 'alpha', value: 1 },
@@ -122,7 +124,7 @@ const successParams: Record<string, unknown> = {
 
 describe('plugin host main/relay conformance', () => {
   it('runs a granted success through both transports for all 13 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(13)
+    expect(PLUGIN_HOST_API_V0).toHaveLength(14)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )

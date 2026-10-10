@@ -92,6 +92,7 @@ export async function executePluginHostCall(
   try {
     const value = await bound.handler(parsedParams.data, {
       pluginId: input.pluginId,
+      viaPanel: input.viaPanel,
       services: input.services
     })
     const validated = bound.spec.result.safeParse(value)

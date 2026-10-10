@@ -11,6 +11,7 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
+    invokePluginCommand: vi.fn().mockResolvedValue({ ok: true }),
     storage: {
       get: vi.fn(),
       set: storageSet,
@@ -141,6 +142,7 @@ function createTerminalHarness(terminalHandles: string[]): {
     services: bindPluginHostServices({
       delegate,
       pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test'),
+      invokePluginCommand: vi.fn().mockResolvedValue({ ok: true }),
       subscribeEvents: vi.fn().mockReturnValue([])
     })
   }
@@ -234,6 +236,49 @@ describe('terminal.sendText explicit worktree routing', () => {
       PLUGIN_WORKSPACE_TERMINAL_LIMIT
     )
     expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('commands.invoke panel bridge', () => {
+  it('invokes a plugin command only with the explicit capability', async () => {
+    const invokePluginCommand = vi.fn().mockResolvedValue({ tickets: [] })
+    const services = createServices(vi.fn().mockReturnValue({ ok: true }))
+    services.invokePluginCommand = invokePluginCommand
+
+    const denied = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'commands.invoke',
+      params: { commandId: 'wurkit.load', args: { projectId: 'p1' } },
+      viaPanel: true,
+      grantedCapabilities: ['workspace:read'],
+      services
+    })
+    expect(denied).toMatchObject({ ok: false, code: 'capability_denied' })
+    expect(invokePluginCommand).not.toHaveBeenCalled()
+
+    const allowed = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'commands.invoke',
+      params: { commandId: 'wurkit.load', args: { projectId: 'p1' } },
+      viaPanel: true,
+      grantedCapabilities: ['commands:invoke'],
+      services
+    })
+    expect(allowed).toEqual({ ok: true, value: { tickets: [] } })
+    expect(invokePluginCommand).toHaveBeenCalledWith('orca-samples.demo', 'wurkit.load', {
+      projectId: 'p1'
+    })
+
+    const workerCall = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'commands.invoke',
+      params: { commandId: 'wurkit.load' },
+      viaPanel: false,
+      grantedCapabilities: ['commands:invoke'],
+      services
+    })
+    expect(workerCall).toMatchObject({ ok: false, code: 'action_failed' })
+    expect(invokePluginCommand).toHaveBeenCalledTimes(1)
   })
 })
 

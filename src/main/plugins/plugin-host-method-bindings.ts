@@ -28,6 +28,7 @@ export type PluginHostServices = {
     title: string
     body?: string
   }): Promise<{ delivered: boolean }>
+  invokePluginCommand(pluginId: string, commandId: string, args?: unknown): Promise<unknown>
   storage: {
     get(pluginId: string, key: string): unknown
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
@@ -53,7 +54,7 @@ export type BoundPluginHostMethod = {
   spec: PluginHostMethodSpec
   handler: (
     params: unknown,
-    ctx: { pluginId: string; services: PluginHostServices }
+    ctx: { pluginId: string; services: PluginHostServices; viaPanel: boolean }
   ) => Promise<unknown>
 }
 
@@ -107,6 +108,13 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     }
     const result = await services.sendTerminalText(terminalId, { text, enter })
     return { accepted: result.accepted }
+  }),
+  definePluginMethod('commands.invoke', async (params, { pluginId, services, viaPanel }) => {
+    if (!viaPanel) {
+      throw new Error('commands.invoke is only available to sandboxed panels')
+    }
+    const { commandId, args } = params as { commandId: string; args?: unknown }
+    return services.invokePluginCommand(pluginId, commandId, args)
   }),
   definePluginMethod('notifications.show', async (params, { pluginId, services }) => {
     const { title, body } = params as { title: string; body?: string }

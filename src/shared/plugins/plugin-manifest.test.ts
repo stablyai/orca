@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   PLUGIN_COMMAND_LIMIT,
@@ -22,6 +24,13 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 describe('pluginManifestSchema boundaries', () => {
+  it('accepts the Wurkit example plugin manifest', () => {
+    const manifestPath = join(process.cwd(), 'examples/plugins/wurkit/orca-plugin.json')
+    const sample = JSON.parse(readFileSync(manifestPath, 'utf8')) as unknown
+
+    expect(parsePluginManifest(sample)).toMatchObject({ ok: true })
+  })
+
   it('accepts documented dotted command namespaces with camel-case actions', () => {
     const result = parsePluginManifest(
       manifest({
