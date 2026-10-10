@@ -284,6 +284,15 @@ export class ShadowSeatDirectory {
     return [...this.cells.keys()]
   }
 
+  // One cell's seats as the map holds them.
+  seatsOnCell(cellId: string): Array<{ userId: string; relayHostId: string; seat: ShadowSeat }> {
+    const cursor = this.cells.get(cellId)
+    if (!cursor) return []
+    return [...cursor.seats].map(([key, seat]) => {
+      const separator = key.indexOf('\u0000')
+      return { userId: key.slice(0, separator), relayHostId: key.slice(separator + 1), seat }
+    })
+  }
 
   // An old cell (404) has no feed; its last known seats stay, marked by status.
   markNoFeed(cellId: string, now: number, runtimeIncarnation?: string): void {

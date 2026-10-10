@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CellReserveClient } from './cell-reserve-client.js'
-import { ReserveAssignment, ReservePaceError, RESERVE_STARTUP_GATE_MS } from './reserve-assignment.js'
+import {
+  ReserveAssignment,
+  ReservePaceError,
+  RESERVE_ROW_FLOOR_TTL_MS,
+  RESERVE_WRONG_CELL_ROW_READ_MS,
+  RESERVE_STARTUP_GATE_MS
+} from './reserve-assignment.js'
 import { ReservePlacer, type ReserveAttempt } from './reserve-placement.js'
 import { ShadowSeatDirectory, type SeatFeedCell, type SeatFeedResponse } from './shadow-seat-directory.js'
 
@@ -43,6 +49,7 @@ function setup(
     feeds?: SeatFeedResponse[]
     reserve?: (cellId: string, sticky: boolean) => ReserveAttempt
     row?: (identity: { userId: string; relayHostId: string }) => Promise<{ cellId: string; assignmentEpoch: number } | null>
+    databaseBusy?: () => boolean
     mode?: 'off' | 'dry-run' | 'on'
     startedAt?: number
   } = {}
@@ -78,6 +85,7 @@ function setup(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
     client: client as unknown as CellReserveClient,
     readRow: options.row ?? (async () => null),
+    ...(options.databaseBusy ? { databaseBusy: options.databaseBusy } : {}),
     now: () => now.value,
     random: () => 0.25,
     log: () => undefined
@@ -88,7 +96,7 @@ function setup(
   for (const response of options.feeds ?? cells.map((cell) => feed(cell.cellId))) {
     directory.apply(response.cellId, { ...response, full: response.full ?? [] }, now.value - 1, now.value - 1)
   }
-  return { assignment, directory, reserved, demoted, now }
+  return { assignment, directory, reserved, demoted, now, placer }
 }
 
 function seated(epoch: number, joinedAt = 0) {
@@ -162,6 +170,21 @@ describe('reserve assignment on a director', () => {
     expect(plan).toMatchObject({ kind: 'answer', lane: 'sticky', assignment: { cellId: 'c1', assignmentEpoch: 7 } })
   })
 
+  it('after the reconcile demotes a seat behind its row, mints above the row and never answers that seat', async () => {
+    const { assignment, directory, reserved, now } = setup({ feeds: [feed('c1', { full: [seated(7)] }), feed('c2')] })
+    // The row names another cell at epoch 8; the mirror would refuse a re-assign at 8.
+    assignment.raiseEpochFloor(HOST, 8)
+    const plan = await assignment.plan(HOST, { reconnect: true, region: US })
+    expect(plan).toMatchObject({ kind: 'answer', lane: 'placement', assignment: { assignmentEpoch: 9 } })
+    expect(reserved.every((call) => !call.sticky && call.epoch === 9)).toBe(true)
+    // The floor lapses, so a host it no longer protects answers from memory again.
+    now.value += RESERVE_ROW_FLOOR_TTL_MS + 1
+    for (const response of [feed('c1', { seq: 2, full: [seated(7)] }), feed('c2', { seq: 2 })]) {
+      directory.apply(response.cellId, response, now.value, now.value)
+    }
+    expect(await assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({ lane: 'sticky' })
+  })
+
   it('never sends a drained or demoted host back, and books it elsewhere above every known epoch', async () => {
     const { assignment, directory, reserved, now } = setup()
     directory.apply(
@@ -229,6 +252,62 @@ describe('reserve assignment on a director', () => {
       kind: 'answer',
       assignment: { assignmentEpoch: 12 }
     })
+  })
+
+  it('after a WRONG_CELL leave, any director reads the row and mints above it', async () => {
+    const leftWrongCell = (
+      row: () => Promise<{ cellId: string; assignmentEpoch: number } | null>,
+      databaseBusy?: () => boolean
+    ) => {
+      const harness = setup({ row, ...(databaseBusy ? { databaseBusy } : {}) })
+      // Another director demoted the seat: this one only sees the leave in c1's feed.
+      harness.directory.apply(
+        'c1',
+        feed('c1', {
+          full: undefined,
+          seq: 3,
+          changes: [
+            { seq: 2, kind: 'join', ...HOST, epoch: 7, generation: 1, at: 1 },
+            { seq: 3, kind: 'leave', ...HOST, epoch: 7, generation: 1, closeCode: 4409, at: 2 }
+          ]
+        }),
+        harness.now.value,
+        harness.now.value
+      )
+      return harness
+    }
+    const row = vi.fn(async () => ({ cellId: 'c2', assignmentEpoch: 8 }))
+    const read = leftWrongCell(row)
+    expect(await read.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      lane: 'placement',
+      assignment: { assignmentEpoch: 9 }
+    })
+    expect(row).toHaveBeenCalledTimes(1)
+    // The database down: placed as before the read existed, above what the map knows.
+    const down = leftWrongCell(async () => Promise.reject(new Error('timeout')))
+    expect(await down.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      assignment: { assignmentEpoch: 8 }
+    })
+    // Pool waiters: the read is skipped outright, so a stall cannot stack timed-out reads.
+    const busyRow = vi.fn(async () => ({ cellId: 'c2', assignmentEpoch: 8 }))
+    const busy = leftWrongCell(busyRow, () => true)
+    expect(await busy.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      assignment: { assignmentEpoch: 8 }
+    })
+    expect(busyRow).not.toHaveBeenCalled()
+    // A stalled database: the read gives up after its bound and places as before.
+    vi.useFakeTimers()
+    try {
+      const stalled = leftWrongCell(() => new Promise(() => undefined))
+      const plan = stalled.assignment.plan(HOST, { reconnect: true, region: US })
+      await vi.advanceTimersByTimeAsync(RESERVE_WRONG_CELL_ROW_READ_MS)
+      expect(await plan).toMatchObject({ kind: 'answer', assignment: { assignmentEpoch: 8 } })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('paces with Retry-After when every reserve cell is out of budget and no database cell exists', async () => {

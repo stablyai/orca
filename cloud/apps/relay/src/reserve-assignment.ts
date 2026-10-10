@@ -49,9 +49,32 @@ export type ReservePlan =
       placeFresh?: () => Promise<RelayAssignment | null>
     }
 
+// A host whose seat the ledger reconcile demoted mints above its row for this long, so the
+// re-assign does not collide with the row again (the mirror refuses an equal epoch).
+export const RESERVE_ROW_FLOOR_TTL_MS = 2 * 60 * 60_000
+const RESERVE_ROW_FLOOR_MAX = 100_000
+
+// The WRONG_CELL row read's bound: well under a database stall (5-7 s).
+export const RESERVE_WRONG_CELL_ROW_READ_MS = 1_000
+
+// Rejects after `ms`; the read itself still settles later, and its failure is swallowed.
+async function withinMs<T>(read: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('row_read_timeout')), ms)
+  })
+  read.catch(() => undefined)
+  try {
+    return await Promise.race([read, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export class ReserveAssignment {
   private summary: PlacementSummary = emptySummary()
   private summaryAt: number
+  private readonly rowFloors = new Map<string, { epoch: number; expiresAt: number }>()
 
   constructor(
     private readonly input: {
@@ -63,6 +86,9 @@ export class ReserveAssignment {
       client: CellReserveClient
       // One primary-key read of the host's row: only for a host the map has never seen.
       readRow: (identity: Identity) => Promise<{ cellId: string; assignmentEpoch: number } | null>
+      // True while the pool has waiters: the optional WRONG_CELL read is skipped, so timed-out
+      // reads cannot stack up behind a stall.
+      databaseBusy?: () => boolean
       now?: () => number
       random?: () => number
       log?: (line: string) => void
@@ -130,19 +156,34 @@ export class ReserveAssignment {
       .filter((entry) => now - entry.at <= RESERVE_STICKY_RECENT_MS)
       .at(-1)
     const booking = directory.bookingOf(identity.userId, identity.relayHostId)
+    const rowFloor = this.rowFloor(identity, now)
     const known = [
       ...seats.map((seat) => seat.epoch),
       ...(left ? [left.epoch] : []),
-      ...(booking ? [booking.epoch] : [])
+      ...(booking ? [booking.epoch] : []),
+      ...(rowFloor === undefined ? [] : [rowFloor])
     ]
     let row: { cellId: string; assignmentEpoch: number } | null = null
-    if (known.length === 0) {
+    // A seat closed with WRONG_CELL was demoted (or failed to re-register) because its row is
+    // ahead, which every director sees in that cell's feed: read the row, so the re-assign mints
+    // above it on any director, not just the one that demoted it.
+    const leftWrongCell =
+      left?.closeCode === RELAY_CLOSE_CODE.WRONG_CELL && !(this.input.databaseBusy?.() ?? false)
+    if (known.length === 0 || leftWrongCell) {
       try {
-        row = await this.input.readRow(identity)
+        // Only the never-seen host needs the row; for the WRONG_CELL one it is an optimisation,
+        // bounded so a database stall cannot hold the reconnect (the reconcile repairs a miss).
+        row =
+          known.length === 0
+            ? await this.input.readRow(identity)
+            : await withinMs(this.input.readRow(identity), RESERVE_WRONG_CELL_ROW_READ_MS)
       } catch {
         // A host the map never saw, with the database down: its epoch cannot be minted safely.
-        this.summary.retries.database += 1
-        return { kind: 'retry', retryAfterSeconds: 2, reason: 'database' }
+        // One the map knows places as it did before this read existed.
+        if (known.length === 0) {
+          this.summary.retries.database += 1
+          return { kind: 'retry', retryAfterSeconds: 2, reason: 'database' }
+        }
       }
       if (row) known.push(row.assignmentEpoch)
     }
@@ -158,7 +199,7 @@ export class ReserveAssignment {
     }
 
     if (request.reconnect) {
-      const sticky = await this.stickyFromMemory(identity, seats, left, now)
+      const sticky = await this.stickyFromMemory(identity, seats, left, now, rowFloor ?? 0)
       if (sticky) {
         this.summary.sticky += 1
         return { kind: 'answer', assignment: sticky, lane: 'sticky' }
@@ -183,11 +224,14 @@ export class ReserveAssignment {
     identity: Identity,
     seats: ShadowSeat[],
     left: { cellId: string; epoch: number; incarnation?: string; closeCode?: number } | undefined,
-    now: number
+    now: number,
+    rowFloor: number
   ): Promise<RelayAssignment | null> {
     // Highest epoch first, then the newest join: only the newest grant may be answered from
     // memory, so a stale seat (or a leaver at a lower epoch) is never sent back.
     const newest = Math.max(0, ...seats.map((seat) => seat.epoch), left?.epoch ?? 0)
+    // A seat at or behind a row the reconcile demoted it for is never answered again.
+    if (newest <= rowFloor) return null
     const candidates: Array<{
       cellId: string
       epoch: number
@@ -308,6 +352,42 @@ export class ReserveAssignment {
       })
       .catch(() => undefined)
     return null
+  }
+
+  // The ledger reconcile demoted this host's seat behind (or level with) a row at `epoch`.
+  raiseEpochFloor(identity: Identity, epoch: number): void {
+    const key = `${identity.userId}\u0000${identity.relayHostId}`
+    const current = this.rowFloors.get(key)
+    this.rowFloors.delete(key)
+    this.rowFloors.set(key, {
+      epoch: Math.max(epoch, current?.epoch ?? 0),
+      expiresAt: this.now() + RESERVE_ROW_FLOOR_TTL_MS
+    })
+    if (this.rowFloors.size > RESERVE_ROW_FLOOR_MAX) {
+      this.rowFloors.delete(this.rowFloors.keys().next().value!)
+    }
+  }
+
+  private rowFloor(identity: Identity, now: number): number | undefined {
+    const key = `${identity.userId}\u0000${identity.relayHostId}`
+    const floor = this.rowFloors.get(key)
+    if (!floor) return undefined
+    if (floor.expiresAt > now) return floor.epoch
+    this.rowFloors.delete(key)
+    return undefined
+  }
+
+  // Fire-and-forget; the cell checks the seat's epoch and join itself.
+  demoteSeat(seat: { userId: string; relayHostId: string; cellId: string; epoch: number; joinedAt: number }): void {
+    const cell = this.input.cells().find((entry) => entry.cellId === seat.cellId)
+    if (!cell) return
+    void this.input.client.demote(cell, {
+      v: 1,
+      userId: seat.userId,
+      relayHostId: seat.relayHostId,
+      epoch: seat.epoch,
+      joinedAt: seat.joinedAt
+    })
   }
 
   // Supersede at placement: the old seats this director's map holds on reserve cells are told
