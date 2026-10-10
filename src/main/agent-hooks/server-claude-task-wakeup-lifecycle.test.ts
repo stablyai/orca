@@ -182,6 +182,83 @@ describe.each([false, true])('Claude wake-up production ingress remote=%s', (rem
     }
   })
 
+  it.each(['subagent-resumed', 'subagent-with-own-shell', 'monitor-events'])(
+    '%s announces no captured wake-up turn that ends with a task still running',
+    async (scenario) => {
+      const server = await host(remote)
+      const announcedWakeups: number[] = []
+      let wakeup = false
+      try {
+        for (const [index, record] of hooks
+          .filter((r) => r.scenario === scenario && r.payload)
+          .entries()) {
+          const payload = record.payload!
+          await server.post(payload)
+          if (payload.hook_event_name === 'UserPromptSubmit') {
+            wakeup = String(payload.prompt).startsWith('<task-notification>')
+          } else if (payload.hook_event_name === 'Stop') {
+            const tasks = Array.isArray(payload.background_tasks) ? payload.background_tasks : []
+            const taskStillRunning = tasks.some((task) => task.status === 'running')
+            if (wakeup && taskStillRunning && server.row()?.turnCompletedAt !== undefined) {
+              announcedWakeups.push(index)
+            }
+            wakeup = false
+          }
+        }
+        expect(announcedWakeups).toEqual([])
+        expect(server.row()?.state).toBe('done')
+      } finally {
+        server.stop()
+      }
+    }
+  )
+
+  it('announces no wake-up turn that ends while another launched task still runs', async () => {
+    const server = await host(remote)
+    try {
+      await server.post({ hook_event_name: 'UserPromptSubmit', prompt: 'delegate two' })
+      for (const id of ['a1', 'b1']) {
+        await server.post({ hook_event_name: 'SubagentStart', agent_id: id })
+        await server.post({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Agent',
+          tool_response: { isAsync: true, agentId: id }
+        })
+      }
+      await server.post({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'a1', type: 'subagent', status: 'running' },
+          { id: 'b1', type: 'subagent', status: 'running' }
+        ]
+      })
+      // The turn the user asked for still announces its end.
+      expect(server.row()).toMatchObject({ state: 'working', turnCompletedAt: expect.any(Number) })
+
+      await server.post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: '<task-notification><task-id>a1</task-id><status>completed</status>'
+      })
+      await server.post({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'b1', type: 'subagent', status: 'running' }]
+      })
+      expect(server.row()).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+      expect(server.row()?.turnCompletedAt).toBeUndefined()
+
+      await server.post({ hook_event_name: 'SubagentStop', agent_id: 'b1' })
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: '<task-notification><task-id>b1</task-id><status>completed</status>'
+      })
+      await server.post({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(server.row()?.state).toBe('done')
+    } finally {
+      server.stop()
+    }
+  })
+
   it('does not reopen notification debt for a duplicate child-end post', async () => {
     const server = await host(remote)
     try {

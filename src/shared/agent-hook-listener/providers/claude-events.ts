@@ -289,6 +289,9 @@ export function normalizeClaudeEvent(
     eventAgentId === undefined &&
     isTurnBoundary &&
     outcome !== 'cancellation' &&
+    // Why: a turn a background task's report-back woke is not news while other tasks still run;
+    // the last one's wake-up ends with no child work and settles the row as a normal completion.
+    previousLead?.taskWakeupTurn !== true &&
     isAgentStatusHeldOpenByChildWork({
       state: resolvedStatus.stateName,
       mainAgent: { state: reportedStateName }
