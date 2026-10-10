@@ -427,14 +427,17 @@ describe('payload bounds on import', () => {
     })
 
     const item = journal.snapshot().items[0]
-    expect(item?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
+    expect(item?.body).toMatchObject({ kind: 'message', role: 'tool' })
     const body = item?.body
-    if (body?.kind !== 'tool-call' || !body.output) {
-      throw new Error('expected a bounded tool-call output')
+    const result = body?.kind === 'message' ? body.blocks[0] : undefined
+    if (result?.type !== 'tool-result') {
+      throw new Error('expected a bounded tool result')
     }
-    expect(body.output.truncated).toBe(true)
-    expect(body.output.byteLength).toBe(64 * 1024)
-    expect(body.output.head).toHaveLength(1_024)
+    expect(result.callId).toBe('toolu_9')
+    expect(result.output.startsWith('y'.repeat(1_024))).toBe(true)
+    expect(result.output).toContain('65536 bytes')
+    expect(result.output).toContain('output truncated')
+    expect(result.output.length).toBeLessThan(1_200)
   })
 
   it('bounds an imported subagent roster by entry count, label and id', async () => {

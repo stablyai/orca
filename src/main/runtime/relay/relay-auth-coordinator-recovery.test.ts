@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 import { RelayHttpError } from './relay-http-client'
 
 const context: RelayAuthContext = {

@@ -158,7 +158,12 @@ export function withActivatedVersion(
   appVersion?: string
 ): OrcadActivationRecord {
   const same = record.active === version
-  const previousAppVersion = same ? record.previousAppVersion : record.activeAppVersion
+  // A stopped record keeps activeAppVersion with nothing active; it names no `previous` here.
+  const previousAppVersion = same
+    ? record.previousAppVersion
+    : record.active
+      ? record.activeAppVersion
+      : undefined
   return {
     schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
     active: version,
@@ -206,6 +211,22 @@ export function withDeactivatedVersion(record: OrcadActivationRecord): OrcadActi
 }
 
 /**
+ * The deactivated record as committed to the host. Never journaled: released peers require a stop
+ * journal's `recordAfter` to equal their core-only `withDeactivatedVersion`, byte for byte.
+ */
+export function withDeactivatedVersionCommitted(
+  record: OrcadActivationRecord
+): OrcadActivationRecord {
+  return {
+    ...withDeactivatedVersion(record),
+    // Why kept with nothing active: the stopped build may have migrated the host's state, and
+    // released planners already skip a host whose activeAppVersion is newer than theirs.
+    ...(record.activeAppVersion ? { activeAppVersion: record.activeAppVersion } : {}),
+    ...(record.rolledBackFrom ? { rolledBackFrom: record.rolledBackFrom } : {})
+  }
+}
+
+/**
  * Version dirs GC must not remove, as directory names.
  *
  * `previous` is here because a rollback target that GC deleted is not a rollback target.
@@ -217,8 +238,11 @@ export function orcadGcPinnedDirNames(
   record: OrcadActivationRecord,
   daemonEntryVersion?: string | null
 ): string[] {
-  const versions = [record.active, record.previous, daemonEntryVersion ?? null].filter(
-    (v): v is string => typeof v === 'string' && v.length > 0
-  )
-  return [...new Set(versions)].map((version) => remoteInstallDirName(ORCAD_INSTALL_MODEL, version))
+  return orcadInstallDirNames([record.active, record.previous, daemonEntryVersion])
+}
+
+/** Distinct install dir names for the non-empty versions, in first-seen order. */
+export function orcadInstallDirNames(versions: readonly (string | null | undefined)[]): string[] {
+  const named = versions.filter((v): v is string => typeof v === 'string' && v.length > 0)
+  return [...new Set(named)].map((version) => remoteInstallDirName(ORCAD_INSTALL_MODEL, version))
 }

@@ -9,10 +9,6 @@ import { gitFetch } from '../../../git/remote'
 import { gitSyncForkDefaultBranch } from '../../../git/fork-sync'
 import { getUpstreamStatus } from '../../../git/upstream'
 import { validateGitPushTarget } from '../../../git/push-target-validation'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { assertValidGitPushTarget } from '../../../../shared/git-push-target-validation'
@@ -22,6 +18,8 @@ import {
   materializeWorktreePushTargetRemoteSsh
 } from '../../worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
+import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -32,15 +30,12 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<GitUpstreamStatus> => {
-      if (args.connectionId) {
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
         if (args.pushTarget) {
           assertValidGitPushTarget(args.pushTarget)
         }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
+        return route.provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -63,17 +58,14 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
         pushTarget?: GitPushTarget
       }
     ): Promise<void> => {
-      if (args.connectionId) {
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
         if (args.pushTarget) {
           assertValidGitPushTarget(args.pushTarget)
         }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
         const materializedPushTarget = args.pushTarget
           ? await materializeWorktreePushTargetRemoteSsh(
-              provider,
+              route.provider,
               args.worktreePath,
               args.pushTarget,
               store,
@@ -81,7 +73,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
               args.worktreeId
             )
           : undefined
-        return provider.fetchRemote(args.worktreePath, materializedPushTarget)
+        return route.provider.fetchRemote(args.worktreePath, materializedPushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -125,12 +117,9 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
       const expectedUpstream = validateGitForkSyncExpectedUpstream(args.expectedUpstream, {
         required: true
       })
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.syncForkDefaultBranch(args.worktreePath, expectedUpstream)
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
+        return route.provider.syncForkDefaultBranch(args.worktreePath, expectedUpstream)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(

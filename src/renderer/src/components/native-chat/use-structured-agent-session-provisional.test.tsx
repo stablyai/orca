@@ -59,8 +59,12 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   }
 }))
 
+vi.mock('@/lib/structured-agent-session-launch-create-support', () => ({
+  useStructuredLaunchCreateSupport: () => false
+}))
+
 vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
-  takeBackStructuredLaunchPrompts: mocks.takeBackLaunchText
+  takeBackLegacyStructuredLaunchPrompts: mocks.takeBackLaunchText
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -68,6 +72,7 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
 }))
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -115,9 +120,15 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     readState = sessionState()
     mocks.send.mockReturnValue(true)
     mocks.call.mockResolvedValue(OPTIONS)
+    resetHostModelCatalogSnapshotsForTests()
   })
 
   it('keeps local sends usable while withholding every provider surface but the picker', async () => {
+    mocks.call.mockResolvedValue({
+      origin: 'probe',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5', efforts: [] }],
+      fetchedAt: 1_000
+    })
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -144,8 +155,8 @@ describe('useStructuredAgentSession provisional launch gate', () => {
       conversationCommands: []
     })
     expect(result.current.sessionCommands).toBeUndefined()
-    // The picker shows the selection the create seeds, from the first frame.
-    expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
+    // The picker shows the selection the create seeds, once the host's list names it.
+    await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
     expect(result.current.optionSurface.getSnapshot()).toBe(result.current.optionSnapshot)
     expect(result.current.send('queued while launching')).toBe(true)
     expect(mocks.send).toHaveBeenCalledWith('queued while launching')

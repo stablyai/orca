@@ -114,6 +114,9 @@ export type TerminalTab = {
    *  `sortEpoch` increments. Split layouts use a numeric count because one tab
    *  can remount several panes. Never persisted — it is a transient handoff. */
   pendingActivationSpawn?: boolean | number
+  /** Hydrated from the saved session, so its own persisted PTY bindings identify it; a host
+   *  surface may retire it only by that identity. Never persisted; dropped once a PTY binds. */
+  restoredFromSession?: true
   /** Transient recovery ledger for this tab. Never persisted — it describes a
    *  mounted pane's in-flight heal, and a stale one would refuse the first
    *  legitimate recovery after restart. Stripped exactly like

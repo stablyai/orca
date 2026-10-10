@@ -14,7 +14,7 @@ import {
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { getActiveMultiplexer } from '../ssh'
@@ -123,9 +123,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           const detected = await detectRepoIconAndUpstream({
             repoPath: importRepoPath,
             kind: 'git',
-            executionHostId: args.connectionId
-              ? toSshExecutionHostId(args.connectionId)
-              : LOCAL_EXECUTION_HOST_ID
+            executionHostId: getConnectionExecutionHostId(args.connectionId)
           })
           const repo: Repo = {
             id: randomUUID(),

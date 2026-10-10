@@ -5,12 +5,12 @@ import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
   SettingsUpdate
-} from './client-settings-schemas'
+} from '../../../../shared/rpc-contract/client-settings-params'
 import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
 // Type-only side effect: keeps the schema/PersistedUIState parity assertions in
 // the typecheck graph so drift fails the build instead of a paired client.
 
-import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
+import { TerminalQuickCommandsUpdate } from '../../../../shared/rpc-contract/terminal-quick-command-params'
 
 export const CLIENT_UI_METHODS = [
   defineMethod({

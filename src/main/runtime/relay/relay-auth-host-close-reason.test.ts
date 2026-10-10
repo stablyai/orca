@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
-import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 
 const context: RelayAuthContext = {
   identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },

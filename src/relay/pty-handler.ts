@@ -347,6 +347,7 @@ function killPtyProcess(pty: IPty, signal: string): void {
 }
 
 function finishPtyCreationOperations(operations: readonly (() => void)[]): void {
+  // Why: the relay still targets Node 18, which lacks Array.prototype.toReversed.
   for (let index = operations.length - 1; index >= 0; index--) {
     operations[index]()
   }

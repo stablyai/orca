@@ -104,7 +104,7 @@ describe('openDocPreviewExternally', () => {
   it('hands a local document straight to the OS', () => {
     openDocPreviewExternally(REMOTE_DOCUMENT)
 
-    expect(mocks.openFilePath).toHaveBeenCalledWith(REMOTE_DOCUMENT.filePath)
+    expect(mocks.openFilePath).toHaveBeenCalledWith(REMOTE_DOCUMENT.filePath, 'local')
     expect(mocks.downloadAndOpen).not.toHaveBeenCalled()
   })
 

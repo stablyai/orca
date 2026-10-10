@@ -19,12 +19,10 @@ import {
 } from './github-remote-identity-parsing'
 import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshGitProviderGeneration
-} from '../providers/ssh-git-dispatch'
+import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
@@ -237,8 +235,8 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
 ): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
   const localGitOptions = getHostedReviewLocalGitOptions(options)
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  if (requireVerifiedSshProbe && connectionId && !getSshGitProvider(connectionId)) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  if (requireVerifiedSshProbe) {
+    requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   }
   let remoteUrl: string | null
   try {
@@ -249,8 +247,8 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
     }
     return null
   }
-  if (requireVerifiedSshProbe && connectionId && !remoteUrl && !getSshGitProvider(connectionId)) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  if (requireVerifiedSshProbe && !remoteUrl) {
+    requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
   }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
   if (!identity) {

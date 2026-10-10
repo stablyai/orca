@@ -313,7 +313,9 @@ const BridgeHostMessageSchema = z.union([
      * behaviour, an older page ignores it. The grant grammar is the manifest's own, so a name the
      * bundle could not have declared cannot arrive here either.
      */
-    pageRouteGrants: BridgePageRouteGrantsSchema.optional()
+    pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
+    /** The page owns the wide host area and draws the sidebar; absent, it never does. Additive. */
+    ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional()
   })
 ])
 

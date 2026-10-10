@@ -16,7 +16,7 @@ import {
   liveTestJournalRows,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
-import { QueuedMessageNotConsumableError } from './journal-queued-messages'
+import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { parseJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'

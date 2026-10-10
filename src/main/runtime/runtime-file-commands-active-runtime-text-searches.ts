@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split class members.
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import type { TerminalFileGrant } from './runtime-file-commands-mobile-file-list-limit'
 import {
   MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES,

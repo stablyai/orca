@@ -13,7 +13,7 @@ import {
 } from '../../shared/orcad-stop-request'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { ORCAD_PID_FILENAME, posixProcessAliveShellFunction } from './orcad-remote-host-support'
-import { windowsStopOrcadCommand } from './orcad-remote-process-control-windows'
+import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 
 /**
  * Ask the orcad recorded in a version dir to stop, and wait for it to go.
@@ -33,10 +33,12 @@ export function stopOrcadCommand(
   )
 ): string {
   if (isWindowsRemoteHost(host)) {
-    return windowsStopOrcadCommand(host, remoteInstallDir, {
-      waitSeconds: options.waitSeconds,
-      justLaunched: options.justLaunched === true
-    })
+    // Windows: stop-request file only; TerminateProcess skips durable shutdown and leaks the instance lock.
+    return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'stop', [
+      remoteInstallDir,
+      String(options.waitSeconds),
+      options.justLaunched === true ? '1' : '0'
+    ])
   }
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))

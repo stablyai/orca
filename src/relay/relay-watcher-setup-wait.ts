@@ -2,6 +2,7 @@ import { isWatcherProcessFailure } from '../main/ipc/parcel-watcher-process-fail
 import type { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
 import type { RequestContext } from './dispatcher'
 import type { RelayWatcherTeardownState } from './relay-watcher-teardown-tracker'
+import { errorMessage } from '../shared/error-message'
 
 export async function startInitialRelayWatch(
   state: RelayWatcherTeardownState,
@@ -42,7 +43,7 @@ export async function awaitRelayWatcherSetupForClient(
     if (expectedAbort) {
       return
     }
-    const message = error instanceof Error ? error.message : String(error)
+    const message = errorMessage(error)
     process.stderr.write(`[relay] File watcher not available for ${state.rootPath}: ${message}\n`)
     throw error
   }

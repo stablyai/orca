@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { withFreshOmpLaunch } from '../../src/shared/omp-fresh-launch'
 if (process.platform !== 'win32') {
   throw new Error('Run this smoke on a Windows host')

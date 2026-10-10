@@ -26,6 +26,7 @@ export function structuredHostStub(
     restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
+    create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     // Attach-shaped entries take a client-supplied location, so the host is asked whether it
     // supports creating there. A real host always answers; leaving it unstubbed made every
     // `ensure` refuse for the harness's own reason rather than the location's.
@@ -58,6 +59,13 @@ export function structuredHostStub(
     queuedMessageSend: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessageDelete: vi.fn(async () => ({ ok: true, replayed: false })),
     queuedMessagesResume: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageUpdate: vi.fn(async () => ({ ok: true, replayed: false })),
+    queuedMessageEditHold: vi.fn(async () => ({
+      status: 'held' as const,
+      fingerprint: 'a'.repeat(64),
+      leaseDurationMs: 120_000,
+      remainingMs: 120_000
+    })),
     rewind: vi.fn(async () => ({
       ok: true,
       replayed: false,
@@ -111,7 +119,10 @@ export function installableHost(
   const host = {
     ...hostCalls,
     // The catalog read checks the session's record for a floating chat's own folder; none here.
-    deps: { modelCatalog: { read: hostCalls.modelCatalog }, store: { getRecord: () => null } },
+    deps: {
+      modelCatalog: { read: hostCalls.modelCatalog },
+      store: { getRecord: () => null, getOperationRow: () => null }
+    },
     restartResume: {
       list: hostCalls.restartResumableList,
       listFailures: hostCalls.restartResumableFailures,

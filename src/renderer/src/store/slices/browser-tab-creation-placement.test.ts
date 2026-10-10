@@ -129,6 +129,24 @@ describe('browser tab creation placement', () => {
     expect(store.getState().unifiedTabsByWorktree['repo1::/elsewhere']).toBeUndefined()
   })
 
+  it('records desktop placement for both normal and profile tabs on an SSH workspace', async () => {
+    seedSplit(store)
+    store.setState({
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WT, repoId: 'repo1', hostId: 'ssh:target' })]
+      }
+    })
+    await store.getState().openNewBrowserTabInActiveWorkspace(G1)
+    await store.getState().openBrowserProfileTabInActiveWorkspace('https://example.com', null)
+    const workspaces = store.getState().browserTabsByWorktree[WT] ?? []
+    expect(workspaces).toHaveLength(2)
+    for (const workspace of workspaces) {
+      expect(
+        store.getState().browserPagesByWorkspace[workspace.id]?.[0]?.browserRuntimeEnvironmentId
+      ).toBeNull()
+    }
+  })
+
   it('places a duplicate directly after its source', () => {
     seedSplit(store)
     const workspace = store

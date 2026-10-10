@@ -58,12 +58,26 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'yes'],
     notes: [
       'Stops orcad on the SSH host and, once the host proves it exited, removes the server from this machine. Its terminals end. Requires --yes.',
-      'If the host cannot prove orcad exited, the server stays linked and the refusal says why; nothing is removed on a guess.',
+      'If the host cannot prove orcad exited, the server stays linked and the refusal says why; nothing is removed on a guess. For a host that is gone for good, use `orca environment forget`.',
       'Pick another Active Server first if this one is active. `orca environment cancel-stop` withdraws a stop orcad has not acted on yet.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],
     examples: ['orca environment stop --environment build-box --yes']
+  },
+  {
+    path: ['environment', 'forget'],
+    destructive: true,
+    summary: 'Unlink a managed Orca server whose SSH host is gone, without stopping it',
+    usage: 'orca environment forget --environment <selector> --yes [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'yes'],
+    notes: [
+      'Removes the server from this machine without contacting its host, so the SSH host can then be removed. Use it when the host was deleted or can never be reached again. Requires --yes.',
+      'Nothing on the host is stopped: if it comes back, orcad may still be running there, and connecting to it again relinks it.',
+      SELECTOR_NOTE,
+      DESKTOP_NOTE
+    ],
+    examples: ['orca environment forget --environment build-box --yes']
   },
   {
     path: ['environment', 'cancel-stop'],

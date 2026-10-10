@@ -8,9 +8,11 @@ import type {
 } from '../../shared/folder-workspace-path-status'
 import {
   assertFolderWorkspacePathUsable,
+  folderWorkspacePathRefusal,
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
+import { FolderWorkspaceCreateRefusedError } from '../project-groups/folder-workspace-create-refusal'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { RuntimeStore } from './runtime-store-contract'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
@@ -134,9 +136,10 @@ export class RuntimeProjectGroupController {
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): Promise<FolderWorkspace> {
+    // Every refusal below comes before the store write, so it proves nothing was created.
     const store = this.deps.getStore()
     if (!store?.createFolderWorkspace) {
-      throw new Error('runtime_unavailable')
+      throw new FolderWorkspaceCreateRefusedError('runtime_unavailable')
     }
     const projectGroups = store.getProjectGroups?.() ?? []
     const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
@@ -145,7 +148,7 @@ export class RuntimeProjectGroupController {
         ? input.folderPath
         : group?.parentPath
     if (!group || !folderPath) {
-      throw new Error('folder_workspace_project_group_not_found')
+      throw new FolderWorkspaceCreateRefusedError('folder_workspace_project_group_not_found')
     }
     const status = await getFolderWorkspacePathStatusForPath(
       {
@@ -157,7 +160,10 @@ export class RuntimeProjectGroupController {
       },
       { getSshFilesystemProvider }
     )
-    assertFolderWorkspacePathUsable(status)
+    const pathRefusal = folderWorkspacePathRefusal(status)
+    if (pathRefusal) {
+      throw new FolderWorkspaceCreateRefusedError(pathRefusal)
+    }
     const workspace = store.createFolderWorkspace({
       ...input,
       creatorProvenance: input.creatorProvenance ?? { kind: 'host' }

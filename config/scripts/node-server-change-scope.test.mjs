@@ -11,7 +11,7 @@ import {
 import { nodeServerTestPaths } from './node-server-test-paths.mjs'
 import { ORCAD_CHILD_ENTRY_POINTS } from './orcad-entry-build.mjs'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
 
 const temporaryDirs = []
@@ -63,6 +63,82 @@ it('runs the matrix when a dependency is deleted or graph analysis fails', async
   expect((await classifyNodeServerChanges([])).shouldRun).toBe(true)
 })
 
+function workspaceTree(imported = '@orca/process-host') {
+  const manifest = (name, source) =>
+    JSON.stringify({
+      name,
+      exports: { '.': { 'orca-source': source, default: './dist/index.js' } }
+    })
+  return moduleTree({
+    'entry.ts': `export * from '${imported}'`,
+    'pnpm-workspace.yaml': 'packages:\n  - src/packages/*\n',
+    'src/packages/process-host/package.json': manifest(
+      '@orca/process-host',
+      './src/run-process.ts'
+    ),
+    'src/packages/process-host/src/run-process.ts':
+      "import('@orca/byte-buffer'); require('./private'); export const value = 1",
+    'src/packages/process-host/src/private.ts': 'module.exports = 2',
+    'src/packages/process-host/dist/index.js': "require('./missing-stale-output')",
+    'src/packages/byte-buffer/package.json': manifest('@orca/byte-buffer', './src/byte-buffer.ts'),
+    'src/packages/byte-buffer/src/byte-buffer.ts': 'export const value = 3',
+    'src/packages/unrelated/package.json': manifest('@orca/unrelated', './src/unrelated.ts'),
+    'src/packages/unrelated/src/unrelated.ts': 'throw Error("unrelated")'
+  })
+}
+
+it('tracks workspace source and manifest closures without trusting dist or widening to unrelated packages', async () => {
+  const root = workspaceTree()
+  const inputs = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  expect([...inputs].sort()).toEqual([
+    'entry.ts',
+    'src/packages/byte-buffer/package.json',
+    'src/packages/byte-buffer/src/byte-buffer.ts',
+    'src/packages/process-host/package.json',
+    'src/packages/process-host/src/private.ts',
+    'src/packages/process-host/src/run-process.ts'
+  ])
+  for (const file of [
+    'src/packages/process-host/package.json',
+    'src/packages/process-host/src/private.ts',
+    'src/packages/byte-buffer/src/byte-buffer.ts'
+  ]) {
+    expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(true)
+  }
+  expect(
+    (
+      await classifyNodeServerChanges(
+        ['src/packages/unrelated/src/unrelated.ts'],
+        async () => inputs
+      )
+    ).shouldRun
+  ).toBe(false)
+})
+
+it.each([
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json'
+])('runs for a change to the process-host build input %s', async (file) => {
+  const result = await classifyNodeServerChanges([file], async () => new Set())
+  expect(result.shouldRun).toBe(true)
+  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+})
+
+it.each(['@orca/unknown', '@orca/process-host/private'])(
+  'retains qualification for an unresolved internal package export: %s',
+  async (specifier) => {
+    const root = workspaceTree(specifier)
+    const result = await classifyNodeServerChanges(
+      ['src/packages/process-host/src/run-process.ts'],
+      () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+    )
+    expect(result.shouldRun).toBe(true)
+    expect(result.graphUnavailable).toBe(true)
+    expect(result.reason).toContain('No public orca-source export')
+  }
+)
+
 it.each([
   ['tests/e2e/daemon-running-work-probe.unit.test.ts'],
   ['config/scripts/zip-extractor-command.test.mjs'],
@@ -88,6 +164,8 @@ it.each([
   '.github/actions/restore-pnpm-verification/action.yml',
   '.github/actions/prepare-headless-compiler/action.yml',
   'config/scripts/headless-detector-compiler-cache.mjs',
+  'config/scripts/workspace-source-exports.mjs',
+  'config/scripts/workspace-source-exports.test.mjs',
   '.github/actions/prepare-native-runtime/action.yml',
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   '.github/workflows/node-server-tests.yml',

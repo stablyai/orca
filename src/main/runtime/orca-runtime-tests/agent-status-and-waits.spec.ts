@@ -150,19 +150,28 @@ describe('OrcaRuntimeService', () => {
       nextCursor: expect.any(String)
     })
 
-    const send = await runtime.sendTerminal(
-      terminal.handle,
-      {
-        text: 'continue',
-        enter: true
-      },
-      { inputKind: 'driving' }
-    )
-    expect(send).toMatchObject({
-      handle: terminal.handle,
-      accepted: true
-    })
-    expect(writes).toEqual(['continue', '\r'])
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+    try {
+      const [send] = await Promise.all([
+        runtime.sendTerminal(
+          terminal.handle,
+          {
+            text: 'continue',
+            enter: true
+          },
+          { inputKind: 'driving' }
+        ),
+        vi.runAllTimersAsync()
+      ])
+      expect(send).toMatchObject({
+        handle: terminal.handle,
+        accepted: true
+      })
+      expect(writes).toEqual(['continue', '\r'])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('reports permission from blocked terminal wait text', async () => {

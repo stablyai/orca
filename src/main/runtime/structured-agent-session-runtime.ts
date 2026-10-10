@@ -34,7 +34,6 @@ import {
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import {
   installAgentSessionAttachments,
   stopAgentSessionAttachments
@@ -134,8 +133,6 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
-  /** Raw settings getter; the reader that fails closed around it is built here, in checked code. */
-  getClaudeManagedAccountGateSettings?: () => ClaudeManagedAccountGateSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Which login-shell variables Codex and Claude children inherit; absent inherits all. */
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
@@ -326,7 +323,13 @@ async function installOnJournal(
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
-    ...(await modelCatalogHostDeps({ store, agents, deps, envResolvers }))
+    ...(await modelCatalogHostDeps({
+      store,
+      agents,
+      registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+      deps,
+      environment: envResolvers
+    }))
   })
   if (deps.attentionDelivery) {
     const installed = host
@@ -347,6 +350,9 @@ async function installOnJournal(
     })
   }
   setStructuredAgentSessionHost(host)
+  // The host starts with its runtime, local or remote, so this is the runtime-start listing.
+  const modelCatalog = host.deps.modelCatalog
+  void modelCatalog?.prewarm()
   installAgentSessionAttachments({
     stateDirectory: deps.stateDirectory,
     store,
@@ -367,6 +373,9 @@ async function installOnJournal(
     adapter,
     journalDatabase,
     waitForRecovery: lifecycle.drain,
-    ...(stopVisualsSweep ? { stopBackgroundWork: stopVisualsSweep } : {})
+    stopBackgroundWork: () => {
+      stopVisualsSweep?.()
+      modelCatalog?.stop()
+    }
   }
 }

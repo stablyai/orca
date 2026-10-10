@@ -50,7 +50,7 @@ vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
   publishDesktopRelayStatus: vi.fn()
 }))
-vi.mock('../runtime/relay/desktop-relay-service', () => ({ DesktopRelayService: class {} }))
+vi.mock('./main-process-relay-startup', () => ({ startDesktopRelayService: vi.fn() }))
 vi.mock('./main-process-serve', () => ({
   getServeOptions: vi.fn(() => null),
   getBundledWebClientRoot: vi.fn(() => null),

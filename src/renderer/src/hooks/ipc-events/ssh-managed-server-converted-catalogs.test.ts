@@ -8,6 +8,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore, makeWorktree } from '../../store/slices/store-test-helpers'
+import { buildBrowserPage } from '../../store/slices/browser-page-records'
 
 const store = createTestStore()
 vi.mock('../../store', () => ({ useAppStore: store }))
@@ -102,6 +103,28 @@ beforeEach(() => {
 })
 
 describe('a host that just moved to its managed server', () => {
+  it('pins existing desktop pages before refreshing their workspace ownership', async () => {
+    const page = buildBrowserPage('browser', worktreeId, 'https://private.invalid/')
+    store.setState({ browserPagesByWorkspace: { browser: [page] } })
+    applySshManagedServerTransition('ssh-1', undefined, {
+      kind: 'managed',
+      environmentId: 'env-browser'
+    })
+
+    expect(store.getState().browserPagesByWorkspace.browser?.[0]).toEqual({
+      ...page,
+      browserRuntimeEnvironmentId: null
+    })
+    await vi.waitFor(() =>
+      expect(store.getState().repos.map((entry) => entry.executionHostId)).toEqual([
+        'runtime:env-browser'
+      ])
+    )
+    expect(
+      store.getState().browserPagesByWorkspace.browser?.[0]?.browserRuntimeEnvironmentId
+    ).toBeNull()
+  })
+
   it('shows the server copies only, under the server name', async () => {
     applySshManagedServerTransition('ssh-1', undefined, {
       kind: 'managed',
