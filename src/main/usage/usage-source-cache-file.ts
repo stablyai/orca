@@ -66,13 +66,20 @@ export async function writeUsageSourceCacheText(
   ref: UsageSourceCacheRef,
   text: string
 ): Promise<void> {
+  await writeUsageSourceCacheData(ref, text)
+}
+
+export async function writeUsageSourceCacheData(
+  ref: UsageSourceCacheRef,
+  data: string | Uint8Array
+): Promise<void> {
   await mkdir(dirname(ref.path), { recursive: true }).catch(() => {})
   // Why: a worker terminated mid-write orphans a multi-MB temp file; reclaim earlier launches' ones.
   await removeStaleDurableWriteTempFiles(ref.path)
   await writeFileDurable(
     durableWriteTempPath(ref.path, threadId > 0 ? String(threadId) : undefined),
     ref.path,
-    text
+    data
   )
 }
 

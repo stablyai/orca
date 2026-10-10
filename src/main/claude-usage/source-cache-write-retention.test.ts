@@ -89,7 +89,7 @@ it('retains the exact verified sidecar for unchanged frozen files without durabl
   const previous = await readClaudeUsageSourceCache(ref())
   const before = JSON.stringify(previous.sources)
   freeze(previous.sources)
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
   const result = await scanAndPersist(previous)
 
@@ -124,7 +124,7 @@ it.each(['append', 'rewrite', 'new', 'delete', 'reorder', 'reclaim', 'deferred']
     } else {
       await appendFile(fork, row(200))
     }
-    const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+    const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
     const result = await scanAndPersist(previous)
 
@@ -145,7 +145,7 @@ it('writes a schema7 generation even when a legacy scan returns identical file r
     JSON.stringify({ schemaVersion: 6, worktreeFingerprint: '[]', sources: saved.sources })
   )
   const previous = await readClaudeUsageSourceCache(ref())
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
   const result = await scanAndPersist(previous)
 
@@ -156,7 +156,7 @@ it('writes a schema7 generation even when a legacy scan returns identical file r
 
 it('does not skip a write for cloned files with unchanged values', async () => {
   const previous = await readClaudeUsageSourceCache(ref())
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
   await persistClaudeUsageSourceCache(ref(), structuredClone(previous.sources), previous)
 
@@ -171,7 +171,7 @@ it('retains verified tiny files whose source envelope protects their complete ro
   await writeClaudeUsageSourceCache(ref(), initial.processedFiles)
   const previous = await readClaudeUsageSourceCache(ref())
   freeze(previous.sources)
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
   await scanAndPersist(previous)
 
@@ -186,7 +186,7 @@ it('persists source repairs even when every surviving file reference is unchange
   discovered.paths = [owner]
   const previous = await readClaudeUsageSourceCache(ref())
   expect(previous.sources).toHaveLength(1)
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
   const result = await scanAndPersist(previous)
 
@@ -209,7 +209,7 @@ it.each(['path', 'schema', 'fingerprint', 'reuse'] as const)(
     } else {
       sourceRef.reuse = false
     }
-    const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+    const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
     await persistClaudeUsageSourceCache(sourceRef, previous.sources, previous)
 
@@ -223,7 +223,7 @@ it('writes changed attribution after an incompatible fingerprint starts cold', a
   const worktrees = [
     { repoId: 'repo', worktreeId: 'tree', path: directory, displayName: 'Project' }
   ]
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
 
   const result = await scanClaudeUsageFiles(worktrees, previous.sources, undefined, [])
   await persistClaudeUsageSourceCache(sourceRef, result.processedFiles, previous)

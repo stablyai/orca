@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { gunzipSync } from 'node:zlib'
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -149,8 +150,10 @@ try {
         reportText = JSON.stringify(state, null, arm.indent)
       } else {
         await arm.persistence.module.writeSourceCache(sourceRef, result.processedFiles)
-        sourceText = await readFile(sourceRef.path, 'utf8')
-        savedFile = JSON.parse(sourceText).sources[0]
+        sourceText = await readFile(sourceRef.path)
+        const decoded =
+          sourceText[0] === 0x1f && sourceText[1] === 0x8b ? gunzipSync(sourceText) : sourceText
+        savedFile = JSON.parse(decoded.toString('utf8')).sources[0]
         reportText = serializeClaudeBenchmarkReport(arm, state)
       }
       measurements[name] = {

@@ -1,5 +1,7 @@
 # Usage scans after a transcript append
 
+Latest follow-up: [lossless source compression](./source-compression.md) removes the disk increase in three measured histories, with CPU costs reported. Earlier tables below describe the uncompressed implementation.
+
 Claude usage refresh previously cached a transcript only while its modification time and size were unchanged. Appending one usage row invalidated that cache and parsed every earlier user, tool and assistant row again. The production route is `ClaudeUsageStore` → `UsageProviderStoreLifecycle.runScan` → the usage worker → `scanClaudeUsageFiles`. Long tool output therefore made a small usage refresh expensive even when the number of usage records stayed fixed.
 
 The regression is deterministic: the append test measures bytes returned by the real filesystem reader. Before the fix, a 424-byte append to a 1,083,929-byte transcript read 1,084,353 bytes. The new scan reads a verified suffix and a fixed amount of prefix evidence. It retains all usage history and places no new cap on transcripts, rows or tokens.

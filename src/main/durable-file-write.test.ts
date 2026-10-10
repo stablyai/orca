@@ -20,6 +20,14 @@ describe('durable file write', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it('durably writes a binary view without leaking bytes outside its bounds', async () => {
+    const final = join(dir, 'state.gz')
+    const backing = Buffer.from([99, 0x1f, 0x8b, 0, 0xff, 77])
+    await writeFileDurable(`${final}.tmp`, final, backing.subarray(1, -1))
+    expect(readFileSync(final)).toEqual(Buffer.from([0x1f, 0x8b, 0, 0xff]))
+    expect(existsSync(`${final}.tmp`)).toBe(false)
+  })
+
   for (const [label, write] of [
     ['async', (t: string, f: string, p: string) => writeFileDurable(t, f, p)],
     [

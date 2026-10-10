@@ -13,6 +13,11 @@ import {
   writeClaudeUsageSourceCache
 } from './persisted-source-cache'
 import { sealUsageCacheJson } from '../usage/usage-cache-json-integrity'
+import {
+  compressClaudeUsageSourceText,
+  decodeClaudeUsageSourceText
+} from './source-cache-compression'
+import { readUsageSourceCache } from '../usage/usage-source-cache-file'
 
 const { discovered } = vi.hoisted(() => {
   const discovered: { paths: string[] } = { paths: [] }
@@ -94,6 +99,54 @@ it('uses a verified packed restart for exact append corrections', async () => {
   expect(resumed.dailyAggregates).toEqual(cold.dailyAggregates)
   expect(resumed.sessions[0]?.turnCount).toBe(1)
   expect(resumed.sessions[0]?.totalInputTokens).toBe(150)
+})
+
+it('compresses large caches losslessly and resumes the same totals after restart', async () => {
+  const rows = Array.from({ length: 3000 }, (_, index) =>
+    row(index).replace('"request"', `"request-${index}"`)
+  ).join('')
+  await writeFile(transcript, rows)
+  const cold = await scanClaudeUsageFiles([], [], undefined, [])
+  await writeClaudeUsageSourceCache(ref(), cold.processedFiles)
+  const text = await readFile(sourcePath)
+  expect([...text.subarray(0, 2)]).toEqual([0x1f, 0x8b])
+  const decoded = await decodeClaudeUsageSourceText(text)
+  expect(Buffer.byteLength(text)).toBeLessThan(Buffer.byteLength(decoded))
+  const cached = await readClaudeUsageSourceCache(ref())
+  expect(cached.sources).toEqual(cold.processedFiles)
+  expect(cached.verifiedSources?.has(cached.sources[0])).toBe(true)
+
+  await appendFile(transcript, row(4000).replace('"request"', '"request-7"'))
+  const resumed = await scanClaudeUsageFiles(
+    [],
+    cached.sources,
+    undefined,
+    [],
+    cached.verifiedSources
+  )
+  expect(resumed).toEqual(await scanClaudeUsageFiles([], [], undefined, []))
+  // Older readers discard the optional resume cache; the separately stored report stays readable.
+  expect(await readUsageSourceCache(ref())).toEqual([])
+})
+
+it('keeps old plain caches readable and rejects compressed content with invalid integrity', async () => {
+  await writeFile(
+    transcript,
+    Array.from({ length: 3000 }, (_, index) =>
+      row(index).replace('"request"', `"request-${index}"`)
+    ).join('')
+  )
+  const cold = await scanClaudeUsageFiles([], [], undefined, [])
+  await writeClaudeUsageSourceCache(ref(), cold.processedFiles)
+  const decoded = await decodeClaudeUsageSourceText(await readFile(sourcePath))
+  await writeFile(sourcePath, decoded)
+  expect((await readClaudeUsageSourceCache(ref())).sources).toEqual(cold.processedFiles)
+  const report = serializeClaudeUsageReport(state(cold.processedFiles[0]))
+  const damaged = JSON.parse(decoded)
+  damaged.sources[0].sessions[0].totalInputTokens++
+  await writeFile(sourcePath, await compressClaudeUsageSourceText(JSON.stringify(damaged)))
+  expect(await readClaudeUsageSourceCache(ref())).toEqual({ sources: [] })
+  expect(await parseClaudeUsageReport(report, JSON.parse(report))).toEqual(JSON.parse(report))
 })
 
 it('protects tiny source rollups despite their absent resume checkpoint', async () => {

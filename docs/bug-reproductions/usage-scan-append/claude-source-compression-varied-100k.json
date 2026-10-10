@@ -1,0 +1,1621 @@
+{
+  "purpose": "Lossless Claude source compression: actual pinned scanner, cache and durable report persistence costs.",
+  "node": "v24.20.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpuModel": "Apple M4 Max",
+  "usageKeys": 100000,
+  "maximaPattern": "varied",
+  "rounds": 6,
+  "historyBytes": 51870301,
+  "suffixBytes": 520,
+  "fixtureSha256": "4df84037527b6312ed80086b6f2f2e2d178eadcec2e888e46cf5649019f25b0b",
+  "methodology": {
+    "timing": "Six arm permutations balance position/order; one unrecorded warmup. Fixtures are scanner-cache cold and OS-page-cache warm. Durable writes use production fsync/rename writers.",
+    "refresh": "Actual production functions composed in the worker request order: source read/verify/decode, scanner, source pack/seal/durable write, main report serialize/seal/durable write.",
+    "uncompressed": "Uncompressed uses uncompressed B4102; current compresses its source sidecar with asynchronous gzip level 1. Both retain identical usage history.",
+    "exclusions": "Worker startup, message serialization/structured clone, IPC queueing, telemetry, worktree discovery and UI rendering are excluded. Report and source read bytes are logical filesystem payload bytes, not physical device I/O.",
+    "attribution": "Main is fixed b44a5796; uncompressed is previously published B4102; current adds lossless source compression.",
+    "correctness": "Exact cold/append cross-arm sessions and daily equality and owned-key count; every append is checked against a fresh scan.",
+    "writtenBytes": "Source writes are logical replacement payload bytes: production durable writers replace the inode when writing. Consecutive bigint file identities prove whether the fixture sidecar was replaced; unavailable inode IDs produce null rather than a zero-write claim. Report payload bytes are captured in the actual writer callback. Accounting stat calls occur outside measured production intervals."
+  },
+  "toolingSha256": "e745a37bbd4161cab061062bb30adc0158d1856d198981d04c5b1f503f1bd5eb",
+  "supportToolingSha256": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+  "arms": {
+    "uncompressed": {
+      "commit": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+      "scanner": {
+        "bundleSha256": "3a225521e140ac4f5d5416a8e0c0c9b58f49702389bb209ca86ac61289b8052a",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/scanner.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "a5d58e164cdd9abca97628de1ea6333660f1fc0b4bf4b9244621e5b7cad81610",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-source-cache.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "505c5274cb3d92c49b93f6eeb63164b239b6caf7baa550ef20174e60db6a4fa2"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/persisted-usage-report.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-cache-json-integrity.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7"
+          },
+          "src/main/usage/usage-inline-cache-preservation.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "ee53cd3c823ce5bd49892bf96486f48d285c0b4e536a295adfe5e94f147712f5"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2"
+        }
+      }
+    },
+    "main": {
+      "commit": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+      "scanner": {
+        "bundleSha256": "91b6e27fe48700d807a8a34faaf08064482fffe8f26898f18c18dad7f774b549",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "55d1990fb662bfd005bfbfac8a2732702aa28b8511161b6259a72cd0e9f5a265",
+        "sourceFingerprints": {
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "d1a7041ef4e1366f7dc1c9225e663b49ebe5ef3ca60717d572bc4b9a85579232"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "657f5317536c7504416431c378bcc7a956ed5de7b7649a35f8d90674688f5da9"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91",
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19"
+        }
+      }
+    },
+    "current": {
+      "commit": null,
+      "scanner": {
+        "bundleSha256": "3a225521e140ac4f5d5416a8e0c0c9b58f49702389bb209ca86ac61289b8052a",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/scanner.ts": {
+            "source": "worktree",
+            "sha256": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "worktree",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "worktree",
+            "sha256": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "worktree",
+            "sha256": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "worktree",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "worktree",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "worktree",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "worktree",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "fe867a08aaaf3b7794bb34775fa59829df0788279a8e0a91daa2bf009c17a8bd",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-source-cache.ts": {
+            "source": "worktree",
+            "sha256": "1bf0d7ba520b8f8727bfe0c6c147005d6af328e9368c6e68238e5df8afbdb7a6"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/persisted-usage-report.ts": {
+            "source": "worktree",
+            "sha256": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04"
+          },
+          "src/main/claude-usage/source-cache-compression.ts": {
+            "source": "worktree",
+            "sha256": "b6a0d3ad3bb447905d056dd98ded0a58c6e4750048c5a530c5ca09a7ce63328f"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "worktree",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "worktree",
+            "sha256": "33b18046e3a2b68fcfc5c3654ff0ad1f70888113ea21420d5db24f32109b82a9"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "worktree",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-cache-json-integrity.ts": {
+            "source": "worktree",
+            "sha256": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7"
+          },
+          "src/main/usage/usage-inline-cache-preservation.ts": {
+            "source": "worktree",
+            "sha256": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "worktree",
+            "sha256": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "worktree",
+            "sha256": "4f2cee1b76a034153fd9c24ef7e2701e0831bf19d1d4c1f817772e8597cdf17e"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "worktree",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "worktree",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "worktree",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "worktree",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "worktree",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91",
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549"
+        }
+      }
+    }
+  },
+  "summary": {
+    "uncompressed": {
+      "cold": {
+        "scanMs": 357.373,
+        "completeRefreshMs": 410.299,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 41.074,
+        "reportSerializeSealMs": 0.026,
+        "reportDurableWriteMs": 12.587,
+        "totalPersistMs": 53.166,
+        "sourceBytes": 10459570,
+        "sourceBytesWritten": 10459570,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461543,
+        "totalPersistedBytes": 10461543
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 15.041,
+        "scanMs": 15.808,
+        "completeRefreshMs": 43.089,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459570,
+        "totalReadBytes": 10459570,
+        "sourceWritePackSealDurableMs": 0.018,
+        "reportSerializeSealMs": 0.012,
+        "reportDurableWriteMs": 11.058,
+        "totalPersistMs": 11.09,
+        "sourceBytes": 10459570,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461543
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 16.509,
+        "scanMs": 44.065,
+        "completeRefreshMs": 107.154,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459570,
+        "totalReadBytes": 10484666,
+        "sourceWritePackSealDurableMs": 35.831,
+        "reportSerializeSealMs": 0.02,
+        "reportDurableWriteMs": 10.495,
+        "totalPersistMs": 46.071,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546
+      }
+    },
+    "main": {
+      "cold": {
+        "scanMs": 240.438,
+        "completeRefreshMs": 276.188,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 23.794,
+        "reportSerializeSealMs": 0.022,
+        "reportDurableWriteMs": 12.294,
+        "totalPersistMs": 36.981,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.127,
+        "scanMs": 14.995,
+        "completeRefreshMs": 48.31,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 6802144,
+        "sourceWritePackSealDurableMs": 17.901,
+        "reportSerializeSealMs": 0.016,
+        "reportDurableWriteMs": 10,
+        "totalPersistMs": 28.227,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 6.916,
+        "scanMs": 235.715,
+        "completeRefreshMs": 275.095,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 58672965,
+        "sourceWritePackSealDurableMs": 21.946,
+        "reportSerializeSealMs": 0.025,
+        "reportDurableWriteMs": 11.306,
+        "totalPersistMs": 33.081,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      }
+    },
+    "current": {
+      "cold": {
+        "scanMs": 349.234,
+        "completeRefreshMs": 505.131,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 142.733,
+        "reportSerializeSealMs": 0.048,
+        "reportDurableWriteMs": 12.942,
+        "totalPersistMs": 155.808,
+        "sourceBytes": 5388803,
+        "sourceBytesWritten": 5388803,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390860,
+        "totalPersistedBytes": 5390860
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 36.511,
+        "scanMs": 15.811,
+        "completeRefreshMs": 62.565,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388803,
+        "totalReadBytes": 5388803,
+        "sourceWritePackSealDurableMs": 0.02,
+        "reportSerializeSealMs": 0.033,
+        "reportDurableWriteMs": 10.136,
+        "totalPersistMs": 10.185,
+        "sourceBytes": 5388803,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390860
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 37.09,
+        "scanMs": 44.418,
+        "completeRefreshMs": 229.307,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388803,
+        "totalReadBytes": 5413899,
+        "sourceWritePackSealDurableMs": 136.35,
+        "reportSerializeSealMs": 0.045,
+        "reportDurableWriteMs": 10.392,
+        "totalPersistMs": 147.247,
+        "sourceBytes": 5388802,
+        "sourceBytesWritten": 5388802,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390859,
+        "totalPersistedBytes": 5390859
+      }
+    }
+  },
+  "samples": [
+    {
+      "arm": "uncompressed",
+      "round": 1,
+      "order": ["uncompressed", "main", "current"],
+      "cold": {
+        "scanMs": 377.6526250000006,
+        "completeRefreshMs": 439.1658750000006,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 47.211457999999766,
+        "reportSerializeSealMs": 0.03208300000005693,
+        "reportDurableWriteMs": 14.269709000000148,
+        "totalPersistMs": 61.51324999999997,
+        "sourceBytes": 10459571,
+        "sourceBytesWritten": 10459571,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461544,
+        "totalPersistedBytes": 10461544
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 15.617209000000003,
+        "scanMs": 21.17895799999951,
+        "completeRefreshMs": 55.81949999999961,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459571,
+        "totalReadBytes": 10459571,
+        "sourceWritePackSealDurableMs": 0.004625000000487489,
+        "reportSerializeSealMs": 0.012584000000060769,
+        "reportDurableWriteMs": 19.006123999999545,
+        "totalPersistMs": 19.023333000000093,
+        "sourceBytes": 10459571,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461544,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 15.582250000000386,
+        "scanMs": 47.477499999999964,
+        "completeRefreshMs": 107.1512500000008,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459571,
+        "totalReadBytes": 10484667,
+        "sourceWritePackSealDurableMs": 33.40541699999994,
+        "reportSerializeSealMs": 0.016625000000203727,
+        "reportDurableWriteMs": 10.669458000000304,
+        "totalPersistMs": 44.09150000000045,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 1,
+      "order": ["uncompressed", "main", "current"],
+      "cold": {
+        "scanMs": 244.80766700000004,
+        "completeRefreshMs": 283.3759999999993,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 26.147249999999985,
+        "reportSerializeSealMs": 0.022875000000567525,
+        "reportDurableWriteMs": 12.398207999998704,
+        "totalPersistMs": 38.56833299999926,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.343874999999571,
+        "scanMs": 18.48425000000043,
+        "completeRefreshMs": 50.75450000000001,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 6802144,
+        "sourceWritePackSealDurableMs": 17.014874999999847,
+        "reportSerializeSealMs": 0.01741700000002311,
+        "reportDurableWriteMs": 9.894083000000137,
+        "totalPersistMs": 26.926375000000007,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 7.09820899999977,
+        "scanMs": 242.69275000000016,
+        "completeRefreshMs": 291.929709,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 58672965,
+        "sourceWritePackSealDurableMs": 26.614416000000347,
+        "reportSerializeSealMs": 0.02645799999936571,
+        "reportDurableWriteMs": 15.49787600000036,
+        "totalPersistMs": 42.13875000000007,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 1,
+      "order": ["uncompressed", "main", "current"],
+      "cold": {
+        "scanMs": 353.3301670000001,
+        "completeRefreshMs": 509.73175099999935,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 143.6430419999997,
+        "reportSerializeSealMs": 0.045208000000457105,
+        "reportDurableWriteMs": 12.713333999999122,
+        "totalPersistMs": 156.40158399999927,
+        "sourceBytes": 5388802,
+        "sourceBytesWritten": 5388802,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390859,
+        "totalPersistedBytes": 5390859
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 36.44862499999999,
+        "scanMs": 15.790874999999687,
+        "completeRefreshMs": 62.15133400000013,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388802,
+        "totalReadBytes": 5388802,
+        "sourceWritePackSealDurableMs": 0.030584000000089873,
+        "reportSerializeSealMs": 0.030958000000282482,
+        "reportDurableWriteMs": 9.850292000000081,
+        "totalPersistMs": 9.911834000000454,
+        "sourceBytes": 5388802,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390859,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 35.81608299999971,
+        "scanMs": 47.21545900000001,
+        "completeRefreshMs": 227.82116699999915,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388802,
+        "totalReadBytes": 5413898,
+        "sourceWritePackSealDurableMs": 135.113875,
+        "reportSerializeSealMs": 0.05495900000005349,
+        "reportDurableWriteMs": 9.620790999999372,
+        "totalPersistMs": 144.78962499999943,
+        "sourceBytes": 5388801,
+        "sourceBytesWritten": 5388801,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390858,
+        "totalPersistedBytes": 5390858,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 2,
+      "order": ["current", "main", "uncompressed"],
+      "cold": {
+        "scanMs": 345.1372079999992,
+        "completeRefreshMs": 498.26045799999883,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 140.1306250000007,
+        "reportSerializeSealMs": 0.04979200000070705,
+        "reportDurableWriteMs": 12.942832999998245,
+        "totalPersistMs": 153.12324999999964,
+        "sourceBytes": 5388805,
+        "sourceBytesWritten": 5388805,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390862,
+        "totalPersistedBytes": 5390862
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 35.36320799999885,
+        "scanMs": 18.219959000000017,
+        "completeRefreshMs": 62.469458999998096,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388805,
+        "totalReadBytes": 5388805,
+        "sourceWritePackSealDurableMs": 0.0057500000002619345,
+        "reportSerializeSealMs": 0.03304100000059407,
+        "reportDurableWriteMs": 8.847500999998374,
+        "totalPersistMs": 8.88629199999923,
+        "sourceBytes": 5388805,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390862,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 38.80383400000028,
+        "scanMs": 42.57024999999885,
+        "completeRefreshMs": 230.7932920000003,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388805,
+        "totalReadBytes": 5413901,
+        "sourceWritePackSealDurableMs": 139.0755420000005,
+        "reportSerializeSealMs": 0.043166999999812106,
+        "reportDurableWriteMs": 10.300499000000855,
+        "totalPersistMs": 149.41920800000116,
+        "sourceBytes": 5388803,
+        "sourceBytesWritten": 5388803,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390860,
+        "totalPersistedBytes": 5390860,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 2,
+      "order": ["current", "main", "uncompressed"],
+      "cold": {
+        "scanMs": 231.03054200000042,
+        "completeRefreshMs": 268.8034580000003,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 23.450291000001016,
+        "reportSerializeSealMs": 0.021333000000595348,
+        "reportDurableWriteMs": 14.301291999998284,
+        "totalPersistMs": 37.772915999999896,
+        "sourceBytes": 6802142,
+        "sourceBytesWritten": 6802142,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804115,
+        "totalPersistedBytes": 6804115
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.1200000000008,
+        "scanMs": 14.990832999999839,
+        "completeRefreshMs": 47.84449999999924,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802142,
+        "totalReadBytes": 6802142,
+        "sourceWritePackSealDurableMs": 17.208582999999635,
+        "reportSerializeSealMs": 0.013291999999637483,
+        "reportDurableWriteMs": 10.511791999999332,
+        "totalPersistMs": 27.733666999998604,
+        "sourceBytes": 6802142,
+        "sourceBytesWritten": 6802142,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804115,
+        "totalPersistedBytes": 6804115,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 5.7042920000003505,
+        "scanMs": 230.15629199999967,
+        "completeRefreshMs": 270.66949999999997,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802142,
+        "totalReadBytes": 58672963,
+        "sourceWritePackSealDurableMs": 23.419416000000638,
+        "reportSerializeSealMs": 0.023167000001194538,
+        "reportDurableWriteMs": 11.366332999998122,
+        "totalPersistMs": 34.808915999999954,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "uncompressed",
+      "round": 2,
+      "order": ["current", "main", "uncompressed"],
+      "cold": {
+        "scanMs": 362.2469999999994,
+        "completeRefreshMs": 416.0006250000006,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 42.20575000000099,
+        "reportSerializeSealMs": 0.02520899999944959,
+        "reportDurableWriteMs": 11.522666000000754,
+        "totalPersistMs": 53.75362500000119,
+        "sourceBytes": 10459571,
+        "sourceBytesWritten": 10459571,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461544,
+        "totalPersistedBytes": 10461544
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 14.92791699999907,
+        "scanMs": 15.834833000000799,
+        "completeRefreshMs": 42.2357090000005,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459571,
+        "totalReadBytes": 10459571,
+        "sourceWritePackSealDurableMs": 0.03225000000020373,
+        "reportSerializeSealMs": 0.011500000000523869,
+        "reportDurableWriteMs": 11.4292089999999,
+        "totalPersistMs": 11.472959000000628,
+        "sourceBytes": 10459571,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461544,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 17.43645800000013,
+        "scanMs": 42.70045899999968,
+        "completeRefreshMs": 105.81554199999846,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459571,
+        "totalReadBytes": 10484667,
+        "sourceWritePackSealDurableMs": 35.33429199999955,
+        "reportSerializeSealMs": 0.02391699999861885,
+        "reportDurableWriteMs": 10.320416000000478,
+        "totalPersistMs": 45.67862499999865,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 3,
+      "order": ["main", "uncompressed", "current"],
+      "cold": {
+        "scanMs": 237.81687499999862,
+        "completeRefreshMs": 272.91525,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 22.887666000000536,
+        "reportSerializeSealMs": 0.021333999999114894,
+        "reportDurableWriteMs": 12.189375000001746,
+        "totalPersistMs": 35.0983750000014,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.407666999999492,
+        "scanMs": 14.998999999999796,
+        "completeRefreshMs": 48.99187600000005,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 6802144,
+        "sourceWritePackSealDurableMs": 17.398709000000963,
+        "reportSerializeSealMs": 0.015750000000480213,
+        "reportDurableWriteMs": 11.170749999999316,
+        "totalPersistMs": 28.58520900000076,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 7.123375000001033,
+        "scanMs": 232.70849999999882,
+        "completeRefreshMs": 271.9749580000007,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 58672965,
+        "sourceWritePackSealDurableMs": 20.875958000000537,
+        "reportSerializeSealMs": 0.021957999999358435,
+        "reportDurableWriteMs": 11.245167000000947,
+        "totalPersistMs": 32.14308300000084,
+        "sourceBytes": 6802143,
+        "sourceBytesWritten": 6802143,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804116,
+        "totalPersistedBytes": 6804116,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "uncompressed",
+      "round": 3,
+      "order": ["main", "uncompressed", "current"],
+      "cold": {
+        "scanMs": 352.4993749999994,
+        "completeRefreshMs": 404.59679099999994,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 39.50733300000138,
+        "reportSerializeSealMs": 0.02599999999983993,
+        "reportDurableWriteMs": 12.5640829999993,
+        "totalPersistMs": 52.09741600000052,
+        "sourceBytes": 10459569,
+        "sourceBytesWritten": 10459569,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461542,
+        "totalPersistedBytes": 10461542
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 15.032499999999345,
+        "scanMs": 15.78191599999991,
+        "completeRefreshMs": 41.1877489999988,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459569,
+        "totalReadBytes": 10459569,
+        "sourceWritePackSealDurableMs": 0.009707999999591266,
+        "reportSerializeSealMs": 0.011500000000523869,
+        "reportDurableWriteMs": 10.352124999999432,
+        "totalPersistMs": 10.373332999999548,
+        "sourceBytes": 10459569,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461542,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 18.054000000000087,
+        "scanMs": 43.92541700000038,
+        "completeRefreshMs": 109.69600000000173,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459569,
+        "totalReadBytes": 10484665,
+        "sourceWritePackSealDurableMs": 36.34725000000071,
+        "reportSerializeSealMs": 0.019458000000668108,
+        "reportDurableWriteMs": 11.349874999999884,
+        "totalPersistMs": 47.716583000001265,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 3,
+      "order": ["main", "uncompressed", "current"],
+      "cold": {
+        "scanMs": 356.4900830000006,
+        "completeRefreshMs": 511.2081240000007,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 141.69933300000048,
+        "reportSerializeSealMs": 0.07716699999946286,
+        "reportDurableWriteMs": 12.941541000000143,
+        "totalPersistMs": 154.71804100000008,
+        "sourceBytes": 5388804,
+        "sourceBytesWritten": 5388804,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390861,
+        "totalPersistedBytes": 5390861
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 36.049167000001034,
+        "scanMs": 15.47058300000026,
+        "completeRefreshMs": 62.71587499999987,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388804,
+        "totalReadBytes": 5388804,
+        "sourceWritePackSealDurableMs": 0.03541599999880418,
+        "reportSerializeSealMs": 0.03291700000045239,
+        "reportDurableWriteMs": 11.127791999999317,
+        "totalPersistMs": 11.196124999998574,
+        "sourceBytes": 5388804,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390861,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 39.84441700000025,
+        "scanMs": 43.989292000000205,
+        "completeRefreshMs": 231.7666250000002,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388804,
+        "totalReadBytes": 5413900,
+        "sourceWritePackSealDurableMs": 137.5831249999992,
+        "reportSerializeSealMs": 0.046457999998892774,
+        "reportDurableWriteMs": 10.303333000001658,
+        "totalPersistMs": 147.93291599999975,
+        "sourceBytes": 5388804,
+        "sourceBytesWritten": 5388804,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390861,
+        "totalPersistedBytes": 5390861,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 4,
+      "order": ["current", "uncompressed", "main"],
+      "cold": {
+        "scanMs": 342.1755409999987,
+        "completeRefreshMs": 500.5307079999984,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 145.29083400000127,
+        "reportSerializeSealMs": 0.0441659999996773,
+        "reportDurableWriteMs": 13.020166999998764,
+        "totalPersistMs": 158.3551669999997,
+        "sourceBytes": 5388802,
+        "sourceBytesWritten": 5388802,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390859,
+        "totalPersistedBytes": 5390859
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 37.33258300000125,
+        "scanMs": 17.52545900000041,
+        "completeRefreshMs": 70.31904200000281,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388802,
+        "totalReadBytes": 5388802,
+        "sourceWritePackSealDurableMs": 0.008959000000686501,
+        "reportSerializeSealMs": 0.03345900000022084,
+        "reportDurableWriteMs": 15.418582000000242,
+        "totalPersistMs": 15.46100000000115,
+        "sourceBytes": 5388802,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390859,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 38.27441700000054,
+        "scanMs": 39.006624999999985,
+        "completeRefreshMs": 223.84291700000176,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388802,
+        "totalReadBytes": 5413898,
+        "sourceWritePackSealDurableMs": 135.11637500000143,
+        "reportSerializeSealMs": 0.034084000000802916,
+        "reportDurableWriteMs": 11.411415999999008,
+        "totalPersistMs": 146.56187500000124,
+        "sourceBytes": 5388804,
+        "sourceBytesWritten": 5388804,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390861,
+        "totalPersistedBytes": 5390861,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "uncompressed",
+      "round": 4,
+      "order": ["current", "uncompressed", "main"],
+      "cold": {
+        "scanMs": 342.77104099999997,
+        "completeRefreshMs": 395.3501660000002,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 39.94212499999958,
+        "reportSerializeSealMs": 0.02637499999946158,
+        "reportDurableWriteMs": 12.610625000001164,
+        "totalPersistMs": 52.579125000000204,
+        "sourceBytes": 10459571,
+        "sourceBytesWritten": 10459571,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461544,
+        "totalPersistedBytes": 10461544
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 15.042124999999942,
+        "scanMs": 15.335333000000901,
+        "completeRefreshMs": 42.20074900000145,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459571,
+        "totalReadBytes": 10459571,
+        "sourceWritePackSealDurableMs": 0.030208000000129687,
+        "reportSerializeSealMs": 0.01208299999962037,
+        "reportDurableWriteMs": 11.781000000000859,
+        "totalPersistMs": 11.823291000000609,
+        "sourceBytes": 10459571,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461544,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 15.577291999999943,
+        "scanMs": 44.20545800000036,
+        "completeRefreshMs": 107.1559159999997,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459571,
+        "totalReadBytes": 10484667,
+        "sourceWritePackSealDurableMs": 36.32683299999917,
+        "reportSerializeSealMs": 0.02829100000053586,
+        "reportDurableWriteMs": 11.018041999999696,
+        "totalPersistMs": 47.3731659999994,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 4,
+      "order": ["current", "uncompressed", "main"],
+      "cold": {
+        "scanMs": 239.2861670000002,
+        "completeRefreshMs": 275.47441699999945,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 23.99187499999971,
+        "reportSerializeSealMs": 0.025333000001410255,
+        "reportDurableWriteMs": 12.171041999998124,
+        "totalPersistMs": 36.18824999999924,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.003208000000086,
+        "scanMs": 15.083958000001076,
+        "completeRefreshMs": 48.77625000000262,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 6802144,
+        "sourceWritePackSealDurableMs": 18.702542000000903,
+        "reportSerializeSealMs": 0.01916700000037963,
+        "reportDurableWriteMs": 9.967375000000175,
+        "totalPersistMs": 28.689084000001458,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 6.734416999999667,
+        "scanMs": 247.4669159999994,
+        "completeRefreshMs": 284.47479199999907,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 58672965,
+        "sourceWritePackSealDurableMs": 20.140458999998373,
+        "reportSerializeSealMs": 0.025834000000031665,
+        "reportDurableWriteMs": 10.107166000001598,
+        "totalPersistMs": 30.273459000000003,
+        "sourceBytes": 6802143,
+        "sourceBytesWritten": 6802143,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804116,
+        "totalPersistedBytes": 6804116,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "uncompressed",
+      "round": 5,
+      "order": ["uncompressed", "current", "main"],
+      "cold": {
+        "scanMs": 349.3036659999998,
+        "completeRefreshMs": 404.41437399999995,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 43.24145800000042,
+        "reportSerializeSealMs": 0.021457999999256572,
+        "reportDurableWriteMs": 11.847792000000481,
+        "totalPersistMs": 55.11070800000016,
+        "sourceBytes": 10459567,
+        "sourceBytesWritten": 10459567,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461540,
+        "totalPersistedBytes": 10461540
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 15.039375000000291,
+        "scanMs": 19.16058300000077,
+        "completeRefreshMs": 44.90716600000087,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459567,
+        "totalReadBytes": 10459567,
+        "sourceWritePackSealDurableMs": 0.007749999997031409,
+        "reportSerializeSealMs": 0.011791999997512903,
+        "reportDurableWriteMs": 10.687666000005265,
+        "totalPersistMs": 10.70720799999981,
+        "sourceBytes": 10459567,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461540,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 17.47583399999712,
+        "scanMs": 45.41008300000249,
+        "completeRefreshMs": 109.34908300000097,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459567,
+        "totalReadBytes": 10484663,
+        "sourceWritePackSealDurableMs": 36.87333299999955,
+        "reportSerializeSealMs": 0.020540999998047482,
+        "reportDurableWriteMs": 9.56929200000377,
+        "totalPersistMs": 46.463166000001365,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 5,
+      "order": ["uncompressed", "current", "main"],
+      "cold": {
+        "scanMs": 372.8322079999998,
+        "completeRefreshMs": 528.5510409999988,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 142.86458299999867,
+        "reportSerializeSealMs": 0.055832999998528976,
+        "reportDurableWriteMs": 12.798417000001791,
+        "totalPersistMs": 155.718832999999,
+        "sourceBytes": 5388801,
+        "sourceBytesWritten": 5388801,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390858,
+        "totalPersistedBytes": 5390858
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 36.57316699999865,
+        "scanMs": 15.830125000000407,
+        "completeRefreshMs": 62.04770899999858,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388801,
+        "totalReadBytes": 5388801,
+        "sourceWritePackSealDurableMs": 0.03579200000240235,
+        "reportSerializeSealMs": 0.032083000001875916,
+        "reportDurableWriteMs": 9.576541999995243,
+        "totalPersistMs": 9.644416999999521,
+        "sourceBytes": 5388801,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390858,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 35.90470899999855,
+        "scanMs": 45.01712499999849,
+        "completeRefreshMs": 226.03566699999647,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388801,
+        "totalReadBytes": 5413897,
+        "sourceWritePackSealDurableMs": 134.5896249999969,
+        "reportSerializeSealMs": 0.043542000003071735,
+        "reportDurableWriteMs": 10.480665999999474,
+        "totalPersistMs": 145.11383299999943,
+        "sourceBytes": 5388798,
+        "sourceBytesWritten": 5388798,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390855,
+        "totalPersistedBytes": 5390855,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 5,
+      "order": ["uncompressed", "current", "main"],
+      "cold": {
+        "scanMs": 241.58924999999726,
+        "completeRefreshMs": 276.9022919999952,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 23.59675000000061,
+        "reportSerializeSealMs": 0.021999999997206032,
+        "reportDurableWriteMs": 11.694292000000132,
+        "totalPersistMs": 35.31304199999795,
+        "sourceBytes": 6802143,
+        "sourceBytesWritten": 6802143,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804116,
+        "totalPersistedBytes": 6804116
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.119583000003331,
+        "scanMs": 13.70995799999946,
+        "completeRefreshMs": 46.83312400000068,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802143,
+        "totalReadBytes": 6802143,
+        "sourceWritePackSealDurableMs": 18.43449999999939,
+        "reportSerializeSealMs": 0.016041999999288237,
+        "reportDurableWriteMs": 9.553040999999212,
+        "totalPersistMs": 28.00358299999789,
+        "sourceBytes": 6802143,
+        "sourceBytesWritten": 6802143,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804116,
+        "totalPersistedBytes": 6804116,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 5.135834000000614,
+        "scanMs": 234.82183299999815,
+        "completeRefreshMs": 273.9762499999997,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802143,
+        "totalReadBytes": 58672964,
+        "sourceWritePackSealDurableMs": 23.016665999999532,
+        "reportSerializeSealMs": 0.02370899999732501,
+        "reportDurableWriteMs": 10.978208000004088,
+        "totalPersistMs": 34.018583000000945,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 6,
+      "order": ["main", "current", "uncompressed"],
+      "cold": {
+        "scanMs": 243.2627500000017,
+        "completeRefreshMs": 281.61604200000147,
+        "transcriptBytesRead": 51870301,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51870301,
+        "sourceWritePackSealDurableMs": 25.038958000001003,
+        "reportSerializeSealMs": 0.03266599999915343,
+        "reportDurableWriteMs": 13.281667999999627,
+        "totalPersistMs": 38.35329199999978,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 5.133208000002924,
+        "scanMs": 13.158207999997103,
+        "completeRefreshMs": 46.742833000000246,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 6802144,
+        "sourceWritePackSealDurableMs": 18.40358400000332,
+        "reportSerializeSealMs": 0.014208000000508036,
+        "reportDurableWriteMs": 10.033624999996391,
+        "totalPersistMs": 28.45141700000022,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 7.480583000000479,
+        "scanMs": 236.60858400000143,
+        "completeRefreshMs": 276.2128330000014,
+        "transcriptBytesRead": 51870821,
+        "sourceBytesRead": 6802144,
+        "totalReadBytes": 58672965,
+        "sourceWritePackSealDurableMs": 20.68091600000116,
+        "reportSerializeSealMs": 0.031749999998282874,
+        "reportDurableWriteMs": 11.411000000000058,
+        "totalPersistMs": 32.1236659999995,
+        "sourceBytes": 6802144,
+        "sourceBytesWritten": 6802144,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 6804117,
+        "totalPersistedBytes": 6804117,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 6,
+      "order": ["main", "current", "uncompressed"],
+      "cold": {
+        "scanMs": 340.30691699999807,
+        "completeRefreshMs": 496.20400099999824,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 142.60091699999975,
+        "reportSerializeSealMs": 0.03966700000091805,
+        "reportDurableWriteMs": 13.256499999999505,
+        "totalPersistMs": 155.89708400000018,
+        "sourceBytes": 5388809,
+        "sourceBytesWritten": 5388809,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390866,
+        "totalPersistedBytes": 5390866
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 37.01204200000211,
+        "scanMs": 15.190999999998894,
+        "completeRefreshMs": 62.66108299999905,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 5388809,
+        "totalReadBytes": 5388809,
+        "sourceWritePackSealDurableMs": 0.0045829999980924185,
+        "reportSerializeSealMs": 0.03083399999741232,
+        "reportDurableWriteMs": 10.422624000002543,
+        "totalPersistMs": 10.458040999998047,
+        "sourceBytes": 5388809,
+        "sourceBytesWritten": 0,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 2057,
+        "totalPersistedBytes": 5390866,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 35.83808399999907,
+        "scanMs": 44.84570800000074,
+        "completeRefreshMs": 231.3951249999991,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 5388809,
+        "totalReadBytes": 5413905,
+        "sourceWritePackSealDurableMs": 139.78008300000147,
+        "reportSerializeSealMs": 0.05025000000023283,
+        "reportDurableWriteMs": 10.880999999997584,
+        "totalPersistMs": 150.71133299999929,
+        "sourceBytes": 5388796,
+        "sourceBytesWritten": 5388796,
+        "reportBytes": 2057,
+        "totalWrittenBytes": 5390853,
+        "totalPersistedBytes": 5390853,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "uncompressed",
+      "round": 6,
+      "order": ["main", "current", "uncompressed"],
+      "cold": {
+        "scanMs": 366.97312500000044,
+        "completeRefreshMs": 417.79070800000045,
+        "transcriptBytesRead": 51886685,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 51886685,
+        "sourceWritePackSealDurableMs": 37.96416700000191,
+        "reportSerializeSealMs": 0.03183300000091549,
+        "reportDurableWriteMs": 12.82158299999719,
+        "totalPersistMs": 50.81758300000001,
+        "sourceBytes": 10459569,
+        "sourceBytesWritten": 10459569,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461542,
+        "totalPersistedBytes": 10461542
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 17.892416999999114,
+        "scanMs": 15.481583000000683,
+        "completeRefreshMs": 43.94312499999796,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 10459569,
+        "totalReadBytes": 10459569,
+        "sourceWritePackSealDurableMs": 0.026333000001613982,
+        "reportSerializeSealMs": 0.01149999999688589,
+        "reportDurableWriteMs": 10.531291999999667,
+        "totalPersistMs": 10.569124999998166,
+        "sourceBytes": 10459569,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 1973,
+        "totalPersistedBytes": 10461542,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 14.730499999997846,
+        "scanMs": 43.81645800000115,
+        "completeRefreshMs": 102.0655829999996,
+        "transcriptBytesRead": 25096,
+        "sourceBytesRead": 10459569,
+        "totalReadBytes": 10484665,
+        "sourceWritePackSealDurableMs": 33.98191600000064,
+        "reportSerializeSealMs": 0.018332999999984168,
+        "reportDurableWriteMs": 9.51837599999999,
+        "totalPersistMs": 43.51862500000061,
+        "sourceBytes": 10459573,
+        "sourceBytesWritten": 10459573,
+        "reportBytes": 1973,
+        "totalWrittenBytes": 10461546,
+        "totalPersistedBytes": 10461546,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-source-compression-c87zan/.claude/projects/benchmark/active-session.jsonl"
+      }
+    }
+  ]
+}

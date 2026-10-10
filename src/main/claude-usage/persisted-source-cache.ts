@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises'
 import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
 import { encodeClaudeUsagePersistedFiles } from './persisted-token-columns'
 import {
+  compressClaudeUsageSourceText,
+  decodeClaudeUsageSourceText
+} from './source-cache-compression'
+import {
   hasClaudeUsageProtectedCheckpoint,
   normalizeClaudeUsageSourceFiles,
   type ClaudeUsageVerifiedSources
@@ -10,7 +14,7 @@ import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-
 import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/usage-cache-json-integrity'
 import {
   usageSourceCachePath,
-  writeUsageSourceCacheText,
+  writeUsageSourceCacheData,
   type UsageCacheSplitRequest,
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
@@ -35,7 +39,7 @@ export async function readClaudeUsageSourceCache(
     return { sources: [] }
   }
   try {
-    const text = await readFile(cacheRef.path, 'utf8')
+    const text = await decodeClaudeUsageSourceText(await readFile(cacheRef.path))
     const parsed = JSON.parse(text)
     const verified = verifyUsageCacheJson(text, parsed?.usageIntegrity, SOURCE_DOMAIN)
     if (
@@ -100,9 +104,11 @@ export async function writeClaudeUsageSourceCache(
     worktreeFingerprint: ref.worktreeFingerprint,
     sources: encodeClaudeUsagePersistedFiles(sources)
   })
-  await writeUsageSourceCacheText(
+  await writeUsageSourceCacheData(
     ref,
-    ref.schemaVersion === 6 ? material : sealUsageCacheJson(material, SOURCE_DOMAIN)
+    await compressClaudeUsageSourceText(
+      ref.schemaVersion === 6 ? material : sealUsageCacheJson(material, SOURCE_DOMAIN)
+    )
   )
 }
 
