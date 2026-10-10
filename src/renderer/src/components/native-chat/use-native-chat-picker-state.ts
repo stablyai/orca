@@ -24,6 +24,7 @@ import {
   type NativeChatPickerItem,
   type NativeChatSendClassification
 } from './native-chat-composer-state'
+import type { NativeChatSessionSkill } from './native-chat-picker-items'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import {
   emitNativeChatPickerItemAccepted,
@@ -52,8 +53,8 @@ export function useNativeChatPickerState(args: {
   agentCommands: readonly SlashCommandSuggestion[]
   /** A message recalled from history is resent or walked past, not completed, until it is edited. */
   recalledFromHistory: boolean
-  /** Skill names the running session reports; undefined keeps the host disk scan. */
-  sessionSkillNames?: readonly string[]
+  /** Skills the running session reports; undefined keeps the host disk scan. */
+  sessionSkills?: readonly NativeChatSessionSkill[]
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -67,7 +68,7 @@ export function useNativeChatPickerState(args: {
     caret,
     agentCommands,
     recalledFromHistory,
-    sessionSkillNames,
+    sessionSkills,
     textareaRef,
     setDraft,
     setCaret,
@@ -93,7 +94,7 @@ export function useNativeChatPickerState(args: {
             profile,
             discovery,
             dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
-            sessionSkillNames
+            sessionSkills
           ),
     [
       agentCommands,
@@ -104,7 +105,7 @@ export function useNativeChatPickerState(args: {
       draft,
       profile,
       recalledFromHistory,
-      sessionSkillNames
+      sessionSkills
     ]
   )
 
@@ -187,13 +188,13 @@ export function useNativeChatPickerState(args: {
         profile,
         discovery,
         null,
-        sessionSkillNames
+        sessionSkills
       )
       if (next.mode === 'none' || next.triggerKey !== dismissed.triggerKey) {
         setDismissed(null)
       }
     },
-    [agentCommands, dismissalContext, dismissed, discovery, draft, profile, sessionSkillNames]
+    [agentCommands, dismissalContext, dismissed, discovery, draft, profile, sessionSkills]
   )
 
   const classifySend = useCallback(

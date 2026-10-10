@@ -111,6 +111,7 @@ export function useMobileStructuredAgentSession(args: {
     }),
     [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
   )
+  const sessionCommands = enabled ? (state.commands ?? undefined) : undefined
 
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
@@ -285,6 +286,8 @@ export function useMobileStructuredAgentSession(args: {
     respondQuestion,
     queued,
     commandRefusalCauses,
-    backgroundTasks
+    backgroundTasks,
+    // Why no memo: the menu keys on these two lists, which keep their references across frames.
+    slashCatalog: { sessionCommands, conversationCommands }
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -11,26 +11,15 @@ import {
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import {
-  applyAutocomplete,
-  detectAutocompleteTrigger,
-  rankSlashCommandSuggestions,
-  rankSuggestions
-} from './mobile-native-chat-autocomplete'
-import {
-  composerSuggestionInsertText,
-  MobileNativeChatComposerSuggestions,
-  type ComposerSuggestion
-} from './MobileNativeChatComposerSuggestions'
+import type { NativeChatStructuredCatalogInputs } from '../../../src/shared/native-chat-composer-catalog'
+import { MobileNativeChatComposerSuggestions } from './MobileNativeChatComposerSuggestions'
+import { useMobileNativeChatComposerAutocomplete } from './use-mobile-native-chat-composer-autocomplete'
 import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
-import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 
 const NO_FILE_PATHS: string[] = []
@@ -39,7 +28,8 @@ const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 type Props = {
   /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
   inputRef?: React.Ref<TextInput>
-  structuredCommands?: readonly AgentSessionConversationCommand[]
+  /** Structured lane: the session's `/` menu inputs; undefined on the terminal lane. */
+  slashCatalog?: NativeChatStructuredCatalogInputs
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
@@ -84,7 +74,7 @@ export function MobileNativeChatComposer({
   getSendCompletionGeneration,
   getComposerEditGeneration,
   agent,
-  structuredCommands,
+  slashCatalog,
   sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
@@ -131,37 +121,20 @@ export function MobileNativeChatComposer({
     !isAttaching &&
     !sessionOptionDispatching
 
-  const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  const suggestions = useMemo<ComposerSuggestion[]>(() => {
-    if (!trigger) {
-      return []
-    }
-    if (trigger.kind === 'slash') {
-      const commands =
-        structuredCommands !== undefined
-          ? structuredSlashCommands(structuredCommands, agent)
-          : agent
-            ? getMobileNativeChatCommands(agent)
-            : []
-      // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
-      // (~5 rows visible), so an uncapped `/` would mount every row and
-      // re-reconcile them on each streaming tick right above the transcript.
-      return rankSlashCommandSuggestions(commands, trigger.query, 12).map((command) => ({
-        kind: 'command' as const,
-        command
-      }))
-    }
-    return rankSuggestions(filePaths, trigger.query).map((path) => ({
-      kind: 'file' as const,
-      path
-    }))
-  }, [trigger, filePaths, agent, structuredCommands])
-
-  useEffect(() => {
-    if (trigger?.kind === 'file') {
-      onNeedFiles?.(trigger.query)
-    }
-  }, [onNeedFiles, trigger?.kind, trigger?.query])
+  const moveCaret = useCallback((next: number) => {
+    setCursor(next)
+    setPendingSelection({ start: next, end: next })
+  }, [])
+  const autocomplete = useMobileNativeChatComposerAutocomplete({
+    value,
+    cursor,
+    agent,
+    slashCatalog,
+    filePaths,
+    onNeedFiles,
+    onChangeText,
+    moveCaret
+  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -173,20 +146,6 @@ export function MobileNativeChatComposer({
 
   const handleChange = (next: string): void => {
     onChangeText(next)
-  }
-
-  const pickSuggestion = (suggestion: ComposerSuggestion): void => {
-    if (!trigger) {
-      return
-    }
-    const { text: nextText, cursor: nextCursor } = applyAutocomplete(
-      value,
-      trigger,
-      composerSuggestionInsertText(suggestion)
-    )
-    onChangeText(nextText)
-    setCursor(nextCursor)
-    setPendingSelection({ start: nextCursor, end: nextCursor })
   }
 
   const handleSend = async (): Promise<void> => {
@@ -222,8 +181,11 @@ export function MobileNativeChatComposer({
 
   return (
     <View>
-      {suggestions.length > 0 ? (
-        <MobileNativeChatComposerSuggestions suggestions={suggestions} onPick={pickSuggestion} />
+      {autocomplete.sections.length > 0 ? (
+        <MobileNativeChatComposerSuggestions
+          sections={autocomplete.sections}
+          onPick={autocomplete.pick}
+        />
       ) : null}
       {attachments.length > 0 ? (
         <ScrollView

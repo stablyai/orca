@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
-  rankSlashCommandSuggestions,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
 
@@ -59,63 +58,7 @@ describe('rankSuggestions', () => {
   })
 })
 
-describe('rankSlashCommandSuggestions', () => {
-  const commands = [
-    { name: 'clear', description: 'Clear conversation history' },
-    { name: 'compact', description: 'Summarize and compact' },
-    { name: 'mcp', description: 'List MCP tools' }
-  ]
-
-  it('shows the whole catalog for a bare slash', () => {
-    expect(rankSlashCommandSuggestions(commands, '').map((c) => c.name)).toEqual([
-      'clear',
-      'compact',
-      'mcp'
-    ])
-  })
-
-  it('ranks prefix matches ahead of substring matches', () => {
-    expect(rankSlashCommandSuggestions(commands, 'c').map((c) => c.name)).toEqual([
-      'clear',
-      'compact',
-      'mcp'
-    ])
-    expect(rankSlashCommandSuggestions(commands, 'm').map((c) => c.name)).toEqual([
-      'mcp',
-      'compact'
-    ])
-  })
-
-  it('is case-insensitive and drops non-matches', () => {
-    expect(rankSlashCommandSuggestions(commands, 'CLE').map((c) => c.name)).toEqual(['clear'])
-    expect(rankSlashCommandSuggestions(commands, 'zzz')).toEqual([])
-  })
-
-  it('preserves command identity and metadata for duplicate names', () => {
-    const catalog = [
-      { name: 'team-review', description: 'First' },
-      { name: 'team-review', argumentHint: '<branch>' },
-      { name: 'review', kindUnspecified: true as const }
-    ]
-    const result = rankSlashCommandSuggestions(catalog, 'review', 3)
-    expect(result[0]).toBe(catalog[2])
-    expect(result[1]).toBe(catalog[0])
-    expect(result[2]).toBe(catalog[1])
-  })
-})
-
-describe.each([
-  { name: 'file', rank: rankSuggestions },
-  {
-    name: 'slash',
-    rank: (names: readonly string[], query: string, limit: number): string[] =>
-      rankSlashCommandSuggestions(
-        names.map((name) => ({ name })),
-        query,
-        limit
-      ).map((command) => command.name)
-  }
-])('$name suggestion bounds', ({ rank }) => {
+describe.each([{ name: 'file', rank: rankSuggestions }])('$name suggestion bounds', ({ rank }) => {
   it('keeps later prefixes ahead of the earliest substring matches', () => {
     const candidates = ['team-review', 'team-review', 'pre-review', 'review-a', 'REVIEW-b']
     expect(rank(candidates, 'REVIEW', 4)).toEqual([

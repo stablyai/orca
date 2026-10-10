@@ -19,6 +19,7 @@ import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-dr
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { NativeChatStructuredCatalogInputs } from '../../../src/shared/native-chat-composer-catalog'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -38,6 +39,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */
   nativeChatVisualSource: MobileNativeChatVisualSource | null
+  /** Structured lane's `/` menu inputs, report or not; undefined on the terminal lane. */
+  nativeChatSlashCatalog: NativeChatStructuredCatalogInputs | undefined
   nativeChatAgentWorking: boolean
   /** What labels the live turn's one indicator row; null off the structured lane. */
   nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null

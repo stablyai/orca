@@ -13,7 +13,6 @@ import {
   slashCommandDispatchText,
   type SlashCommandSuggestion
 } from './native-chat-composer-state'
-import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 
@@ -324,87 +323,6 @@ describe('native skill and command picker', () => {
     }
   })
 
-  it('lets a session report replace the disk scan and enrich the names it knows', () => {
-    const items = buildNativeChatPickerItems(
-      [],
-      [
-        skill({
-          name: 'ref-oss',
-          description: 'On disk',
-          skillFilePath: '/home/ref-oss/SKILL.md',
-          sourceKind: 'home'
-        }),
-        skill({ name: 'stale-on-disk', skillFilePath: '/home/stale/SKILL.md', sourceKind: 'home' })
-      ],
-      '',
-      '/',
-      ['dataviz', 'ref-oss']
-    )
-    // The scanned-but-unreported skill is gone; the reported-but-unscanned one is
-    // offered without a scope, and sorts after the one the scan located.
-    expect(items.map((item) => item.name)).toEqual(['ref-oss', 'dataviz'])
-    expect(items[0]).toMatchObject({ kind: 'skill', description: 'On disk' })
-    expect(items[1]).toMatchObject({ kind: 'skill', description: null, sources: [] })
-  })
-
-  it('keeps the disk scan only when a session report is absent', () => {
-    const items = buildNativeChatPickerItems(
-      [],
-      [skill({ name: 'ref-oss', skillFilePath: '/home/ref-oss/SKILL.md' })],
-      '',
-      '/',
-      undefined
-    )
-    expect(items.map((item) => item.name)).toEqual(['ref-oss'])
-    expect(buildNativeChatPickerItems([], [skill({})], '', '/', [])).toEqual([])
-  })
-
-  it('rejects a session-reported name that is not a safe insertion token', () => {
-    const items = buildNativeChatPickerItems([], [], '', '/', ['ok', 'two words', 'cle\u200bar'])
-    expect(items.map((item) => item.name)).toEqual(['ok'])
-  })
-
-  it('ranks exact, prefix, fuzzy, then description matches within a group', () => {
-    const items = buildNativeChatPickerItems(
-      [],
-      [
-        skill({ name: 'deploy', skillFilePath: '/1/SKILL.md' }),
-        skill({ name: 'deployment', skillFilePath: '/2/SKILL.md' }),
-        skill({ name: 'd-e-p-l-o-y', skillFilePath: '/3/SKILL.md' }),
-        skill({
-          name: 'release',
-          description: 'Deploy an application',
-          skillFilePath: '/4/SKILL.md'
-        })
-      ],
-      'deploy',
-      '$'
-    )
-    expect(items.map((item) => item.name)).toEqual([
-      'deploy',
-      'deployment',
-      'd-e-p-l-o-y',
-      'release'
-    ])
-  })
-
-  it('merges duplicate names but annotates command collisions on one command row', () => {
-    const duplicateSkills = [
-      skill({ name: 'clear', skillFilePath: '/project/clear/SKILL.md', sourceKind: 'repo' }),
-      skill({ name: 'clear', skillFilePath: '/home/clear/SKILL.md', sourceKind: 'home' })
-    ]
-    const skillOnly = buildNativeChatPickerItems([], duplicateSkills, '', '$')
-    expect(skillOnly).toEqual([
-      expect.objectContaining({ kind: 'skill', name: 'clear', sources: expect.any(Array) })
-    ])
-    expect(skillOnly[0].kind === 'skill' ? skillOnly[0].sources : []).toHaveLength(2)
-
-    const collision = buildNativeChatPickerItems(COMMANDS, duplicateSkills, 'clear', '/')
-    expect(collision).toEqual([
-      expect.objectContaining({ kind: 'command', name: 'clear', skillCollision: true })
-    ])
-  })
-
   it('keeps a long token-safe name intact for insertion instead of truncating it', () => {
     const longName = `skill-${'x'.repeat(100)}`
     const items = buildNativeChatPickerItems(
@@ -416,38 +334,6 @@ describe('native skill and command picker', () => {
     expect(items.map((item) => item.name)).toEqual([longName])
     const applied = applyPickerSuggestion('/sk', 3, items[0])
     expect(applied.draft).toBe(`$${longName} `)
-  })
-
-  it('rejects names carrying zero-width characters instead of inserting them', () => {
-    const items = buildNativeChatPickerItems(
-      [],
-      [
-        skill({
-          name: 'cle\u200bar',
-          directoryPath: '/repo/.agents/skills/safe-dir',
-          skillFilePath: '/repo/.agents/skills/safe-dir/SKILL.md'
-        })
-      ],
-      '',
-      '$'
-    )
-    expect(items.map((item) => item.name)).toEqual(['safe-dir'])
-  })
-
-  it('falls back to a token-safe directory name and strips unsafe display text', () => {
-    const items = buildNativeChatPickerItems(
-      [],
-      [
-        skill({
-          name: 'Spoof\u202e Name',
-          directoryPath: '/repo/.agents/skills/safe-name',
-          skillFilePath: '/repo/.agents/skills/safe-name/SKILL.md'
-        })
-      ],
-      '',
-      '$'
-    )
-    expect(items.map((item) => item.name)).toEqual(['safe-name'])
   })
 
   it('replaces only the active slash token and preserves text after the caret', () => {
@@ -511,32 +397,4 @@ describe('native skill and command picker', () => {
       ).mode
     ).toBe('none')
   })
-})
-
-it('preserves known skill completion for unclassified session members only', () => {
-  const commands = sessionSlashCommandSuggestions('claude', [
-    { name: 'clear', kind: 'command', kindUnspecified: true },
-    { name: 'typescript', kind: 'command', kindUnspecified: true },
-    { name: 'project-check', kind: 'command', kindUnspecified: true }
-  ])
-  const diskSkills = [
-    skill({ description: 'TypeScript skill' }),
-    skill({ name: 'not-loaded', skillFilePath: '/not-loaded/SKILL.md' })
-  ]
-  const items = buildNativeChatPickerItems(commands, diskSkills, '', '/', [])
-  expect(items.map(({ name, kind }) => ({ name, kind }))).toEqual([
-    { name: 'clear', kind: 'command' },
-    { name: 'project-check', kind: 'command' },
-    { name: 'typescript', kind: 'skill' }
-  ])
-  expect(items[2]).toMatchObject({
-    description: 'TypeScript skill',
-    sources: [{ sourceKind: 'repo' }]
-  })
-  const classified = sessionSlashCommandSuggestions('claude', [
-    { name: 'typescript', kind: 'command' }
-  ])
-  expect(
-    buildNativeChatPickerItems(classified, diskSkills, '', '/', []).map(({ kind }) => kind)
-  ).toEqual(['command'])
 })

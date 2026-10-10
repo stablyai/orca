@@ -1,11 +1,7 @@
-let baseSensitivityCollator: Intl.Collator | undefined
-let numericCollator: Intl.Collator | undefined
+// Shared so the phone's slash menu sorts with the same comparator.
+export { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collation'
 
-export function compareBaseSensitivityLocaleText(a: string, b: string): number {
-  // Why: stay lazy like localeCompare while resolving ICU options only once.
-  baseSensitivityCollator ??= new Intl.Collator(undefined, { sensitivity: 'base' })
-  return baseSensitivityCollator.compare(a, b)
-}
+let numericCollator: Intl.Collator | undefined
 
 export function compareNumericLocaleText(a: string, b: string): number {
   numericCollator ??= new Intl.Collator(undefined, { numeric: true })

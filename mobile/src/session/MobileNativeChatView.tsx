@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ComponentProps } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -66,6 +66,8 @@ type Props = ComposerTrayProps & {
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
    *  replacing the bridge lane's static three-dot working row (desktop parity). */
   structuredActivityUi?: boolean
+  /** Structured lane: the session's `/` menu inputs; undefined on the terminal lane. */
+  slashCatalog?: ComponentProps<typeof MobileNativeChatComposer>['slashCatalog']
   /** What labels the live turn's one indicator row (structured lane only). */
   turnIndicator?: NativeChatLiveTurnIndicator | null
   /** Structured lane: host-recorded turn timing feeding the per-turn status rows. */
@@ -160,6 +162,7 @@ export function MobileNativeChatView({
   agentWorking,
   canStop = agentWorking,
   structuredActivityUi = false,
+  slashCatalog,
   turnIndicator = null,
   workingStartedAt,
   settledTurns,
@@ -445,9 +448,7 @@ export function MobileNativeChatView({
         </View>
       ) : null}
       <MobileNativeChatComposer
-        structuredCommands={
-          structuredActivityUi ? (sessionOptions?.controller.conversationCommands ?? []) : undefined
-        }
+        slashCatalog={slashCatalog}
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}

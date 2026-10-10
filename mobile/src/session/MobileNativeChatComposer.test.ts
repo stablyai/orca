@@ -25,6 +25,7 @@ vi.mock('react-native', async () => {
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
+    SectionList: (await import('../test-support/section-list-test-double')).SectionListTestDouble,
     StyleSheet: {
       create: (styles: unknown) => styles,
       hairlineWidth: 1

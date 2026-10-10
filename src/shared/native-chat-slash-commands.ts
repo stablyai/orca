@@ -6,6 +6,7 @@
 
 import type { AgentSessionSlashCommand } from './agent-session-wire'
 import type { AgentType } from './agent-status-types'
+import type { NativeChatSessionSkill } from './native-chat-picker-items'
 
 /** Where the chat finds a command's reply when the agent runs in a terminal.
  *  `composer`: the chat answers from state it holds and never sends the command.
@@ -164,11 +165,16 @@ export function sessionSlashCommandSuggestions(
     })
 }
 
-/** Names the session reported as skills, in the order it reported them. */
-export function sessionReportedSkillNames(
+/** The skills the session reported, in its order, with the description it gave. */
+export function sessionReportedSkills(
   reported: readonly AgentSessionSlashCommand[]
-): readonly string[] {
-  return reported.filter((entry) => entry.kind === 'skill').map((entry) => entry.name)
+): readonly NativeChatSessionSkill[] {
+  return reported
+    .filter((entry) => entry.kind === 'skill')
+    .map((entry) => ({
+      name: entry.name,
+      ...(entry.description ? { description: entry.description } : {})
+    }))
 }
 
 /** Whether the draft is a slash command (leading `/`, ignoring leading space).

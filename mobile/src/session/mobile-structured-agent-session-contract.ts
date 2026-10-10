@@ -10,6 +10,7 @@ import type { StructuredMobileSendAttachment } from './use-mobile-structured-sen
 import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import type { NativeChatStructuredCatalogInputs } from '../../../src/shared/native-chat-composer-catalog'
 
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
@@ -37,4 +38,6 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     backgroundTasks: MobileStructuredBackgroundTasks
     /** Where this chat's `::orca-visual` lines read their HTML from; null without a client. */
     visualSource: MobileNativeChatVisualSource | null
+    /** The `/` menu inputs; no `sessionCommands` until a report arrives or on an older host. */
+    slashCatalog: NativeChatStructuredCatalogInputs
   }

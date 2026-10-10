@@ -4,7 +4,7 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
-  sessionReportedSkillNames,
+  sessionReportedSkills,
   sessionSlashCommandSuggestions,
   slashCommandDispatchText
 } from './native-chat-slash-commands'
@@ -78,7 +78,8 @@ describe('a session that reports its own command surface', () => {
   const reported = [
     { name: 'clear', kind: 'command' as const },
     { name: 'opsx:apply', kind: 'command' as const },
-    { name: 'ref-oss', kind: 'skill' as const }
+    { name: 'triage', kind: 'skill' as const, description: 'Sort incoming issues' },
+    { name: 'bare', kind: 'skill' as const }
   ]
 
   it('offers exactly the reported commands, described from the curated catalog', () => {
@@ -93,8 +94,11 @@ describe('a session that reports its own command surface', () => {
     expect(names).not.toContain('compact')
   })
 
-  it('splits skills out for the picker to group on its own', () => {
-    expect(sessionReportedSkillNames(reported)).toEqual(['ref-oss'])
+  it('splits skills out for the picker to group on its own, keeping their descriptions', () => {
+    expect(sessionReportedSkills(reported)).toEqual([
+      { name: 'triage', description: 'Sort incoming issues' },
+      { name: 'bare' }
+    ])
   })
 
   it('prefers the description the session reported over the curated one', () => {

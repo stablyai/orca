@@ -43,6 +43,9 @@ type StructuredOptionsController = {
   invokeStructuredOption: (id: string) => Promise<boolean>
 }
 
+// Stable across renders so the composer's `/` menu memo survives streamed frames.
+const NO_CONVERSATION_COMMANDS: readonly AgentSessionConversationCommand[] = []
+
 export function useMobileStructuredAgentOptions(args: {
   agent: string | null
   client: RpcClient | null
@@ -273,7 +276,9 @@ export function useMobileStructuredAgentOptions(args: {
   return {
     optionPickerRequest,
     conversationCommands:
-      conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
+      conversationSupport?.sessionId === sessionId
+        ? conversationSupport.commands
+        : NO_CONVERSATION_COMMANDS,
     optionSnapshot,
     optionSurface,
     pendingOptionId: optionState.pendingId,
