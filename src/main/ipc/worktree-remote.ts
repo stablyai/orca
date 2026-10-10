@@ -104,6 +104,7 @@ import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
+  remoteHasOrcaProvenance,
   sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
@@ -122,6 +123,7 @@ import {
 } from './worktree-push-target-setup'
 import {
   buildNarrowForkFetchRefspec,
+  ensureRemoteAlsoTracksBranch,
   ensureRemoteTracksBranchNarrowly,
   forkRemoteTrackingRefExists
 } from '../git/fork-remote-refspec'
@@ -1108,7 +1110,11 @@ async function adoptExistingForkRemoteForBranch(
   repoId: string | undefined,
   worktreeId: string | undefined
 ): Promise<GitPushTarget> {
-  await ensureRemoteTracksBranchNarrowly(execGit, repoPath, target.remoteName, target.branchName)
+  // Why (#25703): the target's name can be a user-created remote the store persisted after
+  // a reuse. Without the provenance marker, widen add-only -- never rewrite their refspec.
+  const orcaCreated = await remoteHasOrcaProvenance(execGit, repoPath, target.remoteName)
+  const widenRefspec = orcaCreated ? ensureRemoteTracksBranchNarrowly : ensureRemoteAlsoTracksBranch
+  await widenRefspec(execGit, repoPath, target.remoteName, target.branchName)
   // Why: widening only rewrites config -- it never imports anything. For a sibling worktree's
   // first materialize of a *new* branch on an already-existing remote, the branch's tracking
   // ref doesn't exist yet, and `--set-upstream-to` below hard-fails with "the requested

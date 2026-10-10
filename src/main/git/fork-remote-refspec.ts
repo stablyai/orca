@@ -136,6 +136,25 @@ export async function ensureRemoteTracksBranchNarrowly(
 }
 
 /**
+ * Reuse-path twin of `ensureRemoteTracksBranchNarrowly` for remotes Orca did not create
+ * (#25703): appends the branch's narrow refspec when absent and never drops or rewrites
+ * anything already configured -- the user's wide default and other branches' entries stay
+ * intact, and `tagOpt` is left alone.
+ */
+export async function ensureRemoteAlsoTracksBranch(
+  execGit: GitExecFn,
+  repoPath: string,
+  remoteName: string,
+  branchName: string
+): Promise<void> {
+  const desired = buildNarrowForkFetchRefspec(remoteName, branchName)
+  const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
+  if (!existing.includes(desired)) {
+    await execGit(['config', '--add', `remote.${remoteName}.fetch`, desired], repoPath)
+  }
+}
+
+/**
  * Removes every `remote.<name>.fetch` entry, leaving the remote pushable but importing
  * nothing on a plain fetch. For a fork remote with no branch pinning it at all (no
  * worktree metadata, no `branch.*.remote`/`.pushRemote` config), there's nothing to

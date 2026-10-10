@@ -188,8 +188,9 @@ function isBranchConfigSeparator(code: number): boolean {
 // Why: on-demand materialization (push/pull/fetch/fast-forward, #17828) never
 // updates the store's `pushTarget.remoteCreated` flag, so ownership must also be
 // readable from the repo-local `remote.<name>.orca-created` config Orca writes
-// when it creates the remote (see `worktree-push-target-setup.ts`).
-async function remoteHasOrcaProvenance(
+// when it creates the remote (see `worktree-push-target-setup.ts`). Also gates
+// which reused remotes the refspec narrowing may rewrite (#25703).
+export async function remoteHasOrcaProvenance(
   execGit: GitRemoteExec,
   repoPath: string,
   remoteName: string

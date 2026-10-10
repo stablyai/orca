@@ -6,11 +6,16 @@
 
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { findGitRemoteNameByFetchUrl } from '../../shared/git-remote-url-index'
-import { sameGitHubRemoteUrl, type GitRemoteExec } from './worktree-push-target-cleanup'
 import {
   buildNarrowForkFetchRefspec,
+  ensureRemoteAlsoTracksBranch,
   ensureRemoteTracksBranchNarrowly
 } from '../git/fork-remote-refspec'
+import {
+  remoteHasOrcaProvenance,
+  sameGitHubRemoteUrl,
+  type GitRemoteExec
+} from './worktree-push-target-cleanup'
 
 // One `git remote -v` replaces `git remote` plus a serial `git remote get-url` per
 // remote -- 59 subprocesses at 58 remotes, on every push-target resolution (#17914).
@@ -112,10 +117,15 @@ export async function prepareWorktreePushTargetWithExec(
       // Why: if a later PR worktree reuses an Orca-created fork remote, it
       // must inherit ownership so deleting the final user can remove it.
       remoteCreated = isRemoteCreatedByKnownWorktree(existingRemote)
-      // Why: a remote created before this fix (or reused for a second branch on the
-      // same fork) may still carry the wide default refspec; widen-but-bound it to
-      // cover this branch too rather than trusting whatever is already configured.
-      await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
+      // Why (#25703): only a remote Orca minted (marker set) may have its refspec
+      // rewritten -- narrowing a user-created remote breaks tracking for every other
+      // branch they push (`@{u}`, ahead/behind, PR lookup). For those, widen add-only:
+      // append this branch's narrow refspec, never drop or rewrite their entries.
+      const orcaCreated = await remoteHasOrcaProvenance(execGit, repoPath, remoteName)
+      const widenRefspec = orcaCreated
+        ? ensureRemoteTracksBranchNarrowly
+        : ensureRemoteAlsoTracksBranch
+      await widenRefspec(execGit, repoPath, remoteName, target.branchName)
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
       // Why: `-t <branch> --no-tags` means this remote is never, even transiently,
