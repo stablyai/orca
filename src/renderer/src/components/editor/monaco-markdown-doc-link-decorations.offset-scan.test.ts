@@ -1,5 +1,5 @@
 import type { IRange } from 'monaco-editor'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getMarkdownDocLinkTarget } from './markdown-doc-links'
 import { createMarkdownFenceTracker } from './markdown-fence-scanner'
 import { getMarkdownDocLinkDecorationRanges } from './monaco-markdown-doc-link-decorations'
@@ -145,22 +145,17 @@ describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
       (_, index) => `Line ${index} prose with no wiki link.`
     ).join('\n')
 
-    const realIndexOf = String.prototype.indexOf
-    let indexOfCalls = 0
-    String.prototype.indexOf = function (this: string, ...args: unknown[]) {
-      indexOfCalls += 1
-      return (realIndexOf as (...a: unknown[]) => number).apply(this, args)
-    } as typeof String.prototype.indexOf
+    const indexOf = vi.spyOn(String.prototype, 'indexOf')
     try {
       getMarkdownDocLinkDecorationRanges(linkFree)
+      // Missing delimiters must not trigger another suffix search per line.
+      const delimiterSearches = indexOf.mock.calls.filter(
+        ([needle]) => needle === '[[' || needle === ']]'
+      ).length
+      expect(delimiterSearches).toBeLessThanOrEqual(8)
     } finally {
-      String.prototype.indexOf = realIndexOf
+      indexOf.mockRestore()
     }
-
-    // Why: the delimiter cursors are seeded once and never re-armed while they
-    // hold -1, so a link-free document costs a fixed number of searches rather
-    // than one tail scan per line.
-    expect(indexOfCalls).toBeLessThanOrEqual(8)
   })
 
   it('visits inline-code span offsets linearly across a generated link index', () => {
