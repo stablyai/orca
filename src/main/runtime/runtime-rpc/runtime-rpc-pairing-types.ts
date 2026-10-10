@@ -8,6 +8,8 @@ import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing
 import type { MobileRelayMintFailure } from '../../../shared/mobile-relay-mint-failure'
 import type {
   DeviceCredentialInstalled,
+  PairingGetDirectEndpointsParams,
+  PairingGetDirectEndpointsResult,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
@@ -113,6 +115,10 @@ export type MobileRelayPairingProvider = {
     context: MobilePairingConnectionContext,
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult>
+  getDirectEndpoints(
+    context: MobilePairingConnectionContext,
+    params: PairingGetDirectEndpointsParams
+  ): Promise<PairingGetDirectEndpointsResult>
   provisionRelay(
     context: MobilePairingConnectionContext,
     params: PairingProvisionRelayParams

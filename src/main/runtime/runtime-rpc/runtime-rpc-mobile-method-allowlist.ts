@@ -188,6 +188,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'notifications.unregisterPush',
   'notifications.unsubscribe',
   'pairing.getEndpoints',
+  'pairing.getDirectEndpoints',
   'pairing.provisionRelay',
   'preflight.check',
   'preflight.detectAgents',

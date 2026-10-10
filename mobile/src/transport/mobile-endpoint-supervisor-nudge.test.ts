@@ -218,6 +218,7 @@ describe('mobile endpoint supervisor nudges', () => {
       recordMigration: vi.fn(),
       scheduleLease: vi.fn(),
       scheduleDirectProbe: vi.fn(),
+      refreshDirectEndpoints: vi.fn(async () => {}),
       onBookkeepingError: vi.fn(),
       onDialFailure: vi.fn()
     })

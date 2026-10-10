@@ -123,5 +123,10 @@ describe('local-only mobile pairing', () => {
         newResumeTokenHash: 'A'.repeat(43)
       })
     ).rejects.toThrow('relay_disabled_for_device')
+    await expect(service.getDirectEndpoints(context({ transport: 'direct' }), {})).resolves.toEqual({
+      v: 1,
+      selected: null,
+      endpoints: []
+    })
   })
 })

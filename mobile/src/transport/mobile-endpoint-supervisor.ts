@@ -1,5 +1,6 @@
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import { DirectReturnProbe } from './mobile-direct-return-probe'
+import { HostDirectEndpointRefresh } from './mobile-direct-endpoint-refresh'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
@@ -19,7 +20,7 @@ import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { ForegroundNudgeReason } from './types'
+import type { ForegroundNudgeReason, HostProfile } from './types'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
 import {
@@ -51,6 +52,8 @@ export class MobileEndpointSupervisor {
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
+  private host: HostProfile
+  private readonly directEndpointRefresh: HostDirectEndpointRefresh
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
@@ -86,6 +89,10 @@ export class MobileEndpointSupervisor {
     this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
       void this.recoverRelay(true, true)
     })
+    this.host = dependencies.getHost()
+    this.directEndpointRefresh = new HostDirectEndpointRefresh(async (next) => {
+      await dependencies.saveHost((this.host = next))
+    })
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
       logical,
       controller: this.relayReconnect,
@@ -111,12 +118,18 @@ export class MobileEndpointSupervisor {
           liveRelayLeaseExpiry(this.logical, this.stopped, expiry)
         ),
       scheduleDirectProbe: () => this.directProbe.schedule(),
+      refreshDirectEndpoints: async (client) => {
+        this.host = await this.directEndpointRefresh.apply(client, this.host)
+      },
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
       onDialFailure: (error) => logRelayDialFailure(this.logRelay, error)
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
+      refreshDirectEndpoints: async () => {
+        this.host = await this.directEndpointRefresh.apply(this.logical, this.host)
+      },
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
@@ -195,6 +208,7 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
+    this.directEndpointRefresh.invalidate() // drop late refresh saves after host removal
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null

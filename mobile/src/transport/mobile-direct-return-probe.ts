@@ -5,6 +5,9 @@ import type { ScheduleTimer } from './timer-scheduler'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
+// The relay session's request timeout is 30s. This probe holds the operation
+// mutex, so a refresh that never answers must not delay the direct dial by that long.
+export const DIRECT_REFRESH_BUDGET_MS = 2_000
 
 // While the runtime channel rides the relay, periodically probe the direct
 // endpoint and migrate back once hysteresis proves it stable.
@@ -20,10 +23,11 @@ export class DirectReturnProbe {
       setTimer: ScheduleTimer
       clearTimer: typeof clearTimeout
       openDirect: () => RpcClient
-      directPath: Exclude<MobileConnectionPath, 'relay'>
+      directPath: () => Exclude<MobileConnectionPath, 'relay'>
     },
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
+      refreshDirectEndpoints: () => Promise<void>
       canSchedule: () => boolean
       canAttempt: () => boolean
       beginOperation: () => void
@@ -73,6 +77,12 @@ export class DirectReturnProbe {
     this.hooks.beginOperation()
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
+      // Why: bound the refresh, then dial the saved endpoint if it is still in flight.
+      await this.refreshWithinBudget(controller.signal)
+      if (this.stopped || controller.signal.aborted) {
+        return
+      }
+      const directPath = this.deps.directPath()
       successful = await openAuthenticatedDirectEndpoint(
         this.deps.openDirect,
         12_000,
@@ -93,7 +103,7 @@ export class DirectReturnProbe {
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
       try {
-        await this.hooks.migrate(candidate, this.deps.directPath, () => this.stopped)
+        await this.hooks.migrate(candidate, directPath, () => this.stopped)
       } catch (error) {
         if (this.stopped) {
           return
@@ -113,5 +123,29 @@ export class DirectReturnProbe {
       this.hooks.afterProbe()
       this.schedule()
     }
+  }
+
+  private refreshWithinBudget(signal: AbortSignal): Promise<void> {
+    if (this.stopped || signal.aborted) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (timer) {
+          this.deps.clearTimer(timer)
+        }
+        signal.removeEventListener('abort', finish)
+        resolve()
+      }
+      timer = this.deps.setTimer(finish, DIRECT_REFRESH_BUDGET_MS)
+      signal.addEventListener('abort', finish)
+      void this.hooks.refreshDirectEndpoints().then(finish, finish)
+    })
   }
 }

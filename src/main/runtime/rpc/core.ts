@@ -4,6 +4,8 @@ import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protoc
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
 import type {
   DeviceCredentialInstalled,
+  PairingGetDirectEndpointsParams,
+  PairingGetDirectEndpointsResult,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
@@ -16,6 +18,9 @@ import type { RpcMethodPermission } from './rpc-method-permission'
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  getDirectEndpoints(
+    params: PairingGetDirectEndpointsParams
+  ): Promise<PairingGetDirectEndpointsResult>
   provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
 }
 
