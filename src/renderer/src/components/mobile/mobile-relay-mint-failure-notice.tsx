@@ -121,7 +121,7 @@ export function MobileRelayMintFailureNotice({
           <Button type="button" size={compact ? 'xs' : 'sm'} onClick={onUseLan}>
             {translate('auto.components.mobile.MobileRelayMintFailureNotice.useLan', 'Use LAN')}
           </Button>
-          {!providerMissing && !reconnectRequired && !notEntitled ? (
+          {!reconnectRequired && !notEntitled ? (
             <Button
               type="button"
               size={compact ? 'xs' : 'sm'}

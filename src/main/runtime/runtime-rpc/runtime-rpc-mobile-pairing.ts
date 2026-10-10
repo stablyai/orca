@@ -145,6 +145,9 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
         relayFailure
       }
     }
+    if (!this.mobileRelayPairingProvider) {
+      await this.mobileRelayPairingProviderInstaller?.()
+    }
     const relayProvider = this.mobileRelayPairingProvider
     if (!relayProvider) {
       return refuseAutomaticWithoutRelay({
