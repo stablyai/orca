@@ -20,6 +20,7 @@ import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { applySinglePaneCapVariables } from './single-pane-cap-variables'
 
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
@@ -48,6 +49,7 @@ export function useDocumentAppearance(): void {
     () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
     [registeredBackground]
   )
+  const singlePaneMaxWidth = useAppStore((s) => s.settings?.terminalSinglePaneMaxWidth)
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
@@ -106,4 +108,8 @@ export function useDocumentAppearance(): void {
       rebuildAllTerminalWebglRenderers('code-font-smoothing')
     }
   }, [codeFontSmoothing])
+
+  useEffect(() => {
+    applySinglePaneCapVariables(document.documentElement, singlePaneMaxWidth)
+  }, [singlePaneMaxWidth])
 }

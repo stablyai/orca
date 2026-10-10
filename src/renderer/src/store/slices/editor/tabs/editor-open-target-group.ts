@@ -33,6 +33,7 @@ export function captureEditorOpenLinkIntent(
     ...(captured.targetGroupId ? { targetGroupId: captured.targetGroupId } : {})
   }
 }
+import { findSplitOppositeGroupId } from '../../tabs/lone-pane-split-source'
 
 export function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
   return group.activeTabId ? (tabsById.get(group.activeTabId) ?? null) : null
@@ -60,8 +61,29 @@ export function getMostRecentEditorTabForGroup(
   return null
 }
 
+type EditorOpenTargetState = Pick<
+  AppState,
+  'activeGroupIdByWorktree' | 'groupsByWorktree' | 'unifiedTabsByWorktree'
+> &
+  Partial<Pick<AppState, 'layoutByWorktree'>>
+
 export function resolveEditorOpenTargetGroupId(
-  state: Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
+  state: EditorOpenTargetState,
+  worktreeId: string,
+  explicitTargetGroupId?: string,
+  opts?: { placementFixed?: boolean }
+): string | undefined {
+  const groupId = resolveEditorFocusTargetGroupId(state, worktreeId, explicitTargetGroupId)
+  // Why: resolved here, not in createUnifiedTab, so preview replacement and reuse look in the panel the tab lands in.
+  return (
+    (!opts?.placementFixed && groupId !== undefined
+      ? findSplitOppositeGroupId(state, worktreeId, groupId, 'editor')
+      : null) ?? groupId
+  )
+}
+
+function resolveEditorFocusTargetGroupId(
+  state: EditorOpenTargetState,
   worktreeId: string,
   explicitTargetGroupId?: string
 ): string | undefined {

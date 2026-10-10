@@ -140,13 +140,14 @@ describe('browser tab creation placement', () => {
   it('appends Group New Browser Tab regardless of the active tab', async () => {
     seedSplit(store)
     await drawFromMain()
-    await store.getState().openNewBrowserTabInActiveWorkspace(G1)
+    // Why: a split panel's own + passes placementFixed (useTabGroupCreationCommands).
+    await store.getState().openNewBrowserTabInActiveWorkspace(G1, { placementFixed: true })
     await settled()
     const n = store.getState().unifiedTabsByWorktree[WT]!.at(-1)!
     expect(group(store, G1)?.tabOrder).toEqual(['A', 'B', 'C', n.id])
 
     store.getState().activateTab('A')
-    await store.getState().openNewBrowserTabInActiveWorkspace(G1)
+    await store.getState().openNewBrowserTabInActiveWorkspace(G1, { placementFixed: true })
     await settled()
     const m = store.getState().unifiedTabsByWorktree[WT]!.at(-1)!
     expect(group(store, G1)?.tabOrder).toEqual(['A', 'B', 'C', n.id, m.id])

@@ -389,7 +389,9 @@ describe('ensureSimulatorTab', () => {
   })
 
   it('creates a simulator tab in a new right split when requested', async () => {
-    mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'term-1', groupId: 'group-1', contentType: 'terminal' }]
+    }
     mockStoreState.createUnifiedTabInSplit.mockReturnValue({
       id: 'sim-2',
       groupId: 'group-2',
@@ -432,6 +434,57 @@ describe('ensureSimulatorTab', () => {
     expect(mockStoreState.setActiveTabType).not.toHaveBeenCalled()
   })
 
+  it.each([
+    {
+      name: 'a horizontal split whose right leaf is the source',
+      layout: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'group-0' },
+        second: { type: 'leaf', groupId: 'group-1' }
+      }
+    },
+    {
+      name: 'a vertical split whose lower leaf is the source',
+      layout: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', groupId: 'group-0' },
+        second: { type: 'leaf', groupId: 'group-1' }
+      }
+    },
+    {
+      name: 'a nested split with no right sibling of the source',
+      layout: {
+        type: 'split',
+        direction: 'horizontal',
+        first: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', groupId: 'group-0' },
+          second: { type: 'leaf', groupId: 'group-2' }
+        },
+        second: { type: 'leaf', groupId: 'group-1' }
+      }
+    }
+  ])('does not make a third pane from $name', async ({ layout }) => {
+    // Why: the ceiling of two — rightSplit reuses or falls through, it never adds a pane.
+    mockStoreState.groupsByWorktree = {
+      'wt-1': [{ id: 'group-0' }, { id: 'group-1' }, { id: 'group-2' }]
+    }
+    mockStoreState.layoutByWorktree = { 'wt-1': layout }
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'term-1', groupId: 'group-1', contentType: 'terminal' }]
+    }
+    stubCreatedSimulatorTab('group-1')
+    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
+
+    expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe(createdSimulatorTabId())
+
+    expect(mockStoreState.createUnifiedTabInSplit).not.toHaveBeenCalled()
+    expect(mockStoreState.createEmptySplitGroup).not.toHaveBeenCalled()
+  })
+
   it('reuses an existing right split when requested', async () => {
     mockStoreState.groupsByWorktree = { 'wt-1': [{ id: 'group-1' }, { id: 'group-2' }] }
     mockStoreState.layoutByWorktree = {
@@ -442,7 +495,9 @@ describe('ensureSimulatorTab', () => {
         second: { type: 'leaf', groupId: 'group-2' }
       }
     }
-    mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'term-1', groupId: 'group-1', contentType: 'terminal' }]
+    }
     stubCreatedSimulatorTab('group-2')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
@@ -463,7 +518,8 @@ describe('ensureSimulatorTab', () => {
       id: expect.any(String),
       label: 'Mobile Emulator',
       targetGroupId: 'group-2',
-      activate: true
+      activate: true,
+      placementFixed: true
     })
     expect(mockStoreState.activateTab).toHaveBeenCalledWith(createdSimulatorTabId())
     expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
@@ -471,7 +527,9 @@ describe('ensureSimulatorTab', () => {
   })
 
   it('falls back to the source group when atomic right split creation fails', async () => {
-    mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'term-1', groupId: 'group-1', contentType: 'terminal' }]
+    }
     mockStoreState.createUnifiedTabInSplit.mockReturnValue(null)
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
@@ -512,7 +570,9 @@ describe('ensureSimulatorTab', () => {
   })
 
   it('does not create a split for background auto-attach', async () => {
-    mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'term-1', groupId: 'group-1', contentType: 'terminal' }]
+    }
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
@@ -550,7 +610,9 @@ describe('ensureSimulatorTab', () => {
       { id: 'wt-1', hostId: 'local' },
       { id: 'wt-1', hostId: 'runtime:host-b' }
     ])
-    mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [{ id: 'term-1', groupId: 'group-1', contentType: 'terminal' }]
+    }
     stubCreatedSimulatorTab('group-1')
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
 
