@@ -27,7 +27,10 @@ export function unservedHostServerMessage(decision: UnservedDecision): string {
       return 'Terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.'
     case 'refused':
       return decision.detail ?? 'Orca couldn’t set up its server on this host.'
-    default:
+    case 'source_changed':
+      return 'An older version of Orca changed this host’s projects. Move those changes to its managed server in SSH Hosts settings to continue.'
+    case 'deferred':
+    case 'failed':
       return 'Orca couldn’t start its server on this host. Try connecting again.'
   }
 }
