@@ -15,7 +15,19 @@ import {
 } from '../../shared/agent-session-journal-types'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { readZcodeMessageParts, type ZcodeSessionEvent } from './zcode-protocol-events'
+import {
+  appendZcodeItemAndPublish,
+  zcodeItemIdentity,
+  zcodeMessageIdentity,
+  zcodeToolIdentity,
+  zcodeTurnIdentity
+} from './zcode-structured-journal-sink'
+import {
+  readZcodeMessageParts,
+  readZcodeModelStreamingEvent,
+  type ZcodeSessionEvent
+} from './zcode-protocol-events'
+import { createZcodeStreamTranslator } from './zcode-structured-stream-translation'
 import {
   agentKey,
   readRecord,
@@ -53,54 +65,16 @@ export type ZcodeJournalTranslatorDeps = {
   sessionId: string
   sink: StructuredAgentSessionEventSink
   now: () => number
-}
-
-function identityFor(recordId: string): AgentJournalItemIdentity {
-  // ZCode ids are session-scoped on the wire, so the session id rides the arm.
-  return { provider: 'legacy', agent: 'zcode', sessionId: '', recordId }
+  /** Injected by tests so the delta window can be driven without real time. */
+  schedule?: (run: () => void, ms: number) => () => void
 }
 
 function turnIdentity(turnId: string): AgentJournalItemIdentity {
-  return identityFor(`turn-lifecycle:${turnId}`)
+  return zcodeTurnIdentity(turnId)
 }
 
 function messageIdentity(messageId: string): AgentJournalItemIdentity {
-  return identityFor(`message:${messageId}`)
-}
-
-function toolIdentity(messageId: string, partId: string): AgentJournalItemIdentity {
-  return identityFor(`tool:${messageId}:${partId}`)
-} /** Appends one item and publishes it, honoring the sink's non-blocking variants. */
-function appendAndPublish(
-  sink: StructuredAgentSessionEventSink,
-  identity: AgentJournalItemIdentity,
-  body: AgentJournalItemBody,
-  turnScope: AgentJournalTurnScope,
-  options: { lifecycle?: boolean; observedAt?: number; coalescingKey?: string } = {}
-): ZcodeJournalTranslationAdmission {
-  const admission = sink.tryAppendItem
-    ? sink.tryAppendItem(identity, body, {
-        turnScope,
-        ...(options.lifecycle ? { lifecycle: true } : {}),
-        ...(options.observedAt !== undefined ? { observedAt: options.observedAt } : {})
-      })
-    : (sink.appendItem(
-        identity,
-        body,
-        options.observedAt !== undefined
-          ? { turnScope, observedAt: options.observedAt }
-          : { turnScope }
-      ),
-      ZCODE_JOURNAL_ADMITTED)
-  if (!admission.accepted) {
-    return admission
-  }
-  return sink.tryPublish
-    ? sink.tryPublish({
-        ...(options.lifecycle ? { lifecycle: true } : {}),
-        ...(options.coalescingKey ? { coalescingKey: options.coalescingKey } : {})
-      })
-    : ZCODE_JOURNAL_ADMITTED
+  return zcodeMessageIdentity(messageId)
 }
 
 /** ZCode's turn result vocabulary, or null when this host cannot place one. */
@@ -133,11 +107,20 @@ export function createZcodeJournalTranslator(
       ? { kind: 'turn', turnItemId: agentKey(turnIdentity(turnId)) }
       : AGENT_JOURNAL_THREAD_SCOPE
 
+  // This build's assistant text arrives only as `model.streaming` deltas; whole
+  // `message.upserted` frames never come for assistant messages.
+  const streams = createZcodeStreamTranslator({
+    sink,
+    identityFor: messageIdentity,
+    turnScopeFor,
+    ...(deps.schedule ? { schedule: deps.schedule } : {})
+  })
+
   const handleTurnStarted = (event: ZcodeSessionEvent): ZcodeJournalTranslationAdmission => {
     const turnId = readString(event.payload, 'turnId') ?? `turn-${event.seq}`
     const startedAt = event.timestamp
     currentTurn = { turnId, userItemId: null, startedAt }
-    return appendAndPublish(
+    return appendZcodeItemAndPublish(
       sink,
       turnIdentity(turnId),
       agentJournalTurnBody({ turnId, state: 'running', startedAt }),
@@ -155,7 +138,10 @@ export function createZcodeJournalTranslator(
     const wasCurrent = currentTurn?.turnId === turnId
     const outcome = zcodeTurnOutcome(resultType)
     const turn = wasCurrent ? currentTurn : null
-    const admission = appendAndPublish(
+    // Lifecycle bypasses the delta window: the completed assistant row lands in
+    // the journal before the turn row names the turn ended.
+    streams.endTurn(event.timestamp)
+    const admission = appendZcodeItemAndPublish(
       sink,
       turnIdentity(turnId),
       agentJournalTurnBody({
@@ -175,42 +161,59 @@ export function createZcodeJournalTranslator(
     return admission
   }
 
-  const handleMessageUpserted = (event: ZcodeSessionEvent): ZcodeJournalTranslationAdmission => {
-    const message = readRecord(event.payload, 'message') ?? event.payload
+  /** One whole ZCode message → its journal message row, `null` for unnameable or blank ones. */
+  const messageRowFrom = (
+    message: unknown,
+    timestamp: number | null
+  ): {
+    messageId: string
+    identity: AgentJournalItemIdentity
+    body: AgentJournalItemBody
+  } | null => {
     // Some builds file the id inside `info` rather than at the top level; skipping
     // those would silently drop the message from a resumed chat.
     const messageId =
       readString(message, 'messageId') ?? readString(readRecord(message, 'info') ?? {}, 'messageId')
-    if (!messageId) {
-      return ZCODE_JOURNAL_ADMITTED
-    }
-    const role = readString(message.info ?? message, 'role') ?? 'assistant'
+    const role = readString(readRecord(message, 'info') ?? message, 'role') ?? 'assistant'
     const blocks = readZcodeMessageParts(message)
+    if (!messageId || blocks.length === 0) {
+      return null
+    }
     const isUser = role === 'user'
     if (isUser && currentTurn && !currentTurn.userItemId) {
       currentTurn.userItemId = agentKey(messageIdentity(messageId))
     }
-    return appendAndPublish(
-      sink,
-      messageIdentity(messageId),
-      {
+    return {
+      messageId,
+      identity: messageIdentity(messageId),
+      body: {
         kind: 'message',
         role: isUser ? 'user' : 'assistant',
         blocks,
-        // ZCode upserts whole messages; a running state only survives until the
-        // next upsert, and the turn end closes whatever is left open.
         state: 'completed',
-        completedAt: event.timestamp
-      },
+        ...(timestamp === null ? {} : { completedAt: timestamp })
+      }
+    }
+  }
+
+  const handleMessageUpserted = (event: ZcodeSessionEvent): ZcodeJournalTranslationAdmission => {
+    const row = messageRowFrom(
+      readRecord(event.payload, 'message') ?? event.payload,
+      event.timestamp
+    )
+    if (!row) {
+      return ZCODE_JOURNAL_ADMITTED
+    }
+    // A whole-message upsert is authoritative: its accumulated stream copy is stale.
+    streams.forget(row.messageId)
+    return appendZcodeItemAndPublish(
+      sink,
+      row.identity,
+      row.body,
       turnScopeFor(readString(event, 'turnId') ?? undefined)
     )
   }
 
-  const handlePartDelta = (): ZcodeJournalTranslationAdmission => {
-    // Deltas stream inside a message ZCode also upserts; the upsert carries the
-    // full text, so a delta only updates the running row's activity, not a body.
-    return ZCODE_JOURNAL_ADMITTED
-  }
   const handleToolPart = (event: ZcodeSessionEvent): ZcodeJournalTranslationAdmission => {
     const part = readRecord(event.payload, 'part') ?? event.payload
     const messageId = readString(part, 'messageId') ?? readString(event.payload, 'messageId')
@@ -228,9 +231,9 @@ export function createZcodeJournalTranslator(
       state: bodyState,
       ...(bodyState === 'running' ? {} : { output: zcodeToolOutput(state) })
     }
-    return appendAndPublish(
+    return appendZcodeItemAndPublish(
       sink,
-      toolIdentity(messageId, partId),
+      zcodeToolIdentity(messageId, partId),
       body,
       turnScopeFor(readString(event, 'turnId') ?? undefined)
     )
@@ -247,8 +250,25 @@ export function createZcodeJournalTranslator(
         return handleTurnCompleted(event)
       case 'message.upserted':
         return handleMessageUpserted(event)
+      case 'model.streaming': {
+        const streaming = readZcodeModelStreamingEvent(event.payload)
+        if (!streaming || streaming.done) {
+          // A final empty delta carries no text; the turn end closes the row.
+          return ZCODE_JOURNAL_ADMITTED
+        }
+        const admission = streams.handleDelta({
+          messageId: streaming.messageId,
+          kind: streaming.kind,
+          delta: streaming.delta,
+          turnId: readString(event, 'turnId') ?? undefined,
+          timestamp: event.timestamp
+        })
+        return admission.accepted ? ZCODE_JOURNAL_ADMITTED : admission
+      }
       case 'part.delta':
-        return handlePartDelta()
+        // Deltas stream inside a message ZCode also upserts; the upsert carries
+        // the full text, so a delta only refreshes activity, not a body.
+        return ZCODE_JOURNAL_ADMITTED
       case 'part.started':
       case 'part.upserted':
         return handleToolPart(event)
@@ -262,26 +282,14 @@ export function createZcodeJournalTranslator(
       if (typeof raw !== 'object' || raw === null) {
         continue
       }
-      const message = raw
-      // Same `info.messageId` fallback as the live upsert path: snapshots from builds
-      // that file the id inside `info` would otherwise lose their history.
-      const messageId =
-        readString(message, 'messageId') ??
-        readString(readRecord(message, 'info') ?? {}, 'messageId')
-      const role = readString(readRecord(message, 'info') ?? message, 'role') ?? 'assistant'
-      const blocks = readZcodeMessageParts(message)
-      if (!messageId || blocks.length === 0) {
+      const row = messageRowFrom(raw, null)
+      if (!row) {
         continue
       }
-      const admission = appendAndPublish(
+      const admission = appendZcodeItemAndPublish(
         sink,
-        messageIdentity(messageId),
-        {
-          kind: 'message',
-          role: role === 'user' ? 'user' : 'assistant',
-          blocks,
-          state: 'completed'
-        },
+        row.identity,
+        row.body,
         AGENT_JOURNAL_THREAD_SCOPE
       )
       if (!admission.accepted) {
@@ -297,9 +305,9 @@ export function createZcodeJournalTranslator(
     detail: string | null
     options: { id: string; label: string }[]
   }): ZcodeJournalTranslationAdmission => {
-    return appendAndPublish(
+    return appendZcodeItemAndPublish(
       sink,
-      identityFor(`prompt:${prompt.itemId}`),
+      zcodeItemIdentity(`prompt:${prompt.itemId}`),
       {
         kind: 'approval',
         title: `Allow ${prompt.toolName}?`,
@@ -325,6 +333,9 @@ export function createZcodeJournalTranslator(
       if (!id) {
         return
       }
+      // The turn is unverifiable, so the streams it left open keep their last
+      // running snapshot rather than claiming a completion nobody saw.
+      streams.endTurnUnproven()
       sink.appendItem(
         turnIdentity(id),
         agentJournalTurnBody({
@@ -341,6 +352,7 @@ export function createZcodeJournalTranslator(
     },
     dispose: () => {
       disposed = true
+      streams.dispose()
     }
   }
 }

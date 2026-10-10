@@ -40,6 +40,35 @@ export function readZcodeSessionEvent(method: string, params: unknown): ZcodeSes
   }
 }
 
+/** One `model.streaming` frame: this build's only carrier of assistant text. */
+export type ZcodeModelStreamingEvent = {
+  messageId: string
+  kind: string
+  delta: string
+  done: boolean
+}
+
+export function readZcodeModelStreamingEvent(
+  payload: Record<string, unknown>
+): ZcodeModelStreamingEvent | null {
+  // ZCode wraps the streaming fields one level down: the event params carry
+  // envelope fields (seq, turnId, …) and a `payload` record with the delta.
+  const frame = isRecord(payload.payload) ? payload.payload : payload
+  const messageId =
+    (typeof frame.assistantMessageId === 'string' && frame.assistantMessageId) ||
+    (typeof frame.messageId === 'string' && frame.messageId) ||
+    ''
+  if (!messageId || typeof frame.delta !== 'string') {
+    return null
+  }
+  return {
+    messageId,
+    kind: typeof frame.kind === 'string' ? frame.kind : 'text_delta',
+    delta: frame.delta,
+    done: frame.done === true
+  }
+}
+
 /** A `ZCodeMessageWithParts` as the snapshot and upsert events carry it. */
 export type ZcodeMessageWithParts = {
   info: Record<string, unknown>
