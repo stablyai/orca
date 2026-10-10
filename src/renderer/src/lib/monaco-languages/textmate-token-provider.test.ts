@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
+import { loadGroovyTextMateGrammar } from './register-groovy'
 import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
 
@@ -44,6 +45,31 @@ describe('createTextMateTokensProvider', () => {
     const commentLine = provider.tokenize('# hello', provider.getInitialState())
     expect(commentLine.tokens.map((token) => token.scopes)).toContain(
       'comment.line.number-sign.nim'
+    )
+  })
+
+  it('tokenizes Groovy and Jenkinsfile code through the lazy grammar loader', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.groovy',
+      loadGrammar: loadGroovyTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('def greeting = "Hello ${name}"')).toEqual(
+      expect.arrayContaining([
+        'storage.type.def.groovy',
+        'string.quoted.double.groovy',
+        'source.groovy.embedded.source'
+      ])
+    )
+    expect(scopesOf("@Library('shared') _")).toEqual(
+      expect.arrayContaining(['storage.type.annotation.groovy', 'string.quoted.single.groovy'])
+    )
+    expect(scopesOf('// build step')).toContain('comment.line.double-slash.groovy')
+    expect(scopesOf('/* block */ int x = 42')).toEqual(
+      expect.arrayContaining(['comment.block.groovy', 'constant.numeric.groovy'])
     )
   })
 

@@ -14,6 +14,28 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it.each([
+    'src/Build.groovy',
+    'scripts/deploy.gvy',
+    'scripts/deploy.gy',
+    'scripts/shell.gsh',
+    'build.gradle',
+    'C:\\repo\\settings.GRADLE',
+    'Jenkinsfile',
+    'ci/Jenkinsfile',
+    'C:\\repo\\Jenkinsfile',
+    'Jenkinsfile.release',
+    'ci/deploy.Jenkinsfile'
+  ])('maps Groovy source %s to the groovy language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('groovy')
+  })
+
+  it('keeps known extensions on Jenkinsfile variants and leaves .gradle.kts on kotlin', () => {
+    expect(detectLanguage('Jenkinsfile.md')).toBe('markdown')
+    expect(detectLanguage('build.gradle.kts')).toBe('kotlin')
+    expect(detectLanguage('MyJenkinsfileNotes')).toBe('plaintext')
+  })
+
   it('maps Nim files to the nim language id', () => {
     expect(detectLanguage('src/main.nim')).toBe('nim')
     expect(detectLanguage('tasks/build.nims')).toBe('nim')
