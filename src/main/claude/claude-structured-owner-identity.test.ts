@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
+import { claudeProcessIdentity } from './claude-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY = {
@@ -12,7 +13,7 @@ const IDENTITY = {
 
 describe('claude structured owner identity', () => {
   it('exports the spawn token env and records the observed process identity', async () => {
-    expect(CLAUDE_SPAWN_TOKEN_ENV).toBe('ORCA_AGENT_SESSION_SPAWN_TOKEN')
+    expect(ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV).toBe('ORCA_AGENT_SESSION_SPAWN_TOKEN')
     await expect(
       claudeProcessIdentity(
         { identity: IDENTITY, spawnToken: 'spawn-a', pid: 4242 },

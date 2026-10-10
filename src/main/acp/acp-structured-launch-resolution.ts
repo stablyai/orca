@@ -6,14 +6,12 @@
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandleChain
 } from '../../shared/agent-session-provider-handle'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
@@ -29,8 +27,8 @@ import {
   providerTimelineKeyPart,
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {
   NATIVE_CHAT_VISUALS_DIR_ENV,
   withNativeChatVisualsEnv
@@ -44,6 +42,7 @@ export type AcpStructuredLaunch = {
   command: string
   args: string[]
   cwd: string
+  /** The child's sealed environment; a read that starts no child gets the agent's own. */
   env: Record<string, string>
   /** Keys the child must not inherit from this process's own environment. */
   envToDelete: string[]
@@ -62,25 +61,27 @@ export type AcpStructuredLaunch = {
   } | null
 }
 
-export type AcpStructuredLaunchResolverDeps = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
+export type AcpStructuredLaunchPartDeps = {
   /** The chat's journal as it stands, read without opening it; null when it has none. */
   readJournal: (sessionId: string) => JournalLoad | null
-  resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  /** The shared base env; re-read per acquisition. */
-  resolveEnvironment: () => Promise<Record<string, string>>
-  /** The user's per-agent environment overlay from settings. */
-  resolveLaunchEnv?: (agent: string) => Record<string, string>
   /** The Agent Permissions setting's bypass posture for this agent, re-read per acquisition. */
   resolveFullAccess?: (agent: string) => boolean
-  /** The user's per-agent Command setting, re-read per acquisition; none runs the stock binary. */
-  resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   /** The environment the child process inherits at spawn; this process's own by default. */
   inheritedEnv?: NodeJS.ProcessEnv
   probeVersion?: typeof probeAgentCliVersion
-} & AcpLaunchVisualsDeps
+} & Pick<AcpLaunchVisualsDeps, 'logger'>
+
+/** What a launch's binary and environment are read from; a catalog probe reads the same. */
+export type AcpLaunchInvocationDeps = {
+  /** The shared base env; re-read per acquisition. */
+  resolveEnvironment: () => Promise<Record<string, string>>
+  /** The user's per-agent environment overlay from settings. */
+  resolveLaunchEnv?: (agent: string) => Record<string, string>
+  /** The user's per-agent Command setting, re-read per acquisition; none runs the stock binary. */
+  resolveCommandSettings?: () => StructuredAgentCommandSettings
+} & Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'homePath' | 'inheritedEnv'>
 
 /** The binary a launch with `env` spawns: the user's Command setting when set, else the stock
  *  binary from PATH, then the agent's own install directories. A create's version check resolves
@@ -142,16 +143,6 @@ export async function acpLaunchVersionSupported(
   return (await probeAcpLaunchVersion(spec, launch, false, probe)).supported
 }
 
-export type AcpLaunchInvocationDeps = Pick<
-  AcpStructuredLaunchResolverDeps,
-  | 'resolveEnvironment'
-  | 'resolveLaunchEnv'
-  | 'resolveCommandSettings'
-  | 'resolveCommand'
-  | 'homePath'
-  | 'inheritedEnv'
->
-
 /** The binary and environment any child of this agent runs under for `accountHome`: a session's
  *  launch and a catalog probe both resolve here, so neither can reach another account or install. */
 export async function resolveAcpLaunchInvocation(
@@ -173,31 +164,28 @@ export async function resolveAcpLaunchInvocation(
   return { command, env, envToDelete }
 }
 
-export function createAcpStructuredLaunchResolver(
+/** An ACP agent's part of a launch: its binary under the pinned account, the release check, the
+ *  visuals skill, its arguments and the provider session to reattach. */
+export function acpStructuredLaunchPart(
   spec: AcpLaunchSpec,
-  deps: AcpStructuredLaunchResolverDeps
-): (input: { identity: AgentSessionJournalIdentity }) => Promise<AcpStructuredLaunch> {
-  return async ({ identity }) => {
-    const record = deps.store.getRecord(identity.sessionId)
-    if (!record) {
-      throw new Error(`no durable agent-session record for ${identity.sessionId}`)
-    }
-    if (record.provider !== spec.agent) {
-      throw new Error(`session ${identity.sessionId} is a ${record.provider} session`)
-    }
-    const { location, accountHome } = record
-    // A session pinned elsewhere belongs to that host's runtime; starting it here would put a
-    // second writer on the same provider session.
-    if (location.executionHostId !== LOCAL_EXECUTION_HOST_ID || location.wslDistro !== null) {
-      throw new Error(
-        `${spec.agent} structured sessions run on this runtime's host, not ${location.executionHostId}`
-      )
-    }
-    const { env, envToDelete, command } = await resolveAcpLaunchInvocation(spec, accountHome, deps)
-    const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
-    const visuals = spec.visualsSkill
-      ? ((await deps.prepareVisuals?.(identity.sessionId)) ?? null)
-      : null
+  deps: AcpStructuredLaunchPartDeps
+): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
+  return async (basis, identity) => {
+    const { record } = basis
+    const { env, envToDelete, command } = await resolveAcpLaunchInvocation(
+      spec,
+      record.accountHome,
+      {
+        resolveEnvironment: basis.baseEnvironment,
+        resolveLaunchEnv: () => basis.launchEnv(),
+        resolveCommandSettings: basis.commandSettings,
+        ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+        ...(deps.homePath ? { homePath: deps.homePath } : {}),
+        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {})
+      }
+    )
+    const cwd = await basis.launchDirectory()
+    const visuals = spec.visualsSkill ? await basis.visuals() : null
     // Again at every launch: the binary on PATH may have changed since the chat was created.
     const launchVersion = await probeAcpLaunchVersion(
       spec,
@@ -220,29 +208,33 @@ export function createAcpStructuredLaunchResolver(
           inherited: deps.inheritedEnv ?? process.env
         })
       : null
-    // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
-    const childEnv = withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null)
     const fullAccess = deps.resolveFullAccess?.(spec.agent) ?? false
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
-      spec,
-      command,
-      args: spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null }),
-      cwd,
-      env: childEnv,
-      envToDelete: skill ? envToDelete : [...envToDelete, NATIVE_CHAT_VISUALS_DIR_ENV],
-      fullAccess,
-      resume: head
-        ? {
-            sessionId: head.handle.nativeId,
-            key: agentSessionProviderHandleKey(head.handle),
-            mayBeUnsaved: () =>
-              head.origin === 'created' &&
-              nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
-            unannouncedLosses: () =>
-              unannouncedLosses(deps.readJournal, identity.sessionId, record.providerHandleChain)
-          }
-        : null
+      launch: {
+        spec,
+        command,
+        args: spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null }),
+        fullAccess,
+        resume: head
+          ? {
+              sessionId: head.handle.nativeId,
+              key: agentSessionProviderHandleKey(head.handle),
+              mayBeUnsaved: () =>
+                head.origin === 'created' &&
+                nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
+              unannouncedLosses: () =>
+                unannouncedLosses(deps.readJournal, identity.sessionId, record.providerHandleChain)
+            }
+          : null
+      },
+      env: withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null),
+      inheritedEnvToDelete: [
+        ...STRUCTURED_CHILD_ENV_TO_DELETE,
+        ...envToDelete,
+        // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
+        ...(skill ? [] : [NATIVE_CHAT_VISUALS_DIR_ENV])
+      ]
     }
   }
 }
@@ -250,7 +242,7 @@ export function createAcpStructuredLaunchResolver(
 /** Proof the chat holds no turn of provider session `nativeId`; a journal that does not read whole,
  *  or does not read at all, proves nothing. */
 function nothingExchangedOn(
-  readJournal: AcpStructuredLaunchResolverDeps['readJournal'],
+  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
   sessionId: string,
   nativeId: string
 ): boolean {
@@ -278,7 +270,7 @@ function nothingExchangedOn(
 /** Derived on every start, never stored: a row an attach failure dropped is written by the next
  *  start that succeeds. A journal that does not read whole proves nothing, so none is written. */
 function unannouncedLosses(
-  readJournal: AcpStructuredLaunchResolverDeps['readJournal'],
+  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
   sessionId: string,
   chain: AgentSessionProviderHandleChain
 ): string[] {

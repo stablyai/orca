@@ -16,7 +16,9 @@ import {
 } from './native-chat-visuals-delivery'
 import { nativeChatVisualsFolderFor, nativeChatVisualsRootFor } from './native-chat-visuals-folder'
 import { buildClaudeChildProcessEnv } from '../claude/claude-child-process-environment'
-import { codexStructuredChildEnvironment } from '../codex/codex-structured-child-environment'
+import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from './agent-session-record-test-fixture'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import {
   NATIVE_CHAT_VISUALS_SKILL_NAME,
@@ -116,7 +118,7 @@ describe('preparing a chat for visuals', () => {
     )
   })
 
-  it("never hands a chat another chat's folder that Orca itself inherited", () => {
+  it("never hands a chat another chat's folder that Orca itself inherited", async () => {
     const inherited = { PATH: '/bin', [NATIVE_CHAT_VISUALS_DIR_ENV]: '/parent-chat' }
     const visuals = { folder: '/mine', skill: SKILL }
     for (const platform of ['darwin', 'win32'] as const) {
@@ -127,24 +129,27 @@ describe('preparing a chat for visuals', () => {
         '/mine'
       )
     }
-    const codex = (withVisuals: boolean) =>
+    const record = agentSessionRecordFixture({
+      sessionId: 'chat-1',
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' }
+    })
+    const codex = async (withVisuals: boolean) =>
       resolveProviderChildEnv(
-        codexStructuredChildEnvironment(
-          {
-            command: 'codex',
-            args: ['app-server'],
-            cwd: '/w',
-            codexHome: null,
-            resumeThreadId: null,
-            ...(withVisuals ? { visuals } : {})
-          },
-          'spawn-token',
-          'chat-1'
-        ),
+        await createCodexStructuredLaunchResolver({
+          store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+          resolveCommand: () => 'codex',
+          resolveLaunchArgs: () => [],
+          prepareVisuals: async () => (withVisuals ? visuals : null)
+        })({
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch reads only the session id of its identity here.
+          identity: { sessionId: 'chat-1' } as AgentSessionJournalIdentity,
+          spawnToken: 'spawn-token'
+        }),
         inherited
       )
-    expect(codex(false)).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
-    expect(codex(true)[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe('/mine')
+    expect(await codex(false)).not.toHaveProperty(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect((await codex(true))[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe('/mine')
   })
 
   it('names only this chat folder to the agent', () => {

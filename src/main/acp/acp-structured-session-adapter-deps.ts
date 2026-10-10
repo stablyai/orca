@@ -18,7 +18,13 @@ export const ACP_OPTION_WRITE_TIMEOUT_MS = 30_000
 
 export type AcpStructuredSessionAdapterDeps = {
   spec: AcpLaunchSpec
-  resolveLaunch: (input: { identity: AgentSessionJournalIdentity }) => Promise<AcpStructuredLaunch>
+  /** The child to spawn, sealed with the reservation's token. */
+  resolveLaunch: (input: {
+    identity: AgentSessionJournalIdentity
+    spawnToken: string
+  }) => Promise<AcpStructuredLaunch>
+  /** The same launch for a read that starts no child (restart recovery): the agent's env, unsealed. */
+  readLaunch: (identity: AgentSessionJournalIdentity) => Promise<AcpStructuredLaunch>
   /** The chat's journal as it stands, read without opening it; null when it has none. */
   readJournal?: (sessionId: string) => JournalLoad | null
   /** Starts the agent's process and owns its protocol: `createAcpAgentConnection` in production. */

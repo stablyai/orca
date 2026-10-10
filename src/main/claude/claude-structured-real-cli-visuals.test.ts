@@ -1,3 +1,4 @@
+import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 // The real Claude CLI, launched through Orca's own launch resolution with a chat's visuals: the
 // CLI must report the bundled skill and its plugin in its own init frame. Opt-in, like every
 // real-CLI suite: it spends one short turn on the signed-in account.
@@ -13,7 +14,6 @@ import { nativeChatVisualsFolderFor } from '../native-chat/native-chat-visuals-f
 import { NATIVE_CHAT_VISUALS_SKILL_NAME } from '../native-chat/native-chat-visuals-skill-location'
 import { createClaudeCliFlagSupport } from './claude-cli-flag-support'
 import { readClaudeInit } from './claude-structured-init-proof'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 import {
   realClaudeAuthenticated,
   realClaudeAvailable,

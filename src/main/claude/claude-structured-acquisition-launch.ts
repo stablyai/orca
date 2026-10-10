@@ -89,7 +89,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
         }
       : input.identity
     const launch = await deps
-      .resolveLaunch({ identity: launchIdentity })
+      .resolveLaunch({ identity: launchIdentity, spawnToken: input.spawnToken })
       .catch((error: unknown) => {
         throw error instanceof AgentSessionPreSpawnError
           ? error

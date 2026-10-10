@@ -2,6 +2,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -223,10 +224,7 @@ export function fakeClaude(
           const replayUuid =
             configuredReplayUuid === undefined ? `user-uuid-${replayIndex}` : configuredReplayUuid
           if (replayUuid !== null) {
-            handlers.onMessage?.({
-              ...message,
-              uuid: replayUuid
-            })
+            handlers.onMessage?.({ ...message, uuid: replayUuid })
           }
         }
       },
@@ -269,7 +267,7 @@ export function adapterAtPublishFor(
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
-    resolveLaunch: async () => ({
+    resolveLaunch: async ({ spawnToken }) => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},
       cwd: '/work/repo',
@@ -278,7 +276,9 @@ export function adapterAtPublishFor(
       resumeLeafUuid: null,
       resumesTranscript: false,
       continuesChain: false,
-      ...launch
+      ...launch,
+      // As the composed launch seals it: the reservation's token is the child's, whatever came before.
+      env: { ...launch.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }
     }),
     onEvent: (event) => events.push(event),
     openConnection: claude.openConnection,

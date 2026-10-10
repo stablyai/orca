@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import {
   openCodexAppServerConnection,
   type CodexAppServerConnection
@@ -57,7 +57,7 @@ async function openServer(
       command: process.execPath,
       args: ['-e', FORCE_KILL_APP_SERVER],
       env: {
-        [CODEX_SPAWN_TOKEN_ENV]: `teardown-test-${process.pid}-${iteration}`,
+        [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: `teardown-test-${process.pid}-${iteration}`,
         ...(exitMode ? { ORCA_TEST_PROVIDER_EXIT_MODE: exitMode } : {})
       }
     },

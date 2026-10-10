@@ -1,3 +1,4 @@
+import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
@@ -10,7 +11,6 @@ import {
   type ClaudeProfileRouterSettings
 } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 
 const roots: string[] = []
 afterEach(() => {

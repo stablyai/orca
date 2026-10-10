@@ -357,7 +357,10 @@ beforeEach(async () => {
           }
         },
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
-        resolveCodexOverrides: () => {
+        resolveAgentLaunchEnv: (agent): Record<string, string> => {
+          if (agent !== 'codex') {
+            return {}
+          }
           codexOverrideReads += 1
           return { CODEX_PROFILE: configuredCodexProfile }
         },

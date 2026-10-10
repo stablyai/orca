@@ -44,7 +44,9 @@ export type CodexStructuredLaunch = {
   permissionPolicy?: CodexStructuredPermissionPolicy
   /** The model the session chose; the thread opens on it so its first turn is not a switch. */
   model?: string
+  /** The child's sealed environment, and the inherited keys it must not keep. */
   env?: Record<string, string>
+  envToDelete?: readonly string[]
   /** This chat's visuals folder and skill; absent when the chat has no visuals. */
   visuals?: NativeChatVisualsLaunch
 }
@@ -90,6 +92,7 @@ export type CodexStructuredSessionAdapterDeps = {
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
+    spawnToken: string
   }) => Promise<CodexStructuredLaunch>
   onEvent?: (event: CodexStructuredSessionEvent) => void
   /** Where bookkeeping a close or exit does after the child is gone reports a failure. */

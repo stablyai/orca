@@ -68,17 +68,22 @@ describe('structuredAgentBaseEnvironment', () => {
 })
 
 describe('createStructuredAgentEnvironmentResolvers', () => {
-  it('gives Codex and Claude the same base, with overlays on Codex only', async () => {
+  it("gives every agent the same base, with each agent's own overlay on it", async () => {
     const resolvers = createStructuredAgentEnvironmentResolvers({
       resolveEnvironment: async () => ({ PATH: '/shell/bin', SHELL_ONLY: '1' }),
       resolveShellEnvironmentPolicy: () => INHERIT_ALL,
-      resolveCodexOverrides: () => ({ CODEX_PROFILE: 'p' })
+      resolveAgentLaunchEnv: (agent): Record<string, string> =>
+        agent === 'codex' ? { CODEX_PROFILE: 'p' } : {}
     })
-    expect(await resolvers.resolveClaudeInheritedEnv()).toEqual({
+    expect(await resolvers.resolveBaseEnvironment()).toEqual({
       PATH: '/shell/bin',
       SHELL_ONLY: '1'
     })
-    expect(await resolvers.resolveCodexEnvironment()).toEqual({
+    expect(await resolvers.resolveAgentEnvironment('claude')).toEqual({
+      PATH: '/shell/bin',
+      SHELL_ONLY: '1'
+    })
+    expect(await resolvers.resolveAgentEnvironment('codex')).toEqual({
       PATH: '/shell/bin',
       SHELL_ONLY: '1',
       CODEX_PROFILE: 'p'

@@ -96,7 +96,7 @@ function recoveryWindow(
 
 /** The window for one chat; null for an agent whose store Orca does not read. */
 export async function readAcpRecoveryHistory(
-  input: Pick<AcpStructuredSessionAdapterDeps, 'resolveLaunch' | 'readJournal' | 'logger'> & {
+  input: Pick<AcpStructuredSessionAdapterDeps, 'readLaunch' | 'readJournal' | 'logger'> & {
     spec: Pick<AcpLaunchSpec, 'readStoredUserMessages'>
   },
   identity: AgentSessionJournalIdentity
@@ -113,7 +113,7 @@ export async function readAcpRecoveryHistory(
     if (!load || inDoubt.length === 0) {
       return null
     }
-    const launch = await waitForPromiseWithSignal(input.resolveLaunch({ identity }), signal)
+    const launch = await waitForPromiseWithSignal(input.readLaunch(identity), signal)
     if (!launch.resume) {
       return null
     }

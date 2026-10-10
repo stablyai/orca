@@ -170,9 +170,9 @@ export async function openAcpAdapterRig(
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
   const spec = options.spec ?? GROK
-  const adapter = new AcpStructuredSessionAdapter({
-    spec,
-    resolveLaunch: async () => ({
+  const resolveLaunch: AcpStructuredSessionAdapterDeps['resolveLaunch'] =
+    options.deps?.resolveLaunch ??
+    (async () => ({
       spec,
       command: `/opt/bin/${spec.command}`,
       args: spec.args({ fullAccess: false, pluginDir: null }),
@@ -182,7 +182,12 @@ export async function openAcpAdapterRig(
       fullAccess: false,
       resume: null,
       ...options.launch
-    }),
+    }))
+  const adapter = new AcpStructuredSessionAdapter({
+    spec,
+    resolveLaunch,
+    // A double starts nothing, so a recovery read sees the launch a start would.
+    readLaunch: (identity) => resolveLaunch({ identity, spawnToken: 'recovery-read' }),
     connect: (launch, connectionOptions) => {
       spawned.push('spawn')
       const child = new FakeAcpChild(launch, connectionOptions)

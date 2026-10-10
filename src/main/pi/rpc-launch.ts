@@ -1,13 +1,7 @@
-import {
-  ORCA_SCRUB_SAFE_LAUNCH_ENV,
-  ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../shared/agent-hook-scrub-safe-env'
-import {
-  AGENT_HOOK_RUNTIME_ENV_KEYS,
-  ORCA_AGENT_SESSION_CALLER_ENV_KEYS
-} from '../ipc/pty/host-env/spawn-env-keys'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 
 export type PiRpcLaunchOptions = {
   /** Binary and paths are resolved by the execution host before building the launch. */
@@ -16,25 +10,42 @@ export type PiRpcLaunchOptions = {
   fullAccess: boolean
   extraArgs?: readonly string[]
   env?: Record<string, string>
+  envToDelete?: readonly string[]
   sessionFile?: string
   forkFile?: string
-  structuredSession?: { id: string; spawnToken: string }
 }
 
-const CHILD_ENV_TO_DELETE: readonly string[] = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  ORCA_SCRUB_SAFE_PANE_ENV,
-  ORCA_SCRUB_SAFE_LAUNCH_ENV,
-  ...AGENT_HOOK_RUNTIME_ENV_KEYS
-]
 const CALLER_ENV_TO_DELETE = [
   ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
   'ORCA_TERMINAL_HANDLE',
-  'ORCA_AGENT_SESSION_SPAWN_TOKEN'
+  ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 ]
+
+/** What a structured Pi session strips from its inheritance; the seal keeps a worker's handle. */
+export const PI_RPC_SESSION_ENV_TO_DELETE: readonly string[] = [
+  ...STRUCTURED_CHILD_ENV_TO_DELETE,
+  'ORCA_TERMINAL_HANDLE'
+]
+
+/** `env` naming no caller: a structured session's seal names its own. */
+export function withoutPiCallerEnv(env: Readonly<Record<string, string>>): Record<string, string> {
+  const next = { ...env }
+  for (const key of CALLER_ENV_TO_DELETE) {
+    delete next[key]
+  }
+  return next
+}
+
+/** A Pi child that is no structured session (a catalog listing) names no caller at all. */
+export function piRpcSessionlessEnvironment(env: Readonly<Record<string, string>>): {
+  env: Record<string, string>
+  envToDelete: readonly string[]
+} {
+  return {
+    env: withoutPiCallerEnv(env),
+    envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...CALLER_ENV_TO_DELETE]
+  }
+}
 
 /** Pi stores its own sessions; an explicit session file is shared with terminal resumes. */
 export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLaunch {
@@ -50,16 +61,6 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
   ) {
     throw new Error('Pi fork requires one source session file')
   }
-  const env = { ...options.env }
-  for (const key of CALLER_ENV_TO_DELETE) {
-    delete env[key]
-  }
-  const childEnv = options.structuredSession
-    ? {
-        ...structuredSessionChildIdentityEnv(options.structuredSession.id, env),
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: options.structuredSession.spawnToken
-      }
-    : env
   const args = [...(options.extraArgs ?? [])]
   let provider = false
   let model = false
@@ -106,14 +107,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
-    env: childEnv,
-    envToDelete: [
-      ...CHILD_ENV_TO_DELETE,
-      ...(options.structuredSession
-        ? Object.hasOwn(childEnv, 'ORCA_TERMINAL_HANDLE')
-          ? []
-          : ['ORCA_TERMINAL_HANDLE']
-        : CALLER_ENV_TO_DELETE)
-    ]
+    env: { ...options.env },
+    envToDelete: [...(options.envToDelete ?? [])]
   }
 }

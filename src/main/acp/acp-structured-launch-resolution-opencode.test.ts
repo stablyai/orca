@@ -1,3 +1,4 @@
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
@@ -6,11 +7,8 @@ import { restoreManagedDataAccountEnvironment } from '../../shared/managed-data-
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import { ACP_CHILD_ENV_TO_DELETE, acpLaunchSpecFor } from './acp-launch-specs'
-import {
-  createAcpStructuredLaunchResolver,
-  type AcpStructuredLaunchResolverDeps
-} from './acp-structured-launch-resolution'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 
 const PROFILE = '123e4567-e89b-42d3-a456-426614174000'
 
@@ -61,7 +59,7 @@ function resolver(
     launchEnv?: Record<string, string>
     inheritedEnv?: NodeJS.ProcessEnv
     base?: Record<string, string>
-    probeVersion?: AcpStructuredLaunchResolverDeps['probeVersion']
+    probeVersion?: Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']
   } = {}
 ) {
   return createAcpStructuredLaunchResolver(OPENCODE, {
@@ -106,7 +104,7 @@ describe('OpenCode ACP launch resolution', () => {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       {},
       'darwin'
@@ -159,7 +157,7 @@ describe('OpenCode ACP launch resolution', () => {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       inheritedEnv,
       'darwin'
@@ -179,7 +177,7 @@ describe('OpenCode ACP launch resolution', () => {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       inheritedEnv,
       'darwin'
@@ -215,7 +213,7 @@ describe('OpenCode ACP launch resolution', () => {
   it('refuses a record that pins a single directory instead of an OpenCode account', async () => {
     await expect(
       resolver(openCodeRecord({ variable: 'XDG_DATA_HOME', path: '/data' }))({ identity })
-    ).rejects.toThrow(/pinned data account/)
+    ).rejects.toThrow(/sessions pin opencode/)
   })
 
   it('runs an `opencode` that is stable 2.x', async () => {
@@ -245,7 +243,9 @@ describe('OpenCode ACP launch resolution', () => {
   })
 
   it('asks the version of exactly the binary, folder and environment it spawns', async () => {
-    const asked: Parameters<NonNullable<AcpStructuredLaunchResolverDeps['probeVersion']>>[0][] = []
+    const asked: Parameters<
+      NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
+    >[0][] = []
     const launch = await resolver(openCodeRecord(UNMANAGED), {
       probeVersion: async (input, supports) => (asked.push(input), supports('1.18.31'))
     })({ identity })

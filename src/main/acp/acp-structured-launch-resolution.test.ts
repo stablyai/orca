@@ -1,3 +1,4 @@
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,9 +18,9 @@ import {
   spellProviderTimelineKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { ACP_CHILD_ENV_TO_DELETE, acpLaunchSpecFor } from './acp-launch-specs'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
-import { createAcpStructuredLaunchResolver } from './acp-structured-launch-resolution'
 
 const GROK = acpLaunchSpecFor('grok')!
 const identity = {
@@ -270,7 +271,7 @@ describe('ACP launch resolution', () => {
   it('refuses a record pinned to another host or another agent', async () => {
     const remote = grokRecord()
     remote.location = { ...remote.location, executionHostId: 'ssh:box' }
-    await expect(resolver(remote).resolve({ identity })).rejects.toThrow(/run on this runtime/)
+    await expect(resolver(remote).resolve({ identity })).rejects.toThrow(/run on the local host/)
     await expect(resolver(agentSessionRecordFixture()).resolve({ identity })).rejects.toThrow(
       /claude session/
     )
@@ -295,7 +296,7 @@ describe('Grok status: the structured session is the only producer', () => {
         command: 'grok',
         args: ['agent', 'stdio'],
         env: { GROK_HOME: '/home/user/.grok' },
-        envToDelete: ACP_CHILD_ENV_TO_DELETE
+        envToDelete: STRUCTURED_CHILD_ENV_TO_DELETE
       },
       inherited,
       'win32'

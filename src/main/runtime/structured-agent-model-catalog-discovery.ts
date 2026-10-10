@@ -7,6 +7,15 @@ import { createClaudeModelCatalogProbe } from '../claude/claude-model-catalog-pr
 import { createCodexModelCatalogProbe } from '../codex/codex-model-catalog-probe'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+
+/** Claude's overlay, laid over its base env minus an inherited config dir; absent when none. */
+export function claudeLaunchEnvOverlay(
+  deps: Pick<StructuredAgentSessionRuntimeDeps, 'resolveAgentLaunchEnv'>
+): { resolveEnv?: () => Record<string, string> } {
+  const resolve = deps.resolveAgentLaunchEnv
+  return resolve ? { resolveEnv: () => resolve('claude') } : {}
+}
 
 export function codexModelCatalogDiscovery({
   deps,
@@ -21,7 +30,7 @@ export function codexModelCatalogDiscovery({
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {}),
-      resolveEnvironment: environment.resolveCodexEnvironment,
+      resolveEnvironment: () => environment.resolveAgentEnvironment('codex'),
       ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
     })
   }
@@ -36,10 +45,10 @@ export function claudeModelCatalogDiscovery({
     // Claude's settings or env can pick a model other than the one its listing recommends.
     listingNamesConfiguredModel: false,
     probe: createClaudeModelCatalogProbe({
-      resolveInheritedEnv: environment.resolveClaudeInheritedEnv,
+      resolveInheritedEnv: environment.resolveBaseEnvironment,
       resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
       ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
-      ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {})
+      ...claudeLaunchEnvOverlay(deps)
     })
   }
 }

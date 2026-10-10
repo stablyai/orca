@@ -9,7 +9,7 @@ import type {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
-import { buildPiRpcLaunch } from './rpc-launch'
+import { buildPiRpcLaunch, piRpcSessionlessEnvironment } from './rpc-launch'
 import { piRpcVersionSupported, resolvePiRpcCommand } from './rpc-launch-resolution'
 import { PI_UNMAPPED_THINKING_LEVELS } from './rpc-options'
 
@@ -52,7 +52,12 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
       throw new Error(`pi at ${command} does not run structured chats`)
     }
     // The chat launch's own env rules; only the arguments differ.
-    const launch = buildPiRpcLaunch({ command, cwd, env, fullAccess: true })
+    const launch = buildPiRpcLaunch({
+      command,
+      cwd,
+      ...piRpcSessionlessEnvironment(env),
+      fullAccess: true
+    })
     const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
       { ...launch, args: ['--list-models'] },
       { site: 'pi-model-catalog-probe', signal: options?.signal }

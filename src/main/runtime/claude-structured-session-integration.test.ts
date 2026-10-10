@@ -12,7 +12,7 @@ import {
 } from '../../shared/protocol-version'
 import { fakeClaude } from './claude-structured-fake-connection-test-fixture'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
-import { CLAUDE_SPAWN_TOKEN_ENV } from '../claude/claude-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
@@ -245,7 +245,7 @@ beforeEach(async () => {
         resolveCodexCommand: () => '/usr/local/bin/codex',
         resolveClaudeCommand: () => '/usr/local/bin/claude',
         readProcessStartTime: async (pid: number) => pid * 10,
-        resolveClaudeLaunchEnv: () => claudeLaunchEnv,
+        resolveAgentLaunchEnv: (agent) => (agent === 'claude' ? claudeLaunchEnv : {}),
         // Hermetic: never the developer's real login shell.
         resolveEnvironment: async () => shellEnv,
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
@@ -582,7 +582,7 @@ describe('a structured Claude session over agentSession.*', () => {
       ANTHROPIC_AUTH_TOKEN: 'configured-token',
       ANTHROPIC_BASE_URL: 'https://gateway.example.test',
       CLAUDE_CONFIG_DIR: join(root, 'claude-home'),
-      [CLAUDE_SPAWN_TOKEN_ENV]: expect.any(String)
+      [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: expect.any(String)
     })
     // System auth: the user's own shell key is their sign-in, exactly as on the
     // terminal path, and the configured overlay still wins over it.

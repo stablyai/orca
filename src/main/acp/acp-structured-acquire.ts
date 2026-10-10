@@ -14,14 +14,9 @@ import {
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import {
-  providerSpawnedProcessIdentity,
-  PROVIDER_SPAWN_TOKEN_ENV
-} from '../provider-process/provider-spawned-process-identity'
-import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
+import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { AcpAgentError } from './acp-errors'
 import { acpAuthenticationRequired, acpSignInRequiredRefusal } from './acp-turn-failures'
-import { ACP_CHILD_ENV_TO_DELETE } from './acp-launch-specs'
 import {
   ACP_REOPEN_FAILED,
   acpReopenTakeover,
@@ -83,7 +78,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   closedBeforeSpawn()
   const launch: AcpStructuredLaunch = await deps
-    .resolveLaunch({ identity: acquire.identity })
+    .resolveLaunch({ identity: acquire.identity, spawnToken: acquire.spawnToken })
     .catch((error: unknown) => {
       throw new AgentSessionPreSpawnError(error)
     })
@@ -118,11 +113,8 @@ export async function acquireAcpStructuredSession(input: {
       command: launch.command,
       args: launch.args,
       cwd: launch.cwd,
-      env: {
-        ...structuredSessionChildIdentityEnv(sessionId, launch.env),
-        [PROVIDER_SPAWN_TOKEN_ENV]: acquire.spawnToken
-      },
-      envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+      env: launch.env,
+      envToDelete: launch.envToDelete
     },
     {
       clientInfo: { name: 'orca', version: '1' },

@@ -1,3 +1,4 @@
+import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
@@ -9,9 +10,7 @@ import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_SESSION_STATE_EVENTS_ENV,
   CLAUDE_STRUCTURED_BASE_OPTIONS,
-  claudeSessionIdForOrcaSession,
-  createClaudeStructuredLaunchResolver,
-  type ClaudeStructuredLaunchResolverDeps
+  claudeSessionIdForOrcaSession
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
 import { CLAUDE_THINKING_DISPLAY_FLAG, type ClaudeCliFlag } from './claude-cli-flag-support'
@@ -574,7 +573,7 @@ describe('claude structured launch resolution', () => {
 
 describe('readable Claude thinking', () => {
   const launchWith = (
-    cliFlags?: ClaudeStructuredLaunchResolverDeps['cliFlags'],
+    cliFlags?: Parameters<typeof createClaudeStructuredLaunchResolver>[0]['cliFlags'],
     command = '/usr/local/bin/claude',
     launchArgs: string[] = []
   ) =>

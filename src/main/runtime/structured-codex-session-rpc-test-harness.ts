@@ -227,7 +227,8 @@ export async function openStructuredCodexRpcHarness(
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
       CODEX_HOME: '/shell/home'
     }),
-    resolveCodexOverrides: () => ({ CODEX_PROFILE: 'configured' }),
+    resolveAgentLaunchEnv: (agent): Record<string, string> =>
+      agent === 'codex' ? { CODEX_PROFILE: 'configured' } : {},
     openCodexConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000
   })
