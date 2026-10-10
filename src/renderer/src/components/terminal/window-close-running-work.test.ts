@@ -49,7 +49,7 @@ function setState(ptyIds: string[]): void {
 
 /** Answers each pty id from `byPtyId`; anything unlisted never settles. */
 function answerWith(byPtyId: Record<string, unknown>): void {
-  inspectRuntimeTerminalProcessMock.mockImplementation((_settings: unknown, ptyId: string) =>
+  inspectRuntimeTerminalProcessMock.mockImplementation((ptyId: string) =>
     ptyId in byPtyId ? Promise.resolve(byPtyId[ptyId]) : new Promise(() => {})
   )
 }

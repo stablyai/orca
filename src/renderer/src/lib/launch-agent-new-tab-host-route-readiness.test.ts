@@ -48,7 +48,7 @@ vi.mock('@/components/terminal-pane/pty-pre-handler-buffer', () => ({
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: () => false,
   inspectRuntimeTerminalProcess: vi.fn(async () => null),
-  sendRuntimePtyInputVerified: async (_settings: unknown, _ptyId: string, data: string) => {
+  sendRuntimePtyInputVerified: async (_ptyId: string, data: string) => {
     testState.writes.push({ at: Date.now(), data })
     return true
   }

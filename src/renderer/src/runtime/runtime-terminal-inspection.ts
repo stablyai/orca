@@ -1,14 +1,14 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
 export { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle
+  getRemoteRuntimePtyOwner
 } from './runtime-terminal-stream'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   classifyTerminalProcessInspectionFailure,
   clientOnlyUnverifiableInspection,
@@ -67,17 +67,12 @@ function normalizeInspectionResult(
 }
 
 export async function inspectRuntimeTerminalProcess(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
 ): Promise<RuntimeTerminalProcessInspection> {
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+  const owner = getRemoteRuntimePtyOwner(ptyId)
   const remote = isRemoteInspectionPtyId(ptyId)
-  if (target.kind !== 'environment' || !terminal) {
+  if (!owner) {
     try {
       const result = await (options
         ? window.api.pty.inspectProcess(ptyId, options)
@@ -94,10 +89,10 @@ export async function inspectRuntimeTerminalProcess(
 
   try {
     const result = await callRuntimeRpc<{ process: RuntimeTerminalProcessInspection }>(
-      target,
+      owner.target,
       'terminal.inspectProcess',
       {
-        terminal,
+        terminal: owner.terminal,
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
           : {}),
@@ -126,14 +121,10 @@ export async function inspectRuntimeTerminalProcess(
  * must read as "no new evidence", never as a shell confirmation.
  */
 export async function confirmRuntimeTerminalForegroundProcess(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string
 ): Promise<string | null> {
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment' && getRemoteRuntimeTerminalHandle(ptyId)) {
+  // Why any remote id: an id without an owner segment still runs off this host, never locally.
+  if (isRemoteRuntimePtyId(ptyId)) {
     return null
   }
   const confirmForegroundProcess = window.api.pty.confirmForegroundProcess
@@ -145,7 +136,6 @@ export async function confirmRuntimeTerminalForegroundProcess(
 }
 
 export function sendRuntimePtyInput(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind
@@ -160,38 +150,33 @@ export function sendRuntimePtyInput(
     void tooLarge
       .then((resolvedTooLarge) => {
         if (!resolvedTooLarge) {
-          sendRuntimePtyInputWithinLimit(settings, ptyId, data, inputKind)
+          sendRuntimePtyInputWithinLimit(ptyId, data, inputKind)
         }
       })
       .catch(() => {})
     return true
   }
-  return sendRuntimePtyInputWithinLimit(settings, ptyId, data, inputKind)
+  return sendRuntimePtyInputWithinLimit(ptyId, data, inputKind)
 }
 
 // Why the kind reaches only the local write: terminal.send has no launch kind, and its query-reply
 // kind is for mobile clients, so the host classifies a desktop's environment write by its bytes.
 function sendRuntimePtyInputWithinLimit(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind
 ): boolean {
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
-  if (target.kind !== 'environment' || !terminal) {
+  const owner = getRemoteRuntimePtyOwner(ptyId)
+  if (!owner) {
     window.api.pty.write(ptyId, data, inputKind)
     recordRuntimeTerminalInputForPtyId(ptyId)
     return true
   }
 
   void callRuntimeRpc<{ send: RuntimeTerminalSend }>(
-    target,
+    owner.target,
     'terminal.send',
-    { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
+    { terminal: owner.terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
     { timeoutMs: 15_000 }
   )
     .then((result) => {

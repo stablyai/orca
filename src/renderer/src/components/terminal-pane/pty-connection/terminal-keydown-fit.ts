@@ -184,7 +184,6 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     isRemotePtyId: (ptyId) =>
       Boolean(isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)),
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
-    getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchHookLifecycle: (payload) =>
       dispatchAgentHookTerminalLifecycle(session.cacheKey, payload),

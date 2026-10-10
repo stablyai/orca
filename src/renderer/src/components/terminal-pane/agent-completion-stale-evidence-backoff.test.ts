@@ -91,7 +91,6 @@ function inspect(result: RuntimeTerminalProcessInspection, roundTripMs = 20): Pr
     options: {
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => SSH_PTY_ID,
-      getSettings: () => null,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => INCARNATION
     } as unknown as AgentCompletionCoordinatorOptions,

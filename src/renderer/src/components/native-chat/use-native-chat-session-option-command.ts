@@ -74,7 +74,6 @@ export function useNativeChatSessionOptionCommand(args: {
         if (detectClaudeConfirmation) {
           observer = createClaudeModelSwitchConfirmationObserver({
             ptyId: target.ptyId,
-            settings: target.settings,
             expectedModelLabel: options?.expectedChoiceLabel ?? null
           })
           activeObserversRef.current.add(observer)
@@ -88,18 +87,8 @@ export function useNativeChatSessionOptionCommand(args: {
         }
         const accepted =
           agent === 'codex'
-            ? await typeNativeChatCommand(
-                target.settings,
-                target.ptyId,
-                command,
-                sendController.signal
-              )
-            : await sendNativeChatMessageVerified(
-                target.settings,
-                target.ptyId,
-                command,
-                sendController.signal
-              )
+            ? await typeNativeChatCommand(target.ptyId, command, sendController.signal)
+            : await sendNativeChatMessageVerified(target.ptyId, command, sendController.signal)
         if (!accepted) {
           throw new Error('The terminal did not accept the command.')
         }

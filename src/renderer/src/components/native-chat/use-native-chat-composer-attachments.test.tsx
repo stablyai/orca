@@ -26,8 +26,7 @@ type AttachmentApi = ReturnType<typeof useNativeChatComposerAttachments>
 type ProbeApi = AttachmentApi & { adoptDraft: (draft: string) => void }
 
 const target: NativeChatResolvedTarget = {
-  ptyId: 'pty-1',
-  settings: { activeRuntimeEnvironmentId: null }
+  ptyId: 'pty-1'
 }
 
 function Probe({

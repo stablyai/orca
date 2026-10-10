@@ -82,7 +82,6 @@ describe('remote runtime terminal data subscriptions', () => {
     const watcher = vi.fn()
 
     const dispose = await subscribeToRuntimeTerminalData(
-      { activeRuntimeEnvironmentId: 'env-fallback' },
       'remote:env-1@@terminal-1',
       'watcher-1',
       watcher
@@ -151,7 +150,6 @@ describe('remote runtime terminal data subscriptions', () => {
 
   it('echoes the opaque stream generation in cumulative source-range ACKs', async () => {
     const dispose = await subscribeToRuntimeTerminalData(
-      { activeRuntimeEnvironmentId: 'env-fallback' },
       'remote:env-1@@terminal-1',
       'watcher-1',
       vi.fn()
@@ -195,7 +193,6 @@ describe('remote runtime terminal data subscriptions', () => {
   it('can start at the live tail without replaying the initial snapshot', async () => {
     const watcher = vi.fn()
     const subscription = subscribeToRuntimeTerminalData(
-      { activeRuntimeEnvironmentId: 'env-fallback' },
       'remote:env-1@@terminal-1',
       'watcher-1',
       watcher,
@@ -248,13 +245,11 @@ describe('remote runtime terminal data subscriptions', () => {
 
   it('keeps the shared terminal multiplexer until the last watcher closes', async () => {
     const firstDispose = await subscribeToRuntimeTerminalData(
-      { activeRuntimeEnvironmentId: 'env-fallback' },
       'remote:env-1@@terminal-1',
       'watcher-1',
       vi.fn()
     )
     const secondDispose = await subscribeToRuntimeTerminalData(
-      { activeRuntimeEnvironmentId: 'env-fallback' },
       'remote:env-1@@terminal-2',
       'watcher-2',
       vi.fn()
@@ -276,12 +271,7 @@ describe('remote runtime terminal data subscriptions', () => {
     runtimeSubscribe.mockRejectedValueOnce(new Error('offline'))
 
     await expect(
-      subscribeToRuntimeTerminalData(
-        { activeRuntimeEnvironmentId: 'env-fallback' },
-        'remote:env-1@@terminal-1',
-        'watcher-1',
-        vi.fn()
-      )
+      subscribeToRuntimeTerminalData('remote:env-1@@terminal-1', 'watcher-1', vi.fn())
     ).rejects.toThrow('offline')
 
     expect(sendBinary).not.toHaveBeenCalled()
@@ -302,7 +292,6 @@ describe('remote runtime terminal data subscriptions', () => {
     })
 
     const subscriptionPromise = subscribeToRuntimeTerminalData(
-      { activeRuntimeEnvironmentId: 'env-fallback' },
       'remote:env-1@@terminal-1',
       'watcher-1',
       vi.fn()
