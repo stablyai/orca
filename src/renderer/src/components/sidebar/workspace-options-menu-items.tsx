@@ -14,6 +14,7 @@ import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
+import SidebarArchivedWorkspacesMenuSection from './SidebarArchivedWorkspacesMenuSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
@@ -236,6 +237,9 @@ export function WorkspaceOptionsMenuItems({
       <WorktreeCardDisplayMenuSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
       <DropdownMenuSeparator />
       <SidebarWorkspaceFilterSection />
+      <SidebarArchivedWorkspacesMenuSection
+        preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+      />
     </>
   )
 }

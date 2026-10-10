@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { WorktreeRowOpenInSubMenu } from './WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
+import { WorkspaceArchiveMenuItem } from './WorkspaceArchiveMenuItem'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -48,6 +49,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
+    activeContextWorktrees,
     batchDeleteWorktrees,
     children,
     contentClassName,
@@ -312,6 +314,11 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
             onSleep={handleCloseTerminals}
             onSleepSubtree={handleSleepSubtree}
+          />
+          <WorkspaceArchiveMenuItem
+            contextWorktrees={activeContextWorktrees}
+            disabled={deletingContext}
+            onMenuClose={() => setMenuOpenState(false)}
           />
           {/* Why: primary checkout rows can't be git-worktree-removed, so keep a
              disabled Delete Worktree for parity with non-primary cards and pair

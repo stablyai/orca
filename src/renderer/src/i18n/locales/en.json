@@ -5972,7 +5972,11 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "archiveOne": "Archive 1 Workspace",
+          "archiveMany": "Archive {{value0}} Workspaces",
+          "archive": "Archive",
+          "archiveDescription": "Sleep and hide from the sidebar without deleting the worktree or branch. Restore it from Workspace options → Archived."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -6668,6 +6672,25 @@
           "title": "Sort changed to Manual",
           "description": "Manual keeps workspaces where you drop them.",
           "restore": "Back to {{label}}"
+        },
+        "SidebarArchivedWorkspacesMenuSection": {
+          "archived": "Archived",
+          "empty": "No archived workspaces. Right-click a workspace → Archive.",
+          "restore": "Restore and open"
+        },
+        "archive": {
+          "worktree": {
+            "flow": {
+              "failed": "Failed to archive workspace",
+              "failedMany": "Failed to archive {{value0}} workspaces",
+              "undoFailed": "Failed to undo archive",
+              "archivedOne": "Workspace archived",
+              "archivedMany": "{{value0}} workspaces archived",
+              "restoreHint": "Restore it from Workspace options → Archived.",
+              "undo": "Undo",
+              "restoreFailed": "Failed to restore workspace"
+            }
+          }
         }
       },
       "shared": {
