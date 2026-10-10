@@ -1,5 +1,4 @@
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,14 +11,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-const { compile } = vi.hoisted(() => ({ compile: vi.fn() }))
-vi.mock('@orca/process-host', async (importOriginal) => {
-  const original = await importOriginal()
-  compile.mockImplementation(original.runProcess)
-  return { ...original, runProcess: compile }
-})
+import { afterEach, describe, expect, it } from 'vitest'
 
 const packageDir = resolve('src/packages/process-host')
 const require = createRequire(join(packageDir, 'package.json'))
@@ -31,7 +23,6 @@ const roots = []
 const stateFile = '.dist-build-state.json'
 
 afterEach(() => {
-  compile.mockClear()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -42,7 +33,25 @@ function fixture() {
   roots.push(root)
   mkdirSync(join(root, 'src'))
   mkdirSync(join(root, 'node_modules'))
-  symlinkSync(compilerDir, join(root, 'node_modules', 'typescript'), 'junction')
+  const compiler = join(root, 'node_modules', 'typescript')
+  mkdirSync(join(compiler, 'bin'), { recursive: true })
+  writeFileSync(join(compiler, 'package.json'), readFileSync(join(compilerDir, 'package.json')))
+  symlinkSync(join(compilerDir, 'lib'), join(compiler, 'lib'), 'junction')
+  const nativeName = `@typescript/typescript-${process.platform}-${process.arch}`
+  const nativeDir = dirname(require.resolve(`${nativeName}/package.json`))
+  mkdirSync(join(root, 'node_modules', '@typescript'))
+  symlinkSync(nativeDir, join(root, 'node_modules', nativeName), 'junction')
+  writeFileSync(
+    join(compiler, 'bin', 'tsc'),
+    `import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+appendFileSync('.compiler-invocations', 'compile\\n')
+if (existsSync('.compiler-input-edit')) {
+  writeFileSync('src/entry.ts', readFileSync('.compiler-input-edit'))
+  rmSync('.compiler-input-edit')
+}
+await import(${JSON.stringify(pathToFileURL(join(compilerDir, 'bin', 'tsc')).href)})
+`
+  )
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@orca/process-host' }))
   writeFileSync(
     join(root, 'tsconfig.json'),
@@ -64,6 +73,10 @@ function fixture() {
   return root
 }
 
+function compilationCount(root) {
+  return readFileSync(join(root, '.compiler-invocations'), 'utf8').trim().split('\n').length
+}
+
 function updateConfig(root, mutate) {
   const config = JSON.parse(readFileSync(join(root, 'tsconfig.json'), 'utf8'))
   mutate(config)
@@ -74,11 +87,11 @@ describe('process-host compilation reuse', () => {
   it('compiles once across repeated and concurrent unchanged builds', async () => {
     const root = fixture()
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(1)
+    expect(compilationCount(root)).toBe(1)
 
     const repeated = await Promise.all([buildPackageDist(root), buildPackageDist(root)])
 
-    expect(compile).toHaveBeenCalledTimes(1)
+    expect(compilationCount(root)).toBe(1)
     expect(repeated).toEqual([
       { written: 0, removed: 0, unchanged: 2 },
       { written: 0, removed: 0, unchanged: 2 }
@@ -86,7 +99,7 @@ describe('process-host compilation reuse', () => {
     mkdirSync(join(root, '.dist-staging-abandoned'))
     await buildPackageDist(root)
     expect(existsSync(join(root, '.dist-staging-abandoned'))).toBe(false)
-    expect(compile).toHaveBeenCalledTimes(1)
+    expect(compilationCount(root)).toBe(1)
   })
 
   it('recompiles changed sources, new sources, configuration, and manifests', async () => {
@@ -111,7 +124,7 @@ describe('process-host compilation reuse', () => {
       JSON.stringify({ name: '@orca/process-host', version: '1' })
     )
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(6)
+    expect(compilationCount(root)).toBe(6)
   })
 
   it('repairs missing, corrupt, and extra output and malformed build state', async () => {
@@ -129,7 +142,7 @@ describe('process-host compilation reuse', () => {
     expect(existsSync(join(root, 'dist', 'stale.js'))).toBe(false)
     writeFileSync(join(root, stateFile), '{partial')
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(5)
+    expect(compilationCount(root)).toBe(5)
   })
 
   it('does not reuse inherited configurations', async () => {
@@ -139,7 +152,7 @@ describe('process-host compilation reuse', () => {
     writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ extends: './base.json' }))
     await buildPackageDist(root)
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(2)
+    expect(compilationCount(root)).toBe(2)
     expect(existsSync(join(root, stateFile))).toBe(false)
   })
 
@@ -154,7 +167,7 @@ describe('process-host compilation reuse', () => {
     expect(existsSync(join(root, stateFile))).toBe(false)
     writeFileSync(join(root, 'outside.d.ts'), 'type ExternalValue = string\n')
     await expect(buildPackageDist(root)).rejects.toThrow('compilation failed')
-    expect(compile).toHaveBeenCalledTimes(2)
+    expect(compilationCount(root)).toBe(2)
   })
 
   it('does not reuse a configuration that permits installed libraries to replace native libs', async () => {
@@ -173,29 +186,18 @@ describe('process-host compilation reuse', () => {
     )
     writeFileSync(join(replacement, 'index.d.ts'), 'declare const document: { title: number }\n')
     await expect(buildPackageDist(root)).rejects.toThrow('compilation failed')
-    expect(compile).toHaveBeenCalledTimes(2)
+    expect(compilationCount(root)).toBe(2)
   })
 
   it('invalidates changed compiler contents even at the same version', async () => {
     const root = fixture()
     const local = join(root, 'node_modules', 'typescript')
-    rmSync(local)
-    mkdirSync(local)
-    cpSync(join(compilerDir, 'package.json'), join(local, 'package.json'))
-    cpSync(join(compilerDir, 'bin'), join(local, 'bin'), { recursive: true })
-    cpSync(join(compilerDir, 'lib'), join(local, 'lib'), { recursive: true })
-    const nativeName = `@typescript/typescript-${process.platform}-${process.arch}`
-    const nativeDir = dirname(
-      createRequire(join(compilerDir, 'package.json')).resolve(`${nativeName}/package.json`)
-    )
-    mkdirSync(join(root, 'node_modules', '@typescript'))
-    symlinkSync(nativeDir, join(root, 'node_modules', nativeName), 'junction')
     await buildPackageDist(root)
     await buildPackageDist(root)
     const bin = join(local, 'bin', 'tsc')
     writeFileSync(bin, `${readFileSync(bin, 'utf8')}\n// compiler changed\n`)
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(2)
+    expect(compilationCount(root)).toBe(2)
   })
 
   it('invalidates changes to the Node and transitive declaration inputs', async () => {
@@ -230,7 +232,7 @@ describe('process-host compilation reuse', () => {
     await buildPackageDist(root)
     writeFileSync(join(nodeTypes, 'index.d.ts'), 'declare const changedNodeValue: boolean\n')
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(3)
+    expect(compilationCount(root)).toBe(3)
   })
 
   it('does not cache a failed build or inputs changed during compilation', async () => {
@@ -241,15 +243,11 @@ describe('process-host compilation reuse', () => {
     await expect(buildPackageDist(root)).rejects.toThrow('compilation failed')
     expect(existsSync(join(root, stateFile))).toBe(false)
     writeFileSync(entry, 'export const value = 2\n')
-    const original = compile.getMockImplementation()
-    compile.mockImplementationOnce((spec) => {
-      writeFileSync(entry, 'export const value = 3\n')
-      return original(spec)
-    })
+    writeFileSync(join(root, '.compiler-input-edit'), 'export const value = 3\n')
     await buildPackageDist(root)
     expect(existsSync(join(root, stateFile))).toBe(false)
     await buildPackageDist(root)
     await buildPackageDist(root)
-    expect(compile).toHaveBeenCalledTimes(4)
+    expect(compilationCount(root)).toBe(4)
   })
 })
