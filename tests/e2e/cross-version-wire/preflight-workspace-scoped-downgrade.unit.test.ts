@@ -55,6 +55,11 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
     ...actual,
     runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
       wire.host?.capabilities.includes(capability) ?? false,
+    // Why linux: an old Windows host is asked to update instead of answering its default list.
+    getRuntimeEnvironmentStatus: async () => ({
+      capabilities: wire.host?.capabilities ?? [],
+      hostPlatform: 'linux'
+    }),
     callRuntimeRpc: async (_target: unknown, method: string, params?: unknown) => {
       const hostSaw = wire.host?.parse(method, params)
       wire.sent.push({ method, params, hostSaw })

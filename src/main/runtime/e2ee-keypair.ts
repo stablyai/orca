@@ -9,11 +9,12 @@ import {
   isUnreadableError,
   writeSecureJsonFile
 } from '../../shared/secure-file'
-import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import {
+  E2EE_KEYPAIR_FILENAME as KEYPAIR_FILENAME,
+  MAX_E2EE_KEYPAIR_FILE_BYTES as MAX_KEYPAIR_FILE_BYTES
+} from '../../shared/runtime-e2ee-keypair-file'
 
-const KEYPAIR_FILENAME = E2EE_KEYPAIR_FILENAME
 const KEYPAIR_VERSION = 1
-const MAX_KEYPAIR_FILE_BYTES = 8 * 1024
 
 type KeypairFile = {
   v: number

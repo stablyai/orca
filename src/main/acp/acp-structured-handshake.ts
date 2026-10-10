@@ -15,7 +15,7 @@ import {
   acpSessionNotRestoredRow
 } from './acp-session-reopen-failure'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
-import { probeAcpChildStop } from './acp-structured-child-stop'
+import { probeAcpChildStops } from './acp-structured-child-stop'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
@@ -99,7 +99,7 @@ export async function initializeAcpStructuredSession(input: AcpHandshakeInput): 
     assertStarting()
     liveLane = input.lanes.create(started.sessionId)
   }
-  const subagentStopSupported = await probeAcpChildStop(connection, spec.dialect)
+  const childStops = await probeAcpChildStops(connection, spec.dialect)
   assertStarting()
   options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
@@ -120,7 +120,7 @@ export async function initializeAcpStructuredSession(input: AcpHandshakeInput): 
     fence: acquire.fence,
     acquisitionGeneration: generation,
     spec,
-    subagentStopSupported,
+    childStops,
     connection,
     lane: liveLane,
     prompts,

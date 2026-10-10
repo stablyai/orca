@@ -16,7 +16,7 @@ const retainedSchema = z.object({
     })
   ),
   groupOf: z.map(z.string(), z.string()),
-  settledIds: z.object({ size: z.number() })
+  retention: z.object({ settledIdentities: z.object({ size: z.number() }) })
 })
 
 function spawnGroups(
@@ -99,7 +99,7 @@ describe('ACP subagent retention', () => {
     expect(
       [...retained.groups.values()].reduce((total, group) => total + group.results.size, 0)
     ).toBe(31 * 64)
-    expect(retained.settledIds.size).toBe(32 * 64)
+    expect(retained.retention.settledIdentities.size).toBe(32 * 64)
     expect(timeline.has('live')).toBe(true)
     expect(timeline.has('0:0')).toBe(false)
     expect(timeline.has('33:0')).toBe(true)
@@ -149,7 +149,7 @@ describe('ACP subagent retention', () => {
     const retained = retainedSchema.parse(timeline)
     expect(retained.groups.size).toBe(0)
     expect(retained.groupOf.size).toBe(0)
-    expect(retained.settledIds.size).toBe(0)
+    expect(retained.retention.settledIdentities.size).toBe(0)
     expect(timeline.translate([{ id: 'child-1', tokens: 9 }, { id: 'new' }], {}, 101)).toEqual([])
     expect(retainedSchema.parse(timeline).groups.size).toBe(0)
   })

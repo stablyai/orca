@@ -86,6 +86,15 @@ export function acpScriptedChild(agent: AcpLaunchSpec['agent']): ScriptedAgentCh
               'invalid params: missing field `subagentId`'
             )
           )
+          // Its background-task stop probe, answered the same way.
+          script.on('_x.ai/task/kill', (frame) =>
+            script.fail(
+              frame,
+              -32602,
+              'Invalid params',
+              'invalid params: missing field `sessionId`'
+            )
+          )
           script.on('session/prompt', (frame) => {
             const params = promptParams.parse(frame.params)
             texts.push(params.prompt.map((block) => block.text ?? '').join(''))

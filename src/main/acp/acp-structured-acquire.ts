@@ -28,6 +28,7 @@ import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane, acpLaneChildWorkDelivery } from './acp-structured-lane'
+import { NO_ACP_CHILD_STOPS } from './acp-structured-child-stop'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
@@ -212,7 +213,8 @@ export async function acquireAcpStructuredSession(input: {
       providerSessionId,
       dialect: spec.dialect,
       now,
-      canStopSubagents: () => session?.phase === 'ready' && session.subagentStopSupported === true,
+      childStops: () =>
+        (session?.phase === 'ready' ? session.childStops : undefined) ?? NO_ACP_CHILD_STOPS,
       ...acpLaneChildWorkDelivery(deps, sessionId),
       logger: deps.logger ?? createStructuredAgentSessionLogger(),
       onInputAccepted: (clientMessageId) => {

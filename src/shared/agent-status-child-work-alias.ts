@@ -1,8 +1,7 @@
-import {
-  agentChildWorkFencesEqual,
-  type AgentChildWorkId,
-  type AgentChildWorkInvocationFence,
-  type AgentChildWorkKind
+import type {
+  AgentChildWorkId,
+  AgentChildWorkInvocationFence,
+  AgentChildWorkKind
 } from './agent-status-child-work'
 import { parseAgentChildWorkInvocationFence } from './agent-status-child-work-codec'
 import {
@@ -217,15 +216,4 @@ export function deserializeAgentChildWorkAliasKey(
     alias: parsed.alias
   }
   return serializeAgentChildWorkAliasKey(identity) === value ? identity : null
-}
-
-export function agentChildWorkAliasesMatch(
-  left: AgentChildWorkAliasInput,
-  right: AgentChildWorkAliasInput
-): boolean {
-  return (
-    serializeAgentChildWorkAliasKey(left) === serializeAgentChildWorkAliasKey(right) &&
-    left.childWorkId === right.childWorkId &&
-    agentChildWorkFencesEqual(left.fence, right.fence)
-  )
 }

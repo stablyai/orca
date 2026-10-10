@@ -1,7 +1,9 @@
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
-  LOCAL_EXECUTION_HOST_ID
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
 } from '../../shared/execution-host'
 import {
   findFolderWorkspaceCandidateRepos,
@@ -86,7 +88,10 @@ function resolveWorktree(
   if (sshTargetId) {
     return { kind: 'ssh', connectionId: sshTargetId }
   }
-  // A worktree another runtime owns is not this host's to probe; keep the host default.
+  // Why refuse: another runtime's worktree is not this host's to probe, and its list would mislead.
+  if (parseExecutionHostId(routing.hostId)?.kind === 'runtime') {
+    throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
+  }
   return routing.hostId === LOCAL_EXECUTION_HOST_ID && routing.repo
     ? { kind: 'local', repo: routing.repo, path: worktree.path }
     : null
@@ -107,6 +112,9 @@ function resolveFolderWorkspace(
   }
   if (host.kind === 'ambiguous') {
     throw new Error('worktree_execution_host_unresolved')
+  }
+  if (host.kind === 'runtime') {
+    throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
   }
   const folder = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
   const candidates = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)

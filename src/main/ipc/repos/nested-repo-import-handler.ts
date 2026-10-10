@@ -7,7 +7,7 @@ import type { ProjectGroupImportResult } from '../../../shared/project-group-typ
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { isGitRepo, getRepoName } from '../../git/repo'
+import { isGitRepoAsync, getRepoName } from '../../git/repo'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
@@ -83,7 +83,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
           } else {
             await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-            if (!isGitRepo(repoPath)) {
+            if (!(await isGitRepoAsync(repoPath))) {
               results.push({
                 path: repoPath,
                 status: 'failed',
@@ -152,7 +152,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
-          // Why: reaches here only after the isGitRepo guard above confirmed a git repo, so always true.
+          // Why: reaches here only after the isGitRepoAsync guard above confirmed a git repo, so always true.
           emitRepoAdded('folder_picker', false, true)
         } catch (error) {
           results.push({

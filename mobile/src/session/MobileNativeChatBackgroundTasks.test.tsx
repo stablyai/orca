@@ -376,6 +376,37 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(stop).toHaveBeenCalledWith('codex-command:exec-1')
   })
 
+  it('stops a Grok background command and the Grok subagent beside it by their own ids', () => {
+    const stop = vi.fn(async () => REJECTED)
+    const mounted = mount(
+      tasksFor(
+        {
+          state: 'monitoring',
+          supportsTaskStop: true,
+          supportsStopAll: false,
+          children: [
+            view('agent', { providerId: 'subagent-1', description: 'Review the diff' }),
+            view('cmd', {
+              kind: 'command',
+              providerId: 'acp-task:01a10366',
+              description: 'Run the dev server'
+            })
+          ]
+        },
+        { stop }
+      )
+    )
+    expand(mounted)
+    const buttons = stopButtons(mounted)
+    const labels = buttons.map((button) => button.props.accessibilityLabel)
+    expect(labels).toEqual(
+      expect.arrayContaining(['Stop Run the dev server', 'Stop Review the diff'])
+    )
+    expect(labels).not.toContain('Stop background tasks')
+    act(() => buttons[labels.indexOf('Stop Run the dev server')]!.props.onPress())
+    expect(stop).toHaveBeenCalledWith('acp-task:01a10366')
+  })
+
   it('offers Stop all only to a host with no per-row stop that still accepts one', async () => {
     let finish: (result: StopResult) => void = () => {}
     const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))

@@ -569,10 +569,7 @@ describe('CodexSubagentRoster', () => {
     expect(appended).toHaveLength(atCap)
   })
 
-  // The eviction is the KNOWN LIMITATION the module documents: `groups` is never
-  // seeded from the journal, so the evicted group's next child rebuilds its
-  // durable row from that one child. Pinned so the boundary cannot move silently.
-  it('caps live spawn groups, and an evicted group rebuilds its row from one child', () => {
+  it('retains live spawn groups beyond the settled history budget', () => {
     const { roster, appended, agents } = createHarness()
     for (let index = 0; index <= MAX_CODEX_SUBAGENT_GROUPS; index++) {
       deliver(
@@ -581,10 +578,7 @@ describe('CodexSubagentRoster', () => {
         `turn-${index}`
       )
     }
-    const evicted = codexSubagentGroupIdentity(codexSubagentGroupId(THREAD, 'turn-0'))
-    const rowsFor = (identity: AgentJournalItemIdentity): Appended[] =>
-      appended.filter((entry) => JSON.stringify(entry.identity) === JSON.stringify(identity))
-    expect(rowsFor(evicted)).toHaveLength(1)
+    const original = codexSubagentGroupIdentity(codexSubagentGroupId(THREAD, 'turn-0'))
 
     deliver(
       roster,
@@ -592,8 +586,9 @@ describe('CodexSubagentRoster', () => {
       'turn-0'
     )
 
-    expect(latestIdentity(appended)).toEqual(evicted)
-    expect(agents().map((agent) => agent.id)).toEqual(['child-late'])
+    expect(latestIdentity(appended)).toEqual(original)
+    expect(agents().map((agent) => agent.id)).toEqual(['child-0', 'child-late'])
+    expect(roster.retentionSizes().groups).toBe(MAX_CODEX_SUBAGENT_GROUPS + 1)
   })
 
   it('keeps a token count a later thread-map eviction would otherwise retract', () => {

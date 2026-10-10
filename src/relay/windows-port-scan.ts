@@ -44,12 +44,14 @@ export async function scanWindowsListeningPorts(signal?: AbortSignal): Promise<D
   if (signal?.aborted) {
     return []
   }
+  let json: string
   try {
-    const json = await runWindowsPortScanPowerShell(signal)
-    return normalizeWindowsDetectedPorts(parseWindowsPowerShellPortRows(json))
+    json = await runWindowsPortScanPowerShell(signal)
   } catch {
-    return []
+    // Why throw: neither scanner answered, so "no listeners" would be a guess.
+    throw new Error('Could not list listening ports on this host.')
   }
+  return normalizeWindowsDetectedPorts(parseWindowsPowerShellPortRows(json))
 }
 
 /** Rows, or null when netstat could not answer and the fallback should run. */

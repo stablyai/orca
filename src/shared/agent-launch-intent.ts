@@ -337,12 +337,6 @@ function isAgentLaunchPromptDelivery(value: unknown): value is AgentLaunchPrompt
   return value === 'submit' || value === 'draft'
 }
 
-export function agentLaunchTargetIsCreate(
-  target: AgentLaunchTarget
-): target is Extract<AgentLaunchTarget, { kind: 'create-worktree' }> {
-  return target.kind === 'create-worktree'
-}
-
 /** The agent fields a create payload must not carry: the launch owns placement, and a caller that
  *  sets one of these would route itself around the host's decision. */
 export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [

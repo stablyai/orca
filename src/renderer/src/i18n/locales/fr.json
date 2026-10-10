@@ -3036,7 +3036,6 @@
             "efb3843e75": "Filtrer et trier les espaces de travail",
             "93b7381d50": "Filtres",
             "a615e24679": "Trier",
-            "4cc5b73efe": "Recherche des espaces de travail...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} analysés",
             "searchPlaceholder": "Rechercher des espaces de travail",
             "ageFilter": "Âge",
@@ -3048,7 +3047,6 @@
             "1d3503357d": "Vous pouvez fermer cette fenêtre et revenir pendant que la suppression continue.",
             "4c2990886e": "{{value0}}/{{value1}} supprimés",
             "86ba852118": "{{value0}}, {{value1}} en échec",
-            "7b7bde5181": "Espaces de travail vérifiés jusqu'à présent : {{value0}}",
             "deletingCount": "Suppression des espaces de travail : {{value0}}",
             "deleteCount": "Supprimer les espaces de travail : {{value0}} ?",
             "selectedForDeletionCount": "Sélectionnés pour suppression : {{value0}}",
@@ -5439,7 +5437,9 @@
           "b79b39d865": "Retirer le projet",
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
-          "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés."
+          "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "openTerminalWarningOne": "1 terminal ouvert dans ce projet sera fermé.",
+          "openTerminalWarningMany": "{{count}} terminaux ouverts dans ce projet seront fermés."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Révéler l'espace de travail actif"
@@ -11663,7 +11663,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Afficher les actions de lien du terminal",
-          "description": "Affiche les actions disponibles quand vous cliquez sur un lien du terminal. Désactivez pour exiger un {{modifier}}+clic.",
           "descriptionV2": "Contrôlez les clics sur les URL détectées imprimées dans les volets du terminal et les transcriptions de discussion.",
           "plainClickLabel": "Clic simple",
           "plainClickDescription": "Choisissez si un clic gauche affiche les actions, ouvre l'URL ou la laisse au terminal. Cmd/Ctrl-clic s'ouvre toujours directement.",

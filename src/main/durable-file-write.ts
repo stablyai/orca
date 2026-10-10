@@ -4,7 +4,7 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, open, readdir, rm, stat } from 'node:fs/promises'
+import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   publishFileWithoutOverwrite,
@@ -89,42 +89,6 @@ export async function writeTempFileDurable(
     await handle.sync()
   } finally {
     await handle.close()
-  }
-}
-
-/**
- * Copy `sourcePath` onto `finalPath` durably: a fresh inode, fsynced, then renamed into place. A
- * plain copyFile can be interrupted and leave a torn destination — fatal when the destination is
- * the backup someone will fall back to. Returns false when the source does not exist.
- */
-export async function copyFileDurable(sourcePath: string, finalPath: string): Promise<boolean> {
-  const tmpPath = durableWriteTempPath(finalPath)
-  let renamed = false
-  try {
-    try {
-      // copyFile stays in the kernel — and clones the extents outright on APFS and btrfs — so
-      // this does not pull the whole file through the process on every commit.
-      await copyFile(sourcePath, tmpPath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return false
-      }
-      throw error
-    }
-    const handle = await open(tmpPath, 'r+')
-    try {
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
-    renamed = true
-    await syncDirectory(dirname(finalPath))
-    return true
-  } finally {
-    if (!renamed) {
-      await rm(tmpPath, { force: true }).catch(() => {})
-    }
   }
 }
 
