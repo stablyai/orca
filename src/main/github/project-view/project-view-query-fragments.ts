@@ -24,8 +24,23 @@ fragment FieldConfig on ProjectV2FieldConfiguration {
 }
 `
 
-export function itemContentSelection(includeParent: boolean): string {
+export function supportsProjectExtendedFields(host?: string): boolean {
+  const hostname = host
+    ?.toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '')
+  // Why: older GitHub Enterprise schemas may not expose these GitHub.com fields.
+  return !hostname || hostname === 'github.com'
+}
+
+export function itemContentSelection(
+  includeParent: boolean,
+  includeSubIssuesSummary: boolean
+): string {
   const parentFrag = includeParent ? 'parent { number title url }' : ''
+  const subIssuesSummaryFrag = includeSubIssuesSummary
+    ? 'subIssuesSummary { completed total percentCompleted }'
+    : ''
   return `
     __typename
     ... on Issue {
@@ -40,6 +55,7 @@ export function itemContentSelection(includeParent: boolean): string {
       labels(first:10) { nodes { name color } }
       issueType { id name color description }
       ${parentFrag}
+      ${subIssuesSummaryFrag}
     }
     ... on PullRequest {
       id
@@ -56,7 +72,20 @@ export function itemContentSelection(includeParent: boolean): string {
   `
 }
 
-export const FIELD_VALUES_SELECTION = `
+export function fieldValuesSelection(includeLinkedPullRequests: boolean): string {
+  const linkedPullRequestsFrag = includeLinkedPullRequests
+    ? `
+      ... on ProjectV2ItemFieldPullRequestValue {
+        field { ...FieldConfig }
+        pullRequests(first:10) {
+          totalCount
+          pageInfo { hasNextPage }
+          nodes { number title url }
+        }
+      }
+    `
+    : ''
+  return `
   fieldValues(first:${FIELD_VALUES_PAGE_SIZE}) {
     pageInfo { hasNextPage }
     nodes {
@@ -68,6 +97,8 @@ export const FIELD_VALUES_SELECTION = `
       ... on ProjectV2ItemFieldDateValue         { field { ...FieldConfig } date }
       ... on ProjectV2ItemFieldLabelValue        { field { ...FieldConfig } labels(first:10) { nodes { name color } } }
       ... on ProjectV2ItemFieldUserValue         { field { ...FieldConfig } users(first:5) { nodes { login name avatarUrl } } }
+      ${linkedPullRequestsFrag}
     }
   }
 `
+}
