@@ -5,6 +5,7 @@ import {
   isUnsupervisedSettledDispatch,
   resolveFleetWorkerOutcome
 } from './orchestration-fleet-outcome-resolution'
+import { projectDispatchHeartbeat } from './orchestration-heartbeat-freshness'
 import { readWorkerTerminalHostScope } from './worker-terminal-host-scope'
 import type {
   FleetDurableWorker,
@@ -242,6 +243,11 @@ export function projectOrchestrationFleetWorker(
     },
     outcome,
     liveness,
+    // Absent stamp = a caller that never carried the column; publishing `none` there would
+    // report "never reported" for a lane nobody asked about.
+    ...(worker.lastHeartbeatAt === undefined
+      ? {}
+      : { heartbeat: projectDispatchHeartbeat(worker.lastHeartbeatAt, now) }),
     evidence: {
       durable: true,
       liveStatus: !evidence
