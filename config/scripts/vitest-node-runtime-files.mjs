@@ -86,6 +86,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/relay/relay-primary-channel.test.ts',
   'src/renderer/src/lib/monaco-languages/monarch-upstream-mdx-recursion.test.ts',
   'src/main/ipc/orca-profiles-switch-persistence.test.ts',
+  'src/main/ipc/settings-delayed-response.test.ts',
   'src/main/runtime/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/relay/relay-control-client.test.ts',
