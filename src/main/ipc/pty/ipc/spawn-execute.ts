@@ -1,3 +1,4 @@
+import { prepareAntigravityPtySpawnTarget } from '../antigravity-account-spawn-target'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -16,6 +17,7 @@ import { deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import type { PtyIpcSpawnState } from './spawn-state'
+import type { PtySpawnResult } from '../../../providers/types'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -53,6 +55,22 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
+    const prepareAccount = async (): Promise<PtySpawnResult | void> => {
+      const previousDistro = ctx.expectedWslDistro
+      const attached = await prepareAntigravityPtySpawnTarget(ctx, args.connectionId)
+      if (
+        !attached &&
+        ctx.isDaemonHostSpawn &&
+        expectedPtyId &&
+        previousDistro !== ctx.expectedWslDistro
+      ) {
+        const changed =
+          ctx.deps.runtime?.preparePtyExecutionContext?.(expectedPtyId, ctx.expectedWslDistro) ??
+          false
+        ctx.preparedProvisionalExecutionContext ||= changed
+      }
+      return attached
+    }
     const stablePaneSpawn = ctx.preAdoptedStablePane
       ? ctx.preAdoptedStablePane
       : await spawnForStablePane({
@@ -63,7 +81,8 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           owner: stablePaneOwnerCandidate,
           worktreeId: args.worktreeId,
           connectionId: args.connectionId,
-          resolveOwner
+          resolveOwner,
+          beforeFreshSpawn: prepareAccount
         })
     ctx.result = stablePaneSpawn.result
     ctx.stablePaneOwner = stablePaneSpawn.owner

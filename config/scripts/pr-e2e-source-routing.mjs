@@ -222,10 +222,14 @@ export const PR_E2E_SOURCE_ROUTES = [
       'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts'
     ],
     matches: (file) =>
-      isProductSource(file) &&
-      /^(?:config\/scripts\/(?:verify-wsl-e2e-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
-        file
-      )
+      file === 'src/main/antigravity/native-wsl-accounts.wsl.test.ts' ||
+      file === 'src/main/ipc/pty/antigravity-account-spawn-target.ts' ||
+      file === 'src/main/providers/local-pty-launch-plan.ts' ||
+      file === 'src/main/providers/local-pty-antigravity-account.ts' ||
+      (isProductSource(file) &&
+        /^(?:config\/scripts\/(?:verify-wsl-(?:e2e|account)-participation|verify-playwright-participation)\.mjs$|src\/main\/(?:antigravity\/native-(?:account-|wsl-|credential-)|wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:secure-file-publication\.ts$|secure-path-windows-acl\.ts$|windows-current-user-sid\.ts$|wsl-|windows-terminal-shell)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
+          file
+        ))
   },
   {
     id: 'ephemeral-vm-runtime.rollback-readable-sidecar',

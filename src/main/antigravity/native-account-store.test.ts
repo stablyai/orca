@@ -139,3 +139,24 @@ describe('protected Antigravity account snapshots', () => {
     }
   )
 })
+
+it('binds encrypted WSL snapshots to the verified distro user and HOME', async () => {
+  const authority = {
+    distro: 'Ubuntu',
+    uid: 1000,
+    home: '/home/u',
+    canonicalHome: '/home/u',
+    authorityId: 'a'.repeat(64),
+    credentialPath: '/home/u/token'
+  }
+  const path = join(dir, 'wsl', authority.authorityId, 'vault')
+  const first = createEncryptedAntigravityAccountStore(path, { authority })
+  await first.write({ accounts: [], selectedAccountId: null })
+  const bytes = readFileSync(path)
+  const different = createEncryptedAntigravityAccountStore(path, {
+    authority: { ...authority, uid: 1001 }
+  })
+  await expect(Promise.resolve().then(() => different.read())).rejects.toThrow('preserved')
+  expect(readFileSync(path)).toEqual(bytes)
+  expect(await first.read()).toEqual({ accounts: [], selectedAccountId: null })
+})

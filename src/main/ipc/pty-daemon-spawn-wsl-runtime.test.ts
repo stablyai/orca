@@ -1,13 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   type DaemonSpawnCall,
   createDaemonActiveProviderFixtures
 } from './pty-ipc-daemon-provider-fixtures'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, posix, win32 } from 'node:path'
 import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
+import { prepareAntigravityAccountForLaunch } from '../antigravity/native-account-launch'
+vi.mock('../antigravity/native-account-launch', () => ({
+  prepareAntigravityAccountForLaunch: vi.fn()
+}))
+beforeEach(() => vi.mocked(prepareAntigravityAccountForLaunch).mockReset())
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -28,6 +33,12 @@ vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../pty/windows-path-registry-reader', () => ({
+  readWindowsPathRegistry: () => [
+    { failed: false, value: '' },
+    { failed: false, value: '' }
+  ]
+}))
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
@@ -65,6 +76,37 @@ describe('registerPtyHandlers', () => {
         daemonSpawnAndGetOptions,
         daemonSpawnAndGetEnv
       } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
+
+      it('pins an agy account target in desktop daemon spawn options', async () => {
+        await withWin32Platform(async () => {
+          _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+          setupDaemonAdapter()
+          vi.mocked(prepareAntigravityAccountForLaunch).mockResolvedValueOnce({
+            wslDistro: 'Ubuntu',
+            authorityId: 'a'.repeat(64)
+          })
+          const options = await daemonSpawnAndGetOptions(
+            undefined,
+            undefined,
+            () => ({
+              httpProxyUrl: '',
+              terminalWindowsShell: 'wsl.exe',
+              terminalWindowsWslDistro: 'Ubuntu',
+              localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+            }),
+            undefined,
+            {
+              cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+              command: 'agy',
+              launchAgent: 'antigravity'
+            }
+          )
+          expect(prepareAntigravityAccountForLaunch).toHaveBeenCalledWith(
+            expect.objectContaining({ isWsl: true, wslDistro: 'Ubuntu' })
+          )
+          expect(options.terminalWindowsWslDistro).toBe('Ubuntu')
+        })
+      })
 
       // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('strips inherited Claude child-session stamps from a local runtime-created PTY', async () => {
@@ -564,23 +606,63 @@ describe('registerPtyHandlers', () => {
           mockedApp.isPackaged = prev
         }
       })
-      it('drops a legacy shim PATH entry inherited from the host process on the daemon path', async () => {
-        // Why: the daemon path passes a sparse env, so the prepends re-read PATH from
-        // process.env — the scrub must outlive that fallback (pre-upgrade host or parent pane).
+      it('drops an inherited POSIX legacy shim PATH entry on the daemon path', async () => {
+        // CLI prepends can re-read the host PATH after sparse daemon env cleanup.
         const { app } = await import('electron')
-        const mockedApp = app as unknown as { isPackaged: boolean }
-        const prev = mockedApp.isPackaged
-        mockedApp.isPackaged = false
+        const prev = app.isPackaged
         try {
+          Object.assign(app, { isPackaged: false })
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+            PATH: ['/tmp/orca-user-data/orca-terminal-attribution/posix', '/system/bin'].join(
+              posix.delimiter
+            )
           })
           expect(env.PATH).not.toContain('orca-terminal-attribution')
           expect(env.PATH).toContain('/system/bin')
         } finally {
-          mockedApp.isPackaged = prev
+          Object.assign(app, { isPackaged: prev })
         }
       })
+      it.each(['PATH', 'Path'] as const)(
+        'drops inherited Windows legacy shim entries from %s on the daemon path',
+        async (pathKey) => {
+          await withWin32Platform(async () => {
+            const { app } = await import('electron')
+            const prevPackaged = app.isPackaged
+            const prevEnv = process.env
+            const normalEntries = ['C:\\Program Files\\Git\\cmd', 'C:\\Windows\\System32']
+            try {
+              Object.assign(app, { isPackaged: false })
+              // Isolate the env block so native Windows key aliases cannot collapse the cases.
+              process.env = { ...prevEnv }
+              for (const key of Object.keys(process.env)) {
+                if (key.toLowerCase() === 'path') {
+                  delete process.env[key]
+                }
+              }
+              process.env[pathKey] = [
+                win32.join('C:\\Users\\Test User', 'orca-terminal-attribution', 'win32'),
+                ...normalEntries
+              ].join(win32.delimiter)
+
+              const env = await daemonSpawnAndGetEnv({})
+              const pathEntries = Object.entries(env).filter(
+                ([key]) => key.toLowerCase() === 'path'
+              )
+              expect(pathEntries).toHaveLength(1)
+              expect(pathEntries[0]?.[0]).toBe(pathKey)
+              expect(env[pathKey]).not.toContain('orca-terminal-attribution')
+              expect(env[pathKey].split(win32.delimiter)).toEqual([
+                join('/tmp/orca-user-data', 'cli', 'bin'),
+                ...normalEntries
+              ])
+            } finally {
+              process.env = prevEnv
+              Object.assign(app, { isPackaged: prevPackaged })
+            }
+          })
+        }
+      )
       it('defers indexed Git prompt guards from the daemon wire environment', async () => {
         const env = await daemonSpawnAndGetEnv(
           {

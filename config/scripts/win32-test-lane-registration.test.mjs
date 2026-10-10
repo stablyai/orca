@@ -4,11 +4,15 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { scanSourceTree, stripComments } from '../../src/shared/source-scan/source-tree-scan'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import {
+  isRegisteredInWslAccountLane,
+  WSL_ACCOUNT_TEST_PATH
+} from './wsl-account-ci-registration.mjs'
 
 /**
- * Every Windows-gated test file must be registered in BOTH Windows-lane lists.
+ * Every Windows-gated test file needs a triggered Windows lane that invokes it.
  *
- * PR CI has exactly one job on a Windows runner -- asserted below on any
+ * PR CI has one inline Windows job -- asserted below on any
  * `runs-on` spelling that could land there, because that premise is what makes
  * this guard meaningful -- and it runs a curated explicit file list. Everything else runs on `ubuntu-latest`, where a Windows-gated
  * suite self-skips and reports success. So a new Windows-gated file that nobody
@@ -17,7 +21,8 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
  * whole point was asserting a native addon's bytes no longer contain a flagged
  * primitive. Registering the instances did not hold -- a sixth arrived from
  * unrelated work while the first five were being fixed -- so the class needs a
- * guard.
+ * guard. The reusable WSL account lane qualifies only with its enable flag,
+ * distro setup, immutable PR ref and mandatory execution receipt intact.
  *
  * Both lists matter and being in one is not enough: `WINDOWS_PACKAGE_TESTS` in
  * pr-code-change-scope.mjs decides whether the `package_windows` job RUNS at
@@ -56,7 +61,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
  *     purpose: both can run off Windows, so neither is a win32-only gate. That
  *     holds whether the condition is written at the gate or routed through a
  *     named flag -- the two spellings used to disagree.
- *   - whether a registered suite EXECUTES. Registration is what is asserted. A
+ *   - whether an inline-lane registered suite EXECUTES. A
  *     suite gated on win32 plus an env var stays skipped on the CI runner even
  *     when registered -- see MANUAL_OPT_IN -- and a path registered but gated
  *     for another platform is not caught either.
@@ -306,12 +311,17 @@ function readWindowsWorkflow() {
   })
   const run = runs.join(' ')
   return {
+    workflow,
     windowsJobNames: windowsJobs.map(([name]) => name),
     laneFiles: run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
   }
 }
 
-const { windowsJobNames, laneFiles } = readWindowsWorkflow()
+const { workflow: prWorkflow, windowsJobNames, laneFiles } = readWindowsWorkflow()
+const wslWorkflow = parse(
+  readFileSync(join(projectDir, '.github/workflows/windows-wsl-e2e.yml'), 'utf8')
+)
+
 const scannedTestFiles = scanSourceTree(projectDir, {
   includeTests: true,
   extensions: TEST_FILE_PATTERN
@@ -332,6 +342,9 @@ function isInClassifier(path) {
 }
 
 function registrationFailure(path) {
+  if (isRegisteredInWslAccountLane(path, prWorkflow, wslWorkflow)) {
+    return null
+  }
   const missing = []
   if (!laneFiles.includes(path)) {
     missing.push(
@@ -357,9 +370,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     expect(scannedTestFiles.length).toBeGreaterThan(5000)
   })
 
-  it('has exactly one windows-2022 job to register into', () => {
-    // The whole premise: one Windows lane, one curated list. A second lane would
-    // mean a file could be registered in the wrong one and still run nowhere.
+  it('has exactly one inline windows-2022 job to register into', () => {
     expect(
       windowsJobNames,
       `Expected only ${WINDOWS_LANE_JOB} to run on ${WINDOWS_LANE_RUNNER}.`
@@ -420,7 +431,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     expect(isInClassifier('src/main/windows/not-a-real-file.win32.test.ts')).toBe(false)
   })
 
-  it('has every Windows-gated test file in both registration lists', () => {
+  it('has every Windows-gated test file in a triggered Windows lane', () => {
     const grandfathered = new Set([...UNREGISTERED_ON_MAIN, ...MANUAL_OPT_IN])
     const failures = gatedFiles
       .filter((path) => !grandfathered.has(path))
@@ -428,8 +439,8 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
       .filter((failure) => failure !== null)
     expect(
       failures,
-      'A Windows-gated test file is missing from a Windows CI registration list. It self-skips on ' +
-        'ubuntu and reports success, so it runs on no machine. Both lists are required: ' +
+      'A Windows-gated test file is missing a triggered Windows CI lane. It self-skips on ' +
+        'ubuntu and reports success. Outside the validated WSL account lane, both lists are required: ' +
         'WINDOWS_PACKAGE_TESTS decides whether the package_windows job runs for a diff, the ' +
         'workflow argv decides whether the file runs once it started. Fix each line below.'
     ).toEqual([])
@@ -476,6 +487,169 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
       movable,
       'This file is registrable; it cannot be reclassified as MANUAL_OPT_IN.'
     ).toEqual([])
+  })
+})
+
+describe('reusable WSL account registration', () => {
+  const job = (workflow) => workflow.jobs['wsl-terminal']
+  const exercise = (workflow) => job(workflow).steps.find((step) => step.id === 'wsl-accounts')
+  const receipt = (workflow) =>
+    job(workflow).steps.find((step) => step.name === 'Require both WSL account executions')
+
+  it('recognizes the enabled, source-triggered Windows account lane', () => {
+    expect(isRegisteredInWslAccountLane(WSL_ACCOUNT_TEST_PATH, prWorkflow, wslWorkflow)).toBe(true)
+    expect(registrationFailure(WSL_ACCOUNT_TEST_PATH)).toBeNull()
+    expect(isRegisteredInWslAccountLane('src/main/x.win32.test.ts', prWorkflow, wslWorkflow)).toBe(
+      false
+    )
+  })
+
+  it.each([
+    [
+      'missing reusable job',
+      (pr) => {
+        delete pr.jobs.windows_wsl
+      }
+    ],
+    [
+      'wrong reusable workflow',
+      (pr) => {
+        pr.jobs.windows_wsl.uses = './.github/workflows/other.yml'
+      }
+    ],
+    [
+      'disabled source trigger',
+      (pr) => {
+        pr.jobs.windows_wsl.if = 'false'
+      }
+    ],
+    [
+      'missing source dependency',
+      (pr) => {
+        pr.jobs.windows_wsl.needs = 'preflight'
+      }
+    ],
+    [
+      'mutable PR checkout',
+      (pr) => {
+        pr.jobs.windows_wsl.with.ref = 'main'
+      }
+    ],
+    [
+      'non-Windows runner',
+      (_, workflow) => {
+        job(workflow)['runs-on'] = 'ubuntu-latest'
+      }
+    ],
+    [
+      'disabled WSL job',
+      (_, workflow) => {
+        job(workflow).if = 'false'
+      }
+    ],
+    [
+      'ignored job failure',
+      (_, workflow) => {
+        job(workflow)['continue-on-error'] = true
+      }
+    ],
+    [
+      'foreground app launch',
+      (_, workflow) => {
+        delete job(workflow).env.ORCA_BACKGROUND_LAUNCH
+      }
+    ],
+    [
+      'mutable WSL checkout',
+      (_, workflow) => {
+        job(workflow).steps[0].with.ref = 'main'
+      }
+    ],
+    [
+      'missing distro setup',
+      (_, workflow) => {
+        job(workflow).steps = job(workflow).steps.filter(
+          (step) => step.uses !== './.github/actions/setup-wsl-test-runtime'
+        )
+      }
+    ],
+    [
+      'missing second distro',
+      (_, workflow) => {
+        job(workflow).steps[1].with['second-distro'] = 'false'
+      }
+    ],
+    [
+      'disabled account test',
+      (_, workflow) => {
+        exercise(workflow).if = 'false'
+      }
+    ],
+    [
+      'ignored test failure',
+      (_, workflow) => {
+        exercise(workflow)['continue-on-error'] = true
+      }
+    ],
+    [
+      'missing opt-in',
+      (_, workflow) => {
+        delete exercise(workflow).env.ORCA_REAL_ANTIGRAVITY_WSL_ACCOUNTS_TEST
+      }
+    ],
+    [
+      'same distro twice',
+      (_, workflow) => {
+        exercise(workflow).env.ORCA_WSL_SECOND_TEST_DISTRO = 'Ubuntu'
+      }
+    ],
+    [
+      'missing account argv',
+      (_, workflow) => {
+        exercise(workflow).run = exercise(workflow).run.replace(WSL_ACCOUNT_TEST_PATH, '')
+      }
+    ],
+    [
+      'missing JSON reporter',
+      (_, workflow) => {
+        exercise(workflow).run = exercise(workflow).run.replace('--reporter=json', '')
+      }
+    ],
+    [
+      'mismatched report output',
+      (_, workflow) => {
+        exercise(workflow).run = exercise(workflow).run.replace('wsl-accounts.json', 'other.json')
+      }
+    ],
+    [
+      'missing receipt',
+      (_, workflow) => {
+        job(workflow).steps = job(workflow).steps.filter((step) => step !== receipt(workflow))
+      }
+    ],
+    [
+      'success-only receipt',
+      (_, workflow) => {
+        receipt(workflow).if = 'success()'
+      }
+    ],
+    [
+      'ignored receipt failure',
+      (_, workflow) => {
+        receipt(workflow)['continue-on-error'] = true
+      }
+    ],
+    [
+      'wrong receipt input',
+      (_, workflow) => {
+        receipt(workflow).run = receipt(workflow).run.replace('wsl-accounts.json', 'other.json')
+      }
+    ]
+  ])('rejects %s', (_, mutate) => {
+    const pr = structuredClone(prWorkflow)
+    const workflow = structuredClone(wslWorkflow)
+    mutate(pr, workflow)
+    expect(isRegisteredInWslAccountLane(WSL_ACCOUNT_TEST_PATH, pr, workflow)).toBe(false)
   })
 })
 

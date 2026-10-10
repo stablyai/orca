@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 
 const {
+  getDefaultWslDistroMock,
+  prepareAntigravityAccountForLaunchMock,
   existsSyncMock,
   statSyncMock,
   accessSyncMock,
@@ -16,6 +18,8 @@ const {
   wslUncDirectoryExistsMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
+  getDefaultWslDistroMock: vi.fn((): string | null => 'Ubuntu'),
+  prepareAntigravityAccountForLaunchMock: vi.fn(),
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
@@ -29,6 +33,10 @@ const {
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
+}))
+
+vi.mock('../antigravity/native-account-launch', () => ({
+  prepareAntigravityAccountForLaunch: prepareAntigravityAccountForLaunchMock
 }))
 
 vi.mock('fs', () => ({
@@ -104,7 +112,7 @@ vi.mock('../wsl', () => ({
   toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  getDefaultWslDistro: () => 'Ubuntu',
+  getDefaultWslDistro: getDefaultWslDistroMock,
   isWslAvailableAsync: () => isWslAvailableAsyncMock(),
   // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
   // cwds that are meant to exist, so report them present without spawning wsl.exe.
@@ -154,12 +162,124 @@ describe('LocalPtyProvider', () => {
         exitCb = cb
       }
     })
-    spawnMock.mockReturnValue(mockProc)
+    getDefaultWslDistroMock.mockReset().mockReturnValue('Ubuntu')
+    prepareAntigravityAccountForLaunchMock.mockReset().mockResolvedValue(undefined)
+    spawnMock.mockClear().mockReturnValue(mockProc)
 
     provider = new LocalPtyProvider()
   })
 
   describe('spawn', () => {
+    it('verifies direct local WSL agent spawns even without an environment callback', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      prepareAntigravityAccountForLaunchMock.mockResolvedValue({
+        wslDistro: 'Ubuntu',
+        authorityId: 'a'.repeat(64)
+      })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
+        command: 'agy',
+        launchAgent: 'antigravity',
+        shellOverride: 'powershell.exe'
+      })
+      expect(prepareAntigravityAccountForLaunchMock).toHaveBeenCalledOnce()
+      expect(prepareAntigravityAccountForLaunchMock).toHaveBeenCalledWith(
+        expect.objectContaining({ isWsl: true, wslDistro: 'Ubuntu', envIsComplete: true })
+      )
+      expect(spawnMock.mock.calls[0]?.[0]).toBe('wsl.exe')
+      expect(spawnMock.mock.calls[0]?.[1]).toContain('Ubuntu')
+    })
+
+    it('checks the final environment after optional builders and prevents physical spawn on rejection', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => ({ ...env, WSLENV: 'HOME/u', HOME: '/other' })
+      })
+      prepareAntigravityAccountForLaunchMock.mockRejectedValue(
+        new Error('unverifiable credential authority')
+      )
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo',
+          shellOverride: 'wsl.exe',
+          command: 'agy',
+          launchAgent: 'antigravity'
+        })
+      ).rejects.toThrow('credential authority')
+      expect(prepareAntigravityAccountForLaunchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            HOME: '/other',
+            WSLENV: expect.stringContaining('HOME/u')
+          })
+        })
+      )
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('verifies the final inferred WSL argv target when the cached default is unknown', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      getDefaultWslDistroMock.mockReturnValue(null)
+      provider.configure({
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          CODEX_HOME: '\\\\wsl.localhost\\Debian\\home\\u\\.codex'
+        })
+      })
+      prepareAntigravityAccountForLaunchMock.mockResolvedValue({
+        wslDistro: 'Debian',
+        authorityId: 'a'.repeat(64)
+      })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        shellOverride: 'wsl.exe',
+        command: 'agy',
+        launchAgent: 'antigravity'
+      })
+      expect(prepareAntigravityAccountForLaunchMock).toHaveBeenCalledWith(
+        expect.objectContaining({ isWsl: true, wslDistro: 'Debian' })
+      )
+      expect(spawnMock.mock.calls[0]?.[1]).toContain('Debian')
+    })
+
+    it('does not reverify or create a process when attaching to a live local agent', async () => {
+      const request = {
+        cols: 80,
+        rows: 24,
+        command: 'agy',
+        launchAgent: 'antigravity' as const,
+        sessionId: 'test-antigravity-live'
+      }
+      const created = await provider.spawn(request)
+      const attached = await provider.spawn({ ...request, sessionId: created.id })
+      expect(attached.id).toBe(created.id)
+      expect(prepareAntigravityAccountForLaunchMock).toHaveBeenCalledOnce()
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
+    it('refuses a prepared distro that differs from the actual local launch plan', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      prepareAntigravityAccountForLaunchMock.mockResolvedValue({
+        wslDistro: 'Debian',
+        authorityId: 'a'.repeat(64)
+      })
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
+          command: 'agy',
+          launchAgent: 'antigravity'
+        })
+      ).rejects.toThrow('does not match')
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
     it('passes the guest Claude pointer and injected-home marker through WSLENV', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({
@@ -415,6 +535,29 @@ describe('LocalPtyProvider', () => {
       expect(
         (await provider.listProcesses()).find((entry) => entry.id === result.id)?.wslDistro
       ).toBe('Ubuntu')
+    })
+
+    it('pins the checked WSL authority into native spawn arguments and process metadata', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env, ctx) => {
+          ctx?.pinWslDistro?.('Debian')
+          return env
+        }
+      })
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'wsl.exe',
+        command: 'agy',
+        terminalWindowsWslDistro: null
+      })
+      expect(spawnMock.mock.calls.at(-1)?.[1]).toEqual(expect.arrayContaining(['-d', 'Debian']))
+      expect(result.wslDistro).toBe('Debian')
+      expect(
+        (await provider.listProcesses()).find((entry) => entry.id === result.id)?.wslDistro
+      ).toBe('Debian')
     })
 
     it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {

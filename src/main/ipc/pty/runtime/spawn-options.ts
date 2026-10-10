@@ -34,7 +34,6 @@ import {
 } from '../pane/spawn-reservation'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
-import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
 /** Headless spawns need the same host-side environment isolation as desktop spawns. */
@@ -92,14 +91,7 @@ export async function buildRuntimePtySpawnOptions(
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
-  await prepareAntigravityAccountForLaunch({
-    launchAgent: args.launchAgent,
-    command: ctx.launchCommand,
-    connectionId: args.connectionId,
-    isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
-    env: ctx.env,
-    envToDelete: ctx.spawnOptions.envToDelete
-  })
+
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: ctx.launchCommand,
     agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,

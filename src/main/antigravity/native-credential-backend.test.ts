@@ -1,3 +1,4 @@
+import type * as NodeFs from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +9,15 @@ import {
   createAntigravityHostCredentialBackend,
   isAntigravityFileStorageHost
 } from './native-credential-backend'
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof NodeFs>('node:fs')
+  return {
+    ...actual,
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) =>
+      args[0] === '/proc/sys/kernel/osrelease' ? '6.8-linux' : actual.readFileSync(...args)
+  }
+})
 
 vi.mock('./native-macos-credentials', () => ({
   readAntigravityMacOSCredential: vi.fn(),

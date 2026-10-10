@@ -1,3 +1,5 @@
+import { stablePanePersistenceFence } from './stable-pane-persistence-fence'
+export { stablePanePersistenceFence } from './stable-pane-persistence-fence'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -176,17 +178,7 @@ export type StablePaneSpawnContext = {
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
   onFreshSpawn?: (result: PtySpawnResult) => void
-}
-
-export function stablePanePersistenceFence(
-  owner: StablePaneOwner | null
-): { ptyId: string; incarnationId?: string } | undefined {
-  return owner?.hasPersistedBinding
-    ? {
-        ptyId: owner.ptyId,
-        ...(owner.persistedIncarnationId ? { incarnationId: owner.persistedIncarnationId } : {})
-      }
-    : undefined
+  beforeFreshSpawn?: () => Promise<PtySpawnResult | void>
 }
 
 export async function persistAdmittedStablePaneBinding(args: {
@@ -307,6 +299,10 @@ export async function spawnForStablePane(
     if (attached) {
       return attached
     }
+  }
+  const attached = await args.beforeFreshSpawn?.()
+  if (attached) {
+    return { result: attached, owner: null }
   }
   const result = await args.provider.spawn(args.spawnOptions)
   args.onFreshSpawn?.(result)

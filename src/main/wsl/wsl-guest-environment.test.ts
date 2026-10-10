@@ -35,6 +35,19 @@ beforeEach(() => {
 afterEach(() => invalidateWslGuestEnvironment(undefined, true))
 
 describe('probing', () => {
+  it('fresh credential probes bypass cached HOME and forward cancellation', async () => {
+    respondWithPayload(GOOD)
+    await getWslGuestEnvironment('Ubuntu')
+    respondWithPayload(['/usr/bin', '/home/changed', '/usr/bin/env'].join('\0'))
+    const controller = new AbortController()
+    expect(
+      (await getWslGuestEnvironment('Ubuntu', 500, { fresh: true, signal: controller.signal }))
+        ?.home
+    ).toBe('/home/changed')
+    expect(runProcessMock.mock.calls.at(-1)?.[0].signal).toBe(controller.signal)
+    expect((await getWslGuestEnvironment('Ubuntu'))?.home).toBe('/home/u')
+  })
+
   it('reads PATH, HOME and env out of a banner-polluted stdout', async () => {
     respondWithPayload(GOOD)
     expect(await getWslGuestEnvironment('Ubuntu')).toEqual({

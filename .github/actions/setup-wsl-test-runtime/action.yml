@@ -1,8 +1,15 @@
 name: Set up WSL test runtime
 description: Install a checksum-pinned Ubuntu WSL1 guest with executable Node and Git for real terminal tests.
+inputs:
+  second-distro:
+    description: Import Ubuntu-Secondary from the same pinned image for account isolation tests.
+    required: false
+    default: 'false'
 runs:
   using: composite
   steps:
     - name: Provision Ubuntu WSL1
       shell: pwsh
+      env:
+        ORCA_WSL_SETUP_SECOND_DISTRO: ${{ inputs.second-distro }}
       run: '& "${{ github.action_path }}/setup.ps1"'

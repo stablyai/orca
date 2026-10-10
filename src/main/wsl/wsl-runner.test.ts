@@ -116,6 +116,52 @@ describe('probe lane', () => {
 })
 
 describe('scripts', () => {
+  it.each([{ program: '/bin/cat' }, { script: 'cat' }])(
+    'delivers data on stdin without exposing it in argv for %j',
+    async (command) => {
+      await runWslProcess({ loginPath: 'none', ...command, input: 'private-payload\n' })
+      const call = runProcessMock.mock.calls.at(-1)?.[0]
+      expect(call.input).toBe('private-payload\n')
+      expect(call.args.join(' ')).not.toContain('private-payload')
+      expect(JSON.stringify(call.env)).not.toContain('private-payload')
+    }
+  )
+
+  it.each(['private-payload', ''])(
+    'rejects an oversized script with data stdin %j',
+    async (input) => {
+      await expect(
+        runWslProcess({ loginPath: 'none', script: 'x'.repeat(40_000), input })
+      ).rejects.toThrow('command line')
+      expect(runProcessMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('passes cancellation and output-limit termination to the child', async () => {
+    const controller = new AbortController()
+    await runWslProcess({
+      loginPath: 'none',
+      program: '/bin/cat',
+      signal: controller.signal,
+      killOnOutputLimit: true
+    })
+    const call = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(call.signal).toBe(controller.signal)
+    expect(call.killOnOutputLimit).toBe(true)
+  })
+
+  it.each([true, false])('reports captured output truncation as %s', async (outputTruncated) => {
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      stdout: 'payload',
+      stderr: '',
+      timedOut: false,
+      outputTruncated
+    })
+    const result = await runWslProcess({ loginPath: 'none', program: '/bin/cat' })
+    expect(result.outputTruncated).toBe(outputTruncated)
+  })
+
   it('passes a script in argv by default, leaving the command its own stdin', async () => {
     // A script the runner pipes cannot coexist with a command that reads stdin:
     // the command drains the rest of the script, the shell hits EOF and exits

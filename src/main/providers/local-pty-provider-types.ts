@@ -15,6 +15,8 @@ export type LocalPtyProviderOptions = {
       shellPath?: string
       isWsl?: boolean
       wslDistro?: string | null
+      envToDelete?: readonly string[]
+      pinWslDistro?: (distro: string) => void
     }
     // Why (#16441): Codex launch prep grants hook trust through a codex
     // app-server session. `spawn` already awaits, so returning a promise keeps

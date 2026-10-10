@@ -11,6 +11,17 @@ describe('real WSL terminal lane', () => {
     'config/scripts/verify-playwright-participation.mjs',
     'src/main/wsl-availability.ts',
     'src/main/wsl/wsl-runner.ts',
+    'src/main/antigravity/native-account-host.ts',
+    'src/main/antigravity/native-account-store.ts',
+    'src/main/antigravity/native-wsl-credential-script.ts',
+    'src/main/antigravity/native-wsl-accounts.wsl.test.ts',
+    'src/main/ipc/pty/antigravity-account-spawn-target.ts',
+    'src/main/providers/local-pty-launch-plan.ts',
+    'src/main/providers/local-pty-antigravity-account.ts',
+    'src/shared/secure-file-publication.ts',
+    'src/shared/secure-path-windows-acl.ts',
+    'src/shared/windows-current-user-sid.ts',
+    'config/scripts/verify-wsl-account-participation.mjs',
     'src/main/pty/wsl-orca-env.ts',
     'src/shared/wsl-login-shell-command.ts',
     'src/shared/windows-terminal-shell.ts',
@@ -32,6 +43,8 @@ describe('real WSL terminal lane', () => {
   it.each([
     'docs/reference/wsl-command-execution.md',
     'src/main/wsl-availability.test.ts',
+    'src/main/ipc/pty/antigravity-account-spawn-target.test.ts',
+    'src/main/providers/local-pty-launch-plan.test.ts',
     'src/main/ssh/connection.ts'
   ])('excludes unrelated or unit-only change %s', (path) => {
     expect(hasWslSourceChange([path])).toBe(false)

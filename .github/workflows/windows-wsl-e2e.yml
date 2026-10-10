@@ -26,15 +26,39 @@ jobs:
     timeout-minutes: 30
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-wsl-test-runtime
+        with:
+          second-distro: 'true'
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+      - name: Test real WSL Antigravity accounts
+        id: wsl-accounts
+        env:
+          ORCA_REAL_ANTIGRAVITY_WSL_ACCOUNTS_TEST: '1'
+          ORCA_WSL_TEST_DISTRO: Ubuntu
+          ORCA_WSL_SECOND_TEST_DISTRO: Ubuntu-Secondary
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/main/antigravity/native-wsl-accounts.wsl.test.ts
+          --reporter=default --reporter=json
+          --outputFile=test-results/wsl-accounts.json
+      - name: Require both WSL account executions
+        if: ${{ !cancelled() && steps.wsl-accounts.outcome != 'skipped' }}
+        run: node config/scripts/verify-wsl-account-participation.mjs test-results/wsl-accounts.json
+      - name: Upload WSL account participation report
+        uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && steps.wsl-accounts.outcome != 'skipped' }}
+        with:
+          name: windows-wsl-account-participation-report
+          path: test-results/wsl-accounts.json
+          retention-days: 3
       - name: Build relay and Electron
         run: |
           pnpm run build:relay

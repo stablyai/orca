@@ -17,9 +17,11 @@ export type AntigravityAccountState = {
     identityKnown: boolean
   } | null
   selectedAccountId: string | null
+  resolvedTarget?: { runtime: 'wsl'; wslDistro: string; authorityId: string }
 }
 
 export type AntigravityAccountTarget = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
+  expectedAuthorityId?: string
 }

@@ -166,7 +166,8 @@ export type CommandTemplateBackslash = 'escape' | 'literal'
 
 export function tokenizeCustomCommandTemplate(
   template: string,
-  backslash: CommandTemplateBackslash = 'escape'
+  backslash: CommandTemplateBackslash = 'escape',
+  options?: { requireSingleCommand?: boolean }
 ): TokenizeCustomCommandResult {
   const backslashEscapes = backslash === 'escape'
   const tokens: string[] = []
@@ -180,8 +181,14 @@ export function tokenizeCustomCommandTemplate(
 
   while (i < template.length) {
     const ch = template[i]
+    if (options?.requireSingleCommand && !quote && (ch === '\n' || ch === '\r')) {
+      return { ok: false, error: 'Unquoted line separator in command.' }
+    }
     if (quote) {
       if (backslashEscapes && ch === '\\' && quote === '"' && i + 1 < template.length) {
+        if (options?.requireSingleCommand && /[\r\n]/.test(template[i + 1])) {
+          return { ok: false, error: 'Unmodeled line continuation in command.' }
+        }
         // Why: inside double quotes the shell only consumes the backslash
         // before these; elsewhere it stays a literal byte this tokenizer drops.
         divergesFromShell ||= !'$`"\\'.includes(template[i + 1])
@@ -217,6 +224,9 @@ export function tokenizeCustomCommandTemplate(
     }
 
     if (backslashEscapes && ch === '\\' && i + 1 < template.length) {
+      if (options?.requireSingleCommand && /[\r\n]/.test(template[i + 1])) {
+        return { ok: false, error: 'Unmodeled line continuation in command.' }
+      }
       // Why: an unquoted line continuation joins words the shell splits, so a
       // selector can hide inside the joined token and skip the gap check.
       divergesFromShell ||= template[i + 1] === '\n'
@@ -262,6 +272,9 @@ export function tokenizeCustomCommandTemplate(
   if (inToken) {
     tokens.push(current)
     spans.push({ start: tokenStart, end: template.length, divergesFromShell })
+  }
+  if (options?.requireSingleCommand && tokens.length === 0) {
+    return { ok: false, error: 'Command is empty.' }
   }
   return { ok: true, tokens, spans }
 }

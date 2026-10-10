@@ -334,7 +334,12 @@ describe('spawn', () => {
       shellOverride: 'powershell.exe',
       terminalWindowsWslDistro: 'Ubuntu',
       worktreeId: 'repo-1::/remote/wt',
-      historyIsolationEnabled: true
+      historyIsolationEnabled: true,
+      antigravityAccountOperation: {
+        deadline: Date.now() + 15_000,
+        signal: new AbortController().signal,
+        remainingMs: () => 15_000
+      }
     })
 
     expectRequest(mux.request, 'pty.spawn', {

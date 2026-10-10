@@ -1,3 +1,5 @@
+import { ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { setLocalRuntimeCapabilitiesForTests } from './local-runtime-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callAntigravityAccounts } from './runtime-antigravity-accounts-client'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
@@ -7,6 +9,7 @@ vi.mock('./runtime-rpc-client', () => ({
   callRuntimeRpc: vi.fn()
 }))
 beforeEach(() => {
+  setLocalRuntimeCapabilitiesForTests([ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY])
   vi.mocked(assertRuntimeEnvironmentCapability).mockReset().mockResolvedValue()
   vi.mocked(callRuntimeRpc).mockReset().mockResolvedValue({ accounts: [] })
 })
@@ -30,14 +33,17 @@ describe('Antigravity account execution-host routing', () => {
   it('sends selection only to the specified owning host and includes the exact distro', async () => {
     await callAntigravityAccounts(
       { kind: 'environment', environmentId: 'host-b' },
-      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      { runtime: 'wsl', wslDistro: 'Ubuntu', expectedAuthorityId: 'a'.repeat(64) },
       'Select',
       'account-b'
     )
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'host-b' },
       'accounts.antigravitySelect',
-      { target: { runtime: 'wsl', wslDistro: 'Ubuntu' }, accountId: 'account-b' },
+      {
+        target: { runtime: 'wsl', wslDistro: 'Ubuntu', expectedAuthorityId: 'a'.repeat(64) },
+        accountId: 'account-b'
+      },
       { timeoutMs: 20_000 }
     )
   })
@@ -59,7 +65,7 @@ describe('Antigravity account execution-host routing', () => {
     await callAntigravityAccounts({ kind: 'local' }, { runtime: 'host' }, 'List')
     await callAntigravityAccounts(
       { kind: 'local' },
-      { runtime: 'wsl', wslDistro: 'Debian' },
+      { runtime: 'wsl', wslDistro: 'Debian', expectedAuthorityId: 'a'.repeat(64) },
       'AddCurrent'
     )
     expect(callRuntimeRpc).toHaveBeenNthCalledWith(
@@ -73,8 +79,37 @@ describe('Antigravity account execution-host routing', () => {
       2,
       { kind: 'local' },
       'accounts.antigravityAddCurrent',
-      { runtime: 'wsl', wslDistro: 'Debian' },
+      { runtime: 'wsl', wslDistro: 'Debian', expectedAuthorityId: 'a'.repeat(64) },
       { timeoutMs: 20_000 }
     )
   })
+})
+
+it('requires the distinct WSL capability from the owning peer before sending new fields', async () => {
+  vi.mocked(assertRuntimeEnvironmentCapability).mockImplementation(async (_, capability) => {
+    if (capability === ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY) {
+      throw new Error('WSL unsupported')
+    }
+  })
+  await expect(
+    callAntigravityAccounts(
+      { kind: 'environment', environmentId: 'old-peer' },
+      { runtime: 'wsl', wslDistro: null, expectedAuthorityId: 'a'.repeat(64) },
+      'AddCurrent'
+    )
+  ).rejects.toThrow('WSL unsupported')
+  expect(callRuntimeRpc).not.toHaveBeenCalled()
+})
+it('refuses unsupported local WSL hosts before any RPC', async () => {
+  setLocalRuntimeCapabilitiesForTests([])
+  await expect(
+    callAntigravityAccounts({ kind: 'local' }, { runtime: 'wsl' }, 'List')
+  ).rejects.toThrow('WSL')
+  expect(callRuntimeRpc).not.toHaveBeenCalled()
+})
+it('refuses a WSL mutation without an observed binding', async () => {
+  await expect(
+    callAntigravityAccounts({ kind: 'local' }, { runtime: 'wsl' }, 'AddCurrent')
+  ).rejects.toThrow('reload Accounts')
+  expect(callRuntimeRpc).not.toHaveBeenCalled()
 })

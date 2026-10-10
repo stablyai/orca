@@ -13,6 +13,7 @@ import {
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
 import type * as DaemonBundleStalenessModule from './daemon-bundle-staleness'
+import { createAntigravityAccountOperation } from '../antigravity/native-account-operation'
 
 const {
   getMacDaemonSystemResolverHealthMock,
@@ -159,6 +160,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       try {
         await legacy.spawn({
           sessionId: 'legacy-session',
+          antigravityAccountOperation: createAntigravityAccountOperation(),
           cols: 80,
           rows: 24,
           startupIngress: {
@@ -168,6 +170,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
         const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
         expect(createPayload).not.toHaveProperty('startupIngress')
+        expect(createPayload).not.toHaveProperty('antigravityAccountOperation')
         await expect(legacy.closeStartupQueryAuthority('legacy-session')).resolves.toBe(0)
         expect(requestSpy).not.toHaveBeenCalledWith('closeStartupQueryAuthority', expect.anything())
       } finally {

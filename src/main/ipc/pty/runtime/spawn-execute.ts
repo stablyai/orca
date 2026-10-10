@@ -1,3 +1,4 @@
+import { prepareAntigravityPtySpawnTarget } from '../antigravity-account-spawn-target'
 import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
@@ -62,6 +63,22 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
+    const prepareAccount = async (): Promise<PtySpawnResult | void> => {
+      const previousDistro = ctx.expectedWslDistro
+      const attached = await prepareAntigravityPtySpawnTarget(ctx, args.connectionId)
+      if (
+        !attached &&
+        ctx.isDaemonHostSpawn &&
+        expectedPtyId &&
+        previousDistro !== ctx.expectedWslDistro
+      ) {
+        const changed =
+          ctx.deps.runtime?.preparePtyExecutionContext?.(expectedPtyId, ctx.expectedWslDistro) ??
+          false
+        ctx.preparedProvisionalExecutionContext ||= changed
+      }
+      return attached
+    }
     const assertClientStillConnected = (): void => {
       if (args.signal?.aborted) {
         throw new Error('client_disconnected')
@@ -88,7 +105,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         surface: args.agentSessionEnsure.surface,
         spawn: async () => {
           assertClientStillConnected()
-          providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+          const attached = await prepareAccount()
+          providerResult = attached ?? (await ctx.provider.spawn(ctx.spawnOptions))
           ctx.rejectedRegistrationCandidate = providerResult
           // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
           ctx.reportPtySpawnCommitted()
@@ -151,6 +169,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
                 args.worktreeId,
                 args.connectionId
               ),
+            beforeFreshSpawn: prepareAccount,
             onFreshSpawn: ctx.reportPtySpawnCommitted
           })
       ctx.result = stablePaneSpawn.result

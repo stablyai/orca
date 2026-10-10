@@ -171,6 +171,8 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 // Why: `orca account add claude` signs in to an account folder the host creates first.
 export const CLAUDE_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.claude-sign-in.v1' as const
 export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
+export const ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY =
+  'accounts.antigravity-native-wsl.v1' as const
 export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
@@ -438,6 +440,7 @@ export const RUNTIME_CAPABILITIES = [
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_WSL_ACCOUNTS_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
   ...SKILL_RUNTIME_CAPABILITIES,

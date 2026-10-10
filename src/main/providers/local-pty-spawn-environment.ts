@@ -12,7 +12,7 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-safe-env'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
-import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
+import { pinLocalPtyWslLaunchDistro, type LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtySpawnOptions } from './types'
 
@@ -73,7 +73,9 @@ export function buildLocalPtySpawnEnvironment(args: {
     cwd: plan.cwd,
     shellPath: plan.shellPath,
     isWsl: plan.isWslShell,
-    wslDistro: plan.launchWslDistro
+    wslDistro: plan.launchWslDistro,
+    envToDelete: spawn.envToDelete,
+    pinWslDistro: (distro) => pinLocalPtyWslLaunchDistro(plan, spawn, distro)
   })
 }
 

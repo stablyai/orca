@@ -35,6 +35,7 @@ export function installLocalPtyProviderEnvSandbox(): void {
   let origShell: string | undefined
   let origPowerlevelWizardDisable: string | undefined
   let origHistFile: string | undefined
+  let origWslEnv: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -43,6 +44,8 @@ export function installLocalPtyProviderEnvSandbox(): void {
     origShell = process.env.SHELL
     origPowerlevelWizardDisable = process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     origHistFile = process.env.HISTFILE
+    origWslEnv = process.env.WSLENV
+    delete process.env.WSLENV
     process.env.SHELL = '/bin/zsh'
     delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     // injectHistoryEnv preserves an inherited HISTFILE, so clear it for hermetic history assertions.
@@ -51,6 +54,11 @@ export function installLocalPtyProviderEnvSandbox(): void {
 
   afterEach(() => {
     _resetLocalPtyProviderStateForTest()
+    if (origWslEnv === undefined) {
+      delete process.env.WSLENV
+    } else {
+      process.env.WSLENV = origWslEnv
+    }
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
