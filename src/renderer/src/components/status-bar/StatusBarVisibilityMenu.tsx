@@ -145,6 +145,18 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.zcodeUsageMenu', 'ZCode Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        {isStatusBarItemAvailable('muse', detectedAgentIds) && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('muse')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('muse')
+            }}
+          >
+            <AgentIcon agent="muse" size={14} />
+            {translate('auto.components.status.bar.StatusBar.museUsageMenu', 'Muse Usage')}
+          </DropdownMenuCheckboxItem>
+        )}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('cursor')}
           onCheckedChange={() => {

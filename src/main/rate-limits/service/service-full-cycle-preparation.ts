@@ -6,6 +6,8 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { fetchMuseRateLimits } from '../muse-usage-fetcher'
+import { museUsageDisabledSnapshot } from '../muse-usage-snapshot'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
@@ -51,6 +53,7 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  museResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
 }
 
@@ -123,6 +126,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxGeneration = this.minimaxFetchGeneration
 
     const antigravityUsageEnabled = this.antigravityUsageEnabledResolver?.() ?? true
+    const museUsageEnabled = this.museUsageEnabledResolver?.() ?? true
 
     const zcodePlanConfigResult = this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
@@ -166,7 +170,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      muse: museUsageEnabled
+        ? this.withFetchingStatus(previousState.muse, 'muse')
+        : (previousState.muse ?? museUsageDisabledSnapshot())
     })
 
     // Why its own promise: the keychain read and the desktop state.vscdb read
@@ -185,6 +192,15 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
         : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+
+    const museResultPromise = (
+      museUsageEnabled
+        ? fetchMuseRateLimits({ signal })
+        : Promise.resolve(previousState.muse ?? museUsageDisabledSnapshot())
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -309,6 +325,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      museResultPromise,
       antigravityResultPromise
     }
   }
