@@ -11682,14 +11682,14 @@
           "pathGroup": "How the phone reaches this computer",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.",
-          "signInRequired": "Relay only — LAN does not need an account.",
           "relayUnavailable": "Orca Relay isn’t available in this build. Use LAN.",
           "signIn": "Sign in for Relay",
           "signInAgain": "Sign in again for Relay",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
-          "relayCell": "Relay cell"
+          "relayCell": "Relay cell",
+          "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account."
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",

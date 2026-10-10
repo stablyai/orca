@@ -11458,7 +11458,6 @@
           "pathGroup": "Cómo llega el teléfono a este ordenador",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. El inicio de sesión solo es necesario para Relay.",
-          "signInRequired": "Solo Relay — LAN no necesita una cuenta.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN",

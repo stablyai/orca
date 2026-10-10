@@ -11458,7 +11458,6 @@
           "pathGroup": "휴대폰이 이 컴퓨터에 연결되는 방식",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "휴대폰이 모바일 네트워크 또는 모든 Wi‑Fi에서 연결할 수 있습니다. 로그인은 Relay에만 필요합니다.",
-          "signInRequired": "Relay만 해당 — LAN에는 계정이 필요하지 않습니다.",
           "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "Relay용 다시 로그인",
           "localTitle": "LAN",

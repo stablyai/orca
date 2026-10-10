@@ -11458,7 +11458,6 @@
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。仅 Relay 需要登录。",
-          "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
           "signInAgain": "重新登录以使用 Relay",
           "localTitle": "局域网",

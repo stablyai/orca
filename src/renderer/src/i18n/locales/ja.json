@@ -11458,7 +11458,6 @@
           "pathGroup": "スマートフォンがこのコンピュータに到達する方法",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "スマートフォンはモバイル回線または任意の Wi‑Fi から接続できます。サインインが必要なのは Relay のみです。",
-          "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "Relay に再サインイン",
           "localTitle": "LAN",

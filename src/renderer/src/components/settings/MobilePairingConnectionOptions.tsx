@@ -217,7 +217,7 @@ export function MobilePairingConnectionOptions({
           >
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
+                'auto.components.settings.MobilePairingConnectionOptions.relaySignInDetail',
                 'Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account.'
               )}
             </p>

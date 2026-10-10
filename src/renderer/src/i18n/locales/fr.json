@@ -11540,7 +11540,6 @@
           "pathGroup": "Comment le téléphone joint cet ordinateur",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Le téléphone peut être en données mobiles ou sur n'importe quel Wi‑Fi. Connexion requise uniquement pour Relay.",
-          "signInRequired": "Relay uniquement — le LAN n'a pas besoin de compte.",
           "relayUnavailable": "Orca Relay n'est pas disponible dans ce build. Utilisez le LAN.",
           "signIn": "Se connecter pour Relay",
           "signInAgain": "Se reconnecter pour Relay",
