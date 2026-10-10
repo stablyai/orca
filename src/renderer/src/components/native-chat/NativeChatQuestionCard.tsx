@@ -11,6 +11,7 @@ import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-aut
 import { useNativeChatQuestionNumberKeys } from './use-native-chat-question-number-keys'
 import { isEditableTarget } from '@/lib/editable-target'
 import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
@@ -45,7 +46,16 @@ const TYPED_ANSWER = -1
  * text, and confirms via the trailing action. Number keys pick the numbered row.
  * Multi-question prompts step through tabs across the top. Neutral shadcn tokens.
  */
-export function NativeChatQuestionCard({
+export function NativeChatQuestionCard(
+  props: NativeChatQuestionCardProps
+): React.JSX.Element | null {
+  if (props.prompt.questions.length === 0) {
+    return null
+  }
+  return <NativeChatQuestionCardState key={nativeChatAskDismissKey(props.prompt)} {...props} />
+}
+
+function NativeChatQuestionCardState({
   prompt,
   isSubmitting = false,
   isCancelling = false,
