@@ -11,7 +11,8 @@ import {
   GIT_KEY,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { WorkspaceLayoutStream, type WorkspaceLayoutEvent } from './workspace-layout-stream'
+import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
+import { WorkspaceLayoutStream } from './workspace-layout-stream'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
 
