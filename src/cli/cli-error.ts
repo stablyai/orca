@@ -47,7 +47,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     if (hasOrchestrationRequestId(error.data)) {
       return message
     }
-    return `${message}\nOrca is not running. Run 'orca open' first.`
+    return formatRuntimeUnavailableError(message, error.data)
   }
   // Why: error-specific recovery must win over the generic computer fallback.
   // Classified from the whole error, not just `.code`: a hop that flattens the class leaves only the token.
@@ -71,7 +71,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     error instanceof RuntimeRpcFailureError &&
     error.response.error.code === 'runtime_unavailable'
   ) {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
+    return formatRuntimeUnavailableError(message, error.response.error.data)
   }
   if (error instanceof RuntimeRpcFailureError) {
     return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
@@ -85,6 +85,14 @@ function hasOrchestrationRequestId(data: unknown): boolean {
     typeof data === 'object' &&
     typeof (data as { orchestrationRequestId?: unknown }).orchestrationRequestId === 'string'
   )
+}
+
+function formatRuntimeUnavailableError(message: string, data: unknown): string {
+  const nextSteps = nextStepsFromData(data)
+  if (nextSteps.length > 0) {
+    return formatMessageWithNextSteps(message, nextSteps)
+  }
+  return `${message}\nOrca is not running. Run 'orca open' first.`
 }
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
