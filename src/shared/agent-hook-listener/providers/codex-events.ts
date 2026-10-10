@@ -40,7 +40,7 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: AgentLeadStatusResolution & { updateLead: boolean }
+  options: AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: boolean }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -64,7 +64,8 @@ export function buildCodexStatusPayload(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(lead),
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
-    mainAgent: codexMainAgentStatusForPayload(lead)
+    mainAgent: codexMainAgentStatusForPayload(lead),
+    sessionBoundary: options.sessionBoundary
   })
 }
 
@@ -189,6 +190,15 @@ export function normalizeCodexEvent(
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+    // Why: SessionStart is the only signal a resumed idle Codex TUI emits before the first
+    // prompt (STA-3386). Land it as a session-boundary 'done' row so the sidebar appears
+    // without a phantom spinner or a ping.
+    const record = setCodexMainAgentTurnState(state, paneKey, { state: 'done' })
+    return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+      ...resolveCodexPaneStatus(state, paneKey, record),
+      updateLead: true,
+      sessionBoundary: true
+    })
   }
   if (agentId && transcriptPath && eventName === 'PermissionRequest') {
     const transcriptState = getOrCreateCodexSubagentTranscriptState(state, paneKey)

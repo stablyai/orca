@@ -158,6 +158,33 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.toolInput).toBeUndefined()
   })
 
+  it('maps Codex SessionStart to an idle done row so a resumed session earns its sidebar row before the first prompt', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionStart',
+          session_id: '019ffea4-a02b-7b42-866a-f84fb1c71d58'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: '',
+      agentType: 'codex',
+      sessionBoundary: true
+    })
+    expect(event?.hookEventName).toBe('SessionStart')
+    expect(event?.providerSession).toMatchObject({
+      key: 'session_id',
+      id: '019ffea4-a02b-7b42-866a-f84fb1c71d58'
+    })
+  })
+
   it('maps Codex request_user_input PreToolUse to waiting with the question card, then clears on the answer', () => {
     // Real Codex 0.145 shapes: PreToolUse fires while blocked on the answer (no Stop),
     // PostToolUse carries the answers, Stop ends the turn.
