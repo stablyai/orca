@@ -10,7 +10,6 @@ function listing(
 ): AgentModelCatalogListing {
   return {
     models: [{ id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts }],
-    fastModeTierByModel: {},
     origin,
     at
   }
