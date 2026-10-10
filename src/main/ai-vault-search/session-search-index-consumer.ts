@@ -77,6 +77,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       // keeps the whole read on one path — the buffer is dropped and the file is
       // re-read.
       this.failed = true
+      this.write.discard()
       this.store.reportWriteFailure(error)
     }
   }
@@ -90,6 +91,8 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       committed = !this.failed && !outcome.incomplete && this.write.commit(outcome)
     } catch (error) {
       this.store.reportWriteFailure(error)
+    } finally {
+      this.write.discard()
     }
     if (committed) {
       this.store.writeCommitted(candidate)

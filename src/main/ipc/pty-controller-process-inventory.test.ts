@@ -1,3 +1,4 @@
+import { openCodeHookServiceModuleMock } from './pty-ipc-mock-registry'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
@@ -46,9 +47,7 @@ vi.mock('node-pty', () => ({
   })
 }))
 
-vi.mock('../opencode/hook-service', () => ({
-  openCodeHookService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
-}))
+vi.mock('../opencode/hook-service', () => openCodeHookServiceModuleMock())
 
 vi.mock('../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
@@ -100,10 +99,7 @@ const mainWindow = {
 }
 
 function captureController(): {
-  listProcesses: (
-    connectionId?: string | null,
-    opts?: { deadlineMs?: number }
-  ) => Promise<PtyProcessInfo[]>
+  listProcesses: (hostId?: string, opts?: { deadlineMs?: number }) => Promise<PtyProcessInfo[]>
 } {
   handleMock.mockReset()
   onMock.mockReset()
@@ -178,7 +174,7 @@ describe('aggregate PTY process inventory', () => {
     const controller = captureController()
     const deadlineMs = Date.now() + 1200
 
-    await controller.listProcesses('conn-a', { deadlineMs })
+    await controller.listProcesses('ssh:conn-a', { deadlineMs })
 
     expect(remote.calls).toEqual([{ opts: { deadlineMs } }])
   })

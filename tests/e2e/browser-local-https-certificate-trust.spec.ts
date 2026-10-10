@@ -54,7 +54,7 @@ async function switchToBrowserTab(page: Page, worktreeId: string, browserTabId: 
         return
       }
       state.setActiveBrowserTab(targetBrowserTabId)
-      state.setActiveTabType('browser')
+      state.setActiveTabType('browser', window.__store?.getState().activeWorktreeId ?? null)
     },
     { targetWorktreeId: worktreeId, targetBrowserTabId: browserTabId }
   )

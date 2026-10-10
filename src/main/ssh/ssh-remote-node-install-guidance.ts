@@ -38,7 +38,7 @@ async function detectPackageManager(
     const output = await execCommand(
       conn,
       `for p in ${bins}; do if command -v "$p" >/dev/null 2>&1; then echo "$p"; break; fi; done`,
-      commandOptions(options)
+      { timeoutMs: NODE_PACKAGE_MANAGER_PROBE_TIMEOUT_MS, signal: options?.signal }
     )
     const detected = output.trim().split('\n')[0]
     return NODE_PACKAGE_MANAGER_HINTS.some((hint) => hint.bin === detected) ? detected : null
@@ -76,14 +76,6 @@ function formatNodeInstallHints(detectedBin: string | null): string {
     'If your distro package is older than Node 18, install an LTS release from https://nodejs.org/.'
   )
   return lines.join('\n')
-}
-
-function commandOptions(options?: RemoteNodeResolutionOptions): {
-  timeoutMs: number
-  signal?: AbortSignal
-} {
-  const base = { timeoutMs: NODE_PACKAGE_MANAGER_PROBE_TIMEOUT_MS }
-  return options?.signal ? { ...base, signal: options.signal } : base
 }
 
 function throwIfAborted(options?: RemoteNodeResolutionOptions): void {

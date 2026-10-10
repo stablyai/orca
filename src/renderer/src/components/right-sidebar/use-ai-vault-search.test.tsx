@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { AiVaultSearchSort } from '../../../../shared/ai-vault-types'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
@@ -9,9 +10,10 @@ import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/exe
 import { searchHit, searchResults } from '../../../../shared/ai-vault-search-test-fixture'
 import { useAiVaultPanelSearch, useAiVaultSearch } from './use-ai-vault-search'
 
+const mockSettings: { aiVaultSearch?: { enabled: boolean } } = {}
 vi.mock('@/store', () => ({
-  useAppStore: (select: (state: { settings: undefined }) => unknown) =>
-    select({ settings: undefined })
+  useAppStore: (select: (state: { settings: typeof mockSettings }) => unknown) =>
+    select({ settings: mockSettings })
 }))
 
 const ALL_AGENTS = ['codex' as const]
@@ -35,6 +37,7 @@ beforeEach(() => {
     value: { aiVault: { searchSessions } }
   })
   searchSessions.mockReset().mockResolvedValue(empty)
+  delete mockSettings.aiVaultSearch
 })
 afterEach(() => vi.useRealTimers())
 async function debounce() {
@@ -233,7 +236,7 @@ it('searches every computer at once and keeps each hit on the computer that owns
     ]
   })
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all')
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
   )
   await debounce()
   expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
@@ -247,6 +250,28 @@ it('searches every computer at once and keeps each hit on the computer that owns
   unmount()
 })
 
+it('sends the sort only when it is not the host default', async () => {
+  const initialProps: { sort: AiVaultSearchSort } = { sort: 'relevance' }
+  const { rerender, unmount } = renderHook(
+    ({ sort }) => useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', sort),
+    { initialProps }
+  )
+  await debounce()
+  expect(searchSessions.mock.calls[0]?.[0]).toEqual({
+    query: 'needle',
+    filters: { agents: ALL_AGENTS },
+    cursor: undefined
+  })
+  rerender({ sort: 'newest' })
+  await debounce()
+  expect(searchSessions.mock.calls[1]?.[0]).toEqual({
+    query: 'needle',
+    filters: { agents: ALL_AGENTS, sort: 'newest' },
+    cursor: undefined
+  })
+  unmount()
+})
+
 it('restarts page one under the all scope when the merged cursor goes stale', async () => {
   searchSessions.mockResolvedValueOnce({
     ...searchResults(),
@@ -254,7 +279,7 @@ it('restarts page one under the all scope when the merged cursor goes stale', as
     page: { cursor: 'merged', hasMore: true }
   })
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all')
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
   )
   await debounce()
   searchSessions
@@ -265,5 +290,81 @@ it('restarts page one under the all scope when the merged cursor goes stale', as
   expect(searchSessions.mock.calls[1]).toEqual([{ ...ALL_REQUEST, cursor: 'merged' }, 'all'])
   expect(searchSessions.mock.calls[2]).toEqual([ALL_REQUEST, 'all'])
   expect(result.current.sessions.map((session) => session.executionHostId)).toEqual(['local'])
+  unmount()
+})
+
+it('leaves the box as the legacy title filter while local indexing consent is pending', async () => {
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
+  )
+  await debounce()
+  expect(searchSessions).not.toHaveBeenCalled()
+  expect(result.current.searching).toBe(false)
+  expect(result.current.hasQuery).toBe(true)
+  expect(result.current.needsLocalConsent).toBe(true)
+  expect(result.current.loading).toBe(false)
+  expect(result.current.sessions).toEqual([])
+  unmount()
+})
+
+it('searches the local index with the same query once consent is on', async () => {
+  mockSettings.aiVaultSearch = { enabled: true }
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
+  )
+  await debounce()
+  expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
+    { ...ALL_REQUEST, cursor: undefined },
+    'local'
+  )
+  expect(result.current.searching).toBe(true)
+  expect(result.current.hasQuery).toBe(true)
+  expect(result.current.needsLocalConsent).toBe(false)
+  unmount()
+})
+
+it('is neither searching nor holding a query for a blank box', async () => {
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('   ', ALL_AGENTS, undefined, 'local', 'relevance')
+  )
+  await debounce()
+  expect(searchSessions).not.toHaveBeenCalled()
+  expect(result.current.searching).toBe(false)
+  expect(result.current.hasQuery).toBe(false)
+  unmount()
+})
+
+// #22453: a host's index is not this client's to turn on, so its "off" must not wall the list.
+it.each(['disabled', 'no-service'] as const)(
+  'falls back to the title filter when a single host answers %s',
+  async (reason) => {
+    searchSessions.mockResolvedValue({ kind: 'unavailable', reason })
+    const initialProps = { query: 'needle' }
+    const { result, rerender, unmount } = renderHook(
+      ({ query }) => useAiVaultPanelSearch(query, ALL_AGENTS, undefined, 'ssh:box', 'relevance'),
+      { initialProps }
+    )
+    await debounce()
+    expect(result.current.searching).toBe(false)
+    expect(result.current.titleOnly).toBe(true)
+    expect(result.current.loading).toBe(false)
+
+    // Further typing filters titles without asking that host again.
+    rerender({ query: 'needles' })
+    await debounce()
+    expect(searchSessions).toHaveBeenCalledOnce()
+    expect(result.current.searching).toBe(false)
+    unmount()
+  }
+)
+
+it('keeps full-text search for a host that is merely not ready', async () => {
+  searchSessions.mockResolvedValue({ kind: 'unavailable', reason: 'not-ready' })
+  const { result, unmount } = renderHook(() =>
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'ssh:box', 'relevance')
+  )
+  await debounce()
+  expect(result.current.searching).toBe(true)
+  expect(result.current.titleOnly).toBe(false)
   unmount()
 })

@@ -1,34 +1,6 @@
 import { isAuthError, isPassphraseError, isTransientError } from './ssh-connection-utils'
 import { isHostKeyVerificationError } from './ssh-host-key-decision'
 
-// Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
-// probe timeouts and connect failures never match isTransientError's code table.
-const NETWORK_LIKE_ERROR_FRAGMENTS = [
-  'system ssh connection timed out',
-  'timed out while waiting for handshake',
-  'connection timed out',
-  'operation timed out',
-  'connection refused',
-  'connection reset',
-  'no route to host',
-  'network is unreachable',
-  'network is down',
-  'host is down',
-  'broken pipe',
-  'temporary failure in name resolution',
-  'name or service not known',
-  'nodename nor servname',
-  'could not resolve hostname',
-  'kex_exchange_identification',
-  // Pre-7.x OpenSSH wording for the same banner-exchange failure.
-  'ssh_exchange_identification',
-  'lost connection',
-  'remote end closed',
-  // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
-  // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.
-  'connection closed by remote'
-]
-
 const DEFINITE_HOST_FAILURE_FRAGMENTS = [
   'no route to host',
   'network is unreachable',
@@ -38,6 +10,30 @@ const DEFINITE_HOST_FAILURE_FRAGMENTS = [
   'name or service not known',
   'nodename nor servname',
   'could not resolve hostname'
+]
+
+// Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
+// probe timeouts and connect failures never match isTransientError's code table.
+const NETWORK_LIKE_ERROR_FRAGMENTS = [
+  ...DEFINITE_HOST_FAILURE_FRAGMENTS,
+  'system ssh connection timed out',
+  'timed out while waiting for handshake',
+  'connection timed out',
+  'operation timed out',
+  'connection refused',
+  'connection reset',
+  'broken pipe',
+  'kex_exchange_identification',
+  // Pre-7.x OpenSSH wording for the same banner-exchange failure.
+  'ssh_exchange_identification',
+  'lost connection',
+  // ssh2's wording when TCP connects but the socket closes before the server's banner, as it does
+  // while a port forwarder or NAT still accepts connections for a host it can no longer reach.
+  'connection lost before handshake',
+  'remote end closed',
+  // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
+  // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.
+  'connection closed by remote'
 ]
 
 const DEFINITE_HOST_FAILURE_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN'])

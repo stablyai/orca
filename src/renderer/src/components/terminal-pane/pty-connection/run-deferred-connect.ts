@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -5,7 +6,6 @@ import { useAppStore } from '@/store'
 import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { findTerminalTabForPane } from './terminal-tab-id'
 
@@ -24,6 +24,7 @@ import { bindSettlePaneSerializer } from './pane-serializer-settle'
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
 import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
 import { bindHiddenRestoreStateAndSshProbe } from './hidden-restore-state-and-ssh-probe'
+import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
   const cwdPromise = session.deps.cwdPromise
@@ -193,6 +194,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     bindHiddenRestoreStateAndSshProbe(session)
 
     bindPrepaintParkedSshSnapshot(session)
+    bindParkRevealSnapshotVerdictActions(session)
     bindHandleReattachResult(session)
     runDeferredSessionAttach(session)
   }

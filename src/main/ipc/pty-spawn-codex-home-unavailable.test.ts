@@ -64,7 +64,7 @@ const MANAGED_ACCOUNT_SETTINGS = (() =>
   }) as never) as () => never
 
 type RuntimeSpawnController = {
-  spawn(args: { cols: number; rows: number; launchAgent: 'codex' }): Promise<{ id: string }>
+  spawn(args: { cols: number; rows: number; launchAgent?: 'codex' }): Promise<{ id: string }>
 }
 
 /**
@@ -94,7 +94,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
     resolveHome: (
       target?: unknown,
       env?: NodeJS.ProcessEnv,
-      context?: { unavailableManagedHomePath?: string }
+      context?: { unavailableManagedHomePath?: string; launchesCodex?: boolean }
     ) => string | null,
     runtime?: ReturnType<typeof makeRuntime>,
     prepareCodexSessionResume?: () => Promise<never>
@@ -354,6 +354,45 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       ).rejects.toThrow(UNAVAILABLE_MESSAGE)
 
       expect(daemonSpawn).not.toHaveBeenCalled()
+    })
+  })
+
+  // Why: only an Orca-launched Codex may wait for Codex's hook hashes; a plain terminal never does.
+  describe('which spawns launch prep may make wait', () => {
+    it('marks a Codex launch, and not a plain terminal, on the local spawn path', async () => {
+      readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
+      setupDaemonAdapter()
+      const resolveHome = vi.fn(
+        (_target?: unknown, _env?: NodeJS.ProcessEnv, _context?: { launchesCodex?: boolean }) =>
+          TEST_CODEX_HOME
+      )
+      register(resolveHome)
+
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, launchAgent: 'codex' })
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      const contexts = resolveHome.mock.calls.map(([, , context]) => context)
+      expect(contexts[0]).toMatchObject({ launchesCodex: true })
+      expect(contexts.at(-1)).toMatchObject({ launchesCodex: false })
+    })
+
+    it('marks a Codex launch, and not a plain terminal, on the runtime spawn path', async () => {
+      readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
+      setupDaemonAdapter()
+      const runtime = makeRuntime()
+      const resolveHome = vi.fn(
+        (_target?: unknown, _env?: NodeJS.ProcessEnv, _context?: { launchesCodex?: boolean }) =>
+          TEST_CODEX_HOME
+      )
+      register(resolveHome, runtime)
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+      await controller.spawn({ cols: 80, rows: 24, launchAgent: 'codex' })
+      await controller.spawn({ cols: 80, rows: 24 })
+
+      const contexts = resolveHome.mock.calls.map(([, , context]) => context)
+      expect(contexts[0]).toMatchObject({ launchesCodex: true })
+      expect(contexts.at(-1)).toMatchObject({ launchesCodex: false })
     })
   })
 })

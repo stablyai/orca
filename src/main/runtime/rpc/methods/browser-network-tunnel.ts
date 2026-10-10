@@ -23,6 +23,7 @@ export function createBrowserNetworkTunnelMethods(
   return [
     defineStreamingMethod({
       name: 'network.browserTunnel',
+      permission: 'host-admin',
       params: BrowserNetworkTunnelAttachParams,
       handler: async (
         params,

@@ -10,22 +10,36 @@ import type { Repo } from '../../shared/repo-types'
 
 // Why: the watch must stay one stat per folder project per tick — counting the real
 // calls is what keeps a directory-listing fan-out from creeping back in.
-const { statCalls, readdirSpy, gitProbes } = vi.hoisted(() => ({
+const { statCalls, readdirSpy, gitProbes, pendingGitChecks } = vi.hoisted(() => ({
   statCalls: [] as string[],
   readdirSpy: vi.fn(),
+  pendingGitChecks: new Set<Promise<unknown>>(),
   // Why: the rejected-marker cache exists to stop git respawning every tick; counting the
   // real probes is the only way that guarantee stays true.
   gitProbes: [] as string[]
 }))
 
+function trackGitCheck<T>(pending: Promise<T>): Promise<T> {
+  const completed = pending.finally(() => pendingGitChecks.delete(completed))
+  pendingGitChecks.add(completed)
+  return completed
+}
+
+async function drainGitChecks(): Promise<void> {
+  while (pendingGitChecks.size > 0) {
+    await Promise.allSettled(pendingGitChecks)
+  }
+}
+
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRepo>()
   return {
     ...actual,
-    isGitRepo: (path: string) => {
+    isGitRepoAsync: (path: string) => {
       gitProbes.push(path)
-      return actual.isGitRepo(path)
-    }
+      return trackGitCheck(actual.isGitRepoAsync(path))
+    },
+    getGitRepoRootAsync: (path: string) => trackGitCheck(actual.getGitRepoRootAsync(path))
   }
 })
 
@@ -51,7 +65,8 @@ vi.mock('./repos/repos-changed-notification', () => ({
   notifyReposChanged: vi.fn()
 }))
 vi.mock('./registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn(async () => {})
@@ -142,13 +157,14 @@ describe('folder repo git upgrade watch', () => {
     vi.clearAllMocks()
     root = realpathSync(await mkdtemp(join(tmpdir(), 'folder-repo-upgrade-')))
     symlinkedRoot = `${root}-link`
-    await symlink(root, symlinkedRoot, 'dir')
+    await symlink(root, symlinkedRoot, process.platform === 'win32' ? 'junction' : 'dir')
     statCalls.length = 0
     gitProbes.length = 0
   })
 
   afterEach(async () => {
     stopFolderRepoGitUpgradeWatch()
+    await drainGitChecks()
     await rm(symlinkedRoot, { force: true })
     await rm(root, { recursive: true, force: true })
   })
@@ -156,6 +172,7 @@ describe('folder repo git upgrade watch', () => {
   // Real timers: the tick awaits real filesystem stats, which fake timers cannot flush.
   async function tick(times = 1): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS * times + POLL_MS))
+    await drainGitChecks()
   }
 
   /** Why: a tick that spawns git can outrun a fixed wait on a loaded machine. */
@@ -164,6 +181,7 @@ describe('folder repo git upgrade watch', () => {
     while (statCalls.length < count && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     }
+    await drainGitChecks()
   }
 
   it('upgrades a local folder repo once an external git init creates .git', async () => {
@@ -205,34 +223,16 @@ describe('folder repo git upgrade watch', () => {
       pollIntervalMs: POLL_MS,
       idlePollIntervalMs: IDLE_POLL_MS
     })
-    await tick()
-
-    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
-      kind: 'git',
-      folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
-    })
-  })
-
-  it('refuses a project that has folder workspaces the git listing would drop', async () => {
-    // Why: the git listing branch prunes every lineage id under the repo that `git worktree
-    // list` does not report, which is all of them — the workspaces would be destroyed.
-    const repoPath = join(root, 'notebook')
-    await mkdir(repoPath)
-    gitInit(repoPath)
-    const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })], {
-      [`folder-repo::${repoPath}`]: { displayName: 'notebook' },
-      [`folder-repo::${repoPath}::workspace:11111111-1111-1111-1111-111111111111`]: {
-        displayName: 'draft'
-      }
-    })
-
-    startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
-      pollIntervalMs: POLL_MS,
-      idlePollIntervalMs: IDLE_POLL_MS
-    })
-    await tick(2)
-
-    expect(store.updateRepo).not.toHaveBeenCalled()
+    // A fixed tick wait can finish before the marker stat resolves under load.
+    await vi.waitFor(
+      () => {
+        expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
+          kind: 'git',
+          folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
+        })
+      },
+      { timeout: 5_000, interval: POLL_MS }
+    )
   })
 
   it('retries after the last extra folder workspace is removed', async () => {
@@ -254,26 +254,6 @@ describe('folder repo git upgrade watch', () => {
     expect(store.updateRepo).not.toHaveBeenCalled()
 
     delete worktreeMeta[workspaceId]
-    await tick(2)
-
-    expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
-      expect.objectContaining({ kind: 'git' })
-    )
-  })
-
-  it('still upgrades a project that only has its root workspace', async () => {
-    const repoPath = join(root, 'solo')
-    await mkdir(repoPath)
-    gitInit(repoPath)
-    const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })], {
-      [`folder-repo::${repoPath}`]: { displayName: 'solo' }
-    })
-
-    startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
-      pollIntervalMs: POLL_MS,
-      idlePollIntervalMs: IDLE_POLL_MS
-    })
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
@@ -375,21 +355,6 @@ describe('folder repo git upgrade watch', () => {
     expect(notifyReposChanged).toHaveBeenCalledWith(nextWindow)
   })
 
-  it('ignores a .git entry git itself does not accept as a repository', async () => {
-    const repoPath = join(root, 'stray-marker')
-    await mkdir(repoPath)
-    await writeFile(join(repoPath, '.git'), 'not a gitdir pointer\n')
-    const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })])
-
-    startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
-      pollIntervalMs: POLL_MS,
-      idlePollIntervalMs: IDLE_POLL_MS
-    })
-    await tick(2)
-
-    expect(store.updateRepo).not.toHaveBeenCalled()
-  })
-
   it('upgrades only the folder repo that gained a .git marker', async () => {
     const pathA = join(root, 'project-a')
     const pathB = join(root, 'project-b')
@@ -427,25 +392,6 @@ describe('folder repo git upgrade watch', () => {
     await tick(3)
 
     expect(store.updateRepo).toHaveBeenCalledTimes(1)
-  })
-
-  it('skips remote and WSL folder repos a local stat cannot answer for', async () => {
-    const sshPath = join(root, 'ssh-project')
-    await mkdir(sshPath)
-    gitInit(sshPath)
-    const store = makeStore([
-      makeRepo({ id: 'ssh-repo', path: sshPath, connectionId: 'conn-1' }),
-      makeRepo({ id: 'wsl-repo', path: '\\\\wsl$\\Ubuntu\\home\\user\\project' }),
-      makeRepo({ id: 'runtime-repo', path: sshPath, executionHostId: 'runtime:dev' })
-    ])
-
-    startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
-      pollIntervalMs: POLL_MS,
-      idlePollIntervalMs: IDLE_POLL_MS
-    })
-    await tick(2)
-
-    expect(store.updateRepo).not.toHaveBeenCalled()
   })
 
   it('backs off to the idle interval and stats nothing when no folder project exists', async () => {

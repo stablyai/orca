@@ -1,5 +1,9 @@
+import { existsSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const {
   gitExecFileAsyncMock,
@@ -7,26 +11,14 @@ const {
   translateWslOutputPathsMock,
   statMock,
   readFileMock,
-  resolveGitDirMock,
-  moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
-  resolveGitDirMock: vi.fn(),
-  moveWorktreeDirectoryToTrashMock: vi.fn(),
-  restoreWorktreeDirectoryFromTrashMock: vi.fn(),
-  scheduleWorktreeTrashDeletionMock: vi.fn()
-}))
-
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock,
-  restoreWorktreeDirectoryFromTrash: restoreWorktreeDirectoryFromTrashMock,
-  scheduleWorktreeTrashDeletion: scheduleWorktreeTrashDeletionMock
+  resolveGitDirMock: vi.fn()
 }))
 
 vi.mock('./runner', () => ({
@@ -53,7 +45,7 @@ import {
   resetWorktreeRemovalState
 } from './remove-worktree-test-harness'
 
-import { removeWorktree, WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from './worktree'
+import { removeWorktree } from './worktree'
 import {
   __getSparseCheckoutStateCacheSizeForTests,
   detectSparseCheckoutCached
@@ -62,12 +54,17 @@ import {
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
+// Why: removal argv carries core.longpaths on Windows, so pin a non-Windows default or the
+// exact-argv assertions below fail for a maintainer running vitest on Windows.
+let platformSpy: MockInstance<() => NodeJS.Platform>
+
 beforeEach(() => {
-  resetWorktreeRemovalState({
-    moveWorktreeDirectoryToTrashMock,
-    restoreWorktreeDirectoryFromTrashMock,
-    scheduleWorktreeTrashDeletionMock
-  })
+  resetWorktreeRemovalState()
+  platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+})
+
+afterEach(() => {
+  platformSpy.mockRestore()
 })
 
 describe('removeWorktree', () => {
@@ -223,8 +220,6 @@ branch refs/heads/main
     const calls = getGitCalls()
     expect(calls).toEqual([
       'git worktree list --porcelain -z',
-      // The cleanliness probe that decides whether the checkout may be renamed aside.
-      'git status --porcelain --untracked-files=all',
       'git worktree remove /repo-feature',
       'git branch -d -- feature/test',
       'git worktree prune',
@@ -232,7 +227,7 @@ branch refs/heads/main
     ])
   })
 
-  it('renames the checkout aside and deregisters the missing path', async () => {
+  it('lets Git delete the checkout inline with no deadline', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -251,94 +246,20 @@ branch refs/heads/main
 `
       }
     })
-    moveWorktreeDirectoryToTrashMock.mockResolvedValue('/trash/wt-1-abcdef01')
 
     await removeWorktree('/repo', '/repo-feature')
 
-    const calls = getGitCalls()
-    expect(moveWorktreeDirectoryToTrashMock).toHaveBeenCalledWith('/repo-feature')
-    expect(scheduleWorktreeTrashDeletionMock).toHaveBeenCalledWith('/trash/wt-1-abcdef01')
-    expect(calls).toContain('git worktree remove --force /repo-feature')
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['worktree', 'remove', '--force', '/repo-feature'],
-      { cwd: '/repo', timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS }
-    )
-    expect(calls).not.toContain('git worktree remove /repo-feature')
-    expect(calls).not.toContain('git worktree prune')
-    expect(calls).toContain('git branch -d -- feature/test')
-  })
-
-  it('prunes the registration when deregistering the moved checkout fails', async () => {
-    mockGitCommands({
-      'git worktree list --porcelain': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-
-worktree /repo-feature
-HEAD def456
-branch refs/heads/feature/test
-`
-      },
-      'git worktree list --porcelain#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
-      'git worktree remove --force /repo-feature': {
-        error: new Error('fatal: validation failed, cannot remove working directory')
-      }
-    })
-    moveWorktreeDirectoryToTrashMock.mockResolvedValue('/trash/wt-2-abcdef02')
-
-    await removeWorktree('/repo', '/repo-feature')
-
-    expect(getGitCalls()).toContain('git worktree prune')
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
+    // A large checkout takes Git 30 s or more to delete; any timeout here would cut that short.
+    // Exempt from general admission: deletes queue under their own limit instead.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'remove', '/repo-feature'], {
       cwd: '/repo',
-      timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
+      admissionExempt: true
     })
-    expect(
-      gitExecFileAsyncMock.mock.calls.filter(
-        ([args, options]) =>
-          args.join(' ') === 'worktree list --porcelain -z' &&
-          options.timeout === WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-      )
-    ).toHaveLength(2)
-    expect(scheduleWorktreeTrashDeletionMock).toHaveBeenCalledWith('/trash/wt-2-abcdef02')
-    expect(restoreWorktreeDirectoryFromTrashMock).not.toHaveBeenCalled()
+    expect(getGitCalls()).not.toContain('git worktree prune')
+    expect(getGitCalls()).toContain('git branch -d -- feature/test')
   })
 
-  it('restores the moved checkout and removes in place when the registration survives pruning', async () => {
-    mockGitCommands({
-      'git worktree list --porcelain': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-
-worktree /repo-feature
-HEAD def456
-branch refs/heads/feature/test
-`
-      },
-      'git worktree remove --force /repo-feature': {
-        error: new Error('fatal: validation failed, cannot remove working directory')
-      }
-    })
-    moveWorktreeDirectoryToTrashMock.mockResolvedValue('/trash/wt-3-abcdef03')
-
-    await removeWorktree('/repo', '/repo-feature')
-
-    expect(restoreWorktreeDirectoryFromTrashMock).toHaveBeenCalledWith(
-      '/trash/wt-3-abcdef03',
-      '/repo-feature'
-    )
-    expect(scheduleWorktreeTrashDeletionMock).not.toHaveBeenCalled()
-    expect(getGitCalls()).toContain('git worktree remove /repo-feature')
-  })
-
-  it('removes in place when the checkout cannot be renamed aside', async () => {
+  it('lets a quit stop only the checkout delete, not the branch cleanup that holds ref locks', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -357,16 +278,74 @@ branch refs/heads/main
 `
       }
     })
-    // Windows open handles and cross-volume renames both surface as an unavailable rename.
-    moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined)
+    const stop = new AbortController()
 
-    await removeWorktree('/repo', '/repo-feature')
+    await removeWorktree('/repo', '/repo-feature', false, {
+      checkoutDeleteSignal: stop.signal
+    })
 
-    expect(getGitCalls()).toContain('git worktree remove /repo-feature')
-    expect(scheduleWorktreeTrashDeletionMock).not.toHaveBeenCalled()
+    const optionsOf = (command: string): { signal?: AbortSignal } | undefined =>
+      gitExecFileAsyncMock.mock.calls.find((call) => call[0].join(' ') === command)?.[1]
+    expect(optionsOf('worktree remove /repo-feature')?.signal).toBe(stop.signal)
+    expect(optionsOf('branch -d -- feature/test')).toBeDefined()
+    expect(optionsOf('branch -d -- feature/test')?.signal).toBeUndefined()
   })
 
-  it('never renames a dirty checkout aside', async () => {
+  it('never lets Git run an inherited yes/no prompt program during the delete', async () => {
+    vi.stubEnv('GIT_ASK_YESNO', '/usr/local/bin/prompt')
+    try {
+      mockGitCommands({})
+
+      await removeWorktree('/repo', '/repo-feature', false, {
+        knownRemovedWorktree: { branch: '', head: '', locked: false }
+      })
+
+      const [, removeOptions] = gitExecFileAsyncMock.mock.calls[0]
+      expect(removeOptions.env).toBeDefined()
+      expect(removeOptions.env).not.toHaveProperty('GIT_ASK_YESNO')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('deletes what Git left of the checkout after a successful remove', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'orca-remove-residue-'))
+    const worktreePath = join(scratch, 'feature')
+    // Git for Windows leaves junctions and the directories holding them behind yet exits 0.
+    await mkdir(join(worktreePath, 'node_modules', 'left-behind'), { recursive: true })
+    try {
+      mockGitCommands({})
+
+      await removeWorktree('/repo', worktreePath, false, {
+        knownRemovedWorktree: { branch: '', head: '', locked: false }
+      })
+
+      expect(getGitCalls()).toEqual([`git worktree remove ${worktreePath}`])
+      expect(existsSync(worktreePath)).toBe(false)
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves a WSL checkout that Git reported removed to the distro', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'orca-remove-residue-wsl-'))
+    const worktreePath = join(scratch, 'feature')
+    await mkdir(worktreePath, { recursive: true })
+    try {
+      mockGitCommands({})
+
+      await removeWorktree('/repo', worktreePath, false, {
+        wslDistro: 'Ubuntu',
+        knownRemovedWorktree: { branch: '', head: '', locked: false }
+      })
+
+      expect(existsSync(worktreePath)).toBe(true)
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves a dirty checkout to Git to refuse', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -387,7 +366,7 @@ branch refs/heads/feature/test
     await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
       'contains modified or untracked files'
     )
-    expect(moveWorktreeDirectoryToTrashMock).not.toHaveBeenCalled()
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
   })
 
   it('deletes WSL-hosted checkouts in place inside the distro', async () => {
@@ -412,27 +391,20 @@ branch refs/heads/main
 
     await removeWorktree('/repo', '/repo-feature', false, { wslDistro: 'Ubuntu' })
 
-    expect(moveWorktreeDirectoryToTrashMock).not.toHaveBeenCalled()
     expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
     expect(getGitCalls()).toContain('git worktree remove /repo-feature')
   })
 
-  it('does not rename a WSL checkout configured for a native Windows repo', async () => {
-    const originalPlatform = process.platform
+  it('removes a WSL checkout configured for a native Windows repo with Git alone', async () => {
     const worktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\dev\\feature'
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      mockGitCommands({})
+    platformSpy.mockReturnValue('win32')
+    mockGitCommands({})
 
-      await removeWorktree('C:\\repo', worktreePath, false, {
-        knownRemovedWorktree: { branch: '', head: '', locked: false }
-      })
+    await removeWorktree('C:\\repo', worktreePath, false, {
+      knownRemovedWorktree: { branch: '', head: '', locked: false }
+    })
 
-      expect(moveWorktreeDirectoryToTrashMock).not.toHaveBeenCalled()
-      expect(getGitCalls()).toEqual([`git worktree remove ${worktreePath}`])
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-    }
+    expect(getGitCalls()).toEqual([`git -c core.longpaths=true worktree remove ${worktreePath}`])
   })
 
   it('passes one --force before the worktree path for dirty-file removal', async () => {
@@ -460,7 +432,7 @@ branch refs/heads/main
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
   })
 
-  it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
+  it('preserves Git refusal even when parent status cannot reveal unpublished submodule commits', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -485,25 +457,14 @@ branch refs/heads/main
       'git status --porcelain --untracked-files=all': { stdout: '' }
     })
 
-    await removeWorktree('/repo', '/repo-feature')
-
-    const calls = getGitCalls()
-    expectGitCallOrder(
-      calls,
-      'git worktree remove /repo-feature',
-      'git worktree remove --force /repo-feature'
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+      'git worktree remove failed'
     )
-    // The re-proof of cleanliness between the refusal and the forced retry.
-    expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeGreaterThan(
-      calls.indexOf('git worktree remove /repo-feature')
-    )
-    expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeLessThan(
-      calls.indexOf('git worktree remove --force /repo-feature')
-    )
-    expect(calls).toContain('git branch -d -- feature/test')
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
+    expect(getGitCalls()).not.toContain('git branch -d -- feature/test')
   })
 
-  it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
+  it('preserves Git refusal for a dirty submodule worktree', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -523,7 +484,7 @@ branch refs/heads/feature/test
     })
 
     await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
-      'Worktree has uncommitted or untracked changes.'
+      'git worktree remove failed'
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
   })
@@ -574,10 +535,8 @@ branch refs/heads/feature/test
       'git worktree remove failed'
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
-    // Only the pre-rename probe ran: an unrelated failure must not re-prove cleanliness.
-    expect(
-      getGitCalls().filter((call) => call === 'git status --porcelain --untracked-files=all')
-    ).toHaveLength(1)
+    // An unrelated failure must not re-prove cleanliness.
+    expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
   })
 
   it('rejects a locked worktree with stable app-owned copy before invoking remove', async () => {

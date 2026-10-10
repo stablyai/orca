@@ -1,25 +1,28 @@
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ChildProcessModule from 'node:child_process'
+import type * as RunProcessModule from '@orca/process-host'
 import type * as FsHandlerGitFallback from './fs-handler-git-fallback'
 import type * as FsHandlerUtils from './fs-handler-utils'
 
 const {
-  execFileMock,
+  runProcessMock,
   listFilesWithGitMock,
+  listFilesWithReaddirMock,
   listFilesWithRgMock,
   searchWithGitGrepMock,
   searchWithRgMock
 } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
+  runProcessMock: vi.fn<typeof RunProcessModule.runProcess>(),
   listFilesWithGitMock: vi.fn(),
+  listFilesWithReaddirMock: vi.fn(),
   listFilesWithRgMock: vi.fn(),
   searchWithGitGrepMock: vi.fn(),
   searchWithRgMock: vi.fn()
 }))
 
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal<typeof ChildProcessModule>()),
-  execFile: execFileMock
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcessModule>()),
+  runProcess: runProcessMock
 }))
 
 vi.mock('./fs-handler-utils', async (importOriginal) => ({
@@ -34,11 +37,16 @@ vi.mock('./fs-handler-git-fallback', async (importOriginal) => ({
   searchWithGitGrep: searchWithGitGrepMock
 }))
 
+vi.mock('./fs-handler-readdir-fallback', () => ({
+  listFilesWithReaddir: listFilesWithReaddirMock
+}))
+
 import { FileListingCancelledError } from '../shared/file-listing-cancellation'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { runListFilesScan } from './fs-list-files-fallback-chain'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 type FsHandlerInternals = {
   search(params: Record<string, unknown>): Promise<unknown>
@@ -81,20 +89,86 @@ describe('relay direct ripgrep admission', () => {
     expect(searchWithGitGrepMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back only for a tagged listing launch failure', async () => {
+  it.each(['true\n', 'false\n'])(
+    'uses the Git listing after a successful probe (%s)',
+    async (stdout) => {
+      const controller = new AbortController()
+      listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
+      runProcessMock.mockResolvedValueOnce({
+        code: 0,
+        signal: null,
+        stdout,
+        stderr: '',
+        timedOut: false
+      })
+      listFilesWithGitMock.mockResolvedValueOnce(['src/index.ts'])
+
+      await expect(runListFilesScan('/repo', [], controller.signal)).resolves.toEqual([
+        'src/index.ts'
+      ])
+      expect(listFilesWithRgMock).toHaveBeenCalledTimes(1)
+      expect(runProcessMock).toHaveBeenCalledWith({
+        program: 'git',
+        args: ['rev-parse', '--is-inside-work-tree'],
+        cwd: '/repo',
+        env: buildRelayCommandEnv(),
+        timeoutMs: 5_000,
+        signal: controller.signal
+      })
+      expect(listFilesWithGitMock).toHaveBeenCalledTimes(1)
+      expect(listFilesWithReaddirMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    { code: 128, signal: null, timedOut: false },
+    { code: null, signal: 'SIGTERM', timedOut: false },
+    { code: 0, signal: null, timedOut: true }
+  ] as const)('uses the directory walk when the Git probe fails (%j)', async (result) => {
     const controller = new AbortController()
     listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
-    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-      callback(null)
-      return undefined
-    })
-    listFilesWithGitMock.mockResolvedValueOnce(['src/index.ts'])
+    runProcessMock.mockResolvedValueOnce({ ...result, stdout: '', stderr: '' })
+    listFilesWithReaddirMock.mockResolvedValueOnce(['src/index.ts'])
 
-    await expect(runListFilesScan('/repo', [], controller.signal)).resolves.toEqual([
+    await expect(runListFilesScan('/folder', [], controller.signal)).resolves.toEqual([
       'src/index.ts'
     ])
-    expect(listFilesWithRgMock).toHaveBeenCalledTimes(1)
-    expect(listFilesWithGitMock).toHaveBeenCalledTimes(1)
+    expect(listFilesWithGitMock).not.toHaveBeenCalled()
+    expect(listFilesWithReaddirMock).toHaveBeenCalledWith('/folder', [], {
+      signal: controller.signal,
+      maxResults: undefined
+    })
+  })
+
+  it('uses the directory walk when Git cannot start', async () => {
+    const controller = new AbortController()
+    listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
+    runProcessMock.mockRejectedValueOnce(new Error('spawn git ENOENT'))
+    listFilesWithReaddirMock.mockResolvedValueOnce(['src/index.ts'])
+
+    await expect(runListFilesScan('/folder', [], controller.signal)).resolves.toEqual([
+      'src/index.ts'
+    ])
+    expect(listFilesWithGitMock).not.toHaveBeenCalled()
+    expect(listFilesWithReaddirMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([0, 128])('lets cancellation during the Git probe win its exit (%s)', async (code) => {
+    const controller = new AbortController()
+    const cancellation = new FileListingCancelledError('superseded')
+    const probe = Promise.withResolvers<ProcessResult>()
+    listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
+    runProcessMock.mockReturnValueOnce(probe.promise)
+
+    const scan = runListFilesScan('/repo', [], controller.signal)
+    await vi.waitFor(() => expect(runProcessMock).toHaveBeenCalledTimes(1))
+    expect(runProcessMock.mock.calls[0][0].signal).toBe(controller.signal)
+    controller.abort(cancellation)
+    probe.resolve({ code, signal: null, stdout: '', stderr: '', timedOut: false })
+
+    await expect(scan).rejects.toBe(cancellation)
+    expect(listFilesWithGitMock).not.toHaveBeenCalled()
+    expect(listFilesWithReaddirMock).not.toHaveBeenCalled()
   })
 
   it('lets cancellation win an unavailable-listing race before Git starts', async () => {
@@ -106,8 +180,9 @@ describe('relay direct ripgrep admission', () => {
     })
 
     await expect(runListFilesScan('/repo', [], controller.signal)).rejects.toBe(cancellation)
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
     expect(listFilesWithGitMock).not.toHaveBeenCalled()
+    expect(listFilesWithReaddirMock).not.toHaveBeenCalled()
   })
 
   it('requires ripgrep for bounded query ranking instead of retaining a full Git inventory', async () => {
@@ -117,7 +192,7 @@ describe('relay direct ripgrep admission', () => {
     await expect(runListFilesScan('/repo', [], controller.signal, 33, 'target')).rejects.toThrow(
       'Quick Open search requires ripgrep'
     )
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
     expect(listFilesWithGitMock).not.toHaveBeenCalled()
   })
 })

@@ -12,7 +12,7 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
 
-const EMPTY_STATUS_BY_IDENTITY = new Map<string, GitStatusResult['entries']>()
+const EMPTY_STATUS_BY_IDENTITY = new Map<string, GitStatusResult['entries'] | null>()
 
 export function useDeleteWorktreeStatusHydration({
   isOpen,
@@ -24,14 +24,14 @@ export function useDeleteWorktreeStatusHydration({
   deleteTargets: readonly Worktree[]
   visibleTargets: readonly Worktree[]
   repoMap: ReadonlyMap<string, Repo>
-}): ReadonlyMap<string, GitStatusResult['entries']> {
+}): ReadonlyMap<string, GitStatusResult['entries'] | null> {
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
   const generation = isOpen ? deleteTargets.map(getWorktreeHostIdentity).join('\n') : ''
   const generationRef = useRef(generation)
-  const [statusByIdentity, setStatusByIdentity] = useState<Map<string, GitStatusResult['entries']>>(
-    () => new Map()
-  )
+  const [statusByIdentity, setStatusByIdentity] = useState<
+    Map<string, GitStatusResult['entries'] | null>
+  >(() => new Map())
   const currentStatusByIdentity =
     generationRef.current === generation ? statusByIdentity : EMPTY_STATUS_BY_IDENTITY
 
@@ -89,7 +89,9 @@ export function useDeleteWorktreeStatusHydration({
           }
         })
         .catch(() => {
-          // Best effort only; deletion performs the authoritative backend check.
+          if (!controller.signal.aborted && generationRef.current === generation) {
+            setStatusByIdentity((current) => new Map(current).set(identity, null))
+          }
         })
     }
     return () => {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   getQuickCommandAgentLabel,
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
-    fontSize: 14,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     borderWidth: 1,
     borderColor: colors.borderSubtle
   },

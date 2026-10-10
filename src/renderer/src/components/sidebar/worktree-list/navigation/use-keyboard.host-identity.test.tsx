@@ -101,7 +101,10 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('down')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {})
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false
+    })
   })
 
   it('steps to the previous row when the active host resolved to local', () => {
@@ -109,7 +112,10 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('up')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {})
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false
+    })
   })
 
   it('still steps normally when the active host is unqualified', () => {
@@ -117,6 +123,9 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('down')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {})
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false
+    })
   })
 })

@@ -12,6 +12,7 @@ describe('getServeOptions', () => {
       pairingAddress: null,
       noPairing: true,
       mobilePairing: false,
+      grantDesktopControl: false,
       recipeJson: false,
       projectRoot: null
     })
@@ -142,6 +143,7 @@ describe('getServeOptions', () => {
       pairingAddress: null,
       noPairing: false,
       mobilePairing: false,
+      grantDesktopControl: false,
       recipeJson: false,
       projectRoot: null
     })

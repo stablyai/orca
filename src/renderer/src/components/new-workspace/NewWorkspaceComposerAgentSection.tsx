@@ -17,6 +17,7 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'advancedOpen'
   | 'onToggleAdvanced'
 > & {
+  advancedLocked?: boolean
   visibleQuickAgents: React.ComponentProps<typeof AgentCombobox>['agents']
   defaultTuiAgent: React.ComponentProps<typeof AgentCombobox>['defaultAgent']
   handleSetDefaultAgent: (
@@ -31,6 +32,7 @@ export function NewWorkspaceComposerAgentSection({
   createDisabled,
   onCreate,
   advancedOpen,
+  advancedLocked = false,
   onToggleAdvanced,
   visibleQuickAgents,
   defaultTuiAgent,
@@ -69,6 +71,7 @@ export function NewWorkspaceComposerAgentSection({
           agents={visibleQuickAgents}
           value={quickAgent}
           onValueChange={onQuickAgentChange}
+          allowBlankTerminal
           onOpenManageAgents={onOpenAgentSettings}
           defaultAgent={defaultTuiAgent}
           onSetDefault={handleSetDefaultAgent}
@@ -84,6 +87,8 @@ export function NewWorkspaceComposerAgentSection({
           variant="ghost"
           size="sm"
           onClick={onToggleAdvanced}
+          disabled={advancedLocked}
+          aria-expanded={advancedOpen}
           className="-ml-2 text-xs focus-visible:ring-inset"
         >
           {translate('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}

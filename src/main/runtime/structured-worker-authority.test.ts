@@ -17,9 +17,14 @@ const {
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
-function installRecordProvider(provider: 'claude' | 'codex' | null): void {
+function installRecordProvider(provider: string | null): void {
   hostRef.current = {
-    deps: { store: { getRecord: () => (provider ? { provider } : null) } }
+    deps: {
+      store: {
+        getRecord: () =>
+          provider ? { provider, location: { executionHostId: 'local', wslDistro: null } } : null
+      }
+    }
   }
 }
 
@@ -65,6 +70,14 @@ describe('structuredWorkerAgent', () => {
     // Defaulting here is what stamped a restarted Codex worker's frozen archive as Claude.
     expect(structuredWorkerAgent(identity)).toBe('codex')
   })
+
+  it.each(['opencode', 'grok', 'omp', 'pi'])(
+    'reads a rehydrated %s worker as itself, not as Claude',
+    (provider) => {
+      installRecordProvider(provider)
+      expect(structuredWorkerAgent(rehydratedIdentity())).toBe(provider)
+    }
+  )
 
   it('keeps the provider this process registered, without consulting the record', () => {
     installRecordProvider('claude')

@@ -2,6 +2,7 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
+  expectTerminalAccessibilityText,
   focusActiveTerminalInput,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -17,8 +18,20 @@ import {
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
-import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import {
+  connectDockerSshRelayTarget,
+  disconnectDockerSshRelayTarget,
+  reconnectDisconnectedDockerSshRelayTarget
+} from './helpers/docker-ssh-relay-connection'
 import { createRestartSession } from './helpers/orca-restart'
+import { RuntimeClient } from '../../src/cli/runtime-client'
+import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
+import Database from '../../src/main/sqlite/sync-database'
+import type {
+  RuntimeTerminalListResult,
+  RuntimeTerminalSummary
+} from '../../src/shared/runtime-types'
+import path from 'node:path'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const TAB_COUNT = 6
@@ -30,6 +43,64 @@ function readRemoteProof(target: DockerSshRelayTarget, path: string): string | n
     return execDockerSshRelayTargetCommand(target, `cat ${path}`)
   } catch {
     return null
+  }
+}
+
+function seedSettledAssignment(userDataDir: string, terminal: RuntimeTerminalSummary): string {
+  if (
+    !terminal.ptyId ||
+    !terminal.incarnationId ||
+    !terminal.tabId ||
+    !terminal.leafId ||
+    !terminal.worktreeId
+  ) {
+    throw new Error('Remote terminal has no complete process identity')
+  }
+  const db = new OrchestrationDb(path.join(userDataDir, 'orchestration.db'))
+  try {
+    const run = db.createRun({
+      objective: 'historical SSH worker',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({
+      runId: run.id,
+      spec: 'completed assignment with a live SSH terminal'
+    })
+    const { dispatch } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: dispatch.id,
+      handle: terminal.handle,
+      paneKey: `${terminal.tabId}:${terminal.leafId}`,
+      processIncarnation: `${terminal.ptyId}:${terminal.incarnationId}`,
+      worktreeId: terminal.worktreeId,
+      setupState: 'not_applicable',
+      effects: [],
+      terminalOwnership: 'created'
+    })
+    db.markWorkerDispatchReady(dispatch.id)
+    db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(dispatch.id)
+    return dispatch.id
+  } finally {
+    db.close()
+  }
+}
+
+function readSettledAssignment(userDataDir: string, dispatchId: string): unknown {
+  const db = new Database(path.join(userDataDir, 'orchestration.db'), { readonly: true })
+  try {
+    return db
+      .prepare(`SELECT wd.state, wd.stage, wr.release_state, wr.ownership_state
+      FROM worker_dispatches wd JOIN worker_terminal_resources wr ON wr.owner_dispatch_id = wd.dispatch_id
+      WHERE wd.dispatch_id = ?`)
+      .get(dispatchId)
+  } finally {
+    db.close()
   }
 }
 
@@ -85,12 +156,22 @@ test.describe('SSH cold activation restore', () => {
           () =>
             orcaPage.evaluate(
               async ({ targetId, worktreeId, expectedTabIds }) => {
-                const session = await window.api.session.get()
+                // Why both partitions: an SSH worktree's session lives in `ssh:<targetId>`, and
+                // only globals like `activeConnectionIdsAtShutdown` stay in `local`. Reading
+                // `session.get()` alone asserts the partition layout rather than the invariant,
+                // which is that the state is persisted where the boot read will find it.
+                const [local, host] = await Promise.all([
+                  window.api.session.get(),
+                  window.api.session.get(`ssh:${targetId}`)
+                ])
                 const persistedTabIds = new Set(
-                  (session.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+                  [
+                    ...(local.tabsByWorktree[worktreeId] ?? []),
+                    ...(host.tabsByWorktree[worktreeId] ?? [])
+                  ].map((tab) => tab.id)
                 )
                 return (
-                  session.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
                   expectedTabIds.every((tabId) => persistedTabIds.has(tabId))
                 )
               },
@@ -183,33 +264,19 @@ test.describe('SSH cold activation restore', () => {
           }
         )
         .toBe(firstTabId)
-      await orcaPage.evaluate((tabId) => {
-        const manager = window.__paneManagers?.get(tabId)
-        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-        if (!pane) {
-          throw new Error('Restored SSH pane unavailable')
-        }
-        pane.terminal.options.screenReaderMode = true
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      }, firstTabId)
-
       const marker = `SSH_RESTORE_OK_${Date.now()}`
       const proofFile = '/tmp/orca-ssh-restore-proof'
       await focusActiveTerminalInput(orcaPage)
       await orcaPage.keyboard.type(`printf '${marker}' > ${proofFile} && printf '${marker}\\n'`)
       await orcaPage.keyboard.press('Enter')
-      await expect(
-        orcaPage.locator(
-          `[data-terminal-tab-id=${JSON.stringify(firstTabId)}] .xterm-accessibility-tree`
-        )
-      ).toContainText(marker, { timeout: 30_000 })
+      await expectTerminalAccessibilityText(orcaPage, firstTabId, marker)
       expect(execDockerSshRelayTargetCommand(target, `cat ${proofFile}`)).toBe(marker)
     } finally {
       cleanupDockerSshRelayTarget(target)
     }
   })
 
-  test('reclaims the authenticated PTY owner immediately after a full app restart', async (// oxlint-disable-next-line no-empty-pattern -- This restart test owns both Electron launches.
+  test('repairs a settled worker while retaining its live SSH process through restart and reconnect', async (// oxlint-disable-next-line no-empty-pattern -- This restart test owns both Electron launches.
   {}, testInfo) => {
     test.setTimeout(300_000)
     const restart = createRestartSession(testInfo)
@@ -221,12 +288,21 @@ test.describe('SSH cold activation restore', () => {
       const firstLaunch = await restart.launch()
       firstApp = firstLaunch.app
       await waitForSessionReady(firstLaunch.page)
-      const remote = await connectDockerSshRelayTarget(firstLaunch.page, target)
+      const remote = await connectDockerSshRelayTarget(firstLaunch.page, target, {
+        relayGracePeriodSeconds: 0
+      })
       await expect
         .poll(() => waitForActiveWorktree(firstLaunch.page), { timeout: 30_000 })
         .toBe(remote.worktreeId)
       await waitForActiveTerminalManager(firstLaunch.page, 60_000)
       const firstPtyId = await waitForActivePanePtyId(firstLaunch.page, 60_000)
+      const client = new RuntimeClient(restart.userDataDir, 30_000, null, null)
+      const terminal = (
+        await client.call<RuntimeTerminalListResult>('terminal.list')
+      ).result.terminals.find((entry) => entry.ptyId === firstPtyId)
+      if (!terminal) {
+        throw new Error('Remote terminal was not registered with the runtime')
+      }
       const token = `SSH_PROCESS_RESTART_${Date.now()}`
       const beforeProofPath = `/tmp/orca-ssh-restart-before-${Date.now()}`
       const afterProofPath = `/tmp/orca-ssh-restart-after-${Date.now()}`
@@ -251,10 +327,18 @@ test.describe('SSH cold activation restore', () => {
           () =>
             firstLaunch.page.evaluate(
               async ({ targetId, worktreeId, tabId }) => {
-                const persisted = await window.api.session.get()
+                // See the note above: the worktree's rows are in `ssh:<targetId>`, the globals in
+                // `local`.
+                const [local, host] = await Promise.all([
+                  window.api.session.get(),
+                  window.api.session.get(`ssh:${targetId}`)
+                ])
                 return (
-                  persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
-                  persisted.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true
+                  local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+                  [
+                    ...(local.tabsByWorktree[worktreeId] ?? []),
+                    ...(host.tabsByWorktree[worktreeId] ?? [])
+                  ].some((tab) => tab.id === tabId)
                 )
               },
               { targetId: remote.targetId, worktreeId: remote.worktreeId, tabId: restoredTabId }
@@ -265,36 +349,44 @@ test.describe('SSH cold activation restore', () => {
 
       await restart.close(firstApp)
       firstApp = null
+      const dispatchId = seedSettledAssignment(restart.userDataDir, terminal)
+      expect(readSettledAssignment(restart.userDataDir, dispatchId)).toMatchObject({
+        state: 'ready'
+      })
 
       const secondLaunch = await restart.launch()
       secondApp = secondLaunch.app
       await waitForSessionReady(secondLaunch.page, 60_000)
+      expect(readSettledAssignment(restart.userDataDir, dispatchId)).toEqual({
+        state: 'abandoned',
+        stage: 'assignment_settled',
+        release_state: 'not_requested',
+        ownership_state: 'owned'
+      })
       await expect
         .poll(() => waitForActiveWorktree(secondLaunch.page), { timeout: 60_000 })
         .toBe(remote.worktreeId)
       await waitForActiveTerminalManager(secondLaunch.page, 60_000)
       expect(await waitForActivePanePtyId(secondLaunch.page, 60_000)).toBe(firstPtyId)
-      await secondLaunch.page.evaluate((tabId) => {
-        const manager = window.__paneManagers?.get(tabId)
-        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-        if (!pane) {
-          throw new Error('Restored SSH pane unavailable')
-        }
-        pane.terminal.options.screenReaderMode = true
-        pane.terminal.refresh(0, pane.terminal.rows - 1)
-      }, restoredTabId)
-
       const restoredMarker = `SSH_OWNER_RESTORED_${Date.now()}`
       await focusActiveTerminalInput(secondLaunch.page)
       await secondLaunch.page.keyboard.type(
-        `printf '%s|%s|%s|%s\\n' "$$" "$ORCA_BG_PID" "$ORCA_RESTART_TOKEN" "$PWD" > ${afterProofPath}; printf '${restoredMarker}\\n'`
+        `kill -0 "$ORCA_BG_PID" && printf '%s|%s|%s|%s\\n' "$$" "$ORCA_BG_PID" "$ORCA_RESTART_TOKEN" "$PWD" > ${afterProofPath} && printf '${restoredMarker}\\n'`
       )
       await secondLaunch.page.keyboard.press('Enter')
-      await expect(
-        secondLaunch.page.locator(
-          `[data-terminal-tab-id=${JSON.stringify(restoredTabId)}] .xterm-accessibility-tree`
-        )
-      ).toContainText(restoredMarker, { timeout: 30_000 })
+      await expectTerminalAccessibilityText(secondLaunch.page, restoredTabId, restoredMarker)
+      await expect.poll(() => readRemoteProof(target!, afterProofPath)).toBe(beforeProof)
+      await disconnectDockerSshRelayTarget(secondLaunch.page, remote.targetId)
+      await reconnectDisconnectedDockerSshRelayTarget(secondLaunch.page, remote.targetId)
+      await waitForActiveTerminalManager(secondLaunch.page, 60_000)
+      expect(await waitForActivePanePtyId(secondLaunch.page, 60_000)).toBe(firstPtyId)
+      const reconnectMarker = `SSH_OWNER_RECONNECTED_${Date.now()}`
+      await focusActiveTerminalInput(secondLaunch.page)
+      await secondLaunch.page.keyboard.type(
+        `kill -0 "$ORCA_BG_PID" && printf '%s|%s|%s|%s\\n' "$$" "$ORCA_BG_PID" "$ORCA_RESTART_TOKEN" "$PWD" > ${afterProofPath} && printf '${reconnectMarker}\\n'`
+      )
+      await secondLaunch.page.keyboard.press('Enter')
+      await expectTerminalAccessibilityText(secondLaunch.page, restoredTabId, reconnectMarker)
       await expect.poll(() => readRemoteProof(target!, afterProofPath)).toBe(beforeProof)
     } finally {
       if (secondApp) {

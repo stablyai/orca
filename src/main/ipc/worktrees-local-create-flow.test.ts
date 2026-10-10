@@ -1,3 +1,4 @@
+import { registerLocalBaseDriftWarningTest } from './worktrees-local-base-drift-warning.spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -20,13 +21,7 @@ import {
   computeWorktreePathMock,
   gitExecFileAsyncMock
 } from './worktrees-test-module-mocks'
-import {
-  handlers,
-  harnessRepo,
-  mainWindow,
-  setupWorktreeHandlers,
-  store
-} from './worktrees-test-harness'
+import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
 vi.mock('electron', async () =>
@@ -168,54 +163,7 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('reports stale local base drift through the desktop create path', async () => {
-    store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: 'develop' })
-    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: '/workspace/local-stale-base',
-        head: 'created-sha',
-        branch: 'local-stale-base',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    computeWorktreePathMock.mockReturnValue('/workspace/local-stale-base')
-    gitExecFileAsyncMock.mockImplementation(async (args) => {
-      if (args[0] === 'rev-list') {
-        return { stdout: '0\t692\n', stderr: '' }
-      }
-      if (args.includes('refs/heads/develop^{commit}')) {
-        return { stdout: 'develop-sha\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    const result = await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'local-stale-base'
-    })
-
-    expect(addWorktreeMock).toHaveBeenCalledWith(
-      '/workspace/repo',
-      '/workspace/local-stale-base',
-      'local-stale-base',
-      'develop',
-      false,
-      false,
-      {}
-    )
-    expect(result).toMatchObject({
-      localBaseRefDriftWarning: {
-        baseRef: 'develop',
-        defaultBaseRef: 'origin/main',
-        ahead: 0,
-        behind: 692,
-        relation: 'behind'
-      },
-      warning: expect.stringContaining('develop is 692 commit(s) behind origin/main')
-    })
-  })
+  registerLocalBaseDriftWarningTest(() => runtimeStub)
 
   it('prefetches the local default create base through the runtime refresh cache', async () => {
     const repo = {
@@ -540,7 +488,7 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledTimes(listWorktreesCallsAfterCreate)
   })
 
-  it('completes a create the listing failed and keeps sibling worktrees authorized', async () => {
+  it('verifies a create without re-listing and keeps sibling worktrees authorized', async () => {
     const sibling = {
       path: '/workspace/existing-sibling',
       head: 'sib123',
@@ -559,8 +507,9 @@ describe('registerWorktreeHandlers', () => {
       sibling
     ])
     await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'existing-sibling' })
+    const listingCalls = listWorktreesMock.mock.calls.length
 
-    // The create Git could no longer list, recovered by reading the worktree directly.
+    // Only the new checkout needs verification, even when the full listing is unavailable.
     listWorktreesMock.mockRejectedValue(new Error('git worktree list timed out.'))
     describeCreatedWorktreeMock.mockResolvedValue({
       path: '/workspace/improve-dashboard',
@@ -581,6 +530,7 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
     ).resolves.toBe(resolve('/workspace/improve-dashboard'))
+    expect(listWorktreesMock).toHaveBeenCalledTimes(listingCalls)
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
@@ -741,8 +691,9 @@ describe('registerWorktreeHandlers', () => {
           launch_source: 'new_workspace_composer',
           request_kind: 'new'
         },
-        activate: true
-      }
+        surfaceOwner: false
+      },
+      expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
     expect(runtimeStub.createTerminal).toHaveBeenNthCalledWith(
       2,
@@ -754,14 +705,19 @@ describe('registerWorktreeHandlers', () => {
           ORCA_ROOT_PATH: '/workspace/repo',
           ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
-        activate: false
-      }
+        activate: false,
+        surfaceOwner: false
+      },
+      expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
     const startupCreateCall = runtimeStub.createTerminal.mock.calls[0]
     const setupCreateCall = runtimeStub.createTerminal.mock.calls[1]
     if (!startupCreateCall || !setupCreateCall) {
       throw new Error('expected startup and setup terminal calls')
     }
+    // The submitting renderer decides whether to open the new workspace, so the host must not
+    // activate it for the startup terminal (#9944).
+    expect(startupCreateCall[1]).not.toHaveProperty('activate')
     const startupCommand = (startupCreateCall[1] as { command: string }).command
     const setupCommand = (setupCreateCall[1] as { command: string }).command
     expect(startupCommand).toBe('claude --prefill test')
@@ -835,6 +791,51 @@ describe('registerWorktreeHandlers', () => {
       })
     )
     expect(result.setup?.command).toContain('printf')
+  })
+
+  it('splits split-mode setup into the startup terminal without surfacing the workspace', async () => {
+    addWorktreeMock.mockResolvedValue({})
+    listWorktreesMock.mockResolvedValueOnce([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'def',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace',
+      setupScriptLaunchMode: 'split-vertical'
+    })
+    loadHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' }
+    })
+
+    expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(1)
+    // A user who moved on must not be scrolled to the new workspace by its setup pane (#9944).
+    expect(runtimeStub.splitTerminal).toHaveBeenCalledWith(
+      'term-startup',
+      {
+        direction: 'vertical',
+        command: expect.stringContaining('setup-runner.sh'),
+        env: expect.any(Object),
+        activate: false,
+        surfaceOwner: false
+      },
+      expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
+    )
   })
 
   it('rejects ask-policy creates before mutating git state when setup decision is missing', async () => {

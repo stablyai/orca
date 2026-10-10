@@ -10,6 +10,7 @@
 // WSL's Windows→WSL forwarder grab the freed Windows-side port and blackhole
 // stale Windows-side hook posts — so unlike the SSH relay there is no grace
 // period and no daemon socket.
+import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
 import { homedir } from 'node:os'
 
 import { RELAY_SENTINEL } from './protocol'
@@ -70,6 +71,9 @@ async function main(): Promise<void> {
     preferredPort: windowsPort,
     forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
+  dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
+    applied: hookServer.inferInterrupt(params)
+  }))
   new PreflightHandler(dispatcher)
 
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({

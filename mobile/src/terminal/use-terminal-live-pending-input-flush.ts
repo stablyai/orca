@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
@@ -79,7 +80,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const clearPendingLiveInputCommit = useCallback(() => {
     resetMirrorState()
     setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
+    writeTerminalLiveInputText(liveInputRef, '')
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {

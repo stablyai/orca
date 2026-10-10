@@ -4,7 +4,10 @@ import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
+import {
+  insertNativeChatPastedText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 
 afterEach(cleanup)
@@ -45,6 +48,25 @@ describe('native chat skill editor', () => {
     })
     expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
     expect(input.value).toBe('Please $review $review typed manually')
+  })
+
+  it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
+    const { input, container, onChange } = setup('See  please')
+    act(() => input.setSelectionRange(4, 4))
+    await act(async () =>
+      input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
+    )
+    const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
+    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
+    const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
+    expect(input.value).toBe(`See ${references} please`)
+    expect(input.selectionStart).toBe(4 + references.length)
+    expect(onChange).toHaveBeenCalled()
+    act(() => {
+      input.value = input.value.replace('letter.pdf', 'letter.pd')
+    })
+    expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
   })
 
   it('keeps typed and restored invocations plain', () => {
@@ -142,4 +164,29 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe('$review\nhello')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
+})
+
+it('replaces the selection with literal pasted text as one undoable edit', async () => {
+  const { input, editor } = setup('hello world')
+  act(() => input.setSelectionRange(6, 11))
+  await act(async () => input.insertText?.('안녕\n$literal'))
+  expect(input.value).toBe('hello 안녕\n$literal')
+  await act(async () => {
+    editor.commands.undo()
+  })
+  expect(input.value).toBe('hello world')
+})
+
+it('moves focus into the composer when a paste is routed from elsewhere', async () => {
+  const { input, editor } = setup('hi')
+  act(() => input.setSelectionRange(2, 2))
+  const hiddenTerminal = document.createElement('textarea')
+  document.body.append(hiddenTerminal)
+  hiddenTerminal.focus()
+  await act(async () => {
+    insertNativeChatPastedText(input, ' there')
+  })
+  expect(input.value).toBe('hi there')
+  expect(editor.view.dom.contains(document.activeElement)).toBe(true)
+  hiddenTerminal.remove()
 })

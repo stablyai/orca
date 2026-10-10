@@ -5,7 +5,6 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   isImeCompositionKeyDown,
   isImeOwnedKeyboardEvent,
-  resolveImeModifierGesture,
   useImeEnterGestureOwnership
 } from './ime-composition-keyboard-event'
 
@@ -59,38 +58,6 @@ describe('isImeCompositionKeyDown', () => {
     expect(isImeOwnedKeyboardEvent({ ...chord, isComposing: true })).toBe(true)
     expect(isImeOwnedKeyboardEvent({ ...chord, isComposing: false })).toBe(false)
   })
-
-  it('keeps ownership through the recorded marked modifiers and unmarked dispatch key', () => {
-    let gesture = resolveImeModifierGesture(false, {
-      ctrlKey: true,
-      isComposing: true
-    })
-    expect(gesture).toEqual({ active: true, carried: false, owned: true })
-
-    gesture = resolveImeModifierGesture(gesture.active, {
-      ctrlKey: true,
-      shiftKey: true,
-      isComposing: true
-    })
-    gesture = resolveImeModifierGesture(gesture.active, {
-      ctrlKey: true,
-      shiftKey: true,
-      isComposing: false
-    })
-    expect(gesture).toEqual({ active: true, carried: true, owned: true })
-
-    gesture = resolveImeModifierGesture(gesture.active, {
-      isComposing: false
-    })
-    expect(gesture).toEqual({ active: false, carried: true, owned: true })
-    expect(
-      resolveImeModifierGesture(false, {
-        ctrlKey: true,
-        shiftKey: true,
-        isComposing: false
-      })
-    ).toEqual({ active: false, carried: false, owned: false })
-  })
 })
 
 describe('useImeEnterGestureOwnership', () => {
@@ -138,27 +105,57 @@ describe('useImeEnterGestureOwnership', () => {
 
   // Regression: IMEs that report Process/229 for EVERY key (Pinyin) armed the carry on
   // each letter. A non-Enter keyup must disarm it, or a later deliberate Enter is eaten.
-  it('expires the carry a frame after a non-Enter keyup so a later deliberate Enter submits', () => {
+  it.each([
+    { key: '1', keyCode: 49 },
+    { key: 'Process', keyCode: 229 }
+  ])(
+    'expires the carry after candidate selection keyup %j so deliberate Enter submits',
+    (release) => {
+      const { result } = renderHook(() => useImeEnterGestureOwnership())
+      result.current.setComposing(true)
+
+      // Pinyin candidate selection: the last composing key is a digit reported as Process/229.
+      expect(
+        result.current.ownsKeyDown(
+          gestureEvent({ key: 'Process', keyCode: 229, isComposing: true })
+        )
+      ).toBe(true)
+      result.current.setComposing(false)
+      let frame: FrameRequestCallback | undefined
+      const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        frame = cb
+        return 1
+      })
+      result.current.onKeyUp(gestureEvent(release))
+      frame?.(0)
+      raf.mockRestore()
+
+      const deliberate = gestureEvent({ key: 'Enter', keyCode: 13 })
+      expect(result.current.ownsKeyDown(deliberate)).toBe(false)
+      expect(deliberate.prevented).toBe(false)
+    }
+  )
+
+  it('keeps a newer gesture owned when an older keyup expires', () => {
     const { result } = renderHook(() => useImeEnterGestureOwnership())
-    result.current.setComposing(true)
-
-    // Pinyin candidate selection: the last composing key is a digit reported as Process/229.
-    expect(
-      result.current.ownsKeyDown(gestureEvent({ key: 'Process', keyCode: 229, isComposing: true }))
-    ).toBe(true)
-    result.current.setComposing(false)
-    let frame: FrameRequestCallback | undefined
-    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-      frame = cb
-      return 1
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback)
+      return frames.length
     })
-    result.current.onKeyUp(gestureEvent({ key: '1', keyCode: 49 }))
-    frame?.(0)
-    raf.mockRestore()
+    try {
+      const marked = { key: 'Process', keyCode: 229 }
+      result.current.ownsKeyDown(gestureEvent(marked))
+      result.current.onKeyUp(gestureEvent(marked))
+      result.current.ownsKeyDown(gestureEvent(marked))
+      frames[0]?.(0)
 
-    const deliberate = gestureEvent({ key: 'Enter', keyCode: 13 })
-    expect(result.current.ownsKeyDown(deliberate)).toBe(false)
-    expect(deliberate.prevented).toBe(false)
+      const redispatch = gestureEvent({ key: 'Enter', keyCode: 13 })
+      expect(result.current.ownsKeyDown(redispatch)).toBe(true)
+      expect(redispatch.prevented).toBe(true)
+    } finally {
+      raf.mockRestore()
+    }
   })
 
   // Regression: holding Cmd/Ctrl through a composition confirm dropped the chord submit —

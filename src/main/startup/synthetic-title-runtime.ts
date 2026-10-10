@@ -1,11 +1,7 @@
 import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty'
 import { agentHookServer } from '../agent-hooks/server'
 import type { AgentStatusState } from '../../shared/agent-status-types'
-import {
-  getSyntheticAgentTitleProfile,
-  shouldDriveSyntheticAgentTitleFromHook,
-  type SyntheticAgentTitleProfile
-} from '../../shared/synthetic-agent-title'
+import type { SyntheticAgentTitleProfile } from '../../shared/synthetic-agent-title'
 import {
   advanceSyntheticTitleSpinnerEntries,
   getSyntheticTitleSpinnerPaneKeyToStop,
@@ -13,7 +9,6 @@ import {
 } from '../synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from '../synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from '../synthetic-title-frame-routing'
-import { resolveTuiAgentPermissionMode } from '../../shared/tui-agent-permissions'
 import { mainProcessState as state } from './main-process-state'
 
 // Why: cursor-agent re-emits its own OSC title on every redraw, overwriting a one-shot frame — so re-assert a working frame on an interval.
@@ -150,29 +145,6 @@ export function driveSyntheticTitleFromHook(
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, { force: true })
 }
 
-export function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | { agentArgs?: string | null; agentEnv?: Record<string, string> | null }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return (
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
-  )
-}
-
 export function initializeSyntheticTitleRuntime(): void {
   // Why: on PTY teardown drop the spinner entry explicitly, else the shared timer keeps ticking with sendSyntheticTitle no-oping forever.
   registerPaneKeyTeardownListener((paneKey) => stopSyntheticTitleSpinner(paneKey))
@@ -187,15 +159,4 @@ export function initializeSyntheticTitleRuntime(): void {
     }
   })
   agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
-}
-
-export function driveSyntheticTitleForAgentStatus(
-  paneKey: string,
-  agentType: string | null | undefined,
-  agentState: AgentStatusState
-): void {
-  const profile = getSyntheticAgentTitleProfile(agentType)
-  if (profile && shouldDriveSyntheticAgentTitleFromHook(agentType, agentState)) {
-    driveSyntheticTitleFromHook(paneKey, agentState, profile)
-  }
 }

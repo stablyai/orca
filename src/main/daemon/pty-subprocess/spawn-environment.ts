@@ -1,7 +1,12 @@
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
+import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
+import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
 import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
+import { removeChromiumDisabledSessionBus } from '../../pty/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
+import { stripPiProcessOwnerEnv } from '../../pty/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/terminal-color-env'
@@ -13,9 +18,14 @@ import {
 } from '../../../shared/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/terminal-git-credential-guard'
 import {
+  ORCA_IMAGE_PROTOCOL_ENV,
+  ORCA_IMAGE_PROTOCOL_VALUE
+} from '../../../shared/terminal-image-protocol'
+import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
@@ -23,7 +33,10 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
+  'ORCA_WSL_CLI_DIR',
+  'JCODE_RUNTIME_DIR'
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
@@ -45,11 +58,33 @@ function deleteRequestedDaemonEnvKeys(
   env: Record<string, string>,
   keys: readonly string[] | undefined
 ): void {
+  const userDataPath = process.env.ORCA_USER_DATA_PATH
+  if (userDataPath) {
+    for (const key of getLegacyOpenCodeEnvKeysToDelete(env, userDataPath, {})) {
+      delete env[key]
+    }
+  }
   // Why: persistent daemon state can differ from Electron; delete CODEX_HOME only when its Orca overlay owns it.
   const deleteOrcaOwnedCodexHome =
     keys?.includes('ORCA_CODEX_HOME') === true &&
     env.ORCA_CODEX_HOME !== undefined &&
     env.CODEX_HOME === env.ORCA_CODEX_HOME
+  // A merged caller config can supersede the daemon's recorded overlay source.
+  if (
+    keys?.includes('ORCA_OPENCODE_CONFIG_DIR') &&
+    (env.OPENCODE_CONFIG_DIR === undefined ||
+      env.OPENCODE_CONFIG_DIR === env.ORCA_OPENCODE_CONFIG_DIR)
+  ) {
+    restoreOrStripOverlayEnv(
+      env,
+      {
+        primary: 'OPENCODE_CONFIG_DIR',
+        overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+        source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+      },
+      {}
+    )
+  }
   for (const key of keys ?? []) {
     delete env[key]
   }
@@ -121,6 +156,7 @@ function promoteAgentTeamsShimPath(
   env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
+/** A dev receiver without an endpoint file must not fall back to another runtime's file. */
 function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -131,15 +167,19 @@ function removeInheritedDevAgentHookEndpoint(
   }
 }
 
+/** A persistent daemon's inherited environment cannot supply ownership for a new pane. */
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
+  const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+  restoreManagedDataAccountEnvironment(inheritedEnv)
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
+    ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
-    FORCE_HYPERLINK: '1'
-  } as Record<string, string>
+    FORCE_HYPERLINK: '1',
+    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+  } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
@@ -147,6 +187,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     env.TERM = opts.env.TERM
   }
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  stripPiProcessOwnerEnv(env)
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)
   }
@@ -159,11 +200,16 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   delete env.ELECTRON_RUN_AS_NODE
   removeAppImageRuntimeEnv(env)
+  removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
+  // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
+  // alias can never outlive the value it mirrors.
+  applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
   return env
 }
 
+/** Platform launch preparation must not undo the caller's explicit environment deletions. */
 export function rescrubDaemonPtyEnvironment(
   env: Record<string, string>,
   opts: PtySubprocessOptions
@@ -174,6 +220,7 @@ export function rescrubDaemonPtyEnvironment(
   }
 }
 
+/** Shell preparation can restore ambient state, so pane isolation is enforced again here. */
 export function finalizeDaemonPtyEnvironment(
   env: Record<string, string>,
   requestedEnv: Record<string, string> | undefined
@@ -186,4 +233,14 @@ export function finalizeDaemonPtyEnvironment(
   promoteAgentTeamsShimPath(env, requestedPath)
   stripLegacyTerminalShimEnv(env, process.platform)
   dropIncoherentCondaActivationEnv(env, process.platform)
+  stripPiProcessOwnerEnv(env)
+  // A live daemon pins this runtime across app updates; callers cannot name the host executable.
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase() === 'ORCA_AGENT_HOOK_NODE') {
+      delete env[key]
+    }
+  }
+  if (process.platform === 'win32') {
+    env.ORCA_AGENT_HOOK_NODE = process.execPath
+  }
 }

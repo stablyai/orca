@@ -33,6 +33,20 @@ describe('readClaudeSubagentTaskFrame', () => {
       })
     })
 
+    it('announces the legacy local_subagent task type', () => {
+      expect(
+        readClaudeSubagentTaskFrame(
+          system('task_started', {
+            task_id: 'task-legacy-subagent',
+            tool_use_id: 'toolu_legacy',
+            task_type: 'local_subagent',
+            subagent_type: 'code-reviewer',
+            description: 'Review the diff'
+          })
+        )
+      ).toMatchObject({ announcesSubagent: true, excluded: false })
+    })
+
     it('excludes a backgrounded shell command even though it carries a tool_use_id', () => {
       const frame = readClaudeSubagentTaskFrame(
         system('task_started', {

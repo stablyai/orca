@@ -329,6 +329,33 @@ describe('createOrFocusDashboardPopout', () => {
     }
   })
 
+  it('keeps saving bounds after a vetoed quit and freezes them only on an allowed quit', () => {
+    vi.useFakeTimers()
+    try {
+      const store = makeStore()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The window fixture reads getUI, updateUI, and onUIChanged supplied by this store.
+      createOrFocusDashboardPopout(store as never)
+      const win = instances[0]
+      const freeze = appOnMock.mock.calls.find(([event]) => event === 'before-quit')?.[1]
+      expect(freeze).toBeTypeOf('function')
+      freeze({ defaultPrevented: true })
+      win.bounds = { x: 10, y: 20, width: 1200, height: 900 }
+      win.emit('resize')
+      vi.advanceTimersByTime(500)
+      expect(store.updateUI).toHaveBeenCalledWith({
+        dashboardPopoutBounds: { x: 10, y: 20, width: 1200, height: 900 }
+      })
+
+      store.updateUI.mockClear()
+      freeze({ defaultPrevented: false })
+      win.emit('resize')
+      vi.advanceTimersByTime(500)
+      expect(store.updateUI).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('closeDashboardPopout closes an open window', () => {
     createOrFocusDashboardPopout(makeStore() as never)
     const win = instances[0]

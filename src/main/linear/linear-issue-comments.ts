@@ -2,7 +2,7 @@ import type { LinearClient } from '@linear/sdk'
 import type { LinearComment } from '../../shared/linear/issue-types'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
-import { getClients, isAuthError } from './client'
+import { getClients, getPublicFileUrlClient, isAuthError } from './client'
 import {
   ATTACHMENT_BY_UUID_QUERY,
   COMMENT_BY_UUID_QUERY,
@@ -184,7 +184,7 @@ export async function getIssueComments(
 
   await acquire()
   try {
-    const result = await entry.client.client.rawRequest<
+    const result = await getPublicFileUrlClient(entry).client.rawRequest<
       LinearIssueCommentsResponse,
       LinearRawVariables
     >(ISSUE_COMMENTS_QUERY, { id: issueId })

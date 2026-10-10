@@ -7,12 +7,12 @@ import { getConnectionId } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import {
   bulkDiscardRuntimeGitPaths,
+  bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
   stageRuntimeGitPath,
   unstageRuntimeGitPath,
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
-import { useAppStore } from '@/store'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
@@ -80,8 +80,14 @@ export function useSourceControlEntryMutations({
   )
 
   const handleUnstage = useCallback(
-    (filePath: string): Promise<void> =>
-      runEntryMutation('unstage', filePath, unstageRuntimeGitPath),
+    (filePath: string, oldPath?: string): Promise<void> =>
+      runEntryMutation(
+        'unstage',
+        filePath,
+        oldPath
+          ? (context, path) => bulkUnstageRuntimeGitPaths(context, [path, oldPath])
+          : unstageRuntimeGitPath
+      ),
     [runEntryMutation]
   )
 
@@ -91,8 +97,7 @@ export function useSourceControlEntryMutations({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
-      const runtimeEnvironmentId =
-        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      const runtimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
       // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
       await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
@@ -126,8 +131,7 @@ export function useSourceControlEntryMutations({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
-      const runtimeEnvironmentId =
-        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      const runtimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
       // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
       await Promise.all(
         filePaths.map((relativePath) =>

@@ -23,6 +23,11 @@ const knobByFlag = {
   '--keys': 'ORCA_TYPING_BENCH_KEYS',
   '--cadence-ms': 'ORCA_TYPING_BENCH_KEY_CADENCE_MS',
   '--cpu-workers': 'ORCA_TYPING_BENCH_CPU_WORKERS',
+  '--git-churn-repos': 'ORCA_TYPING_BENCH_GIT_CHURN_REPOS',
+  '--git-churn-files': 'ORCA_TYPING_BENCH_GIT_CHURN_FILES',
+  '--git-churn-concurrency': 'ORCA_TYPING_BENCH_GIT_CHURN_CONCURRENCY',
+  '--codex-frame-rows': 'ORCA_TYPING_BENCH_CODEX_FRAME_ROWS',
+  '--codex-split-delay-ms': 'ORCA_TYPING_BENCH_CODEX_SPLIT_DELAY_MS',
   '--worktrees': 'ORCA_TYPING_BENCH_METADATA_WORKTREES',
   '--repositories': 'ORCA_TYPING_BENCH_METADATA_REPOSITORIES',
   '--terminal-tabs': 'ORCA_TYPING_BENCH_METADATA_TERMINAL_TABS',
@@ -40,6 +45,8 @@ const knobByFlag = {
   '--metadata-status': 'ORCA_TYPING_BENCH_METADATA_STATUS',
   '--metadata-titles': 'ORCA_TYPING_BENCH_METADATA_TITLES',
   '--instrumentation': 'ORCA_TYPING_BENCH_INSTRUMENTATION',
+  '--graph-probe': 'ORCA_TYPING_BENCH_GRAPH_PROBE',
+  '--cpu-throttle': 'ORCA_TYPING_BENCH_CPU_THROTTLE',
   '--label': 'ORCA_TYPING_BENCH_LABEL'
 }
 

@@ -47,9 +47,8 @@ export function fetchHomeHostWorktreeInfo(
           markUnavailable()
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = catalog.value as { worktrees?: HomeWorktreeSummary[] }
-        const worktrees = result.worktrees ?? []
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktrees` is a salvaged member, so the `?? []` is what makes it an array; the rows stay opaque because three screens project a row differently. This card reads `status` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
+        const worktrees = (catalog.value.worktrees ?? []) as HomeWorktreeSummary[]
         setCachedWorktrees(hostId, worktrees, { proven: true })
         const active = worktrees.filter((w) => w.status && ACTIVE_STATUSES.has(w.status))
         // Mirror the desktop's focused workspace (see pickResumeWorktree).

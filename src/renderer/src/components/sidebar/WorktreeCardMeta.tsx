@@ -1,4 +1,6 @@
 import React from 'react'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { WorktreeCardLinkedItemsSection } from './WorktreeCardLinkedItemsSection'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
@@ -53,6 +55,9 @@ function hasComment(comment: string | null): boolean {
 }
 
 export function WorktreeCardDetailsHover({
+  workspace,
+  referenceDetails,
+  onManageLinks,
   issue,
   linearIssue,
   jiraIssue,
@@ -162,9 +167,15 @@ export function WorktreeCardDetailsHover({
   }, [copyLinkedWorkItemLink, review])
 
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
+  const attachments = getWorkspaceAttachments(workspace ?? {})
+  const showAttachmentCollection =
+    attachments.length > 1 ||
+    (attachments.length === 1 && !issue && !linearIssue && !jiraIssue && !review)
 
   if (
     !showIdentityHeader &&
+    attachments.length === 0 &&
+    !onManageLinks &&
     !hasWorktreeCardDetails({
       issue,
       linearIssue,
@@ -196,7 +207,7 @@ export function WorktreeCardDetailsHover({
         side="right"
         align="start"
         sideOffset={8}
-        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
+        variant="workspace-details"
         {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
@@ -213,122 +224,143 @@ export function WorktreeCardDetailsHover({
             />
           )}
 
-          <WorktreeCardIssueDetailSection
-            issue={issue}
-            issueMenuOpen={issueMenuOpen}
-            onIssueMenuOpenChange={handleIssueMenuOpenChange}
-            onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
-            onEditIssue={onEditIssue}
-            onOpenGitHubIssueInOrca={
-              onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
-            }
-            onOpenIssueInBrowser={
-              onOpenIssueInBrowser && issue?.url
-                ? (url: string) => {
-                    closeHover()
-                    onOpenIssueInBrowser(url)
-                  }
-                : undefined
-            }
-          />
+          {!showAttachmentCollection ? (
+            <>
+              <WorktreeCardIssueDetailSection
+                issue={issue}
+                issueMenuOpen={issueMenuOpen}
+                onIssueMenuOpenChange={handleIssueMenuOpenChange}
+                onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
+                onEditIssue={onEditIssue}
+                onOpenGitHubIssueInOrca={
+                  onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
+                }
+                onOpenIssueInBrowser={
+                  onOpenIssueInBrowser && issue?.url
+                    ? (url: string) => {
+                        closeHover()
+                        onOpenIssueInBrowser(url)
+                      }
+                    : undefined
+                }
+              />
 
-          {linearIssue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<LinearIcon className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
-                  'Linear {{value0}}',
-                  { value0: linearIssue.identifier }
-                )}
-                actions={
-                  <>
-                    {linearIssue.url && onOpenLinearIssueInOrca && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
-                        )}
-                        onClick={dismissAndRun(onOpenLinearIssueInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
+              {linearIssue && (
+                <WorktreeCardDetailSection>
+                  <DetailHeader
+                    icon={<LinearIcon className="size-3 text-muted-foreground" />}
+                    label={translate(
+                      'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
+                      'Linear {{value0}}',
+                      { value0: linearIssue.identifier }
                     )}
-                    {linearIssue.url && (
+                    actions={
+                      <>
+                        {linearIssue.url && onOpenLinearIssueInOrca && (
+                          <MetadataActionIcon
+                            label={translate(
+                              'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                              'Open in Orca'
+                            )}
+                            onClick={dismissAndRun(onOpenLinearIssueInOrca)}
+                          >
+                            <MonitorUp className="size-3" />
+                          </MetadataActionIcon>
+                        )}
+                        {linearIssue.url && (
+                          <MetadataActionIcon
+                            label={translate(
+                              'auto.components.sidebar.WorktreeCardMeta.e42941631a',
+                              'View on Linear'
+                            )}
+                            href={linearIssue.url}
+                          >
+                            <ExternalLink className="size-3" />
+                          </MetadataActionIcon>
+                        )}
+                      </>
+                    }
+                  />
+                  <WorktreeCardDetailSectionContent className="space-y-1.5">
+                    <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                      {linearIssue.title}
+                    </div>
+                    {((linearIssue.labels && linearIssue.labels.length > 0) ||
+                      linearIssue.stateName) && (
+                      <div className="flex flex-wrap gap-1">
+                        {linearIssue.stateName && (
+                          <LinearStateBadge
+                            stateName={linearIssue.stateName}
+                            stateType={linearIssue.stateType}
+                          />
+                        )}
+                        {(linearIssue.labels ?? []).map((label) => (
+                          <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
+                            {label}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </WorktreeCardDetailSectionContent>
+                </WorktreeCardDetailSection>
+              )}
+
+              {jiraIssue && (
+                <WorktreeCardDetailSection>
+                  <DetailHeader
+                    icon={<JiraIcon className="size-3 text-muted-foreground" />}
+                    label={translate(
+                      'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
+                      'Jira {{value0}}',
+                      { value0: jiraIssue.identifier }
+                    )}
+                    actions={
                       <MetadataActionIcon
                         label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.e42941631a',
-                          'View on Linear'
+                          'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
+                          'View on Jira'
                         )}
-                        href={linearIssue.url}
+                        href={jiraIssue.url}
                       >
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
-                    )}
-                  </>
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {linearIssue.title}
-                </div>
-                {((linearIssue.labels && linearIssue.labels.length > 0) ||
-                  linearIssue.stateName) && (
-                  <div className="flex flex-wrap gap-1">
-                    {linearIssue.stateName && (
-                      <LinearStateBadge stateName={linearIssue.stateName} />
-                    )}
-                    {(linearIssue.labels ?? []).map((label) => (
-                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+                    }
+                  />
+                  <WorktreeCardDetailSectionContent>
+                    <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                      {jiraIssue.title}
+                    </div>
+                  </WorktreeCardDetailSectionContent>
+                </WorktreeCardDetailSection>
+              )}
 
-          {jiraIssue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<JiraIcon className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
-                  'Jira {{value0}}',
-                  { value0: jiraIssue.identifier }
-                )}
-                actions={
-                  <MetadataActionIcon
-                    label={translate(
-                      'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
-                      'View on Jira'
-                    )}
-                    href={jiraIssue.url}
-                  >
-                    <ExternalLink className="size-3" />
-                  </MetadataActionIcon>
+              <WorktreeCardReviewDetailSection
+                review={review}
+                reviewMenuOpen={reviewMenuOpen}
+                onReviewMenuOpenChange={handleReviewMenuOpenChange}
+                onOpenReviewInOrca={onOpenReviewInOrca}
+                onOpenReviewInBrowser={
+                  onOpenReviewInBrowser && review?.url ? onOpenReviewInBrowser : undefined
                 }
+                onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
+                onUnlinkReview={onUnlinkReview}
+                closeHover={closeHover}
               />
-              <WorktreeCardDetailSectionContent>
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {jiraIssue.title}
-                </div>
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
-
-          <WorktreeCardReviewDetailSection
+            </>
+          ) : null}
+          <WorktreeCardLinkedItemsSection
+            workspace={workspace}
+            referenceDetails={referenceDetails}
             review={review}
-            reviewMenuOpen={reviewMenuOpen}
-            onReviewMenuOpenChange={handleReviewMenuOpenChange}
-            onOpenReviewInOrca={onOpenReviewInOrca}
-            onOpenReviewInBrowser={
-              onOpenReviewInBrowser && review?.url ? onOpenReviewInBrowser : undefined
-            }
-            onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
-            onUnlinkReview={onUnlinkReview}
-            closeHover={closeHover}
+            issue={issue}
+            linearIssue={linearIssue}
+            jiraIssue={jiraIssue}
+            showItems={showAttachmentCollection}
+            onManage={onManageLinks ? dismissAndRun(onManageLinks) : undefined}
+            onOpen={(url) => {
+              closeHover()
+              void window.api.shell.openUrl(url)
+            }}
           />
 
           {automationProvenance && (

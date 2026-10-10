@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners } = vi.hoisted(
@@ -51,8 +52,8 @@ describe('remote filesystem watcher re-arm', () => {
   it('still resyncs when a fresh watch beat the failed reinstall to the retry slot', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
-    const senderTwo = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
+    const senderOne = createWatcherSender(1)
+    const senderTwo = createWatcherSender(2)
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     getSshFilesystemProviderMock.mockReturnValue({ watch: vi.fn().mockResolvedValue(vi.fn()) })
 

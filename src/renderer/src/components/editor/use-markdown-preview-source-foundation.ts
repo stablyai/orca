@@ -5,6 +5,7 @@ import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
 import type { MarkdownPreviewSearchInstance } from './markdown-preview-search'
 import {
@@ -13,6 +14,7 @@ import {
   getMarkdownPreviewSourceRelativePath,
   resolveMarkdownPreviewSourceWorktree
 } from './markdown-preview-source-routing'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 
 export function useMarkdownPreviewSourceFoundation({
@@ -20,12 +22,14 @@ export function useMarkdownPreviewSourceFoundation({
   filePath,
   sourceFileId,
   sourceWorktreeId,
-  sourceRuntimeEnvironmentId
+  sourceRuntimeEnvironmentId,
+  prewarmImages = true
 }: {
   content: string
   filePath: string
   sourceFileId: string | null
   sourceWorktreeId: string | null
+  prewarmImages?: boolean
   sourceRuntimeEnvironmentId: string | null | undefined
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -143,18 +147,19 @@ export function useMarkdownPreviewSourceFoundation({
   )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = useDocumentDarkTheme()
 
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
   useEffect(() => {
+    if (!prewarmImages || exceedsMarkdownRichModeSizeLimit(renderedContent)) {
+      return
+    }
     const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
       runtimeContext: imageRuntimeContext
     })
     return prewarm.cancel
-  }, [renderedContent, filePath, imageRuntimeContext])
+  }, [renderedContent, filePath, imageRuntimeContext, prewarmImages])
 
   return {
     rootRef,

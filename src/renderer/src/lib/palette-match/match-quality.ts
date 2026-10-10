@@ -12,14 +12,6 @@ export const PALETTE_MATCH_QUALITIES = [
 
 export type PaletteMatchQuality = (typeof PALETTE_MATCH_QUALITIES)[number]
 
-const QUALITY_RANK = new Map<PaletteMatchQuality, number>(
-  PALETTE_MATCH_QUALITIES.map((quality, index) => [quality, index])
-)
-
-export function paletteMatchQualityRank(quality: PaletteMatchQuality): number {
-  return QUALITY_RANK.get(quality) ?? PALETTE_MATCH_QUALITIES.length
-}
-
 export function isFuzzyPaletteMatchQuality(quality: PaletteMatchQuality): boolean {
   return quality === 'typo'
 }

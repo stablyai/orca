@@ -32,7 +32,13 @@ export { getBranchCompare } from './source-control/branch-compare'
 export { getBranchDiff } from './source-control/branch-diff'
 export { getCommitCompare } from './source-control/commit-compare'
 export { getCommitDiff } from './source-control/commit-diff'
-export { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './source-control/staging'
+export {
+  bulkStageFiles,
+  bulkUnstageFiles,
+  stageFile,
+  stageWorktreeChanges,
+  unstageFile
+} from './source-control/staging'
 export { getStagedCommitContext } from './source-control/staged-commit-context'
 export { commitChanges } from './source-control/commit-changes'
 export {

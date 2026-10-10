@@ -2,7 +2,9 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { formatAgentTypeLabel, agentKindForAgentType } from '../../../lib/agent-status'
 import {
   deriveRunningAgentSendTargets,
-  resolveRunningAgentSendTarget
+  resolveRunningAgentSendTarget,
+  runningAgentMessageTarget,
+  runningAgentSendTargetAgentType
 } from '../../../lib/running-agent-targets'
 import { translate } from '@/i18n/i18n'
 import { createUiActivityActions } from './ui-slice-activity-actions'
@@ -74,6 +76,8 @@ export function createUiAgentActions(
         targets.some((target) => target.status === 'eligible') &&
         (previousMode?.id !== args.id || previousMode.worktreeId !== args.worktreeId)
       ) {
+        // Why switch: the send targets render on workspace cards, not activity rows.
+        get().setSidebarBody('workspaces')
         get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
       }
     },
@@ -118,12 +122,17 @@ export function createUiAgentActions(
       }),
     sendPromptToSidebarAgentTarget: async (paneKey) => {
       const mode = get().agentSendPopoverTargetMode
-      if (!mode || mode.status === 'sending') {
+      // An empty prompt has nothing to send: every note may already be on its way.
+      if (!mode || mode.status === 'sending' || !mode.prompt.trim()) {
         return false
       }
 
       const target = resolveRunningAgentSendTarget(get(), mode.worktreeId, paneKey)
-      if (!target || target.status !== 'eligible' || !target.ptyId) {
+      if (
+        !target ||
+        target.status !== 'eligible' ||
+        (target.kind === 'terminal' && !target.ptyId)
+      ) {
         // Why: eligibility can drop after the menu opened; keep the picker open (row title explains) rather than adding toast noise.
         return false
       }
@@ -142,19 +151,24 @@ export function createUiAgentActions(
           : s
       )
 
-      const label = formatAgentTypeLabel(target.entry.agentType)
-      const { activeAgentNotesSendFailureMessage, sendNotesToActiveAgentSession } =
-        await import('@/lib/active-agent-note-send')
-      const result = await sendNotesToActiveAgentSession({
+      const agentType = runningAgentSendTargetAgentType(target)
+      const label = formatAgentTypeLabel(agentType)
+      const [{ activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
+        import('@/lib/active-agent-note-send'),
+        import('@/lib/agent-message-send')
+      ])
+      const sending = sendMessageToAgent({
         worktreeId: mode.worktreeId,
         prompt: mode.prompt,
-        noteTarget: { tabId: target.tabId, leafId: target.leafId }
+        target: runningAgentMessageTarget(target)
       }).catch(() => {
         console.error('Failed to send notes to sidebar agent target:', {
           code: 'runtime-unverifiable'
         })
         return { status: 'status-unavailable' as const, code: 'runtime-unverifiable' as const }
       })
+      mode.onPromptHandedOff?.(sending)
+      const result = await sending
 
       const stillCurrent = (): boolean => {
         const current = get().agentSendPopoverTargetMode
@@ -200,7 +214,7 @@ export function createUiAgentActions(
         import('@/lib/telemetry')
       ])
       track('agent_prompt_sent', {
-        agent_kind: agentKindForAgentType(target.entry.agentType),
+        agent_kind: agentKindForAgentType(agentType),
         launch_source: mode.launchSource,
         request_kind: 'followup'
       })

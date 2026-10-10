@@ -9,9 +9,15 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
+/** Where the reader left an opened run's own scroll box. */
+export type NativeChatRunScroll = { top: number; followsEnd: boolean }
+
 export type NativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
   write: (key: string, open: boolean) => void
+  /** By the run's disclosure key, and forgotten when that disclosure closes. A plain map, not
+   *  state: scrolling a run must not re-render the transcript. */
+  runScroll: Map<string, NativeChatRunScroll>
 }
 
 export const NativeChatDisclosureContext = createContext<NativeChatDisclosureStore | null>(null)
@@ -22,23 +28,33 @@ export const MAX_NATIVE_CHAT_DISCLOSURES = 512
 
 export function useNativeChatDisclosures(): NativeChatDisclosureStore {
   const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() => new Map())
-  const write = useCallback((key: string, next: boolean) => {
-    setOpen((current) => {
-      if (current.get(key) === next) {
-        return current
+  const [runScroll] = useState(() => new Map<string, NativeChatRunScroll>())
+  const write = useCallback(
+    (key: string, next: boolean) => {
+      if (!next) {
+        runScroll.delete(key)
       }
-      const updated = new Map(current)
-      updated.set(key, next)
-      if (updated.size > MAX_NATIVE_CHAT_DISCLOSURES) {
-        const oldest = updated.keys().next().value
-        if (oldest !== undefined && oldest !== key) {
-          updated.delete(oldest)
+      setOpen((current) => {
+        if (current.get(key) === next) {
+          return current
         }
-      }
-      return updated
-    })
-  }, [])
-  return useMemo(() => ({ read: (key: string) => open.get(key), write }), [open, write])
+        const updated = new Map(current)
+        updated.set(key, next)
+        if (updated.size > MAX_NATIVE_CHAT_DISCLOSURES) {
+          const oldest = updated.keys().next().value
+          if (oldest !== undefined && oldest !== key) {
+            updated.delete(oldest)
+          }
+        }
+        return updated
+      })
+    },
+    [runScroll]
+  )
+  return useMemo(
+    () => ({ read: (key: string) => open.get(key), write, runScroll }),
+    [open, write, runScroll]
+  )
 }
 
 export type NativeChatDisclosure = {

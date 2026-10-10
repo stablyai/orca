@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "aiVault.history-scan",
   "family": "aiVault.history",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
-  "scenarioSha256": "efb8d1cd2a2ff0ade4cdc48a1aacec565e33b405bbe95c100b86534cdde49740",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "03941f1abe9e": {
       "name": "aiVault.listSessions#1",
@@ -84,18 +75,6 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "1277d47c0e64": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Cannot read properties of undefined (reading 'sessions')"
       }
     },
     "23523c413cbd": {
@@ -295,18 +274,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "61f76365e23c": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Cannot read properties of null (reading 'sessions')"
       }
     },
     "698f848e6967": {
@@ -571,21 +538,16 @@
         "$rpc": "undefined"
       }
     },
-    "fc659419e768": {
+    "fead2d57ab18": {
       "activeWorktreePath": "/repo/feature",
       "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
+        "$rpc": "null"
       },
       "refreshing": false,
       "scope": "workspace",
       "screenState": {
-        "issues": {
-          "$rpc": "undefined"
-        },
-        "kind": "ready",
-        "sessions": {
-          "$rpc": "undefined"
-        }
+        "kind": "error",
+        "message": "The host sent a reply this app could not read (aiVault.listSessions)"
       }
     }
   },
@@ -612,7 +574,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1277d47c0e64",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -624,7 +586,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "61f76365e23c",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -636,7 +598,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "fc659419e768",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -648,7 +610,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "fc659419e768",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -660,7 +622,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "fc659419e768",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },

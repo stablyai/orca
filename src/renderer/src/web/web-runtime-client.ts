@@ -1,3 +1,4 @@
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
 import type {
   RuntimeHostStatusSnapshot,
@@ -103,6 +104,7 @@ export class WebRuntimeClient {
     callbacks: WebRuntimeSubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeSubscriptionHandle> {
+    throwIfSignalAborted(options?.signal)
     if (SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)) {
       return subscribeWebRuntimeFileWatch({
         params,
@@ -117,9 +119,12 @@ export class WebRuntimeClient {
     const client = new WebRuntimeClient(this.pairing)
     this.childClients.add(client)
     const closeChild = (notifySubscriptions = false): void => {
+      options?.signal?.removeEventListener('abort', onAbort)
       this.childClients.delete(client)
       client.close({ notifySubscriptions })
     }
+    const onAbort = (): void => closeChild()
+    options?.signal?.addEventListener('abort', onAbort, { once: true })
     try {
       const wrappedCallbacks: WebRuntimeSubscriptionCallbacks = {
         ...callbacks,
@@ -140,12 +145,14 @@ export class WebRuntimeClient {
       )
       return {
         unsubscribe: () => {
+          options?.signal?.removeEventListener('abort', onAbort)
           handle.unsubscribe()
           closeChild()
         },
         sendBinary: (bytes) => handle.sendBinary(bytes)
       }
     } catch (error) {
+      options?.signal?.removeEventListener('abort', onAbort)
       closeChild()
       throw error
     }
@@ -168,7 +175,8 @@ export class WebRuntimeClient {
     callbacks: WebRuntimeSubscriptionCallbacks,
     options?: SubscribeOptions
   ): Promise<WebRuntimeTransportSubscriptionHandle> {
-    await this.waitForConnected(options?.timeoutMs)
+    await waitForPromiseWithSignal(this.waitForConnected(options?.timeoutMs), options?.signal)
+    throwIfSignalAborted(options?.signal)
     const id = this.nextId()
     const subscription = { id, method, params, callbacks, needsReplay: false }
     this.subscriptions.set(id, subscription)

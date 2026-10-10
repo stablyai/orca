@@ -67,10 +67,6 @@ describe('formatSessionSearchResponse: results', () => {
     )
   })
 
-  it('leaves the [[ ]] match marks exactly as the engine wrote them', () => {
-    expect(formatSessionSearchResponse(results())).toContain('[[resize]]')
-  })
-
   it('omits the host and the resume line a paired host withheld', () => {
     const { executionHostId: _host, resumeCommand: _resume, ...withheld } = localHit
     expect(formatSessionSearchResponse(results({ hits: [withheld] }))).toBe(

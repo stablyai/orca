@@ -9,6 +9,11 @@ import {
   type RelayCellConnectionHardCap,
   type RelayRegion
 } from '@orca-cloud/relay-contract'
+import {
+  RELAY_MAX_READINESS_GRACE_MS,
+  RELAY_READINESS_JWKS_GRACE_MS,
+  RELAY_READINESS_SQL_GRACE_MS
+} from './relay-readiness.js'
 
 export const RELAY_MAX_CELL_CAPACITY_REQUESTS = 100_000
 export const RELAY_DATABASE_POOL_MAX = 10
@@ -30,6 +35,14 @@ const OptionalServiceAccountSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.string().email().optional()
 )
+
+// 0 disables the window and restores the fail-on-first-error readiness answer. An unset variable
+// arrives as '' from Cloud Run, which z.coerce would read as 0 rather than as the default.
+const readinessGraceSchema = (defaultMs: number) =>
+  z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(RELAY_MAX_READINESS_GRACE_MS).default(defaultMs)
+  )
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
@@ -81,9 +94,26 @@ const EnvSchema = z.object({
     .optional(),
   ORCA_RELAY_ADMIN_JWKS_URL: z.string().url().default('https://www.googleapis.com/oauth2/v3/certs'),
   ORCA_RELAY_DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).optional(),
+  ORCA_RELAY_READINESS_JWKS_GRACE_MS: readinessGraceSchema(RELAY_READINESS_JWKS_GRACE_MS),
+  ORCA_RELAY_READINESS_SQL_GRACE_MS: readinessGraceSchema(RELAY_READINESS_SQL_GRACE_MS),
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 5 on directors: `off` (default) is today's path; `dry-run` asks the picked cell to
+  // check a booking without making it, and logs the answer; `on` places on switched-on cells.
+  ORCA_RELAY_RESERVE_PLACEMENT: z.enum(['off', 'dry-run', 'on']).default('off'),
+  // Step 3 shadow directory: unset or empty polls no cell; `all` or a comma list of cell ids.
+  ORCA_RELAY_SHADOW_SEAT_FEED_CELLS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value.trim() === 'all'
+        ? ('all' as const)
+        : value
+            .split(',')
+            .map((cellId) => cellId.trim())
+            .filter((cellId) => cellId.length > 0)
+    ),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY: z.coerce.number().int().positive().max(100).default(2),
   ORCA_RELAY_PUBLIC_STICKY_CONCURRENCY: z.coerce.number().int().positive().max(100).default(1),
   ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX: z.coerce.number().int().positive().max(4_096).default(64),
@@ -94,6 +124,17 @@ const EnvSchema = z.object({
     .positive()
     .max(60)
     .default(2),
+  // Borrowed from placement concurrency, which always keeps at least one permit.
+  ORCA_RELAY_DRAIN_RETURN_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
+  ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX: z.coerce.number().int().positive().max(64).default(4),
+  ORCA_RELAY_DRAIN_RETURN_WAIT_MS: z.coerce.number().int().positive().max(10_000).default(3_000),
+  // The desktop parser caps a Retry-After at 5 minutes; a larger value is truncated there.
+  ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(2)
+    .max(300)
+    .default(300),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX: z.coerce
     .number()
     .int()
@@ -179,6 +220,8 @@ export type RelayConfig = {
   fenceBrokerServiceAccount?: string
   rehomeDirectorServiceAccount?: string
   rehomeAudience?: string
+  shadowSeatFeedCells?: 'all' | string[]
+  reservePlacement?: 'off' | 'dry-run' | 'on'
   runtimeServiceAccount: string
   directorUrl?: string
   heartbeatAudience?: string
@@ -187,6 +230,8 @@ export type RelayConfig = {
   connectionUnobservedBound?: number
   adminJwksUrl: string
   databasePoolMax: number
+  readinessJwksGraceMs?: number
+  readinessSqlGraceMs?: number
   publicAssignmentsEnabled: boolean
   regionalPlacementEnabled?: boolean
   regionCorrectionCohortPercent?: number
@@ -200,6 +245,10 @@ export type RelayConfig = {
   publicStickyQueueMax?: number
   publicStickyWaitMs?: number
   publicStickyRetryAfterSeconds?: number
+  drainReturnConcurrency?: number
+  drainReturnQueueMax?: number
+  drainReturnWaitMs?: number
+  drainReturnMaxRetryAfterSeconds?: number
   databaseUrl?: string
   dataDir: string
 }
@@ -322,6 +371,8 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     fenceBrokerServiceAccount: parsed.ORCA_RELAY_FENCE_BROKER_SERVICE_ACCOUNT,
     rehomeDirectorServiceAccount: parsed.ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT,
     rehomeAudience: parsed.ORCA_RELAY_REHOME_AUDIENCE,
+    shadowSeatFeedCells: parsed.ORCA_RELAY_SHADOW_SEAT_FEED_CELLS,
+    reservePlacement: parsed.ORCA_RELAY_RESERVE_PLACEMENT,
     runtimeServiceAccount:
       parsed.ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT ?? parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     directorUrl,
@@ -335,6 +386,8 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     connectionUnobservedBound: ownCell.connectionUnobservedBound,
     adminJwksUrl: parsed.ORCA_RELAY_ADMIN_JWKS_URL,
     databasePoolMax,
+    readinessJwksGraceMs: parsed.ORCA_RELAY_READINESS_JWKS_GRACE_MS,
+    readinessSqlGraceMs: parsed.ORCA_RELAY_READINESS_SQL_GRACE_MS,
     publicAssignmentsEnabled: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED,
     regionalPlacementEnabled: parsed.ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED,
     regionCorrectionCohortPercent: parsed.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT,
@@ -348,6 +401,10 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     publicStickyQueueMax: parsed.ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX,
     publicStickyWaitMs: parsed.ORCA_RELAY_PUBLIC_STICKY_WAIT_MS,
     publicStickyRetryAfterSeconds: parsed.ORCA_RELAY_PUBLIC_STICKY_RETRY_AFTER_SECONDS,
+    drainReturnConcurrency: parsed.ORCA_RELAY_DRAIN_RETURN_CONCURRENCY,
+    drainReturnQueueMax: parsed.ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX,
+    drainReturnWaitMs: parsed.ORCA_RELAY_DRAIN_RETURN_WAIT_MS,
+    drainReturnMaxRetryAfterSeconds: parsed.ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS,
     databaseUrl: parsed.DATABASE_URL,
     dataDir: parsed.ORCA_RELAY_DATA_DIR
   }

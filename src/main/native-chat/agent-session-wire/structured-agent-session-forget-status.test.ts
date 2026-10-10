@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Removing a session from the host's map and removing its status row are ONE operation.
 //
 // The store keeps a row until told to drop it, and `structuredHostOwned` bypasses the staleness
@@ -15,17 +16,22 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
-// Everything before the journal is out of scope here; what matters is that the orchestration's
-// own `onAttachFailed` runs, which is the real one.
+// Everything before the journal is out of scope here; what matters is what the orchestration does
+// when the attach throws after acquisition.
 vi.mock('./structured-agent-session-attach-flow', () => ({
-  performAttach: async (input: { onAttachFailed?: () => Promise<void> }) => {
-    await input.onAttachFailed?.()
+  performAttach: async () => {
     throw new Error('attach failed after acquisition')
   }
 }))
@@ -39,7 +45,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'repo-1::/workspace/app',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: SESSION }
+  providerHandle: codexProviderHandle(SESSION)
 }
 
 const SUBJECT = makeStructuredAgentStatusSubject(
@@ -107,16 +113,16 @@ async function workingSession(): Promise<{
   journal: AgentSessionJournal
   records: Map<string, AgentSessionRecord>
 }> {
-  const journal = await journals.open({ identity: IDENTITY, journalDir: join(root, SESSION) })
+  const journal = await journals.open({ identity: IDENTITY, stateDirectory: join(root, SESSION) })
   await journal.appendItem(
     PROMPT,
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.appendItem(
     TURN,
     { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const sessions = new Map<string, StructuredAgentSessionHostSession>([
     [
@@ -136,15 +142,14 @@ async function workingSession(): Promise<{
           accountHome: ownerRecord().accountHome,
           runtimeKind: 'native'
         },
-        fence: 1,
-        hasProviderChild: true,
-        acquisitionGeneration: null
+        child: { generation: null, fence: 1, phase: 'ready' }
       }
     ]
   ])
   const server = new AgentHookServer()
   const records = new Map([[SESSION, ownerRecord()]])
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions,
     getRecord: (sessionId) => records.get(sessionId) ?? null,
     now: () => 1,
@@ -171,27 +176,46 @@ function attachContext(
     bind: () => undefined,
     close: () => undefined
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
-    deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
+    deps: {
+      store: { getRecord: () => null },
+      claimKeyId: 'key-1',
+      journalDatabase: openTestJournalHostDatabase(root)
+    },
     runtimeState: {
       resolveRecovery: async () => undefined,
       eventSinkFor: () => eventSink,
+      currentEventSink: () => eventSink,
+      mintEventSink: () => eventSink,
+      adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
-      discardEventSink: () => undefined
+      discardEventSink: () => undefined,
+      acquireAborts: new StructuredAgentSessionAcquireAborts()
     },
     sessions,
-    subscribers: { reset: () => undefined, snapshot: () => undefined, publish: () => undefined },
+    subscribers: { snapshot: () => undefined, publish: () => undefined },
     tasks: { trackAttach: <T>(task: Promise<T>) => task },
     reconcileLeases: async () => null,
     serialize: <T>(_sessionId: string, task: () => Promise<T>) => task(),
     now: () => 1,
-    forgetStatus: (sessionId: string) => feed.forget(sessionId)
+    publishStatus: (sessionId: string) => feed.publish(sessionId)
   } as unknown as StructuredAgentSessionAttachContext
 }
 
-const attachParams = {
-  envelope: { sessionId: SESSION, clientOperationId: 'op-1' }
-} as unknown as Parameters<typeof attachStructuredAgentSession>[2]
+const attachParams: Parameters<typeof attachStructuredAgentSession>[2] = {
+  envelope: {
+    sessionId: SESSION,
+    clientOperationId: 'op-1',
+    expectedRuntimeFence: 1,
+    payloadFingerprint: 'fixture-payload'
+  },
+  location: ownerRecord().location,
+  provider: 'codex',
+  agent: 'codex',
+  accountHome: ownerRecord().accountHome,
+  runtimeKind: 'native'
+}
 
 describe('a session that leaves the host without an explicit close', () => {
   it('forgets the retained exact subject after the record and live session are deleted first', async () => {
@@ -225,15 +249,19 @@ describe('a session that leaves the host without an explicit close', () => {
     expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ prompt: 'other host' })])
   })
 
-  it('leaves the agent-status store with it when an attach fails', async () => {
+  // A failed attach no longer drops the session: the conversation stays open for the failure to be
+  // written into, so its row stays with it and the later close forgets both together.
+  it('keeps the session and its status row together when an attach fails', async () => {
     const { server, feed, sessions } = await workingSession()
+    const drop = vi.spyOn(server, 'dropStructuredStatus')
 
     await expect(
       attachStructuredAgentSession(attachContext(sessions, feed), 'caller-1', attachParams)
     ).rejects.toThrow('attach failed after acquisition')
 
-    expect(sessions.has(SESSION)).toBe(false)
-    expect(server.getStatusSnapshot()).toEqual([])
+    expect(sessions.has(SESSION)).toBe(true)
+    expect(drop).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toHaveLength(1)
   })
 
   // The feed's own cache deliberately retains the projection for reload history; only the store

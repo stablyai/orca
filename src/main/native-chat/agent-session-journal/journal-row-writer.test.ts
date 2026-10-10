@@ -9,15 +9,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
-import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
-import { journalDatabaseFile } from './journal-paths'
-import {
-  insertJournalRow,
-  readJournalEpochRows,
-  upsertJournalSessionRow
-} from './journal-row-table'
+import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
+import { JournalWriteQueue } from './journal-write-queue'
+import { readJournalRowsAfter } from './journal-row-table'
+import {
+  openTestJournalHostDatabase,
+  readTestJournalRows,
+  insertTestJournalRow,
+  publishTestJournalEpoch
+} from './journal-host-database-test-support'
 
 const SESSION_ID = 'session-1'
 const EPOCH = 'epoch-1'
@@ -38,19 +40,19 @@ function row(seq: number, ts: number): JournalRow {
 
 describe('journal row writer', () => {
   let root: string
-  let database: OpenJournalDatabase
+  let database: JournalHostDatabase
   let readOnly = false
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-row-writer-'))
-    database = openJournalDatabase(journalDatabaseFile(root))
-    upsertJournalSessionRow(database.db, SESSION_ID, EPOCH, 1)
+    database = openTestJournalHostDatabase(root)
+    publishTestJournalEpoch(database.db, SESSION_ID, EPOCH)
     readOnly = false
   })
 
   afterEach(async () => {
     try {
-      database.db.close()
+      database.close()
     } catch {
       // Already closed by the case.
     }
@@ -60,17 +62,18 @@ describe('journal row writer', () => {
   function writerHarness() {
     const committedRows: JournalRow[] = []
     let sequence = 1
+    const queue = new JournalWriteQueue(SESSION_ID)
     const writer = new JournalRowWriter({
       sessionId: SESSION_ID,
       now: () => 1,
-      serialize: (run) => run(),
+      serialize: (run) => queue.serialize(run),
       database: () => database,
       readOnly: () => readOnly,
       highestFence: () => 0,
       nextSequence: () => sequence,
       commit: (committed) => {
-        committedRows.push(committed)
-        sequence = committed.seq + 1
+        committedRows.push(...committed)
+        sequence = committed.at(-1)!.seq + 1
       }
     })
     return { writer, committedRows }
@@ -79,16 +82,46 @@ describe('journal row writer', () => {
   it('rolls the transaction back and sets no latch when the insert fails', async () => {
     const { writer, committedRows } = writerHarness()
     // A row already occupies sequence 1, so the insert violates the primary key.
-    insertJournalRow(database.db, SESSION_ID, row(1, 1))
+    insertTestJournalRow(database.db, SESSION_ID, row(1, 1))
 
     await expect(writer.enqueue(row)).rejects.toThrow()
 
     expect(readOnly).toBe(false)
     expect(committedRows).toHaveLength(0)
-    expect(readJournalEpochRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
+    expect(readTestJournalRows(database.db, SESSION_ID, EPOCH)).toHaveLength(1)
     // Still writable: there is no ambiguity for a latch to protect against.
     await expect(writer.enqueue((seq, ts) => row(seq + 1, ts))).resolves.toMatchObject({
       kind: 'item'
     })
   })
+
+  it('writes several rows as one: a failure on the last leaves none', async () => {
+    const { writer, committedRows } = writerHarness()
+    // Sequence 2 is taken, so the second of the two rows violates the primary key.
+    insertTestJournalRow(database.db, SESSION_ID, row(2, 1))
+
+    await expect(writer.enqueueRows(() => [row, row])).rejects.toThrow()
+
+    expect(committedRows).toHaveLength(0)
+    expect(readTestJournalRows(database.db, SESSION_ID, EPOCH).map((stored) => stored.seq)).toEqual(
+      [2]
+    )
+  })
+
+  it.each(['single', 'batch'] as const)(
+    'keeps the save time separate from a pinned JSON timestamp in a %s write',
+    async (kind) => {
+      const { writer, committedRows } = writerHarness()
+      const pinned = (seq: number) => row(seq, 0)
+      await (kind === 'single'
+        ? writer.enqueue(pinned)
+        : writer.enqueueRows(() => [pinned, pinned]))
+
+      const saved = readJournalRowsAfter(database.db, SESSION_ID, EPOCH, 0)
+      expect(saved).toHaveLength(kind === 'single' ? 1 : 2)
+      expect(saved.map((entry) => entry.ts)).toEqual(saved.map(() => 1))
+      expect(saved.map((entry) => JSON.parse(entry.rowJson))).toEqual(committedRows)
+      expect(committedRows.map((entry) => entry.ts)).toEqual(saved.map(() => 0))
+    }
+  )
 })

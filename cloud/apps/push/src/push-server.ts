@@ -24,6 +24,7 @@ import { PushHostSessionStore } from './host-session-store.js'
 import type { PushDatabase } from './push-database.js'
 import { PushDispatcher } from './push-dispatcher.js'
 import { PushObservability } from './push-observability.js'
+import { reserveRequestConnection } from './push-background-database.js'
 import { createPushReadiness } from './push-readiness.js'
 import { PushRequestDrain } from './push-request-drain.js'
 
@@ -60,7 +61,11 @@ export function createPushServer(
   const challenges = new PushHostChallengeStore(database, config.publicUrl, now)
   const sessions = new PushHostSessionStore(database, now)
   const devices = new PushDeviceRegistryStore(database, now)
-  const deliveryStore = new DurablePushStore(database, now)
+  const deliveryStore = new DurablePushStore(
+    database,
+    now,
+    reserveRequestConnection(database, config.databasePoolMax)
+  )
   const apnsTransport = options.apnsTransport ?? (config.apns ? createApnsHttp2Transport() : null)
   const dispatcher = new PushDispatcher({
     devices,

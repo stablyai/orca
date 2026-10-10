@@ -32,17 +32,25 @@ function addCost(left: number | null, right: number | null): number | null {
   return (left ?? 0) + (right ?? 0)
 }
 
-type OpenCodeUsageMetric = { estimatedCostUsd: number | null }
+type OpenCodeUsageMetric = {
+  estimatedCostUsd: number | null
+  cacheWriteInputTokens?: number
+}
 
 const openCodeUsageAggregation = createUsageEventAggregation<
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageMetric
 >({
   metric: {
-    empty: () => ({ estimatedCostUsd: null }),
-    fromEvent: (event) => ({ estimatedCostUsd: event.estimatedCostUsd }),
+    empty: () => ({ estimatedCostUsd: null, cacheWriteInputTokens: 0 }),
+    fromEvent: (event) => ({
+      estimatedCostUsd: event.estimatedCostUsd,
+      cacheWriteInputTokens: event.cacheWriteInputTokens ?? 0
+    }),
     fold: (target, source) => {
       target.estimatedCostUsd = addCost(target.estimatedCostUsd, source.estimatedCostUsd)
+      target.cacheWriteInputTokens =
+        (target.cacheWriteInputTokens ?? 0) + (source.cacheWriteInputTokens ?? 0)
     }
   },
   cloneSessionForMerge: (session) => structuredClone(session)

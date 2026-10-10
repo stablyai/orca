@@ -33,7 +33,7 @@ function pickNextActiveTab(
   )
 }
 
-function pruneGroupLayout(
+export function pruneGroupLayout(
   node: TabGroupLayoutNode | undefined,
   validGroupIds: ReadonlySet<string>
 ): TabGroupLayoutNode | undefined {
@@ -159,6 +159,18 @@ function deriveActiveSurface(
   return { terminalTabId: terminalFallback, browserTabId: null, fileId: null, type: 'terminal' }
 }
 
+/** Whether this session holds the terminal tab, as a row or a unified tab. */
+export function workspaceSessionListsTerminalTab(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string
+): boolean {
+  return (
+    session.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true ||
+    findUnifiedTerminalTabs(session, worktreeId, tabId).length > 0
+  )
+}
+
 export function closeTerminalTabInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -225,6 +237,9 @@ export function closeTerminalTabInWorkspaceSession(
       [worktreeId]: (session.tabsByWorktree[worktreeId] ?? []).filter((tab) => tab.id !== tabId)
     },
     terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId },
+    ...(session.localOnlyScrollbackByTabId
+      ? { localOnlyScrollbackByTabId: { ...session.localOnlyScrollbackByTabId } }
+      : {}),
     unifiedTabs: { ...session.unifiedTabs, [worktreeId]: nextTabs },
     tabGroups: { ...session.tabGroups, [worktreeId]: nextGroups },
     tabGroupLayouts: { ...session.tabGroupLayouts },
@@ -233,6 +248,7 @@ export function closeTerminalTabInWorkspaceSession(
     sleepingAgentSessionsByPaneKey: { ...session.sleepingAgentSessionsByPaneKey }
   }
   delete next.terminalLayoutsByTabId[tabId]
+  delete next.localOnlyScrollbackByTabId?.[tabId]
   delete next.remoteSessionIdsByTabId![tabId]
   if (nextLayout) {
     next.tabGroupLayouts![worktreeId] = nextLayout

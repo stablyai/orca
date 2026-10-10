@@ -1,229 +1,207 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  type AgentStatusEntry,
+  type AgentStatusState,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status-types'
 import type { RetainedAgentEntry } from './agent-status'
 import { createTestStore, makeTab } from './store-test-helpers'
+import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { buildWorktreeAgentRows } from '@/components/sidebar/worktree-agent-rows'
+import { getAgentDotState } from '@/components/sidebar/worktree-card-agent-summary'
+import { resolveAttention } from '@/components/sidebar/smart-attention'
 
-describe('agent status runtime orchestration metadata', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('fills runtime orchestration metadata into existing live entries', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex'
+{
+  describe('agent status runtime orchestration metadata', () => {
+    afterEach(() => {
+      vi.useRealTimers()
     })
-    const epochBeforeRuntime = store.getState().agentStatusEpoch
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
+
+    it('fills runtime orchestration metadata into existing live entries', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex'
+      })
+      const epochBeforeRuntime = store.getState().agentStatusEpoch
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          taskTitle: 'Checkout race',
+          displayName: 'Fix checkout race',
+          parentPaneKey
+        }
+      })
+
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         taskTitle: 'Checkout race',
         displayName: 'Fix checkout race',
         parentPaneKey
+      })
+      expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
+    })
+
+    it('updates typed attention without changing per-agent unread, focus, or drafts', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const paneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      const draft = {
+        repoId: null,
+        name: 'keep me',
+        prompt: 'unsent draft',
+        note: '',
+        attachments: [],
+        linkedWorkItem: null,
+        agent: 'codex' as const,
+        linkedIssue: '',
+        linkedPR: null
       }
+      store.getState().setAgentStatus(paneKey, {
+        state: 'waiting',
+        prompt: 'worker prompt',
+        agentType: 'codex'
+      })
+      store.setState({
+        unreadAgentCompletionPanes: { [paneKey]: true },
+        unreadTerminalPanes: { [paneKey]: true },
+        activeTabId: 'tab-compose',
+        newWorkspaceDraft: draft
+      })
+      const before = store.getState()
+
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [paneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          attention: { categories: ['input', 'approval'], requiresAction: true }
+        }
+      })
+
+      const after = store.getState()
+      expect(after.agentStatusByPaneKey[paneKey].orchestration?.attention).toEqual({
+        categories: ['input', 'approval'],
+        requiresAction: true
+      })
+      expect(after.unreadAgentCompletionPanes).toBe(before.unreadAgentCompletionPanes)
+      expect(after.unreadTerminalPanes).toBe(before.unreadTerminalPanes)
+      expect(after.activeTabId).toBe('tab-compose')
+      expect(after.newWorkspaceDraft).toBe(draft)
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      taskTitle: 'Checkout race',
-      displayName: 'Fix checkout race',
-      parentPaneKey
-    })
-    expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
-  })
+    it('replaces stale live orchestration metadata when runtime dispatch identity changes', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      const staleParentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+      const currentParentPaneKey = 'tab-parent:33333333-3333-4333-8333-333333333333'
 
-  it('updates typed attention without changing per-agent unread, focus, or drafts', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const paneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const draft = {
-      repoId: null,
-      name: 'keep me',
-      prompt: 'unsent draft',
-      note: '',
-      attachments: [],
-      linkedWorkItem: null,
-      agent: 'codex' as const,
-      linkedIssue: '',
-      linkedPR: null
-    }
-    store.getState().setAgentStatus(paneKey, {
-      state: 'waiting',
-      prompt: 'worker prompt',
-      agentType: 'codex'
-    })
-    store.setState({
-      unreadAgentCompletionPanes: { [paneKey]: true },
-      unreadTerminalPanes: { [paneKey]: true },
-      activeTabId: 'tab-compose',
-      newWorkspaceDraft: draft
-    })
-    const before = store.getState()
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentPaneKey: staleParentPaneKey,
+          parentTerminalHandle: 'term-stale'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-2',
+          dispatchId: 'ctx-2',
+          parentPaneKey: currentParentPaneKey,
+          parentTerminalHandle: 'term-current'
+        }
+      })
 
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [paneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        attention: { categories: ['input', 'approval'], requiresAction: true }
-      }
-    })
-
-    const after = store.getState()
-    expect(after.agentStatusByPaneKey[paneKey].orchestration?.attention).toEqual({
-      categories: ['input', 'approval'],
-      requiresAction: true
-    })
-    expect(after.unreadAgentCompletionPanes).toBe(before.unreadAgentCompletionPanes)
-    expect(after.unreadTerminalPanes).toBe(before.unreadTerminalPanes)
-    expect(after.activeTabId).toBe('tab-compose')
-    expect(after.newWorkspaceDraft).toBe(draft)
-  })
-
-  it('replaces stale live orchestration metadata when runtime dispatch identity changes', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const staleParentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-    const currentParentPaneKey = 'tab-parent:33333333-3333-4333-8333-333333333333'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentPaneKey: staleParentPaneKey,
-        parentTerminalHandle: 'term-stale'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
         taskId: 'task-2',
         dispatchId: 'ctx-2',
         parentPaneKey: currentParentPaneKey,
         parentTerminalHandle: 'term-current'
-      }
+      })
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-2',
-      dispatchId: 'ctx-2',
-      parentPaneKey: currentParentPaneKey,
-      parentTerminalHandle: 'term-current'
-    })
-  })
+    it('uses existing orchestration fields only as fallback for the same runtime dispatch', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
 
-  it('uses existing orchestration fields only as fallback for the same runtime dispatch', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentPaneKey,
+          coordinatorHandle: 'term-stale-coordinator'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          coordinatorHandle: 'term-current-coordinator'
+        }
+      })
 
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         parentPaneKey,
-        coordinatorHandle: 'term-stale-coordinator'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
         coordinatorHandle: 'term-current-coordinator'
-      }
+      })
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentPaneKey,
-      coordinatorHandle: 'term-current-coordinator'
-    })
-  })
+    it('clears stale lineage when the authoritative runtime snapshot loses its Run binding', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
 
-  it('clears stale lineage when the authoritative runtime snapshot loses its Run binding', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          dispatchStatus: 'dispatched',
+          parentTerminalHandle: 'term-old-coordinator',
+          parentPaneKey: 'tab-parent:22222222-2222-4222-8222-222222222222',
+          coordinatorHandle: 'term-old-coordinator',
+          orchestrationRunId: 'run-1'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          dispatchStatus: 'dispatched',
+          orchestrationRunId: 'run-1'
+        }
+      })
 
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         dispatchStatus: 'dispatched',
-        parentTerminalHandle: 'term-old-coordinator',
-        parentPaneKey: 'tab-parent:22222222-2222-4222-8222-222222222222',
-        coordinatorHandle: 'term-old-coordinator',
         orchestrationRunId: 'run-1'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'dispatched',
-        orchestrationRunId: 'run-1'
-      }
+      })
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      dispatchStatus: 'dispatched',
-      orchestrationRunId: 'run-1'
-    })
-  })
-
-  it('updates runtime status for the same dispatch', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'done',
-      prompt: 'child agent',
-      agentType: 'claude',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'dispatched'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'completed'
-      }
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      dispatchStatus: 'completed'
-    })
-  })
-
-  it.each(['failed', 'circuit_broken'] as const)(
-    'updates runtime status to %s for the same dispatch',
-    (dispatchStatus) => {
+    it('updates runtime status for the same dispatch', () => {
       vi.useFakeTimers()
       const store = createTestStore()
       const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
@@ -239,161 +217,332 @@ describe('agent status runtime orchestration metadata', () => {
         }
       })
       store.getState().setRuntimeAgentOrchestrationByPaneKey({
-        [childPaneKey]: { taskId: 'task-1', dispatchId: 'ctx-1', dispatchStatus }
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          dispatchStatus: 'completed'
+        }
       })
 
-      expect(
-        store.getState().agentStatusByPaneKey[childPaneKey].orchestration?.dispatchStatus
-      ).toBe(dispatchStatus)
-    }
-  )
-
-  it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
-        parentTerminalHandle: 'term-stale'
-      }
+        dispatchStatus: 'completed'
+      })
     })
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
+
+    it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentTerminalHandle: 'term-stale'
+        }
+      })
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex',
+        orchestration: {
+          taskId: 'task-2',
+          dispatchId: 'ctx-2',
+          parentTerminalHandle: 'term-current'
+        }
+      })
+
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
         taskId: 'task-2',
         dispatchId: 'ctx-2',
         parentTerminalHandle: 'term-current'
-      }
+      })
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-2',
-      dispatchId: 'ctx-2',
-      parentTerminalHandle: 'term-current'
-    })
-  })
+    it('fills already-synced runtime orchestration metadata into new live entries', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
 
-  it('fills already-synced runtime orchestration metadata into new live entries', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentPaneKey
+        }
+      })
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex'
+      })
 
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         parentPaneKey
-      }
-    })
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex'
+      })
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentPaneKey
+    it('clears stale live orchestration when a reused pane starts non-orchestrated work', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'done',
+        prompt: 'finished child',
+        agentType: 'codex',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentTerminalHandle: 'term-parent'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({})
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'manual follow-up',
+        agentType: 'codex'
+      })
+
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toBeUndefined()
     })
-  })
 
-  it('clears stale live orchestration when a reused pane starts non-orchestrated work', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+    it('preserves stale live orchestration for final done rows', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
 
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'done',
-      prompt: 'finished child',
-      agentType: 'codex',
-      orchestration: {
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'working',
+        prompt: 'child agent',
+        agentType: 'codex',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentTerminalHandle: 'term-parent'
+        }
+      })
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({})
+      store.getState().setAgentStatus(childPaneKey, {
+        state: 'done',
+        prompt: 'child finished',
+        agentType: 'codex'
+      })
+
+      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         parentTerminalHandle: 'term-parent'
+      })
+    })
+
+    it('fills runtime orchestration metadata into retained entries', () => {
+      const store = createTestStore()
+      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+      const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
+      const now = Date.now()
+      const entry: AgentStatusEntry = {
+        state: 'done',
+        prompt: 'child agent',
+        updatedAt: now,
+        stateStartedAt: now,
+        paneKey: childPaneKey,
+        stateHistory: []
       }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({})
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'manual follow-up',
-      agentType: 'codex'
-    })
+      const retained: RetainedAgentEntry = {
+        entry,
+        worktreeId: 'wt-1',
+        tab: makeTab({ id: 'tab-child', worktreeId: 'wt-1', title: 'codex' }),
+        agentType: 'codex',
+        startedAt: now
+      }
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toBeUndefined()
-  })
+      store.getState().retainAgents([retained])
+      store.getState().setRuntimeAgentOrchestrationByPaneKey({
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentPaneKey
+        }
+      })
 
-  it('preserves stale live orchestration for final done rows', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
+      expect(
+        store.getState().retainedAgentsByPaneKey[childPaneKey].entry.orchestration
+      ).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
-        parentTerminalHandle: 'term-parent'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({})
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'done',
-      prompt: 'child finished',
-      agentType: 'codex'
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentTerminalHandle: 'term-parent'
+        parentPaneKey
+      })
     })
   })
+}
 
-  it('fills runtime orchestration metadata into retained entries', () => {
+{
+  // The safety argument for STA-4293 step 1 in one file: an observation-stamped row and an
+  // unstamped row must be indistinguishable to every consumer that reads status today.
+
+  const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+  const OBSERVATION: AgentStatusObservation = {
+    origin: 'hook',
+    authorityId: 'main-agent-hooks:test',
+    incarnation: 3,
+    revision: 17,
+    observedAt: 1_700_000_000_000,
+    boundary: true,
+    kind: 'transition'
+  }
+
+  const STATES: AgentStatusState[] = ['working', 'blocked', 'waiting', 'done']
+
+  function withoutObservation(entry: AgentStatusEntry): Omit<AgentStatusEntry, 'observation'> {
+    const { observation: _observation, ...rest } = entry
+    return rest
+  }
+
+  function applyStatus(
+    state: AgentStatusState,
+    observation: AgentStatusObservation | undefined
+  ): {
+    entry: AgentStatusEntry
+    agentStatusEpoch: number
+    sortEpoch: number
+  } {
     const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-    const now = Date.now()
-    const entry: AgentStatusEntry = {
-      state: 'done',
-      prompt: 'child agent',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: childPaneKey,
-      stateHistory: []
+    store.getState().setAgentStatus(PANE_KEY, {
+      state: 'working',
+      prompt: 'first turn',
+      agentType: 'claude',
+      ...(observation ? { observation } : {})
+    })
+    store.getState().setAgentStatus(PANE_KEY, {
+      state,
+      prompt: 'first turn',
+      agentType: 'claude',
+      lastAssistantMessage: state === 'done' ? 'all set' : undefined,
+      ...(observation ? { observation } : {})
+    })
+    const snapshot = store.getState()
+    const entry = snapshot.agentStatusByPaneKey[PANE_KEY]
+    if (!entry) {
+      throw new Error(`expected a live entry for ${state}`)
     }
-    const retained: RetainedAgentEntry = {
+    return {
       entry,
-      worktreeId: 'wt-1',
-      tab: makeTab({ id: 'tab-child', worktreeId: 'wt-1', title: 'codex' }),
-      agentType: 'codex',
-      startedAt: now
+      agentStatusEpoch: snapshot.agentStatusEpoch,
+      sortEpoch: snapshot.sortEpoch
     }
+  }
 
-    store.getState().retainAgents([retained])
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentPaneKey
+  describe('agent status observation is behavior-neutral', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it.each(STATES)('produces an identical %s entry apart from the observation field', (state) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_700_000_000_000)
+
+      const stamped = applyStatus(state, OBSERVATION)
+      vi.setSystemTime(1_700_000_000_000)
+      const unstamped = applyStatus(state, undefined)
+
+      expect(withoutObservation(stamped.entry)).toEqual(withoutObservation(unstamped.entry))
+      expect(stamped.entry.observation).toEqual(OBSERVATION)
+      expect(unstamped.entry.observation).toBeUndefined()
+      // Why: an extra epoch tick is an extra render across every aggregate consumer — that
+      // would be a behavior change even though no rendered value differs.
+      expect(stamped.agentStatusEpoch).toBe(unstamped.agentStatusEpoch)
+      expect(stamped.sortEpoch).toBe(unstamped.sortEpoch)
+    })
+
+    it.each(STATES)('resolves %s identically for freshness, rows, dot and attention', (state) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_700_000_000_000)
+      const stamped = applyStatus(state, OBSERVATION).entry
+      vi.setSystemTime(1_700_000_000_000)
+      const unstamped = applyStatus(state, undefined).entry
+      vi.useRealTimers()
+
+      const now = 1_700_000_000_000
+      const tabs = [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+
+      for (const at of [now, now + AGENT_STATUS_STALE_AFTER_MS + 1]) {
+        expect(isExplicitAgentStatusFresh(stamped, at, AGENT_STATUS_STALE_AFTER_MS)).toBe(
+          isExplicitAgentStatusFresh(unstamped, at, AGENT_STATUS_STALE_AFTER_MS)
+        )
+
+        const stampedRows = buildWorktreeAgentRows({
+          tabs,
+          entries: [stamped],
+          retained: [],
+          now: at
+        })
+        const unstampedRows = buildWorktreeAgentRows({
+          tabs,
+          entries: [unstamped],
+          retained: [],
+          now: at
+        })
+        // Why: an empty-vs-empty comparison would pass without proving anything.
+        expect(stampedRows).toHaveLength(1)
+        expect(
+          stampedRows.map((row) => ({ ...row, entry: withoutObservation(row.entry) }))
+        ).toEqual(unstampedRows.map((row) => ({ ...row, entry: withoutObservation(row.entry) })))
+        expect(stampedRows.map(getAgentDotState)).toEqual(unstampedRows.map(getAgentDotState))
+
+        expect(resolveAttention([{ kind: 'hook', entry: stamped, hasLivePty: false }], at)).toEqual(
+          resolveAttention([{ kind: 'hook', entry: unstamped, hasLivePty: false }], at)
+        )
       }
     })
 
-    expect(
-      store.getState().retainedAgentsByPaneKey[childPaneKey].entry.orchestration
-    ).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentPaneKey
+    it('leaves an unstamped entry resolving exactly as it does today', () => {
+      // Why: old hosts, persisted rehydration, title-derived rows and subagent rows all reach
+      // consumers with no observation at all; that path must not have moved.
+      const now = 1_700_000_000_000
+      const entry: AgentStatusEntry = {
+        paneKey: PANE_KEY,
+        state: 'blocked',
+        prompt: 'needs approval',
+        updatedAt: now,
+        stateStartedAt: now,
+        stateHistory: [],
+        agentType: 'codex'
+      }
+
+      expect(isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
+      expect(resolveAttention([{ kind: 'hook', entry, hasLivePty: false }], now)).toMatchObject({
+        cls: 1
+      })
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
+        entries: [entry],
+        retained: [],
+        now
+      })
+      expect(rows).toHaveLength(1)
+      expect(rows[0].entry.observation).toBeUndefined()
+      expect(getAgentDotState(rows[0])).toBe('blocked')
+    })
+
+    it('does not carry a previous observation onto an unstamped write', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store.getState().setAgentStatus(PANE_KEY, {
+        state: 'working',
+        prompt: 'p',
+        agentType: 'claude',
+        observation: OBSERVATION
+      })
+      store.getState().setAgentStatus(PANE_KEY, { state: 'done', prompt: 'p', agentType: 'claude' })
+
+      // Why: inheriting it would let a stale authority claim ordering over a row it never observed.
+      expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.observation).toBeUndefined()
     })
   })
-})
+}

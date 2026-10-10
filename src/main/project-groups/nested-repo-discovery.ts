@@ -1,7 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../shared/project-group-types'
-import { isGitRepo } from '../git/repo'
+import { isGitRepoAsync } from '../git/repo'
 import {
   isIgnoredNestedRepoDirectory,
   normalizeNestedRepoScanOptions,
@@ -58,7 +58,8 @@ export async function scanNestedRepos(args: {
     joinPath: join,
     basename,
     hasGitMarker,
-    isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
+    isSelectedPathGitRepo: async (path: string) =>
+      (await isGitRepoAsync(path)) || (await hasGitMarker(path))
   }
   const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
     selectedPath: args.path,
@@ -90,7 +91,7 @@ export async function scanNestedRepos(args: {
     return buildResult('non_git_folder')
   }
 
-  const foldersToTraverse: TraversalFolder[] = [
+  const foldersToTraverse: (TraversalFolder | undefined)[] = [
     { path: args.path, depth: 0, segments: [], ignoreRules: [] }
   ]
   let nextFolderIndex = 0
@@ -107,7 +108,13 @@ export async function scanNestedRepos(args: {
     if (noteAbort()) {
       break
     }
-    const currentFolder = foldersToTraverse[nextFolderIndex++]
+    const currentFolder = foldersToTraverse[nextFolderIndex++]!
+    // Release processed paths and inherited ignore rules before the next filesystem await.
+    foldersToTraverse[nextFolderIndex - 1] = undefined
+    if (nextFolderIndex >= 64 && nextFolderIndex * 2 >= foldersToTraverse.length) {
+      foldersToTraverse.splice(0, nextFolderIndex)
+      nextFolderIndex = 0
+    }
     if (currentFolder.depth > options.maxDepth) {
       continue
     }

@@ -185,13 +185,16 @@ export function createWorkspaceTerminalHydrationActions(
           worktreesByRepo,
           // Why: restore the focus-recency map; pruning is deferred to App.tsx (post-hydration) because SSH worktrees may still be appearing in worktreesByRepo.
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
-          defaultTerminalTabsAppliedByWorktreeId:
-            session.defaultTerminalTabsAppliedByWorktreeId ?? {},
-          // Why replace and not union: both callers hand over a map they derived from this store
-          // synchronously (the pull merge) or from disk before the store had one (startup), so there
-          // is no local tombstone to lose — and a union would resurrect the ones the merge just
-          // retired on the host's acknowledgement, which is the whole bound on this map.
-          closedTerminalTabTombstonesByTabId: session.closedTerminalTabTombstonesByTabId ?? {},
+          // Why union: a persist snapshot that omits the write-once marker is a writer that never
+          // stamped it, not a report that default tabs were never applied (#18117).
+          defaultTerminalTabsAppliedByWorktreeId: {
+            ...session.defaultTerminalTabsAppliedByWorktreeId,
+            ...s.defaultTerminalTabsAppliedByWorktreeId
+          },
+          // Why keep the store's when absent: only main's session carries close records, and the
+          // pull merge's session does not, so re-hydrating from it must not clear the mirror.
+          closedTerminalTabTombstonesByTabId:
+            session.closedTerminalTabTombstonesByTabId ?? s.closedTerminalTabTombstonesByTabId,
           automaticAgentResumeClaimsByTabId: {},
           sleepingAgentSessionsByPaneKey,
           pendingReconnectWorktreeIds,
@@ -213,7 +216,12 @@ export function createWorkspaceTerminalHydrationActions(
             session,
             tabById,
             validTabIds
-          })
+          }),
+          localOnlyScrollbackByTabId: Object.fromEntries(
+            Object.entries(session.localOnlyScrollbackByTabId ?? {}).filter(([tabId]) =>
+              validTabIds.has(tabId)
+            )
+          )
         }
         return options?.replaceWorkspaceKeys
           ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)

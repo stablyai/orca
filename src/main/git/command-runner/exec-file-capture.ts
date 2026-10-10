@@ -1,7 +1,8 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../shared/subprocess-stdin-write'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { resolveSelectedLocalCommand } from '../../ipc/command-path-resolver'
 import type { WslProcessGroupTermination } from '../wsl-process-group-termination'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
@@ -27,12 +28,13 @@ export async function execFileCaptureToTermination(
   options: ExecFileCaptureOptions,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  // Why measured here: runProcess spawns inside its promise executor, which runs
-  // synchronously, so this brackets exactly the main-thread block execFileCapture
-  // reports for its own spawns.
-  const spawnStartedAt = performance.now()
+  // Spawn cost is reported by spawnProcess's observer, which runProcess goes
+  // through; recording it again here would double-count every capture.
   const pending = runProcess({
-    program: command,
+    program: resolveSelectedLocalCommand(command, {
+      env: options.env,
+      cwd: typeof options.cwd === 'string' ? options.cwd : undefined
+    }),
     args,
     cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
     env: options.env,
@@ -43,7 +45,6 @@ export async function execFileCaptureToTermination(
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
-  recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
   const result = await pending
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr

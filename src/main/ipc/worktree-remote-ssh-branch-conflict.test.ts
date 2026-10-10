@@ -10,6 +10,9 @@ function providerAnswering(answers: {
   remoteRefs: string[]
 }): ConflictProvider {
   const exec: ConflictProvider['exec'] = vi.fn(async (args: string[]) => {
+    if (args[0] === 'for-each-ref') {
+      return { stdout: '', stderr: '' }
+    }
     if (args[0] === 'remote') {
       return { stdout: `${answers.remotes.join('\n')}\n`, stderr: '' }
     }

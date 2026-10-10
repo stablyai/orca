@@ -41,7 +41,6 @@ function createPorts() {
   })
   const ports: StartupArgs['ports'] = {
     canSpawn: true,
-    markTrusted: vi.fn(),
     createTerminal,
     pasteDraft: vi.fn(),
     sendFollowup: vi.fn(),
@@ -51,7 +50,69 @@ function createPorts() {
   return { createTerminal, ports }
 }
 
+const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
+const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
+
+async function startupTerminalOptions(startupPaneKey?: string) {
+  const { createTerminal, ports } = createPorts()
+  await startRuntimeLocalWorktreeTerminals({
+    request: {
+      repoSelector: `id:${repo.id}`,
+      name: worktree.displayName,
+      ...(startupPaneKey ? { startupPaneKey } : {})
+    },
+    repo,
+    worktree,
+    createdWithAgent: 'codex',
+    startup: { command: 'codex' },
+    ports
+  })
+  return createTerminal.mock.calls[0]?.[1] ?? {}
+}
+
+describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
+  // The local, folder and remote creates each forward this separately, so nothing above them
+  // catches the one that stops.
+  it('creates the startup terminal under the pane the caller reserved', async () => {
+    expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
+      tabId: TAB_ID,
+      leafId: LEAF_ID
+    })
+  })
+
+  it('leaves the pane to the runtime when none was reserved', async () => {
+    const options = await startupTerminalOptions()
+    expect(options).not.toHaveProperty('tabId')
+    expect(options).not.toHaveProperty('leafId')
+  })
+})
+
 describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
+  it.each([false, true])(
+    'provisions a headless activated workspace without a viewer (setup=%s)',
+    async (withSetup) => {
+      const { ports } = createPorts()
+      ports.provisionInBackground = () => true
+      const setup = withSetup ? { runnerScriptPath: '/repo/setup.sh', envVars: {} } : undefined
+      await startRuntimeLocalWorktreeTerminals({
+        request: { repoSelector: `id:${repo.id}`, name: 'headless', activate: true },
+        repo,
+        worktree,
+        setup,
+        ports
+      })
+      expect(ports.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: worktree.id,
+          hasStartupTerminal: false,
+          surfaceOwner: false,
+          ...(setup ? { setup } : {})
+        })
+      )
+      expect(ports.createTerminal).not.toHaveBeenCalled()
+    }
+  )
+
   it.each([
     ['Blank Terminal', undefined, 1],
     ['an agent', 'codex' as const, 0]

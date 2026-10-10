@@ -11,6 +11,7 @@ import {
   migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
 } from '../../terminal-scrollback-snapshot-async-migration'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
+import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import {
   normalizeWorkspaceSessionPaneIdentities,
@@ -37,7 +38,7 @@ export function setLocalWorkspaceSession(
   const prior = context.runtime.state.workspaceSession
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
-  session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
+  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
   session = pruneWorkspaceSessionBrowserHistory(
     pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
@@ -104,14 +105,27 @@ export function setLocalWorkspaceSession(
     deleteRemovedTerminalScrollbackSnapshots(
       prior,
       session,
-      context.runtime.terminalScrollbackSnapshotStorage
+      context.runtime.terminalScrollbackSnapshotStorage,
+      retainedScrollbackRefs(context.runtime)
     )
   }
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
   }
-  scheduleSave(context.scheduling)
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
+    // UI remaps include protected fields, so keep the complete serializer boundary.
+    scheduleSave(context.scheduling)
+  } else {
+    scheduleSave(
+      context.scheduling,
+      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession']
+    )
+  }
 }
 
 export function enqueueTerminalScrollbackSnapshotWork(
@@ -128,7 +142,8 @@ export function enqueueTerminalScrollbackSnapshotWork(
           await deleteRemovedTerminalScrollbackSnapshotsAsync(
             prior,
             context.runtime.state.workspaceSession,
-            context.runtime.terminalScrollbackSnapshotStorage
+            context.runtime.terminalScrollbackSnapshotStorage,
+            retainedScrollbackRefs(context.runtime)
           )
         }
         return
@@ -147,14 +162,16 @@ export function enqueueTerminalScrollbackSnapshotWork(
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           migrated,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
         )
       }
       if (current) {
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           prior,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
         )
       }
     })
@@ -167,4 +184,12 @@ export function enqueueTerminalScrollbackSnapshotWork(
       }
     })
   context.runtime.pendingSnapshotFileWork = work
+}
+
+function retainedScrollbackRefs(runtime: {
+  retainedScrollbackRefsByMigrationId: ReadonlyMap<string, ReadonlySet<string>>
+}): ReadonlySet<string> {
+  return new Set(
+    [...runtime.retainedScrollbackRefsByMigrationId.values()].flatMap((refs) => [...refs])
+  )
 }

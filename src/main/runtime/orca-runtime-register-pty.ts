@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 
 export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
   registerPty(
@@ -27,6 +28,16 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
     const existingPty = this.ptysById.get(ptyId)
+    // Why: a relay reattach can finish registering after a stop recorded that incarnation's exit.
+    if (
+      binding?.incarnationId !== undefined &&
+      existingPty?.incarnationId === binding.incarnationId &&
+      !existingPty.connected &&
+      this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
+    ) {
+      return
+    }
+    this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const replacementHandle = binding?.terminalHandle?.trim()
     const pendingReplacement = this.pendingPtyHandleReplacementFences.get(ptyId)
     const pendingReplacementMatches =
@@ -77,7 +88,13 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         ? { runtimeSessionOwned: true }
         : {}),
       ...(isWsl !== undefined ? { isWsl } : {}),
-      ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
+      ...(binding && paneKey
+        ? {
+            tabId: binding.tabId,
+            paneKey,
+            surfaceRecordedAtGraphSequence: spawnSurfaceClaimSequence(this.graphSequence)
+          }
+        : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
@@ -132,9 +149,17 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         currentFence.pendingRegistration = false
       }
     }
+    // Why: a listed surface's pending-handle → ready flip must not wait on a later renderer graph change.
+    this.touchMobileSessionSnapshotsForPty(ptyId)
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
+      if (
+        replacementHandle?.startsWith('term_') &&
+        this.handleByPtyId.get(ptyId) !== replacementHandle
+      ) {
+        this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
+      }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
   }

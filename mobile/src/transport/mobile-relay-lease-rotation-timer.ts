@@ -1,3 +1,5 @@
+import type { ScheduleTimer } from './timer-scheduler'
+
 // Why: the relay resume lease expires; the phone must proactively re-resume a
 // little before the deadline (and retry shortly if a forced rotation didn't land)
 // so the session never lapses. Owns the single lease/rotation timer slot.
@@ -12,7 +14,7 @@ const LEASE_ROTATION_MAX_DELAY_MS = 6 * 60 * 60 * 1000
 
 export type RelayLeaseRotationDependencies = {
   now: () => number
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 

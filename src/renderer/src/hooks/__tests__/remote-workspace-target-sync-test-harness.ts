@@ -82,6 +82,7 @@ export function worktree(id = 'repo-a::/remote/work') {
 }
 
 export function appState(overrides: Record<string, unknown> = {}): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture intentionally supplies only the slices used by target-sync tests.
   return {
     workspaceSessionReady: true,
     repos: [repo()],
@@ -100,6 +101,7 @@ export function appState(overrides: Record<string, unknown> = {}): AppState {
     directSshPaneRetryByTabId: {},
     directSshLivePtyBindingByTabId: {},
     terminalLayoutsByTabId: {},
+    pendingDirectSshLayoutEditsByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
     editorDrafts: {},
@@ -122,9 +124,11 @@ export function appState(overrides: Record<string, unknown> = {}): AppState {
     hydrateTabsSession: vi.fn(),
     hydrateEditorSession: vi.fn(),
     hydrateBrowserSession: vi.fn(),
+    remoteWorkspaceHydratedTargetIds: new Set<string>(),
     markRemoteWorkspaceHydrated: vi.fn(),
     clearRemoteWorkspaceHydrated: vi.fn(),
     setRemoteWorkspaceSyncStatus: vi.fn(),
+    acknowledgeDirectSshLayoutEdits: vi.fn(),
     reconnectPersistedTerminals: vi.fn(async () => {}),
     ...overrides
   } as unknown as AppState

@@ -5,7 +5,7 @@ import type {
   ConnectionState,
   MobileConnectionDiagnosticPath
 } from '../transport/types'
-import { normalizeHostAppVersion } from '../transport/host-app-version-store'
+import { normalizeHostAppVersion } from '../transport/host-app-version'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'

@@ -192,7 +192,7 @@ describe('orchestration worker release', () => {
         h.db.beginWorkerStop(dispatchId, h.runtime.getRuntimeId())
         h.db.settleWorkerStop(dispatchId)
       } else {
-        h.db.abandonWorkerDispatch(dispatchId)
+        h.db.abandonWorkerDispatch(dispatchId, 'epoch_test')
       }
       h.inspectProcessLiveness.mockResolvedValue('exited')
 
@@ -221,7 +221,7 @@ describe('orchestration worker release', () => {
         h.db.beginWorkerStop(dispatchId, h.runtime.getRuntimeId())
         h.db.settleWorkerStop(dispatchId)
       } else {
-        h.db.abandonWorkerDispatch(dispatchId)
+        h.db.abandonWorkerDispatch(dispatchId, 'epoch_test')
       }
       h.inspectProcessLiveness.mockResolvedValue('unverifiable')
 

@@ -10,12 +10,15 @@ import type {
   AiVaultSearchStatus
 } from '../../shared/ai-vault-search-types'
 import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import type { SessionSearchHostScope } from '../ai-vault-search/session-search-service'
 import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-scan-roots'
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
-import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
+import type { AiVaultScanOptions } from './session-scanner-types'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
+
+export type AiVaultServiceScanOptions = Omit<AiVaultScanOptions, 'signal'>
 
 export type AiVaultServiceLane = 'cache' | 'interactive'
 export type AiVaultServiceOperation =
@@ -66,7 +69,7 @@ export type AiVaultServiceInit = {
 }
 
 export type AiVaultServiceRequestBody =
-  | { type: 'request'; operation: 'scan'; options: AiVaultWorkerScanOptions }
+  | { type: 'request'; operation: 'scan'; options: AiVaultServiceScanOptions }
   | {
       type: 'request'
       operation: 'titles'
@@ -82,7 +85,13 @@ export type AiVaultServiceRequestBody =
       operation: 'firstPrompt'
       request: ReadAiVaultFirstUserPromptArgs
     }
-  | { type: 'request'; operation: 'searchSessions'; request: AiVaultSearchRequest }
+  | {
+      type: 'request'
+      operation: 'searchSessions'
+      request: AiVaultSearchRequest
+      /** What the host made of a scope identity; outside `request` so no wire cap applies. */
+      hostScope?: SessionSearchHostScope
+    }
   | { type: 'request'; operation: 'searchStatus' }
   | { type: 'request'; operation: 'searchReconcile' }
   | { type: 'request'; operation: 'searchClear' }

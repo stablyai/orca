@@ -14,13 +14,15 @@ import type {
   RecordingScheduler,
   MountedOperation
 } from './recording-scenario'
-import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import { ScriptedRpcTransport, type ScriptedClientWrapper } from './scripted-rpc-transport'
 import { createWriteOrdinal } from './write-ordinal'
 
 export async function runRecording(
   scenario: RecordingScenario,
   mount: MountAdapter,
-  scheduler: RecordingScheduler
+  scheduler: RecordingScheduler,
+  /** A transport to record through instead of straight at the scripted one; see its type. */
+  wrapClient?: ScriptedClientWrapper
 ): Promise<Recording> {
   await scheduler.start()
   // One counter per recording, shared by requests, payloads and effects. Each list is append-only
@@ -29,7 +31,7 @@ export async function runRecording(
   // this replaced ordered payloads and effects against sends only, never against each other, so in
   // a family that sends no requests every stamp was `0` and subscribe-vs-effect order was unpinned.
   const nextWriteOrdinal = createWriteOrdinal()
-  const transport = new ScriptedRpcTransport(scheduler.elapsed, nextWriteOrdinal)
+  const transport = new ScriptedRpcTransport(scheduler.elapsed, nextWriteOrdinal, wrapClient)
   const effects: { name: string; ordinal: number; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
@@ -51,8 +53,8 @@ export async function runRecording(
     // byte-identical.
     await scheduler.flush()
     // A stream the product forgot to close is only visible on the wire when its method has an
-    // unsubscribe builder; `notifications.subscribe` has none, so closing it writes nothing and the
-    // leak stays a live registry record until some later cutover replays it. Observed here, after
+    // unsubscribe builder; closing a builder-less one writes nothing and the leak stays a live
+    // registry record until some later cutover replays it. Observed here, after
     // the product's own cleanup and before the transport tears the registries down, so a
     // builder-less subscription is pinned without a scenario that cuts over to expose it.
     const registered = transport.registeredStreams()

@@ -12,12 +12,14 @@ import {
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import {
+  readTargetSyncPhase,
+  waitForUploadedRemoteSnapshot
+} from './helpers/docker-ssh-relay-workspace-snapshot'
 import { createRestartSession } from './helpers/orca-restart'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const BASELINE_TAB_COUNT = 3
-/** Where the relay persists a target's workspace snapshot inside the fixture container. */
-const REMOTE_SNAPSHOT_DIR = '/root/.orca/sessions'
 
 test.use({ seedTestRepo: false })
 
@@ -31,13 +33,6 @@ async function readWorktreeTabIds(page: Page, worktreeId: string): Promise<strin
 async function isTargetHydrated(page: Page, targetId: string): Promise<boolean> {
   return page.evaluate(
     (id) => window.__store?.getState().remoteWorkspaceHydratedTargetIds.has(id) === true,
-    targetId
-  )
-}
-
-async function readTargetSyncPhase(page: Page, targetId: string): Promise<string | undefined> {
-  return page.evaluate(
-    (id) => window.__store?.getState().remoteWorkspaceSyncStatusByTargetId[id]?.phase,
     targetId
   )
 }
@@ -60,28 +55,6 @@ async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<str
     )
     .toBeGreaterThanOrEqual(3)
   return latest
-}
-
-function findRemoteSnapshotPath(target: DockerSshRelayTarget): string | null {
-  const listing = execDockerSshRelayTargetControlCommand(
-    target,
-    `ls -1 ${REMOTE_SNAPSHOT_DIR}/*.json 2>/dev/null || true`
-  ).trim()
-  return listing.split('\n').find((line) => line.endsWith('.json')) ?? null
-}
-
-async function waitForUploadedRemoteSnapshot(target: DockerSshRelayTarget): Promise<string> {
-  let snapshotPath: string | null = null
-  await expect
-    .poll(
-      () => {
-        snapshotPath = findRemoteSnapshotPath(target)
-        return snapshotPath
-      },
-      { timeout: 60_000, message: 'the relay never persisted a workspace snapshot' }
-    )
-    .not.toBeNull()
-  return snapshotPath!
 }
 
 /**

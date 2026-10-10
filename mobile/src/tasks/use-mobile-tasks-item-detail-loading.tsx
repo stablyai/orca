@@ -1,19 +1,12 @@
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
+import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
   useEffect
 } from './mobile-tasks-dependencies'
-import {
-  type DetailComment,
-  type GitHubAssignableUser,
-  type GitHubDetailCheck,
-  type GitHubDetailFile,
-  type GitHubPRReviewSummary,
-  type LinearIssue,
-  type TaskItem,
-  createLinearTask
-} from './mobile-tasks-legacy-foundation'
+import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import {
   githubItemDetailRead,
   gitlabItemDetailRead,
@@ -21,7 +14,43 @@ import {
   linearIssueRead
 } from './mobile-task-item-detail-operations'
 
-export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
+type GitLabHydratedStatus = Pick<GitLabWorkItem, 'mergeable' | 'reviewDecision' | 'reviewerCount'>
+
+function gitLabHydrationUnchanged(
+  source: GitLabWorkItem,
+  summary: ProviderCheckSummary,
+  status: GitLabHydratedStatus
+): boolean {
+  const current = source.checksSummary
+  return (
+    current?.state === summary.state &&
+    current.total === summary.total &&
+    current.passed === summary.passed &&
+    current.failed === summary.failed &&
+    current.pending === summary.pending &&
+    current.neutral === summary.neutral &&
+    (status.mergeable === undefined || source.mergeable === status.mergeable) &&
+    (status.reviewDecision === undefined || source.reviewDecision === status.reviewDecision) &&
+    (status.reviewerCount === undefined || source.reviewerCount === status.reviewerCount)
+  )
+}
+
+export type ItemDetailLoadingInput = Pick<
+  ItemDetailMetadataEffectsModel,
+  | 'actionItem'
+  | 'client'
+  | 'detailRefreshSeq'
+  | 'setActionItem'
+  | 'setDetailError'
+  | 'setDetailLoading'
+  | 'setDetailPayload'
+  | 'setItems'
+  | 'tasksSupported'
+>
+
+export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingInput>(
+  model: Model
+) {
   const {
     actionItem,
     client,
@@ -57,31 +86,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const details = githubItemDetailRead.interpret(reply) as {
-          body?: string
-          comments?: DetailComment[]
-          item?: {
-            labels?: string[]
-            reviewDecision?: string | null
-            reviewRequests?: GitHubAssignableUser[]
-            latestReviews?: GitHubPRReviewSummary[]
-          }
-          assignees?: string[]
-          headSha?: string
-          baseSha?: string
-          pullRequestId?: string
-          checks?: GitHubDetailCheck[]
-          files?: Array<{
-            path: string
-            oldPath?: string
-            status?: GitHubDetailFile['status']
-            additions?: number
-            deletions?: number
-            isBinary?: boolean
-            viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
-          }>
-        } | null
+        const details = githubItemDetailRead.interpret(reply)
         if (!details) {
           throw new Error('Details not found')
         }
@@ -116,23 +121,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const details = gitlabItemDetailRead.interpret(reply) as {
-          body?: string
-          comments?: DetailComment[]
-          item?: { labels?: string[]; mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' }
-          assignees?: string[]
-          pipelineJobs?: Array<{
-            id?: number
-            name: string
-            stage: string
-            status: string
-            webUrl?: string | null
-            duration?: number | null
-          }>
-          reviewers?: unknown[]
-          approvalState?: { approvalsRequired: number | null; approvalsLeft: number | null }
-        } | null
+        const details = gitlabItemDetailRead.interpret(reply)
         if (!details) {
           throw new Error('Details not found')
         }
@@ -158,7 +147,9 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
           }
           setActionItem((current) =>
-            current?.provider === 'gitlab' && current.source.id === actionItem.source.id
+            current?.provider === 'gitlab' &&
+            current.source.id === actionItem.source.id &&
+            !gitLabHydrationUnchanged(current.source, checksSummary, hydratedStatus)
               ? {
                   ...current,
                   source: {
@@ -169,20 +160,24 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
                 }
               : current
           )
-          setItems((current) =>
-            current.map((candidate) =>
-              candidate.provider === 'gitlab' && candidate.source.id === actionItem.source.id
-                ? {
-                    ...candidate,
-                    source: {
-                      ...candidate.source,
-                      checksSummary,
-                      ...hydratedStatus
-                    }
-                  }
-                : candidate
-            )
-          )
+          setItems((current) => {
+            let changed = false
+            const next = current.map((candidate) => {
+              if (
+                candidate.provider !== 'gitlab' ||
+                candidate.source.id !== actionItem.source.id ||
+                gitLabHydrationUnchanged(candidate.source, checksSummary, hydratedStatus)
+              ) {
+                return candidate
+              }
+              changed = true
+              return {
+                ...candidate,
+                source: { ...candidate.source, checksSummary, ...hydratedStatus }
+              }
+            })
+            return changed ? next : current
+          })
         }
         return
       }
@@ -208,11 +203,9 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           { timeoutMs: 30_000 }
         )
       ])
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const issue = linearIssueRead.interpret(issueReply) as LinearIssue | null
+      const issue = linearIssueRead.interpret(issueReply)
       const accepted = linearIssueCommentsRead.interpret(commentsReply)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const comments = accepted.accepted ? ((accepted.value as DetailComment[]) ?? []) : []
+      const comments = accepted.accepted ? (accepted.value ?? []) : []
       if (!issue) {
         throw new Error('Details not found')
       }
@@ -262,4 +255,4 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
   return model
 }
 
-export type ItemDetailLoadingModel = ReturnType<typeof useMobileTasksItemDetailLoading>
+export type ItemDetailLoadingModel = ItemDetailMetadataEffectsModel

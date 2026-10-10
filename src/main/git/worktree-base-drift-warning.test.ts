@@ -8,7 +8,7 @@ vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { getLocalBaseRefDriftWarningForWorktreeCreate } from './worktree-base-refresh-analysis'
+import { getLocalBaseRefDriftWarningForWorktreeCreate } from './worktree-base-drift-warning'
 
 describe('getLocalBaseRefDriftWarningForWorktreeCreate', () => {
   beforeEach(() => gitExecFileAsyncMock.mockReset())

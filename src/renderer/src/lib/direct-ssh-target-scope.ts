@@ -1,6 +1,7 @@
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
+  parseRoutableExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -38,12 +39,8 @@ function addHostEvidence(evidence: HostEvidence, rawHostId: string | null | unde
   if (!rawHostId?.trim()) {
     return
   }
-  const host = parseExecutionHostId(rawHostId)
+  const host = parseRoutableExecutionHostId(rawHostId)
   if (!host) {
-    evidence.ambiguous = true
-    return
-  }
-  if (host.kind === 'runtime' && host.environmentId === 'unresolved-owner') {
     evidence.ambiguous = true
     return
   }
@@ -120,10 +117,8 @@ function resolveWorktreeEvidence(
   evidence.ambiguous ||= repoIds.size !== 1
   const explicitHosts = new Set<ExecutionHostId>()
   for (const row of rows) {
-    const parsedHost = parseExecutionHostId(row.hostId)
+    const parsedHost = parseRoutableExecutionHostId(row.hostId)
     if (row.hostId?.trim() && !parsedHost) {
-      evidence.ambiguous = true
-    } else if (parsedHost?.kind === 'runtime' && parsedHost.environmentId === 'unresolved-owner') {
       evidence.ambiguous = true
     } else if (parsedHost) {
       explicitHosts.add(parsedHost.id)

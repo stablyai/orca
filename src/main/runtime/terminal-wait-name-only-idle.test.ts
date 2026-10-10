@@ -24,6 +24,15 @@ const QUIESCENCE_MS = 3000
 const NAME_ONLY_TITLE = 'Codex'
 const EXPLICIT_IDLE_TITLE = 'Codex ready'
 const HANDLE = 'terminal-1'
+// Real bytes: node-pty capture of `muse --provider echo --trust-workspace` at its ready
+// prompt. Muse's OSC title is the bare cwd (`tmp`) and never changes.
+const MUSE_READY_TAIL = [
+  '  Muse Code 1.3.0',
+  '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+  '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+  '❯ ────────────────────────────────────────────────────────────────────',
+  '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
+]
 
 function createWait(options: {
   pty?: RuntimePtyWorktreeRecord
@@ -42,12 +51,15 @@ function createWait(options: {
     getAdoptedPtyIdleStatus: () => options.adoptedIdleStatus ?? null,
     getPaneAgent: () => options.agent ?? null,
     getFirstPartyAgentStatus: () => options.firstPartyStatus ?? null,
+    readScreenLines: () => null,
+    readVisibleScreen: () => null,
     quiescenceMs: QUIESCENCE_MS
   }
   const polls = new RuntimeTerminalIdlePolls({
     ...shared,
     intervalMs: POLL_INTERVAL_MS,
     getForegroundProcess: () => Promise.resolve(options.foreground ?? null),
+    hasCommandPainted: () => true,
     getLiveLeaf: (leaf) => options.liveLeaf?.() ?? leaf,
     resolve: (waiter, result) => waiters.resolve(waiter, result)
   })
@@ -198,6 +210,37 @@ describe('tui-idle evidence ranking', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4 + QUIESCENCE_MS)
     expect(settled).not.toHaveBeenCalled()
   })
+
+  // Why: Muse sets its OSC title to the bare cwd and never updates it, so the title
+  // lanes stay null and only the ready-screen body can settle the wait — but only once
+  // the stream goes quiet, so a mid-turn streaming pane never satisfies.
+  it('settles a Muse ready screen only once the stream goes quiet', async () => {
+    const pty = makeTuiIdlePty({
+      lastAgentStatus: null,
+      lastOscTitle: 'tmp',
+      tailBuffer: [...MUSE_READY_TAIL]
+    })
+    const { wait } = createWait({ pty, agent: 'muse' })
+    const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
+
+    await advanceWhileStreaming(pty, 2)
+    expect(settled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + POLL_INTERVAL_MS)
+    expect(settled).toHaveBeenCalledWith({ ok: expect.objectContaining({ satisfied: true }) })
+  })
+
+  it('never settles another agent quoting Muse in its scrollback', async () => {
+    const pty = makeTuiIdlePty({
+      lastAgentStatus: null,
+      lastOscTitle: 'Codex',
+      tailBuffer: [...MUSE_READY_TAIL],
+      lastOutputAt: Date.now() - QUIESCENCE_MS * 4
+    })
+    const { wait } = createWait({ pty, agent: 'codex' })
+    const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3 + QUIESCENCE_MS)
+    expect(settled).not.toHaveBeenCalled()
+  })
 })
 
 const E2E_WORKTREE_ID = 'repo-1::/tmp/name-only-idle'
@@ -255,6 +298,15 @@ function oscTitle(title: string): string {
 }
 
 describe('tui-idle over the live OSC title pipeline', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('does not settle on a name-only title arriving mid-stream', async () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
@@ -263,7 +315,9 @@ describe('tui-idle over the live OSC title pipeline', () => {
     // The agent is mid-turn and repaints its title to the bare product name.
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}more output\n`, Date.now())
 
-    await expect(waiting).rejects.toThrow('timeout')
+    const assertion = expect(waiting).rejects.toThrow('timeout')
+    await vi.advanceTimersByTimeAsync(250)
+    await assertion
   })
 
   it('settles when the agent reports idle explicitly', async () => {
@@ -281,9 +335,11 @@ describe('tui-idle over the live OSC title pipeline', () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}output\n`, Date.now())
 
-    await expect(
+    const assertion = expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 250 })
     ).rejects.toThrow('timeout')
+    await vi.advanceTimersByTimeAsync(250)
+    await assertion
   })
 
   it('still settles for an agent whose only rest signal is its name', async () => {
@@ -294,4 +350,15 @@ describe('tui-idle over the live OSC title pipeline', () => {
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_000 })
     ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
   })
+
+  it('settles a quiet Muse ready screen over the live PTY pipeline', async () => {
+    const { runtime, handle } = await makeRuntime('muse')
+    runtime.onPtyData(E2E_PTY_ID, `${oscTitle('tmp')}${MUSE_READY_TAIL.join('\n')}\n`, Date.now())
+
+    const assertion = expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 15_000 })
+    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    await assertion
+  }, 20_000)
 })

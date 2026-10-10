@@ -822,6 +822,14 @@
   color: rgba(0, 0, 0, 0.6);
 }
 
+/* Border and title colors come from the callout component. */
+.markdown-body [data-callout] {
+  margin: 0.75em 0;
+  padding: 0.25em 1em;
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
 .markdown-body table {
   margin: 1em 0;
   border-collapse: collapse;
@@ -834,6 +842,13 @@
   padding: 8px 14px;
   border: 1px solid var(--border);
   text-align: left;
+}
+
+/* Why: --border is ~7% white in dark mode, so table grid lines are nearly invisible;
+   mix in foreground (~15% total) while keeping the border token role. */
+.dark .markdown-body th,
+.dark .markdown-body td {
+  border-color: color-mix(in srgb, var(--foreground) 8%, var(--border));
 }
 
 .markdown-body th {
@@ -851,11 +866,13 @@
   background: rgba(0, 0, 0, 0.04);
 }
 
-.markdown-dark .markdown-body tr:nth-child(even) td {
+.markdown-dark .markdown-body tr:nth-child(even):not([data-preview-table-row-even='false']) td,
+.markdown-dark .markdown-body tr[data-preview-table-row-even='true'] td {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.markdown-light .markdown-body tr:nth-child(even) td {
+.markdown-light .markdown-body tr:nth-child(even):not([data-preview-table-row-even='false']) td,
+.markdown-light .markdown-body tr[data-preview-table-row-even='true'] td {
   background: rgba(0, 0, 0, 0.015);
 }
 
@@ -1028,4 +1045,16 @@
 }
 .markdown-dark .hljs-strong {
   font-weight: 700;
+}
+
+.markdown-preview table[data-preview-table-start] {
+  overflow-wrap: anywhere;
+}
+
+.markdown-preview table[data-preview-table-start='false'] {
+  margin-top: 0;
+}
+
+.markdown-preview table[data-preview-table-end='false'] {
+  margin-bottom: 0;
 }

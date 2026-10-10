@@ -18,6 +18,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { DISPATCH_REJECTED_NOT_DELIVERED } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export type ProviderHistoryItem = {
   /** The provider's own id for this item. Used to claim it at most once; the
@@ -29,7 +30,9 @@ export type ProviderHistoryItem = {
   /** Fingerprint of the submitted payload, when the caller can compute one from
    *  provider content. Used only to break an otherwise unique tie. */
   payloadFingerprint: string | null
-  identity: AgentJournalItemIdentity
+  /** Absent when the provider keeps no identity of its own for the item: a submission it matches
+   *  keeps Orca's (`orca:<clientMessageId>`), which is the identity its row already has. */
+  identity?: AgentJournalItemIdentity
 }
 
 export type ProviderHistoryWindow = {
@@ -55,7 +58,7 @@ export type SubmissionReconciliation =
   | { clientMessageId: string; outcome: 'rejected'; reason: SubmissionRejectionReason }
   | { clientMessageId: string; outcome: 'unknown'; reason: SubmissionUnknownReason }
 
-export type SubmissionRejectionReason = 'not_delivered'
+export type SubmissionRejectionReason = typeof DISPATCH_REJECTED_NOT_DELIVERED
 
 export type SubmissionUnknownReason =
   | 'history_boundary_inconsistent'
@@ -89,6 +92,7 @@ export function reconcileSubmissions(input: {
       // A submission that already adopted a key re-matches on that key, not on the
       // provider's raw id — the raw id renumbers, the identity-derived key does not.
       Boolean(submission.providerItemId) &&
+      item.identity !== undefined &&
       submission.providerItemId === agentJournalItemKey(item.identity)
   )
   claimBy(
@@ -168,7 +172,7 @@ function resolveOne(
       clientMessageId: submission.clientMessageId,
       outcome: 'accepted',
       providerItemId: item.providerItemId,
-      identity: item.identity
+      identity: item.identity ?? { provider: 'orca', clientMessageId: submission.clientMessageId }
     }
   }
   if (ambiguous.has(submission.clientMessageId)) {
@@ -197,6 +201,6 @@ function resolveOne(
   return {
     clientMessageId: submission.clientMessageId,
     outcome: 'rejected',
-    reason: 'not_delivered'
+    reason: DISPATCH_REJECTED_NOT_DELIVERED
   }
 }

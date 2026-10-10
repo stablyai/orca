@@ -90,18 +90,16 @@ describe('OffscreenBrowserBackend lifecycle', () => {
   beforeEach(() => {
     mocks.windows.length = 0
     mocks.finishLoads = true
-    mocks.BrowserWindow.mockImplementation(
-      function BrowserWindowMock(this: {
-        webContents: MockWebContents
-        isDestroyed: () => boolean
-        destroy: () => void
-      }) {
-        const window = new MockBrowserWindow()
-        this.webContents = window.webContents
-        this.isDestroyed = window.isDestroyed.bind(window)
-        this.destroy = window.destroy.bind(window)
-      }
-    )
+    mocks.BrowserWindow.mockImplementation(function BrowserWindowMock(this: {
+      webContents: MockWebContents
+      isDestroyed: () => boolean
+      destroy: () => void
+    }) {
+      const window = new MockBrowserWindow()
+      this.webContents = window.webContents
+      this.isDestroyed = window.isDestroyed.bind(window)
+      this.destroy = window.destroy.bind(window)
+    })
   })
 
   it('settles a pending load and removes its waiters when the page is destroyed', async () => {

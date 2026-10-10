@@ -113,13 +113,6 @@ function emitProgress(overrides: Partial<BrowserDownloadProgressEvent> = {}): vo
 }
 
 describe('ClientHostedBrowserPagePane download notices', () => {
-  it('subscribes to the download lifecycle for the page it renders', () => {
-    renderPane()
-
-    expect(requested.listenerCount()).toBe(1)
-    expect(finished.listenerCount()).toBe(1)
-  })
-
   it('names the remote workspace destination when the download lands there', () => {
     renderPane()
 

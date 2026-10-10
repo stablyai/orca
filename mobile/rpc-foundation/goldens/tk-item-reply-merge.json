@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.item-reply-merge-github",
   "family": "tasks.item-reply-merge",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
-  "scenarioSha256": "b8e60092a29ea4944a891adc026444cc1da18c52221876f9e7c07b450b34cea8",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "04f53bdc9dca": {
       "name": "mutatingStatus",

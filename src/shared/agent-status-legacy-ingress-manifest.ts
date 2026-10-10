@@ -34,7 +34,7 @@ function entry(
 export const AGENT_STATUS_LEGACY_INGRESS_MANIFEST = Object.freeze([
   entry({
     caller: 'main-status-update',
-    sourcePath: 'src/main/agent-hooks/server/server-status-update.ts',
+    sourcePath: 'src/main/agent-hooks/server/server-status-application.ts',
     reason: 'Hook, OSC, and unsupported-peer observations still use pane ownership in 2A.',
     owner: 'main-agent-hooks',
     destination: '2B',

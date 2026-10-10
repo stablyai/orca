@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -45,6 +46,7 @@ function fixture(maxMetadataBytes?: number) {
     {
       sink,
       maxMetadataBytes,
+      attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
       schedule: (run) => {
         scheduled.add(run)
         return () => {
@@ -70,14 +72,15 @@ describe('persistent command retention', () => {
     items.streams.flush()
     const originalJoin = Array.prototype.join
     let retainedJoins = 0
-    const spy = vi
-      .spyOn(Array.prototype, 'join')
-      .mockImplementation(function (this: unknown[], separator) {
-        if (this[0] === 'retained-prefix') {
-          retainedJoins += 1
-        }
-        return originalJoin.call(this, separator)
-      })
+    const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+      this: unknown[],
+      separator
+    ) {
+      if (this[0] === 'retained-prefix') {
+        retainedJoins += 1
+      }
+      return originalJoin.call(this, separator)
+    })
     try {
       for (let index = 0; index < 100; index += 1) {
         items.streams.flush()
@@ -107,18 +110,26 @@ describe('persistent command retention', () => {
         }).admission
       ).toEqual({ accepted: true })
     }
+    expect(tracker.tasks()).toEqual([])
     for (let thread = 0; thread < 7; thread += 1) {
+      const threadId = `thread-${thread}`
+      expect(tracker.threadCommands(threadId)).toHaveLength(64)
       expect(
         settleCodexJournalTurn({
           sessionId: 'session',
-          threadId: `thread-${thread}`,
+          threadId,
           turnId: 'turn',
           turnLifecycle: null,
+          completedAt: 1,
+          turnEnd: 'completed',
           sink,
           streams: items.streams,
-          activeItems: items.activeItems
+          activeItems: items.activeItems,
+          attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
         })
       ).toEqual({ accepted: true })
+      expect(tracker.endTurn(threadId, 'turn')).toHaveLength(64)
+      expect(tracker.tasks()).toHaveLength((thread + 1) * 64)
     }
     expect(items.activeItems.size).toBe(448)
     expect(items.streams.persistentCount).toBe(448)
@@ -209,9 +220,12 @@ describe('persistent command retention', () => {
         threadId: 'root',
         turnId: 'turn',
         turnLifecycle: null,
+        completedAt: 1,
+        turnEnd: 'completed',
         sink,
         streams: items.streams,
-        activeItems: items.activeItems
+        activeItems: items.activeItems,
+        attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       })
     ).toEqual({ accepted: true })
     expect(items.activeItems.size).toBe(1)

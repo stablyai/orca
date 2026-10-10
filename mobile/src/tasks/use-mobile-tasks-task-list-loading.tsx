@@ -3,8 +3,6 @@ import { isHostedTaskRepo, useCallback } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
-  type GitLabTodo,
-  type LinearIssue,
   type GitLabWorkItem,
   LINEAR_LIMIT,
   type TaskItem,
@@ -145,16 +143,14 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             const reply = await gitlabTodoListRead.request(requestClient, {
               repo: `id:${queriedRepos[0]!.id}`
             })
-            // Kept spelled `response.result`: a reply that is neither an array nor nullish
-            // crashes in `.map` below, and the message the screen shows is this expression's
-            // source text, which `matrix-tasks.task-list-gitlab-todos-gitlab.todos-1` pins.
-            const response = { result: gitlabTodoListRead.interpret(reply) }
+            // The reader answers rows it has checked, so `.map is not a function` and a to-do
+            // with no `actionName` are both named at `gitlab.todos` instead of crashing the list.
+            const todos = gitlabTodoListRead.interpret(reply)
             if (!isCurrent()) {
               return
             }
             setItems(
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-              ((response.result as GitLabTodo[]) ?? [])
+              (todos ?? [])
                 .map(createGitLabTodoTask)
                 .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
             )
@@ -172,7 +168,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row at `GitLabWorkItem`'s own member types, requiring the ones a consumer reads unguarded; the row builder's own reads are unchanged.
                 const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
                   items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
                   error?: { type?: string; message: string }
@@ -228,8 +224,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
                   workspaceId: selectedLinearWorkspaceId ?? undefined
                 })
               )
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          const issues = found as LinearIssue[]
+          const issues = found
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))

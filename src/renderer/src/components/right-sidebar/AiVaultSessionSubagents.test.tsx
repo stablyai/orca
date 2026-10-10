@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ComponentProps, JSX } from 'react'
-import { act, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -30,7 +30,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  document.body.replaceChildren()
+  cleanup()
 })
 
 function makeSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {

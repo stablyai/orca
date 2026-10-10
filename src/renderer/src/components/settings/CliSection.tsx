@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -8,11 +9,6 @@ import {
   ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -26,11 +22,9 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
-  getSkillDiscoveryTargetForRuntime,
-  getWslCliDistroRequest
+  getSkillDiscoveryTargetForRuntime
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
@@ -115,14 +109,6 @@ export function CliSection({
     settings,
     agentRuntime
   )
-  const getCliSkillPrerequisiteStatus = useCallback(
-    () =>
-      agentRuntime.runtime === 'wsl'
-        ? window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-        : window.api.cli.getInstallStatus(),
-    [agentRuntime]
-  )
-
   const handleStatusChange = useCallback(
     (nextStatus: CliInstallStatus): void => {
       if (mountedRef.current) {
@@ -185,8 +171,8 @@ export function CliSection({
         </h2>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.CliSection.6930feda9e',
-            'Use Orca from your terminal to open the app, manage worktrees, and interact with Orca terminals.'
+            'auto.components.settings.CliSection.outsideOrcaDescription',
+            'Orca terminals already have `orca`. Turn this on to use `orca` from other terminals outside Orca.'
           )}
         </p>
       </div>
@@ -308,7 +294,11 @@ export function CliSection({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void window.api.shell.openPath(status.commandPath as string)}
+              onClick={() => {
+                if (status.commandPath) {
+                  void window.api.shell.openPath(status.commandPath, LOCAL_EXECUTION_HOST_ID)
+                }
+              }}
               disabled={loading || !canRevealCommandPath}
               className="gap-2"
             >
@@ -350,16 +340,6 @@ export function CliSection({
               installed={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-              getPrerequisiteStatus={getCliSkillPrerequisiteStatus}
-              isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
-              onBeforeOpenTerminal={async () => {
-                await (agentRuntime.runtime === 'wsl'
-                  ? ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-                  : ensureOrcaCliAvailableForAgentSkillTerminal({
-                      onStatusChange: handleStatusChange
-                    }))
-              }}
               onRecheck={refreshCliSkill}
               freshnessSkillName={cliSkillFreshnessName}
             />

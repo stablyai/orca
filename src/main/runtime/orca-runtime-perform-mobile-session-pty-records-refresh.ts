@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './orca-runtime-build-headless-mobile-session-browser-tabs'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
+import { isAgentLaunchRunningIn } from '../agent-launch/agent-launch-pane-attachment'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TabActivationIntent } from '../../shared/tab-activation-intent'
@@ -15,6 +16,7 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../shared/tab-activation-intent'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { isWorktreeTerminalsSleepingError } from './worktree-terminals-sleeping-error'
 
 export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected async performMobileSessionPtyRecordsRefresh(
@@ -51,7 +53,9 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     if (
       targetConnectionId !== null &&
       this.ptyController.supportsForegroundProcessEvidence &&
-      !(await this.ptyController.supportsForegroundProcessEvidence(targetConnectionId))
+      !(await this.ptyController.supportsForegroundProcessEvidence(
+        parsedTargetHost?.kind === 'ssh' ? parsedTargetHost.id : undefined
+      ))
     ) {
       // A legacy relay ignores the optional projection and would still run its
       // expensive process-table inventory on every mobile cadence tick.
@@ -138,13 +142,21 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       // their tab id, so focusing the renderer would silently no-op.
       // Phone-local activation also needs this path for inactive restored tabs:
       // desktop focus is intentionally suppressed, but the PTY still must exist.
+      const automatic = isAutomaticTabActivation(opts.intent)
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
         // Why: opening a tab is the documented wake gesture for a slept pane
         // (#11598), so only a background probe may be refused for one.
-        (!isAutomaticTabActivation(opts.intent) ||
-          !this.isDeliberatelyParkedPane(worktreeId, tab)) &&
+        (!automatic ||
+          (!this.isDeliberatelyParkedPane(worktreeId, tab) &&
+            !this.isWorktreeTerminalSleepHeld(worktreeId))) &&
+        // Why: a launch's early tab is listed before its agent spawns; that launch's spawn fills it.
+        !isAgentLaunchRunningIn(worktreeId, {
+          kind: 'pane',
+          tabId: tab.parentTabId,
+          leafId: tab.leafId
+        }) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
@@ -185,9 +197,19 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             startupCommandDelivery: agentStartup.startupCommandDelivery,
             launchConfig: agentStartup.launchConfig,
             launchAgent: tab.launchAgent,
-            targetGroupId
+            targetGroupId,
+            ...(automatic ? { refuseSleptWorktree: true } : {})
           })
         } catch (err) {
+          if (automatic && isWorktreeTerminalsSleepingError(err)) {
+            // Why: the host slept the worktree while this probe waited for the spawn lock.
+            return this.applyMobileSessionTabNavigation(
+              this.getMobileSessionTabsForWorktree(worktreeId),
+              tab.id,
+              navigation,
+              opts.clientNavigationId
+            )
+          }
           if (sessionId && parseAppSshPtyId(sessionId)) {
             // Why: an expired SSH reattach clears durable bindings in the store,
             // but this in-memory headless snapshot can still carry the old id.

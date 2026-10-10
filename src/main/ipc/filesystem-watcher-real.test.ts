@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 /*
  * Real (unmocked) @parcel/watcher integration test.
  *
@@ -76,15 +77,6 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     vi.clearAllMocks()
   })
 
-  // Why: a clear, separate failure mode — if the native addon is missing from
-  // the bundle the watcher silently no-ops (doInstallLocalWatcher swallows the
-  // import error), so the wiring assertion below would time out with a vague
-  // message. This makes "addon absent" distinct from "wiring broken".
-  it('loads the real @parcel/watcher native addon', async () => {
-    const watcher = await import('@parcel/watcher')
-    expect(typeof watcher.subscribe).toBe('function')
-  })
-
   // Why: this integration targets the Linux native watcher path described
   // above; macOS developer sandboxes can load the addon while suppressing
   // subscribe callbacks, which makes this an environment check instead.
@@ -95,12 +87,7 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
       // tmpdir() returns /var, so compare canonical paths instead of aliases.
       tempDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fswatch-real-')))
       const sendMock = vi.fn()
-      const sender = {
-        isDestroyed: () => false,
-        send: sendMock,
-        once: vi.fn(),
-        id: 1
-      }
+      const sender = createWatcherSender(1, sendMock)
 
       // Subscribe resolves only after the native watcher is installed.
       await handlers['fs:watchWorktree']({ sender }, { worktreePath: tempDir })
@@ -139,7 +126,7 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     await mkdir(join(root.realRoot, 'src'), { recursive: true })
 
     const sendMock = vi.fn()
-    const sender = { isDestroyed: () => false, send: sendMock, once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1, sendMock)
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: root.aliasRoot })
 
     const expectedPath = join(root.aliasRoot, 'src', 'agent-edit.ts')

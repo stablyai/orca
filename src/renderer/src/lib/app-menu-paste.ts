@@ -4,10 +4,7 @@ import {
 } from '../../../shared/clipboard-text'
 import { TEXT_CONTROL_PASTE_MAX_BYTES, pasteTextIntoTextControl } from './text-control-paste'
 import { createTextControlRejectedResult } from './text-control-paste-diagnostics'
-import {
-  findOwnedTextControlPasteTarget,
-  shouldClaimTextControlPastePayload
-} from './text-control-paste-ownership'
+import { findOwnedTextControlPasteTarget } from './text-control-paste-ownership'
 
 export const APP_MENU_PASTE_EVENT = 'orca-app-menu-paste'
 
@@ -38,7 +35,7 @@ export function dispatchAppMenuPasteEvent(target: Window = window): boolean {
   return event.defaultPrevented
 }
 
-export function findFocusedAppMenuTextControlPasteTarget(
+function findFocusedAppMenuTextControlPasteTarget(
   activeElement: Element | null = typeof document === 'undefined' ? null : document.activeElement
 ): HTMLInputElement | HTMLTextAreaElement | null {
   return findOwnedTextControlPasteTarget(activeElement)
@@ -130,8 +127,4 @@ export async function handleAppMenuPasteRequest({
     reason: result.reason,
     redactedDiagnostic: result.redactedDiagnostic
   })
-}
-
-export function shouldOwnAppMenuTextControlPaste(text: string): boolean {
-  return shouldClaimTextControlPastePayload(text)
 }

@@ -1,8 +1,12 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
-import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
+import {
+  hostRefusesOtherRuntimeWorkspace,
+  loadMobileNewTabAgentOptions,
+  MobileWorkspaceOnOtherRuntimeError
+} from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
@@ -13,6 +17,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     worktreeId,
     client,
     connState,
+    hostCapabilities,
     activeHandle,
     pendingDiffNotesDelivery,
     showCreateTabDrawer,
@@ -39,8 +44,14 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     refreshCanPaste,
     activeSessionTab
   } = scope
+  const clipboardContents = useClipboardReader().contents
+  const agent =
+    activeSessionTab && 'agentStatus' in activeSessionTab
+      ? (activeSessionTab.agentStatus?.agentType ?? nativeChatController.nativeChatAgent)
+      : nativeChatController.nativeChatAgent
   const handlePaste = useMobileTerminalPaste({
     client,
+    agent,
     activeHandle,
     activeHandleRef,
     activeSessionTabTypeRef,
@@ -71,6 +82,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   // native chat instead holds it as a composer chip and rides it along on submit.
   const { attachImage, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
     client,
+    agent,
     activeHandle,
     activeHandleRef,
     canSend,
@@ -93,12 +105,9 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   useEffect(() => {
     let mounted = true
     const refresh = () => {
-      void Promise.all([
-        Clipboard.hasStringAsync().catch(() => false),
-        Clipboard.hasImageAsync().catch(() => false)
-      ]).then(([hasString, hasImage]) => {
+      void clipboardContents().then(({ text, image }) => {
         if (mounted) {
-          setCanPaste(hasString || hasImage)
+          setCanPaste(text || image)
         }
       })
     }
@@ -114,8 +123,9 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       mounted = false
       sub.remove()
     }
-  }, [selectModeActive])
+  }, [clipboardContents, selectModeActive, setCanPaste])
 
+  const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(hostCapabilities)
   useEffect(() => {
     const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
     if (!shouldLoadAgentOptions) {
@@ -136,24 +146,34 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     void (async () => {
       const options = await loadMobileNewTabAgentOptions({
         client,
-        worktreeId
+        worktreeId,
+        hostRefusesOtherRuntime
       })
       if (stale) {
         return
       }
       setCreateTabAgentOptions(options)
       setCreateTabAgentLoadState('loaded')
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (!stale) {
         setCreateTabAgentOptions([])
-        setCreateTabAgentLoadState('error')
+        setCreateTabAgentLoadState(
+          error instanceof MobileWorkspaceOnOtherRuntimeError ? 'other-runtime' : 'error'
+        )
       }
     })
 
     return () => {
       stale = true
     }
-  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
+  }, [
+    client,
+    connState,
+    hostRefusesOtherRuntime,
+    pendingDiffNotesDelivery,
+    showCreateTabDrawer,
+    worktreeId
+  ])
   return {
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,

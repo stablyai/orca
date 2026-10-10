@@ -4,24 +4,22 @@ import {
   type LinearIssueLinkUpdates
 } from '../../shared/linear/links'
 import { RuntimeClientError } from '../runtime-client'
+import { getOptionalWorktreeLinkFlagValue } from './worktree-link-flag-value'
 
 export function getOptionalLinearIssueLinkFlag(
   flags: Map<string, string | boolean>,
   name: string,
   options: { allowNull?: boolean } = {}
 ): LinearIssueLinkUpdates | undefined {
-  const value = getPresentStringFlag(flags, name)
+  const value = getOptionalWorktreeLinkFlagValue(flags, name, {
+    ...options,
+    createHint: 'a Linear issue identifier or URL'
+  })
   if (value === undefined) {
     return undefined
   }
 
-  if (value.trim().toLowerCase() === 'null') {
-    if (!options.allowNull) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Omit --linear-issue on create, or pass a Linear issue identifier or URL.'
-      )
-    }
+  if (value === null) {
     return { ...LINEAR_ISSUE_LINK_CLEARED }
   }
 
@@ -38,18 +36,4 @@ export function getOptionalLinearIssueLinkFlag(
   }
 
   return updates
-}
-
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && value.length > 0) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
 }

@@ -10,11 +10,13 @@ import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/runtime/restored-client-hosted-browser-host-attach', () => ({
   ensureBrowserClientHostsForRestoredPages: vi.fn(),
-  ensureBrowserClientHostForRestartedRuntime: vi.fn()
+  ensureBrowserClientHostOnRuntimeContact: vi.fn()
 }))
 vi.mock('@/runtime/client-hosted-browser-close-intent-replay', () => ({
   replayClientHostedBrowserCloseIntents: vi.fn()
@@ -77,17 +79,33 @@ it('represents failed verification honestly without manufacturing a session rest
   expect(
     runtimeHostConnectionStateForEntry(viewer.getState().runtimeStatusByEnvironmentId.get('env-a'))
   ).toBe('runtime-unavailable')
-  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
     generation
   )
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
+  // Regaining contact on the same runtime is neither a new connection nor a new session: the
+  // generation holds so the session mirror is not rebuilt (#19647), and only the contact epoch
+  // — the mirror's resubscribe trigger — moves. Hosting is re-claimed, but no toast.
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
+    generation
+  )
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.hostContactEpoch).toBe(1)
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+    'rt-1'
+  )
+  expect(ensureBrowserClientHostOnRuntimeContact).toHaveBeenCalledTimes(1)
   expect(toast.warning).not.toHaveBeenCalled()
+  const reconnectedGeneration = viewer
+    .getState()
+    .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
   viewer
     .getState()
     .applyRuntimeHostStatusSnapshot(snapshot(4, { status: { runtimeId: 'rt-2' } as RuntimeStatus }))
-  expect(
-    viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
-  ).toBeGreaterThan(generation ?? 0)
+  // A replacement runtime id is a restart: a genuinely new connection, so the generation moves.
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
+    (reconnectedGeneration ?? 0) + 1
+  )
+  expect(ensureBrowserClientHostOnRuntimeContact).toHaveBeenCalledTimes(2)
 })
 
 it('retains disconnect ordering and rejects publications for removed or replaced pairings', () => {
@@ -108,4 +126,28 @@ it('retains disconnect ordering and rejects publications for removed or replaced
   viewer.getState().setRuntimeEnvironments([])
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(5, { pairingRevision: 2 }))
   expect(viewer.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+})
+
+// P1-C: main re-paired the host (a CLI rollback) and published status under the new revision.
+it('re-reads the catalog when status outruns its pairing, then shows the host', async () => {
+  const viewer = store()
+  const refresh = vi.fn(async () => {
+    viewer.getState().setRuntimeEnvironments([{ ...environment, pairingRevision: 2 }])
+  })
+  setRuntimeEnvironmentCatalogRefresher(refresh)
+  try {
+    viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1, { pairingRevision: 2 }))
+    await vi.waitFor(() =>
+      expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+        'rt-1'
+      )
+    )
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    // A late snapshot from the replaced pairing is dropped without another re-read.
+    viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2, { pairingRevision: 1 }))
+    expect(refresh).toHaveBeenCalledTimes(1)
+  } finally {
+    setRuntimeEnvironmentCatalogRefresher(null)
+  }
 })

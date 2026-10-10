@@ -138,8 +138,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
                   { timeoutMs: 30_000 }
                 )
               )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = updated as { ok?: boolean; error?: { message?: string } }
+        const result = updated
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update GitHub item')
         }
@@ -218,10 +217,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectCommentWrite.interpret(reply) as
-          | { ok: true; comment?: DetailComment }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectCommentWrite.interpret(reply)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to add comment')
         }
@@ -229,7 +225,8 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         if (result.comment) {
           setProjectRowDetail((current) =>
             current?.provider === 'github'
-              ? { ...current, comments: [...current.comments, result.comment as DetailComment] }
+              ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the comment's `id` and types its body/author/createdAt; the thread renderer owns the rest of the record, and the recorded reply carries `id` as a NUMBER, which DetailComment permits and a narrower requirement would refuse.
+                { ...current, comments: [...current.comments, result.comment as DetailComment] }
               : current
           )
         }
@@ -268,11 +265,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectCommentUpdate.interpret(reply) as {
-          ok?: boolean
-          error?: string | { message?: string }
-        }
+        const result = githubProjectCommentUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(
             typeof result.error === 'string'

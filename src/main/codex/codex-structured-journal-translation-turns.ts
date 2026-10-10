@@ -1,8 +1,10 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnItem,
-  AgentJournalTurnLifecycle,
-  AgentJournalTurnLifecycleState
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnItem,
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnLifecycleState,
+  type AgentJournalTurnOutcome
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
@@ -42,11 +44,38 @@ export function codexTurnLifecycleBody(
   return agentJournalTurnBody(turnLifecycle)
 }
 
-/** `turn/completed` is Codex's only turn-end notification; a missing status is a clean finish. */
+/** Maps a `turn/completed` status, live or restored. Only `interrupted` is a stop;
+ *  a failed turn completed, and `codexTurnOutcome` says it failed. */
 export function codexTurnLifecycleState(
   status: string | null
 ): Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'> {
-  return status === null || status === 'completed' ? 'completed' : 'interrupted'
+  return status === 'interrupted' ? 'interrupted' : 'completed'
+}
+
+/**
+ * Codex's own verdict on a turn, or null when this host cannot place one.
+ *
+ * `TurnStatus` in the app-server protocol is `completed | interrupted | failed |
+ * inProgress` and `status` is REQUIRED on every `Turn`, on the live notification
+ * and in resumed history alike. So a missing or unrecognised status is a payload
+ * this host did not get, not a clean finish — unlike `codexTurnLifecycleState`,
+ * which still has to name a terminal lifecycle arm for the row. `inProgress` on
+ * a turn-end contradicts itself and is no verdict either.
+ */
+export function codexTurnOutcome(status: string | null): AgentJournalTurnOutcome | null {
+  switch (status) {
+    case 'completed':
+      return 'success'
+    case 'failed':
+      return 'failure'
+    case 'interrupted':
+      return 'cancellation'
+    // The fourth protocol arm, plus the two shapes that are no verdict at all.
+    case 'inProgress':
+    case null:
+    default:
+      return null
+  }
 }
 
 export function publishCodexTurnLifecycle(input: {
@@ -56,6 +85,8 @@ export function publishCodexTurnLifecycle(input: {
   threadId: string
   turnId: string
   state: AgentJournalTurnLifecycleState
+  /** Absent whenever Codex named no verdict, which reads as unknown. */
+  outcome?: AgentJournalTurnOutcome
   userItemId?: string
   startedAt?: number
   requestedAt?: number
@@ -69,6 +100,7 @@ export function publishCodexTurnLifecycle(input: {
   const body = codexTurnLifecycleBody({
     turnId: input.turnId,
     state: input.state,
+    ...(input.outcome !== undefined ? { outcome: input.outcome } : {}),
     userItemId: input.userItemId ?? codexTurnUserItemId(input.threadId, input.turnId),
     ...(input.startedAt !== undefined ? { startedAt: input.startedAt } : {}),
     ...(input.requestedAt !== undefined ? { requestedAt: input.requestedAt } : {}),
@@ -78,6 +110,7 @@ export function publishCodexTurnLifecycle(input: {
   // The running row's `ts` is the host's turn-start receipt so clients can anchor a live counter.
   const appendOptions = {
     lifecycle: true,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
     ...(input.state === 'running' && input.startedAt !== undefined
       ? { observedAt: input.startedAt }
       : {})
@@ -90,7 +123,7 @@ export function publishCodexTurnLifecycle(input: {
   } else {
     input.sink.appendItem(identity, body, appendOptions)
   }
-  // Preserve first-work evidence when completion arrives before the journal drains.
+  // Keyed apart, so a completion's publication never replaces a start one still waiting to run.
   const publishOptions = {
     lifecycle: true,
     ...(input.state === 'running'

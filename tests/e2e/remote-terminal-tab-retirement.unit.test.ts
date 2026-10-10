@@ -4,12 +4,13 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
 import {
   acceptReplayedWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  shouldApplyWebSessionTabsSnapshot,
-  type WebSessionTabsSyncState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync'
+  resetWebSessionTabsSnapshotFreshnessForTests
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
+import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
+import { shouldApplyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
+import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { withDurableRuntimeStore } from '../../src/main/runtime/runtime-durable-store-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: { setState: vi.fn() }
@@ -129,13 +130,16 @@ describe('remote terminal tab retirement publication', () => {
   it('removes a permanent host exit from simultaneous viewers without stale resurrection', async () => {
     let session = makePersistedSession()
     const flushOrThrow = vi.fn()
-    const runtime = new OrcaRuntimeService({
-      getWorkspaceSession: () => session,
-      setWorkspaceSession: (next) => {
-        session = next
-      },
-      flushOrThrow
-    } as never)
+    const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This retirement fixture implements the Store session and durability operations used by the runtime.
+      withDurableRuntimeStore({
+        getWorkspaceSession: () => session,
+        setWorkspaceSession: (next) => {
+          session = next
+        },
+        flushOrThrow
+      }) as never
+    )
     runtime.attachWindow(1)
     const staleLiveSnapshot = makeHostSnapshot()
     runtime.syncWindowGraph(1, {
@@ -177,7 +181,7 @@ describe('remote terminal tab retirement publication', () => {
 
     const publications: (typeof livePublication)[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((event) => publications.push(event))
-    runtime.onPtyExit(PTY_ID, 0, INCARNATION_ID)
+    await runtime.onPtyExit(PTY_ID, 0, INCARNATION_ID)
     const retiredPublication = publications.at(-1)
     expect(retiredPublication).toBeDefined()
     if (!retiredPublication) {

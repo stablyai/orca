@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_ARTIFACTS } from '../../shared/relay-artifacts'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { NATIVE_DEPS_COMMAND_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import {
   computeRelayNativeDepsCacheKey,
@@ -46,21 +46,6 @@ export type RelayNativeDepsCacheContext = {
   localRelayDir: string
   deps: Readonly<Record<string, string>>
   signal?: AbortSignal
-}
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  signal?: AbortSignal
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell',
-    // Why the native-deps budget and not the default 30s: a seeding copy moves a whole
-    // node_modules on the host's own disk, which is fast but not instant on a cold cache.
-    timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
-    signal
-  })
 }
 
 /**
@@ -136,11 +121,13 @@ export async function attachRelayNativeDepsCache(
   }
   const paths = cachePathsFor(context, key)
   try {
+    // Why the native-deps budget and not the default 30s: a seeding copy moves a whole
+    // node_modules on the host's own disk, which is fast but not instant on a cold cache.
     const output = await execHostCommand(
       conn,
       context.hostPlatform,
       ensureRelayNativeDepsCacheCommand(paths, context.deps),
-      context.signal
+      { timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS, signal: context.signal }
     )
     if (output.includes(RELAY_NATIVE_CACHE_LINKED)) {
       console.log(`[ssh-relay] Native deps linked from shared cache entry ${key}`)
@@ -179,7 +166,7 @@ export async function promoteRelayNativeDepsCache(
       conn,
       context.hostPlatform,
       promoteRelayNativeDepsCacheCommand(cachePathsFor(context, key)),
-      context.signal
+      { timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS, signal: context.signal }
     )
     console.log(
       output.includes(RELAY_NATIVE_CACHE_PROMOTED)

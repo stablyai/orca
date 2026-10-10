@@ -59,14 +59,18 @@ export function getComposerRepoWorktreeBranches(
     : []
 }
 
+function isLocalBranchSelection(refName: string, localBranchName: string): boolean {
+  return refName === localBranchName || refName === `refs/heads/${localBranchName}`
+}
+
 /**
  * Issue #5181: decide whether a picked branch row is an existing LOCAL branch
  * that can be reused (checked out) instead of branched off, and whether reuse
  * should default ON.
  *
- * Reuse is only possible for a LOCAL branch (ref === local name; remote-only
- * refs carry an `origin/`-style prefix) that is NOT already checked out in
- * another worktree — git allows a branch in only one worktree at a time. Reuse
+ * Reuse is only possible for a LOCAL branch that is NOT already checked out in
+ * another worktree; namespace-qualified local selectors count too. Git allows
+ * a branch in only one worktree at a time. Reuse
  * defaults ON only when the worktree name was auto-derived from the branch (the
  * selection produced a branch-name override); a user who typed a custom
  * worktree name first is branching off the ref, so reuse stays OFF unless they
@@ -79,7 +83,7 @@ export function resolveComposerBranchReuse(args: {
   branchCheckedOutElsewhere: boolean
 }): { reuseEligibleBranch: string | null; defaultReuse: boolean } {
   const reuseEligibleBranch =
-    args.refName === args.localBranchName && !args.branchCheckedOutElsewhere
+    isLocalBranchSelection(args.refName, args.localBranchName) && !args.branchCheckedOutElsewhere
       ? args.localBranchName
       : null
   return {
@@ -102,7 +106,10 @@ export function resolveComposerReuseOverride(args: {
   branchNameOverride: string | undefined
   branchCheckedOutElsewhere: boolean
 }): string | undefined {
-  if (args.branchCheckedOutElsewhere && args.refName === args.localBranchName) {
+  if (
+    args.branchCheckedOutElsewhere &&
+    isLocalBranchSelection(args.refName, args.localBranchName)
+  ) {
     return undefined
   }
   return args.branchNameOverride

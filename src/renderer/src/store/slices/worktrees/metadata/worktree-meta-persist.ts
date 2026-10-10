@@ -1,3 +1,7 @@
+import { assertWorkspaceAttachmentWriteCapability } from '../../../../runtime/runtime-workspace-attachment-capabilities'
+import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
+import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../../../shared/workspace-attachment-legacy'
+import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shared/workspace-attachment-capabilities'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -51,7 +55,7 @@ export function isDisplayNamePersistencePending(
 export function persistWorktreeMeta(
   settings: AppState['settings'],
   worktreeId: string,
-  updates: Partial<WorktreeMeta>,
+  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
   identityKey?: string
 ): Promise<void> {
@@ -80,7 +84,7 @@ export function persistWorktreeMeta(
 async function persistWorktreeMetaUntracked(
   settings: AppState['settings'],
   worktreeId: string,
-  updates: Partial<WorktreeMeta>,
+  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
   identityKey?: string
 ): Promise<void> {
@@ -89,10 +93,11 @@ async function persistWorktreeMetaUntracked(
     await window.api.worktrees.updateMeta({
       worktreeId,
       ...(executionHostId ? { executionHostId } : {}),
-      updates
+      updates: updates
     })
     return
   }
+  await assertWorkspaceAttachmentWriteCapability(target, updates)
   // Why: `worktree.set` parses in strip mode, so an older runtime drops the key
   // and applies the rest. Both gates key off presence, not value — a dropped
   // *clear* strands a stale link that the Issue row then hides.
@@ -122,6 +127,17 @@ async function persistWorktreeMetaUntracked(
     )
   }
   let compatibleUpdates = updates
+  const legacySelection = getLegacyWorkspaceReviewSelectionUpdates(updates)
+  if (
+    legacySelection !== updates &&
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY
+    ))
+  ) {
+    compatibleUpdates = legacySelection
+  }
   if (target.kind === 'environment' && 'suppressedGitHubPR' in updates) {
     if (typeof updates.suppressedGitHubPR === 'number' && updates.suppressedGitHubPR > 0) {
       await assertRuntimeEnvironmentCapability(
@@ -139,7 +155,7 @@ async function persistWorktreeMetaUntracked(
         WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
       ))
     ) {
-      const olderHostUpdates = { ...updates }
+      const olderHostUpdates = { ...compatibleUpdates }
       delete olderHostUpdates.suppressedGitHubPR
       compatibleUpdates = olderHostUpdates
     }

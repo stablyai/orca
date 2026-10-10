@@ -25,6 +25,16 @@ export type UnvalidatedRpcRequestPortEntry = {
 
 /** Modules whose job is the port. These do not shrink to zero. */
 export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequestPortEntry[] = [
+  // Forwards raw requests as a transport, reads no reply. Not a call site: it picks no method and
+  // decides no acceptance — the page names the method and runs the typed operation over it, exactly
+  // as a native screen does over a socket client. Split out of `bridge-host.ts`, which now holds
+  // none of them.
+  { file: 'src/mobile-web-shell/bridge-host-requests.ts', references: 3 },
+  // The far end of that transport: it offers the port to the page and posts what it is handed,
+  // reading neither the method nor the reply.
+  { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
+  // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
+  { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.
@@ -45,8 +55,14 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   { file: 'src/transport/stable-logical-rpc-client.ts', references: 2 },
   // Names the port as the recording oracle's sender contract; a non-test file for the same reason.
   { file: 'src/test-support/rpc-recording/recording-scenario.ts', references: 1 },
-  // Scripts the port for the recording oracle, over the real tracker and logical client.
-  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 5 }
+  // Scripts the port for the recording oracle, over the real tracker and logical client. Seven and
+  // not five because the oracle now records through a transport under test as well as without one,
+  // which needs one layer between the operation's call and the logical client: the wrapper's own
+  // `sendRequest` and its forward. The name each physical send is filed under has to be taken in
+  // that layer, because it is the only one that runs exactly once per logical call — below it the
+  // logical client replays a pending request through a fresh physical client after a cutover, and
+  // above it a wrapper that forwards asynchronously has already been passed the next call.
+  { file: 'src/test-support/rpc-recording/scripted-rpc-transport.ts', references: 7 }
 ]
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
@@ -96,9 +112,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // src/notifications/ — push registration and delivery. Nothing is left here. Registration and
   // unregistration migrated in step 4; see mobile-push-registration-operations.ts. Tray
   // reconciliation followed once a scenario could declare the notification tray and the stored host
-  // list it resolves against; see push-dismissal-operations.ts. The stream unsubscribe inside the
-  // `notifications.subscribe` callback migrated in step 6 once the recorder could script the
-  // `ready` frame that hands it a subscription id; see desktop-notification-stream-operations.ts.
+  // list it resolves against; see push-dismissal-operations.ts. The stream's `notifications.unsubscribe`
+  // is no longer a request here: the stream transport sends it with the id from the current `ready`.
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see
@@ -166,6 +181,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/transport/mobile-runtime-capability-negotiation.ts', references: 2 },
   // Sends through hostStatusProbe; the one reference left is its parameter type. Its callers do
   // not share a client type — push-registration.ts holds only the sender — so the parameter names
-  // the port itself. It reaches zero when the last such caller migrates.
-  { file: 'src/transport/runtime-capability-probe.ts', references: 1 }
+  // the port itself. It reaches zero when the last such caller migrates. Moved here from
+  // runtime-capability-probe.ts, which is now a projection of this probe and names no port.
+  { file: 'src/transport/runtime-status-probe.ts', references: 1 }
 ]

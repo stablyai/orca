@@ -36,7 +36,7 @@ export function notificationTestScreenMountAdapters(
         getActivePath: () => 'lan',
         getPendingPath: () => null,
         isPairingRejected: () => false,
-        isHostSignedOut: () => false,
+        getRelayHostReachability: () => 'connecting',
         getAllClients: () => [{ hostId: HOST, client }],
         subscribeHostState: () => () => {},
         subscribeAllHosts: () => () => {}

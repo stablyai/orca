@@ -90,10 +90,3 @@ export function isWslTranscriptFsProcessHandle(
 ): value is WslTranscriptFsProcessHandle {
   return 'wslTranscriptFsProcessHandle' in value
 }
-
-export function resetWslTranscriptFsProcessClientForTests(): void {
-  for (const client of clientsByLane.values()) {
-    client.dispose()
-  }
-  clientsByLane.clear()
-}

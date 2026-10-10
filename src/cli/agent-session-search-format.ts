@@ -76,9 +76,19 @@ function formatDebug(debug: SessionSearchResults['debug']): string[] {
   ]
 }
 
-function formatUnavailable(reason: 'disabled' | 'not-ready' | 'no-service'): string {
+function formatUnavailable(
+  reason: 'disabled' | 'not-ready' | 'no-service' | 'scope-unknown' | 'unsupported-agent'
+): string {
   if (reason === 'disabled') {
     return 'Session search is off on this host.'
+  }
+  if (reason === 'unsupported-agent') {
+    return 'This host does not support history search for the selected agent. Update Orca on that host or select another agent.'
+  }
+  // The CLI scopes with --path, never with an identity, so this only reaches a
+  // caller that built a request by hand.
+  if (reason === 'scope-unknown') {
+    return 'This host does not know the workspace or project that search was scoped to.'
   }
   if (reason === 'not-ready') {
     return 'Session search is not ready on this host yet. Try again once its index has started.'

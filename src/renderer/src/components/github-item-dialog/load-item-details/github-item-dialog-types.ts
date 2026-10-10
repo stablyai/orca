@@ -26,3 +26,23 @@ export type GitHubItemDialogProps = {
   /** Optional Project-origin context; when set, edits route via slug-addressed IPCs against the row's repo (slug routing wins for writes). */
   projectOrigin?: GitHubItemDialogProjectOrigin
 }
+
+export type GitHubItemDialogEditSectionProps = {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  localState: GitHubWorkItem['state']
+  localLabels: string[]
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  onLabelsChange: (labels: string[]) => void
+  /** Why: lets the parent invalidate its details cache after a mutation, else a reopen within FRESH_MS paints pre-mutation data. */
+  onMutated: () => void
+  assignees: string[]
+  onUse: (item: GitHubWorkItem) => void
+  onOpenOrUse?: (item: GitHubWorkItem) => void
+  attachedWorkspaceLabel?: string | null
+  /** `horizontal`: compact pill strip for the non-issue drawer/header; `top-columns`: labeled columns above the issue page body. */
+  layout?: 'horizontal' | 'top-columns'
+}

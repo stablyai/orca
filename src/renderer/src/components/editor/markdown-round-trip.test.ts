@@ -212,6 +212,15 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
+  it.each(['class="ORCA-DETAILS"', "CLASS='Orca-Details'", 'Class=ORCA-DETAILS'])(
+    'preserves details with case-sensitive %s as passthrough html',
+    (attributes) => {
+      const input = `<details ${attributes}><summary>Toggle</summary><p>Body</p></details>`
+
+      expect(roundTripMarkdown(input)).toBe(input)
+    }
+  )
+
   it('preserves details blocks with unsupported attributes as passthrough html', () => {
     const input =
       '<details id="x"><summary class="s">Toggle</summary><p data-x="1">Body</p></details>\n'

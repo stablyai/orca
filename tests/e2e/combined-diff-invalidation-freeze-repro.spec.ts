@@ -299,6 +299,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
       )
 
       console.log(`external-change burst measurement ${JSON.stringify(measurement)}`)
+      expect(measurement.sectionRowCount).toBe(1)
       expect(measurement.stuckLoadingRowCount).toBe(0)
       expect(measurement.editorCount).toBeGreaterThan(0)
       // Why: before the fix this window blocked continuously — p95 3963ms, 16 samples in 23s.
