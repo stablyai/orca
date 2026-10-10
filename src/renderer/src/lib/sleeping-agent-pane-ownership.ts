@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -25,6 +26,39 @@ export function activationTreatsNoteAsFinished(record: SleepingAgentSessionRecor
     record.origin !== 'quit' &&
     !(record.origin === 'live' && agentTurnEndedUncleanly(record)) &&
     record.state === 'done'
+  )
+}
+
+export function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
+  return (
+    record.tabId ??
+    parsePaneKey(record.paneKey)?.tabId ??
+    parseLegacyNumericPaneKey(record.paneKey)?.tabId ??
+    null
+  )
+}
+
+/** True only when the record names a terminal tab and none of its tab ids exists in any worktree. */
+export function sleepingRecordTabIsGone(
+  record: SleepingAgentSessionRecord,
+  state: AppStoreState
+): boolean {
+  // Why: a structured session's tab id is synthetic and never appears among terminal tabs.
+  if (isStructuredAgentSyntheticSleepingRecord(record)) {
+    return false
+  }
+  // Why every candidate: record.tabId and the pane-key tab id can drift; absent only if none match.
+  const candidates = [
+    record.tabId,
+    parsePaneKey(record.paneKey)?.tabId,
+    parseLegacyNumericPaneKey(record.paneKey)?.tabId
+  ].filter((id): id is string => Boolean(id))
+  if (candidates.length === 0) {
+    return false
+  }
+  // Why every worktree: a tab can be re-homed while its record and live-PTY claim keep the old id.
+  return !Object.values(state.tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => candidates.includes(tab.id))
   )
 }
 

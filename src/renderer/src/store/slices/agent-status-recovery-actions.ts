@@ -1,4 +1,5 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
@@ -60,6 +61,16 @@ export function createAgentStatusRecoveryActions(
         }
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
+          // Why: a record minted from a stale non-done entry is invalid on arrival (the activation
+          // sweep clears it as stale), so re-minting it on every tick only resurrects the record
+          // that sweep just cleared (#23391). Existing records are kept, not deleted.
+          if (
+            mode === 'periodic' &&
+            entry.state !== 'done' &&
+            capturedAt - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+          ) {
+            continue
+          }
           if (entry.state === 'done') {
             const existing = next[entry.paneKey]
             if (
