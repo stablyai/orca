@@ -243,7 +243,6 @@ test('the staging director deploy passes argument groups the deploy script accep
     '--capacity-service-account': account('gha-cap'),
     '--asia-proof-service-account': account('gha-aproof'),
     '--regional-placement-secret-version': '1',
-    '--min-instances': '0',
     '--runtime-service-account': account('relay-dir'),
     '--rehome-director-service-account': account('relay-dir'),
     '--rehome-audience': 'https://relay-staging.onorca.dev/v1/admin/host-drain',
