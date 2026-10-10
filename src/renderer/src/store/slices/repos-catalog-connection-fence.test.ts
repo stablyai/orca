@@ -92,4 +92,33 @@ describe('repo catalogs use the host-catalog fence (#20811)', () => {
       }
     })
   }
+
+  it('keeps the newer all-host load when a superseded one finishes listing hosts late', async () => {
+    const olderHosts = Promise.withResolvers<{ id: string; name: string }[]>()
+    const listHosts = vi
+      .fn()
+      .mockReturnValueOnce(olderHosts.promise)
+      .mockResolvedValue([{ id: 'env-1', name: 'Remote' }])
+    vi.mocked(window.api.runtimeEnvironments).list = listHosts
+    const newerRemote = Promise.withResolvers<unknown>()
+    const newerStarted = Promise.withResolvers<void>()
+    stubRemoteRepoList(newerRemote.promise, newerStarted.resolve)
+    const store = createTestStore()
+
+    const older = store.getState().fetchReposForAllHosts()
+    await vi.waitFor(() => expect(listHosts).toHaveBeenCalledOnce())
+    const newer = store.getState().fetchReposForAllHosts()
+    await newerStarted.promise
+    olderHosts.resolve([{ id: 'env-1', name: 'Remote' }])
+    await older
+    newerRemote.resolve({
+      id: 'rpc-repo-list',
+      ok: true,
+      result: { repos: [repo('remote-repo', '/remote')] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await newer
+
+    expect(store.getState().repos.map((entry) => entry.id)).toContain('remote-repo')
+  })
 })

@@ -146,6 +146,10 @@ export function createAllHostRepoCatalogActions(
       }
 
       const environments = await listRuntimeEnvironmentsForAllHostLoad()
+      // Why: a superseded load must not claim remote fences, or it would void the newer load's catalogs.
+      if (latestAllHostRepoCatalogGenerationByStore.get(get) !== generation) {
+        return
+      }
       // Why: unreachable remotes can spend the full connect timeout; merge each resolved host via the state updater so parallel loads don't clobber.
       await Promise.all(
         environments.map(async (environment) => {
