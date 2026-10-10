@@ -60,7 +60,8 @@ export function setCodexMainAgentTurnState(
     state: next.state,
     ...(continued.outcome ? { outcome: continued.outcome } : {}),
     stateStartedAt: continued.stateStartedAt,
-    model: next.model
+    model: next.model,
+    sessionId: next.sessionId ?? previous?.sessionId
   }
   state.codexLeadStateByPaneKey.set(paneKey, record)
   return record

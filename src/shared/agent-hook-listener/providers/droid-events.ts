@@ -2,7 +2,11 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
-import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
+import {
+  clearProducerTurnCacheState,
+  type HookListenerState,
+  producerCacheKey
+} from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
@@ -20,9 +24,10 @@ export function normalizeDroidEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  const cacheKey = producerCacheKey(paneKey, 'droid')
   if (eventName === 'SessionStart') {
     // Why: Droid's SessionStart fires while idle (TUI open/resume); wait for real activity before a working row.
-    clearPaneTurnCacheState(state, paneKey)
+    clearProducerTurnCacheState(state, cacheKey)
     return null
   }
 
@@ -57,7 +62,7 @@ export function normalizeDroidEvent(
 
   const snapshot = resolveToolState(
     state,
-    paneKey,
+    cacheKey,
     extractToolFields('droid', eventName, hookPayload),
     { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
   )
@@ -67,7 +72,7 @@ export function normalizeDroidEvent(
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+    prompt: resolvePrompt(state, cacheKey, effectivePrompt, {
       resetOnNewTurn: isNewTurnEvent('droid', eventName)
     }),
     agentType: 'droid',

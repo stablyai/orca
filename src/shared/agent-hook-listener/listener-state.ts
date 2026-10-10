@@ -1,4 +1,5 @@
 import type { AgentMainAgentStatus } from '../agent-status-types'
+import type { AgentHookSource } from '../agent-hook-relay'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
 export type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
@@ -33,8 +34,10 @@ import {
 export type HookListenerState = {
   warnedVersions: Set<string>
   warnedEnvs: Set<string>
-  lastPromptByPaneKey: Map<string, string>
-  lastToolByPaneKey: Map<string, ToolSnapshot>
+  /** Keyed by producerCacheKey: a nested agent on the pane must never read back another agent's prompt. */
+  lastPromptByProducerKey: Map<string, string>
+  /** Keyed by producerCacheKey, like lastPromptByProducerKey. */
+  lastToolByProducerKey: Map<string, ToolSnapshot>
   /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
   lastStatusByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
@@ -95,6 +98,21 @@ export type GrokActiveTurn = {
   sessionId?: string
 }
 
+/** One agent's own cache slot on a pane. The `\0` suffix keeps pane-scoped move/delete/tab cleanup covering it. */
+export function producerCacheKey(paneKey: string, source: AgentHookSource): string {
+  return `${paneKey}\0${source}`
+}
+
+/** The pane's row only when this producer wrote it; another agent's row is not this producer's history. */
+export function producerPreviousStatus(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentHookSource
+): AgentHookEventPayload | undefined {
+  const previous = state.lastStatusByPaneKey.get(paneKey)
+  return previous?.source === source ? previous : undefined
+}
+
 const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()
 
 function legacyStatusAdapter(state: HookListenerState): AgentStatusLegacyAdapter {
@@ -112,8 +130,8 @@ export function createHookListenerState(
   const state: HookListenerState = {
     warnedVersions: new Set(),
     warnedEnvs: new Set(),
-    lastPromptByPaneKey: new Map(),
-    lastToolByPaneKey: new Map(),
+    lastPromptByProducerKey: new Map(),
+    lastToolByProducerKey: new Map(),
     lastStatusByPaneKey: adapter.view,
     antigravityCompletedTranscriptByPaneKey: new Map(),
     jcodeTurnPromptByPaneKey: new Map(),
@@ -199,8 +217,8 @@ export function seedLegacyAgentStatusForTests(
 }
 
 export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
-  deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
-  deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.lastPromptByProducerKey, paneKey)
+  deletePaneScopedCacheEntry(state.lastToolByProducerKey, paneKey)
   deletePaneScopedCacheEntry(state.jcodeTurnPromptByPaneKey, paneKey)
   deleteLegacyAgentStatus(state, paneKey)
   for (const key of state.lastStatusByPaneKey.keys()) {
@@ -257,8 +275,8 @@ export function movePaneCacheState(
   if (fromPaneKey === toPaneKey) {
     return
   }
-  movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastPromptByProducerKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastToolByProducerKey, fromPaneKey, toPaneKey)
   moveLegacyAgentStatuses(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.jcodeTurnPromptByPaneKey, fromPaneKey, toPaneKey)
@@ -281,19 +299,15 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
 }
 
-export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
-  state.lastPromptByPaneKey.delete(paneKey)
-  state.lastToolByPaneKey.delete(paneKey)
-  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
-  state.jcodeTurnPromptByPaneKey.delete(paneKey)
-  state.ampCompletedCacheKeys.delete(paneKey)
-  state.grokActiveTurnByPaneKey.delete(paneKey)
-  state.grokMainAgentStatusByPaneKey.delete(paneKey)
+/** Drops one producer's turn caches; other agents on the pane keep theirs. */
+export function clearProducerTurnCacheState(state: HookListenerState, cacheKey: string): void {
+  state.lastPromptByProducerKey.delete(cacheKey)
+  state.lastToolByProducerKey.delete(cacheKey)
 }
 
 export function clearAllListenerCaches(state: HookListenerState): void {
-  state.lastPromptByPaneKey.clear()
-  state.lastToolByPaneKey.clear()
+  state.lastPromptByProducerKey.clear()
+  state.lastToolByProducerKey.clear()
   clearLegacyAgentStatuses(state)
   state.antigravityCompletedTranscriptByPaneKey.clear()
   state.jcodeTurnPromptByPaneKey.clear()

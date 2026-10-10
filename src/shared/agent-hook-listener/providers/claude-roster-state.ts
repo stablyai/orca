@@ -10,7 +10,11 @@ import {
   type ClaudeSubagentRoster
 } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
-import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
+import {
+  producerCacheKey,
+  type ClaudeLeadTurnState,
+  type HookListenerState
+} from '../listener-state'
 import { readString } from '../tool-input-preview'
 import { resolveClaudePaneStatus } from './claude-pane-hold-evidence'
 export {
@@ -223,12 +227,13 @@ export function seedClaudeSubagentRosterFromSnapshots(
 export function seedClaudeLeadTurnFromPersistedStatus(
   state: HookListenerState,
   paneKey: string,
-  status: Pick<AgentHookEventPayload, 'payload' | 'claudeRunningNonAgentTask'>
+  status: Pick<AgentHookEventPayload, 'source' | 'payload' | 'claudeRunningNonAgentTask'>
 ): void {
   const mainAgent = status.payload.mainAgent
   // Why: a row old enough to lack `mainAgent` was mapped from its legacy child-only flag at hydrate.
+  // Why source: a row another agent wrote can keep Claude's label, but its prompt is not Claude's.
   if (
-    status.payload.agentType === 'claude' &&
+    status.source === 'claude' &&
     mainAgent?.state === 'done' &&
     status.claudeRunningNonAgentTask === false
   ) {
@@ -240,11 +245,12 @@ export function seedClaudeLeadTurnFromPersistedStatus(
         ? { turnCompletedAt: status.payload.turnCompletedAt }
         : {})
     })
+    const cacheKey = producerCacheKey(paneKey, 'claude')
     if (status.payload.prompt) {
-      state.lastPromptByPaneKey.set(paneKey, status.payload.prompt)
+      state.lastPromptByProducerKey.set(cacheKey, status.payload.prompt)
     }
     if (status.payload.lastAssistantMessage) {
-      state.lastToolByPaneKey.set(paneKey, {
+      state.lastToolByProducerKey.set(cacheKey, {
         lastAssistantMessage: status.payload.lastAssistantMessage,
         lastAssistantMessageIsToolOutput: status.payload.lastAssistantMessageIsToolOutput
       })
@@ -271,6 +277,21 @@ export function reapRestoredClaudeSubagentsForDeadPane(
   return true
 }
 
+/** A cleared wait drops the cached tool and card but keeps the lead's last reply. */
+function keepOnlyClaudeAssistantMessage(state: HookListenerState, paneKey: string): void {
+  const cacheKey = producerCacheKey(paneKey, 'claude')
+  const previousTool = state.lastToolByProducerKey.get(cacheKey)
+  state.lastToolByProducerKey.set(
+    cacheKey,
+    previousTool?.lastAssistantMessage
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
+      : {}
+  )
+}
+
 /** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state. */
 export function clearClaudePendingWaitForAgent(
   state: HookListenerState,
@@ -282,16 +303,7 @@ export function clearClaudePendingWaitForAgent(
     return
   }
   setClaudeMainAgentTurnState(state, paneKey, lead.stateBeforeWait ?? { state: 'working' })
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
-  state.lastToolByPaneKey.set(
-    paneKey,
-    previousTool?.lastAssistantMessage
-      ? {
-          lastAssistantMessage: previousTool.lastAssistantMessage,
-          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
-        }
-      : {}
-  )
+  keepOnlyClaudeAssistantMessage(state, paneKey)
 }
 
 /** Clear an AskUserQuestion wait after the answer is typed (answering emits no hook event; the caller infers it from the submit keystroke). Restores the stashed pre-wait lead state or 'working', drops the cached card, and returns the pane state to emit (gated up to 'working' while children run). */
@@ -314,16 +326,7 @@ export function clearClaudeAnsweredQuestionWait(
       : { state: 'working' as const }
   const restored = setClaudeMainAgentTurnState(state, paneKey, { ...stash })
   const publishedMainAgent = claudeMainAgentStatusForPayload(restored)
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
-  state.lastToolByPaneKey.set(
-    paneKey,
-    previousTool?.lastAssistantMessage
-      ? {
-          lastAssistantMessage: previousTool.lastAssistantMessage,
-          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
-        }
-      : {}
-  )
+  keepOnlyClaudeAssistantMessage(state, paneKey)
   const resolved = resolveClaudePaneStatus(state, paneKey, restored)
   return {
     state: resolved.stateName,

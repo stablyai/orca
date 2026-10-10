@@ -86,7 +86,7 @@ describe('legacy structural TUI identity at the execution-host boundary', () => 
     expect([...state.lastLaunchTokenByPaneKey]).toEqual(tokens)
     expect(lookupOpenCodeSessionPane(state, 'ses_b')).toBe(owner)
     expect(state.lastStatusByPaneKey.size).toBe(0)
-    expect(state.lastPromptByPaneKey.size).toBe(0)
+    expect(state.lastPromptByProducerKey.size).toBe(0)
   })
 
   it.each([{ opencodeTui: undefined }, { opencodeMajor: 2 }])(

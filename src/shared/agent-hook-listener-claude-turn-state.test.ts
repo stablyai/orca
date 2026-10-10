@@ -383,10 +383,10 @@ describe('shared agent-hook-listener', () => {
     }
 
     const scopedPrefix = `${PANE_KEY}\0amp:`
-    const promptKeys = [...state.lastPromptByPaneKey.keys()].filter((key) =>
+    const promptKeys = [...state.lastPromptByProducerKey.keys()].filter((key) =>
       key.startsWith(scopedPrefix)
     )
-    const toolKeys = [...state.lastToolByPaneKey.keys()].filter((key) =>
+    const toolKeys = [...state.lastToolByProducerKey.keys()].filter((key) =>
       key.startsWith(scopedPrefix)
     )
     const completedKeys = [...state.ampCompletedCacheKeys].filter((key) =>
@@ -396,8 +396,8 @@ describe('shared agent-hook-listener', () => {
     expect(promptKeys.length).toBeLessThanOrEqual(32)
     expect(toolKeys.length).toBeLessThanOrEqual(32)
     expect(completedKeys.length).toBeLessThanOrEqual(32)
-    expect(state.lastPromptByPaneKey.has(`${scopedPrefix}thread-0`)).toBe(false)
-    expect(state.lastPromptByPaneKey.get(`${scopedPrefix}thread-39`)).toBe('prompt 39')
+    expect(state.lastPromptByProducerKey.has(`${scopedPrefix}thread-0`)).toBe(false)
+    expect(state.lastPromptByProducerKey.get(`${scopedPrefix}thread-39`)).toBe('prompt 39')
     expect(latestPrompt).toBe('prompt 39')
   })
 })

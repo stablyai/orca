@@ -159,6 +159,7 @@ describe('Cursor hook normalization', () => {
     }
     agentHookServer.ingestRemote(
       {
+        source: submit.source,
         paneKey: submit.paneKey,
         tabId: submit.tabId,
         worktreeId: submit.worktreeId,
@@ -178,6 +179,7 @@ describe('Cursor hook normalization', () => {
     }
     agentHookServer.ingestRemote(
       {
+        source: stop.source,
         paneKey: stop.paneKey,
         tabId: stop.tabId,
         worktreeId: stop.worktreeId,
@@ -199,6 +201,7 @@ describe('Cursor hook normalization', () => {
 
     agentHookServer.ingestRemote(
       {
+        source: response.source,
         paneKey: response.paneKey,
         tabId: response.tabId,
         worktreeId: response.worktreeId,

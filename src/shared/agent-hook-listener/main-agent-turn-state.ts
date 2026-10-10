@@ -43,4 +43,6 @@ export type CodexLeadTurnState = {
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string
+  /** The root's own session; the pane row may belong to another agent. */
+  sessionId?: string
 }

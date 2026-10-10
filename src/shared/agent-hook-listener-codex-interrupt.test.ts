@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   createHookListenerState,
+  seedLegacyAgentStatusForTests,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
@@ -89,6 +93,36 @@ describe("Codex's Interrupt hook", () => {
     startTurn()
     expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toMatchObject({ state: 'working' })
     expect(state.codexLeadStateByPaneKey.get(PANE_KEY)?.outcome).toBeUndefined()
+  })
+
+  it('ends a nested Codex turn while the pane row belongs to another agent', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-nested-interrupt-'))
+    try {
+      const rollout = join(dir, 'rollout.jsonl')
+      writeFileSync(rollout, '')
+      seedLegacyAgentStatusForTests(state, {
+        paneKey: PANE_KEY,
+        source: 'claude',
+        connectionId: null,
+        providerSession: { key: 'session_id', id: 'claude-session' },
+        payload: { state: 'working', prompt: 'claude task', agentType: 'claude' }
+      })
+      post({
+        hook_event_name: 'UserPromptSubmit',
+        session_id: INTERRUPT.session_id,
+        transcript_path: rollout,
+        prompt: 'list files'
+      })
+
+      // Interrupt carries no transcript path; it is Codex's own session, not a side chat.
+      expect(post(INTERRUPT)?.payload).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('records the cancellation when a relay forwards the Interrupt row', () => {

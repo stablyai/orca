@@ -15,7 +15,7 @@
 // limit, since tool_response text is passed through uncapped for most sources.
 //
 // Amplifier this models in the second table: resolveToolState stores the raw
-// value in lastToolByPaneKey and inherits it until a turn reset, so one large
+// value in lastToolByProducerKey and inherits it until a turn reset, so one large
 // tool result is re-serialized and re-scanned on every later event of the turn.
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'

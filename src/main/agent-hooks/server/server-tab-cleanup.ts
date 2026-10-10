@@ -23,12 +23,12 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
         }
       }
     }
-    for (const key of this.state.lastPromptByPaneKey.keys()) {
+    for (const key of this.state.lastPromptByProducerKey.keys()) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
         paneKeysToClear.add(key.split('\0', 1)[0] ?? key)
       }
     }
-    for (const key of this.state.lastToolByPaneKey.keys()) {
+    for (const key of this.state.lastToolByProducerKey.keys()) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
         paneKeysToClear.add(key.split('\0', 1)[0] ?? key)
       }

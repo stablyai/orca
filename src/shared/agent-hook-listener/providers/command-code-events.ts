@@ -2,7 +2,7 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
-import type { HookListenerState } from '../listener-state'
+import { producerCacheKey, type HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 
@@ -13,6 +13,7 @@ export function normalizeCommandCodeEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  const cacheKey = producerCacheKey(paneKey, 'command-code')
   const stateName =
     eventName === 'PreToolUse' || eventName === 'PostToolUse'
       ? 'working'
@@ -25,14 +26,14 @@ export function normalizeCommandCodeEvent(
 
   const snapshot = resolveToolState(
     state,
-    paneKey,
+    cacheKey,
     extractToolFields('command-code', eventName, hookPayload),
     { resetOnNewTurn: isNewTurnEvent('command-code', eventName) }
   )
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
+    prompt: resolvePrompt(state, cacheKey, promptText, {
       resetOnNewTurn: isNewTurnEvent('command-code', eventName)
     }),
     agentType: 'command-code',

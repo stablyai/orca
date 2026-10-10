@@ -10,7 +10,11 @@ import {
   type AgentChildWorkLiveness,
   type AgentChildWorkLivenessCandidate
 } from '../../agent-status-child-work-liveness'
-import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
+import {
+  clearProducerTurnCacheState,
+  producerCacheKey,
+  type HookListenerState
+} from '../listener-state'
 import { normalizeGrokPromptId } from '../listener-limits'
 import { resolvePrompt, resolveToolState, stripGrokUserQueryWrapper } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
@@ -149,6 +153,7 @@ export function normalizeGrokEvent(
   hookPayload: Record<string, unknown>,
   grokHome?: string
 ): ParsedAgentStatusPayload | null {
+  const cacheKey = producerCacheKey(paneKey, 'grok')
   // Why: child sessions reuse their parent's pane route; their lifecycle cannot settle the parent.
   if (isGrokSubagentEvent(hookPayload)) {
     return null
@@ -156,7 +161,9 @@ export function normalizeGrokEvent(
   if (isGrokEvent(eventName, 'session_start')) {
     // Why: SessionStart resets stale per-turn state but must not create a working row before any prompt/tool event.
     // The main agent clock goes with it: a new process is a new main agent.
-    clearPaneTurnCacheState(state, paneKey)
+    clearProducerTurnCacheState(state, cacheKey)
+    state.grokActiveTurnByPaneKey.delete(paneKey)
+    state.grokMainAgentStatusByPaneKey.delete(paneKey)
     return null
   }
 
@@ -248,7 +255,7 @@ export function normalizeGrokEvent(
 
   const snapshot = resolveToolState(
     state,
-    paneKey,
+    cacheKey,
     extractToolFields('grok', eventName, hookPayload, { grokHome }),
     { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
   )
@@ -260,7 +267,7 @@ export function normalizeGrokEvent(
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+    prompt: resolvePrompt(state, cacheKey, effectivePrompt, {
       resetOnNewTurn: isNewTurnEvent('grok', eventName)
     }),
     agentType: 'grok',

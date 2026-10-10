@@ -49,8 +49,8 @@ describe('bounded agent hook status cache', () => {
       }
     )
     upsertBoundedAgentHookStatus(listener, status('done', 'done', now), { maxPanes: 3, now })
-    listener.lastPromptByPaneKey.set('stale', 'cached prompt')
-    listener.lastToolByPaneKey.set('stale\0tool', {} as never)
+    listener.lastPromptByProducerKey.set('stale', 'cached prompt')
+    listener.lastToolByProducerKey.set('stale\0tool', {})
 
     const evicted = upsertBoundedAgentHookStatus(listener, status('current', 'working', now), {
       maxPanes: 3,
@@ -61,7 +61,7 @@ describe('bounded agent hook status cache', () => {
     expect(listener.lastStatusByPaneKey.has('fresh-oldest')).toBe(true)
     expect(listener.lastStatusByPaneKey.has('done')).toBe(true)
     expect(listener.lastStatusByPaneKey.has('current')).toBe(true)
-    expect(listener.lastPromptByPaneKey.has('stale')).toBe(false)
-    expect(listener.lastToolByPaneKey.has('stale\0tool')).toBe(false)
+    expect(listener.lastPromptByProducerKey.has('stale')).toBe(false)
+    expect(listener.lastToolByProducerKey.has('stale\0tool')).toBe(false)
   })
 })

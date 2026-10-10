@@ -4,7 +4,11 @@ import {
 } from '../../agent-status-types'
 import { readFirstString } from '../interactive-tool'
 import { readBoundedString } from '../grok-result-discovery'
-import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
+import {
+  clearProducerTurnCacheState,
+  producerCacheKey,
+  type HookListenerState
+} from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { AMP_MAX_SCOPED_THREAD_CACHE_KEYS, AMP_THREAD_ID_MAX_LENGTH } from '../listener-limits'
@@ -18,9 +22,9 @@ export function normalizeAmpEvent(
 ): ParsedAgentStatusPayload | null {
   const ampCacheKey = getAmpCacheKey(paneKey, hookPayload)
   if (eventName === 'session.start') {
-    clearPaneTurnCacheState(state, ampCacheKey)
-    if (ampCacheKey !== paneKey) {
-      clearPaneTurnCacheState(state, paneKey)
+    for (const key of [ampCacheKey, producerCacheKey(paneKey, 'amp')]) {
+      clearProducerTurnCacheState(state, key)
+      state.ampCompletedCacheKeys.delete(key)
     }
     return null
   }
@@ -64,7 +68,7 @@ export function normalizeAmpEvent(
   ])
   const canUseMessageAsPrompt =
     eventName === 'agent.start' ||
-    (eventName === 'agent.end' && !state.lastPromptByPaneKey.has(ampCacheKey))
+    (eventName === 'agent.end' && !state.lastPromptByProducerKey.has(ampCacheKey))
   const ampPromptText = explicitPrompt ?? (canUseMessageAsPrompt ? promptText : '')
 
   const normalized = normalizeAgentStatusPayload({
@@ -96,8 +100,9 @@ export function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unkn
     ['threadId', 'threadID', 'thread_id'],
     AMP_THREAD_ID_MAX_LENGTH
   )
+  const producerKey = producerCacheKey(paneKey, 'amp')
   // Why: Amp emits events for multiple threads per pane; cache by thread internally while keeping the visible paneKey stable.
-  return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
+  return threadId ? `${producerKey}:${threadId}` : producerKey
 }
 
 export function pruneAmpThreadCacheKeys(
@@ -105,18 +110,18 @@ export function pruneAmpThreadCacheKeys(
   paneKey: string,
   currentCacheKey: string
 ): void {
-  const scopedPrefix = `${paneKey}\0amp:`
+  const scopedPrefix = `${producerCacheKey(paneKey, 'amp')}:`
   if (!currentCacheKey.startsWith(scopedPrefix)) {
     return
   }
 
   const scopedKeys = new Set<string>()
-  for (const key of state.lastPromptByPaneKey.keys()) {
+  for (const key of state.lastPromptByProducerKey.keys()) {
     if (key.startsWith(scopedPrefix)) {
       scopedKeys.add(key)
     }
   }
-  for (const key of state.lastToolByPaneKey.keys()) {
+  for (const key of state.lastToolByProducerKey.keys()) {
     if (key.startsWith(scopedPrefix)) {
       scopedKeys.add(key)
     }
@@ -140,8 +145,8 @@ export function pruneAmpThreadCacheKeys(
     if (key === currentCacheKey) {
       continue
     }
-    state.lastPromptByPaneKey.delete(key)
-    state.lastToolByPaneKey.delete(key)
+    state.lastPromptByProducerKey.delete(key)
+    state.lastToolByProducerKey.delete(key)
     state.ampCompletedCacheKeys.delete(key)
     overflow--
   }

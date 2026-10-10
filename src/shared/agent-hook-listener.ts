@@ -14,7 +14,11 @@ import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from './agent-hook-listener/listener-limits'
-import type { HookListenerState } from './agent-hook-listener/listener-state'
+import {
+  producerCacheKey,
+  producerPreviousStatus,
+  type HookListenerState
+} from './agent-hook-listener/listener-state'
 import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
@@ -185,10 +189,12 @@ export function normalizeHookPayload(
         providerPromptId
       )
     }
-    // Why: the compact's own event carries no prompt; keep the pane's label from the turn it
-    // summarized rather than blanking the row as it clears.
-    if (previousStatus?.payload.prompt && !state.lastPromptByPaneKey.has(paneKey)) {
-      state.lastPromptByPaneKey.set(paneKey, previousStatus.payload.prompt)
+    // Why: the compact's own event carries no prompt; keep the label from the turn it summarized
+    // rather than blanking the row as it clears — but only a row this producer wrote.
+    const promptCacheKey = producerCacheKey(paneKey, source)
+    const ownPreviousPrompt = producerPreviousStatus(state, paneKey, source)?.payload.prompt
+    if (ownPreviousPrompt && !state.lastPromptByProducerKey.has(promptCacheKey)) {
+      state.lastPromptByProducerKey.set(promptCacheKey, ownPreviousPrompt)
     }
   }
 

@@ -7,6 +7,7 @@ import {
 import {
   clearPaneCacheState,
   createHookListenerState,
+  producerCacheKey,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
@@ -695,7 +696,7 @@ describe('shared agent-hook-listener', () => {
 
       clearClaudeAnsweredQuestionWait(state, PANE_KEY)
 
-      expect(state.lastToolByPaneKey.get(PANE_KEY)).toMatchObject({
+      expect(state.lastToolByProducerKey.get(producerCacheKey(PANE_KEY, 'claude'))).toMatchObject({
         lastAssistantMessage: 'raw command output',
         lastAssistantMessageIsToolOutput: true
       })

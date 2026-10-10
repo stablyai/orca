@@ -3,7 +3,7 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
-import type { HookListenerState } from '../listener-state'
+import { producerCacheKey, type HookListenerState } from '../listener-state'
 import {
   resolvePrompt,
   resolveToolState,
@@ -71,6 +71,7 @@ export function normalizeZCodeEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  const cacheKey = producerCacheKey(paneKey, 'zcode')
   if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
     return null
   }
@@ -82,14 +83,14 @@ export function normalizeZCodeEvent(
   const resetOnNewTurn = isNewTurnEvent('zcode', eventName)
   const snapshot = resolveToolState(
     state,
-    paneKey,
+    cacheKey,
     extractToolFields('zcode', eventName, hookPayload),
     { resetOnNewTurn }
   )
 
   return normalizeAgentStatusPayload({
     state: turn.stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, { resetOnNewTurn }),
+    prompt: resolvePrompt(state, cacheKey, promptText, { resetOnNewTurn }),
     agentType: 'zcode',
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,

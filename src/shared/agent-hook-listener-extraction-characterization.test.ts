@@ -6,6 +6,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   movePaneCacheState,
+  producerCacheKey,
   seedLegacyAgentStatusForTests
 } from './agent-hook-listener/listener-state'
 import { warnOnHookEnvOrVersionMismatch } from './agent-hook-listener/listener-limits'
@@ -122,8 +123,8 @@ describe('agent hook extraction boundaries', () => {
     const movedScoped = `${MOVED_PANE}\0child`
     const sibling = `${PANE}-sibling`
     const paneMaps = [
-      state.lastPromptByPaneKey,
-      state.lastToolByPaneKey,
+      state.lastPromptByProducerKey,
+      state.lastToolByProducerKey,
       state.antigravityCompletedTranscriptByPaneKey,
       state.claudeSubagentRosterByPaneKey,
       state.claudeLeadStateByPaneKey,
@@ -182,7 +183,7 @@ describe('agent hook extraction boundaries', () => {
     }
 
     movePaneCacheState(state, MOVED_PANE, MOVED_PANE)
-    expect((state.lastPromptByPaneKey as Map<string, unknown>).get(MOVED_PANE)).toBe('exact')
+    expect(state.lastPromptByProducerKey.get(MOVED_PANE)).toBe('exact')
   })
 
   it('clears exact and NUL-scoped cache keys but not sibling prefixes', () => {
@@ -190,8 +191,8 @@ describe('agent hook extraction boundaries', () => {
     const scoped = `${PANE}\0thread`
     const sibling = `${PANE}-sibling`
     const paneMaps = [
-      state.lastPromptByPaneKey,
-      state.lastToolByPaneKey,
+      state.lastPromptByProducerKey,
+      state.lastToolByProducerKey,
       state.antigravityCompletedTranscriptByPaneKey
     ]
     for (const map of paneMaps) {
@@ -238,8 +239,12 @@ describe('agent hook extraction boundaries', () => {
 
   it('preserves cache mutation from a provider reset that emits no row', () => {
     const state = createHookListenerState()
-    state.lastPromptByPaneKey.set(PANE, 'old prompt')
-    state.lastToolByPaneKey.set(PANE, { toolName: 'old tool' })
+    const droidKey = producerCacheKey(PANE, 'droid')
+    const claudeKey = producerCacheKey(PANE, 'claude')
+    state.lastPromptByProducerKey.set(droidKey, 'old prompt')
+    state.lastToolByProducerKey.set(droidKey, { toolName: 'old tool' })
+    state.lastPromptByProducerKey.set(claudeKey, 'claude prompt')
+    state.lastToolByProducerKey.set(claudeKey, { toolName: 'claude tool' })
     seedLegacyAgentStatusForTests(state, {
       paneKey: PANE,
       connectionId: null,
@@ -254,8 +259,11 @@ describe('agent hook extraction boundaries', () => {
     )
 
     expect(event).toBeNull()
-    expect(state.lastPromptByPaneKey.has(PANE)).toBe(false)
-    expect(state.lastToolByPaneKey.has(PANE)).toBe(false)
+    expect(state.lastPromptByProducerKey.has(droidKey)).toBe(false)
+    expect(state.lastToolByProducerKey.has(droidKey)).toBe(false)
+    // Another agent's turn on the same pane is not Droid's to reset.
+    expect(state.lastPromptByProducerKey.get(claudeKey)).toBe('claude prompt')
+    expect(state.lastToolByProducerKey.get(claudeKey)).toEqual({ toolName: 'claude tool' })
     expect(state.lastStatusByPaneKey.has(PANE)).toBe(true)
   })
 
@@ -263,7 +271,7 @@ describe('agent hook extraction boundaries', () => {
     const state = createHookListenerState()
     state.warnedVersions.add('old-version')
     state.warnedEnvs.add('development->production')
-    state.lastPromptByPaneKey.set(PANE, 'prompt')
+    state.lastPromptByProducerKey.set(PANE, 'prompt')
     state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
     state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
@@ -272,7 +280,7 @@ describe('agent hook extraction boundaries', () => {
 
     expect(state.warnedVersions.size).toBe(0)
     expect(state.warnedEnvs.size).toBe(0)
-    expect(state.lastPromptByPaneKey.size).toBe(0)
+    expect(state.lastPromptByProducerKey.size).toBe(0)
     expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
     expect(state.codexLeadStateByPaneKey.size).toBe(0)
     expect(state.grokActiveTurnByPaneKey.size).toBe(0)

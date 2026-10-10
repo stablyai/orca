@@ -47,7 +47,8 @@ describe('The main agent fact across a restart', () => {
       lastStatusPath(),
       JSON.stringify({
         version: 2,
-        entries: { [PANE]: { paneKey: PANE, tabId: 'tab-1', ...entry } }
+        // Rows have persisted their hook source since before the legacy child-only flag existed.
+        entries: { [PANE]: { paneKey: PANE, tabId: 'tab-1', source: 'claude', ...entry } }
       })
     )
   }

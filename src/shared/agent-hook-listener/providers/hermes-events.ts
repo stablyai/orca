@@ -2,7 +2,7 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../agent-status-types'
-import type { HookListenerState } from '../listener-state'
+import { producerCacheKey, type HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 
@@ -32,6 +32,7 @@ export function normalizeHermesEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  const cacheKey = producerCacheKey(paneKey, 'hermes')
   const stateName = typeof eventName === 'string' ? HERMES_EVENT_STATES[eventName] : undefined
 
   if (!stateName) {
@@ -40,14 +41,14 @@ export function normalizeHermesEvent(
 
   const snapshot = resolveToolState(
     state,
-    paneKey,
+    cacheKey,
     extractToolFields('hermes', eventName, hookPayload),
     { resetOnNewTurn: isNewTurnEvent('hermes', eventName) }
   )
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
+    prompt: resolvePrompt(state, cacheKey, promptText, {
       resetOnNewTurn: isNewTurnEvent('hermes', eventName)
     }),
     agentType: 'hermes',

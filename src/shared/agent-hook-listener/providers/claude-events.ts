@@ -10,7 +10,7 @@ import {
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
-import type { HookListenerState } from '../listener-state'
+import { producerCacheKey, type HookListenerState } from '../listener-state'
 import { readFirstString } from '../interactive-tool'
 import { shouldIgnoreCompactContinuationUserPromptSubmit } from '../prompt-fields'
 import { readString } from '../tool-input-preview'
@@ -152,7 +152,7 @@ export function normalizeClaudeEvent(
   }
 
   const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
+  const previousTool = state.lastToolByProducerKey.get(producerCacheKey(paneKey, 'claude'))
   const isParallelSiblingCompletionDuringQuestion =
     eventAgentId === undefined &&
     previousLead?.state === 'waiting' &&
