@@ -50,7 +50,7 @@ export function restoreLocalStructuredSessionTabsOnce(
  *  fenced exactly as before, so nothing about first paint changes. */
 export function refreshLocalStructuredSessionTabs(
   expectedGeneration = localStructuredSessionGeneration(),
-  options: { authoritative?: boolean } = {}
+  options: { authoritative?: boolean; reacceptCurrentVersion?: boolean } = {}
 ): Promise<RuntimeMobileSessionTabsResult[]> {
   // Capture request order before IPC: a reply that began before a close cannot retire its fence.
   const authoritativeInventory = beginStructuredAgentSessionAuthoritativeInventory()
