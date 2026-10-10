@@ -334,6 +334,9 @@ export const WORKSPACE_ON_OTHER_RUNTIME = 'workspace_on_other_runtime'
 // only on the endpoint itself, never on a workspace's SSH host.
 export const WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY =
   'workspace-ports.host-scoped.v1' as const
+// Hosts without this capability ignore a request's expectedRuntimeSource; the CLI's pre-send probe
+// is then the only fence.
+export const RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY = 'runtime-source-fence.v1' as const
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
@@ -442,6 +445,7 @@ export const RUNTIME_CAPABILITIES = [
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY,
+  RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
   ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 

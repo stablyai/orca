@@ -77,7 +77,7 @@ export class RuntimeClient {
     this.originalArgs = originalArgs ? [...originalArgs] : undefined
     this.remotePairing = resolveRemotePairing(userDataPath, remotePairingCode, environmentSelector)
     this.remoteCompat = new RemoteRuntimeCompatGate(userDataPath, environmentSelector)
-    this.runtimeSourceFence = createRuntimeSourceFence(process.env, userDataPath)
+    this.runtimeSourceFence = createRuntimeSourceFence(process.env, userDataPath, requestTimeoutMs)
   }
 
   get isRemote(): boolean {
@@ -166,12 +166,17 @@ export class RuntimeClient {
     }
     const metadata = readMetadata(this.userDataPath)
     // Why outside recover(): a refusal here happens before anything is sent, so there is nothing to retry.
-    await this.runtimeSourceFence.check(metadata, method, (target) =>
-      sendRequest<RuntimeStatus>(target, 'status.get', undefined, this.requestTimeoutMs)
-    )
+    const expectedRuntimeSource = await this.runtimeSourceFence.check(metadata, method)
     let response
     try {
-      response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
+      response = await sendRequest<TResult>(
+        metadata,
+        method,
+        params,
+        effectiveTimeoutMs,
+        envelope,
+        expectedRuntimeSource
+      )
     } catch (error) {
       throw recover(error, metadata.runtimeId ?? null)
     }

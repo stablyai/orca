@@ -40,7 +40,7 @@ afterEach(async () => {
   servers.clear()
 })
 
-type FakeRuntime = { userDataPath: string; methods: string[] }
+type FakeRuntime = { userDataPath: string; methods: string[]; expectations: unknown[] }
 
 /** A live runtime on its own socket that answers every method and records what reached it. */
 async function startRuntime(args: {
@@ -53,6 +53,7 @@ async function startRuntime(args: {
     ? `\\\\.\\pipe\\orca-source-fence-${randomUUID()}`
     : join(userDataPath, 'runtime.sock')
   const methods: string[] = []
+  const expectations: unknown[] = []
   const server = createServer((socket) => {
     let buffer = ''
     socket.setEncoding('utf8')
@@ -62,8 +63,11 @@ async function startRuntime(args: {
       if (newline === -1) {
         return
       }
-      const request: { id: string; method: string } = JSON.parse(buffer.slice(0, newline))
+      const request: { id: string; method: string; expectedRuntimeSource?: unknown } = JSON.parse(
+        buffer.slice(0, newline)
+      )
       methods.push(request.method)
+      expectations.push(request.expectedRuntimeSource)
       const result =
         request.method === 'status.get'
           ? {
@@ -90,7 +94,7 @@ async function startRuntime(args: {
       startedAt: 1
     })
   )
-  return { userDataPath, methods }
+  return { userDataPath, methods, expectations }
 }
 
 function launchedBy(sourceId: string, incarnation: string, profilePath?: string): void {
@@ -130,6 +134,9 @@ describe('RuntimeClient runtime-source fence', () => {
     await client.call('terminal.send', { terminal: 't1', text: 'hi' })
     await client.call('worktree.list')
     expect(runtime.methods).toEqual(['status.get', 'terminal.send', 'worktree.list'])
+    // Why: the host refuses the send itself if it is no longer the runtime the probe verified.
+    const expected = { sourceId: SOURCE_A, runtimeId: 'runtime-a2' }
+    expect(runtime.expectations).toEqual([undefined, expected, expected])
   })
 
   it('sends without a probe when the launching runtime is still the live one', async () => {
@@ -139,6 +146,7 @@ describe('RuntimeClient runtime-source fence', () => {
 
     await client.call('worktree.list')
     expect(runtime.methods).toEqual(['worktree.list'])
+    expect(runtime.expectations).toEqual([{ sourceId: SOURCE_A, runtimeId: 'runtime-a' }])
   })
 
   it('refuses when the live runtime cannot say which profile it serves', async () => {
@@ -158,6 +166,7 @@ describe('RuntimeClient runtime-source fence', () => {
 
     await client.call('worktree.list')
     expect(runtime.methods).toEqual(['worktree.list'])
+    expect(runtime.expectations).toEqual([undefined])
   })
 
   it('lets an explicit switch to another profile through, e.g. orca-dev from a packaged terminal', async () => {

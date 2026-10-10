@@ -1,8 +1,10 @@
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { isSameUserDataPath } from '../../shared/serve-user-data-path'
 import { readRuntimeSourceStamp, type RuntimeSourceStamp } from '../../shared/runtime-source-env'
+import type { ExpectedRuntimeSource } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getPlatformUserDataPath } from './metadata'
+import { sendRequest } from './transport'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
 type StatusProbe = (metadata: RuntimeMetadata) => Promise<RuntimeRpcResponse<RuntimeStatus>>
@@ -28,26 +30,34 @@ export function resolveFencedRuntimeSource(
 /**
  * Refuses, before the request is sent, a runtime other than the one that launched this process.
  * A new incarnation of the same source (restart, update) is accepted so surviving panes keep working.
+ * Returns what the request must carry so the host itself refuses it if it is not that runtime.
  */
 export class RuntimeSourceFence {
   private readonly verifiedRuntimeIds = new Set<string>()
 
-  constructor(private readonly expected: RuntimeSourceStamp | null) {
+  constructor(
+    private readonly expected: RuntimeSourceStamp | null,
+    private readonly probe: StatusProbe
+  ) {
     if (expected) {
       this.verifiedRuntimeIds.add(expected.incarnation)
     }
   }
 
-  async check(metadata: RuntimeMetadata, method: string, probe: StatusProbe): Promise<void> {
+  async check(
+    metadata: RuntimeMetadata,
+    method: string
+  ): Promise<ExpectedRuntimeSource | undefined> {
     // Why status.get is exempt: it is the read-only probe itself.
     if (!this.expected || method === 'status.get') {
-      return
+      return undefined
     }
+    const expectation = { sourceId: this.expected.sourceId, runtimeId: metadata.runtimeId }
     if (this.verifiedRuntimeIds.has(metadata.runtimeId)) {
-      return
+      return expectation
     }
     // Why trust the answer: the transport rejects a response from any runtime but metadata's.
-    const response = await probe(metadata)
+    const response = await this.probe(metadata)
     if (response.ok === false) {
       throw new RuntimeClientError(
         'runtime_source_unverifiable',
@@ -68,12 +78,14 @@ export class RuntimeSourceFence {
       )
     }
     this.verifiedRuntimeIds.add(metadata.runtimeId)
+    return expectation
   }
 }
 
 export function createRuntimeSourceFence(
   env: Readonly<Record<string, string | undefined>>,
-  userDataPath: string
+  userDataPath: string,
+  probeTimeoutMs: number
 ): RuntimeSourceFence {
   let platformDefaultPath: string | null = null
   try {
@@ -82,6 +94,7 @@ export function createRuntimeSourceFence(
     // Why: no resolvable default (Windows without APPDATA) means nothing can fall back to it.
   }
   return new RuntimeSourceFence(
-    resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath)
+    resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath),
+    (metadata) => sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, probeTimeoutMs)
   )
 }
