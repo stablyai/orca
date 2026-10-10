@@ -85,6 +85,7 @@ describe('reserve ledger writer', () => {
     writer.enqueue({ ...HOST, cellId: 'c1', epoch: 9 })
     await writer.flush()
     const other = { userId: 'user-2', relayHostId: 'cccccccccccccccc' }
+    const demoted: unknown[] = []
     const result = await reconcileReserveLedger({
       writer,
       seats: () => [
@@ -93,10 +94,13 @@ describe('reserve ledger writer', () => {
         // Too young: it may still be superseded.
         { userId: 'user-3', relayHostId: 'dddddddddddddddd', cellId: 'c1', epoch: 2, joinedAt: 990_000 }
       ],
+      demote: (seat) => demoted.push(seat),
       now: 1_000_000
     })
     await writer.flush()
-    expect(result).toEqual({ upserted: 1 })
+    // The row is ahead of the c1 seat: the row stays, and that seat is told to go.
+    expect(result).toEqual({ upserted: 1, demoted: 1 })
+    expect(demoted).toEqual([{ ...HOST, cellId: 'c1', epoch: 8, joinedAt: 0 }])
     expect(await row(db)).toMatchObject({ cell_id: 'c7', assignment_epoch: 9 })
     const written = await db.query(`SELECT cell_id FROM relay_assignments WHERE user_id = 'user-2'`)
     expect(written).toEqual([{ cell_id: 'c1' }])

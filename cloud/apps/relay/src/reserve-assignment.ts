@@ -305,6 +305,19 @@ export class ReserveAssignment {
     return null
   }
 
+  // Fire-and-forget; the cell checks the seat's epoch and join itself.
+  demoteSeat(seat: { userId: string; relayHostId: string; cellId: string; epoch: number; joinedAt: number }): void {
+    const cell = this.input.cells().find((entry) => entry.cellId === seat.cellId)
+    if (!cell) return
+    void this.input.client.demote(cell, {
+      v: 1,
+      userId: seat.userId,
+      relayHostId: seat.relayHostId,
+      epoch: seat.epoch,
+      joinedAt: seat.joinedAt
+    })
+  }
+
   // Supersede at placement: the old seats this director's map holds on reserve cells are told
   // to go. Each cell checks the seat's epoch and join itself, so a stale map only misses.
   private supersede(identity: Identity, seats: readonly ShadowSeat[], cellId: string, epoch: number): void {

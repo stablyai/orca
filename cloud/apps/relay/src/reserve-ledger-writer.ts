@@ -194,20 +194,29 @@ const RECONCILE_SETTLE_MS = 30_000
 type ReconcileSeat = { userId: string; relayHostId: string; cellId: string; epoch: number; joinedAt: number }
 
 // Every director upserts the map's seats on reserve-mode cells: guarded and idempotent, so
-// concurrent runs are harmless. A row at an equal or higher epoch is left alone.
+// concurrent runs are harmless. A row ahead of the seat (today's path answered a newer epoch,
+// and the desktop was then answered the old seat from memory) is never rewritten: that seat is
+// demoted (epoch-checked, closes with 4409), so the desktop re-assigns to what the row names.
 export async function reconcileReserveLedger(input: {
   writer: ReserveLedgerWriter
   seats: () => ReconcileSeat[]
+  demote?: (seat: ReconcileSeat) => void
   now: number
-}): Promise<{ upserted: number }> {
+}): Promise<{ upserted: number; demoted: number }> {
   const seats = input.seats().filter((seat) => input.now - seat.joinedAt >= RECONCILE_SETTLE_MS)
   const rows = await input.writer.readRows(seats)
   let upserted = 0
+  let demoted = 0
   for (const seat of seats) {
     const row = rows.get(`${seat.userId}\u0000${seat.relayHostId}`)
+    if (row && row.epoch > seat.epoch && input.demote) {
+      input.demote(seat)
+      demoted += 1
+      continue
+    }
     if (row && row.epoch >= seat.epoch) continue
     input.writer.enqueue(seat)
     upserted += 1
   }
-  return { upserted }
+  return { upserted, demoted }
 }

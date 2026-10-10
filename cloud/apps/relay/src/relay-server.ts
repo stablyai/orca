@@ -249,6 +249,16 @@ export function createRelayServer(
                 joinedAt: seat.joinedAt
               }))
             ),
+        demote: (seat) => {
+          reservePlacement?.demoteSeat(seat)
+          console.warn(
+            JSON.stringify({
+              event: 'orca_relay_reserve_ledger_seat_behind_row',
+              cellId: seat.cellId,
+              epoch: seat.epoch
+            })
+          )
+        },
         now
       })
         .catch(() => console.warn('[orca-relay] reserve ledger reconcile deferred'))
@@ -260,9 +270,10 @@ export function createRelayServer(
       setTimeout(reconcile, RESERVE_LEDGER_RECONCILE_MS + random() * 60_000).unref?.()
     }
     // A restart loses the queue: the first run goes as soon as the map is complete.
-    const bootedAt = Date.now()
+    const clock = options.now ?? Date.now
+    const bootedAt = clock()
     const firstRun = setInterval(() => {
-      if (!directory.isComplete() && Date.now() - bootedAt < RESERVE_LEDGER_RECONCILE_MS) return
+      if (!directory.isComplete() && clock() - bootedAt < RESERVE_LEDGER_RECONCILE_MS) return
       clearInterval(firstRun)
       reconcile()
     }, 1_000)
