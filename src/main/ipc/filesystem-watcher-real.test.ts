@@ -14,7 +14,7 @@ import { createWatcherSender } from './filesystem-watcher-test-sender'
  * On a Linux host isWslPath() is always false, so a native /tmp path routes to
  * createWatcher() -> real @parcel/watcher (not the inotifywait WSL fallback).
  */
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -142,4 +142,58 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
 
     await handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: root.aliasRoot })
   }, 15_000)
+
+  // Why (#24285): the worktree's recursive watch does not descend into a symlinked folder, so the
+  // File Explorer watches an expanded one on its own; that watch must report under the link path.
+  it.runIf(process.platform === 'linux')(
+    'reports a symlinked folder only through its own watch, under the link path',
+    async () => {
+      tempDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fswatch-linked-')))
+      const worktree = join(tempDir, 'worktree')
+      const target = join(tempDir, 'outside')
+      await mkdir(worktree)
+      await mkdir(target)
+      const linked = join(worktree, 'linked')
+      await symlink(target, linked, 'dir')
+
+      const sendMock = vi.fn()
+      const sender = createWatcherSender(1, sendMock)
+      await handlers['fs:watchWorktree']({ sender }, { worktreePath: worktree })
+      await handlers['fs:watchWorktree']({ sender }, { worktreePath: linked })
+      const payloads = (): FsChangedCall[] =>
+        sendMock.mock.calls
+          .filter(([channel]) => channel === 'fs:changed')
+          .map(([, payload]) => payload as FsChangedCall)
+
+      await writeFile(join(target, 'new.txt'), 'hello')
+      const expectedPath = join(linked, 'new.txt')
+      await waitFor(() =>
+        payloads().some(
+          (payload) =>
+            payload.worktreePath === linked &&
+            payload.events.some((event) => event.absolutePath === expectedPath)
+        )
+      )
+
+      // Prove the worktree watch is live, then that it never saw the symlinked folder's file.
+      const siblingPath = join(worktree, 'sibling.txt')
+      await writeFile(siblingPath, 'hello')
+      await waitFor(() =>
+        payloads().some((payload) =>
+          payload.events.some((event) => event.absolutePath === siblingPath)
+        )
+      )
+      expect(
+        payloads().some(
+          (payload) =>
+            payload.worktreePath === worktree &&
+            payload.events.some((event) => event.absolutePath.endsWith('new.txt'))
+        )
+      ).toBe(false)
+
+      await handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: linked })
+      await handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: worktree })
+    },
+    15_000
+  )
 })
