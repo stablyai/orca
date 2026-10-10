@@ -8,7 +8,8 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { isRevealInFileManagerBlocked } from '@/lib/reveal-in-file-manager'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
@@ -59,7 +60,7 @@ export function getOpenInEntryAvailability(
   ownerUnresolved?: boolean
 ): { disabled: boolean; metadata?: string } {
   if (entry.target === 'file-manager') {
-    const disabled = isLocalPathOpenBlocked(settings, {
+    const disabled = isRevealInFileManagerBlocked(settings, {
       connectionId,
       runtimeEnvironmentId,
       ownerUnresolved
@@ -116,7 +117,7 @@ export async function openWorktreePath(args: {
   const settings = useAppStore.getState().settings
   if (args.target === 'file-manager') {
     if (
-      isLocalPathOpenBlocked(settings, {
+      isRevealInFileManagerBlocked(settings, {
         connectionId: args.connectionId ?? null,
         runtimeEnvironmentId: args.runtimeEnvironmentId,
         ownerUnresolved: args.ownerUnresolved

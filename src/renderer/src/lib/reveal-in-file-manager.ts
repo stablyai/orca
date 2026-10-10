@@ -2,7 +2,11 @@ import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManager } from './local-file-manager-label'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from './local-path-open-guard'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast
+} from './local-path-open-guard'
 
 /** Menu label for showing a path in the OS file manager, as each platform names it. */
 export function getRevealInFileManagerLabel(): string {
@@ -31,9 +35,12 @@ export function getRevealInFileManagerLabel(): string {
  */
 export function isRevealInFileManagerBlocked(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  owner: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
+  owner: Parameters<typeof getLocalPathOpenOwnerForRoute>[0]
 ): boolean {
-  return isLocalPathOpenBlocked(settings, owner)
+  return (
+    Boolean(settings?.activeRuntimeEnvironmentId?.trim()) ||
+    isLocalPathOpenBlocked(getLocalPathOpenOwnerForRoute(owner))
+  )
 }
 
 /** Shows a client-local path selected in the OS file manager, and says why when it cannot. */

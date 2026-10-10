@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeRowOpenInRuntimeOwner } from './worktree-row-open-in-owner'
 import { getExternalEditorOpenCapability } from './external-editor-open-capability'
-import { isLocalPathOpenBlocked } from './local-path-open-guard'
+import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from './local-path-open-guard'
 
 const WORKTREE_ID = 'repo-1::/srv/worktree'
 
@@ -49,7 +49,7 @@ describe('resolveWorktreeRowOpenInRuntimeOwner', () => {
       allowed: false,
       reason: 'remote-runtime'
     })
-    expect(isLocalPathOpenBlocked(rivalHubState.settings, context)).toBe(true)
+    expect(isLocalPathOpenBlocked(getLocalPathOpenOwnerForRoute(context))).toBe(true)
   })
 
   it('recovers a single HUB owner for an unstamped row on its SSH host', () => {
