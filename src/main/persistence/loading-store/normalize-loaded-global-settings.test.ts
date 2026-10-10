@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
+import { terminalLinkClickBehaviorFor } from '../../../renderer/src/components/terminal-pane/terminal-link-click-behavior'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -14,6 +15,12 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   delete settings.experimentalActivity
   delete settings.experimentalAgentDashboardPopout
   Object.assign(settings, overrides)
+  // An undefined override means the key was never stored, not an explicit undefined value.
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete (settings as Record<string, unknown>)[key]
+    }
+  }
   const parsed: PersistedState = { ...defaults, settings: settings as GlobalSettings }
   const noop = (): void => {}
   const terminal = prepareLoadedTerminalSettings(parsed, noop)
@@ -107,6 +114,16 @@ describe('machine name setting', () => {
     )
     expect(normalizeLegacyProfile({ machineName: undefined }).machineName).toBe('')
     expect(normalizeLegacyProfile({ machineName: 'x'.repeat(300) }).machineName).toHaveLength(255)
+  })
+})
+
+describe('legacy terminal link popover flag', () => {
+  it('keeps a profile that disabled the popover on leave-to-terminal after the default merge', () => {
+    const normalized = normalizeLegacyProfile({
+      terminalLinkActionPopoverEnabled: false,
+      terminalLinkClickBehavior: undefined
+    })
+    expect(terminalLinkClickBehaviorFor(normalized)).toBe('none')
   })
 })
 
