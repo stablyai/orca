@@ -3,24 +3,50 @@ name: Prove Relay Asia Staging
 on:
   workflow_dispatch:
     inputs:
-      image-digest:
-        description: Exact immutable Relay digest deployed on staging C4
+      mode:
+        description: prove runs the fixed C4 proof; load runs the generator with free-form arguments
         required: true
+        default: prove
+        type: choice
+        options: [prove, load]
+      image-digest:
+        description: Prove only. Exact immutable Relay digest deployed on staging C4
+        required: false
         type: string
       selector-generation:
-        description: Exact selector generation with C4 migration-only
-        required: true
+        description: Prove only. Exact selector generation with C4 migration-only
+        required: false
         type: string
       promote-attempt-id:
-        description: Durable unique C4 promotion attempt ID
-        required: true
+        description: Prove only. Durable unique C4 promotion attempt ID
+        required: false
         type: string
       rollback-attempt-id:
-        description: Durable unique C4 rollback attempt ID
-        required: true
+        description: Prove only. Durable unique C4 rollback attempt ID
+        required: false
+        type: string
+      load-region:
+        description: Load only. asia-east2 runs on the Asia load runner; us-central1 on a hosted runner
+        required: false
+        default: asia-east2
+        type: choice
+        options: [asia-east2, us-central1]
+      load-shards:
+        description: Load only. Generator processes, each with its own shard of the 32 load principals
+        required: false
+        default: '4'
+        type: choice
+        options: ['1', '2', '3', '4']
+      load-args:
+        description: >-
+          Load only. Per-shard generator arguments, e.g. --controls 150 --splices 15
+          --reconnect-max-seconds 30 --duration-seconds 900. Origins, region, principals and
+          sharding are set by the workflow
+        required: false
+        default: ''
         type: string
       confirmation:
-        description: Enter PROVE_ASIA_STAGING
+        description: Enter PROVE_ASIA_STAGING (prove) or LOAD_RELAY_STAGING (load)
         required: true
         type: string
 
@@ -28,8 +54,10 @@ permissions:
   contents: read
   id-token: write
 
+# A load run drives traffic only, so it must not queue behind (or hold up) the staging deploys
+# and switch writes it is there to exercise.
 concurrency:
-  group: relay-staging-mutation
+  group: ${{ inputs.mode == 'load' && 'relay-staging-load' || 'relay-staging-mutation' }}
   cancel-in-progress: false
 
 defaults:
@@ -38,7 +66,7 @@ defaults:
 
 jobs:
   prove:
-    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') && inputs.mode == 'prove' }}
     runs-on: [self-hosted, linux, x64, relay-asia-east2-load]
     timeout-minutes: 75
     environment: staging
@@ -282,7 +310,7 @@ jobs:
           retention-days: 7
 
   recover:
-    if: ${{ always() && github.ref == 'refs/heads/main' }}
+    if: ${{ always() && github.ref == 'refs/heads/main' && inputs.mode == 'prove' }}
     needs: prove
     runs-on: blacksmith-2vcpu-ubuntu-2204
     timeout-minutes: 15
@@ -331,3 +359,116 @@ jobs:
             --attempt-id "${ROLLBACK_ATTEMPT_ID}" \
             --image-digest "${IMAGE_DIGEST}")"
           test "$(jq -r '.states["staging-gce-c4"]' <<< "${result}")" = migration-only
+
+  # The staging auth service mints relay load principals only for this workflow file, so the
+  # free-form staging load lives here rather than in a workflow of its own.
+  load:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') && inputs.mode == 'load' }}
+    runs-on: ${{ inputs.load-region == 'us-central1' && 'ubuntu-latest' || fromJSON('["self-hosted","linux","x64","relay-asia-east2-load"]') }}
+    timeout-minutes: 180
+    environment: staging
+    env:
+      DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
+      AUTH_ORIGIN: https://auth-staging.onorca.dev
+      LOAD_REGION: ${{ inputs.load-region }}
+      LOAD_SHARDS: ${{ inputs.load-shards }}
+      LOAD_ARGS: ${{ inputs.load-args }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the staging load request
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "${CONFIRMATION}" = LOAD_RELAY_STAGING
+          [[ "${LOAD_REGION}" =~ ^(asia-east2|us-central1)$ ]]
+          [[ "${LOAD_SHARDS}" =~ ^[1-4]$ ]]
+          read -r -a args <<< "${LOAD_ARGS}"
+          for arg in "${args[@]}"; do
+            [[ "${arg}" =~ ^[A-Za-z0-9=:/._,-]+$ ]] || { echo "unsupported characters in load-args" >&2; exit 1; }
+            case "${arg}" in
+              --target-origin|--director-origin|--auth-origin|--signing-key-file|--preferred-region|\
+              --relay-asia-load-principals|--shard-count|--shard-index|--phase-barrier-dir)
+                echo "${arg} is set by the workflow" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - name: Install exact load-harness dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the Relay load-harness contract
+        run: pnpm --filter @orca-cloud/relay-contract build
+
+      - name: Run the sharded staging load
+        env:
+          # Probes that read director capacity need an admin token; it lasts about an hour.
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          load_dir="${RUNNER_TEMP}/relay-staging-load"
+          mkdir -p "${load_dir}"
+          fd_limit="$(ulimit -n)"
+          if test "${fd_limit}" != unlimited; then
+            [[ "${fd_limit}" =~ ^[0-9]+$ ]]
+            test "${fd_limit}" -ge 4096
+          fi
+          read -r -a args <<< "${LOAD_ARGS}"
+          pids=()
+          stop_shards() {
+            for pid in "${pids[@]}"; do kill "${pid}" 2>/dev/null || true; done
+            for pid in "${pids[@]}"; do wait "${pid}" 2>/dev/null || true; done
+          }
+          trap stop_shards EXIT
+          for ((shard = 0; shard < LOAD_SHARDS; shard++)); do
+            node dev/scripts/load-relay-controls.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --auth-origin "${AUTH_ORIGIN}" \
+              --preferred-region "${LOAD_REGION}" \
+              --relay-asia-load-principals 32 \
+              --shard-count "${LOAD_SHARDS}" \
+              --shard-index "${shard}" \
+              "${args[@]}" \
+              > "${load_dir}/shard-${shard}.jsonl" &
+            pids+=("$!")
+          done
+          failed=0
+          for pid in "${pids[@]}"; do
+            if ! wait "${pid}"; then failed=1; fi
+          done
+          trap - EXIT
+          for ((shard = 0; shard < LOAD_SHARDS; shard++)); do
+            jq -c 'select(.event == "relay_load_complete" or .event == "relay_load_progress")' \
+              "${load_dir}/shard-${shard}.jsonl" | tail -n 1 || true
+          done
+          exit "${failed}"
+
+      - name: Upload the load reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-staging-load-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/relay-staging-load/
+          if-no-files-found: warn
+          retention-days: 7
