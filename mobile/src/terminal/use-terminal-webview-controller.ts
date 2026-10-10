@@ -46,6 +46,14 @@ export type TerminalWebViewTransport = {
   pingsOnForegroundRecovery: () => boolean
 }
 
+/**
+ * Whether a notify is init's 'ready', the one that follows its rAF chain and drained replay and so
+ * proves a committed paint. resize() notifies 'ready' synchronously, before any repaint.
+ */
+export function isInitReady(msg: Record<string, unknown>) {
+  return msg.type === 'ready' && msg.source !== 'resize'
+}
+
 export function useTerminalWebViewController(
   props: TerminalWebViewProps,
   transport: TerminalWebViewTransport
@@ -168,8 +176,11 @@ export function useTerminalWebViewController(
       } else if (msg.type === 'ready') {
         // Why: the document's init() rAF chain has run — term is open, renderService is
         // populated, first paint has happened, and its box was reported. Resolve any pending
-        // awaitReady() so a queued fit reads that box.
-        promises.resolveReady()
+        // awaitReady() so a queued fit reads that box. A resize flushed ahead of that init would
+        // otherwise answer for it.
+        if (isInitReady(msg)) {
+          promises.resolveReady()
+        }
       } else if (msg.type === 'cell-box') {
         cellBoxRef.current = readTerminalCellBox(msg)
         if (msg.refit === true) {

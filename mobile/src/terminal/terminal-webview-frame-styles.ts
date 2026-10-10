@@ -9,5 +9,10 @@ export const TERMINAL_WEBVIEW_FRAME_STYLES = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: colors.terminalBg
+  },
+  // Why: the container shares the terminal background, so the hidden interval reads as flat
+  // theme; opacity keeps layout and the WKWebView alive, unlike unmounting (#17304).
+  webviewHidden: {
+    opacity: 0
   }
 })
