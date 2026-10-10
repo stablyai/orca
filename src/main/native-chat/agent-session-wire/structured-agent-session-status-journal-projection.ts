@@ -59,6 +59,7 @@ export class StructuredAgentSessionJournalProjections {
     seen?: {
       lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
       operationalRevision?: number
+      child?: StructuredAgentSessionWorkEvidence['child']
     }
   ): StructuredAgentSessionJournalProjection {
     const cursor = journal.cursor()
@@ -68,6 +69,7 @@ export class StructuredAgentSessionJournalProjections {
     const work = structuredAgentSessionCurrentWork(journal, {
       record,
       replaced: record ? this.replacedRuntime?.(record.sessionId) : undefined,
+      ...(seen ? { child: seen.child ?? null } : {}),
       ...(ended ? { ended } : {}),
       revision: seen?.operationalRevision ?? 0
     })

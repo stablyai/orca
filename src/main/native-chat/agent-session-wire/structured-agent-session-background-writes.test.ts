@@ -169,7 +169,7 @@ describe('an episode the retry gives up', () => {
     'is re-armed by %s, and the work lands',
     async (trigger) => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
       const current = await settlementOwed()
       await exhaust(current)
       expect(turnState(current)).toBe('running')
@@ -193,7 +193,7 @@ describe('an episode the retry gives up', () => {
 describe('a queued send the retry gives up on', () => {
   it('reads as not sent from memory when its stored hold cannot be written either', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     rig = await createQueuedMessageTestRig({ restartable: true })
     const current = rig
     const working = await current.workingSend()

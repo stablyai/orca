@@ -7,8 +7,9 @@
 // One wake (`wake`): marking a chat owed or any commit runs a round now unless one runs or the timer
 // waits; a commit after a lock refused the last round ends that wait. The timer is the backoff
 // after a refused round (1 s to 2 s), or its first step after a busy lane. One budget: about 3
-// minutes of refused rounds give up (`RECONCILIATION_GIVE_UP_MS`), keeping the set and showing owed
-// sends as not sent; the next wake after that is the only reset.
+// minutes since the episode's first refused round give up (`RECONCILIATION_GIVE_UP_MS`), keeping
+// the set, dropping its loaded reads and showing owed sends as not sent; only a round that made
+// progress ends the episode, and only the next wake after a give-up resets it.
 
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
 import { setImmediate as yieldToEvents } from 'node:timers/promises'
@@ -56,10 +57,11 @@ export class StructuredAgentSessionRetry {
   private running = false
   /** Woken while a round ran: another follows at once. */
   private again = false
-  /** Refused rounds in a row, and the backoffs they waited out; at the budget the episode ends.
-   *  `locked`: the last one met another connection's lock, which a commit here proves gone. */
+  /** Refused rounds in a row, and when the first was (`performance.now()`); at the budget the
+   *  episode ends. `locked`: the last one met another connection's lock, which a commit here proves
+   *  gone. */
   private failures = 0
-  private failingFor = 0
+  private failingSince: number | null = null
   private locked = false
   private disposed = false
   /** The round's chain of chat turns (`inTurn`), and whether contention stopped the round. */
@@ -169,15 +171,16 @@ export class StructuredAgentSessionRetry {
       this.again = true
       return
     }
+    // No backoff pending once the budget is spent: the episode gave up, and this wake starts anew.
+    if (this.timer === null && this.failingFor() >= RECONCILIATION_GIVE_UP_MS) {
+      this.failures = 0
+      this.failingSince = null
+    }
     if (early) {
       this.stopTimer()
     }
     if (this.timer !== null) {
       return
-    }
-    if (this.failingFor >= RECONCILIATION_GIVE_UP_MS) {
-      this.failures = 0
-      this.failingFor = 0
     }
     this.timer = 'soon'
     queueMicrotask(() => void this.round())
@@ -194,7 +197,9 @@ export class StructuredAgentSessionRetry {
     let failed = false
     let locked = false
     let busy = false
+    let progress = false
     const end = (visit: Visit) => {
+      progress ||= visit === 'settled' || visit === 'again'
       failed ||= visit === 'failed' || visit === 'contended'
       locked ||= visit === 'contended'
       busy ||= visit === 'busy'
@@ -205,12 +210,12 @@ export class StructuredAgentSessionRetry {
       // Store-wide: once a round, for every chat, never once per chat. No chat is visited while it
       // owes anything.
       const reconciled = await this.context.reconcile()
-      if (reconciled !== 'settled') {
-        end(reconciled)
-        this.stopped = true
-      }
+      end(reconciled)
+      this.stopped = reconciled !== 'settled'
     }
     const due = [...this.owed].filter(([, chat]) => chat.due)
+    // Nothing owed is progress too; a round only busy or parked is not.
+    progress ||= due.length === 0
     await Promise.all(
       due.map(async ([sessionId, chat]) => {
         const visit = this.stopped ? null : await this.visitInSlot(sessionId, chat)
@@ -220,21 +225,23 @@ export class StructuredAgentSessionRetry {
       })
     )
     this.running = false
-    this.roundEnded(failed, locked, busy)
+    this.roundEnded(failed, locked, busy, progress)
     // After the round's outcome is set, so a waiter reads its backoff, never a round still running.
     for (const [, chat] of due) {
       chat.attempted.splice(0).forEach((resolve) => resolve())
     }
   }
 
-  private roundEnded(failed: boolean, locked: boolean, busy: boolean): void {
+  private roundEnded(failed: boolean, locked: boolean, busy: boolean, progress: boolean): void {
     if (this.disposed) {
       return
     }
     this.locked = locked
     if (!failed) {
-      this.failures = 0
-      this.failingFor = 0
+      if (progress) {
+        this.failures = 0
+        this.failingSince = null
+      }
       if (this.again) {
         this.wake()
       } else if (busy) {
@@ -244,10 +251,9 @@ export class StructuredAgentSessionRetry {
       return
     }
     this.failures += 1
-    if (this.failingFor < RECONCILIATION_GIVE_UP_MS) {
-      const delay = reconciliationBackoffDelay(this.failures)
-      this.failingFor += delay
-      this.arm(delay)
+    this.failingSince ??= performance.now()
+    if (this.failingFor() < RECONCILIATION_GIVE_UP_MS) {
+      this.arm(reconciliationBackoffDelay(this.failures))
       return
     }
     // The episode ends; the set stays for the next wake.
@@ -256,10 +262,16 @@ export class StructuredAgentSessionRetry {
       error: new Error(`${this.failures} rounds failed`)
     })
     for (const [sessionId, chat] of this.owed) {
+      // Owed still, but no hidden chat's replay is held through the wait for the next wake.
+      dropStructuredAgentSessionLoaded(chat)
       if (chat.send) {
         this.context.abandonSend(sessionId)
       }
     }
+  }
+
+  private failingFor(): number {
+    return this.failingSince === null ? 0 : performance.now() - this.failingSince
   }
 
   private arm(delay: number): void {

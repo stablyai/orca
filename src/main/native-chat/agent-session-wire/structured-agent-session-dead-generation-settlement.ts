@@ -49,11 +49,6 @@ export { settleStaleStructuredAgentSessionState } from './structured-agent-sessi
  *  same cap. */
 export const MAX_UNEXPECTED_EXIT_REASON_CHARS = MAX_PROVIDER_DIAGNOSTIC_CHARS
 
-/** Whether the settlement was written, and what stopped it when it was not. */
-export type StructuredAgentSessionDeadGenerationSettlement =
-  | { ok: true }
-  | { ok: false; error: unknown }
-
 export type StructuredAgentSessionDeadGenerationInput = {
   journal: DeadGenerationJournal
   sessionId: string
@@ -75,30 +70,6 @@ export type StructuredAgentSessionDeadGenerationInput = {
   exit?: StructuredAgentSessionWatchedExit
   /** A person's Stop ended a starting child before what it was handed could run: each is rejected so. */
   unrunRejection?: SubmissionRejectionFact
-}
-
-/** The exited child's own settlement, planned at the batch's own turn in the write queue. */
-export async function settleStructuredAgentSessionDeadGeneration(
-  input: StructuredAgentSessionDeadGenerationInput
-): Promise<StructuredAgentSessionDeadGenerationSettlement> {
-  try {
-    if (
-      !input.showUnexpectedExitOutcome &&
-      !hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
-    ) {
-      return { ok: true }
-    }
-    await input.journal.appendPlannedLifecycleBatch({
-      settlementId: `dead-generation:${input.settlementId}`,
-      fence: input.fence,
-      recovered: true,
-      plan: () => planStructuredAgentSessionDeadGeneration(input)
-    })
-    return { ok: true }
-  } catch (error) {
-    // Returned rather than logged: each caller logs it under its own scope.
-    return { ok: false, error }
-  }
 }
 
 /** The exit's rows, read from the journal as it stands. `owns`: which fences are the exited

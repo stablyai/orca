@@ -203,6 +203,7 @@ export class StructuredAgentSessionClientDelivery {
     return structuredAgentSessionCurrentWork(journal, {
       record: this.deps().store.getRecord(sessionId),
       replaced: this.deps().store.replacedRuntime(sessionId),
+      ...(session ? { child: session.child } : {}),
       ...(ended ? { ended } : {}),
       revision: session?.operationalRevision ?? 0
     })

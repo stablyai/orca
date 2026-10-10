@@ -126,7 +126,7 @@ describe('a release nothing proved', () => {
 })
 
 describe('an owner that may still run', () => {
-  it('keeps an unreconciled owner’s current work, which still holds, and settles nothing', async () => {
+  it('reads an unreconciled owner’s work as unverifiable, holding nothing, and settles nothing', async () => {
     rig = await createQueuedMessageTestRig({
       restartable: true,
       probeOwner: async () => {
@@ -143,7 +143,8 @@ describe('an owner that may still run', () => {
     expect(current.store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
     expect(recoveredRows(openTestJournalHostDatabase(current.root).db)).toEqual([])
     expect(turnState(current)).toBe('running')
-    expect(holds(current)).toEqual({ working: true, queueHeld: true })
+    // No child here holds it, and it may still run: not working, its prompt not actionable.
+    expect(holds(current)).toEqual({ working: false, queueHeld: false })
   })
 
   it('leaves a live owner’s work unchanged at every trigger but its own exit', async () => {

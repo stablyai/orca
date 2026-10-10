@@ -51,13 +51,15 @@ export function structuredQueueSendGate(
 ): QueueSendGate {
   return (journal) => {
     const record = host.store.getRecord(sessionId)
-    const ended = host.sessions.get(sessionId)?.lastEndedChild
+    const session = host.sessions.get(sessionId)
+    const ended = session?.lastEndedChild
     const abandoned = drain?.abandonedCard(sessionId)
     return {
       record,
       work: structuredAgentSessionCurrentWork(journal, {
         record,
         replaced: host.store.replacedRuntime(sessionId),
+        ...(session ? { child: session.child } : {}),
         ...(ended ? { ended } : {})
       }),
       ...(drain ? { drainWaits: (messageId: string) => drain.waits(sessionId, messageId) } : {}),

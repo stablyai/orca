@@ -306,6 +306,16 @@ describe('a chat whose turn a replaced server held, before anything settles it',
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   })
 
+  it('reads unverifiable and not working while its owner recovers with no child here', async () => {
+    await survivingOwnerStartup(false)
+
+    const { page } = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+
+    expect(page.working).toBe(false)
+    expect(page.latestTurn?.turn).toMatchObject({ turnId: TURN.turnId, state: 'unverifiable' })
+    expect(rig.host.currentWork(SESSION)?.working()).toBe(false)
+  })
+
   it('settles nothing and stops nothing with no runtime replaced, while its recovery waits', async () => {
     const { stopOwnerProcess, lease } = await survivingOwnerStartup(false)
 

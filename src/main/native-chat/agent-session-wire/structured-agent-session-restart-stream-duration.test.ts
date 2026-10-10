@@ -179,11 +179,10 @@ describe('a provider stream cut short before its next lease renewal', () => {
   it('retains the output bound when a client opens the journal before owner reconciliation', async () => {
     await streamBeforeCrash()
     await restartAfterCrash()
-    // The open writes nothing: the turn reads as the crash left it until startup settles it.
-    const beforeProof = await rig.host.journalSnapshot(SESSION)
-    expect(
-      beforeProof.items.some((item) => readAgentJournalTurn(item.body)?.state === 'running')
-    ).toBe(true)
+    // The open writes nothing; with its owner not yet reconciled the turn reads unverifiable.
+    const beforeProof = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(beforeProof.page.latestTurn?.turn.state).toBe('unverifiable')
+    expect(beforeProof.page.working).toBe(false)
 
     await rig.host.reconcileRestartLeases()
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})

@@ -41,6 +41,8 @@ export type StructuredAgentSessionWorkEvidence = {
   revision?: number
   /** The runtimes this one replaced for the chat (`AgentSessionRecordStore.replacedRuntime`). */
   replaced?: StructuredAgentSessionReplacedEnd | undefined
+  /** This host's live child (`StructuredAgentSessionHostSession.child`); absent: not known. */
+  child?: { fence: number } | null
 }
 
 /** Every fence at or below `fence` was granted by a runtime this one replaced. */
@@ -60,11 +62,25 @@ export function structuredAgentSessionLiveFence(
   if (lease.claimStatus === 'released') {
     return null
   }
-  if (structuredAgentSessionReplacedRuntimeEnded(lease, evidence.replaced)) {
+  if (
+    structuredAgentSessionReplacedRuntimeEnded(lease, evidence.replaced) ||
+    structuredAgentSessionOwnerUnverifiable(evidence)
+  ) {
     return null
   }
   const { ended } = evidence
   return ended?.rootGone === true && ended.fence === lease.runtimeFence ? null : lease.runtimeFence
+}
+
+/** An owner not yet reconciled, or latched in recovery, that this process holds no child for: it
+ *  may still be running, so its turn is unverifiable, and nothing it left is current work. */
+function structuredAgentSessionOwnerUnverifiable(evidence: StructuredAgentSessionWorkEvidence) {
+  const lease = evidence.record?.lease
+  return (
+    (lease?.unreconciled === true || lease?.handoffStage === 'recovering') &&
+    evidence.child !== undefined &&
+    evidence.child?.fence !== lease.runtimeFence
+  )
 }
 
 /** Whether a runtime this one replaced granted the lease's generation, which is then over. A
@@ -110,7 +126,9 @@ export class StructuredAgentSessionCurrentWork {
      *  what it derived from this answer keys it here and on the journal's cursor. */
     readonly revision = 0,
     private readonly ended?: StructuredAgentSessionSeenEnd,
-    private readonly replaced?: StructuredAgentSessionReplacedEnd
+    private readonly replaced?: StructuredAgentSessionReplacedEnd,
+    /** `structuredAgentSessionOwnerUnverifiable`. */
+    private readonly ownerUnverifiable = false
   ) {}
 
   /** What a reader that published this answer compares to learn it changed with no row: the live
@@ -210,14 +228,17 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   /** The newest turn record as a client is told it: a running one an ended generation opened is
-   *  none, or interrupted when it died on its own (`diedTurn`), so no client reads it as working,
-   *  steers into it or reads it finished. */
+   *  none, interrupted when it died on its own (`diedTurn`), or unverifiable while its owner is, so
+   *  no client reads it as working, steers into it or reads it finished. */
   publishedLatestTurn(latest: AgentSessionLatestTurn | null): AgentSessionLatestTurn | null {
     if (latest?.turn.state !== 'running' || this.isCurrentItem(latest.itemId)) {
       return latest
     }
-    return this.diedTurn()?.item.itemId === latest.itemId
-      ? { ...latest, turn: { ...latest.turn, state: 'interrupted' } }
+    if (this.diedTurn()?.item.itemId === latest.itemId) {
+      return { ...latest, turn: { ...latest.turn, state: 'interrupted' } }
+    }
+    return this.ownerUnverifiable
+      ? { ...latest, turn: { ...latest.turn, state: 'unverifiable' } }
       : null
   }
 }
@@ -231,7 +252,8 @@ export function structuredAgentSessionCurrentWork(
     structuredAgentSessionLiveFence(evidence),
     evidence.revision,
     evidence.ended,
-    evidence.replaced
+    evidence.replaced,
+    structuredAgentSessionOwnerUnverifiable(evidence)
   )
 }
 

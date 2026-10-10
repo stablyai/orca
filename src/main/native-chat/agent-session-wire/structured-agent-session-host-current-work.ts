@@ -18,7 +18,7 @@ export type StructuredAgentSessionCurrentWorkHost = {
     ):
       | Pick<
           StructuredAgentSessionHostSession,
-          'journal' | 'lastEndedChild' | 'operationalRevision'
+          'journal' | 'lastEndedChild' | 'operationalRevision' | 'child'
         >
       | undefined
   }
@@ -34,6 +34,7 @@ export function hostStructuredAgentSessionCurrentWork(
     ? structuredAgentSessionCurrentWork(session.journal, {
         record: host.store.getRecord(sessionId),
         replaced: host.store.replacedRuntime(sessionId),
+        child: session.child,
         ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {}),
         revision: session.operationalRevision ?? 0
       })

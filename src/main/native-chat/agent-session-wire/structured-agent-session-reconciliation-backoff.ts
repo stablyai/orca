@@ -4,8 +4,7 @@
 // and nothing announces the lift.
 
 export const RECONCILIATION_BACKOFF_MS = { first: 1_000, max: 2_000 } as const
-/** The backoffs a retry waits out with every round failing, summed, after which it gives up: a
- *  round fails at once, so this is the time it kept failing. */
+/** The time since an episode's first refused round after which its retry gives up. */
 export const RECONCILIATION_GIVE_UP_MS = 180_000
 
 /** The wait before the next try, after `failures` consecutive failed ones. */

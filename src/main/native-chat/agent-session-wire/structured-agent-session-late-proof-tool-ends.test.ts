@@ -12,10 +12,8 @@ import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-re
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from './structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-late-proof'
@@ -153,10 +151,11 @@ describe('a proof written after an unverifiable settle', () => {
 
   it('corrects a call an unverifiable restart eviction closed', async () => {
     await seedTurn('turn-1', 7)
-    await settleStructuredAgentSessionDeadGeneration({
+    await settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 8,
+      ownerFence: 7,
       settlementId: `restart-eviction:${SESSION}:8`,
       pendingSubmissionReason: 'provider_exited_before_acknowledgement',
       verdict: { state: 'unverifiable' },

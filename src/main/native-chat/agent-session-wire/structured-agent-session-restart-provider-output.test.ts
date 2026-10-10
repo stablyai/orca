@@ -354,13 +354,14 @@ describe('provider output survives host restart', () => {
     await rig.host.reconcileRestartLeases()
     await rig.host.startupSettled()
     await retryIdle(rig.host.collaboratorsForTests().reconciliation, SESSION)
-    const snapshot = await rig.host.journalSnapshot(SESSION)
-    const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
-    // No runtime was replaced, so the owner's fate is unverifiable: startup settles nothing while
-    // its recovery is undecided, and the turn is never ended.
+    const read = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    // No runtime was replaced and no child here holds it: the turn reads unverifiable and not
+    // working, derived, while its recovery is undecided; nothing is written.
     expect(rig.store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
-    expect(turn?.state).toBe('running')
+    const turn = read.page.latestTurn?.turn
+    expect(turn?.state).toBe('unverifiable')
     expect(turn?.completedAt).toBeUndefined()
+    expect(read.page.working).toBe(false)
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(rig.store.getRecord(SESSION)?.lease.deathEvidence).toBeFalsy()
   })
