@@ -27,6 +27,7 @@ export type ChecksListProps = {
   githubRepository?: GitHubRepositoryIdentity | null
 }
 
+/** Sorted check rows with expand and lazy detail state; auto-expands the first failure once per context. */
 export function useChecksListState({
   checks,
   checkDetailsContextKey,
@@ -82,14 +83,16 @@ export function useChecksListState({
       }
       return next
     })
+    // Why: close the one-shot latch outside the updater; React may run an updater twice.
+    let autoExpandKey: string | undefined
+    if (autoExpandedContextRef.current !== checkDetailsContextKey) {
+      autoExpandKey = rows.find((row) => isFailedCheck(row.check))?.key
+      autoExpandedContextRef.current = checkDetailsContextKey
+    }
     setExpandedCheckKeys((current) => {
       const next = new Set([...current].filter((key) => validKeys.has(key)))
-      if (autoExpandedContextRef.current !== checkDetailsContextKey) {
-        const firstFailed = rows.find((row) => isFailedCheck(row.check))
-        if (firstFailed) {
-          next.add(firstFailed.key)
-        }
-        autoExpandedContextRef.current = checkDetailsContextKey
+      if (autoExpandKey !== undefined) {
+        next.add(autoExpandKey)
       }
       return next
     })
