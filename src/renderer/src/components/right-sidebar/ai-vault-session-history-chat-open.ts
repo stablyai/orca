@@ -18,11 +18,14 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
  * persistence and close commands all work unchanged; `AiVaultSessionHistoryChatLayer` is the
  * body this tab paints.
  */
-export function openAiVaultSessionHistoryChatForRow(session: AiVaultSession): boolean {
+export function openAiVaultSessionHistoryChatForRow(
+  session: AiVaultSession,
+  worktreeId?: string | null
+): boolean {
   if (!canOpenAiVaultSessionHistoryChat(session)) {
     return false
   }
-  const tab = openAiVaultSessionHistoryChatTab(session)
+  const tab = openAiVaultSessionHistoryChatTab(session, worktreeId)
   if (!tab) {
     toast.error(
       translate(
@@ -33,10 +36,16 @@ export function openAiVaultSessionHistoryChatForRow(session: AiVaultSession): bo
   }
   return true
 }
-export function openAiVaultSessionHistoryChatTab(session: AiVaultSession): Tab | null {
+export function openAiVaultSessionHistoryChatTab(
+  session: AiVaultSession,
+  /** The row's resolved target; defaults to the active worktree when the caller has none. */
+  requestedWorktreeId?: string | null
+): Tab | null {
   const state = useAppStore.getState()
-  const worktreeId = state.activeWorktreeId
-  if (!worktreeId) {
+  const worktreeId = requestedWorktreeId ?? state.activeWorktreeId
+  // A named target the app has not mounted has no tab strip to paint into; falling
+  // back to the active worktree would open the conversation in the wrong workspace.
+  if (!worktreeId || !state.unifiedTabsByWorktree[worktreeId]) {
     return null
   }
   const tabId = aiVaultSessionHistoryChatTabId(session.sessionId)

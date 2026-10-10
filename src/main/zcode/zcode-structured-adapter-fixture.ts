@@ -10,6 +10,7 @@ import type {
   ZcodeAppServerLaunch,
   openZcodeAppServerConnection
 } from './zcode-app-server-connection'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { ZcodeStructuredSessionAdapter } from './zcode-structured-session-adapter'
 import type { ZcodeStructuredSessionAdapterDeps } from './zcode-structured-session-state'
 
@@ -37,6 +38,7 @@ export type FakeConnectionRoutes = Partial<{
 export function fakeZcode(routes: FakeConnectionRoutes = {}) {
   const connections: FakeConnection[] = []
   const openConnection: typeof openZcodeAppServerConnection = async (launch, handlers = {}) => {
+    let spawnReported = false
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -73,6 +75,11 @@ export function fakeZcode(routes: FakeConnectionRoutes = {}) {
               : method === 'session/subscribe'
                 ? { sessionId: payload.sessionId, eventSeq: 0, events: [] }
                 : {}
+        // The real connection reports the spawn once, before its first request lands.
+        if (!spawnReported) {
+          spawnReported = true
+          void connection.handlers.onSpawned?.(connection.pid ?? 0)
+        }
         const timeoutMs = options?.timeoutMs
         if (timeoutMs === undefined) {
           return Promise.resolve(settle)
@@ -128,6 +135,9 @@ export type ZcodeAcquireArgs = {
   }
   fence: number
   spawnToken: string
+  /** Handed straight through to the wire's acquire input; tests bind sinks and spawn reports. */
+  events?: StructuredAgentSessionAcquireInput['events']
+  onSpawned?: StructuredAgentSessionAcquireInput['onSpawned']
 }
 
 export function identityFor(sessionId = 'session-1'): ZcodeAcquireArgs['identity'] {

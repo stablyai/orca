@@ -3,6 +3,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { zcodeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
@@ -51,11 +52,23 @@ export async function acquireZcodeStructuredSession(input: {
   const acquisitionGeneration = deps.mintAcquisitionGeneration?.() ?? randomUUID()
   const resumeSessionId = launch.resumeSessionId
   const childEnv = zcodeStructuredChildEnvironment(launch, sessionId)
-  /** Set once the translator exists, so prompts a session asked before publication are held. */
-  let livePrompts: ZcodeLivePrompt[] = []
+  /** Shared with the session: prompts the child asks during and after acquire all land here. */
+  const livePrompts = new Map<string, ZcodeLivePrompt>()
 
   let connection: Awaited<ReturnType<typeof openZcodeAppServerConnection>> | null = null
   let translator: ZcodeJournalTranslator | null = null
+  let unbindReadingControl: (() => void) | undefined
+  /** The start time read once at spawn; onSpawned's report and the acquisition must match. */
+  let spawnIdentity: Promise<AgentSessionProcessIdentity> | undefined
+  const identityAt = async (pid: number): Promise<AgentSessionProcessIdentity> => {
+    spawnIdentity ??= (async () => ({
+      hostId: acquire.identity.hostId,
+      pid,
+      processStartTimeMs: (await deps.readProcessStartTime?.(pid)) ?? null,
+      spawnToken: acquire.spawnToken
+    }))()
+    return spawnIdentity
+  }
   // Tests inject a whole fake connection opener (Codex's seam); production spawns the real child.
   const open: typeof openZcodeAppServerConnection =
     deps.openConnection ?? openZcodeAppServerConnection
@@ -71,12 +84,7 @@ export async function acquireZcodeStructuredSession(input: {
       {
         onSpawned: acquire.onSpawned
           ? async (pid: number) => {
-              await acquire.onSpawned?.({
-                hostId: acquire.identity.hostId,
-                pid,
-                processStartTimeMs: null,
-                spawnToken: acquire.spawnToken
-              })
+              await acquire.onSpawned?.(await identityAt(pid))
             }
           : undefined,
         onNotification: (method, params) => {
@@ -87,13 +95,23 @@ export async function acquireZcodeStructuredSession(input: {
         },
         onServerRequest: (request) => {
           // An approval or question the child waits on; held here, claimed by the session.
-          if (readZcodePermissionRequest(request.method, request.params)) {
-            livePrompts.push({
+          const permission = readZcodePermissionRequest(request.method, request.params)
+          if (permission) {
+            const prompt: ZcodeLivePrompt = {
               itemId: `zcode-prompt-${request.id}`,
               kind: 'approval',
               requestId: request.id,
               method: request.method,
               params: request.params
+            }
+            livePrompts.set(prompt.itemId, prompt)
+            translator?.announcePrompt({
+              itemId: prompt.itemId,
+              toolName: permission.toolName,
+              detail: permission.reason ?? null,
+              options: permission.options
+                .filter((option) => option.optionId !== '')
+                .map((option) => ({ id: option.optionId, label: option.name || option.optionId }))
             })
             return
           }
@@ -140,15 +158,21 @@ export async function acquireZcodeStructuredSession(input: {
     )
     translator?.restoreSnapshot(snapshot.messages)
 
-    const processStartTimeMs =
-      deps.readProcessStartTime && connection.pid !== undefined
-        ? await deps.readProcessStartTime(connection.pid)
-        : null
+    // The sink couples its durable-queue pressure to this child's stream; without the
+    // binding a hard-watermark sink keeps admitting and the child's rows drop.
+    if (connection.pauseReading && connection.resumeReading) {
+      unbindReadingControl = acquire.events?.bindReadingControl?.({
+        pauseReading: connection.pauseReading,
+        resumeReading: connection.resumeReading
+      })
+    }
+
+    const process = connection.pid === undefined ? null : await identityAt(connection.pid)
     const acquisition: AgentSessionAcquisition = {
-      process: {
+      process: process ?? {
         hostId: acquire.identity.hostId,
-        pid: connection.pid ?? 0,
-        processStartTimeMs,
+        pid: 0,
+        processStartTimeMs: null,
         spawnToken: acquire.spawnToken
       },
       link: {
@@ -169,12 +193,14 @@ export async function acquireZcodeStructuredSession(input: {
       ended: false,
       exitObservedAt: null,
       orcaClose: false,
-      prompts: new Map(livePrompts.map((prompt) => [prompt.itemId, prompt])),
+      prompts: livePrompts,
       options: new Map(Object.entries(acquire.options ?? {})),
-      launch
+      launch,
+      ...(unbindReadingControl ? { unbindReadingControl } : {})
     }
     return { acquisition, session }
   } catch (error) {
+    unbindReadingControl?.()
     translator?.dispose()
     if (connection) {
       const proven = await connection.close().catch(() => false)

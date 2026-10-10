@@ -39,6 +39,8 @@ export type ZcodeStructuredSession = {
   /** The options the session's create carried; the child has no read-back surface. */
   options: Map<string, string>
   launch: ZcodeStructuredLaunch
+  /** Releases the journal sink's backpressure binding; every close path calls it. */
+  unbindReadingControl?: () => void
 }
 
 export type ZcodeStructuredSessionAdapterDeps = {

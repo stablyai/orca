@@ -34,6 +34,17 @@ export type ZcodeJournalTranslator = {
   handle: (event: ZcodeSessionEvent) => ZcodeJournalTranslationAdmission
   /** Seeds the journal from a `session/create`/`session/resume` snapshot, before publication. */
   restoreSnapshot: (messages: unknown[]) => ZcodeJournalTranslationAdmission
+  /**
+   * Writes the durable pending-approval row a reverse-RPC prompt waits on. The live
+   * prompt is the claim state, but a second client answers from the journal, so the
+   * row has to exist even when the asker never polls it.
+   */
+  announcePrompt: (prompt: {
+    itemId: string
+    toolName: string
+    detail: string | null
+    options: { id: string; label: string }[]
+  }) => ZcodeJournalTranslationAdmission
   endTurnUnproven: (turnId: string | undefined) => void
   dispose: () => void
 }
@@ -166,7 +177,10 @@ export function createZcodeJournalTranslator(
 
   const handleMessageUpserted = (event: ZcodeSessionEvent): ZcodeJournalTranslationAdmission => {
     const message = readRecord(event.payload, 'message') ?? event.payload
-    const messageId = readString(message, 'messageId')
+    // Some builds file the id inside `info` rather than at the top level; skipping
+    // those would silently drop the message from a resumed chat.
+    const messageId =
+      readString(message, 'messageId') ?? readString(readRecord(message, 'info') ?? {}, 'messageId')
     if (!messageId) {
       return ZCODE_JOURNAL_ADMITTED
     }
@@ -249,7 +263,11 @@ export function createZcodeJournalTranslator(
         continue
       }
       const message = raw
-      const messageId = readString(message, 'messageId')
+      // Same `info.messageId` fallback as the live upsert path: snapshots from builds
+      // that file the id inside `info` would otherwise lose their history.
+      const messageId =
+        readString(message, 'messageId') ??
+        readString(readRecord(message, 'info') ?? {}, 'messageId')
       const role = readString(readRecord(message, 'info') ?? message, 'role') ?? 'assistant'
       const blocks = readZcodeMessageParts(message)
       if (!messageId || blocks.length === 0) {
@@ -273,9 +291,35 @@ export function createZcodeJournalTranslator(
     return ZCODE_JOURNAL_ADMITTED
   }
 
+  const announcePrompt = (prompt: {
+    itemId: string
+    toolName: string
+    detail: string | null
+    options: { id: string; label: string }[]
+  }): ZcodeJournalTranslationAdmission => {
+    return appendAndPublish(
+      sink,
+      identityFor(`prompt:${prompt.itemId}`),
+      {
+        kind: 'approval',
+        title: `Allow ${prompt.toolName}?`,
+        detail: prompt.detail,
+        options: prompt.options,
+        resolution: {
+          state: 'pending',
+          selectedOptionId: null,
+          resolvedBy: null,
+          resolvedAt: null
+        }
+      },
+      turnScopeFor(currentTurn?.turnId)
+    )
+  }
+
   return {
     handle: handleSessionEvent,
     restoreSnapshot,
+    announcePrompt,
     endTurnUnproven: (turnId) => {
       const id = turnId ?? currentTurn?.turnId
       if (!id) {

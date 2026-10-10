@@ -81,7 +81,9 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
         'session/send',
         {
           sessionId: session.providerSessionId,
-          content: text
+          content: text,
+          // The model takes effect per send; an unset option stays absent on the wire.
+          ...(session.options.get('model') ? { model: session.options.get('model') } : {})
         },
         { timeoutMs: this.deps.requestTimeoutMs ?? 30_000 }
       )
@@ -232,6 +234,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     // The exit observer marks the session ended without publishing when a close
     // asked for it, so this close owns exactly the one `ended` the host gets.
     session.ended = true
+    session.unbindReadingControl?.()
     session.translator?.dispose()
     this.sessions.delete(sessionId)
     this.deps.onEvent?.({
@@ -255,6 +258,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     const observedAt = this.deps.now?.() ?? Date.now()
     session.ended = true
     session.exitObservedAt = observedAt
+    session.unbindReadingControl?.()
     session.translator?.dispose()
     this.sessions.delete(sessionId)
     if (session.orcaClose) {

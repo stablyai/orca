@@ -198,15 +198,16 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResumeInNewChat = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
+      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
       // No structured host to adopt into: the row opens as a read-only chat tab over the
-      // agent's own store, which is the whole conversation, not a fork of it.
-      if (openAiVaultSessionHistoryChatForRow(session)) {
+      // agent's own store, which is the whole conversation, not a fork of it. It must
+      // land in the row's own workspace, not whichever one happens to be active.
+      if (openAiVaultSessionHistoryChatForRow(session, worktreeId)) {
         return
       }
       if (!isAgentSessionHandleProvider(session.agent)) {
         return
       }
-      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
       if (!worktreeId) {
         toast.error(
           translate(
