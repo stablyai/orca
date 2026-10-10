@@ -130,15 +130,18 @@ export function useMarkdownPreviewSourceFoundation({
   )
   const imageRuntimeContext = useMemo(
     () =>
-      sourceRoutingWorktreeId && worktreeRoot && sourceRuntimeTarget
-        ? {
-            target: sourceRuntimeTarget,
-            worktreeId: sourceRoutingWorktreeId,
-            worktreePath: worktreeRoot,
-            connectionId: sourceConnectionId,
-            expectedExternalSshTargetId: sourceOpenFile?.externalSshTargetId
-          }
-        : undefined,
+      !sourceRoutingWorktreeId || !worktreeRoot
+        ? undefined
+        : sourceRuntimeTarget
+          ? {
+              target: sourceRuntimeTarget,
+              worktreeId: sourceRoutingWorktreeId,
+              worktreePath: worktreeRoot,
+              connectionId: sourceConnectionId,
+              expectedExternalSshTargetId: sourceOpenFile?.externalSshTargetId
+            }
+          : // Why null, not undefined: undefined reads as a plain local file and would read here.
+            null,
     [
       sourceRuntimeTarget,
       sourceConnectionId,

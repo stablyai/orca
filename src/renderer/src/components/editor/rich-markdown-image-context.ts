@@ -10,7 +10,8 @@ export type RichMarkdownImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'co
 export type RichMarkdownImageResolverContext = {
   filePath: string
   imageUrls?: Record<string, string>
-  runtimeContext?: RichMarkdownImageRuntimeContext
+  /** `null`: the owner is unresolved, so local images must not load; `undefined`: no workspace. */
+  runtimeContext?: RichMarkdownImageRuntimeContext | null
 }
 
 type RichMarkdownImageUrls = Record<string, string>
@@ -38,8 +39,25 @@ type RichMarkdownImageStorage = {
     filePath: string
     imageUrls?: Record<string, string>
     reloadListeners?: Set<() => void>
-    runtimeContext?: RichMarkdownImageRuntimeContext
+    runtimeContext?: RichMarkdownImageRuntimeContext | null
   }
+}
+
+/** The stored image context; `null` (unresolved owner) is kept so readers refuse instead of going local. */
+export function readRichMarkdownImageRuntimeContext(
+  storage: object
+): RichMarkdownImageRuntimeContext | null | undefined {
+  const value: unknown = 'runtimeContext' in storage ? storage.runtimeContext : undefined
+  if (value === null) {
+    return null
+  }
+  return isRichMarkdownImageRuntimeContext(value) ? value : undefined
+}
+
+function isRichMarkdownImageRuntimeContext(
+  value: unknown
+): value is RichMarkdownImageRuntimeContext {
+  return typeof value === 'object' && value !== null && 'target' in value && 'worktreeId' in value
 }
 
 export function getRichMarkdownImageResolverContextVersion(editor: Editor): number {
@@ -60,15 +78,16 @@ export function createRichMarkdownImageResolverContext({
 }: {
   filePath: string
   externalSshTargetId?: string
-  /** The document owner's transport; `null` while unresolved, so images do not load. */
+  /** The document owner's transport; `null` while unresolved, which blocks local image reads. */
   runtimeTarget: RuntimeClientTarget | null
   worktreeId: string
   worktreeRoot: string | null
 }): RichMarkdownImageResolverContext {
   return {
     filePath,
-    runtimeContext:
-      worktreeRoot && runtimeTarget
+    runtimeContext: !worktreeRoot
+      ? undefined
+      : runtimeTarget
         ? {
             target: runtimeTarget,
             worktreeId,
@@ -76,7 +95,7 @@ export function createRichMarkdownImageResolverContext({
             connectionId: getConnectionId(worktreeId),
             expectedExternalSshTargetId: externalSshTargetId
           }
-        : undefined
+        : null
   }
 }
 
@@ -115,9 +134,11 @@ function getRichMarkdownImageContextSignature(context: RichMarkdownImageResolver
   return [
     context.filePath,
     JSON.stringify(context.imageUrls ?? {}),
-    context.runtimeContext?.target.kind === 'environment'
-      ? context.runtimeContext.target.environmentId
-      : 'client',
+    context.runtimeContext === null
+      ? 'unresolved'
+      : context.runtimeContext?.target.kind === 'environment'
+        ? context.runtimeContext.target.environmentId
+        : 'client',
     context.runtimeContext?.connectionId ?? 'local',
     context.runtimeContext?.expectedExternalSshTargetId ?? '',
     context.runtimeContext?.worktreeId ?? 'unknown-worktree',
