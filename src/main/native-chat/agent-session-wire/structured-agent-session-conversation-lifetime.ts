@@ -178,15 +178,23 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
       return serialize(sessionId, async () => {
         readRefusals.forget(sessionId)
-        const session = sessions.get(sessionId)
-        if (session) {
-          // Settled and marked before the stop, so no start delivers it, and nothing it closed with
-          // sends by itself, even if the handle stays open.
-          await holdClosedStructuredAgentSessionSends(deps(), sessionId, session.journal, {
-            mark: 'always'
+        // The agent stops first, so no settlement write can keep it running. Nothing queued is
+        // handed over meanwhile: every send and start waits behind this step, and what a person's
+        // close failed to settle is settled before the next start (`closeWhatTheUserClosed`).
+        try {
+          await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
+            cause,
+            closing: true
           })
+        } finally {
+          // After the child's end, so the reopen mark also holds the cards its end kept.
+          const session = sessions.get(sessionId)
+          if (session) {
+            await holdClosedStructuredAgentSessionSends(deps(), sessionId, session.journal, {
+              mark: 'always'
+            })
+          }
         }
-        await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, { cause })
         await closeConversation(sessionId)
       })
     }

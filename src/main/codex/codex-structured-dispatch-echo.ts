@@ -71,6 +71,10 @@ export type CodexDispatchEchoes = {
   ) => { clientMessageId: string; via: AgentJournalTurnJoin }[]
   /** Submission origin for this exact send, retained until its echo settles it. */
   requestOrigin: (clientMessageId: string) => CodexDispatchRequestOrigin | null
+  /** The exact answered binding, including a turn that ended before its message echo. */
+  boundTurn: (
+    clientMessageId: string
+  ) => { threadId: string; turnId: string; ended: boolean } | null
   /** Highest causal sequence assigned to a dispatch in this session. */
   latestSequence: () => number
   clear: () => void
@@ -186,6 +190,16 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       return origin?.requestedAt === null || origin === undefined
         ? null
         : { requestedAt: origin.requestedAt, sequence: origin.sequence }
+    },
+    boundTurn: (clientMessageId) => {
+      const turn = armed.get(clientMessageId)?.turn
+      return turn
+        ? {
+            threadId: turn.threadId,
+            turnId: turn.turnId,
+            ended: endedTurns.has(turnKey(turn.threadId, turn.turnId))
+          }
+        : null
     },
     latestSequence: () => nextSequence - 1,
     clear: () => {

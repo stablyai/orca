@@ -9,7 +9,10 @@ import type { MutationPlan } from './structured-agent-session-mutation-plans'
  *  must not wait in the session's queue for its turn. */
 export function agentSessionMutationAdmitsNow<TValue>(
   request: Pick<AgentSessionMutationRequest<TValue>, 'store' | 'callerKey' | 'envelope' | 'now'> & {
-    plan: Pick<MutationPlan<TValue>, 'method' | 'fields' | 'operationIdScope' | 'conversationWrite'>
+    plan: Pick<
+      MutationPlan<TValue>,
+      'method' | 'fields' | 'operationIdScope' | 'conversationWrite' | 'receiptPolicy'
+    >
   }
 ): boolean {
   const { plan, envelope } = request
@@ -23,6 +26,7 @@ export function agentSessionMutationAdmitsNow<TValue>(
     envelope,
     hostFingerprint,
     now: request.now(),
+    ...(plan.receiptPolicy ? { receiptPolicy: plan.receiptPolicy } : {}),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
   return (

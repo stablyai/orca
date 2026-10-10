@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import { SendParams } from '../../../src/shared/rpc-contract/structured-agent-session-params'
 import type { RpcClient } from '../transport/rpc-client'
 import { fieldsOf, ok } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -196,6 +197,60 @@ describe('mobile structured send actions', () => {
     expect(event.page.submissions[0]?.dispatchState).toBe('unknown')
     expect(calls()).toHaveLength(1)
   })
+
+  it.each(['accepted', 'rejected'] as const)(
+    'an expired reply and later %s history never automatically replace the Send',
+    async (dispatchState) => {
+      sendRequest.mockImplementation(async (method) => {
+        if (method !== 'agentSession.send') {
+          return ok({ models: [], current: {} })
+        }
+        return calls().length === 1
+          ? ok({
+              ok: false,
+              refusal: { code: 'agent_session_operation_expired', message: 'Operation expired' }
+            })
+          : sendResult('accepted')
+      })
+      await mountSession()
+      await act(async () => {
+        expect(await hook!.sendWithOutcome('same text')).toBe('rejected')
+      })
+      expect(calls()).toHaveLength(1)
+      const request = SendParams.parse(calls()[0]?.[1])
+      const original = structuredSendResultFixture(dispatchState)
+      if (!('submission' in original)) {
+        throw new Error('expected a submission answer')
+      }
+      const event = snapshotEvent()
+      event.page.submissions = [
+        {
+          ...original.submission,
+          clientMessageId: request.envelope.clientOperationId,
+          payloadFingerprint: request.envelope.payloadFingerprint
+        }
+      ]
+      event.page.items = [
+        {
+          itemId: 'original-message',
+          revision: 1,
+          sequence: 1,
+          observedAt: 10,
+          body: request.body
+        }
+      ]
+      act(() => listener?.(event))
+      expect(hook!.session.messages).toHaveLength(1)
+      expect(calls()).toHaveLength(1)
+      expect(new Set(sentIds()).size).toBe(1)
+      await act(async () => {
+        expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
+      })
+      expect(calls()).toHaveLength(2)
+      expect(sentIds()[1]).not.toBe(request.envelope.clientOperationId)
+      expect(asyncStorage.getItem).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(['reply-before-row', 'row-before-commit'] as const)(
     'states delivery once and leaves auth guidance in the transcript for %s',

@@ -1,5 +1,10 @@
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { useStructuredAgentSessionHostStopsConversation } from '@/runtime/structured-agent-session-host-capability'
+import { AGENT_SESSION_TARGETED_STOP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { agentSessionStopTarget } from '../../../../shared/agent-session-stop-target'
+import {
+  useStructuredAgentSessionHostCapability,
+  useStructuredAgentSessionHostStopsConversation
+} from '@/runtime/structured-agent-session-host-capability'
 import { agentStopDisplayStatus } from '../../../../shared/agent-stop-display-status'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionStopPress } from './use-structured-agent-session-stop-press'
@@ -11,7 +16,7 @@ export function useStructuredAgentSessionStop(input: {
   target: RuntimeClientTarget
   transportState: Pick<
     ReturnType<typeof useStructuredAgentSessionTransportState>,
-    'fence' | 'isWorking'
+    'fence' | 'isWorking' | 'submissions'
   >
   /** The host says a person's Stop is still ending this session's work. */
   hostStopping: boolean
@@ -27,6 +32,10 @@ export function useStructuredAgentSessionStop(input: {
 } {
   const { sessionId, target, transportState, hostStopping, mutate } = input
   const press = useStructuredAgentSessionStopPress(sessionId)
+  const targetedStop = useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_TARGETED_STOP_RUNTIME_CAPABILITY
+  )
   const stopsConversation =
     useStructuredAgentSessionHostStopsConversation(target) && transportState.fence !== null
   return {
@@ -39,11 +48,22 @@ export function useStructuredAgentSessionStop(input: {
     pressed: press.pressed,
     stopsConversation,
     stop: (turnId, stopSends) => {
+      const stopTarget = agentSessionStopTarget(
+        turnId,
+        transportState.submissions,
+        transportState.fence
+      )
       // The chat's own send goes no further if it has not gone out yet. Host-held cards are
       // never withdrawn by a Stop: the host pauses them, visible on every device, until acted on.
       if (stopsConversation) {
         stopSends()
-        return press.track(() => mutate('agentSession.cancel', 'agentSession.cancel', {}))
+        return press.track(() =>
+          mutate(
+            'agentSession.cancel',
+            'agentSession.cancel',
+            stopTarget && targetedStop ? { stopTarget } : {}
+          )
+        )
       }
       if (!turnId) {
         return Promise.resolve(null)

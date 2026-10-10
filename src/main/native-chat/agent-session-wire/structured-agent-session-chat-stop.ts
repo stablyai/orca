@@ -48,7 +48,7 @@ export function mutateWithChatStop<TValue>(
   plan: MutationPlan<TValue>,
   run: (
     ctx: AgentSessionTurnContext,
-    stop: () => Promise<StructuredAgentSessionChatStopRun>
+    stop: (turnId?: string) => Promise<StructuredAgentSessionChatStopRun>
   ) => Promise<TurnOutcome<TValue>>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { envelope, turnId } = params
@@ -59,13 +59,14 @@ export function mutateWithChatStop<TValue>(
     | undefined
   // The Stop's event, still landing when its session ends: the next step holds the lane for it.
   let eventAfterEnd: Promise<void> | undefined
-  const named = turnId !== undefined ? { turnId } : {}
   // Its own step wrote the Stop's event first.
   const stopChild = () => context.stopAgent(sessionId, { recorded: 'user-stop' })
   // The same for every client: once the Stop takes effect its event is written, and the queue's
   // pause follows from it. The cards stay published; no text rides the answer.
-  const stop = (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> =>
-    runRecordedStop(
+  const stop = (ctx: AgentSessionTurnContext, stoppedTurnId = turnId): Promise<ChatStopOutcome> => {
+    const turnId = stoppedTurnId
+    const named = turnId !== undefined ? { turnId } : {}
+    return runRecordedStop(
       ctx,
       {
         reason: 'user-stop',
@@ -170,6 +171,7 @@ export function mutateWithChatStop<TValue>(
         }
       }
     )
+  }
   const result = mutateStructuredAgentSession(
     context,
     caller,
@@ -177,7 +179,10 @@ export function mutateWithChatStop<TValue>(
     {
       ...plan,
       run: (ctx) =>
-        run(ctx, async () => ({ outcome: await stop(ctx), endsSession: windDown !== undefined }))
+        run(ctx, async (turnId) => ({
+          outcome: await stop(ctx, turnId),
+          endsSession: windDown !== undefined
+        }))
     },
     openForWrite(context, envelope)
   )

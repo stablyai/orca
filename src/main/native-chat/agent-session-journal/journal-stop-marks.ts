@@ -53,7 +53,7 @@ export class JournalStopMarks {
   }
 
   /** Closes a settle `beginSettle` opened, binding `turnId` when the Stop stopped one, or marking
-   *  `failedOn` (display only) when it failed to stop that turn. */
+   *  `failedOn` when it failed to stop that turn. */
   settled(settle: JournalStopSettle | null, turnId?: string, failedOn?: JournalStopFailedOn): void {
     if (!settle) {
       return

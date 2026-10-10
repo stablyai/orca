@@ -305,6 +305,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
+  /** Execution-host binding before the user-message echo reaches the journal. */
+  observeSubmissionTurn?(input: {
+    sessionId: string
+    clientMessageId: string
+    fence: number
+  }): { verdict: 'live'; turnId: string } | { verdict: 'exited' } | { verdict: 'unverifiable' }
   /** How this session narrows its agent's declared rewind; `agent` answers for one with no child
    *  running. The router applies the declaration first, so an adapter's answer never widens it. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport

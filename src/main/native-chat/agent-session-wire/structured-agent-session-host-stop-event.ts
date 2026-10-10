@@ -2,6 +2,7 @@
 // record, and the write itself, issued before the kill.
 
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -24,6 +25,8 @@ export type StructuredAgentSessionStopEnding =
       /** The idle sweep judged the agent resting (`owesWork`): a send it retires unanswered is
        *  no work its event records. */
       resting?: true
+      /** The chat's close settles what is queued once its agent stopped: none of it is work. */
+      closing?: true
     }
 
 /** How long a host stop waits for the session's sink before it judges whether the stop ends work. */
@@ -62,13 +65,12 @@ export async function stopEndsWork(
     STOP_EVENT_DRAIN_TIMEOUT_MS,
     'slow' as const
   )
+  const submissions = ending.closing
+    ? journal.submissions().filter((entry) => !isQueuedAgentJournalSubmission(entry))
+    : journal.submissions()
   const working =
     (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) ||
-    isStructuredAgentSessionMainAgentWorking(
-      journal.activeTurnId(),
-      journal.submissions(),
-      child.fence
-    )
+    isStructuredAgentSessionMainAgentWorking(journal.activeTurnId(), submissions, child.fence)
   return working && (ending.cause === 'user-close' || !defersToPersonsStop(session))
 }
 

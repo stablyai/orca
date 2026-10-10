@@ -11,7 +11,10 @@ import type {
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { stopIsAPersons } from '../agent-session-journal/journal-stop-turn-end'
+import {
+  stopIsAPersons,
+  type JournalLatestStop
+} from '../agent-session-journal/journal-stop-turn-end'
 import type { JournalStopFailedOn } from '../agent-session-journal/queued-message-pause'
 
 /** Whether the latest person's Stop is still settling, or is bound to the turn running now: the
@@ -61,7 +64,13 @@ function firstSendHandedOverAfter(
   return first
 }
 
-/** Where a Stop that failed leaves "Stopping…" (display only): the turn running now, or, with
+/** Whether `stop` took effect: settled, and not failed. While it settles or after it failed, the
+ *  chat reads "Stopping…" and what it was sent for may still run. */
+export function structuredAgentSessionStopTookEffect(stop: JournalLatestStop): boolean {
+  return stop.settle?.settling !== true && stop.settle?.failedOn === undefined
+}
+
+/** Where a Stop that failed leaves "Stopping…": the turn running now, or, with
  *  none, the first that opens after this position. */
 export function structuredAgentSessionFailedStopMark(
   journal: Pick<AgentSessionJournal, 'activeTurnId' | 'cursor'>

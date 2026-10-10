@@ -12,6 +12,7 @@ import {
 } from '../../../src/shared/structured-session-background-tasks-view'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
+import { agentSessionBackgroundStopTarget } from '../../../src/shared/agent-session-background-stop-target'
 
 export type MobileStructuredBackgroundTasks = {
   /** The conversation these tasks belong to; the strip's open and stopping state is kept per one. */
@@ -33,6 +34,7 @@ export function useMobileStructuredBackgroundTasks(args: {
   turnId: string | null
   /** Live transport; without it the kept roster is the last thing heard, not what runs now. */
   connected: boolean
+  targetedStopSupported?: boolean
   mutate: MobileStructuredAgentMutate
 }): MobileStructuredBackgroundTasks {
   const { connected, mutate, sessionKey, state, turnId } = args
@@ -58,9 +60,14 @@ export function useMobileStructuredBackgroundTasks(args: {
       mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
         scope: 'background-tasks',
-        ...(taskId ? { taskId } : {})
+        ...(taskId ? { taskId } : {}),
+        ...(args.targetedStopSupported
+          ? {
+              stopTarget: agentSessionBackgroundStopTarget(view.children, taskId)
+            }
+          : {})
       }),
-    [mutate]
+    [args.targetedStopSupported, mutate, view.children]
   )
   return useMemo(
     () => ({ sessionKey, view, rowContext, stop }),

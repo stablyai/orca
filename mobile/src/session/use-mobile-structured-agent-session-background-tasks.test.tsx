@@ -77,7 +77,13 @@ describe('mobile structured session background tasks', () => {
     close: () => {}
   }
 
-  function Harness({ connected }: { connected: boolean }): null {
+  function Harness({
+    connected,
+    targetedStop = false
+  }: {
+    connected: boolean
+    targetedStop?: boolean
+  }): null {
     hook = useMobileStructuredAgentSession({
       client,
       sessionId: 'session-1',
@@ -85,15 +91,15 @@ describe('mobile structured session background tasks', () => {
       enabled: true,
       connected,
       agent: 'claude',
-      hostSupport: CAPABLE,
+      hostSupport: { ...CAPABLE, targetedStop },
       onSendError
     })
     return null
   }
 
-  async function mount(event: AgentSessionSubscribeEvent): Promise<void> {
+  async function mount(event: AgentSessionSubscribeEvent, targetedStop = false): Promise<void> {
     act(() => {
-      renderer = create(createElement(Harness, { connected: true }))
+      renderer = create(createElement(Harness, { connected: true, targetedStop }))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(event))
@@ -179,6 +185,20 @@ describe('mobile structured session background tasks', () => {
       turnId: 'background-tasks',
       scope: 'background-tasks',
       taskId: 'task-a'
+    })
+  })
+
+  it('names the host child invocation when targeted Stop is supported', async () => {
+    await mount(withChildren(), true)
+    await act(async () => {
+      await hook?.backgroundTasks.stop('task-a')
+    })
+    const cancel = sendRequest.mock.calls.find(([method]) => method === 'agentSession.cancel')
+    expect(fieldsOf(cancel?.[1])).toMatchObject({
+      stopTarget: {
+        kind: 'background-tasks',
+        tasks: [{ id: 'a', invocation: { invocationId: 'spawn-a', generation: 1 } }]
+      }
     })
   })
 })

@@ -12,6 +12,7 @@ import type { StructuredAgentSessionStatusObserverOptions } from './structured-a
 // republishes them.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session-lease-adjudication'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -320,11 +321,20 @@ export class StructuredAgentSessionStatusFeed {
    *  surface of them shares. */
   readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
     try {
-      return this.ownership.readChildWork(sessionId)
+      const children = this.ownership.readChildWork(sessionId)
+      if (children !== undefined) {
+        return children
+      }
     } catch (error) {
       this.logFailure('child-work-read', 'child work read failed', sessionId, error)
-      return undefined
     }
+    // A released provider with proven exit has no live tasks, including after the roster is forgotten.
+    const lease = this.deps.getRecord(sessionId)?.lease
+    return !this.deps.sessions.get(sessionId)?.child &&
+      lease &&
+      agentSessionLeaseOwnerVerdict(lease) === 'exited'
+      ? []
+      : undefined
   }
 
   private admitChildWork(

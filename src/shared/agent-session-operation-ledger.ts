@@ -271,6 +271,8 @@ export function evaluateAgentSessionOperation(args: {
   operationId: string
   fingerprint: string
   now: number
+  /** Targeted cleanup re-derives its effect from host state instead of replaying a receipt. */
+  skipReceipt?: true
 }): AgentSessionOperationDecision {
   const { rows, callerKey, operationId, fingerprint, now } = args
   const operationTimestamp = parseAgentSessionOperationTimestamp(operationId)
@@ -296,7 +298,7 @@ export function evaluateAgentSessionOperation(args: {
           details: { reason: 'operationIdReused' }
         }
   }
-  if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
+  if (!args.skipReceipt && now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
     // Why: once a tombstone could have expired, an unseen replay must never be reinterpreted as
     // permission to start another fresh agent.
     return {

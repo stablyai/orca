@@ -1,3 +1,4 @@
+import { StopTarget, validateCancelStopTarget } from './agent-session-stop-target-params'
 import {
   SendBody,
   MAX_OPTION_LABEL,
@@ -168,6 +169,7 @@ export const CancelParams = z
     turnId: Identifier('Invalid turn id').optional(),
     scope: z.literal('background-tasks').optional(),
     taskId: Identifier('Invalid task id').optional(),
+    stopTarget: StopTarget.optional(),
     prompt: z
       .object({
         itemId: Identifier('Invalid item id'),
@@ -178,6 +180,7 @@ export const CancelParams = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    validateCancelStopTarget(value, ctx)
     if (value.taskId !== undefined && value.scope !== 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A task id requires background-task scope' })
     }

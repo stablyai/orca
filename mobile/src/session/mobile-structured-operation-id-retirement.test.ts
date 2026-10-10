@@ -63,6 +63,28 @@ function cancelArgs(client: RpcClient, hostAnswersRepeatedStops: boolean | null 
 }
 
 describe('structured mutation id retirement', () => {
+  it.each([false, true])(
+    'uses a receipt-free turn target only for a capable host: %s',
+    async (targetedStopSupported) => {
+      const sendRequest = vi.fn(async (_method: string, _params: SentParams) => ({
+        ok: true,
+        result: { ok: true, value: { cancelled: true } },
+        _meta: { runtimeId: 'runtime-1' }
+      }))
+      expect(
+        await requestMobileStructuredAgentSessionCancel({
+          ...cancelArgs(fakeClient(sendRequest)),
+          targetedStopSupported
+        })
+      ).toBe(true)
+      const params = sendRequest.mock.calls[0]?.[1]
+      expect(params).toMatchObject(
+        targetedStopSupported
+          ? { stopTarget: { kind: 'turn', turnId: 'turn-1' } }
+          : expect.not.objectContaining({ stopTarget: expect.anything() })
+      )
+    }
+  )
   it('reports a host that cannot say what became of the id as unknown', async () => {
     const result = await requestStructuredAgentSessionMutation({
       client: fakeClient(async () => operationRefusedAsUnknown()),

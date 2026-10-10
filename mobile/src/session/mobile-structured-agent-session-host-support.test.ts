@@ -17,6 +17,7 @@ describe('structuredAgentSessionHostSupport', () => {
       queuedMessages: false,
       queuedCommands: false,
       quietRepeatedStop: false,
+      targetedStop: false,
       statusFeed: false
     }
     expect(structuredAgentSessionHostSupport([])).toEqual(none)

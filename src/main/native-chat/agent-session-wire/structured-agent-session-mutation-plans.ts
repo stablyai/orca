@@ -10,10 +10,8 @@ import {
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
 } from '../../../shared/agent-session-message-source'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import type {
-  AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionOptionResult,
   AgentSessionPromptResult,
@@ -31,7 +29,6 @@ import {
   structuredAgentSessionCompactBody
 } from './structured-agent-session-command-turn'
 import {
-  performCancel,
   performPrompt,
   performSend,
   performSetOption,
@@ -50,6 +47,7 @@ export type MutationPlan<TValue> = {
   conversationWrite?: true
   /** Still runs, decided from the committed ledger, when its ledger row cannot be written. */
   runsWithoutLedgerRow?: true
+  receiptPolicy?: 'none'
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
@@ -227,45 +225,6 @@ export function conversationCommandPlan(params: {
       const prior = params.priorRecord()
       return prior ? { recorded: prior } : null
     }
-  }
-}
-
-export function cancelPlan(params: {
-  envelope: AgentSessionMutationEnvelope
-  turnId?: string
-  scope?: 'background-tasks'
-  taskId?: string
-  prompt?: { itemId: string; expectedRevision: number }
-  /** The session's child records, which name the tasks a background Stop reaches. */
-  childWork?: () => readonly AgentChildWorkView[] | undefined
-}): MutationPlan<AgentSessionCancelResult> {
-  return {
-    method: 'agentSession.cancel',
-    // Stop is a conversation write; a prompt or background-task cancel needs the live child.
-    ...(params.scope || params.prompt ? {} : { conversationWrite: true as const }),
-    // A Stop must reach the agent even when storage refuses the row recording it.
-    runsWithoutLedgerRow: true,
-    fields: {
-      ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
-      ...(params.scope ? { scope: params.scope } : {}),
-      ...(params.taskId ? { taskId: params.taskId } : {}),
-      ...(params.prompt ? { prompt: params.prompt } : {})
-    },
-    run: (ctx) =>
-      performCancel(ctx, {
-        clientOperationId: params.envelope.clientOperationId,
-        ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
-        ...(params.scope ? { scope: params.scope } : {}),
-        ...(params.taskId ? { taskId: params.taskId } : {}),
-        ...(params.prompt ? { prompt: params.prompt } : {}),
-        ...(params.childWork ? { childWork: params.childWork } : {})
-      }),
-    // Interrupting twice would kill a turn the client never asked to stop, so a
-    // replay reports the turn as already handled.
-    replay: () => ({
-      ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
-      cancelled: false
-    })
   }
 }
 

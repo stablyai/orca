@@ -1,4 +1,9 @@
 import { agentStatusSubjectsEqual, type AgentStatusSubject } from './agent-status-subject'
+import type { AgentChildWorkInvocationFence } from './agent-child-work-invocation'
+export {
+  agentChildWorkFencesEqual,
+  type AgentChildWorkInvocationFence
+} from './agent-child-work-invocation'
 
 export const AGENT_CHILD_WORK_KINDS = [
   'agent',
@@ -46,11 +51,6 @@ export type AgentChildWorkOperation = {
   input?: string
   basis: AgentChildWorkOperationBasis
   observedAt: number
-}
-
-export type AgentChildWorkInvocationFence = {
-  invocationId: string
-  generation: number
 }
 
 export type AgentChildWorkInvocationHistory = {
@@ -107,13 +107,6 @@ export type AgentChildWorkInput = {
 
 export type AgentChildWorkRecord = AgentChildWorkInput & {
   revision: number
-}
-
-export function agentChildWorkFencesEqual(
-  left: AgentChildWorkInvocationFence,
-  right: AgentChildWorkInvocationFence
-): boolean {
-  return left.invocationId === right.invocationId && left.generation === right.generation
 }
 
 export function agentChildWorkBelongsTo(

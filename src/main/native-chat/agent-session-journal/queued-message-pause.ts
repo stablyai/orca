@@ -25,7 +25,8 @@ export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
  *  reopen binds nothing: while it settles, every turn that ends; once settled, the turn it stopped.
  *  `failedOn`: the turn a Stop that failed could not stop, which reads "Stopping…" until it ends:
  *  the one running when it failed, or with none, the first that opens after the journal position
- *  it failed at. Display only: no turn-end rule reads it, so that turn's own end stays its own. */
+ *  it failed at. No turn-end rule reads it, so that turn's own end stays its own; it only keeps the
+ *  Stop from counting as having taken effect (`structuredAgentSessionStopTookEffect`). */
 export type JournalStopSettle = {
   settling: boolean
   turnId?: string

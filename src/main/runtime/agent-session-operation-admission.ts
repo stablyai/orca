@@ -31,6 +31,7 @@ export type AgentSessionOperationAdmission = {
   operationId: string
   fingerprint: string
   now: number
+  skipReceipt?: true
 }
 
 export type AgentSessionOperationAcceptance = AgentSessionOperationAdmission & {
@@ -82,11 +83,13 @@ export type AgentSessionMutationOperationAdmission = {
   now: number
   operationIdScope?: 'global'
   conversationWrite?: true
+  receiptPolicy?: 'none'
 }
 
 export type AgentSessionMutationOperationDecision = {
   admission: AgentSessionMutationAdmission
   record: AgentSessionRecord
+  receiptRecorded?: false
 } | null
 
 type EvaluatedOperationRows = { rows: OperationRows; decision: AgentSessionOperationDecision }
@@ -96,6 +99,9 @@ export function evaluateAgentSessionOperationRow(
   rows: OperationRows,
   args: AgentSessionOperationAdmission
 ): EvaluatedOperationRows {
+  if (args.skipReceipt) {
+    return { rows, decision: evaluateAgentSessionOperation({ ...args, rows: new Map() }) }
+  }
   const pruned = pruneAgentSessionOperationRows(rows, args.now)
   return { rows: pruned, decision: evaluateAgentSessionOperation({ rows: pruned, ...args }) }
 }
@@ -124,7 +130,7 @@ function placeAdmittedAgentSessionOperationRow(
   evaluated: EvaluatedOperationRows,
   args: AgentSessionOperationAdmission
 ): EvaluatedOperationRows {
-  if (evaluated.decision.decision === 'admit') {
+  if (evaluated.decision.decision === 'admit' && !args.skipReceipt) {
     evaluated.rows.set(
       agentSessionOperationKey(args.callerKey, args.operationId),
       evaluated.decision.row
@@ -174,7 +180,8 @@ function mutationOperation(
     callerKey: args.callerKey,
     operationId: args.envelope.clientOperationId,
     fingerprint: args.hostFingerprint,
-    now: args.now
+    now: args.now,
+    ...(args.receiptPolicy === 'none' ? { skipReceipt: true as const } : {})
   }
 }
 
@@ -202,7 +209,16 @@ export function admitAgentSessionMutationOperation(
     ledger.rows.delete(agentSessionOperationKey(operation.callerKey, operation.operationId))
   }
   state.operations = ledger.rows
-  return { admission, record }
+  const receiptRecorded =
+    ledger.decision.decision !== 'refused' &&
+    ledger.rows.has(
+      agentSessionOperationKey(ledger.decision.row.callerKey, ledger.decision.row.operationId)
+    )
+  return {
+    admission,
+    record,
+    ...(!receiptRecorded ? { receiptRecorded: false as const } : {})
+  }
 }
 
 /**

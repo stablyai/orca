@@ -57,7 +57,8 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TARGETED_STOP_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { projectStructuredAgentSessionStatusSummary } from '../../../../shared/structured-agent-session-projection'
@@ -154,7 +155,8 @@ describe('Stop against a host that stops the conversation', () => {
   beforeEach(() => {
     setLocalRuntimeCapabilitiesForTests([
       AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+      AGENT_SESSION_TARGETED_STOP_RUNTIME_CAPABILITY
     ])
   })
 
@@ -413,6 +415,20 @@ describe('Stop against a host that stops the conversation', () => {
     expect(result.current.isWorking).toBe(false)
     expect(result.current.canStop).toBe(false)
   })
+  it('sends the captured host target only when the host advertises targeted Stop', async () => {
+    setLocalRuntimeCapabilitiesForTests([
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+      AGENT_SESSION_TARGETED_STOP_RUNTIME_CAPABILITY
+    ])
+    items = [RUNNING_TURN]
+    const { result } = render()
+    await act(async () => {
+      await result.current.stop()
+    })
+    expect(cancels()).toEqual([
+      expect.objectContaining({ stopTarget: { kind: 'turn', turnId: 'provider-turn' } })
+    ])
+  })
 })
 
 const EARLIER_TURN: AgentJournalRenderItem[] = [
@@ -482,7 +498,8 @@ describe('Stop against a host that stops the conversation, beside the sidebar', 
   beforeEach(() => {
     setLocalRuntimeCapabilitiesForTests([
       AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+      AGENT_SESSION_TARGETED_STOP_RUNTIME_CAPABILITY
     ])
   })
 

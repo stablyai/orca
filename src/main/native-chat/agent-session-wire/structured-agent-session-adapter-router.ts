@@ -102,6 +102,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 
+  observeSubmissionTurn: NonNullable<StructuredAgentSessionAdapter['observeSubmissionTurn']> = (
+    input
+  ) =>
+    this.liveOwnerOrNull(input.sessionId)?.observeSubmissionTurn?.(input) ?? {
+      verdict: 'unverifiable'
+    }
+
   changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) => {
     const change = this.owner(input.sessionId).changeThreadGoal
     if (!change) {

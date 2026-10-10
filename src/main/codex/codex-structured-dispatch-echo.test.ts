@@ -81,6 +81,39 @@ describe('codex dispatch echoes', () => {
     expect(echoes.settle('client-1')).toBe(false)
   })
 
+  it('exposes exact admitted bindings before the echo, including coalesced sends', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.arm('client-1')
+    echoes.arm('client-2')
+    expect(echoes.boundTurn('client-1')).toBeNull()
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
+    echoes.bindTurn('client-2', 'thread-1', 'turn-1', 'steer')
+    expect(echoes.boundTurn('client-1')).toEqual({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      ended: false
+    })
+    expect(echoes.boundTurn('client-2')).toEqual(echoes.boundTurn('client-1'))
+    echoes.settle('client-1')
+    expect(echoes.boundTurn('client-1')).toBeNull()
+    expect(echoes.boundTurn('client-2')?.turnId).toBe('turn-1')
+  })
+
+  it('observes the positively ended binding while a completed send still awaits its echo', () => {
+    const echoes = createCodexDispatchEchoes()
+    echoes.arm('client-1')
+    echoes.bindTurn('client-1', 'thread-1', 'turn-1', 'start')
+    echoes.endTurn('thread-1', 'turn-1', { status: 'completed' })
+    expect(echoes.boundTurn('client-1')).toEqual({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      ended: true
+    })
+    echoes.arm('client-2')
+    echoes.bindTurn('client-2', 'thread-1', 'turn-2', 'start')
+    expect(echoes.boundTurn('client-2')?.ended).toBe(false)
+  })
+
   it('refuses new correlations at capacity without dropping an older send', () => {
     const echoes = createCodexDispatchEchoes()
     for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
