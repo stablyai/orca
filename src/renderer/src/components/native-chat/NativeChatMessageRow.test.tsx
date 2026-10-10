@@ -95,7 +95,7 @@ describe('MessageRow control visibility', () => {
     })
   })
 
-  it('copies an assistant reply without its visual lines, which mean nothing outside Orca', async () => {
+  it('copies an assistant reply without its markdown syntax or visual lines', async () => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     Object.assign(window, { api: { ui: { writeClipboardText } } })
 
@@ -110,7 +110,7 @@ describe('MessageRow control visibility', () => {
             blocks: [
               {
                 type: 'text',
-                text: 'Here it is.\n\n::orca-visual{file="usage.html" title="Usage"}\n\nDone.'
+                text: '## Here **it** is.\n\n::orca-visual{file="usage.html" title="Usage"}\n\n- `Done`.'
               }
             ]
           }}
@@ -122,7 +122,7 @@ describe('MessageRow control visibility', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy message' }))
 
     await waitFor(() => {
-      expect(writeClipboardText).toHaveBeenCalledWith('Here it is.\n\nDone.')
+      expect(writeClipboardText).toHaveBeenCalledWith('Here it is.\n\n- Done.')
     })
   })
 

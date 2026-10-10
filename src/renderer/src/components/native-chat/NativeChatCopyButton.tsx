@@ -15,7 +15,7 @@ export function NativeChatCopyButton({
   label: copyLabel,
   className
 }: {
-  text: string
+  text: string | (() => string)
   /** What this button copies, when it is not the whole message. */
   label?: string
   className?: string
@@ -33,7 +33,7 @@ export function NativeChatCopyButton({
 
   const handleCopy = useCallback(async () => {
     try {
-      await window.api.ui.writeClipboardText(text)
+      await window.api.ui.writeClipboardText(typeof text === 'function' ? text() : text)
       setCopied(true)
       if (resetTimerRef.current !== null) {
         window.clearTimeout(resetTimerRef.current)
