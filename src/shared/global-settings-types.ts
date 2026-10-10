@@ -474,6 +474,14 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalPet: boolean
   /** Legacy persisted key from before the sidekick -> pet rename; read only during migration, new writes use experimentalPet. */
   experimentalSidekick?: boolean
+  /** Pet speech bubbles for finished / attention-needed agents; absent = on. */
+  petSpeechBubbles?: boolean
+  /** Custom bubble copy; empty or absent uses the built-in text. `{count}` expands to the agent count. */
+  petSpeechDoneText?: string
+  petSpeechWaitingText?: string
+  petSpeechReminderText?: string
+  /** Minutes between reminders while finished agents stay unseen; 0 disables. Absent = 10. */
+  petSpeechReminderMinutes?: number
   /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */

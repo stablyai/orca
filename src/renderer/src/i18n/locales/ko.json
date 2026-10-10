@@ -12448,6 +12448,16 @@
           "description": "이 호스트는 현재 상태 그대로 관리형 서버로 돌아갑니다. 이전 버전의 Orca가 여기에서 추가하거나 변경한 내용은 이동되지 않으며, 정리될 때까지 이 컴퓨터의 저장된 설정에만 남습니다.",
           "cancel": "취소",
           "confirm": "서버 버전 유지"
+        },
+        "PetSpeechBubbleSetting": {
+          "title": "말풍선",
+          "description": "에이전트가 작업을 끝내거나 입력이 필요할 때 펫이 말풍선으로 알려 줍니다. 말풍선을 클릭하면 닫힙니다.",
+          "doneLabel": "에이전트가 작업을 끝냈을 때",
+          "waitingLabel": "에이전트가 입력을 기다릴 때",
+          "reminderLabel": "다시 알림",
+          "reminderMinutesLabel": "다시 알림 간격",
+          "reminderMinutesDescription": "완료되었거나 대기 중인 에이전트를 확인하지 않으면 알림을 반복합니다. 문구의 {count}는 에이전트 수로 바뀝니다. 0이면 다시 알리지 않습니다.",
+          "reminderMinutesSuffix": "분"
         }
       },
       "right": {
@@ -14020,6 +14030,11 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "클라우디노"
           }
+        },
+        "PetSpeechBubble": {
+          "doneDefault": "다 끝났어요! 확인해 주세요.",
+          "waitingDefault": "에이전트가 입력을 기다리고 있어요.",
+          "reminderDefault": "{count}개 에이전트가 아직 기다리고 있어요."
         }
       },
       "onboarding": {
