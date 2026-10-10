@@ -4,39 +4,27 @@ import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-lin
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
-import {
-  getRuntimeEnvironmentIdForWorktree,
-  type WorktreeRuntimeOwnerState
-} from '@/lib/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import {
   importExternalPathsToRuntime,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  runtimeTargetEnvironmentId,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
-
-export function getEditorFileDropSettingsForWorktree(
-  store: WorktreeRuntimeOwnerState,
-  worktreeId: string
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
-  // Why: OS drops target the selected worktree. Use that worktree's host owner
-  // so a focused runtime cannot hijack local/SSH editor drops.
-  return {
-    ...store.settings,
-    activeRuntimeEnvironmentId: runtimeEnvironmentId
-  }
-}
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 
 export function shouldUploadRemoteEditorFileDrop(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  target: RuntimeClientTarget,
   connectionId: string | null | undefined
 ): boolean {
-  return Boolean(settings?.activeRuntimeEnvironmentId?.trim() || connectionId?.trim())
+  return target.kind === 'environment' || Boolean(connectionId?.trim())
 }
 
 export function getEditorFileDropOperationContext(
@@ -46,7 +34,8 @@ export function getEditorFileDropOperationContext(
   connectionId: string | undefined
 ): RuntimeFileOperationArgs {
   return {
-    settings: getEditorFileDropSettingsForWorktree(store, worktreeId),
+    // Why: OS drops target the selected worktree's owner, never the focused server.
+    target: requireRuntimeTargetForFileOwner(store, worktreeId, undefined),
     worktreeId,
     worktreePath,
     connectionId
@@ -89,7 +78,7 @@ function sameEditorFileDropOwner(a: EditorFileDropContext, b: EditorFileDropCont
   return (
     a.worktreePath === b.worktreePath &&
     a.connectionId === b.connectionId &&
-    left.settings?.activeRuntimeEnvironmentId === right.settings?.activeRuntimeEnvironmentId &&
+    runtimeTargetEnvironmentId(left.target) === runtimeTargetEnvironmentId(right.target) &&
     left.expectedExecutionHostId === right.expectedExecutionHostId &&
     left.expectedSshTargetId === right.expectedSshTargetId &&
     left.expectedSshConnectionGeneration === right.expectedSshConnectionGeneration
@@ -149,9 +138,8 @@ async function openEditorFileDropPaths(
   const store = useAppStore.getState()
   const { worktreeId, groupId } = destination
   const groupOptions = groupId ? { targetGroupId: groupId } : null
-  const dropSettings = fileContext.settings
-  const runtimeEnvironmentId = dropSettings?.activeRuntimeEnvironmentId ?? null
-  if (shouldUploadRemoteEditorFileDrop(dropSettings, connectionId)) {
+  const runtimeEnvironmentId = runtimeTargetEnvironmentId(fileContext.target)
+  if (shouldUploadRemoteEditorFileDrop(fileContext.target, connectionId)) {
     if (!worktreePath) {
       toast.error(
         translate(

@@ -20,7 +20,6 @@ import {
   ensureRuntimeDirectory,
   uploadRuntimeFileWithoutClobber
 } from './runtime-file-upload-client'
-import { getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
@@ -36,7 +35,7 @@ export async function importExternalPathsToRuntime(
     access?: LocalFileAccess
   }
 ): Promise<{ results: ImportItemResult[] }> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
     return window.api.fs.importExternalPaths(
       withSshMutationExpectation(context, {

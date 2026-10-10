@@ -39,7 +39,7 @@ it('keeps the new viewport loader alive when a canceled delimiter scan rejects l
     ])
   )
   const file = {
-    readArgs: { settings: null, filePath: '/repo/a.csv' },
+    readArgs: { target: { kind: 'local' as const }, filePath: '/repo/a.csv' },
     snapshot: { size: 20, mtime: 1, isDirectory: false }
   }
   const { result, rerender } = renderHook(({ delimiter }) => useCsvPagedPreview(file, delimiter), {
@@ -79,7 +79,7 @@ it('coalesces rapid scrolls and releases rows outside the latest viewport', asyn
       )
   )
   const file = {
-    readArgs: { settings: null, filePath: '/repo/a.csv' },
+    readArgs: { target: { kind: 'local' as const }, filePath: '/repo/a.csv' },
     snapshot: { size: 80, mtime: 1, isDirectory: false }
   }
   const { result } = renderHook(() => useCsvPagedPreview(file, ','))

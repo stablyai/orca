@@ -23,6 +23,11 @@ export function runtimeTargetForOwnerEnvironment(
   return ownerId ? { kind: 'environment', environmentId: ownerId } : { kind: 'local' }
 }
 
+/** The server a transport dials, or `null` for this app. */
+export function runtimeTargetEnvironmentId(target: RuntimeClientTarget): string | null {
+  return target.kind === 'environment' ? target.environmentId : null
+}
+
 /**
  * Transport to the host that owns a row: a server's own runtime, or this app for local and direct
  * SSH (which ride this app's IPC with a `connectionId`). `null` when the id names no routable host.

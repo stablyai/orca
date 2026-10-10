@@ -19,7 +19,7 @@ import { getDiskBaselineSignature } from '@/components/editor/diff-content-signa
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 
 const CONTEXT = {
-  settings: null,
+  target: { kind: 'local' as const },
   worktreeId: 'wt-1',
   worktreePath: '/repo',
   connectionId: undefined

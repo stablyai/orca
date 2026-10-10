@@ -17,6 +17,7 @@ import {
   subscribeToLocalImageCacheInvalidation,
   unpinLocalImageCache
 } from './local-image-src-cache'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export function getLocalImageCacheKey(
   absolutePath: string,
@@ -26,8 +27,9 @@ export function getLocalImageCacheKey(
   },
   access?: LocalFileAccess
 ): string {
-  const runtimeEnvironmentId =
-    runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client'
+  const runtimeEnvironmentId = runtimeContext
+    ? (runtimeTargetEnvironmentId(runtimeContext.target) ?? 'client')
+    : 'client'
   return [
     runtimeEnvironmentId,
     runtimeContext?.connectionId ?? connectionId ?? 'local',

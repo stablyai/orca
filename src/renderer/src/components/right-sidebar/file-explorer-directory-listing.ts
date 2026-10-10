@@ -49,7 +49,7 @@ export async function readFileExplorerDirectory(
   }
   const entries = await readRuntimeDirectory(
     {
-      settings: route.settings,
+      target: route.target,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId: route.connectionId

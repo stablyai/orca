@@ -33,9 +33,20 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
 vi.mock('@/runtime/runtime-file-client', () => ({ statRuntimePath: runtime.stat }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({ owner })
-}))
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 vi.mock('./markdown-document-list-request', () => ({
   requestSharedMarkdownDocumentList: runtime.list
 }))
@@ -225,7 +236,7 @@ describe('Markdown document navigation', () => {
 
     expect(runtime.stat).toHaveBeenCalledWith(
       {
-        settings: { owner: 'runtime-owner' },
+        target: { kind: 'environment', environmentId: 'runtime-owner' },
         worktreeId: 'wt',
         worktreePath: '/repo',
         connectionId: 'ssh-owner'

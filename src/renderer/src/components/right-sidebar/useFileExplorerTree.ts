@@ -195,7 +195,7 @@ export function useFileExplorerTree(
       }
       return statUserOpenedPath(
         {
-          settings: route.settings,
+          target: route.target,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId: route.connectionId

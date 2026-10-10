@@ -167,7 +167,7 @@ describe.each(['native', 'internal'])('%s runtime terminal catalog ownership', (
       if (lane === 'native') {
         expect(mocks.importPaths).toHaveBeenCalledExactlyOnceWith(
           {
-            settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+            target: { kind: 'environment', environmentId: 'owner-runtime' },
             worktreeId: workspaceId,
             worktreePath: '/owner/workspace',
             expectedExecutionHostId: executionHostId,

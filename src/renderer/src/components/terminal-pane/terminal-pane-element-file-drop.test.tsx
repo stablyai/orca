@@ -459,7 +459,7 @@ describe('terminal element file drops', () => {
     await settle()
     expect(mocks.importPaths).toHaveBeenCalledWith(
       expect.objectContaining({
-        settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+        target: { kind: 'environment', environmentId: 'owner-runtime' },
         worktreePath: '/owner/workspace',
         expectedExecutionHostId: 'local'
       }),

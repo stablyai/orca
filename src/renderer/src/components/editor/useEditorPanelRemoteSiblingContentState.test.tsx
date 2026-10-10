@@ -52,6 +52,25 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(() => null)
 }))
 
+// These fixtures' workspaces live on runtime-1, so an unstamped tab resolves there.
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    runtimeEnvironmentId: string | null | undefined
+  ) =>
+    runtimeEnvironmentId === null
+      ? { kind: 'local' as const }
+      : { kind: 'environment' as const, environmentId: runtimeEnvironmentId ?? 'runtime-1' }
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
+
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
 
 vi.mock('./useEditorPanelExternalContentEvents', () => ({

@@ -548,7 +548,7 @@ describe('createFloatingWorkspaceMarkdownTab', () => {
       '/tmp/orca/floating-workspace',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
-      { activeRuntimeEnvironmentId: null }
+      { kind: 'local' }
     )
     expect(store.openFile).toHaveBeenCalledWith(fileInfo, {
       preview: false,
@@ -570,7 +570,7 @@ describe('createFloatingWorkspaceMarkdownTab', () => {
       '/tmp/orca/floating-workspace',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
-      { activeRuntimeEnvironmentId: null }
+      { kind: 'local' }
     )
     expect(store.openFile).not.toHaveBeenCalled()
   })

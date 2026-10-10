@@ -5,7 +5,9 @@ import { useAppStore } from '@/store'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { getRuntimeFileReadScope } from '@/runtime/runtime-file-client'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
-import { RuntimeRpcCallError, settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
 import {
@@ -92,11 +94,6 @@ export function useEditorPanelFileContentLoader({
         const resolvedConnectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
         const connectionId = resolvedConnectionId ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
-        const activeSettings = useAppStore.getState().settings
-        const readSettings = settingsForRuntimeOwner(
-          activeSettings,
-          restoredOpenFile?.runtimeEnvironmentId
-        )
         const isLiveTailLogTab =
           restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
         // Why: these tabs name a file on this client, so the worktree's SSH or runtime owner must
@@ -104,6 +101,16 @@ export function useEditorPanelFileContentLoader({
         const isClientLocalTab = restoredOpenFile
           ? isClientLocalReadOnlyTab(restoredOpenFile)
           : false
+        const readTarget: RuntimeClientTarget =
+          isClientLocalTab && restoredOpenFile?.runtimeEnvironmentId === undefined
+            ? { kind: 'local' }
+            : requireRuntimeTargetForFileOwner(
+                useAppStore.getState(),
+                worktreeId,
+                restoredOpenFile?.runtimeEnvironmentId
+              )
+        const readOwnerEnvironmentId =
+          readTarget.kind === 'environment' ? readTarget.environmentId : undefined
         readConnectionId = connectionId
         let readWorktreeId = worktreeId
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
@@ -145,7 +152,7 @@ export function useEditorPanelFileContentLoader({
         if (
           !isClientLocalTab &&
           resolvedConnectionId === undefined &&
-          !readSettings?.activeRuntimeEnvironmentId?.trim() &&
+          !readOwnerEnvironmentId &&
           !isWorktreeConnectionResolved(worktreeId ?? null)
         ) {
           // Why: the backing repo hasn't hydrated yet (SSH still connecting), so
@@ -160,9 +167,7 @@ export function useEditorPanelFileContentLoader({
           const externalSshOwnerId =
             restoredOpenFile.externalSshTargetId?.trim() ||
             (isClientLocalTab ? undefined : connectionId)
-          const runtimeEnvironmentId = isClientLocalTab
-            ? undefined
-            : readSettings?.activeRuntimeEnvironmentId?.trim()
+          const runtimeEnvironmentId = isClientLocalTab ? undefined : readOwnerEnvironmentId
           if (isClientLocalTab) {
             readConnectionId = undefined
           } else {
@@ -190,7 +195,7 @@ export function useEditorPanelFileContentLoader({
             }
           }
         }
-        const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
+        const readScope = getRuntimeFileReadScope(readTarget, readConnectionId)
         const access = restoredOpenFile
           ? editorTabFileAccess(useAppStore.getState(), restoredOpenFile)
           : undefined
@@ -213,7 +218,7 @@ export function useEditorPanelFileContentLoader({
         if (!pending) {
           const promise = readEditorCsvFileContent(
             {
-              settings: readSettings,
+              target: readTarget,
               filePath,
               relativePath: readRelativePath,
               worktreeId: readWorktreeId,

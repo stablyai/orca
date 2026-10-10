@@ -1,6 +1,6 @@
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import { normalizeRelativePath } from '@/lib/path'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import {
   assertLocalFilesystemFallbackAllowed,
@@ -190,7 +190,7 @@ export async function deleteRuntimeRelativePath(
   relativePath: string,
   recursive?: boolean
 ): Promise<boolean> {
-  const target = getActiveRuntimeTarget(context.settings)
+  const target = context.target
   if (
     target.kind !== 'environment' ||
     !context.worktreeId ||

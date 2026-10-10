@@ -20,9 +20,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-file-client', () => ({
   getRuntimeFileReadScope: vi.fn(
     (
-      settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined,
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string },
       connectionId?: string
-    ) => connectionId ?? settings?.activeRuntimeEnvironmentId ?? null
+    ) => connectionId ?? (target.kind === 'environment' ? target.environmentId : null)
   ),
   readRuntimeFileContent: mocks.readRuntimeFileContent,
   subscribeRuntimeFileChanges: vi.fn()
@@ -46,6 +46,18 @@ vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
+
+// Fixture owners: `repo-runtime::` workspaces live on runtime-1, everything else here is local.
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const ownerTarget = (_s: unknown, worktreeId?: string, owner?: string | null) => {
+    const id = owner === undefined && worktreeId?.startsWith('repo-runtime::') ? 'runtime-1' : owner
+    return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }
+  }
+  return {
+    getRuntimeTargetForFileOwner: ownerTarget,
+    requireRuntimeTargetForFileOwner: ownerTarget
+  }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: {

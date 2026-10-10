@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import { getConnectionId } from '@/lib/connection-context'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 export type RichMarkdownImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
@@ -10,10 +10,9 @@ export type RichMarkdownImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'co
 export type RichMarkdownImageResolverContext = {
   filePath: string
   imageUrls?: Record<string, string>
-  runtimeContext?: RichMarkdownImageRuntimeContext
+  /** `null`: the owner is unresolved, so local images must not load; `undefined`: no workspace. */
+  runtimeContext?: RichMarkdownImageRuntimeContext | null
 }
-
-export type RichMarkdownImageResolverSettings = Parameters<typeof settingsForRuntimeOwner>[0]
 
 type RichMarkdownImageUrls = Record<string, string>
 
@@ -40,8 +39,28 @@ type RichMarkdownImageStorage = {
     filePath: string
     imageUrls?: Record<string, string>
     reloadListeners?: Set<() => void>
-    runtimeContext?: RichMarkdownImageRuntimeContext
+    runtimeContext?: RichMarkdownImageRuntimeContext | null
   }
+}
+
+/** The image node view's storage; its context is validated on read. */
+export type RichMarkdownImageNodeStorage = { runtimeContext?: unknown }
+
+/** The stored image context; `null` (unresolved owner) is kept so readers refuse instead of going local. */
+export function readRichMarkdownImageRuntimeContext(
+  storage: RichMarkdownImageNodeStorage
+): RichMarkdownImageRuntimeContext | null | undefined {
+  const value = storage.runtimeContext
+  if (value === null) {
+    return null
+  }
+  return isRichMarkdownImageRuntimeContext(value) ? value : undefined
+}
+
+function isRichMarkdownImageRuntimeContext(
+  value: unknown
+): value is RichMarkdownImageRuntimeContext {
+  return typeof value === 'object' && value !== null && 'target' in value && 'worktreeId' in value
 }
 
 export function getRichMarkdownImageResolverContextVersion(editor: Editor): number {
@@ -56,29 +75,30 @@ export function getRichMarkdownImageResolverContextVersion(editor: Editor): numb
 export function createRichMarkdownImageResolverContext({
   filePath,
   externalSshTargetId,
-  runtimeEnvironmentId,
-  settings,
+  runtimeTarget,
   worktreeId,
   worktreeRoot
 }: {
   filePath: string
   externalSshTargetId?: string
-  runtimeEnvironmentId?: string | null
-  settings: RichMarkdownImageResolverSettings
+  /** The document owner's transport; `null` while unresolved, which blocks local image reads. */
+  runtimeTarget: RuntimeClientTarget | null
   worktreeId: string
   worktreeRoot: string | null
 }): RichMarkdownImageResolverContext {
   return {
     filePath,
-    runtimeContext: worktreeRoot
-      ? {
-          settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
-          worktreeId,
-          worktreePath: worktreeRoot,
-          connectionId: getConnectionId(worktreeId),
-          expectedExternalSshTargetId: externalSshTargetId
-        }
-      : undefined
+    runtimeContext: !worktreeRoot
+      ? undefined
+      : runtimeTarget
+        ? {
+            target: runtimeTarget,
+            worktreeId,
+            worktreePath: worktreeRoot,
+            connectionId: getConnectionId(worktreeId),
+            expectedExternalSshTargetId: externalSshTargetId
+          }
+        : null
   }
 }
 
@@ -117,7 +137,11 @@ function getRichMarkdownImageContextSignature(context: RichMarkdownImageResolver
   return [
     context.filePath,
     JSON.stringify(context.imageUrls ?? {}),
-    context.runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client',
+    context.runtimeContext === null
+      ? 'unresolved'
+      : context.runtimeContext?.target.kind === 'environment'
+        ? context.runtimeContext.target.environmentId
+        : 'client',
     context.runtimeContext?.connectionId ?? 'local',
     context.runtimeContext?.expectedExternalSshTargetId ?? '',
     context.runtimeContext?.worktreeId ?? 'unknown-worktree',

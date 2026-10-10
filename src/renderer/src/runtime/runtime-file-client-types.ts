@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from './runtime-client-target'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
@@ -11,7 +11,8 @@ export type RuntimeReadableFileContent = {
 }
 
 export type RuntimeFileReadArgs = {
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  /** The file owner's transport; never the focused server. */
+  target: RuntimeClientTarget
   filePath: string
   relativePath?: string
   worktreeId?: string
@@ -23,7 +24,8 @@ export type RuntimeFileReadArgs = {
 }
 
 export type RuntimeFileOperationArgs = {
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  /** The worktree owner's transport; never the focused server. */
+  target: RuntimeClientTarget
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string

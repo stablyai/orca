@@ -4,7 +4,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { joinPath, getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-client'
-import { getActiveRuntimeTarget, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { RuntimeTerminalPathResolution } from '../../../shared/runtime-file-contracts'
 import { resolveWslRepoWorktreeBasePath } from '../../../shared/wsl-paths'
@@ -36,7 +36,7 @@ export async function openQuickOpenFile(
   }
   assertCurrent()
   const route = guard.route
-  const target = getActiveRuntimeTarget(route.settings)
+  const target = route.target
   const resolvePastedPath = (path: string): string =>
     target.kind !== 'environment' &&
     !route.connectionId &&
@@ -125,7 +125,7 @@ export async function openQuickOpenFile(
     filePath,
     relativePath,
     worktreeId,
-    runtimeEnvironmentId: route.settings.activeRuntimeEnvironmentId,
+    runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
     ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
       ? { externalSshTargetId: route.connectionId }
       : {}),

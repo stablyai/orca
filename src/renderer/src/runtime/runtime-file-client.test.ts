@@ -27,7 +27,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         filePath: '/repo/readme.md',
         relativePath: 'readme.md',
         worktreeId: 'wt-1',
@@ -45,7 +45,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         filePath: '/tmp/external.md',
         relativePath: '/tmp/external.md',
         worktreeId: 'wt-1',
@@ -64,7 +64,7 @@ describe('runtime file client', () => {
   it('rejects an external SSH file read after the target changes', async () => {
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: null },
+        target: { kind: 'local' as const },
         filePath: '/tmp/external.md',
         relativePath: '/tmp/external.md',
         worktreeId: 'wt-1',
@@ -79,7 +79,7 @@ describe('runtime file client', () => {
   it('rejects an external SSH file read through a runtime environment', async () => {
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/tmp/external.md',
         relativePath: '/tmp/external.md',
         worktreeId: 'wt-1',
@@ -94,7 +94,7 @@ describe('runtime file client', () => {
 
   it('binds direct SSH mutations to the captured target and generation', async () => {
     const context = {
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       connectionId: 'ssh-1',
@@ -149,7 +149,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/src/index.ts',
         relativePath: 'src/index.ts',
         worktreeId: 'wt-1'
@@ -171,7 +171,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/Users/me/scratch.md',
         relativePath: '/Users/me/scratch.md'
       })
@@ -187,7 +187,7 @@ describe('runtime file client', () => {
   it('rejects remote-owned text reads that are not worktree-relative', async () => {
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/tmp/scratch.md',
         relativePath: '/tmp/scratch.md',
         worktreeId: 'wt-1'
@@ -196,7 +196,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/unknown.md',
         worktreeId: 'wt-1'
       })
@@ -221,7 +221,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/large.log',
         relativePath: 'large.log',
         worktreeId: 'wt-1'
@@ -254,7 +254,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/doc.pdf',
         relativePath: 'doc.pdf',
         worktreeId: 'wt-1'
@@ -295,7 +295,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/secret.txt',
         relativePath: 'secret.txt',
         worktreeId: 'wt-1'
@@ -327,7 +327,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/huge.pdf',
         relativePath: 'huge.pdf',
         worktreeId: 'wt-1'
@@ -352,7 +352,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         filePath: '/remote/repo/doc.pdf',
         relativePath: 'doc.pdf',
         worktreeId: 'wt-1'
@@ -364,11 +364,11 @@ describe('runtime file client', () => {
     )
   })
 
-  it('uses the active runtime id as the dedupe scope', () => {
-    expect(getRuntimeFileReadScope({ activeRuntimeEnvironmentId: 'env-1' }, 'ssh-1')).toBe(
+  it('uses the owner runtime id as the dedupe scope', () => {
+    expect(getRuntimeFileReadScope({ kind: 'environment', environmentId: 'env-1' }, 'ssh-1')).toBe(
       'runtime:env-1'
     )
-    expect(getRuntimeFileReadScope({ activeRuntimeEnvironmentId: null }, 'ssh-1')).toBe('ssh-1')
+    expect(getRuntimeFileReadScope({ kind: 'local' }, 'ssh-1')).toBe('ssh-1')
   })
 
   it('routes directory reads through the selected runtime environment', async () => {
@@ -382,7 +382,7 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeDirectory(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -408,7 +408,7 @@ describe('runtime file client', () => {
 
     await readRuntimeDirectory(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: 'C:\\Repo'
       },
@@ -433,7 +433,7 @@ describe('runtime file client', () => {
 
     await readRuntimeDirectory(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: '//Server/Share/Repo'
       },
@@ -459,7 +459,7 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeFilePreview(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -484,7 +484,7 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeFilePreview(
         {
-          settings: { activeRuntimeEnvironmentId: null },
+          target: { kind: 'local' as const },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo',
           connectionId: 'ssh-2',
@@ -501,7 +501,7 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeFilePreview(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo'
         },
@@ -528,7 +528,7 @@ describe('runtime file client', () => {
 
     await expect(
       readRuntimeFilePreview(
-        { settings: { activeRuntimeEnvironmentId: 'env-1' }, ...owner },
+        { target: { kind: 'environment' as const, environmentId: 'env-1' }, ...owner },
         storedPath
       )
     ).resolves.toMatchObject({ content: 'base64', mimeType: 'image/png' })
@@ -552,7 +552,7 @@ describe('runtime file client', () => {
 
     await readRuntimeDirectory(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: '/remote/repo'
       },
@@ -571,7 +571,7 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeDirectory(
         {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo',
           connectionId: 'ssh-1'

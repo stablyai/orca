@@ -2,7 +2,10 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
-  settingsForWorktreeOperationRoute,
+  runtimeTargetForOwnerEnvironment,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
+import {
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
 } from '@/lib/worktree-operation-route'
@@ -70,38 +73,21 @@ const FLOATING_WORKSPACE_ROUTE: WorktreeOperationRouteResolution = {
   route: { executionHostId: 'local', runtimeEnvironmentId: null }
 }
 
-// Route settings are cloned for the runtime operation contract. Reuse that
-// clone while the store's source settings and selected runtime are unchanged so
-// consumers do not treat an unrelated store update as a new image owner.
-const settingsBySource = new WeakMap<object, Map<string, AppState['settings']>>()
+// Why stable: consumers compare by identity, so an unrelated store update must not read as a
+// new image owner.
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
+const environmentTargets = new Map<string, RuntimeClientTarget>()
 
-function stableSettingsForRoute(
-  settings: AppState['settings'],
-  runtimeEnvironmentId: string | null
-): AppState['settings'] {
-  if (!settings) {
-    return settingsForWorktreeOperationRoute(settings, {
-      executionHostId: null,
-      runtimeEnvironmentId
-    })
+function stableTargetForRoute(runtimeEnvironmentId: string | null): RuntimeClientTarget {
+  if (!runtimeEnvironmentId) {
+    return LOCAL_TARGET
   }
-  const source = settings as object
-  let byRuntime = settingsBySource.get(source)
-  if (!byRuntime) {
-    byRuntime = new Map()
-    settingsBySource.set(source, byRuntime)
+  let target = environmentTargets.get(runtimeEnvironmentId)
+  if (!target) {
+    target = runtimeTargetForOwnerEnvironment(runtimeEnvironmentId)
+    environmentTargets.set(runtimeEnvironmentId, target)
   }
-  const cacheKey = runtimeEnvironmentId ?? ''
-  const cached = byRuntime.get(cacheKey)
-  if (cached) {
-    return cached
-  }
-  const resolved = settingsForWorktreeOperationRoute(settings, {
-    executionHostId: null,
-    runtimeEnvironmentId
-  })
-  byRuntime.set(cacheKey, resolved)
-  return resolved
+  return target
 }
 
 export function resolveNativeChatImageRuntimeContext(
@@ -139,7 +125,7 @@ export function resolveNativeChatImageRuntimeContext(
     return null
   }
   const context: RuntimeFileOperationArgs = {
-    settings: stableSettingsForRoute(state.settings, route.runtimeEnvironmentId),
+    target: stableTargetForRoute(route.runtimeEnvironmentId),
     worktreeId: linkContext.worktreeId,
     worktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local'

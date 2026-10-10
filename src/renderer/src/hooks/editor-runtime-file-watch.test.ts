@@ -71,7 +71,7 @@ describe('editor runtime file watch recovery', () => {
     await settle()
     expect(runtime.subscribe).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'host-a' },
+        target: { kind: 'environment', environmentId: 'host-a' },
         worktreeId: 'wt',
         worktreePath: '/repo',
         connectionId: undefined
@@ -99,7 +99,7 @@ describe('editor runtime file watch recovery', () => {
     await settle()
     expect(runtime.subscribe).toHaveBeenLastCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'host-a' },
+        target: { kind: 'environment', environmentId: 'host-a' },
         worktreeId: folder.worktreeId,
         worktreePath: '/notes',
         connectionId: undefined

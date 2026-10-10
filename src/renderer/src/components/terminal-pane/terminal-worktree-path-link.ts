@@ -8,7 +8,6 @@ import {
   type WorktreeOperationRoute,
   type WorktreeOperationRouteState
 } from '@/lib/worktree-operation-route'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   toRuntimeExecutionHostId,
@@ -107,8 +106,8 @@ export function terminalFileSourceHost(
   state: WorktreeOperationRouteState,
   context: RuntimeFileOperationArgs | undefined
 ): ExecutionHostId | null {
-  const target = getActiveRuntimeTarget(context?.settings)
-  if (target.kind === 'environment') {
+  const target = context?.target
+  if (target?.kind === 'environment') {
     const sourceRoute = context?.worktreeId
       ? resolveWorktreeOperationRouteResult(state, context.worktreeId)
       : null

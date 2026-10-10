@@ -11,6 +11,7 @@ import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -133,7 +134,7 @@ export async function activateFileExplorerNode(args: {
   let fileRuntimeEnvironmentId: string | null
   try {
     const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
-    fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
+    fileRuntimeEnvironmentId = runtimeTargetEnvironmentId(route.target)
   } catch {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
     return

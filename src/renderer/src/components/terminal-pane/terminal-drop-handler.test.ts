@@ -159,7 +159,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment', environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: '/remote/repo',
         expectedExecutionHostId: 'local',
@@ -262,7 +262,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        target: { kind: 'environment', environmentId: 'env-1' },
         worktreeId: 'wt-1',
         worktreePath: '//server/share/repo',
         expectedExecutionHostId: 'local',
@@ -326,7 +326,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
       {
-        settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+        target: { kind: 'environment', environmentId: 'owner-runtime' },
         worktreeId: 'wt-1',
         worktreePath: '/remote/repo',
         expectedExecutionHostId: 'local',

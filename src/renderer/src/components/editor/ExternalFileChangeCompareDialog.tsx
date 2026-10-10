@@ -14,7 +14,10 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { detectLanguage } from '@/lib/language-detect'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import {
+  FILE_OWNER_UNRESOLVED_MESSAGE,
+  getRuntimeTargetForFileOwner
+} from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { translate } from '@/i18n/i18n'
@@ -57,8 +60,17 @@ export function ExternalFileChangeCompareDialog({
     setDiskState({ kind: 'loading' })
     // Why: read at open time — the banner can be minutes old and the agent
     // may have written again since; the comparison must show current disk.
+    const target = getRuntimeTargetForFileOwner(
+      useAppStore.getState(),
+      file.worktreeId,
+      file.runtimeEnvironmentId
+    )
+    if (!target) {
+      setDiskState({ kind: 'error', message: FILE_OWNER_UNRESOLVED_MESSAGE })
+      return
+    }
     void readRuntimeFileContent({
-      settings: settingsForRuntimeOwner(useAppStore.getState().settings, file.runtimeEnvironmentId),
+      target,
       filePath: file.filePath,
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,

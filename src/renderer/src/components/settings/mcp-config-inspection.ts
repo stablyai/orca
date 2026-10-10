@@ -77,7 +77,7 @@ export async function loadMcpConfigInspections(
 
       try {
         const result = await readRuntimeFileContent({
-          settings: context.settings,
+          target: context.target,
           worktreeId: context.worktreeId ?? undefined,
           filePath: absolutePath,
           relativePath: candidate.relativePath,

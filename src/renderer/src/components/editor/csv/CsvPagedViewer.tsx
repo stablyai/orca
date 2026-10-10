@@ -11,6 +11,7 @@ import { EditorFileLoadErrorView } from '../EditorFileLoadErrorView'
 import { useCsvColumnWidths } from './useCsvColumnWidths'
 import { buildFileViewPreferenceKey } from '../file-view-preference-storage'
 import { openCsvHttpLink } from './csv-link-routing'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export default function CsvPagedViewer({
   file,
@@ -97,7 +98,7 @@ function CsvPagedTable({
     preferenceKey ??
       buildFileViewPreferenceKey({
         worktreeId: file.readArgs.worktreeId ?? '',
-        runtimeEnvironmentId: file.readArgs.settings?.activeRuntimeEnvironmentId,
+        runtimeEnvironmentId: runtimeTargetEnvironmentId(file.readArgs.target),
         externalSshTargetId: file.readArgs.connectionId,
         filePath: file.readArgs.filePath
       }),
@@ -124,7 +125,7 @@ function CsvPagedTable({
             openCsvHttpLink(url, event, {
               filePath: file.readArgs.filePath,
               worktreeId: file.readArgs.worktreeId,
-              runtimeEnvironmentId: file.readArgs.settings?.activeRuntimeEnvironmentId,
+              runtimeEnvironmentId: runtimeTargetEnvironmentId(file.readArgs.target),
               connectionId: file.readArgs.connectionId ?? null
             })
           }

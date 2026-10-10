@@ -2,7 +2,6 @@ import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
-import type { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { PtyTransport } from './pty-transport'
@@ -23,10 +22,10 @@ import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
-    settings: ReturnType<typeof useAppStore.getState>['settings']
     owner: ReturnType<typeof captureTerminalDropTransportOwner>
     worktreeId: string
     localWslDrop: boolean
@@ -40,7 +39,6 @@ export async function deliverNativeTerminalFileDrop(
     pane,
     dataPaths,
     dropTarget,
-    settings,
     owner,
     worktreePath,
     localWslDrop
@@ -52,7 +50,6 @@ export async function deliverNativeTerminalFileDrop(
       manager,
       paneTransports,
       pane,
-      settings,
       tabId,
       worktreeId,
       worktreePath,
@@ -127,7 +124,6 @@ export type NativeDropFlowArgs = {
 async function uploadRuntimeDropPaths(
   args: NativeDropFlowArgs & {
     runtimeEnvironmentId: string
-    settings: ReturnType<typeof useAppStore.getState>['settings']
     worktreeId: string
   }
 ): Promise<void> {
@@ -145,7 +141,7 @@ async function uploadRuntimeDropPaths(
       {
         // Why: drops into existing worktrees must follow the worktree owner,
         // not the currently focused host in the sidebar.
-        settings: { ...args.settings, activeRuntimeEnvironmentId: args.runtimeEnvironmentId },
+        target: runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId),
         worktreeId: args.worktreeId,
         worktreePath: args.worktreePath,
         expectedExecutionHostId: args.expectedExecutionHostId,

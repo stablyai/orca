@@ -26,7 +26,7 @@ describe('openTabEntryWithOperations', () => {
     groupId: 'group-1',
     worktreePath: '/repo',
     runtimeContext: {
-      settings: null,
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     },

@@ -5,7 +5,10 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { statRuntimePath } from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import {
+  getRuntimeTargetForFileOwner,
+  requireRuntimeTargetForFileOwner
+} from '@/lib/file-owner-runtime-target'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import {
   createMarkdownDocumentIndex,
@@ -81,9 +84,14 @@ export function useMarkdownDocuments(
         return
       }
       const state = useAppStore.getState()
-      const settings = settingsForRuntimeOwner(state.settings, activeFile.runtimeEnvironmentId)
+      const target = getRuntimeTargetForFileOwner(
+        state,
+        worktreeId,
+        activeFile.runtimeEnvironmentId
+      )
       // The content loader reowns retained tabs before metadata may use their new host.
       if (
+        !target ||
         findRestoredEditorWorkspaceRuntimeOwner(
           state,
           {
@@ -95,7 +103,7 @@ export function useMarkdownDocuments(
           },
           worktreeId
         ) ||
-        (connectionId === undefined && !settings?.activeRuntimeEnvironmentId?.trim())
+        (connectionId === undefined && target.kind === 'local')
       ) {
         return
       }
@@ -105,7 +113,7 @@ export function useMarkdownDocuments(
       try {
         const documents = await requestSharedMarkdownDocumentList(
           {
-            settings,
+            target,
             worktreeId,
             worktreePath,
             connectionId: connectionId ?? undefined
@@ -161,8 +169,9 @@ export function useMarkdownDocuments(
       try {
         const stats = await statRuntimePath(
           {
-            settings: settingsForRuntimeOwner(
-              useAppStore.getState().settings,
+            target: requireRuntimeTargetForFileOwner(
+              useAppStore.getState(),
+              worktreeId,
               activeFile.runtimeEnvironmentId
             ),
             worktreeId,

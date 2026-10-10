@@ -27,7 +27,7 @@ export function getMarkdownDocumentListRequestKey(
   rootPath: string
 ): string {
   return JSON.stringify([
-    context.settings?.activeRuntimeEnvironmentId?.trim() ?? '',
+    context.target.kind === 'environment' ? context.target.environmentId : '',
     context.connectionId ?? '',
     context.worktreeId ?? '',
     context.worktreePath ?? '',

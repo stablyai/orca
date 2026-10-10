@@ -690,7 +690,7 @@ describe('FloatingTerminalPanel markdown editor', () => {
       '/tmp/orca/floating-notes',
       FLOATING_TERMINAL_WORKTREE_ID,
       undefined,
-      { activeRuntimeEnvironmentId: null }
+      { kind: 'local' }
     )
     expect(mocks.openFile).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/orca/floating-notes/untitled.md' }),

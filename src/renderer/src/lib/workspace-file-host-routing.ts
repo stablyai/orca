@@ -1,7 +1,7 @@
 import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store'
 
 /** Which host owns a workspace file, resolved the same way for every surface that opens one. */
@@ -10,9 +10,12 @@ export function buildWorkspaceFileContext(
   worktreePath: string,
   runtimeEnvironmentId?: string | null
 ): RuntimeFileOperationArgs {
-  const settings = useAppStore.getState().settings
   return {
-    settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
+    target: requireRuntimeTargetForFileOwner(
+      useAppStore.getState(),
+      worktreeId,
+      runtimeEnvironmentId
+    ),
     worktreeId: worktreeId || null,
     worktreePath,
     connectionId: getConnectionId(worktreeId || null) ?? undefined

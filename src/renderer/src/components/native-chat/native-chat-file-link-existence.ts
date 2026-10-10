@@ -15,6 +15,7 @@ import {
   type FileLinkTarget
 } from '@/components/terminal-pane/terminal-file-link-target'
 import { getTerminalFileContext } from '@/components/terminal-pane/terminal-file-path-mapping'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 // Why: a host that could not answer is retried a few times, then waits for the next recheck.
 export const UNVERIFIABLE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000] as const
@@ -131,8 +132,8 @@ export function createNativeChatFileLinkExistence(
       if (
         !current.sourceHostResolved ||
         current.connectionId !== target.fileContext.connectionId ||
-        current.settings?.activeRuntimeEnvironmentId !==
-          target.fileContext.settings?.activeRuntimeEnvironmentId
+        runtimeTargetEnvironmentId(current.target) !==
+          runtimeTargetEnvironmentId(target.fileContext.target)
       ) {
         throw new Error('The workspace host changed or could not be determined')
       }

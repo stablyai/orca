@@ -89,7 +89,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('shows remote download only for desktop SSH rows and file-like Remote Host rows', () => {
     const runtimeContext = {
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+      target: { kind: 'environment' as const, environmentId: 'runtime-1' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     }
@@ -290,7 +290,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('downloads Remote Host rows through the runtime download path', async () => {
     const runtimeContext = {
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+      target: { kind: 'environment' as const, environmentId: 'runtime-1' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     }

@@ -17,6 +17,7 @@ import {
   getRuntimeEnvironmentIdForWorktree
 } from '@/lib/worktree-runtime-owner'
 import type { SearchResult } from '../../../../shared/code-search-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000
@@ -95,10 +96,9 @@ export function useFileSearchRunner({
           excludePattern: currentSearchState?.excludePattern || undefined
         })
       ) {
-        const runtimeSettings = { activeRuntimeEnvironmentId: runtimeEnvironmentId }
         updateActiveSearchState({
           results: createEmptyRuntimeFileSearchResult(),
-          resultOwner: createFileSearchResultOwner(activeWorktreeId, runtimeSettings, {
+          resultOwner: createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
             rootPath: worktreePath,
             executionHostId
           }),
@@ -116,8 +116,7 @@ export function useFileSearchRunner({
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
         // Why: results can outlive the selected worktree; clicks must reuse the route that produced them.
-        const runtimeSettings = { activeRuntimeEnvironmentId: runtimeEnvironmentId }
-        const resultOwner = createFileSearchResultOwner(activeWorktreeId, runtimeSettings, {
+        const resultOwner = createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
           rootPath: worktreePath,
           executionHostId
         })
@@ -145,7 +144,7 @@ export function useFileSearchRunner({
           }
           const results = await searchRuntimeFiles(
             {
-              settings: runtimeSettings,
+              target: runtimeTargetForOwnerEnvironment(runtimeEnvironmentId),
               worktreeId: activeWorktreeId,
               worktreePath,
               connectionId

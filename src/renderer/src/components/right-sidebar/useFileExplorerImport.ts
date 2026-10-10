@@ -102,7 +102,7 @@ export function useFileExplorerImport({
         guard.assertCurrent()
         const { results } = await importExternalPathsToRuntime(
           {
-            settings: guard.route.settings,
+            target: guard.route.target,
             worktreeId: destination.worktreeId,
             worktreePath: destination.worktreePath,
             connectionId: guard.route.connectionId,

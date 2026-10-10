@@ -26,7 +26,7 @@ for (const version of [1, 2]) {
       })
     )
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      target: { kind: 'environment' as const, environmentId: 'env-1' },
       worktreeId: `freshness-${version}`,
       worktreePath: '/host/repo'
     }

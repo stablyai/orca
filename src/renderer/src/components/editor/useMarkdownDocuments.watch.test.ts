@@ -24,11 +24,20 @@ vi.mock('@/runtime/runtime-file-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: (_settings: unknown, owner: string | null | undefined) => ({
-    activeRuntimeEnvironmentId: owner
-  })
-}))
+vi.mock('@/lib/file-owner-runtime-target', () => {
+  const getRuntimeTargetForFileOwner = (
+    _state: unknown,
+    _worktreeId: string | null | undefined,
+    owner: string | null | undefined
+  ) => (owner ? { kind: 'environment' as const, environmentId: owner } : { kind: 'local' as const })
+  return {
+    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
+    getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
+      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+  }
+})
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -147,7 +156,7 @@ describe('Markdown metadata from the existing worktree watcher', () => {
     await settle()
     expect(controllers[0].markdownDocuments).toEqual([target])
     expect(runtime.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ settings: { activeRuntimeEnvironmentId: null } }),
+      expect.objectContaining({ target: { kind: 'local' } }),
       '/repo'
     )
   })
