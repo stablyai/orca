@@ -230,20 +230,23 @@ function parseResumeInvocations(command: string): ResumeInvocation[] {
   const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|[^\s]+/g) ?? []
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
   // Each agent reads every token naming its own binary, so another agent's name earlier in the
-  // command (`cd ~/pi && claude -r x`, `claude --model pi`) never hides its resume.
-  return STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(({ definition, sessionHistory }) =>
-    sessionHistory
-      ? normalized.flatMap((token, index) => {
-          if (!isSessionHistoryBinary(sessionHistory, token)) {
-            return []
-          }
-          const invocation = sessionHistory.parseResumeArgs(normalized.slice(index + 1))
-          return invocation
-            ? [{ ...invocation, provider: definition.agent, history: sessionHistory }]
-            : []
-        })
-      : []
-  )
+  // command (`cd ~/pi && claude -r x`, `claude --model pi`) never hides its resume. A mention reads
+  // its arguments up to that agent's next mention, which reads the rest: each token is parsed once.
+  return STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(({ definition, sessionHistory }) => {
+    if (!sessionHistory) {
+      return []
+    }
+    const mentions = normalized.flatMap((token, index) =>
+      isSessionHistoryBinary(sessionHistory, token) ? [index] : []
+    )
+    return mentions.flatMap((mention, nth) => {
+      const args = normalized.slice(mention + 1, mentions[nth + 1] ?? normalized.length)
+      const invocation = sessionHistory.parseResumeArgs(args)
+      return invocation
+        ? [{ ...invocation, provider: definition.agent, history: sessionHistory }]
+        : []
+    })
+  })
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

@@ -174,9 +174,10 @@ describe('resolveTabSessionHistorySubject', () => {
           structuredSessionId: 'orca-chat-1'
         })
 
-      expect(subject('grok')).toEqual(chatSubject)
       expect(subject('codex')).toBeNull()
       expect(subject('claude')).toEqual(chatSubject)
+      // Its row is owned, but its CLI cannot fork, so no move exists to look up.
+      expect(subject('grok')).toBeNull()
     })
   })
 

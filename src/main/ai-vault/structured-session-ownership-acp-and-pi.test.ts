@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -9,6 +9,7 @@ import {
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import { installOwnership, listResult } from './structured-session-ownership.test-support'
+import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 
 const OPENCODE_ID = 'ses_2f9aB3cD4eF5gH6iJ7kL8mN9oP'
 const GROK_ID = '019fd600-1a2b-7c3d-8e4f-5a6b7c8d9e0f'
@@ -261,5 +262,31 @@ describe('another agent named in a command', () => {
   it('still reads a Pi resume that follows a Claude one', async () => {
     installOwnership({ handle: PI_HANDLE })
     await refused(`claude --resume ${OTHER_UUID}; pi --session ${PI_ID}`)
+  })
+})
+
+// The guard runs on every terminal.send text, so a long text naming agents often must stay linear.
+describe('parsing cost', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('reads each token once per agent however often agents are named', async () => {
+    installOwnership({ handle: PI_HANDLE })
+    const parsedArgs = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(({ sessionHistory }) =>
+      sessionHistory ? [vi.spyOn(sessionHistory, 'parseResumeArgs')] : []
+    )
+    const line = 'the claude agent said codex and pi and grok are fine; omp wrote opencode output\n'
+    const text = line.repeat(2_000)
+    const tokenCount = text.split(/\s+/).filter(Boolean).length
+
+    await allowed(text)
+    const argsRead = parsedArgs
+      .flatMap((spy) => spy.mock.calls)
+      .reduce((sum, [args]) => sum + args.length, 0)
+    expect(argsRead).toBeLessThanOrEqual(tokenCount * parsedArgs.length)
+  })
+
+  it('still refuses an owned resume after many mentions', async () => {
+    installOwnership({ handle: PI_HANDLE })
+    await refused(`${'echo pi; '.repeat(5_000)}pi --session ${PI_ID}`)
   })
 })

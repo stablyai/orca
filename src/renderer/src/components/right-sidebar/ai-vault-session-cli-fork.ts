@@ -15,10 +15,16 @@ export function aiVaultSessionCliForkWorktreeId(
   if (!session.structuredSession || resume.disabled || !resume.worktreeId) {
     return null
   }
-  const canFork =
-    isResumableTuiAgent(session.agent) &&
-    getAgentForkArgv(session.agent, { key: 'session_id', id: session.sessionId }) !== null
-  return canFork ? resume.worktreeId : null
+  return agentCliForksConversations(session.agent, session.sessionId) ? resume.worktreeId : null
+}
+
+/** Whether the agent's CLI can open a copy of a conversation: whether it has a fork command for
+ *  `sessionId`, which a caller with no conversation yet may leave as any id. */
+export function agentCliForksConversations(agent: string, sessionId = 'any'): boolean {
+  return (
+    isResumableTuiAgent(agent) &&
+    getAgentForkArgv(agent, { key: 'session_id', id: sessionId }) !== null
+  )
 }
 
 /** The toast for a failed "Resume in New CLI". Only a host whose guard predates the fork refuses
