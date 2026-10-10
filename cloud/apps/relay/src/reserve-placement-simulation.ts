@@ -378,6 +378,9 @@ export type SimulationConfig = {
   rttMs: (region: RelayRegion) => number
   faults?: SimulationFaults
   cellRestarts?: Array<{ at: number; cellId: string }>
+  // Cold start budget: a restarted director's estimates start empty and refill at its share of
+  // each cell's intake, so it books nothing on a cell for 1 / (intakePerSec / directors) s and
+  // paces the rest (Retry-After >= 1 s); the startup gate holds unheard hosts up to 30 s.
   directorRestarts?: Array<{ at: number; director: number }>
   databaseStalls?: Array<{ at: number; durationMs: number }>
   // Every director misses every feed poll for this long (a director-side outage).
@@ -632,7 +635,6 @@ export async function runReservePlacementSimulation(
         return
       }
       director.answeredCells.add(cell.cellId)
-      director.placer.observePoll(current!.placement)
     })
   }
 
