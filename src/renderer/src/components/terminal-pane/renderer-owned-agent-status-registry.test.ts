@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
 import {
   _getRendererOwnedAgentStatusPaneCountForTest,
   isClientAuthoritativeAgentStatusPane,
+  isReleasedClientWrittenAgentStatusPane,
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
@@ -10,6 +12,7 @@ import {
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 const OTHER_PANE = 'tab-2:22222222-2222-4222-8222-222222222222'
 const ENV = 'web-env-1'
+const T0 = 1_700_000_000_000
 
 describe('renderer-owned agent status registry', () => {
   beforeEach(() => {
@@ -30,15 +33,33 @@ describe('renderer-owned agent status registry', () => {
     expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(0)
   })
 
-  it('cedes authority on teardown and leaks no entry', () => {
-    const release = registerRendererOwnedAgentStatusPane(PANE, ENV)
-    markRendererOwnedAgentStatusWrite(PANE)
-    release()
-    expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(false)
-    expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(0)
-    // A post-teardown write must not resurrect the claim.
-    markRendererOwnedAgentStatusWrite(PANE)
-    expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(false)
+  it('cedes authority on teardown but remembers that it wrote, until the row could not be live', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    try {
+      const release = registerRendererOwnedAgentStatusPane(PANE, ENV)
+      markRendererOwnedAgentStatusWrite(PANE)
+      release()
+
+      expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(false)
+      // The host publishes nothing for a pane this renderer wrote, so the mirror
+      // needs the released claim to read that silence correctly (#22445).
+      expect(isReleasedClientWrittenAgentStatusPane(PANE, T0 + 1_000)).toBe(true)
+      expect(
+        isReleasedClientWrittenAgentStatusPane(PANE, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)
+      ).toBe(false)
+      // A post-teardown write must not resurrect the claim.
+      markRendererOwnedAgentStatusWrite(PANE)
+      expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(false)
+
+      // The evidence is swept once it can no longer describe a live row.
+      vi.setSystemTime(T0 + AGENT_STATUS_STALE_AFTER_MS + 1)
+      registerRendererOwnedAgentStatusPane(OTHER_PANE, ENV)
+      expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(1)
+      expect(isReleasedClientWrittenAgentStatusPane(PANE, Date.now())).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the earned claim across a remount in the same environment', () => {
@@ -56,7 +77,7 @@ describe('renderer-owned agent status registry', () => {
     expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(false)
   })
 
-  it('scopes authority per pane', () => {
+  it('scopes authority per pane and leaks nothing for a pane that never wrote', () => {
     const releasePane = registerRendererOwnedAgentStatusPane(PANE, ENV)
     const releaseOther = registerRendererOwnedAgentStatusPane(OTHER_PANE, ENV)
     markRendererOwnedAgentStatusWrite(PANE)
@@ -64,7 +85,9 @@ describe('renderer-owned agent status registry', () => {
     expect(isClientAuthoritativeAgentStatusPane(OTHER_PANE)).toBe(false)
     releasePane()
     releaseOther()
-    expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(0)
+    // Only the pane that proved a byte-derived write leaves evidence behind.
+    expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(1)
+    expect(isReleasedClientWrittenAgentStatusPane(OTHER_PANE, Date.now())).toBe(false)
   })
 
   // A replacement mount registers before the superseded pane's dispose runs

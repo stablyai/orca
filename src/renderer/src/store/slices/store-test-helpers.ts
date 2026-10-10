@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createRepoSlice } from './repos'
@@ -60,7 +60,11 @@ export {
   makeTabGroup
 } from './store-session-test-harness'
 
-export function createTestStore() {
+/** The store shape `createTestStore` hands out, named here so suites don't reach
+ *  back through `ReturnType<typeof createTestStore>` for it. */
+export type TestAppStore = UseBoundStore<StoreApi<AppState>>
+
+export function createTestStore(): TestAppStore {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),
