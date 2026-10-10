@@ -10,7 +10,7 @@ import type { AcpTimelineEvent } from './acp-timeline-event'
 /** Keeps a task's handle apart from a subagent's, so a Stop knows which route it takes. */
 const TASK_ID_PREFIX = 'acp-task:'
 
-export function acpBackgroundTaskHandle(taskId: string): AgentChildWorkEvidenceHandle {
+function acpBackgroundTaskHandle(taskId: string): AgentChildWorkEvidenceHandle {
   return { idKind: 'task_id', id: `${TASK_ID_PREFIX}${taskId}` }
 }
 

@@ -77,7 +77,7 @@ export type AcpDialect = {
     /** The agent refusing the route by name: the only answer that hides Stop. */
     lacksRoute(error: AcpAgentError): boolean
     request(sessionId: string, taskId: string): { method: string; params: unknown }
-    /** `gone`: the agent holds no running task by that id, so no ending of its own may follow. */
+    /** `gone`: the agent no longer runs a task by that id; its own ending may still follow. */
     response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
   }
   injectedPromptIdentity?: true

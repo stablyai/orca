@@ -113,9 +113,10 @@ async function stopAcpBackgroundTask(
   if (outcome === 'refused') {
     return { cancelled: false, stillRunning: true }
   }
-  // A killed task's own completion ends its row; a task the agent no longer holds sends none.
+  // A killed task's own completion ends its row. A gone one settles here, and any completion
+  // Grok still sends for it (exited but not yet swept) overwrites this with the real result.
   if (outcome === 'gone') {
-    session.lane.forgetBackgroundTask(taskId)
+    session.lane.apply(session.lane.translator.reconcileBackgroundTask(taskId))
   }
   return { cancelled: true }
 }

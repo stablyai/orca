@@ -183,7 +183,7 @@ describe('Grok background commands in the background-tasks strip', () => {
   })
 
   it.each(['already_exited', 'not_found'])(
-    'treats %s as gone: stopped quietly and the row leaves at once',
+    'treats %s as gone: the transcript row settles, and a restated live task stays gone',
     async (outcome) => {
       const f = await fixture()
       await f.background()
@@ -191,10 +191,50 @@ describe('Grok background commands in the background-tasks strip', () => {
         f.agent.reply(frame, { result: { taskId: TASK, outcome } })
       )
       expect(await f.targetedStop(CHILD)).toMatchObject({ ok: true, value: { cancelled: true } })
+      expect(await f.rowState()).toBe('unverifiable')
+      expect(await f.strip()).toBeNull()
+      expect(f.childWork.views()).toEqual([])
+      await f.background()
+      expect(await f.rowState()).toBe('unverifiable')
       expect(await f.strip()).toBeNull()
       expect(f.childWork.views()).toEqual([])
     }
   )
+
+  it("still writes Grok's result when its completion follows already_exited", async () => {
+    const f = await fixture()
+    await f.background()
+    f.agent.on('_x.ai/task/kill', (frame) =>
+      f.agent.reply(frame, { result: { taskId: TASK, outcome: 'already_exited' } })
+    )
+    expect(await f.targetedStop(CHILD)).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(await f.rowState()).toBe('unverifiable')
+    await f.complete({ exit_code: 0 })
+    expect(await f.rowState()).toBe('done')
+    expect(await f.strip()).toBeNull()
+  })
+
+  // As for Codex and Claude: running background work must be stopped before the chat is cleared.
+  it('refuses /clear while a background command runs', async () => {
+    const f = await fixture()
+    await f.background()
+    f.agent.reply(f.prompt, { stopReason: 'end_turn' })
+    await f.rows()
+    const fields = { command: 'clear' as const }
+    expect(
+      await f.host.conversationCommand(CALLER, {
+        ...fields,
+        envelope: envelope('agentSession.conversationCommand', fields)
+      })
+    ).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        message: 'Stop background tasks before using this command.',
+        details: { reason: 'backgroundTasksRunning' }
+      }
+    })
+  })
 
   // Grok's own refusal means it killed nothing; a reply about another task proves nothing.
   it.each([

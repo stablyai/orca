@@ -16,7 +16,6 @@ import { AcpTimelineTranslator } from './acp-timeline-translator'
 import { acpSubagentChildWork, isAcpSubagentChildWorkEvent } from './acp-subagent-child-work'
 import {
   acpBackgroundTaskChildWork,
-  acpBackgroundTaskHandle,
   isAcpBackgroundTaskChildWorkEvent
 } from './acp-background-task-child-work'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
@@ -212,17 +211,6 @@ export class AcpStructuredLane {
       return
     }
     this.publishEvidence(evidence)
-  }
-
-  /** The agent says it holds no running task by this id, so no ending of its own will come. */
-  forgetBackgroundTask(taskId: string): void {
-    this.publishEvidence([
-      {
-        type: 'removed',
-        observedAt: this.deps.now?.() ?? Date.now(),
-        handle: acpBackgroundTaskHandle(taskId)
-      }
-    ])
   }
 
   private publishEvidence(evidence: AgentChildWorkEvidence[]): void {
