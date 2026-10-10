@@ -44,3 +44,18 @@ it('keeps timestamp and journal authority ahead of a derived reasoning key', () 
   laterReasoning.timestamp = 0
   expect(compareNativeChatTranscriptMessages(answer, laterReasoning)).toBeLessThan(0)
 })
+
+it('preserves a provider sequence ahead of timestamps and keeps split reasoning beside its answer', () => {
+  const messages = [
+    row('pending-send', 'user', 50),
+    { ...row('a', 'assistant', 0), transcriptOrder: 2 },
+    { ...row('z', 'assistant', 100), transcriptOrder: 1 },
+    { ...row('z:reasoning', 'reasoning', 100), transcriptOrder: 1 }
+  ]
+  expect(projectNativeChatTranscriptMessages(messages).map((message) => message.id)).toEqual([
+    'z:reasoning',
+    'z',
+    'a',
+    'pending-send'
+  ])
+})

@@ -1,3 +1,5 @@
+import { pruneOpenCodeFingerprintCache } from './transcript-opencode-fingerprint-window'
+export { pruneOpenCodeFingerprintCache as pruneOpenCodeFingerprintCacheForTest } from './transcript-opencode-fingerprint-window'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import {
   DESKTOP_READ_WINDOW,
@@ -6,7 +8,7 @@ import {
   type SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import type { OpenCodeTranscriptItem } from './transcript-opencode-sqlite-query'
-import { bindOpenCodeTranscriptDeps, type OpenCodeTranscriptDeps } from './transcript-opencode'
+import { openCodeTranscriptDefaultDeps, type OpenCodeTranscriptDeps } from './transcript-opencode'
 import {
   openCodeTranscriptPageLimit,
   OPENCODE_TRANSCRIPT_MAX_WINDOW
@@ -14,30 +16,21 @@ import {
 
 const OPENCODE_POLL_MS = 1_000
 
-function pruneOpenCodeFingerprintCache(fingerprints: Map<number, string>, cap: number): void {
-  if (fingerprints.size <= cap) {
-    return
-  }
-  const keep = new Set([...fingerprints.keys()].sort((a, b) => b - a).slice(0, cap))
-  for (const rowid of fingerprints.keys()) {
-    if (!keep.has(rowid)) {
-      fingerprints.delete(rowid)
-    }
-  }
-}
-
-export const pruneOpenCodeFingerprintCacheForTest = pruneOpenCodeFingerprintCache
-
 export function subscribeOpenCodeNativeChatTranscript(
   args: SubscribeNativeChatTranscriptArgs,
   setupSignal?: AbortSignal,
   deps: OpenCodeTranscriptDeps = {},
-  // When 'zcode': discovery probes ZCode's database, reads drop hidden rows.
   agent?: 'zcode'
 ): NativeChatTranscriptSubscription {
   setupSignal?.throwIfAborted()
   const controller = new AbortController()
-  const bound = bindOpenCodeTranscriptDeps(deps, controller.signal, agent)
+  const resolveDbPath = deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath
+  const readSignal = deps.readSignal ?? openCodeTranscriptDefaultDeps.readSignal
+  const readPage = (page: Parameters<NonNullable<OpenCodeTranscriptDeps['readPage']>>[0]) =>
+    (deps.readPage ?? openCodeTranscriptDefaultDeps.readPage)(
+      { ...page, ...(agent ? { agent } : {}) },
+      controller.signal
+    )
   const pollMs = args.resolvePollIntervalMs ?? OPENCODE_POLL_MS
   const initialLimit = openCodeTranscriptPageLimit(
     args.initialLimit && args.initialLimit > 0 ? args.initialLimit : DESKTOP_READ_WINDOW
@@ -107,7 +100,7 @@ export function subscribeOpenCodeNativeChatTranscript(
       return
     }
     try {
-      dbPath ??= await bound.resolveDbPath()
+      dbPath ??= await resolveDbPath(args.sessionId, controller.signal, agent)
       if (closed) {
         return
       }
@@ -116,7 +109,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      const signal = await bound.readSignal(dbPath, args.sessionId)
+      const signal = await readSignal(dbPath, args.sessionId, controller.signal, agent)
       if (closed) {
         return
       }
@@ -131,7 +124,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      const page = await bound.readPage({
+      const page = await readPage({
         dbPath,
         sessionId: args.sessionId,
         limit: firstSnapshot
@@ -165,6 +158,17 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
+      // Imported rows can precede the frontier regardless of their storage rowid.
+      if (agent === 'zcode') {
+        if (
+          await replaceWithBridgedWindow(dbPath, page, signal.messageCount < lastCounts.messages)
+        ) {
+          lastSignal = fingerprint
+          lastCounts = { messages: signal.messageCount, parts: signal.partCount }
+        }
+        scheduleTick()
+        return
+      }
       let changed = page.items.some(
         (item) =>
           item.rowid <= lastEmittedRowId && fingerprints.get(item.rowid) !== item.fingerprint
@@ -183,7 +187,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         const displaced = [...fingerprints.keys()].filter((rowid) => rowid < oldest)
         if (displaced.length > 0) {
           // Verify the displaced fringe: cap eviction and a real deletion look identical in the tail.
-          const older = await bound.readPage({
+          const older = await readPage({
             dbPath,
             sessionId: args.sessionId,
             limit: displaced.length,
@@ -246,7 +250,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         lastEmittedRowId = item.rowid
       }
     }
-    pruneOpenCodeFingerprintCache(fingerprints, OPENCODE_TRANSCRIPT_MAX_WINDOW)
+    pruneOpenCodeFingerprintCache(fingerprints, OPENCODE_TRANSCRIPT_MAX_WINDOW, agent)
     windowLimit = Math.max(windowLimit, fingerprints.size)
   }
 
@@ -257,14 +261,14 @@ export function subscribeOpenCodeNativeChatTranscript(
   // overlap, so the gap retries instead of dropping rows.
   async function replaceWithBridgedWindow(
     db: string,
-    page: Awaited<ReturnType<typeof bound.readPage>>,
+    page: Awaited<ReturnType<typeof readPage>>,
     shrinking = false
   ): Promise<boolean> {
     let limit = Math.max(windowLimit, page?.items.length ?? 0)
     for (;;) {
       const replacement =
         page ??
-        (await bound.readPage({
+        (await readPage({
           dbPath: db,
           sessionId: args.sessionId,
           limit
@@ -283,7 +287,11 @@ export function subscribeOpenCodeNativeChatTranscript(
         emitSafely(() => args.onReplace?.([], hasMore, before), 'replace')
         return true
       }
-      if (shrinking || oldest <= lastEmittedRowId || !replacement.hasMore) {
+      const overlaps =
+        agent === 'zcode'
+          ? replacement.items.some((item) => fingerprints.has(item.rowid))
+          : oldest <= lastEmittedRowId
+      if (shrinking || overlaps || !replacement.hasMore) {
         fingerprints.clear()
         lastEmittedRowId = 0
         rememberItems(replacement.items)

@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
@@ -14,9 +15,7 @@ import {
   listOpenCodeDatabasesInDirectory
 } from '../opencode-usage/opencode-database-discovery'
 
-// ZCode's CLI keeps its OpenCode-v1-shaped history in its own database, so a
-// zcode transcript must never be claimed by an unrelated OpenCode install (the
-// same separation the AI Vault scanner draws in session-scanner-zcode-sources).
+// ZCode sessions belong only to its own store.
 function zcodeTranscriptDatabasePaths(wslHomeDirs: readonly string[]): string[] {
   return [homedir(), ...wslHomeDirs].map((home) => join(home, '.zcode', 'cli', 'db', 'db.sqlite'))
 }
@@ -50,10 +49,19 @@ export async function discoverOpenCodeTranscriptDatabase(
       }
       boundedSignal.throwIfAborted()
       probed.add(dbPath)
-      if (!sessionId) {
-        return dbPath
-      }
       try {
+        if (
+          agent === 'zcode' &&
+          !(await waitForPromiseWithSignal(
+            wslGatedAccess(dbPath, 'exact', boundedSignal),
+            boundedSignal
+          ))
+        ) {
+          continue
+        }
+        if (!sessionId) {
+          return dbPath
+        }
         if (
           await waitForPromiseWithSignal(
             readOpenCodeTranscriptSignalViaWorker(
@@ -67,24 +75,32 @@ export async function discoverOpenCodeTranscriptDatabase(
         }
       } catch (error) {
         boundedSignal.throwIfAborted()
+        if (
+          agent === 'zcode' &&
+          error instanceof Error &&
+          'code' in error &&
+          error.code === 'ENOENT'
+        ) {
+          continue
+        }
         refusals.push(error instanceof Error ? error : new Error(String(error)))
       }
     }
     return null
   }
   try {
-    // A zcode transcript only ever lives in a ZCode database: probe those first
-    // and never fall through to OpenCode installs that cannot hold the session.
     if (agent === 'zcode') {
-      const homes = await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)
       const native = await findSession(zcodeTranscriptDatabasePaths([]))
       if (native) {
         return native
       }
-      const readerRoots = homes
-      if (readerRoots.length > 0) {
+      const homes = (await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)).slice(
+        0,
+        32
+      )
+      if (homes.length > 0) {
         const readers = await waitForPromiseWithSignal(
-          prepareOpenCodeWslReaders(readerRoots),
+          prepareOpenCodeWslReaders(homes),
           boundedSignal
         )
         boundedSignal.throwIfAborted()

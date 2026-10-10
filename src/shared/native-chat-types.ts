@@ -219,6 +219,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   source: NativeChatSource
   /** Optional provider row cursor; split projections share it for whole-row paging. */
   transcriptOffset?: number
+  /** Display order when the provider's sequence differs from its stable paging cursor. */
+  transcriptOrder?: number
   /** Model id that produced an assistant response, as the provider API names it. */
   model?: string
   /** The agent's provider that served `model`, where the agent records one. */
