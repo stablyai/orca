@@ -24,6 +24,7 @@ import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-look
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
+import { readAllWorktreeMetaForRepo } from '../persistence/host-qualified-worktree-meta'
 import {
   countRepoWorkspacesWithMetadata,
   describeProjectRemovalRefusal
@@ -178,7 +179,11 @@ export class RuntimeProjectHostSetupController {
     }
     const refusal = describeProjectRemovalRefusal({
       liveTerminals: this.deps.countLiveTerminalsForRepo(repo),
-      workspacesWithMetadata: countRepoWorkspacesWithMetadata(repo, store.getAllWorktreeMeta())
+      workspacesWithMetadata: countRepoWorkspacesWithMetadata(
+        repo,
+        // Host-qualified read: a same-id, same-path sibling host keeps its rows only in canonical maps.
+        readAllWorktreeMetaForRepo(store, repo)
+      )
     })
     if (refusal) {
       throw new Error(refusal)

@@ -18,23 +18,33 @@ const repo: Repo = {
   kind: 'git'
 }
 
-function makeController(options: { liveTerminals: number; metaIds: string[] }) {
-  const { projects, setups: projectHostSetups } = projectHostSetupProjectionFromRepos([repo])
+function makeController(options: {
+  liveTerminals: number
+  metaIds: string[]
+  canonicalMetaIdsForHost?: string[]
+  targetRepo?: Repo
+}) {
+  const targetRepo = options.targetRepo ?? repo
+  const { projects, setups: projectHostSetups } = projectHostSetupProjectionFromRepos([targetRepo])
   const deleteProjectHostSetup = vi.fn(() => ({
     project: projects[0],
     setup: projectHostSetups[0],
-    repo
+    repo: targetRepo
   }))
   const store = {
     getProjects: () => projects,
     getProjectHostSetups: () => projectHostSetups,
     getAllWorktreeMeta: () =>
       Object.fromEntries(options.metaIds.map((id) => [id, { hostId: undefined }])),
+    getAllWorktreeMetaForHost: (hostId: string) =>
+      options.canonicalMetaIdsForHost
+        ? Object.fromEntries(options.canonicalMetaIdsForHost.map((id) => [id, { hostId }]))
+        : undefined,
     deleteProjectHostSetup
   }
   const controller = new RuntimeProjectHostSetupController({
     getStore: () => store as never,
-    listRepos: () => [repo],
+    listRepos: () => [targetRepo],
     addRepo: vi.fn(),
     addRemoteRepo: vi.fn(),
     cloneRepo: vi.fn(),
@@ -66,6 +76,21 @@ describe('project setup delete guard', () => {
     const { controller, deleteProjectHostSetup, setupId } = makeController({
       liveTerminals: 0,
       metaIds: ['repo-1::/work/app', 'other-repo::/work/other']
+    })
+
+    expect(() => controller.deleteSetup({ setupId, force: false })).toThrow(
+      /saved details for 1 workspace\./
+    )
+    expect(deleteProjectHostSetup).not.toHaveBeenCalled()
+  })
+
+  it('sees sibling-host metadata kept only in the host-qualified maps', () => {
+    // Same repo id and path on local and SSH: the raw-id map holds only the local row.
+    const { controller, deleteProjectHostSetup, setupId } = makeController({
+      liveTerminals: 0,
+      metaIds: ['repo-1::/work/app'],
+      canonicalMetaIdsForHost: ['repo-1::/work/app'],
+      targetRepo: { ...repo, connectionId: 'box' }
     })
 
     expect(() => controller.deleteSetup({ setupId, force: false })).toThrow(
