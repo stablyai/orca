@@ -414,7 +414,7 @@ describe('RateLimitService', () => {
     }
   })
 
-  it('lets a user-directed refresh bypass the Claude Retry-After gate', async () => {
+  it('keeps user-directed refresh inside the Claude Retry-After gate until expiry', async () => {
     vi.useFakeTimers()
     try {
       vi.mocked(fetchClaudeRateLimits)
@@ -431,6 +431,11 @@ describe('RateLimitService', () => {
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
       expect(service.getState().claude?.status).toBe('error')
 
+      await service.refresh()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('error')
+
+      await vi.advanceTimersByTimeAsync(40 * 60 * 1000)
       await service.refresh()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(service.getState().claude?.status).toBe('ok')

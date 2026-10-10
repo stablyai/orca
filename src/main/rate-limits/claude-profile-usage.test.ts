@@ -3,7 +3,16 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-const calls = vi.hoisted(() => ({ keychain: vi.fn(), usage: vi.fn(), keychainService: vi.fn() }))
+/** 실제 Keychain과 사용량 호출을 격리한 시험 상태다. */
+const calls = vi.hoisted(() => ({
+  keychain: vi.fn(),
+  usage: vi.fn(),
+  keychainService: vi.fn(),
+  cacheRoot: ''
+}))
+vi.mock('../persistence/loading-store/user-data-path', () => ({
+  getCanonicalUserDataPath: () => calls.cacheRoot
+}))
 vi.mock('../macos-keychain/generic-password', () => ({
   readKeychainPassword: calls.keychainService
 }))
@@ -45,9 +54,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
+/** @returns 임시 프로필 폴더와 조회 옵션 */
 function profile() {
   const home = mkdtempSync(join(tmpdir(), 'claude-usage-'))
   roots.push(home)
+  calls.cacheRoot = home
   calls.keychain.mockResolvedValue(null)
   const options = {
     authPreparation: {
@@ -58,9 +69,11 @@ function profile() {
   }
   return { home, options }
 }
+/** @returns 임시 기본 계정 폴더와 조회 옵션 */
 function systemDefault() {
   const home = mkdtempSync(join(tmpdir(), 'claude-usage-default-'))
   roots.push(home)
+  calls.cacheRoot = home
   calls.keychain.mockResolvedValue(null)
   return {
     home,
@@ -93,7 +106,14 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
     join(system.home, '.credentials.json'),
     JSON.stringify({ claudeAiOauth: { accessToken: 'expired-default', expiresAt: 1 } })
   )
-  calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
+  calls.usage.mockResolvedValueOnce({
+    provider: 'claude',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok'
+  })
   expect(await fetchActiveClaudeRateLimits(system.options)).toMatchObject({ status: 'ok' })
   expect(await fetchActiveClaudeRateLimits(system.options)).toMatchObject({
     error: 'Claude usage updates the next time Claude runs.',
@@ -185,8 +205,13 @@ it("keeps a 429's Retry-After and rate-limit message so polling waits it out", a
   })
   expect(limited.usageMetadata?.retryAtMs).toBeGreaterThanOrEqual(before + 3_000_000)
   expect(limited.usageMetadata?.retryAtMs).toBeLessThanOrEqual(Date.now() + 3_000_000)
-  calls.usage.mockRejectedValueOnce(new OAuthUsageError(message, 429, true, null))
-  expect((await fetchActiveClaudeRateLimits(f.options)).usageMetadata?.retryAtMs).toBeUndefined()
+  expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
+    status: limited.status,
+    error: limited.error,
+    updatedAt: limited.updatedAt,
+    usageMetadata: { failureKind: 'rate-limited', retryAtMs: limited.usageMetadata?.retryAtMs }
+  })
+  expect(calls.usage).toHaveBeenCalledTimes(1)
 })
 it("reads System default's own CLAUDE_CONFIG_DIR Keychain item before the unsuffixed one", async () => {
   const root = mkdtempSync(join(tmpdir(), 'claude-usage-inherited-'))

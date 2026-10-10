@@ -1,4 +1,7 @@
+import { DEFAULT_POLL_MS, MIN_POLL_MS } from './service/service-types'
+
 // Why: a corrupt/hostile Retry-After must not gate usage refreshes for days.
+/** 잘못된 서버 헤더의 최대 대기 시간이다. */
 const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
 
 export class OAuthUsageError extends Error {
@@ -12,6 +15,10 @@ export class OAuthUsageError extends Error {
   }
 }
 
+/**
+ * @param res 사용량 API의 실패 응답
+ * @returns 429 기본 대기 시간을 포함한 오류
+ */
 export async function createOAuthUsageError(res: Response): Promise<OAuthUsageError> {
   return new OAuthUsageError(
     await describeOAuthUsageError(res),
@@ -19,7 +26,9 @@ export async function createOAuthUsageError(res: Response): Promise<OAuthUsageEr
     // Why: auth/rate-limit responses are already the user-visible usage API
     // answer. Falling through to /usage can spawn Claude Code needlessly.
     res.status === 401 || res.status === 403 || res.status === 429,
-    res.status === 429 ? parseRetryAfterMs(res.headers.get('retry-after')) : null
+    res.status === 429
+      ? Math.max(MIN_POLL_MS, parseRetryAfterMs(res.headers.get('retry-after')) ?? DEFAULT_POLL_MS)
+      : null
   )
 }
 

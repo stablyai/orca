@@ -13,7 +13,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
 
     try {
       let shouldContinue = true
-      // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
+      // Why: queued user refreshes bypass the normal interval; Claude's shared fetcher still enforces server waits.
       let cycleForce = options?.force ?? false
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
@@ -134,7 +134,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
 
     try {
       let shouldContinue = true
-      // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
+      // Why: queued user refreshes bypass the normal interval; Claude's shared fetcher still enforces server waits.
       let cycleForce = options?.force ?? false
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>

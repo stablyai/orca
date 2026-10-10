@@ -1,3 +1,6 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { fetchCachedClaudeUsage } from './claude-usage-cache'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   readClaudeOAuthCredentials,
@@ -10,8 +13,30 @@ import type { ClaudeRateLimitFetchOptions } from './claude-usage-fetch-options'
 import { abortedClaudeRateLimitResult, makeClaudeUsageResult } from './claude-usage-result'
 import { CLAUDE_PROFILE_MISSING_MESSAGE } from '../../shared/claude-profile-routing'
 
-/** Usage observes the account; only a user-started Claude process may refresh its login. */
+/**
+ * 모든 조회 경로에서 계정의 서버 대기를 지키며 사용량만 관찰한다.
+ * @param options 계정 인증 경로와 취소 신호
+ * @returns 캐시된 사용량 또는 새 조회 결과
+ */
 export async function fetchActiveClaudeRateLimits(
+  options?: ClaudeRateLimitFetchOptions
+): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
+  if (options?.authPreparation?.usageError) {
+    return fetchUncachedClaudeRateLimits(options)
+  }
+  const configDir = options?.authPreparation?.configDir ?? join(homedir(), '.claude')
+  return fetchCachedClaudeUsage(configDir, () => fetchUncachedClaudeRateLimits(options))
+}
+
+/**
+ * 대기 확인 후 인증을 읽고 한 번 조회한다.
+ * @param options 계정 인증 경로와 취소 신호
+ * @returns 해당 계정의 사용량 또는 오류
+ */
+async function fetchUncachedClaudeRateLimits(
   options?: ClaudeRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
   const usageError = options?.authPreparation?.usageError

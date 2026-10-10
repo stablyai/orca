@@ -29,7 +29,7 @@ describe('createOAuthUsageError', () => {
     expect(error.retryAfterMs).toBe(24 * 60 * 60 * 1000)
   })
 
-  it('ignores missing, invalid, and non-positive Retry-After values', async () => {
+  it('defaults missing, invalid, and non-positive Retry-After values to 15 minutes', async () => {
     for (const headers of [
       undefined,
       { 'retry-after': 'soon' },
@@ -37,8 +37,13 @@ describe('createOAuthUsageError', () => {
       { 'retry-after': '-5' }
     ]) {
       const error = await createOAuthUsageError(rateLimitedResponse(headers))
-      expect(error.retryAfterMs).toBeNull()
+      expect(error.retryAfterMs).toBe(15 * 60 * 1000)
     }
+  })
+
+  it('floors a short server wait at 30 seconds', async () => {
+    const error = await createOAuthUsageError(rateLimitedResponse({ 'retry-after': '1' }))
+    expect(error.retryAfterMs).toBe(30_000)
   })
 
   it('does not capture Retry-After for non-429 responses', async () => {
