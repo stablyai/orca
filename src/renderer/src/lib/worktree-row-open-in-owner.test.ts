@@ -35,7 +35,7 @@ describe('resolveWorktreeRowOpenInRuntimeOwner', () => {
         rivalHubState,
         worktree('ssh:same-private-target', 'hub-b')
       )
-    ).toEqual({ runtimeEnvironmentId: 'hub-b', ownerUnresolved: false })
+    ).toEqual({ runtimeEnvironmentId: 'hub-b', connectionId: null, ownerUnresolved: false })
   })
 
   it('reports an unstamped row on a rival-HUB host as unresolved, never as desktop-owned', () => {
@@ -43,8 +43,8 @@ describe('resolveWorktreeRowOpenInRuntimeOwner', () => {
       rivalHubState,
       worktree('ssh:same-private-target')
     )
-    expect(owner).toEqual({ runtimeEnvironmentId: null, ownerUnresolved: true })
-    const context = { connectionId: null, command: 'code', ...owner }
+    expect(owner).toEqual({ runtimeEnvironmentId: null, connectionId: null, ownerUnresolved: true })
+    const context = { command: 'code', ...owner }
     expect(getExternalEditorOpenCapability(context)).toEqual({
       allowed: false,
       reason: 'remote-runtime'
@@ -58,7 +58,7 @@ describe('resolveWorktreeRowOpenInRuntimeOwner', () => {
         { worktreesByRepo: { 'repo-1': [worktree('ssh:hub-private-target', 'hub-a')] } },
         worktree('ssh:hub-private-target')
       )
-    ).toEqual({ runtimeEnvironmentId: 'hub-a', ownerUnresolved: false })
+    ).toEqual({ runtimeEnvironmentId: 'hub-a', connectionId: null, ownerUnresolved: false })
   })
 
   it('keeps a direct SSH row resolved with no runtime', () => {
@@ -70,12 +70,46 @@ describe('resolveWorktreeRowOpenInRuntimeOwner', () => {
         },
         worktree('ssh:ssh-1')
       )
-    ).toEqual({ runtimeEnvironmentId: null, ownerUnresolved: false })
+    ).toEqual({ runtimeEnvironmentId: null, connectionId: 'ssh-1', ownerUnresolved: false })
+  })
+
+  it('names the SSH target of a host-only SSH row that has no repo connection', () => {
+    const owner = resolveWorktreeRowOpenInRuntimeOwner(
+      {
+        repos: [{ id: 'repo-1', executionHostId: 'ssh:ssh-1' }],
+        worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+      },
+      worktree(undefined)
+    )
+    expect(owner).toEqual({
+      runtimeEnvironmentId: null,
+      connectionId: 'ssh-1',
+      ownerUnresolved: false
+    })
+    expect(isLocalPathOpenBlocked(getLocalPathOpenOwnerForRoute(owner))).toBe(true)
+  })
+
+  it('names the SSH target of a direct-SSH folder workspace row, which has no repo', () => {
+    const folderRow = { id: 'folder:fw-1', hostId: 'ssh:ssh-1' as const }
+    const owner = resolveWorktreeRowOpenInRuntimeOwner(
+      {
+        folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'group-1', connectionId: 'ssh-1' }],
+        projectGroups: [{ id: 'group-1', connectionId: 'ssh-1' }]
+      },
+      folderRow
+    )
+    expect(owner).toEqual({
+      runtimeEnvironmentId: null,
+      connectionId: 'ssh-1',
+      ownerUnresolved: false
+    })
+    expect(isLocalPathOpenBlocked(getLocalPathOpenOwnerForRoute(owner))).toBe(true)
   })
 
   it('keeps a local row resolved as desktop-owned', () => {
     expect(resolveWorktreeRowOpenInRuntimeOwner({}, worktree('local'))).toEqual({
       runtimeEnvironmentId: null,
+      connectionId: null,
       ownerUnresolved: false
     })
   })
