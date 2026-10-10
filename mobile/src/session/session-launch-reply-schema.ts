@@ -45,6 +45,16 @@ export const aiVaultResumePreparationSchema = z
   .nullish()
 
 /**
+ * The SSH transcript existence probe. `status` is the whole answer; anything unreadable is read
+ * as unverifiable by the call site, so a malformed reply never blocks a resume.
+ */
+export const aiVaultTranscriptProbeSchema = z
+  .looseObject({
+    status: salvagedOptional('status', z.enum(['present', 'missing', 'unverifiable']))
+  })
+  .nullish()
+
+/**
  * The four launch replies no call site interprets.
  *
  * `files.createFile` is read for its refusal message only, the structured-agent probe and create

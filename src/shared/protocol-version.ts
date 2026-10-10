@@ -113,6 +113,10 @@ export const JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE =
 // conditional like browser.headless.v1.
 export const AI_VAULT_RUNTIME_CAPABILITY = 'aiVault.v1' as const
 export const AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY = 'aiVault.session-titles.v1' as const
+// Why: aiVault.listSessions accepts executionHostScope (local | ssh:<id>) and
+// aiVault.probeSessionTranscript exists. An older host would drop the unknown scope and
+// answer its own local scan, so a client sends it only when this is advertised.
+export const AI_VAULT_HOST_SCOPE_RUNTIME_CAPABILITY = 'aiVault.host-scope.v1' as const
 // Why: signals a host owns browser pages with no renderer (headless serve via the
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
@@ -392,6 +396,7 @@ export const RUNTIME_CAPABILITIES = [
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
+  AI_VAULT_HOST_SCOPE_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,

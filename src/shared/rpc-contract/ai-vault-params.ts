@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { parseExecutionHostId } from '../execution-host'
+import { isWslUncPath } from '../wsl-paths'
 import { AI_VAULT_AGENTS, AI_VAULT_SCOPE_PATHS_MAX_COUNT } from '../ai-vault-types'
 import { OptionalBoolean } from './rpc-param-primitives'
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../ai-vault-session-title'
@@ -20,6 +21,29 @@ export const executionHostIdSchema = z.string().transform((value, ctx): `runtime
     code: 'custom',
     message: 'Invalid runtime execution host id'
   })
+  return z.NEVER
+})
+
+// Why: a paired client may scan this host itself or one SSH host, never a fan-out or another
+// runtime's host. Whether an `ssh:` id is a target this host is connected to is checked at
+// the handler; the schema only fixes the shape.
+export const mobileExecutionHostScopeSchema = z
+  .string()
+  .transform((value, ctx): 'local' | `ssh:${string}` => {
+    const parsed = parseExecutionHostId(value)
+    if (parsed?.kind === 'local' || parsed?.kind === 'ssh') {
+      return parsed.id
+    }
+    ctx.addIssue({ code: 'custom', message: 'Invalid execution host scope' })
+    return z.NEVER
+  })
+
+const sshExecutionHostIdSchema = z.string().transform((value, ctx): `ssh:${string}` => {
+  const parsed = parseExecutionHostId(value)
+  if (parsed?.kind === 'ssh') {
+    return parsed.id
+  }
+  ctx.addIssue({ code: 'custom', message: 'Invalid SSH execution host id' })
   return z.NEVER
 })
 
@@ -45,7 +69,11 @@ export const AiVaultListSessionsParams = z
     // Why: desktop/web callers name the runtime host they are addressing; mobile
     // omits it. The scan itself is host-local either way, so the id must never
     // change what is scanned — it only restamps the shared cached result.
-    executionHostId: executionHostIdSchema.optional()
+    executionHostId: executionHostIdSchema.optional(),
+    // Why: omitted keeps the host-local scan older clients rely on; `ssh:<id>` scans that
+    // SSH host through its relay and stamps rows with the SSH host id. Gated by the
+    // aiVault.host-scope.v1 capability on the client side.
+    executionHostScope: mobileExecutionHostScopeSchema.optional()
   })
   .superRefine((params, ctx) => {
     if (params.unlimited !== true && params.limit && params.limit > AI_VAULT_LIMIT_MAX) {
@@ -73,3 +101,22 @@ export const AiVaultSessionTitlesParams = z.object({
     )
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
 })
+
+// Why: the only transcript a client may ask about is a host-local WSL UNC path, the one
+// case it cannot prove reachable from an SSH shell on its own. Limiting it to a `.jsonl`
+// file with no `..` segment keeps the probe from answering whether arbitrary files exist.
+export const AiVaultProbeSessionTranscriptParams = z.object({
+  executionHostId: sshExecutionHostIdSchema,
+  filePath: z
+    .string()
+    .min(1)
+    .max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)
+    .refine((value) => isWslUncPath(value) && isProbeableTranscriptPath(value), {
+      message: 'Expected a WSL UNC transcript path'
+    })
+})
+
+function isProbeableTranscriptPath(value: string): boolean {
+  const segments = value.split(/[\\/]+/)
+  return /\.jsonl$/i.test(value) && !segments.includes('..')
+}

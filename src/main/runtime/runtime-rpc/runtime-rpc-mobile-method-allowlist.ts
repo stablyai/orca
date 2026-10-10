@@ -15,6 +15,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'aiVault.searchStatus',
   'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',
+  'aiVault.probeSessionTranscript',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',

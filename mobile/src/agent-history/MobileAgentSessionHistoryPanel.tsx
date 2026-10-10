@@ -17,6 +17,8 @@ import {
   resumeAiVaultSessionInTerminal
 } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
+import { selectMobileAiVaultTranscriptProbeCandidate } from '../session/ai-vault-resume-transcript-probe'
+import { mobileAiVaultResumeTargetBlockMessage } from './agent-history-resume-block-reason'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -24,7 +26,10 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
+import {
+  resolveMobileAiVaultSessionResumeTarget,
+  type MobileAiVaultResumeReadyCandidate
+} from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
@@ -178,7 +183,7 @@ export function MobileAgentSessionHistoryPanel({
           worktrees: freshWorktrees
         } = await loadMobileResumeMetadata(client)
         assertCurrentOwner()
-        const target = resolveMobileAiVaultSessionResumeTarget({
+        const resolvedTarget = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
           // Why: resolve against live worktrees so a workspace deleted or
@@ -189,10 +194,30 @@ export function MobileAgentSessionHistoryPanel({
           folderWorkspaces,
           projectGroups
         })
-        if (target.status !== 'ready') {
-          setResumeMessage(target.message)
+        if (resolvedTarget.status !== 'ready') {
+          setResumeMessage(resolvedTarget.message)
           triggerError()
           return
+        }
+
+        let target: MobileAiVaultResumeReadyCandidate = resolvedTarget
+        const probeCandidates =
+          resolvedTarget.transcriptProbeCandidates ??
+          (resolvedTarget.transcriptProbeHostId ? [resolvedTarget] : [])
+        if (probeCandidates.length > 0) {
+          const selection = await selectMobileAiVaultTranscriptProbeCandidate({
+            client,
+            session,
+            candidates: probeCandidates,
+            hostCapabilities: resumeHost.capabilities,
+            assertCurrentOwner
+          })
+          if (selection.kind === 'missing') {
+            setResumeMessage(mobileAiVaultResumeTargetBlockMessage('ssh', 'ssh-transcript-missing'))
+            triggerError()
+            return
+          }
+          target = selection.candidate
         }
 
         const platform = resolveMobileAiVaultResumePlatform(

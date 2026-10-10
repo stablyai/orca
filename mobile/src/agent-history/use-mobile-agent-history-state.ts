@@ -15,6 +15,7 @@ import {
 } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import { resolveMobileAgentHistoryHostScope } from './agent-history-host-scope'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
 
@@ -134,18 +135,40 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
 
         const scopePaths = deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
-        const reply = await agentHistorySessionScan.request(client, {
+        const scanParams = {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
           scopePaths
-        })
-        if (!isCurrent()) {
-          return
         }
-        const result = interpretOrThrowRefusalMessage(
-          () => agentHistorySessionScan.interpret(reply),
-          'Unable to load agent sessions'
-        )
+        const hostScope = resolveMobileAgentHistoryHostScope(activeWorktree, status.capabilities)
+        let result
+        try {
+          const reply = await agentHistorySessionScan.request(
+            client,
+            hostScope ? { ...scanParams, executionHostScope: hostScope } : scanParams
+          )
+          if (!isCurrent()) {
+            return
+          }
+          result = interpretOrThrowRefusalMessage(
+            () => agentHistorySessionScan.interpret(reply),
+            'Unable to load agent sessions'
+          )
+        } catch (scopedError) {
+          if (!hostScope || !isCurrent()) {
+            throw scopedError
+          }
+          // Why: the SSH host can be disconnected on the desktop; fall back to the serving host's
+          // own history (the pre-scope behavior) instead of an empty error screen.
+          const reply = await agentHistorySessionScan.request(client, scanParams)
+          if (!isCurrent()) {
+            return
+          }
+          result = interpretOrThrowRefusalMessage(
+            () => agentHistorySessionScan.interpret(reply),
+            'Unable to load agent sessions'
+          )
+        }
         setScreenState({
           kind: 'ready',
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.

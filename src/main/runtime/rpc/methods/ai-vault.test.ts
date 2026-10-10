@@ -24,8 +24,15 @@ vi.mock('../../../ai-vault/session-scanner-service-spawn', async (importOriginal
   resolveAiVaultSessionTitlesInService
 }))
 
+const sshScope = vi.hoisted(() => ({
+  isActiveSshAiVaultTarget: vi.fn((targetId: string) => targetId === 'builder'),
+  probeWslTranscriptOnSshHost: vi.fn()
+}))
+vi.mock('../../../host/ai-vault-ssh-host-port', () => sshScope)
+
 import {
   AI_VAULT_METHODS,
+  AiVaultProbeSessionTranscriptParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
@@ -94,6 +101,15 @@ function makeFailingDispatcher(error: Error): RpcDispatcher {
     listAiVaultSessions: vi.fn().mockRejectedValue(error)
   } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+}
+
+function runtimeStub(members: Record<string, unknown>): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers under test read only the members each test supplies.
+  return {
+    getRuntimeId: () => 'test-runtime',
+    ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
+    ...members
+  } as unknown as OrcaRuntimeService
 }
 
 describe('aiVault.resolveSessionTitles handler', () => {
@@ -189,6 +205,129 @@ describe('aiVault.listSessions params schema', () => {
     expect(AiVaultListSessionsParams.safeParse({ executionHostId: 'ssh:dev-box' }).success).toBe(
       false
     )
+  })
+})
+
+describe('aiVault.listSessions executionHostScope', () => {
+  it('accepts local and ssh scopes and omitting it', () => {
+    expect(AiVaultListSessionsParams.safeParse({}).success).toBe(true)
+    expect(AiVaultListSessionsParams.safeParse({ executionHostScope: 'local' }).success).toBe(true)
+    expect(
+      AiVaultListSessionsParams.safeParse({ executionHostScope: 'ssh:builder' }).data
+        ?.executionHostScope
+    ).toBe('ssh:builder')
+  })
+
+  it('rejects fan-out, runtime and malformed scopes', () => {
+    for (const executionHostScope of ['all', 'runtime:devbox', 'builder', 'ssh:', 'ssh:a|b']) {
+      expect(AiVaultListSessionsParams.safeParse({ executionHostScope }).success).toBe(false)
+    }
+  })
+
+  it('forwards the scope without restamping the scanned rows', async () => {
+    const listAiVaultSessions = vi.fn().mockResolvedValue({
+      sessions: [{ ...makeSession(), executionHostId: 'ssh:builder' }],
+      issues: [],
+      scannedAt: SCANNED_AT
+    })
+    const runtime = runtimeStub({ listAiVaultSessions })
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+    const response = await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', {
+        executionHostScope: 'ssh:builder',
+        executionHostId: 'runtime:devbox'
+      })
+    )
+    expect(listAiVaultSessions).toHaveBeenCalledWith(
+      expect.objectContaining({ executionHostScope: 'ssh:builder' })
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { sessions: [{ executionHostId: 'ssh:builder' }] }
+    })
+  })
+
+  it('passes no scope key when the client sent none', async () => {
+    const listAiVaultSessions = vi.fn().mockResolvedValue(makeResult())
+    const runtime = runtimeStub({ listAiVaultSessions })
+    await new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS }).dispatch(
+      makeRequest('aiVault.listSessions', { limit: 5 })
+    )
+    expect(listAiVaultSessions.mock.calls[0]?.[0]).not.toHaveProperty('executionHostScope')
+  })
+
+  it('surfaces the unconnected-target rejection from the runtime', async () => {
+    const dispatcher = makeFailingDispatcher(new Error('That SSH host is not connected'))
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listSessions', { executionHostScope: 'ssh:nope' }))
+    ).resolves.toMatchObject({ ok: false })
+  })
+})
+
+describe('aiVault.prepareSessionResume SSH routing', () => {
+  function dispatcherWith(prepare: ReturnType<typeof vi.fn>): RpcDispatcher {
+    const runtime = runtimeStub({ prepareAiVaultSessionResume: prepare })
+    return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+  }
+  const base = { agent: 'codex', filePath: '/home/ada/.codex/s.jsonl', codexHome: null }
+
+  it('honors an ssh stamp for a connected target without touching the local home', async () => {
+    const prepare = vi.fn()
+    const response = await dispatcherWith(prepare).dispatch(
+      makeRequest('aiVault.prepareSessionResume', { ...base, executionHostId: 'ssh:builder' })
+    )
+    expect(response).toMatchObject({ ok: true, result: { useRealCodexHome: false } })
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unknown ssh target and a runtime stamp pinned to this host', async () => {
+    for (const executionHostId of ['ssh:unknown', 'runtime:devbox', 'garbage']) {
+      const prepare = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+      await dispatcherWith(prepare).dispatch(
+        makeRequest('aiVault.prepareSessionResume', { ...base, executionHostId })
+      )
+      expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ executionHostId: 'local' }))
+    }
+  })
+})
+
+describe('aiVault.probeSessionTranscript', () => {
+  const wsl = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\s.jsonl'
+
+  it('only accepts an ssh host id and a WSL UNC path', () => {
+    const ok = { executionHostId: 'ssh:builder', filePath: wsl }
+    expect(AiVaultProbeSessionTranscriptParams.safeParse(ok).success).toBe(true)
+    expect(
+      AiVaultProbeSessionTranscriptParams.safeParse({ ...ok, executionHostId: 'local' }).success
+    ).toBe(false)
+    expect(
+      AiVaultProbeSessionTranscriptParams.safeParse({ ...ok, filePath: '/etc/passwd' }).success
+    ).toBe(false)
+    expect(
+      AiVaultProbeSessionTranscriptParams.safeParse({
+        ...ok,
+        filePath: '\\\\wsl.localhost\\Ubuntu\\etc\\shadow'
+      }).success
+    ).toBe(false)
+    expect(
+      AiVaultProbeSessionTranscriptParams.safeParse({
+        ...ok,
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\..\\..\\etc\\x.jsonl'
+      }).success
+    ).toBe(false)
+  })
+
+  it('returns the host probe verdict for the named target', async () => {
+    sshScope.probeWslTranscriptOnSshHost.mockResolvedValue('missing')
+    const runtime = runtimeStub({})
+    const response = await new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS }).dispatch(
+      makeRequest('aiVault.probeSessionTranscript', {
+        executionHostId: 'ssh:builder',
+        filePath: wsl
+      })
+    )
+    expect(response).toMatchObject({ ok: true, result: { status: 'missing' } })
+    expect(sshScope.probeWslTranscriptOnSshHost).toHaveBeenCalledWith('builder', wsl)
   })
 })
 

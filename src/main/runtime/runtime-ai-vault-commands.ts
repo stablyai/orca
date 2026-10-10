@@ -8,6 +8,8 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { listAiVaultSessions } from '../ai-vault/cached-session-list'
+import { listSshHostScopeAiVaultSessions } from '../host/ai-vault-ssh-host-port'
+import { parseExecutionHostId } from '../../shared/execution-host'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
 
 export class RuntimeAiVaultCommands {
@@ -18,7 +20,12 @@ export class RuntimeAiVaultCommands {
   ) {}
 
   list(args?: AiVaultListArgs): Promise<AiVaultListResult> {
-    return listAiVaultSessions(args)
+    // Why: only a single SSH scope is routed here; every other value keeps the host-local scan
+    // this method has always answered (the RPC schema never admits 'all' or runtime scopes).
+    const scope = parseExecutionHostId(args?.executionHostScope)
+    return scope?.kind === 'ssh'
+      ? listSshHostScopeAiVaultSessions(scope.targetId, args)
+      : listAiVaultSessions(args)
   }
 
   resolveTitles(

@@ -20,6 +20,8 @@ import {
 } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
+import { createAiVaultSshHostPort } from '../ai-vault/ssh-host-scope'
+import { installAiVaultSshHostPort } from '../host/ai-vault-ssh-host-port'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
@@ -125,6 +127,7 @@ export function attachMainWindowServices(
     void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
+  installAiVaultSshHostPort(createAiVaultSshHostPort())
   registerRemoteWorkspaceHandlers(store, () => mainWindow, runtime)
   registerDroppedPathPreparation(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)

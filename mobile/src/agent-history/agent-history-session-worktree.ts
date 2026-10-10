@@ -52,6 +52,39 @@ export function resolveMobileAgentHistorySessionWorktree(args: {
   }
 }
 
+/**
+ * Worktree ids whose path matches the session cwd exactly as well as the preferred one, preferred
+ * first, archived ones dropped. Several SSH workspaces on different hosts can share one path
+ * (same repo checkout location), so the cwd alone cannot say which host holds a transcript.
+ */
+export function resolveMobileAgentHistorySessionWorktreeTies(args: {
+  session: Pick<AiVaultSession, 'cwd'>
+  worktrees: readonly Worktree[]
+}): string[] {
+  if (!args.session.cwd) {
+    return []
+  }
+  const sessionCwd = args.session.cwd
+  const candidates = buildMobileWorktreeCandidates(args.worktrees)
+    .filter((candidate) => isSessionInWorktreePath(candidate.path, sessionCwd))
+    .sort(compareWorktreeCandidates)
+  const best = candidates[0]
+  if (!best) {
+    return []
+  }
+  const bestLength = normalizedPathLength(best.path)
+  const ids: string[] = []
+  for (const candidate of candidates) {
+    if (normalizedPathLength(candidate.path) !== bestLength) {
+      break
+    }
+    if (!candidate.worktree.isArchived && !ids.includes(candidate.worktree.worktreeId)) {
+      ids.push(candidate.worktree.worktreeId)
+    }
+  }
+  return ids
+}
+
 export function canResumeInMobileSessionWorktree(
   worktreeInfo: MobileAgentHistorySessionWorktreeInfo | null
 ): boolean {

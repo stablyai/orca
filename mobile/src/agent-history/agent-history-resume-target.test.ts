@@ -186,6 +186,166 @@ describe('mobile AI Vault resume target guards', () => {
     expect(target.status === 'blocked' ? target.message : '').toContain('SSH workspace')
   })
 
+  describe('SSH workspaces', () => {
+    const sshRepos = [
+      ...repos,
+      { id: 'other-ssh-repo', path: '/home/ada/other', connectionId: 'other-builder' }
+    ]
+    const sshWorktree = worktree({
+      worktreeId: 'ssh-wt',
+      repoId: 'ssh-repo',
+      path: '/home/ada/ssh-repo/feature'
+    })
+    const resolve = (sessionOverrides: Partial<AiVaultSession>, worktrees = [sshWorktree]) =>
+      resolveMobileAiVaultSessionResumeTarget({
+        session: session({ cwd: '/home/ada/ssh-repo/feature/src', ...sessionOverrides }),
+        activeWorktreeId: 'ssh-wt',
+        worktrees,
+        repos: sshRepos
+      })
+
+    it('resumes a session stored on the same SSH host', () => {
+      expect(
+        resolve({ executionHostId: 'ssh:builder', filePath: '/home/ada/.claude/session.jsonl' })
+      ).toEqual({
+        status: 'ready',
+        worktreeId: 'ssh-wt',
+        targetStatus: 'ssh',
+        workspacePath: '/home/ada/ssh-repo/feature',
+        terminalPlatform: null
+      })
+    })
+
+    it('matches the worktree host id before the repo connection', () => {
+      const target = resolve({ executionHostId: 'ssh:builder' }, [
+        { ...sshWorktree, hostId: 'ssh:builder' }
+      ])
+      expect(target.status).toBe('ready')
+    })
+
+    it('resumes a WSL-stored session into an SSH workspace (SSH-to-local-WSL)', () => {
+      const target = resolve({
+        executionHostId: 'local',
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\s.jsonl'
+      })
+      expect(target.status).toBe('ready')
+      expect(target.status === 'ready' ? target.targetStatus : '').toBe('ssh')
+      // The WSL guess is the only proof here, so the caller must verify it on the SSH host.
+      expect(target.status === 'ready' ? target.transcriptProbeHostId : '').toBe('ssh:builder')
+    })
+
+    describe('same-path SSH workspaces on different hosts', () => {
+      const WSL_FILE = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\s.jsonl'
+      const hostRepos = ['a', 'b', 'c', 'd', 'e'].map((name) => ({
+        id: `repo-${name}`,
+        path: '/home/e2e/repo',
+        connectionId: `host-${name}`
+      }))
+      const tied = hostRepos.map((repo) =>
+        worktree({ worktreeId: `wt-${repo.id}`, repoId: repo.id, path: '/home/e2e/repo' })
+      )
+      const resolveTie = (worktrees: Worktree[], overrides: Partial<AiVaultSession> = {}) =>
+        resolveMobileAiVaultSessionResumeTarget({
+          session: session({ cwd: '/home/e2e/repo/src', filePath: WSL_FILE, ...overrides }),
+          activeWorktreeId: null,
+          worktrees,
+          repos: hostRepos
+        })
+
+      it('returns one candidate per host in list order, capped at four', () => {
+        const target = resolveTie(tied)
+        expect(target.status === 'ready' ? target.worktreeId : '').toBe('wt-repo-a')
+        expect(
+          target.status === 'ready'
+            ? target.transcriptProbeCandidates?.map((candidate) => candidate.transcriptProbeHostId)
+            : null
+        ).toEqual(['ssh:host-a', 'ssh:host-b', 'ssh:host-c', 'ssh:host-d'])
+      })
+
+      it('collapses same-host ties and skips archived workspaces', () => {
+        const target = resolveTie([
+          tied[0],
+          worktree({ worktreeId: 'wt-a2', repoId: 'repo-a', path: '/home/e2e/repo' }),
+          { ...tied[1], isArchived: true },
+          tied[2]
+        ])
+        expect(
+          target.status === 'ready'
+            ? target.transcriptProbeCandidates?.map((candidate) => candidate.worktreeId)
+            : null
+        ).toEqual(['wt-repo-a', 'wt-repo-c'])
+      })
+
+      it('keeps a single target when the path match is not a tie', () => {
+        const target = resolveTie([
+          tied[0],
+          worktree({ worktreeId: 'deeper', repoId: 'repo-b', path: '/home/e2e/repo/src' })
+        ])
+        expect(target.status === 'ready' ? target.worktreeId : '').toBe('deeper')
+        expect(target.status === 'ready' ? target.transcriptProbeCandidates : 'x').toBeUndefined()
+      })
+
+      it('keeps a single target when only one host matches', () => {
+        const target = resolveTie([tied[0]])
+        expect(target.status === 'ready' ? target.transcriptProbeCandidates : 'x').toBeUndefined()
+      })
+
+      it('does not expand ties for rows that are not the WSL fallback', () => {
+        const target = resolveTie(tied, {
+          executionHostId: 'ssh:host-a',
+          filePath: '/home/ada/.claude/session.jsonl'
+        })
+        expect(target.status === 'ready' ? target.transcriptProbeCandidates : 'x').toBeUndefined()
+        expect(target.status === 'ready' ? target.transcriptProbeHostId : 'x').toBeUndefined()
+      })
+    })
+
+    it('does not ask for a transcript probe when the row was scanned on the SSH host', () => {
+      const target = resolve({
+        executionHostId: 'ssh:builder',
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\s.jsonl'
+      })
+      expect(target.status === 'ready' ? target.transcriptProbeHostId : 'blocked').toBeUndefined()
+    })
+
+    it('blocks a host-local session on an SSH workspace', () => {
+      const target = resolve({ executionHostId: 'local' })
+      expect(target.status).toBe('blocked')
+      expect(target.status === 'blocked' ? target.message : '').toContain('SSH workspace')
+    })
+
+    it('blocks a session stored on a different SSH host', () => {
+      const target = resolve({
+        executionHostId: 'ssh:other-builder',
+        filePath: '/home/ada/.claude/session.jsonl'
+      })
+      expect(target.status).toBe('blocked')
+      expect(target.status === 'blocked' ? target.message : '').toContain('different SSH host')
+    })
+
+    it('blocks Antigravity IDE history on an SSH workspace even from the same host', () => {
+      const target = resolve({
+        executionHostId: 'ssh:builder',
+        agent: 'antigravity',
+        filePath: '/home/ada/.gemini/antigravity-ide/brain/abc/transcript.jsonl'
+      })
+      expect(target.status).toBe('blocked')
+    })
+
+    it('keeps runtime targets blocked even when the session host matches', () => {
+      const target = resolveMobileAiVaultSessionResumeTarget({
+        session: session({ cwd: '/workspace/runtime/app', executionHostId: 'runtime:devbox' }),
+        activeWorktreeId: 'runtime-wt',
+        worktrees: [
+          worktree({ worktreeId: 'runtime-wt', repoId: 'runtime-repo', path: '/workspace/runtime' })
+        ],
+        repos
+      })
+      expect(target.status).toBe('blocked')
+      expect(target.status === 'blocked' ? target.message : '').toContain('runtime-hosted')
+    })
+  })
+
   it('blocks folder workspaces whose candidate repos include a runtime owner', () => {
     const target = resolveMobileAiVaultSessionResumeTarget({
       session: session({ cwd: '/workspace/folder/src' }),

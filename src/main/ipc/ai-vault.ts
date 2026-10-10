@@ -13,11 +13,11 @@ import {
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
+import { aiVaultListCacheKey } from '../ai-vault/ai-vault-list-cache-key'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
-  AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
@@ -86,16 +86,8 @@ async function listAiVaultSessions(
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
   const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
-  // Canonicalize bounded workspace sets so equivalent scopes share a scan.
   const scopePaths = args?.scopePaths ?? []
-  const key = JSON.stringify({
-    scopePaths:
-      scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
-        ? [...new Set(scopePaths)].sort()
-        : scopePaths,
-    executionHostScope,
-    includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
-  })
+  const key = aiVaultListCacheKey(args, executionHostScope)
   const depth = requestedAiVaultSessionDepth(args)
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers

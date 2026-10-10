@@ -2,6 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   aiVaultResumePreparationSchema,
+  aiVaultTranscriptProbeSchema,
   browserTabCreatedSchema,
   fileTapOpenedSchema,
   sessionLaunchUnreadReplySchema
@@ -69,6 +70,21 @@ export const aiVaultResumePreparationRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('ai-vault-resume-preparation', aiVaultResumePreparationSchema)
+  })
+)
+
+/**
+ * Whether a host-local WSL transcript also exists on the SSH host a resume targets. A refusal is
+ * not a failure here: a host without the method, or one that cannot verify, leaves the resume
+ * on the unverified path.
+ */
+export const aiVaultTranscriptProbeRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'aiVault.probe-session-transcript',
+    method: 'aiVault.probeSessionTranscript',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('ai-vault-transcript-probe', aiVaultTranscriptProbeSchema)
   })
 )
 

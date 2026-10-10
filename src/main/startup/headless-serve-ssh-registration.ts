@@ -1,6 +1,8 @@
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerSshHandlers } from '../ipc/ssh'
+import { createAiVaultSshHostPort } from '../ai-vault/ssh-host-scope'
+import { installAiVaultSshHostPort } from '../host/ai-vault-ssh-host-port'
 import { mainProcessState as state } from './main-process-state'
 
 /**
@@ -11,4 +13,5 @@ import { mainProcessState as state } from './main-process-state'
  */
 export function registerHeadlessServeSshHandlers(store: Store, runtime: OrcaRuntimeService): void {
   registerSshHandlers(store, () => state.mainWindow ?? null, runtime)
+  installAiVaultSshHostPort(createAiVaultSshHostPort())
 }
