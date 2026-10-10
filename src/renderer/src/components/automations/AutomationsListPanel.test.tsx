@@ -6,7 +6,7 @@
  * returns no rows cannot take the query and the caret with it.
  */
 
-import { act } from 'react'
+import { act, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -21,8 +21,10 @@ import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import {
   makeAutomation,
   makeAutomationListRow,
-  makeScopedExternalManager
+  makeScopedExternalManager,
+  makeWorktree
 } from './automations-page-fixtures'
+import type { Repo } from '../../../../shared/repo-types'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
   buildExternalAutomationListEntries,
@@ -83,6 +85,10 @@ function renderPanel(
     setActivePaneTab?: (tab: AutomationPaneTab) => void
     listSort?: AutomationListSort | null
     onListSortChange?: (field: AutomationListSortField) => void
+    ownerResolvers?: Pick<
+      ComponentProps<typeof AutomationsListPanel>,
+      'repoMap' | 'worktreeMap' | 'repoForRow' | 'worktreeForRow'
+    >
   } = {}
 ): void {
   const externalEntries = options.externalEntries ?? []
@@ -124,6 +130,7 @@ function renderPanel(
           runtimeStatusByEnvironmentId={new Map()}
           hostTargetFor={() => null}
           automationSourceHostAvailabilityByRowKey={new Map()}
+          {...options.ownerResolvers}
           isActionEnabled={() => true}
           externalActionKey={null}
           selectAutomationRow={options.selectAutomationRow ?? (() => undefined)}
@@ -215,6 +222,45 @@ describe('AutomationsListPanel flat table layout', () => {
     expect(container.textContent).toContain('Nightly Sync')
     expect(container.textContent).toContain('Remote Linux')
   })
+})
+
+describe('AutomationsListPanel qualified target refusal', () => {
+  it.each(['repo', 'workspace'])(
+    'keeps %s refusal when a bare map contains a runnable sibling',
+    (missing) => {
+      const repo: Repo = {
+        id: 'repo-1',
+        displayName: 'Bare sibling',
+        path: '/repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+      const workspace = makeWorktree()
+      const row = makeAutomationListRow({
+        automation: makeAutomation({ workspaceMode: 'existing', workspaceId: workspace.id })
+      })
+      renderPanel([row], '', undefined, null, {
+        ownerResolvers: {
+          repoMap: new Map([[repo.id, repo]]),
+          worktreeMap: new Map([[workspace.id, workspace]]),
+          repoForRow: () => (missing === 'repo' ? undefined : repo),
+          worktreeForRow: () => undefined
+        }
+      })
+      if (missing === 'repo') {
+        expect(container.textContent).toContain('Unknown project')
+        expect(container.textContent).not.toContain('Bare sibling')
+      }
+      act(() =>
+        container
+          .querySelector<HTMLButtonElement>('button[aria-label="Automation actions"]')
+          ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      )
+      const runItem = document.querySelector('[role="menuitem"][data-disabled]')
+      expect(runItem).not.toBeNull()
+      expect(runItem?.textContent).not.toContain('Run Now')
+    }
+  )
 })
 
 describe('AutomationsListPanel enter key navigation', () => {

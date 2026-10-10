@@ -4,9 +4,12 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { createWorktreeIdentity } from '../../../../shared/worktree/identity'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { repoWithFetchedOwner } from '../../store/repos/owner-routing'
 import { setupWithFetchedOwner } from '../../store/projects/project-host-routing'
+import { automationRepoForRow, automationWorktreeForRow } from './automation-list-row-identity'
+import { withRepoHostOwnership } from '../../store/slices/worktrees/listing/worktree-host-ownership'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -89,6 +92,113 @@ function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatu
 }
 
 describe('automation target availability', () => {
+  it.each([
+    [false, false, false],
+    [false, true, false],
+    [true, false, false],
+    [true, true, false],
+    [false, false, true],
+    [false, true, true],
+    [true, false, true],
+    [true, true, true]
+  ])(
+    'joins the saved raw repo/workspace owner (paired: %s, selected first: %s, same path: %s)',
+    (paired, selectedFirst, samePath) => {
+      const target = paired
+        ? ({ kind: 'environment', environmentId: 'gpu' } as const)
+        : ({ kind: 'local' } as const)
+      const aHost = paired ? 'ssh:a' : 'local'
+      const a = repoWithFetchedOwner(
+        makeRepo({ executionHostId: aHost, path: samePath ? '/repo' : '/repo/a' }),
+        target
+      )
+      const b = repoWithFetchedOwner(
+        makeRepo({ executionHostId: 'ssh:b', path: samePath ? '/repo' : '/repo/b' }),
+        target
+      )
+      const setups = ([aHost, 'ssh:b'] as const).map((host) =>
+        setupWithFetchedOwner(
+          makeProjectHostSetup({ hostId: host, path: host === 'ssh:b' ? b.path : a.path }),
+          target
+        )
+      )
+      const automation = makeAutomation({
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'project-1',
+          hostId: 'ssh:b',
+          projectHostSetupId: 'setup-1',
+          repoId: b.id,
+          path: b.path
+        }
+      })
+      const row = {
+        key: 'row',
+        automation,
+        hostLabel: '',
+        usageSummary: null,
+        catalogRef: {
+          authority: paired
+            ? ({ kind: 'runtime', environmentId: 'gpu' } as const)
+            : ({ kind: 'desktop' } as const),
+          selector: { kind: 'ssh', targetId: 'b' } as const
+        }
+      }
+      const repos = selectedFirst ? [b, a] : [a, b]
+      const selectedRepo = automationRepoForRow(row, repos, new Map([[b.id, a]]))
+      expect(selectedRepo).toBe(b)
+      expect(automationRepoForRow(row, [a], new Map([[b.id, a]]))).toBeUndefined()
+      expect(automationRepoForRow(row, [b, { ...b }], new Map([[b.id, a]]))).toBeUndefined()
+      const workspaceA = withRepoHostOwnership(
+        makeWorkspace({ hostId: aHost, path: '/repo/a/linked-checkout' }),
+        a.executionHostId ?? 'local'
+      )
+      const workspaceB = withRepoHostOwnership(
+        makeWorkspace({ hostId: 'ssh:b', path: '/repo/b/linked-checkout' }),
+        b.executionHostId ?? 'local'
+      )
+      const workspace = automationWorktreeForRow(
+        row,
+        { [b.id]: [workspaceA, workspaceB] },
+        selectedRepo,
+        new Map([[workspaceB.id, workspaceA]])
+      )
+      expect(workspace).toBe(workspaceB)
+      expect(
+        automationWorktreeForRow(row, {}, undefined, new Map([[workspaceB.id, workspaceA]]))
+      ).toBeUndefined()
+      expect(
+        automationWorktreeForRow(
+          row,
+          { [b.id]: [workspaceA] },
+          b,
+          new Map([[workspaceB.id, workspaceA]])
+        )
+      ).toBeUndefined()
+      expect(
+        automationWorktreeForRow(
+          row,
+          { [b.id]: [workspaceB, { ...workspaceB, instanceId: 'other-instance' }] },
+          b,
+          new Map()
+        )
+      ).toBeUndefined()
+      const args = {
+        automation,
+        repo: selectedRepo,
+        workspace,
+        projectHostSetups: setups,
+        sshConnectionStates: new Map([['b', { status: 'connected' as const }]]),
+        automationHostTarget: target
+      }
+      expect(getAutomationTargetAvailability(args)).toEqual({
+        canRunNow: true,
+        reason: 'available',
+        message: null
+      })
+      expect(getAutomationTargetAvailability({ ...args, repo: a }).reason).toBe('host-mismatch')
+    }
+  )
   it.each(['receiver', 'publisher'] as const)(
     'refuses an explicitly different %s backing repo',
     (mismatch) => {
@@ -117,6 +227,67 @@ describe('automation target availability', () => {
           automationHostTarget: target
         }).reason
       ).toBe('host-mismatch')
+    }
+  )
+  it.each([
+    ['local', false],
+    ['local', true],
+    ['runtime:gpu', false],
+    ['runtime:gpu', true]
+  ] as const)(
+    'keeps immutable raw owner %s through the runtime display alias (first: %s)',
+    (rawHost, first) => {
+      const target = { kind: 'environment', environmentId: 'gpu' } as const
+      const repo = repoWithFetchedOwner(makeRepo({ executionHostId: rawHost }), target)
+      const rows = (['local', 'runtime:gpu'] as const).map((host) =>
+        withRepoHostOwnership(
+          makeWorkspace({
+            identity: createWorktreeIdentity({
+              executionHostId: host,
+              worktreeId: 'worktree-1',
+              instanceId: host
+            })
+          }),
+          'runtime:gpu'
+        )
+      )
+      const selected = rows.find((workspace) => workspace.identity?.executionHostId === rawHost)!
+      const sibling = rows.find((workspace) => workspace !== selected)!
+      const row = {
+        key: 'row',
+        hostLabel: '',
+        usageSummary: null,
+        automation: makeAutomation({
+          runContext: {
+            kind: 'workspace-run',
+            projectId: 'project-1',
+            projectHostSetupId: 'setup-1',
+            repoId: repo.id,
+            path: repo.path,
+            hostId: rawHost
+          }
+        }),
+        catalogRef: {
+          authority: { kind: 'runtime', environmentId: 'gpu' } as const,
+          selector: { kind: 'self' } as const
+        }
+      }
+      expect(
+        automationWorktreeForRow(
+          row,
+          { [repo.id]: first ? [selected, sibling] : [sibling, selected] },
+          repo,
+          new Map()
+        )
+      ).toBe(selected)
+      expect(
+        automationWorktreeForRow(
+          row,
+          { [repo.id]: [sibling] },
+          repo,
+          new Map([[selected.id, sibling]])
+        )
+      ).toBeUndefined()
     }
   )
   it.each(['local', 'ssh:devbox'] as const)(
