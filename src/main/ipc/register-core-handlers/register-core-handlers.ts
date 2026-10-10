@@ -63,6 +63,7 @@ import { registerEmulatorVideoStreamHandlers } from '../emulator/emulator-video-
 import { registerEmulatorScrcpyTouchHandler } from '../emulator/emulator-scrcpy-touch'
 import { registerEmulatorScrcpyKeyboardHandler } from '../emulator/emulator-scrcpy-keyboard'
 import { registerSpeechHandlers } from '../speech'
+import { registerVoiceControlHandlers } from '../voice-control'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-views/terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../accounts/codex-accounts'
@@ -282,5 +283,6 @@ export async function registerCoreHandlers(
     if (!lifecycleOptions.deferHostInitialization) {
       await hostsReady
     }
+    registerVoiceControlHandlers(store, runtime)
   })())
 }

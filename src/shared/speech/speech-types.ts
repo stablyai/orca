@@ -1,4 +1,5 @@
 import type { DictationTerm } from './dictation/dictation-dictionary'
+import type { VoiceControlSettings } from '../voice-control-types'
 export type SpeechModelType =
   | 'transducer'
   | 'paraformer'
@@ -146,6 +147,7 @@ export type VoiceSettings = {
   aiCleanupInstructions?: string
   /** Said to take back what came just before it; only AI cleanup acts on it. Absent = "scratch that". */
   dictationCorrectionWord?: string
+  control: VoiceControlSettings
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */

@@ -98,6 +98,7 @@ import { e2eApi } from './api/diagnostics/e2e-bridge'
 import { mobileApi } from './api/mobile/mobile-bridge'
 import { agentStatusApi } from './api/agent-status/agent-status-bridge'
 import { speechApi } from './api/speech/speech-bridge'
+import { voiceControlApi } from './api/voice-control-bridge'
 
 installBrowserFindListener()
 
@@ -212,7 +213,8 @@ const api = {
   e2e: e2eApi,
   mobile: mobileApi,
   agentStatus: agentStatusApi,
-  speech: speechApi
+  speech: speechApi,
+  voiceControl: voiceControlApi
 } satisfies PreloadApi
 
 if (process.contextIsolated) {

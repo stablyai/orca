@@ -6,6 +6,12 @@ export function selectAppRootSurfaceVoiceEnabled(state: AppRootSurfaceSettingsSt
   return state.settings?.voice?.enabled === true
 }
 
+export function selectAppRootSurfaceVoiceControlEnabled(
+  state: AppRootSurfaceSettingsState
+): boolean {
+  return state.settings?.voice?.control?.enabled === true
+}
+
 export function selectAppRootSurfacePetEnabled(state: AppRootSurfaceSettingsState): boolean {
   return state.settings?.experimentalPet === true
 }
