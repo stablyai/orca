@@ -14,6 +14,18 @@ The header bell shows unread notifications across all worktrees. Clicking a noti
 
 On macOS, the same unread count is mirrored as a badge on the Dock icon, so you can spot pending agent pings without bringing Orca to the foreground.
 
+## Jump to the latest input request
+
+Press `Cmd+Shift+U` on macOS or `Ctrl+Shift+U` on Windows/Linux to open the newest agent
+still waiting for input or blocked on a request, including its tab and split pane. Remap
+**Jump to latest agent needing input** in Settings → Shortcuts.
+
+The action uses fresh agent status, rather than older notifications or completed turns.
+Reading a request does not resolve it: repeated presses return to the same newest pending
+request until the agent resumes or another request arrives. When nothing needs input,
+the shortcut passes through to the focused terminal. It also works with folder workspaces,
+floating terminals, structured chats, and SSH/remote workspaces.
+
 ## Mark unread
 
 Right-click a notification to mark unread — useful when you've triaged something but want to come back to it later.

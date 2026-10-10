@@ -109,7 +109,7 @@ export function buildActivityTabHostIndex(
   return index
 }
 
-function resolveActivityExecutionHostId(
+export function resolveActivityExecutionHostId(
   context: ActivityTabContext,
   entry: AgentStatusEntry,
   terminalPtyId: string | null | undefined,
