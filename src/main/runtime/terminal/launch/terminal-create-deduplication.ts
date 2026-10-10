@@ -190,6 +190,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       suppressStartupUpdatePrompt?: boolean
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
       wslUserAct?: true
+      preAllocatedHandle?: string
     },
     resolvedTarget?: { worktree: ResolvedWorktree; repo: Repo; folderWorkspace?: FolderWorkspace }
   ): Promise<RuntimeTerminalCreate> {
@@ -218,7 +219,10 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         startupPromptDelivery: 'auto-submit',
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         title: opts.title,
-        ...(opts.wslUserAct ? { wslUserAct: true } : {})
+        ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+        // Why: voice dispatch preambles bake the handle in before the PTY exists;
+        // createTerminal exports it as ORCA_TERMINAL_HANDLE, same as the agent-session create flow.
+        ...(opts.preAllocatedHandle ? { preAllocatedHandle: opts.preAllocatedHandle } : {})
       },
       undefined,
       worktree,

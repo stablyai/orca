@@ -12,8 +12,12 @@ import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
+import { VoiceControlSettingsSection } from './VoiceControlSettingsSection'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
+import {
+  getOpenaiTranscriptionSearchEntry,
+  getVoiceControlSearchEntry
+} from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
 
 type VoicePaneProps = {
@@ -144,6 +148,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
 
+  const showVoiceControlSection =
+    voiceSettings.openAiApiKeyConfigured ||
+    (settingsSearchQuery.trim() !== '' &&
+      matchesSettingsSearch(settingsSearchQuery, getVoiceControlSearchEntry()))
+
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
     setOpenAiApiKeyDraft('')
@@ -245,6 +254,16 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
             disabled={openAiKeyPending}
             onConfigure={() => openOpenAiDialog(null)}
             onClear={() => void clearOpenAiApiKey()}
+          />
+        </>
+      )}
+
+      {showVoiceControlSection && (
+        <>
+          <Separator />
+          <VoiceControlSettingsSection
+            voiceSettings={voiceSettings}
+            onUpdateVoiceSettings={updateVoiceSettings}
           />
         </>
       )}

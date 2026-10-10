@@ -55,10 +55,17 @@ export function walkTree(
   nodeById: Map<string, AXNode>,
   depth: number,
   entries: SnapshotEntry[],
-  nextRef: () => number
+  nextRef: () => number,
+  excludeBackendNodeIds?: ReadonlySet<number>
 ): void {
+  // Why: the voice coordinator snapshots the main Orca window, where live xterm panes
+  // would flood the tree with scrollback text; callers pass those subtrees here so a
+  // terminal never drowns out the UI the user asked about.
+  if (node.backendDOMNodeId !== undefined && excludeBackendNodeIds?.has(node.backendDOMNodeId)) {
+    return
+  }
   if (node.ignored) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
+    walkChildren(node, nodeById, depth, entries, nextRef, excludeBackendNodeIds)
     return
   }
 
@@ -66,7 +73,7 @@ export function walkTree(
   const name = node.name?.value ?? ''
 
   if (SKIP_ROLES.has(role)) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
+    walkChildren(node, nodeById, depth, entries, nextRef, excludeBackendNodeIds)
     return
   }
 
@@ -76,12 +83,12 @@ export function walkTree(
   const isStaticText = role === 'staticText' || role === 'StaticText'
 
   if (!isInteractive && !isHeading && !isLandmark && !isStaticText) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
+    walkChildren(node, nodeById, depth, entries, nextRef, excludeBackendNodeIds)
     return
   }
 
   if (!name && !isLandmark) {
-    walkChildren(node, nodeById, depth, entries, nextRef)
+    walkChildren(node, nodeById, depth, entries, nextRef, excludeBackendNodeIds)
     return
   }
 
@@ -95,7 +102,7 @@ export function walkTree(
       backendDOMNodeId: node.backendDOMNodeId ?? 0,
       depth
     })
-    walkChildren(node, nodeById, depth + 1, entries, nextRef)
+    walkChildren(node, nodeById, depth + 1, entries, nextRef, excludeBackendNodeIds)
     return
   }
 
@@ -133,7 +140,7 @@ export function walkTree(
     return
   }
 
-  walkChildren(node, nodeById, depth, entries, nextRef)
+  walkChildren(node, nodeById, depth, entries, nextRef, excludeBackendNodeIds)
 }
 
 function walkChildren(
@@ -141,7 +148,8 @@ function walkChildren(
   nodeById: Map<string, AXNode>,
   depth: number,
   entries: SnapshotEntry[],
-  nextRef: () => number
+  nextRef: () => number,
+  excludeBackendNodeIds?: ReadonlySet<number>
 ): void {
   if (!node.childIds) {
     return
@@ -149,7 +157,7 @@ function walkChildren(
   for (const childId of node.childIds) {
     const child = nodeById.get(childId)
     if (child) {
-      walkTree(child, nodeById, depth, entries, nextRef)
+      walkTree(child, nodeById, depth, entries, nextRef, excludeBackendNodeIds)
     }
   }
 }
