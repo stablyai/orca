@@ -12959,7 +12959,8 @@
             "740aca88ab": "Workspace port scan failed.",
             "5be4f7f727": "Port {{value0}} menu",
             "7550998473": "Copy",
-            "1004af16ab": "Copy {{value0}}"
+            "1004af16ab": "Copy {{value0}}",
+            "153d3a8026": "Workspace host unknown"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",

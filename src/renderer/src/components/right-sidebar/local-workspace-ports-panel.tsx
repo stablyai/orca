@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
@@ -26,8 +26,15 @@ import {
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 
-/** Right-sidebar Ports panel scoped to the active workspace's owner host. */
-export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
+/** Right-sidebar Ports panel for a workspace that runs on an endpoint's own machine. */
+export function LocalWorkspacePortsPanel({
+  isVisible,
+  runtimeTarget
+}: {
+  isVisible: boolean
+  /** The endpoint that owns the active workspace, even if the sidebar is focused elsewhere. */
+  runtimeTarget: RuntimeClientTarget | null
+}): React.JSX.Element {
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const settings = useAppStore((s) => s.settings)
@@ -43,9 +50,6 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
     external: true
   })
 
-  // Why: the Ports panel acts on the active workspace; use that workspace's
-  // host owner even if the sidebar is focused elsewhere.
-  const runtimeTarget = useWorktreeRuntimeTarget(activeWorktree?.id)
   const scanKey = runtimeTarget ? `${workspacePortRuntimeTargetKey(runtimeTarget)}:all` : null
 
   const refresh = useCallback(() => {
