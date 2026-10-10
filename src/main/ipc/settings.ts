@@ -302,7 +302,7 @@ export function registerSettingsHandlers(
       })
     }
 
-    return result
+    return store.getSettings()
   })
 
   ipcMain.handle(

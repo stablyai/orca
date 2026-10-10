@@ -11,6 +11,8 @@ import type { RuntimeStore } from './runtime-store-contract'
 import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type {
+  WorkspacePortHostKillRequest,
+  WorkspacePortHostScanResult,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
   WorkspacePortProbe,
@@ -21,6 +23,14 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import {
+  killWorkspacePortOnExecutionHost,
+  scanWorkspacePortsOnExecutionHost,
+  type WorkspacePortExecutionHostDeps
+} from '../ports/workspace-port-execution-host'
+import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
+import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
   listManagedWorktrees(
@@ -153,22 +163,45 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     return killWorkspacePort(await this.getWorkspacePortProbes(args.repoId), args)
   }
 
+  // Why the workspace, not a client-named host: this server resolves where the workspace runs.
+  async scanWorkspacePortsOnHost(worktreeSelector: string): Promise<WorkspacePortHostScanResult> {
+    const { executionHostId } = await this.resolveRuntimeFileTarget(worktreeSelector)
+    return scanWorkspacePortsOnExecutionHost(executionHostId, this.getWorkspacePortHostDeps())
+  }
+
+  async killWorkspacePortOnHost(
+    args: WorkspacePortHostKillRequest
+  ): Promise<WorkspacePortKillResult> {
+    const { executionHostId } = await this.resolveRuntimeFileTarget(args.worktree)
+    return killWorkspacePortOnExecutionHost(executionHostId, args, this.getWorkspacePortHostDeps())
+  }
+
+  protected getWorkspacePortHostDeps(): WorkspacePortExecutionHostDeps {
+    return {
+      getLocalProbes: () => this.getWorkspacePortProbes(),
+      getSshMultiplexer: getActiveMultiplexer
+    }
+  }
+
   // Why: remote clients may invoke this over RPC, so the runtime derives
   // allowed worktree paths from its own store instead of trusting client paths.
   protected async getWorkspacePortProbes(repoId?: string): Promise<WorkspacePortProbe[]> {
-    const reposById = new Map(
-      this.requireStore()
-        .getRepos()
-        .map((repo) => [repo.id, repo])
-    )
+    const repos = this.requireStore().getRepos()
     return filterWorkspacePortProbes(
-      (await this.listResolvedWorktrees()).map((worktree) => ({
-        id: worktree.id,
-        repoId: worktree.repoId,
-        displayName: worktree.displayName,
-        path: worktree.git.path,
-        connectionId: reposById.get(worktree.repoId)?.connectionId ?? null
-      })),
+      (await this.listResolvedWorktrees()).map((worktree) => {
+        // Why host routing, not the repo-id row's connectionId: an SSH repo may carry only
+        // `executionHostId`, and its remote path must never authorize a local listener.
+        const routing = resolveWorktreeHostRouting(repos, worktree)
+        return {
+          id: worktree.id,
+          repoId: worktree.repoId,
+          displayName: worktree.displayName,
+          path: worktree.git.path,
+          runsHere:
+            routing.kind === 'unowned' ||
+            (routing.kind === 'resolved' && routing.hostId === LOCAL_EXECUTION_HOST_ID)
+        }
+      }),
       repoId
     )
   }
