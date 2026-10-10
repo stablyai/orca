@@ -614,7 +614,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "2b9f4e7c01": "Update the remote runtime to link GitLab issues and merge requests"
                 }
               }
             }
