@@ -41,9 +41,9 @@ const target: SshTarget = {
   username: 'deploy'
 }
 
-function asTransport(value: object): SshConnection {
+function asTransport(value: { id: string }): SshConnection {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution keys on identity only.
-  return value as SshConnection
+  return value as unknown as SshConnection
 }
 
 describe('SSH IPC handlers', () => {
