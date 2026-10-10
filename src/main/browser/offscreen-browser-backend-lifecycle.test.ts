@@ -102,6 +102,29 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     })
   })
 
+  it('enables genuine offscreen rendering without weakening guest isolation or profile ownership', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn()
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+    await backend.createTab({ browserPageId: 'paint-page', url: 'about:blank', worktreeId: 'wt' })
+    expect(mocks.BrowserWindow).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        show: false,
+        webPreferences: expect.objectContaining({
+          offscreen: true,
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          partition: 'persist:orca-browser'
+        })
+      })
+    )
+    await backend.closeTab('paint-page')
+    expect(mocks.windows[0].isDestroyed()).toBe(true)
+  })
+
   it('settles a pending load and removes its waiters when the page is destroyed', async () => {
     vi.useFakeTimers()
     mocks.finishLoads = false

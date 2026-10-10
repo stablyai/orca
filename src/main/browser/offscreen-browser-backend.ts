@@ -58,6 +58,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         // HTML fullscreen behavior aligned with desktop <webview> guests.
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
+        // Why: hidden windows alone do not reliably paint for headless CDP capture.
+        offscreen: true,
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false
