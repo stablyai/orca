@@ -76,6 +76,76 @@ describe('hosted review cache revalidation', () => {
     _clearHostedReviewRequestGenerationsForTest()
   })
 
+  it.each(['old-first', 'new-first'])('deduplicates A/B/A lookups (%s)', async (order) => {
+    const resolvers: ((value: HostedReviewInfo | null) => void)[] = []
+    mockApi.hostedReview.forBranch.mockImplementation(
+      () => new Promise<HostedReviewInfo | null>((resolve) => resolvers.push(resolve))
+    )
+    const store = makeStore()
+    const fetch = store.getState().fetchHostedReviewForBranch
+    const oldFetch = fetch('/repo', 'feature/overlapping-heads', {
+      force: true,
+      currentHeadOid: 'aaaaaaa'
+    })
+    const newFetch = fetch('/repo', 'feature/overlapping-heads', {
+      force: true,
+      currentHeadOid: 'bbbbbbb'
+    })
+    const repeatedOldFetch = fetch('/repo', 'feature/overlapping-heads', {
+      force: true,
+      currentHeadOid: 'aaaaaaa'
+    })
+    const callCount = mockApi.hostedReview.forBranch.mock.calls.length
+    const first = order === 'old-first' ? 0 : 1
+    resolvers[first](first === 0 ? { ...review, title: 'Old head' } : review)
+    await (first === 0 ? oldFetch : newFetch)
+    resolvers[1 - first](first === 0 ? review : { ...review, title: 'Old head' })
+    // Settle any duplicate too, so a failing implementation leaves no pending request.
+    for (const resolve of resolvers.slice(2)) {
+      resolve({ ...review, title: 'Old head' })
+    }
+    await expect(oldFetch).resolves.toEqual({ ...review, title: 'Old head' })
+    await expect(repeatedOldFetch).resolves.toEqual({ ...review, title: 'Old head' })
+    await expect(newFetch).resolves.toEqual(review)
+    expect(callCount).toBe(2)
+    expect(Object.values(store.getState().hostedReviewCache)[0]?.data).toEqual(review)
+    mockApi.hostedReview.forBranch.mockResolvedValue(null)
+    await expect(
+      fetch('/repo', 'feature/overlapping-heads', { force: true, currentHeadOid: 'aaaaaaa' })
+    ).resolves.toBeNull()
+    await expect(
+      fetch('/repo', 'feature/overlapping-heads', { force: true, currentHeadOid: 'bbbbbbb' })
+    ).resolves.toBeNull()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not reuse a completed generation while an older head is still pending', async () => {
+    const resolvers: ((value: HostedReviewInfo | null) => void)[] = []
+    mockApi.hostedReview.forBranch.mockImplementation(
+      () => new Promise<HostedReviewInfo | null>((resolve) => resolvers.push(resolve))
+    )
+    const store = makeStore()
+    const fetchHead = (currentHeadOid: string) =>
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/generation-reuse', {
+        force: true,
+        currentHeadOid
+      })
+    const oldFetch = fetchHead('aaaaaaa')
+    const middleFetch = fetchHead('bbbbbbb')
+    resolvers[1](review)
+    await middleFetch
+    // Cache eviction must not let an older request become the current writer again.
+    store.setState({ hostedReviewCache: {} })
+    const newestFetch = fetchHead('ccccccc')
+    resolvers[0]({ ...review, title: 'Old head' })
+    await oldFetch
+    const cacheAfterOldResponse = store.getState().hostedReviewCache
+    resolvers[2](review)
+    await newestFetch
+    expect(cacheAfterOldResponse).toEqual({})
+    expect(Object.values(store.getState().hostedReviewCache)[0]?.data).toEqual(review)
+  })
+
   it('dedupes repeated linked PR retries while a stronger lookup is in flight', async () => {
     let resolveLinkedLookup: (value: typeof review) => void = () => {}
     const linkedLookup = new Promise<typeof review>((resolve) => {
