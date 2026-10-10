@@ -58,7 +58,8 @@ const TUI_AGENT_KIND_BY_AGENT = {
   muse: 'muse',
   zcode: 'zcode',
   dsh: 'dsh',
-  jcode: 'jcode'
+  jcode: 'jcode',
+  mirror: 'mirror'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 
 // Why: `satisfies Record<TuiAgent, …>` makes the lookup exhaustive at compile
