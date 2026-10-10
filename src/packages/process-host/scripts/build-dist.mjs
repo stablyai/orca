@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -7,14 +7,137 @@ import {
   realpathSync,
   renameSync,
   rmSync,
-  rmdirSync
+  rmdirSync,
+  writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import lockfile from 'proper-lockfile'
 
 // Source resolution bootstraps compilation without requiring an existing dist.
+
+const BUILD_STATE_FILE = '.dist-build-state.json'
+
+function hashDirectory(hash, directory) {
+  for (const file of listFiles(directory).sort()) {
+    const contents = readFileSync(join(directory, file))
+    hash.update(JSON.stringify([directory, file, contents.length])).update(contents)
+  }
+}
+
+function distFingerprint(packageDir) {
+  const dist = join(packageDir, 'dist')
+  if (!existsSync(dist)) {
+    return null
+  }
+  const hash = createHash('sha256')
+  hashDirectory(hash, dist)
+  return hash.digest('hex')
+}
+
+function inputFingerprint(packageDir, compiler, compiledFiles) {
+  try {
+    const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+    const config = JSON.parse(readFileSync(join(packageDir, 'tsconfig.json'), 'utf8'))
+    const options = config.compilerOptions ?? {}
+    // Reuse is deliberately limited to this package's self-contained compiler inputs.
+    if (
+      manifest.name !== '@orca/process-host' ||
+      config.extends ||
+      config.references ||
+      config.files ||
+      !config.include?.every((pattern) => pattern.startsWith('src/')) ||
+      options.paths ||
+      options.baseUrl ||
+      options.rootDirs ||
+      options.typeRoots ||
+      options.libReplacement === true ||
+      !Array.isArray(options.types) ||
+      options.types.some((type) => type !== 'node') ||
+      ['dependencies', 'optionalDependencies', 'peerDependencies'].some(
+        (field) => Object.keys(manifest[field] ?? {}).length > 0
+      )
+    ) {
+      return null
+    }
+    const require = createRequire(compiler)
+    const compilerManifest = require.resolve('typescript/package.json')
+    const compilerDir = dirname(compilerManifest)
+    const metadata = JSON.parse(readFileSync(compilerManifest, 'utf8'))
+    const nativeName = `@typescript/typescript-${process.platform}-${process.arch}`
+    if (!metadata.optionalDependencies?.[nativeName]) {
+      return null
+    }
+    const roots = [
+      join(packageDir, 'src'),
+      import.meta.dirname,
+      join(compilerDir, 'bin'),
+      join(compilerDir, 'lib'),
+      dirname(require.resolve(`${nativeName}/package.json`))
+    ]
+    if (options.types?.includes('node')) {
+      const nodeTypes = createRequire(join(packageDir, 'package.json')).resolve(
+        '@types/node/package.json'
+      )
+      const undiciTypes = createRequire(nodeTypes).resolve('undici-types/package.json')
+      const nodeMetadata = JSON.parse(readFileSync(nodeTypes, 'utf8'))
+      const undiciMetadata = JSON.parse(readFileSync(undiciTypes, 'utf8'))
+      if (
+        Object.keys(nodeMetadata.dependencies ?? {}).some((name) => name !== 'undici-types') ||
+        Object.keys(undiciMetadata.dependencies ?? {}).length > 0
+      ) {
+        return null
+      }
+      roots.push(dirname(nodeTypes), dirname(undiciTypes))
+    }
+    // TypeScript can reach external declarations even without manifest dependencies.
+    if (
+      compiledFiles &&
+      (!compiledFiles.length ||
+        compiledFiles.some(
+          (file) =>
+            !isAbsolute(file) ||
+            !roots.some((root) => {
+              const within = relative(realpathSync(root), realpathSync(file))
+              return within !== '..' && !within.startsWith(`..${sep}`) && !isAbsolute(within)
+            })
+        ))
+    ) {
+      return null
+    }
+    const hash = createHash('sha256').update(
+      JSON.stringify([process.version, process.platform, process.arch])
+    )
+    for (const file of [
+      join(packageDir, 'package.json'),
+      join(packageDir, 'tsconfig.json'),
+      compilerManifest,
+      compiler
+    ]) {
+      hash.update(file).update(readFileSync(file))
+    }
+    for (const root of roots) {
+      hashDirectory(hash, root)
+    }
+    return hash.digest('hex')
+  } catch {
+    // Unknown configuration or dependencies compile normally, without reusable state.
+    return null
+  }
+}
+
+function hasReusableDist(packageDir, input) {
+  if (input === null) {
+    return false
+  }
+  try {
+    const state = JSON.parse(readFileSync(join(packageDir, BUILD_STATE_FILE), 'utf8'))
+    return state.input === input && state.output === distFingerprint(packageDir)
+  } catch {
+    return false
+  }
+}
 
 const STAGING_PREFIX = '.dist-staging-'
 const LOCK_PATH = '.dist-build.lock'
@@ -112,19 +235,13 @@ async function syncCompiledOutput(stagingDir, distDir, assertLockHeld) {
   return result
 }
 
-async function compileAndSync(packageDir, assertLockHeld) {
-  // Only the lock holder stages, so any staging directory left here is from a killed build.
-  for (const name of readdirSync(packageDir)) {
-    if (name.startsWith(STAGING_PREFIX)) {
-      rmSync(join(packageDir, name), { recursive: true, force: true })
-    }
-  }
+async function compileAndSync(packageDir, compiler, assertLockHeld) {
   // Same depth as dist so emitted source-map paths are identical once moved.
   const stagingDir = join(packageDir, `${STAGING_PREFIX}${randomUUID().slice(0, 8)}`)
   try {
     const compile = await runProcess({
       program: process.execPath,
-      args: [resolvePackageCompiler(packageDir), '-p', 'tsconfig.json', '--outDir', stagingDir],
+      args: [compiler, '-p', 'tsconfig.json', '--outDir', stagingDir, '--listFiles'],
       cwd: packageDir,
       timeoutMs: COMPILE_TIMEOUT_MS
     })
@@ -133,7 +250,13 @@ async function compileAndSync(packageDir, assertLockHeld) {
       const reason = compile.timedOut ? 'timed out' : (compile.signal ?? compile.code)
       throw new Error(`process-host compilation failed (${reason})${detail ? `:\n${detail}` : ''}`)
     }
-    return await syncCompiledOutput(stagingDir, join(packageDir, 'dist'), assertLockHeld)
+    return {
+      result: await syncCompiledOutput(stagingDir, join(packageDir, 'dist'), assertLockHeld),
+      compiledFiles: compile.stdout
+        .split('\n')
+        .map((file) => file.trim())
+        .filter(Boolean)
+    }
   } finally {
     rmSync(stagingDir, { recursive: true, force: true })
   }
@@ -161,8 +284,27 @@ export async function buildPackageDist(packageDir) {
     }
   }
   try {
-    const result = await compileAndSync(packageDir, assertLockHeld)
+    // Only the lock holder stages, so leftovers are from a killed build.
+    for (const name of readdirSync(packageDir)) {
+      if (name.startsWith(STAGING_PREFIX)) {
+        rmSync(join(packageDir, name), { recursive: true, force: true })
+      }
+    }
+    const compiler = resolvePackageCompiler(packageDir)
+    const input = inputFingerprint(packageDir, compiler)
+    if (hasReusableDist(packageDir, input)) {
+      assertLockHeld()
+      return { written: 0, removed: 0, unchanged: listFiles(join(packageDir, 'dist')).length }
+    }
     assertLockHeld()
+    rmSync(join(packageDir, BUILD_STATE_FILE), { force: true })
+    const { result, compiledFiles } = await compileAndSync(packageDir, compiler, assertLockHeld)
+    assertLockHeld()
+    if (input !== null && input === inputFingerprint(packageDir, compiler, compiledFiles)) {
+      const output = distFingerprint(packageDir)
+      assertLockHeld()
+      writeFileSync(join(packageDir, BUILD_STATE_FILE), JSON.stringify({ input, output }))
+    }
     return result
   } finally {
     // proper-lockfile already untracks compromised locks; releasing one could affect its new owner.
