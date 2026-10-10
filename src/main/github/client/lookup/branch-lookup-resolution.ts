@@ -24,8 +24,12 @@ import { lookupPRByBranchName } from './pr-branch-lookup'
 import { lookupPRByNumber } from './pr-number-lookup'
 import { derivePRRefreshData } from './branch-lookup-derived-data'
 import { assemblePRRefreshFoundOutcome } from './pr-refresh-outcome-assembly'
-import { shouldRetryTrackedUpstreamBranch } from './tracked-upstream-cache'
+import {
+  shouldRetryTrackedUpstreamBranch,
+  type TrackedUpstreamBranch
+} from './tracked-upstream-cache'
 import { getTrackedUpstreamBranch } from './tracked-upstream-branch'
+import { isTrackedUpstreamDefaultBranch } from './tracked-upstream-default-branch'
 import { PR_BRANCH_LOOKUP_BUCKETS } from './pr-lookup-rate-limit'
 import type { HostedReviewLocalGitOptions } from './../github-exec-scope'
 export async function resolvePRForBranchOutcome(input: {
@@ -74,6 +78,7 @@ export async function resolvePRForBranchOutcome(input: {
   let hasPendingBranchLookupError = false
   let currentHeadOidForMergedImplicit: string | null | undefined
   let usedExactNumberLookup = false
+  let retriedUpstream: { branch: TrackedUpstreamBranch; headRepo: OwnerRepo } | null = null
 
   const explicitCurrentHeadOid =
     typeof options.currentHeadOid === 'string' && options.currentHeadOid.trim().length > 0
@@ -190,6 +195,7 @@ export async function resolvePRForBranchOutcome(input: {
           upstreamHeadRepo &&
           shouldRetryTrackedUpstreamBranch(upstreamBranch, branchName, upstreamHeadRepo, headRepo)
         ) {
+          retriedUpstream = { branch: upstreamBranch, headRepo: upstreamHeadRepo }
           const upstreamLookup = await lookupPRByBranchName({
             candidates,
             headRepo: upstreamHeadRepo,
@@ -227,6 +233,23 @@ export async function resolvePRForBranchOutcome(input: {
     })
     data = fallbackLookup.data
     dataRepo = fallbackLookup.dataRepo
+  }
+  // Why: covers the cached fallback number too, so a link stored before #26948 heals.
+  if (
+    data &&
+    retriedUpstream &&
+    data.headRefName === retriedUpstream.branch.branchName &&
+    (await isTrackedUpstreamDefaultBranch({
+      upstreamBranch: retriedUpstream.branch,
+      upstreamHeadRepo: retriedUpstream.headRepo,
+      candidates,
+      repoPath,
+      connectionId,
+      localGitOptions
+    }))
+  ) {
+    data = null
+    dataRepo = null
   }
   if (!data) {
     if (hasPendingBranchLookupError) {

@@ -361,7 +361,11 @@ describe('getPRForBranch', () => {
       await vi.advanceTimersByTimeAsync(30_001)
       const pr = await getPRForBranch('/remote/repo-root', 'feature', undefined, 'ssh-1')
 
-      expect(sshGitProvider.exec).toHaveBeenCalledTimes(2)
+      // Why: a found upstream PR also resolves the default branch (#26948); count snapshot probes only.
+      const snapshotProbes = sshGitProvider.exec.mock.calls.filter(([args]) =>
+        args.includes('refs/heads')
+      )
+      expect(snapshotProbes).toHaveLength(2)
       expect(pr).toMatchObject({
         number: 81,
         title: 'Fresh SSH upstream PR'
