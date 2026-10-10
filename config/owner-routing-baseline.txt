@@ -32,7 +32,6 @@
 1 src/renderer/src/components/pull-request-page/reviewers/panel.tsx
 2 src/renderer/src/components/pull-request-page/reviewers/request-actions.ts
 1 src/renderer/src/components/quick-open-file-navigation.ts
-2 src/renderer/src/components/right-sidebar/checks-panel/gitlab-review-client.ts
 3 src/renderer/src/components/settings/AccountsPane.tsx
 1 src/renderer/src/components/settings/GeneralPane.tsx
 1 src/renderer/src/components/settings/RepositoryGitHubAccountSection.tsx
@@ -66,7 +65,6 @@
 2 src/renderer/src/lib/codex-pane-selection-lane.ts
 1 src/renderer/src/lib/github-pr-start-point.ts
 1 src/renderer/src/lib/github-source-runtime-context.ts
-2 src/renderer/src/lib/gitlab-work-item-source-lookup.ts
 1 src/renderer/src/lib/hosted-review-repo-read.ts
 1 src/renderer/src/lib/launch-agent-background-session.ts
 1 src/renderer/src/lib/launch-worktree-background-terminals.ts
@@ -76,7 +74,6 @@
 1 src/renderer/src/lib/structured-agent-session-tab-activation.ts
 1 src/renderer/src/lib/workspace-file-host-routing.ts
 1 src/renderer/src/lib/worktree-creation-flow-startup.ts
-1 src/renderer/src/runtime/gitlab-job-trace-client.ts
 1 src/renderer/src/runtime/mobile-markdown-bridge.ts
 1 src/renderer/src/runtime/runtime-file-import-client.ts
 1 src/renderer/src/runtime/runtime-file-metadata-client.ts

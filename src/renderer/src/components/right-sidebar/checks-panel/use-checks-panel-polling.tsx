@@ -10,6 +10,7 @@ import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './gitlab-review-client'
+import { checksPanelLoadErrorMessage, checksPanelOwnerHostId } from './checks-panel-forge-owner'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -25,10 +26,11 @@ export type ChecksPanelPollingInput = Pick<
     | 'pollIntervalRef'
     | 'prevChecksRef'
     | 'repo'
-    | 'settings'
     | 'setChecks'
+    | 'setChecksError'
     | 'setChecksLoading'
     | 'setComments'
+    | 'setCommentsError'
     | 'setCommentsLoading'
     | 'gitLabProjectRefRef'
   > &
@@ -72,8 +74,10 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         prCacheKey,
         fetchPRChecks,
         isCurrentAsyncResult,
+        activeWorktree,
         setChecksLoading,
         setChecks,
+        setChecksError,
         pollIntervalRef,
         prevChecksRef
       } = modelRef.current
@@ -123,6 +127,9 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           return
         }
         console.warn('Failed to fetch PR checks:', err)
+        setChecksError(
+          checksPanelLoadErrorMessage(err, checksPanelOwnerHostId(repo, activeWorktree))
+        )
         policyRef.current.fail()
         pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {
@@ -143,13 +150,11 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       mrNumberOverride,
       headShaOverride,
       commitAsCurrent = false,
-      settingsOverride,
       isRequestCurrent
     }: {
       mrNumberOverride?: number | null
       headShaOverride?: string | null
       commitAsCurrent?: boolean
-      settingsOverride?: ChecksPanelControllerState['settings']
       isRequestCurrent?: () => boolean
     } = {}) => {
       const {
@@ -158,13 +163,14 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         branch,
         hostedReviewCacheKey,
         asyncResultKeyRef,
-        settings,
         activeWorktree,
         isCurrentAsyncResult,
         gitLabProjectRefRef,
         setChecks,
+        setChecksError,
         setChecksLoading,
         setComments,
+        setCommentsError,
         setCommentsLoading,
         pollIntervalRef,
         prevChecksRef
@@ -196,9 +202,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         const details = await fetchGitLabMRDetailsForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings: settingsOverride ?? settings,
           iid: targetMRNumber,
-          repoOwnerExecutionHostId: activeWorktree?.hostId
+          repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree)
         })
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
@@ -221,6 +226,13 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           return
         }
         console.warn('Failed to fetch GitLab MR checks:', err)
+        // Why: one MR details read carries both the pipeline and the discussion.
+        const message = checksPanelLoadErrorMessage(
+          err,
+          checksPanelOwnerHostId(repo, activeWorktree)
+        )
+        setChecksError(message)
+        setCommentsError(message)
         policyRef.current.fail()
         pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {

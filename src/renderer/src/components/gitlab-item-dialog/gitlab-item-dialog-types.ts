@@ -14,4 +14,5 @@ export type GitLabDialogRepoSelector = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  repoOwnerExecutionHostId?: string
 }

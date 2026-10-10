@@ -1,3 +1,4 @@
+import { checksPanelOwnerHostId } from './checks-panel-forge-owner'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { pickDefaultSourceControlAgent } from '../SourceControl'
@@ -17,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
+  | 'activeWorktree'
   | 'activeWorktreeId'
   | 'branch'
   | 'claimedCommentResolutionRef'
@@ -42,6 +44,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   const {
     activeGitLabReview,
     activeReview,
+    activeWorktree,
     activeWorktreeId,
     branch,
     claimedCommentResolutionRef,
@@ -80,10 +83,10 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
           iid: activeGitLabReview.number,
           discussionId: threadId,
-          resolved: resolve
+          resolved: resolve,
+          repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree)
         })
         if (!result.ok) {
           rollbackThread(previousThreadComments)
@@ -139,7 +142,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       prNumber,
       repo,
       resolveReviewThread,
-      settings,
+      activeWorktree,
       setComments
     ]
   )

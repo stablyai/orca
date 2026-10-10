@@ -1,12 +1,41 @@
 import type { TaskPageProviderMetadataModel } from './use-task-page-provider-metadata'
 import { useEffect } from 'react'
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import type { Repo } from '../../../shared/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import type { GitLabDialogRepoSelector } from './gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../shared/gitlab-types'
 import {
   getTaskPageRepoSourceContext,
   isGitLabIssueFilter,
   isGitLabMRFilter
 } from './task-page-source-context'
-export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
+function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
+  return {
+    repoPath: repo.path,
+    repoId: repo.id,
+    sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
+    repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
+  }
+}
+
+type GitLabLoadingInput = Pick<
+  TaskPageProviderMetadataModel,
+  | 'selectedRepos'
+  | 'selectedReposKey'
+  | 'primaryRepo'
+  | 'taskSource'
+  | 'setGitlabItems'
+  | 'setGitlabLoading'
+  | 'setGitlabError'
+  | 'gitlabRefreshNonce'
+  | 'gitlabView'
+  | 'setGitlabTodos'
+  | 'setGitlabTodosLoading'
+  | 'activeGitlabFilter'
+>
+
+export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
   const {
     selectedRepos,
     selectedReposKey,
@@ -39,7 +68,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     ) {
       return
     }
-    // Why: folder-mode repos lack remotes to derive a GitLab project from; SSH-backed repos use the same provider-aware IPC path.
+    // Why: folder-mode repos lack remotes to derive a GitLab project from; each repo is read on the machine holding its GitLab sign-in.
     const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
@@ -54,11 +83,10 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
       gitlabView === 'issues'
         ? (repo: (typeof eligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
-            return window.api.gl
+            const selector = gitLabTaskRepoSelector(repo)
+            return gitLabApiFor(selector)
               .listIssues({
-                repoPath: repo.path,
-                repoId: repo.id,
-                sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
+                ...selector,
                 state: 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
                 limit: 50
@@ -80,12 +108,11 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
                 }
               })
           }
-        : (repo: (typeof eligibleRepos)[0]) =>
-            window.api.gl
+        : (repo: (typeof eligibleRepos)[0]) => {
+            const selector = gitLabTaskRepoSelector(repo)
+            return gitLabApiFor(selector)
               .listMRs({
-                repoPath: repo.path,
-                repoId: repo.id,
-                sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
+                ...selector,
                 state: activeMRFilter ?? 'opened',
                 page: 1,
                 perPage: 50
@@ -105,6 +132,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
                   error
                 }
               })
+          }
     void Promise.allSettled(eligibleRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
@@ -157,12 +185,9 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     }
     let stale = false
     setGitlabTodosLoading(true)
-    void window.api.gl
-      .todos({
-        repoPath: primaryRepo.path,
-        repoId: primaryRepo.id,
-        sourceContext: getTaskPageRepoSourceContext(primaryRepo, 'gitlab')
-      })
+    const selector = gitLabTaskRepoSelector(primaryRepo)
+    void gitLabApiFor(selector)
+      .todos(selector)
       .then((todos) => {
         if (!stale) {
           setGitlabTodos(todos as GitLabTodo[])
@@ -191,4 +216,4 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
   ])
   return model
 }
-export type TaskPageGitLabLoadingModel = ReturnType<typeof useTaskPageGitLabLoading>
+export type TaskPageGitLabLoadingModel = TaskPageProviderMetadataModel

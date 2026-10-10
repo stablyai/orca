@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
@@ -89,9 +89,20 @@ export function useChecksPanelControllerState() {
     activeWorktreeId ? readDetectedAgentsForWorktree(s, activeWorktreeId) : s.detectedAgentIds
   )
 
-  const [checks, setChecks] = useState<PRCheckDetail[]>([])
+  const [checks, setChecksState] = useState<PRCheckDetail[]>([])
+  // Why: a failed read keeps its own state so the list says so instead of "No checks configured".
+  const [checksError, setChecksError] = useState<string | null>(null)
+  const setChecks = useCallback((next: SetStateAction<PRCheckDetail[]>) => {
+    setChecksError(null)
+    setChecksState(next)
+  }, [])
   const [checksLoading, setChecksLoading] = useState(false)
-  const [comments, setComments] = useState<PRComment[]>([])
+  const [comments, setCommentsState] = useState<PRComment[]>([])
+  const [commentsError, setCommentsError] = useState<string | null>(null)
+  const setComments = useCallback((next: SetStateAction<PRComment[]>) => {
+    setCommentsError(null)
+    setCommentsState(next)
+  }, [])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const commentsRef = useRef<PRComment[]>([])
   const [commentsSelectionClearRequest, setCommentsSelectionClearRequest] =
@@ -296,8 +307,12 @@ export function useChecksPanelControllerState() {
     setChecks,
     checksLoading,
     setChecksLoading,
+    checksError,
+    setChecksError,
     comments,
     setComments,
+    commentsError,
+    setCommentsError,
     commentsLoading,
     setCommentsLoading,
     commentsRef,

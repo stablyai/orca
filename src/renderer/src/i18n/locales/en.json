@@ -13284,6 +13284,7 @@
           },
           "checks": {
             "panel": {
+              "loadFailedOnMachine": "Could not load from {{machine}}: {{detail}}",
               "content": {
                 "3916814392": "behind (base commit:",
                 "755be805f6": "No comments",
@@ -17937,6 +17938,10 @@
       },
       "gitlabIpcTimeout": {
         "timedOut": "Timed out talking to GitLab."
+      },
+      "forgeCredentialTarget": {
+        "unknownHost": "The machine that owns this repository is not known yet. Reconnect it and try again.",
+        "thisComputer": "this computer"
       }
     },
     "ssh": {
