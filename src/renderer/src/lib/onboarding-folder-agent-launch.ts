@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentLaunchRouteStore } from '@/lib/agent-launch-route-input'
@@ -13,6 +13,15 @@ import {
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import {
+  freshNewTabLaunchesThroughHost,
+  launchFreshNewTabThroughHost
+} from '@/lib/launch-agent-new-tab-host-route'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { useAppStore } from '@/store'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null
@@ -51,6 +60,22 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   }
 }
 
+/** Whether the folder's agent starts through this computer's host, as a plain new tab's does: only
+ *  on this computer, and only where the host quotes it as main's window does (this computer's
+ *  platform and its default shell). Temporary: the rest keeps main's window launch. */
+function onboardingFolderLaunchesThroughHost(worktreeId: string, agent: TuiAgent): boolean {
+  const state = useAppStore.getState()
+  const { resolvedLaunchPlatform, queuedShell } = resolveAgentLaunchExecutionContext(state, {
+    worktreeId
+  })
+  return (
+    getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID &&
+    resolveStartupShell(resolvedLaunchPlatform, queuedShell) ===
+      resolveStartupShell(CLIENT_PLATFORM) &&
+    freshNewTabLaunchesThroughHost({ freshNewTab: true, worktreeId, agent }, resolvedLaunchPlatform)
+  )
+}
+
 /** Reveal a folder just added after dismissed onboarding and start its default agent on the
  *  planned route. Both add-folder paths (local store action, SSH dialog) share this; the store
  *  path must import it lazily because the launch graph reaches the store root. */
@@ -69,10 +94,23 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
       ...(startup ? { startup } : {}),
       ...(providesInitialSurface ? { providesInitialSurface: true } : {})
     })
-  const { plan } = args.launch
+  const { agent, plan, startup } = args.launch
   const structured = plan?.route === 'structured-native-chat'
   if (!structured) {
-    reveal(args.launch.startup)
+    if (agent && startup && onboardingFolderLaunchesThroughHost(args.worktreeId, agent)) {
+      // The host's agent tab is the folder's first tab, so activation seeds no shell beside it.
+      if (reveal(undefined, true) !== false) {
+        launchFreshNewTabThroughHost({
+          agent,
+          worktreeId: args.worktreeId,
+          prompt: '',
+          launchSource: 'onboarding',
+          pendingActivationSpawn: true
+        })
+      }
+      return
+    }
+    reveal(startup)
     return
   }
   beginStructuredAgentSessionProvisionalLaunch({
