@@ -67,6 +67,25 @@ describe('getActivityThreadTaskTitle', () => {
     ).toBe('Refactor auth middleware')
   })
 
+  it("names a split pane from its own prompt, not a sibling pane's generated title", () => {
+    const splitTab = { ...tab, generatedTitlePaneKey: 'tab-1:pane-a' }
+    const entry = { prompt: 'Design a Redis cache strategy', stateHistory: [] }
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { ...entry, paneKey: 'tab-1:pane-b' },
+        tab: splitTab,
+        generatedTitlesEnabled: true
+      })
+    ).toBe('Design a Redis cache strategy')
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { ...entry, paneKey: 'tab-1:pane-a' },
+        tab: splitTab,
+        generatedTitlesEnabled: true
+      })
+    ).toBe('Refactor auth middleware')
+  })
+
   it('ignores terse live prompts and uses generated title or history', () => {
     expect(
       getActivityThreadTaskTitle({
