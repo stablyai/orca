@@ -145,6 +145,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
     for (const id of replacedEnvironmentIds) {
       clearRuntimeCompatibilityCache(id)
+      get().clearRuntimeDetectedAgents?.(id)
       get().markEnvironmentSshStateStale?.(id)
     }
     // Why: a same-id re-pair to another peer retires it as surely as a removal.

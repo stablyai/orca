@@ -181,7 +181,7 @@ describe('AgentsPane', () => {
     expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'local' })
   })
 
-  it('scopes agent detection to the active remote server', () => {
+  it('waits for host launch settings before displaying remote agent controls', () => {
     // Repro for the "Remote Server lists local agents" bug: with an Active
     // Server selected, the Installed list must probe that server's PATH.
     // Why the mutation: renderToStaticMarkup makes useSyncExternalStore read
@@ -199,22 +199,20 @@ describe('AgentsPane', () => {
         activeRuntimeEnvironmentId: 'env-1'
       })
 
-      expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'runtime', environmentId: 'env-1' })
-      expect(markup).toContain('on Coder')
+      expect(detectedAgentsMock.lastTarget).toBeUndefined()
+      expect(markup).toContain('Loading agent settings…')
+      expect(markup).not.toContain('Default Agent')
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }
   })
 
-  it('shows a retryable error when initial remote detection fails', () => {
+  it('shows a retryable error when initial local detection fails', () => {
     detectedAgentsMock.detectedIds = null
     detectedAgentsMock.isLoading = false
     detectedAgentsMock.detectionFailed = true
 
-    const markup = renderPane({
-      ...getDefaultSettings('/tmp'),
-      activeRuntimeEnvironmentId: 'env-1'
-    })
+    const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toContain('Couldn’t detect installed agents')
     expect(markup).toContain('Retry')

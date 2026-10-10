@@ -11114,7 +11114,7 @@
           "sourceControlAiDefaults": "레시피, 프롬프트, 호스팅 리뷰 기본값은 이 클라이언트에서 공유됩니다. 모델 선택과 탐색은 agent가 실행되는 호스트 범위에 유지됩니다.",
           "projectOnThisHost": "이 호스트의 프로젝트",
           "repositorySourceControlAi": "이 재정의는 이 프로젝트 설정에 적용되며, 사용자 지정하기 전까지 클라이언트의 Source Control AI 기본값을 상속합니다.",
-          "agentLaunchDefaults": "기본 agent, 명령 재정의, CLI 인수, 실행 환경은 클라이언트 환경설정입니다. SSH 및 원격 서버 실행은 실행 시점에 여전히 호스트 사용 가능 여부를 확인합니다.",
+          "agentLaunchDefaults": "기본 agent, 명령 재정의, CLI 인수 및 실행 환경은 선택한 호스트에 저장됩니다.",
           "clientDefaultProjectScopes": "클라이언트 기본값 + 프로젝트 범위",
           "terminalQuickCommands": "명령은 이 클라이언트에 저장된 뒤 전역 또는 프로젝트 설정 범위로 지정되어 선택한 terminal 컨텍스트에서 실행됩니다.",
           "hostOverride": "호스트 재정의",
@@ -19565,5 +19565,18 @@
   },
   "projectField": {
     "updateFailed": "프로젝트 필드를 업데이트하지 못했습니다"
-  }
+  },
+  "settings.agents.environmentName": "환경 변수 이름",
+  "settings.agents.environmentValue": "{{name}} 값",
+  "settings.agents.savedEnvironment": "저장된 값 · 바꾸려면 입력",
+  "settings.agents.newEnvironment": "값",
+  "settings.agents.removeEnvironment": "삭제",
+  "settings.agents.loadingHost": "에이전트 설정 불러오는 중…",
+  "settings.agents.updateHost": "에이전트 실행 설정을 편집하려면 이 서버를 업데이트하세요.",
+  "settings.agents.readFailed": "에이전트 설정을 읽을 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
+  "settings.agents.saveFailed": "에이전트 설정을 저장할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
+  "settings.agents.hostDefaults": "선택한 호스트의 새 에이전트 기본값입니다.",
+  "settings.agents.launchHost": "실행 설정 대상",
+  "settings.agents.hostUnavailable": "에이전트 실행 설정을 편집하려면 이 호스트에 연결하세요.",
+  "settings.agents.save": "저장"
 }

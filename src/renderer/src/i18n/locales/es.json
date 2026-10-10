@@ -11114,7 +11114,7 @@
           "sourceControlAiDefaults": "Las recetas, prompts y valores predeterminados de revisión alojada se comparten en este cliente; las elecciones de modelo y el descubrimiento quedan limitados al host donde se ejecuta el agente.",
           "projectOnThisHost": "Proyecto en este host",
           "repositorySourceControlAi": "Estas anulaciones se aplican a la configuración de este proyecto y heredan los valores predeterminados de Source Control AI del cliente hasta que se personalicen.",
-          "agentLaunchDefaults": "El agente predeterminado, las anulaciones de comandos, los argumentos de CLI y el entorno de lanzamiento son preferencias del cliente. Los lanzamientos por SSH y servidor remoto siguen validando la disponibilidad del host en tiempo de ejecución.",
+          "agentLaunchDefaults": "El agente predeterminado, los comandos personalizados, los argumentos de la CLI y el entorno de inicio se guardan en el host seleccionado.",
           "clientDefaultProjectScopes": "Predeterminado del cliente + ámbitos de proyecto",
           "terminalQuickCommands": "Los comandos se guardan en este cliente y luego se limitan globalmente o a una configuración de proyecto para que se ejecuten desde el contexto de terminal seleccionado.",
           "hostOverride": "Anulación del host",
@@ -19565,5 +19565,18 @@
   },
   "projectField": {
     "updateFailed": "No se pudo actualizar el campo del proyecto"
-  }
+  },
+  "settings.agents.environmentName": "Nombre de la variable de entorno",
+  "settings.agents.environmentValue": "Valor de {{name}}",
+  "settings.agents.savedEnvironment": "Valor guardado · escribe para reemplazarlo",
+  "settings.agents.newEnvironment": "Valor",
+  "settings.agents.removeEnvironment": "Eliminar",
+  "settings.agents.loadingHost": "Cargando la configuración de agentes…",
+  "settings.agents.updateHost": "Actualiza este servidor para editar su configuración de inicio de agentes.",
+  "settings.agents.readFailed": "No se pudo leer la configuración de agentes. Comprueba la conexión con el host e inténtalo de nuevo.",
+  "settings.agents.saveFailed": "No se pudo guardar la configuración de agentes. Comprueba la conexión con el host e inténtalo de nuevo.",
+  "settings.agents.hostDefaults": "Valores predeterminados para nuevos agentes en el host seleccionado.",
+  "settings.agents.launchHost": "Configuración de inicio en",
+  "settings.agents.hostUnavailable": "Conecta este host para editar su configuración de inicio de agentes.",
+  "settings.agents.save": "Guardar"
 }

@@ -3624,7 +3624,7 @@
     "ko": "클라이언트"
   },
   "auto.components.settings.settingOwnership.agentLaunchDefaults": {
-    "ko": "기본 agent, 명령 재정의, CLI 인수, 실행 환경은 클라이언트 환경설정입니다. SSH 및 원격 서버 실행은 실행 시점에 여전히 호스트 사용 가능 여부를 확인합니다."
+    "ko": "기본 agent, 명령 재정의, CLI 인수 및 실행 환경은 선택한 호스트에 저장됩니다."
   },
   "auto.components.settings.settingOwnership.clientDefault": {
     "ko": "클라이언트 기본값"

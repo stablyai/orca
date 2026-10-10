@@ -17,12 +17,11 @@ describe('getSettingOwnershipSummary', () => {
     expect(summary.description).toContain('this project setup')
   })
 
-  it('documents agent launch defaults as client-owned with run-time host validation', () => {
+  it('documents agent launch defaults as owned by the selected execution host', () => {
     const summary = getSettingOwnershipSummary('agentLaunchDefaults')
 
-    expect(summary.ownership).toBe('client-default')
-    expect(summary.description).toContain('SSH and remote server launches')
-    expect(summary.description).toContain('validate host availability')
+    expect(summary.ownership).toBe('host-collection')
+    expect(summary.description).toContain('saved on the selected host')
   })
 
   it('keeps workspace directories and provider accounts explicitly host-aware', () => {

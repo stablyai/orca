@@ -9,6 +9,7 @@ import {
 } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   getRuntimeAgentInventoryEnvironmentId,
@@ -102,6 +103,15 @@ export function callRuntimeAgentDetection<T>(
   })
 }
 
+type PairingFence = { expectedEnvironmentPairingRevision: number | undefined }
+
+// Why: captured before the capability wait, so a re-pair during it cannot retarget the probe.
+function capturePairingFence(environmentId: string): PairingFence {
+  return {
+    expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(environmentId)
+  }
+}
+
 export function _getRuntimeDetectPromiseCountForTest(): number {
   return runtimeDetectPromises.size
 }
@@ -159,14 +169,15 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
 
   const nestedSshDetection = (
     target: RuntimeClientTarget,
-    worktreeId: string | null | undefined
+    worktreeId: string | null | undefined,
+    fence: PairingFence
   ): NestedSshAgentDetection<TuiAgent[]> | undefined => {
     const connectionId = worktreeId ? getConnectionIdFromState(get(), worktreeId) : null
     return typeof connectionId === 'string'
       ? {
           connectionId,
           call: (params) =>
-            callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectRemoteAgents', params)
+            callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectRemoteAgents', params, fence)
         }
       : undefined
   }
@@ -212,16 +223,17 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       }))
 
       const target = { kind: 'environment', environmentId } as const
+      const fence = capturePairingFence(environmentId)
       const pending = callRuntimeAgentDetection(
         environmentId,
         worktreeId,
-        (params) => callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params),
-        nestedSshDetection(target, worktreeId)
+        (params) => callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence),
+        nestedSshDetection(target, worktreeId, fence)
       )
         .then((typed) => {
-          // Why: skip committing if the environment was removed (retained out)
-          // while the detect was in flight — otherwise it re-adds a stale entry
-          // that retainRuntimeDetectedAgents just pruned.
+          // Why: skip committing if the environment was removed (retained out) or
+          // re-paired while the detect was in flight — otherwise it re-adds a stale
+          // entry that retainRuntimeDetectedAgents or clearRuntimeDetectedAgents just pruned.
           if (runtimeDetectPromises.get(key) === pending) {
             commitDetection(key, typed, false)
           }
@@ -268,11 +280,12 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       }))
 
       const target = { kind: 'environment', environmentId } as const
+      const fence = capturePairingFence(environmentId)
       const pending = callRuntimeAgentDetection(
         environmentId,
         worktreeId,
         (params) =>
-          callRuntimeRpc<{ agents: TuiAgent[] }>(target, 'preflight.refreshAgents', params)
+          callRuntimeRpc<{ agents: TuiAgent[] }>(target, 'preflight.refreshAgents', params, fence)
             .then((result) => result.agents)
             .catch((error) => {
               if (!isRuntimeMethodNotFoundError(error)) {
@@ -280,13 +293,13 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
               }
               // Why: only older servers need the fallback; retrying disconnects and
               // runtime failures doubles remote work without any chance of recovery.
-              return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params)
+              return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
             }),
-        nestedSshDetection(target, worktreeId)
+        nestedSshDetection(target, worktreeId, fence)
       )
         .then((typed) => {
           // Why: same guard as ensureRuntimeDetectedAgents — if the environment
-          // was retained out mid-refresh, don't re-add a pruned entry.
+          // was retained out or re-paired mid-refresh, don't re-add a pruned entry.
           if (runtimeRefreshPromises.get(key) === pending) {
             commitDetection(key, typed, false)
           }

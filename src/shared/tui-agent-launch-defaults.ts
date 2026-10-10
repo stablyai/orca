@@ -94,15 +94,15 @@ export function normalizeTuiAgentEnvRecord(
     if (!isTuiAgent(agent) || !env || typeof env !== 'object') {
       continue
     }
-    const nextEnv: Record<string, string> = {}
+    const entries: [string, string][] = []
     for (const [name, raw] of Object.entries(env)) {
       const key = name.trim()
       if (!key || typeof raw !== 'string') {
         continue
       }
-      nextEnv[key] = raw
+      entries.push([key, raw])
     }
-    normalized[agent] = nextEnv
+    normalized[agent] = Object.fromEntries(entries)
   }
   return normalized
 }

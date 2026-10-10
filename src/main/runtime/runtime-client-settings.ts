@@ -24,6 +24,13 @@ import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetr
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { RuntimeStore } from './runtime-store-contract'
+import {
+  agentLaunchSettingsMutationUpdates,
+  projectAgentLaunchSettings,
+  type AgentLaunchSettings,
+  type AgentLaunchSettingsMutation
+} from '../../shared/agent-launch-settings'
+import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 
 export type RuntimeClientSettings = Pick<
   GlobalSettings,
@@ -97,7 +104,10 @@ export class RuntimeClientSettingsController {
   private reconciliationTail: Promise<void> = Promise.resolve()
 
   constructor(
-    private readonly store: Pick<RuntimeStore, 'getSettings' | 'updateSettings'> | null,
+    private readonly store: Pick<
+      RuntimeStore,
+      'getSettings' | 'updateSettings' | 'runDurableMutation'
+    > | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined
   ) {}
 
@@ -178,6 +188,55 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     return this.store.getSettings().terminalQuickCommands ?? []
+  }
+
+  getAgentLaunch(): AgentLaunchSettings {
+    if (!this.store?.getSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    return projectAgentLaunchSettings(this.store.getSettings())
+  }
+
+  async mutateAgentLaunch(mutation: AgentLaunchSettingsMutation): Promise<AgentLaunchSettings> {
+    const store = this.store
+    if (!store?.getSettings || !store.updateSettings || !store.runDurableMutation) {
+      throw new Error('runtime_unavailable')
+    }
+    const applySettings = store.updateSettings.bind(store)
+    const committed = await store.runDurableMutation(() => {
+      const before = store.getSettings()
+      const updates = agentLaunchSettingsMutationUpdates(before, mutation, process.platform)
+      applySettings(updates, { notifyListeners: true })
+      const applied = store.getSettings()
+      return {
+        value: {
+          settings: projectAgentLaunchSettings(applied),
+          reconcileHooks:
+            updates.disabledTuiAgents !== undefined &&
+            !haveSameDisabledTuiAgents(before.disabledTuiAgents, applied.disabledTuiAgents)
+        },
+        rollback: () => {
+          const rollback = agentLaunchSettingsRollbackUpdates(
+            before,
+            applied,
+            store.getSettings(),
+            updates
+          )
+          if (Object.keys(rollback).length > 0) {
+            applySettings(rollback, { notifyListeners: true })
+          }
+        }
+      }
+    })
+    if (committed.reconcileHooks) {
+      void this.reconcileManagedAgentHooks().catch((error) => {
+        console.error(
+          '[agent-hooks] Failed to reconcile managed hooks after saving launch settings:',
+          error
+        )
+      })
+    }
+    return committed.settings
   }
 
   updateTerminalQuickCommands(mutation: TerminalQuickCommandMutation): TerminalQuickCommand[] {

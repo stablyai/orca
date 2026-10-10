@@ -84,6 +84,8 @@ describe('every RPC method declares a known permission', () => {
     expect(permissionOf('computer.permissionsStatus')).toBe('workspace')
     expect(permissionOf('accounts.selectClaude')).toBe('accounts-admin')
     expect(permissionOf('settings.update')).toBe('settings-write')
+    expect(permissionOf('settings.getAgentLaunch')).toBe('workspace')
+    expect(permissionOf('settings.mutateAgentLaunch')).toBe('settings-write')
     expect(permissionOf('skills.install')).toBe('skills-admin')
     expect(permissionOf('skills.share')).toBe('skills-admin')
     expect(permissionOf('pairing.provisionRelay')).toBe('pairing-admin')
@@ -104,6 +106,7 @@ describe('SSH bridge without the per-host opt-in', () => {
     ['computer.click', { app: 'Finder' }],
     ['accounts.selectClaude', {}],
     ['settings.update', {}],
+    ['settings.mutateAgentLaunch', { type: 'permissions', mode: 'manual' }],
     ['skills.install', {}],
     ['terminal.create', {}],
     ['orchestration.dispatch', { task: 'task_1' }],
@@ -233,6 +236,7 @@ describe('SSH bridge with the per-host opt-in', () => {
     ['computer.click', { app: 'Finder' }],
     ['accounts.selectClaude', {}],
     ['settings.update', {}],
+    ['settings.mutateAgentLaunch', { type: 'permissions', mode: 'manual' }],
     ['skills.install', {}],
     ['ssh.connect', {}],
     ['pairing.provisionRelay', {}]

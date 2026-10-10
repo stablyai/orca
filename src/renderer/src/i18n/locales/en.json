@@ -11341,7 +11341,7 @@
           "sourceControlAiDefaults": "Recipes, prompts, and hosted-review defaults are shared by this client; model choices and discovery stay scoped to the host where the agent runs.",
           "projectOnThisHost": "Project on this host",
           "repositorySourceControlAi": "These overrides apply to this project setup and inherit the client Source Control AI defaults until customized.",
-          "agentLaunchDefaults": "Default agent, command overrides, CLI arguments, and launch environment are client preferences. SSH and remote server launches still validate host availability at run time.",
+          "agentLaunchDefaults": "Default agent, command overrides, CLI arguments, and launch environment are saved on the selected host.",
           "clientDefaultProjectScopes": "Client default + project scopes",
           "terminalQuickCommands": "Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context.",
           "hostOverride": "Host override",
@@ -19723,6 +19723,19 @@
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
     }
   },
+  "settings.agents.environmentName": "Environment variable name",
+  "settings.agents.environmentValue": "Value for {{name}}",
+  "settings.agents.savedEnvironment": "Saved value · enter to replace",
+  "settings.agents.newEnvironment": "Value",
+  "settings.agents.removeEnvironment": "Remove",
+  "settings.agents.loadingHost": "Loading agent settings…",
+  "settings.agents.updateHost": "Update this server to edit its agent launch settings.",
+  "settings.agents.readFailed": "Couldn’t read agent settings. Check the host connection and try again.",
+  "settings.agents.saveFailed": "Couldn’t save agent settings. Check the host connection and try again.",
+  "settings.agents.hostDefaults": "Defaults for new agents on the selected host.",
+  "settings.agents.launchHost": "Launch settings on",
+  "settings.agents.hostUnavailable": "Connect this host to edit its agent launch settings.",
+  "settings.agents.save": "Save",
   "tabHoverCard": {
     "browser": "Browser",
     "editor": "Editor",

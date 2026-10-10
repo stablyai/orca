@@ -11114,7 +11114,7 @@
           "sourceControlAiDefaults": "方案、提示和托管评审默认值由此客户端共享；模型选择和发现则限定在智能体运行的主机内。",
           "projectOnThisHost": "此主机上的项目",
           "repositorySourceControlAi": "这些覆盖项应用于此项目设置，并继承客户端的源代码管理 AI 默认值，直至自定义。",
-          "agentLaunchDefaults": "默认智能体、命令覆盖、CLI 参数和启动环境是客户端偏好。SSH 和远程服务器启动仍会在运行时验证主机可用性。",
+          "agentLaunchDefaults": "默认代理、命令覆盖、CLI 参数和启动环境保存在所选主机上。",
           "clientDefaultProjectScopes": "客户端默认 + 项目范围",
           "terminalQuickCommands": "命令保存在此客户端，然后限定为全局或某项目设置，以便从所选终端上下文运行。",
           "hostOverride": "主机覆盖",
@@ -19565,5 +19565,18 @@
   },
   "projectField": {
     "updateFailed": "无法更新项目字段"
-  }
+  },
+  "settings.agents.environmentName": "环境变量名称",
+  "settings.agents.environmentValue": "{{name}} 的值",
+  "settings.agents.savedEnvironment": "已保存的值 · 输入以替换",
+  "settings.agents.newEnvironment": "值",
+  "settings.agents.removeEnvironment": "删除",
+  "settings.agents.loadingHost": "正在加载代理设置…",
+  "settings.agents.updateHost": "请更新此服务器以编辑其代理启动设置。",
+  "settings.agents.readFailed": "无法读取代理设置。请检查主机连接并重试。",
+  "settings.agents.saveFailed": "无法保存代理设置。请检查主机连接并重试。",
+  "settings.agents.hostDefaults": "所选主机上新代理的默认设置。",
+  "settings.agents.launchHost": "启动设置所在主机",
+  "settings.agents.hostUnavailable": "请连接此主机以编辑其代理启动设置。",
+  "settings.agents.save": "保存"
 }

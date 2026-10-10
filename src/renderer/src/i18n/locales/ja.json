@@ -11114,7 +11114,7 @@
           "sourceControlAiDefaults": "レシピ、プロンプト、ホスト型レビューの既定値は、このクライアントで共有されます。モデルの選択と検出は、Agent が実行されるホストの範囲に限定されます。",
           "projectOnThisHost": "このホスト上のプロジェクト",
           "repositorySourceControlAi": "これらの上書き設定はこのプロジェクトのセットアップに適用され、変更するまではクライアントのソース管理 AI 既定値を継承します。",
-          "agentLaunchDefaults": "既定の Agent、コマンドの上書き、CLI 引数、起動時の環境変数はクライアントの設定です。SSH やリモートサーバーでの起動時には、実行時にホストの利用可否を確認します。",
+          "agentLaunchDefaults": "既定のAgent、コマンドの上書き、CLI 引数、起動環境は選択したホストに保存されます。",
           "clientDefaultProjectScopes": "クライアントの既定値とプロジェクトのスコープ",
           "terminalQuickCommands": "コマンドはこのクライアントに保存され、全体またはプロジェクトのセットアップにスコープを設定して、選択したターミナルのコンテキストで実行されます。",
           "hostOverride": "ホストごとの上書き",
@@ -19565,5 +19565,18 @@
   },
   "projectField": {
     "updateFailed": "プロジェクトフィールドを更新できませんでした"
-  }
+  },
+  "settings.agents.environmentName": "環境変数名",
+  "settings.agents.environmentValue": "{{name}} の値",
+  "settings.agents.savedEnvironment": "保存済みの値 · 置き換えるには入力",
+  "settings.agents.newEnvironment": "値",
+  "settings.agents.removeEnvironment": "削除",
+  "settings.agents.loadingHost": "Agent設定を読み込み中…",
+  "settings.agents.updateHost": "Agentの起動設定を編集するには、このサーバーを更新してください。",
+  "settings.agents.readFailed": "Agent設定を読み込めませんでした。ホストへの接続を確認して再試行してください。",
+  "settings.agents.saveFailed": "Agent設定を保存できませんでした。ホストへの接続を確認して再試行してください。",
+  "settings.agents.hostDefaults": "選択したホストで起動する新しいAgentの既定値。",
+  "settings.agents.launchHost": "起動設定の対象",
+  "settings.agents.hostUnavailable": "Agentの起動設定を編集するには、このホストに接続してください。",
+  "settings.agents.save": "保存"
 }
