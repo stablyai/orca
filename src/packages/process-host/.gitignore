@@ -1,3 +1,2 @@
 .dist-staging-*/
 .dist-build.lock/
-.dist-build-state.json
