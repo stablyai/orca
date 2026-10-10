@@ -3,6 +3,7 @@ import { Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentUnverifiableIcon } from '@/components/AgentUnverifiableIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
   StateIndicatorTooltip,
@@ -29,7 +30,8 @@ const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
   'failed',
   'interrupted',
   'unconfirmed',
-  'done'
+  'done',
+  'unverifiable'
 ])
 
 const StatusIndicator = React.memo(function StatusIndicator({
@@ -88,6 +90,15 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         <AgentStateDot state="unconfirmed" size="md" title={null} />
+      </span>
+    )
+  } else if (status === 'unverifiable') {
+    indicator = (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        {...rest}
+      >
+        <AgentUnverifiableIcon className="size-3" />
       </span>
     )
   } else if (status === 'permission') {
