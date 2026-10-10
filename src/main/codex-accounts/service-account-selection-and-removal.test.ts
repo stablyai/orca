@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   createCodexAuthJson,
@@ -315,6 +315,119 @@ describe('CodexAccountService config sync', () => {
       expect.any(Error)
     )
     warnSpy.mockRestore()
+  })
+
+  // Issue #24942: two host accounts with `selectedId` as the persisted host
+  // selection (an existing id, a stale id, or null for the system default).
+  async function removeIdleAccount(
+    selectedId: string | null,
+    options?: { unmarkActiveHome?: boolean }
+  ) {
+    const activeHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-active',
+      '',
+      '{"account":"active"}\n'
+    )
+    if (options?.unmarkActiveHome) {
+      rmSync(join(activeHomePath, '.orca-managed-home'))
+    }
+    const idleHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-idle',
+      '',
+      '{"account":"idle"}\n'
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-active',
+          email: 'active@example.com',
+          managedHomePath: activeHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-idle',
+          email: 'idle@example.com',
+          managedHomePath: idleHomePath,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeCodexManagedAccountId: selectedId,
+      activeCodexManagedAccountIdsByRuntime: { host: selectedId, wsl: {} }
+    })
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    const result = await service.removeAccount('account-idle')
+    return { result, activeHomePath, idleHomePath, rateLimits, runtimeHome }
+  }
+
+  it('keeps the selected account runtime sync and quota view intact when removing an inactive account', async () => {
+    const { result, activeHomePath, idleHomePath, rateLimits, runtimeHome } =
+      await removeIdleAccount('account-active')
+
+    // Removal itself must still happen: record gone, managed home cleaned, cache evicted.
+    expect(result.accounts.map((account) => account.id)).toEqual(['account-active'])
+    expect(result.activeAccountId).toBe('account-active')
+    expect(existsSync(idleHomePath)).toBe(false)
+    expect(existsSync(activeHomePath)).toBe(true)
+    expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-idle')
+    // Nothing the selection reflects changed, so neither view may clear or re-probe.
+    expect(runtimeHome.syncForCurrentSelection).not.toHaveBeenCalled()
+    expect(rateLimits.refreshForCodexAccountChange).not.toHaveBeenCalled()
+  })
+
+  it('still syncs and refreshes when removing the selected account', async () => {
+    const { result, rateLimits, runtimeHome } = await removeIdleAccount('account-idle')
+
+    expect(result.activeAccountId).toBe(null)
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalled()
+  })
+
+  it('still syncs and refreshes when the selected home fails the ownership check', async () => {
+    const { result, rateLimits, runtimeHome } = await removeIdleAccount('account-active', {
+      unmarkActiveHome: true
+    })
+
+    expect(result.accounts.map((account) => account.id)).toEqual(['account-active'])
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalled()
+  })
+
+  it('still syncs and refreshes when the host selection is the system default', async () => {
+    const { result, rateLimits, runtimeHome } = await removeIdleAccount(null)
+
+    expect(result.activeAccountId).toBe(null)
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalled()
+  })
+
+  it('still syncs and refreshes when the persisted host selection is stale', async () => {
+    const { result, rateLimits, runtimeHome } = await removeIdleAccount('removed-elsewhere')
+
+    expect(result.activeAccountId).toBe('removed-elsewhere')
+    expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalled()
   })
 
   it('lists accounts with normalizeActiveSelection', async () => {

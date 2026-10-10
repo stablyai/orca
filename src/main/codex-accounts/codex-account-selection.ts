@@ -29,6 +29,8 @@ type CodexAccountSelectionDependencies = {
   resolveSystemDefault: () => CodexSystemDefaultIdentity
   removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
   discardResetAttempts: (accountId: string) => Promise<void>
+  /** Read-only probe: false for any home whose ownership cannot be proven right now. */
+  isOwnedHostManagedHome: (candidatePath: string, expectedAccountId: string) => boolean
 }
 
 export class CodexAccountSelection {
@@ -64,20 +66,25 @@ export class CodexAccountSelection {
   async remove(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
     const settings = this.dependencies.store.getSettings()
+    const previousSelection = normalizeCodexRuntimeSelection(settings)
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeCodexAccountIdFromSelection(
-      normalizeCodexRuntimeSelection(settings),
-      accountId
-    )
+    const nextSelection = removeCodexAccountIdFromSelection(previousSelection, accountId)
     const nextActiveId =
       settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
+    // Why: refreshing an unchanged selection over a proven-owned host home would only blank the active account's quota bars during a cold probe.
+    const runtimeViewsAlreadyCurrent =
+      nextActiveId === settings.activeCodexManagedAccountId &&
+      JSON.stringify(nextSelection) === JSON.stringify(previousSelection) &&
+      this.isSelectedHostHomeOwned(nextSelection.host, nextAccounts)
 
     this.dependencies.store.updateSettings({
       codexManagedAccounts: nextAccounts,
       activeCodexManagedAccountId: nextActiveId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
-    this.dependencies.runtimeHome.syncForCurrentSelection()
+    if (!runtimeViewsAlreadyCurrent) {
+      this.dependencies.runtimeHome.syncForCurrentSelection()
+    }
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
@@ -90,14 +97,29 @@ export class CodexAccountSelection {
       // Removal already succeeded; retain the ledger's safety guards if cleanup fails.
       console.warn('[codex-accounts] Removed account, but credit ledger cleanup failed:', error)
     }
-    const accountTarget = getCodexSelectionTargetForAccount(account)
-    this.startQuotaRefresh(
-      getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
-        ? accountId
-        : undefined,
-      accountTarget
-    )
+    if (!runtimeViewsAlreadyCurrent) {
+      const accountTarget = getCodexSelectionTargetForAccount(account)
+      this.startQuotaRefresh(
+        getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
+          ? accountId
+          : undefined,
+        accountTarget
+      )
+    }
     return this.snapshot()
+  }
+
+  private isSelectedHostHomeOwned(
+    hostAccountId: string | null,
+    accounts: CodexManagedAccount[]
+  ): boolean {
+    const selected = hostAccountId
+      ? accounts.find((entry) => entry.id === hostAccountId && entry.managedHomeRuntime !== 'wsl')
+      : undefined
+    return (
+      selected !== undefined &&
+      this.dependencies.isOwnedHostManagedHome(selected.managedHomePath, selected.id)
+    )
   }
 
   async select(
