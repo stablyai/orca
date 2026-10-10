@@ -1,7 +1,10 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
+import {
+  sendTerminalInputThroughPane,
+  temporarilySetNavigatorUserAgent
+} from './pty-connection-test-dom'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -40,6 +43,7 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
+let restoreNavigatorUserAgent: (() => void) | null = null
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync
@@ -175,6 +179,8 @@ describe('connectPanePty', () => {
   })
 
   afterEach(async () => {
+    restoreNavigatorUserAgent?.()
+    restoreNavigatorUserAgent = null
     await restoreTerminalTestGlobals()
   })
 
@@ -471,7 +477,7 @@ describe('connectPanePty', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
-  it('keeps a failed local terminal visible after user input', async () => {
+  it('tears down a failed local terminal after user input', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)
     const transport = createMockTransport('tab-pty')
@@ -487,17 +493,12 @@ describe('connectPanePty', () => {
     sendTerminalInputThroughPane(pane, 'agent startup\r')
     onPtyExit?.('tab-pty', 1)
 
-    expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-      paneId: 1,
-      exitCode: 1,
-      startup: null,
-      reason: 'process-failed'
-    })
-    expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+    expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
+    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
-  it('keeps a failed local split pane visible', async () => {
+  it('closes a failed local split pane without the capacity marker', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
     transportFactoryQueue.push(transport)
@@ -510,13 +511,8 @@ describe('connectPanePty', () => {
       | undefined
     onPtyExit?.('tab-pty', 1)
 
-    expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-      paneId: 1,
-      exitCode: 1,
-      startup: null,
-      reason: 'process-failed'
-    })
-    expect(manager.closePane).not.toHaveBeenCalled()
+    expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
+    expect(manager.closePane).toHaveBeenCalledWith(1)
   })
 
   it('classifies the Git Bash capacity failure before retaining its pane', async () => {
@@ -531,12 +527,19 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const startup = { command: 'codex --resume session-1' }
     const deps = createDeps({ onPaneProcessDied: vi.fn(), startup })
+    restoreNavigatorUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
 
+    onPtySpawn?.('tab-pty')
     capturedDataCallback.current?.(
       'console device allocation failure - too many consoles in use, max consoles is 128'
     )
@@ -549,6 +552,37 @@ describe('connectPanePty', () => {
       reason: 'git-bash-console-capacity'
     })
     expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+  })
+
+  it('does not retain the capacity marker outside native Windows', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'tab-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({ onPaneProcessDied: vi.fn() })
+    restoreNavigatorUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X)'
+    )
+
+    connectPanePty(createPane(1) as never, manager as never, deps as never)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as
+      | ((ptyId: string, exitCode?: number) => void)
+      | undefined
+
+    onPtySpawn?.('tab-pty')
+    capturedDataCallback.current?.('too many consoles in use, max consoles is 128')
+    onPtyExit?.('tab-pty', 1)
+
+    expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
+    expect(manager.closePane).toHaveBeenCalledWith(1)
   })
 
   it('retains the cold-restore resume startup when its replacement hits capacity', async () => {
@@ -565,9 +599,16 @@ describe('connectPanePty', () => {
       startup: { command: 'codex stale-startup' },
       onPaneProcessDied: vi.fn()
     })
+    restoreNavigatorUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
 
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.('resume-pty')
     callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
@@ -621,12 +662,8 @@ describe('connectPanePty', () => {
       | undefined
     onPtyExit?.('resume-pty', 1)
 
-    expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-      paneId: 1,
-      exitCode: 1,
-      startup: null,
-      reason: 'process-failed'
-    })
+    expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
+    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('resume-pty')
   })
 
   it('does not retain a failed direct-SSH terminal locally', async () => {
