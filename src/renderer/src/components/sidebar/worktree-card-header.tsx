@@ -86,7 +86,8 @@ export function WorktreeCardHeader({
     showDeleteQuickAction,
     showTitleRowIndicators,
     titleRowIndicators,
-    titleWrapper
+    titleWrapper,
+    titleIsProvisional
   } = presentation
 
   return (
@@ -167,22 +168,32 @@ export function WorktreeCardHeader({
         )}
 
         {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}
-        <WorktreeTitleInlineRename
-          displayName={visibleCardTitle}
-          disabled={isDeleting || affiliateListMode}
-          showUnreadEmphasis={showUnreadEmphasis}
-          dimReadTitle={newCardStyle}
-          className="text-[13px] leading-5"
-          editingClassName="flex-1"
-          titleWrapper={titleWrapper}
-          onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
-          onRename={handleRenameTitle}
-          beginEditing={
-            !affiliateListMode &&
-            shouldBeginWorktreeRename(renamingWorktreeId, worktree.id, renameRowKey)
-          }
-          onBeginEditingConsumed={affiliateListMode ? undefined : () => setRenamingWorktreeId(null)}
-        />
+        {titleIsProvisional ? (
+          <span
+            data-worktree-card-title-placeholder=""
+            aria-hidden="true"
+            className="h-3.5 w-24 shrink-0 animate-pulse rounded-sm bg-muted-foreground/20 motion-reduce:animate-none"
+          />
+        ) : (
+          <WorktreeTitleInlineRename
+            displayName={visibleCardTitle}
+            disabled={isDeleting || affiliateListMode}
+            showUnreadEmphasis={showUnreadEmphasis}
+            dimReadTitle={newCardStyle}
+            className="text-[13px] leading-5"
+            editingClassName="flex-1"
+            titleWrapper={titleWrapper}
+            onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
+            onRename={handleRenameTitle}
+            beginEditing={
+              !affiliateListMode &&
+              shouldBeginWorktreeRename(renamingWorktreeId, worktree.id, renameRowKey)
+            }
+            onBeginEditingConsumed={
+              affiliateListMode ? undefined : () => setRenamingWorktreeId(null)
+            }
+          />
+        )}
 
         {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 &&
