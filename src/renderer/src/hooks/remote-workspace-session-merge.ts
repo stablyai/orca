@@ -268,9 +268,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
   // repo.
   // Why: every host republish carries the last uploaded selection, so after the first hydrate a
   // title change while an agent works would otherwise steal focus back (#19697, #20938).
-  const keepsLocalView =
-    activeOutsideTarget ||
-    (keepLocalSelection && (current.activeWorktreeId == null || localActiveWorkspaceSurvives))
+  // The home screen is not kept: hydration reads a null worktree as "restore the repo's default".
+  const keepsLocalView = activeOutsideTarget || (keepLocalSelection && localActiveWorkspaceSurvives)
   const keepsLocalWorkspace =
     !keepsLocalView && remote.activeWorktreeId == null && preservedActiveWorktreeId != null
   const activeWorktreeId = keepsLocalView

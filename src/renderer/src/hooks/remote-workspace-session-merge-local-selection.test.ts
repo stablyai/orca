@@ -102,4 +102,23 @@ describe('direct-SSH merge keeps this view’s selection after the first hydrate
     expect(merged.activeTabId).toBe('tab-1')
     expect(merged.activeTabIdByWorktree?.[WORKTREE]).toBe('tab-1')
   })
+
+  it('leaves a user on the home screen there when the host names no workspace', () => {
+    const current = session(null, local, {
+      activeWorktreeId: null,
+      activeWorkspaceKey: null,
+      activeTabIdByWorktree: { [WORKTREE]: 'tab-3' }
+    })
+    const remote = session('tab-1', republished, {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeWorkspaceKey: null
+    })
+
+    const merged = merge(current, remote, true)
+
+    expect(merged.activeWorktreeId).toBeNull()
+    expect(merged.activeRepoId).toBeNull()
+    expect(merged.activeTabIdByWorktree?.[WORKTREE]).toBe('tab-3')
+  })
 })
