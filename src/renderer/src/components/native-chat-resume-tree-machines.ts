@@ -5,7 +5,7 @@ import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-res
 import type { ResumeFailureAction } from './native-chat-resume-failure-guidance'
 import type { MachineView } from './native-chat-resume-machine-views'
 import type { RestartMachineKey } from './native-chat-restart-machines'
-import { resumeOwnershipLabel } from './native-chat-resume-ownership'
+import { resumeCandidateOwnership, resumeOwnershipLabel } from './native-chat-resume-ownership'
 import { resumeRowKey, resumeRowSelectedByDefault } from './native-chat-resume-selection'
 
 /**
@@ -52,7 +52,10 @@ export function resumeTreeMachines(
   const machineOfRow = new Map<ResumeCandidate, MachineView>()
   // Keyed by plain string: the tree names a machine node by its host id inside a string key.
   const machineByHost = new Map<string, MachineView>()
-  const rowByKey = new Map<string, { machine: MachineView; sessionId: string }>()
+  const rowByKey = new Map<
+    string,
+    { machine: MachineView; sessionId: string; candidate: ResumeCandidate }
+  >()
   const shown = new Map(machines.map((machine) => [machine, rowsOf(machine)]))
   for (const [machine, rows] of shown) {
     for (const row of rows) {
@@ -60,7 +63,8 @@ export function resumeTreeMachines(
       machineByHost.set(row.executionHostId ?? LOCAL_EXECUTION_HOST_ID, machine)
       rowByKey.set(resumeRowKey(machine.identity, row.sessionId), {
         machine,
-        sessionId: row.sessionId
+        sessionId: row.sessionId,
+        candidate: row
       })
     }
   }
@@ -80,10 +84,13 @@ export function resumeTreeMachines(
       return machine !== undefined && resuming.has(machine.machine)
     },
     failureFor: (key) => lookup(key, (machine, sessionId) => machine.failureFor(sessionId)),
-    originLabelFor: (key) =>
-      lookup(key, (machine, sessionId) =>
-        resumeOwnershipLabel(machine.ownershipFor(sessionId), machine.name)
-      ),
+    // Read from the row shown, which may be a run's copy of a chat its host no longer lists.
+    originLabelFor: (key) => {
+      const row = rowByKey.get(key)
+      return row
+        ? resumeOwnershipLabel(resumeCandidateOwnership(row.candidate), row.machine.name)
+        : undefined
+    },
     // A machine starts open when the dialog was opened for it, when it is the only one listed, or
     // when nothing on it starts ticked (so its empty box is explained); every other node is open.
     defaultExpanded: (nodeKey) => {

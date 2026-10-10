@@ -97,6 +97,8 @@ it('retires the dialog request when the only run it shows belongs to a server th
   // The success toast's Show (or the user reopening) opens the finished run.
   await act(async () => requestNativeChatResumeOnRestartDialog('environment:studio'))
   expect(document.body.textContent).toContain('Resumed 1 of 1 chat')
+  // The resumed chat has left the listing; its origin comes from the run's own row.
+  expect(document.body.textContent).not.toContain('Unknown origin')
   // Server unpaired / re-paired / contact revoked while the dialog is up.
   await act(async () => forgetNativeChatRestartMachine('environment:studio'))
   expect(getNativeChatRestartRuns().size).toBe(0)
