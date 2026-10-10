@@ -28,6 +28,7 @@ import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-action
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { resolveAiVaultHistoryRowResume } from './ai-vault-session-resume-in-chat-workspace'
 import {
+  useAiVaultSessionOwnerWorkspaces,
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
 } from './ai-vault-session-worktree'
@@ -185,10 +186,12 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [allWorktrees, projectHostSetupProjection, repos, sessions]
   )
+  // Folder workspaces own their sessions by cwd too, so they resume and jump like a worktree.
+  const ownerWorkspaces = useAiVaultSessionOwnerWorkspaces(allWorktrees, resumeTargetState)
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,
-    worktrees: allWorktrees
+    worktrees: ownerWorkspaces
   })
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   // `current` is stamped per row at read time so the map above stays cached.
@@ -239,11 +242,11 @@ export default function AiVaultPanel(): React.JSX.Element {
       session,
       worktreeInfo: getSessionWorktreeInfo(session),
       activeWorktreeId: effectiveActiveWorktreeId,
-      worktrees: allWorktrees,
+      worktrees: ownerWorkspaces,
       repos,
       targetState: resumeTargetState
     }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
+    [effectiveActiveWorktreeId, getSessionWorktreeInfo, ownerWorkspaces, repos, resumeTargetState]
   )
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
@@ -254,15 +257,11 @@ export default function AiVaultPanel(): React.JSX.Element {
   const getSessionResumeActions = useCallback(
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeActions({
+        ...getSessionRowResumeArgs(session),
         sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: getSessionWorktreeInfo(session),
-        activeWorktreeId: effectiveActiveWorktreeId,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
+        sessionExecutionHostId: session.executionHostId
       }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
+    [getSessionRowResumeArgs]
   )
 
   // Resuming into a chat asks a different question from resuming into a terminal: not "can this

@@ -2,7 +2,6 @@ import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
@@ -10,6 +9,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import { activateAiVaultResumeWorkspace } from './ai-vault-session-resume-in-chat-launch'
 import {
   createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
@@ -86,7 +86,7 @@ export function useAiVaultOriginalPaneActions(): {
         return
       }
 
-      if (!activateAndRevealWorktree(target.worktreeId)) {
+      if (!activateAiVaultResumeWorkspace(target.worktreeId)) {
         toast.error(
           translate(
             'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
@@ -106,7 +106,7 @@ export function useAiVaultOriginalPaneActions(): {
   )
 
   const jumpToWorktree = useCallback((worktreeId: string): void => {
-    if (!activateAndRevealWorktree(worktreeId)) {
+    if (!activateAiVaultResumeWorkspace(worktreeId)) {
       toast.error(
         translate(
           'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
