@@ -36,6 +36,12 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
           discardPendingLiveChunksSalvagingQueries()
           return 'refetch'
         }
+        if (data.length < chunk.data.length) {
+          // Why: the snapshot covers these bytes, but their queries are still the view's to answer.
+          session.salvageRendererQueriesFromDiscardedRestoreData(
+            chunk.data.slice(0, chunk.data.length - data.length)
+          )
+        }
         // Why: advance the continuity point so reconciliation neither re-drops drained chunks as duplicates nor misreads the next live chunk as a gap.
         if (typeof chunk.seq === 'number' && session.restoredSnapshotExpectedStartSeq !== null) {
           session.restoredSnapshotExpectedStartSeq = Math.max(

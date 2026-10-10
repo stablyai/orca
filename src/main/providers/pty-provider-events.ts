@@ -26,4 +26,6 @@ export type PtyBackgroundStreamEvent =
       mode2031PendingSubscribe?: true
     }
   | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
+  /** The daemon answers this PTY's queries in every byte after this event iff `responder`. */
+  | { id: string; kind: 'queryResponderMarker'; responder: boolean }
   | { id: string; kind: 'transientFact'; fact: PtyTransientFact }

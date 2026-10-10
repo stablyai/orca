@@ -153,6 +153,18 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     return state ? projectTerminalVisibleLines(state.emulator).lines : null
   }
 
+  /** readLiveTerminalScreenLines, but a model rebuilt after dormancy is awaited, not read as
+   *  no screen. */
+  protected async readSettledLiveTerminalScreenLines(ptyId: string): Promise<string[] | null> {
+    const lines = this.readLiveTerminalScreenLines(ptyId)
+    const state = this.headlessTerminals.get(ptyId)
+    if (lines !== null || !state || !this.isMainTerminalModelCatchingUp(ptyId)) {
+      return lines
+    }
+    await state.writeChain
+    return this.readLiveTerminalScreenLines(ptyId)
+  }
+
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */
   protected readRuledScreen(ptyId: string | null | undefined): RuledScreen | null {
     const state = this.readWholeScreenModel(ptyId)
@@ -177,6 +189,8 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     if (!ptyId) {
       return null
     }
+    // Why: screen rules poll; a dormant model reads null once while its seed lands.
+    this.noteMainTerminalModelDemand(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (
       !state ||

@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { PtyProviderBufferSnapshot } from '../providers/types'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TRANSCRIPT_PANE_TAB_ID = 'tab-1'
@@ -34,6 +35,8 @@ export type TranscriptPaneOptions = {
   /** The pane's root process the provider reports; absent for a provider without an inventory. */
   paneRootPid?: number
   onShellForegroundProof?: () => void
+  /** A local daemon's settled snapshot of the pane, which lets main's own model go dormant. */
+  settledDaemonSnapshot?: () => PtyProviderBufferSnapshot
 }
 
 export async function createTranscriptPane(
@@ -93,6 +96,13 @@ export async function createTranscriptPane(
               title: 'Terminal'
             }
           ]
+        }
+      : {}),
+    ...(options.settledDaemonSnapshot
+      ? {
+          canProvideSettledBufferSnapshot: () => true,
+          hasRendererSerializer: () => true,
+          serializeProviderBuffer: async () => options.settledDaemonSnapshot?.() ?? null
         }
       : {}),
     ...(options.shellForegroundProven !== undefined

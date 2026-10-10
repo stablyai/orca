@@ -26,6 +26,8 @@ export type PtyRendererDeliveryDebugSnapshot = {
   deliveryInterestPtyCount: number
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
+  /** PTYs whose daemon answers terminal queries for a gated view. */
+  daemonQueryResponderPtyCount: number
   pendingDroppedChars: number
   /** One-paste freeze diagnostics: per-pty delivery table + event history. */
   diagnostics: PtyMainDeliveryDiagnostics
@@ -80,6 +82,7 @@ export const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebu
   deliveryInterestPtyCount: 0,
   hiddenDeliveryDroppedChars: 0,
   hiddenDeliveryDroppedChunks: 0,
+  daemonQueryResponderPtyCount: 0,
   pendingDroppedChars: 0,
   diagnostics: EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
   rendererLifecycleResetCount: 0,

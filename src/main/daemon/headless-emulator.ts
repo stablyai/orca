@@ -29,7 +29,7 @@ export type HeadlessEmulatorOptions = {
   cols: number
   rows: number
   scrollback?: number
-  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes emit here. The daemon Session must never pass this. */
+  /** Query reply sink (terminal-query-authority.md); only `forwardQueryReplies` writes emit here. The daemon flags writes only while main delegated the session's queries. */
   onQueryReply?: (reply: string) => void
   pathFlavor?: 'posix' | 'win32'
   remotePosixFileUriAuthority?: boolean
@@ -123,7 +123,7 @@ export class HeadlessEmulator {
     return this.terminal.parser
   }
 
-  /** Headless core has no theme service, so OSC 4/10/11/12 and DSR ?996n answer from the renderer's pushed attributes; daemon Session must never call this. */
+  /** Headless core has no theme service, so OSC 4/10/11/12 and DSR ?996n answer from the renderer's pushed attributes. */
   installViewAttributeResponder(getBaseAttributes: () => TerminalViewAttributes | null): void {
     if (this.viewAttributeResponder) {
       return

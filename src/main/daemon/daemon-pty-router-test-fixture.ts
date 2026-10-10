@@ -7,7 +7,10 @@ import {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 } from './types'
-import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
+import {
+  SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION,
+  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
+} from './daemon-protocol-version'
 
 type AdapterMock = DaemonPtyAdapter & {
   emitData: (id: string, data: string, sequenceChars?: number) => void
@@ -44,6 +47,8 @@ export function createAdapter(
       protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
     canProvideAuthoritativeBufferSnapshot: () =>
       protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
+    canProvideSettledBufferSnapshot: () =>
+      protocolVersion >= SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)

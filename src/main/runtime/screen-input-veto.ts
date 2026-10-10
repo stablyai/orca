@@ -12,6 +12,10 @@ const SCREEN_INPUT_VETOES: Partial<Record<TuiAgent, (screen: RuledScreen) => boo
   omp: isOmpOverlayScreen
 }
 
+export function hasScreenInputVeto(agent: TuiAgent | null | undefined): boolean {
+  return agent ? SCREEN_INPUT_VETOES[agent] !== undefined : false
+}
+
 /** Whether the agent's live screen refuses input; null with no veto rule or no trustworthy screen. */
 export function readScreenInputVeto(
   agent: TuiAgent | null | undefined,

@@ -162,6 +162,11 @@ export function holdsReadyTextToQuiet(agent: TuiAgent | null | undefined): boole
   return someRule(agent, (rule) => rule.region === 'text' && isStrongQuietIdle(rule.verdict))
 }
 
+/** Whether any of the agent's rules reads the screen. */
+export function rulesReadScreen(agent: TuiAgent | null | undefined): boolean {
+  return someRule(agent, (rule) => rule.region === 'screen')
+}
+
 /** Whether the agent's own idle-title rule waits for quiet; null when it has none. */
 export function idleTitleRequiresQuiet(agent: TuiAgent | null | undefined): boolean | null {
   const verdict = compiledFileFor(agent)?.rules.find((rule) => rule.region === 'title')?.verdict

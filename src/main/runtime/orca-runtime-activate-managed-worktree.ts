@@ -246,12 +246,14 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
         signal: stop.signal,
         isShellInFront: async (ownerPtyId) =>
           (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
-        accept: (readyPtyId) => {
+        accept: async (readyPtyId) => {
           const pty = this.ptysById.get(readyPtyId)
+          // Why settled: a dialog painted before the model went dormant is only on its screen.
+          const screenLines = pty ? await this.readSettledLiveTerminalScreenLines(readyPtyId) : null
           const hold = pty
             ? readFreshComposerHold(
                 buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-                this.readLiveTerminalScreenLines(readyPtyId)
+                screenLines
               )
             : null
           if (hold === 'dialog' && stopOnDialog) {

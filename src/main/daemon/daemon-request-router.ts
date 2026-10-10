@@ -75,6 +75,9 @@ export class DaemonRequestRouter {
       case 'setColorQueryReplyColors':
         setPtyOwnerHostColors(request.payload.colors)
         return {}
+      case 'setTerminalViewAttributes':
+      case 'setSessionQueryResponder':
+        return this.options.sessionBackgroundRouting.routeQueryResponder(request)
       case 'write':
         return this.write(client, request.payload.sessionId, request.payload.data)
       case 'resize':

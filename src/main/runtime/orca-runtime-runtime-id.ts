@@ -359,12 +359,16 @@ export class OrcaRuntimeWithRuntimeId {
       return pty === undefined || hasTerminalCommandPainted(pty)
     },
     // Why the runtime's own emulator: a provider snapshot would be a host round trip per tick.
-    readVisibleScreen: (ptyId) =>
-      this.headlessTerminals.has(ptyId)
+    // Why demand first: a dormant model is rebuilt behind its write chain, which the read awaits,
+    // so its dialog is not read as no screen.
+    readVisibleScreen: (ptyId) => {
+      this.noteMainTerminalModelDemand(ptyId)
+      return this.headlessTerminals.has(ptyId)
         ? this.readHeadlessVisibleTerminalState(ptyId).then(
             (screen) => screen?.lines.join('\n') ?? null
           )
-        : null,
+        : null
+    },
     getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })

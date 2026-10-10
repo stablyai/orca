@@ -128,6 +128,8 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     if (!data) {
       return
     }
+    // Why: an explicit seed owns the model now; a dormant PTY must not skip the bytes after it.
+    this.mainTerminalModelDormancy.cancelDormancy(ptyId)
     const existing = this.headlessTerminals.get(ptyId)
     if (existing) {
       // Why: emulator already has live data — re-seeding would duplicate

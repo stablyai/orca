@@ -6,11 +6,14 @@ import {
   isNativeWindowsLocalPtySpawn,
   isTerminalModelQueryAuthorityEnabled,
   markNativeWindowsConptyPty,
+  resolveTerminalQueryResponder,
   shouldModelAnswerHiddenPtyQueries
 } from './terminal-model-query-authority'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   markHiddenRendererPty,
+  setDaemonQueryResponderConfirmed,
+  setHiddenDeliveryDaemonHandoff,
   setRendererPtyDeliveryInterest
 } from '../ipc/pty-hidden-delivery-gate'
 
@@ -64,10 +67,10 @@ describe('shouldModelAnswerHiddenPtyQueries', () => {
     expect(answer('pty-other')).toBe(false)
   })
 
-  it('yields to registered renderer delivery interest (chunk is delivered to a sidecar)', () => {
+  it('keeps answering under renderer delivery interest (the chunk reaches sidecars, not the view)', () => {
     markHiddenRendererPty('pty-1')
     setRendererPtyDeliveryInterest('pty-1', true)
-    expect(answer('pty-1')).toBe(false)
+    expect(answer('pty-1')).toBe(true)
     setRendererPtyDeliveryInterest('pty-1', false)
     expect(answer('pty-1')).toBe(true)
   })
@@ -88,6 +91,40 @@ describe('shouldModelAnswerHiddenPtyQueries', () => {
     expect(answer('pty-1', { terminalModelQueryAuthority: false })).toBe(false)
     expect(answer('pty-1', { terminalHiddenDeliveryGate: false })).toBe(false)
     expect(answer('pty-1', { terminalMainSideEffectAuthority: false })).toBe(false)
+  })
+})
+
+describe('resolveTerminalQueryResponder', () => {
+  const responder = (hasRemoteViewSubscriber = false) =>
+    resolveTerminalQueryResponder({ ptyId: 'pty-1', settings: ALL_ON, hasRemoteViewSubscriber })
+
+  it('picks exactly one party as the daemon request is confirmed and released', () => {
+    expect(responder()).toBe('view')
+    markHiddenRendererPty('pty-1')
+    expect(responder()).toBe('main')
+    setHiddenDeliveryDaemonHandoff('pty-1', true)
+    expect(responder()).toBe('view')
+    setDaemonQueryResponderConfirmed('pty-1', true)
+    expect(responder()).toBe('daemon')
+    expect(
+      shouldModelAnswerHiddenPtyQueries({
+        ptyId: 'pty-1',
+        settings: ALL_ON,
+        hasRemoteViewSubscriber: false
+      })
+    ).toBe(false)
+    setHiddenDeliveryDaemonHandoff('pty-1', false)
+    expect(responder()).toBe('daemon')
+    setDaemonQueryResponderConfirmed('pty-1', false)
+    expect(responder()).toBe('main')
+  })
+
+  it('names the daemon until its take-back even after a remote view attached', () => {
+    markHiddenRendererPty('pty-1')
+    setDaemonQueryResponderConfirmed('pty-1', true)
+    expect(responder(true)).toBe('daemon')
+    setDaemonQueryResponderConfirmed('pty-1', false)
+    expect(responder(true)).toBe('view')
   })
 })
 

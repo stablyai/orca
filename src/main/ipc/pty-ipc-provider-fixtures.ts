@@ -3,6 +3,7 @@ import type { Mock } from 'vitest'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 import { makeDisposable } from './pty-ipc-test-constants'
+import type { PtyBackgroundStreamEvent } from '../providers/types'
 
 /** The node-pty process double plus the emitters that drive its registered handlers. */
 export type MockPtyProcess = {
@@ -23,6 +24,7 @@ export type ObservableDaemonProviderDouble = {
   emitData: (id: string, data: string) => void
   emitExit: (id: string, code?: number) => void
   emitDataGap: (id: string, droppedChars: number) => void
+  emitQueryResponderMarker: (id: string, responder: boolean) => void
 }
 
 /** Provider double used by agent-claim/ownership suites; every member is a bare spy. */
@@ -125,10 +127,9 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
     const shutdown = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
-    let backgroundStreamHandler:
-      | ((payload: { id: string; kind: 'dataGap'; droppedChars: number }) => void)
-      | null = null
+    let backgroundStreamHandler: ((payload: PtyBackgroundStreamEvent) => void) | null = null
     const getBufferSnapshot = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements only the provider members these suites drive.
     setLocalPtyProvider({
       spawn,
       write,
@@ -153,12 +154,10 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
         return () => {}
       }),
       onReplay: vi.fn(() => () => {}),
-      onBackgroundStreamEvent: vi.fn(
-        (handler: (payload: { id: string; kind: 'dataGap'; droppedChars: number }) => void) => {
-          backgroundStreamHandler = handler
-          return () => {}
-        }
-      ),
+      onBackgroundStreamEvent: vi.fn((handler: (payload: PtyBackgroundStreamEvent) => void) => {
+        backgroundStreamHandler = handler
+        return () => {}
+      }),
       getBufferSnapshot,
       onExit: vi.fn((handler: (payload: { id: string; code: number }) => void) => {
         exitHandler = handler
@@ -180,7 +179,9 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       emitData: (id: string, data: string) => dataHandler?.({ id, data }),
       emitExit: (id: string, code = 0) => exitHandler?.({ id, code }),
       emitDataGap: (id: string, droppedChars: number) =>
-        backgroundStreamHandler?.({ id, kind: 'dataGap', droppedChars })
+        backgroundStreamHandler?.({ id, kind: 'dataGap', droppedChars }),
+      emitQueryResponderMarker: (id: string, responder: boolean) =>
+        backgroundStreamHandler?.({ id, kind: 'queryResponderMarker', responder })
     }
   }
 
