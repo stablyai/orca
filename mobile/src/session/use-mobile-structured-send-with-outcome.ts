@@ -4,17 +4,18 @@
 // host advertises the queue and no pending prompt is one this build cannot answer.
 
 import { useCallback } from 'react'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-outbox'
+} from '../../../src/shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionComposerOptions } from '../../../src/shared/structured-agent-session-composer'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
 import {
@@ -22,26 +23,34 @@ import {
   pendingStructuredQuestion
 } from './mobile-structured-agent-prompts'
 
+/** Whether a send made now asks the host to queue it. The host's queue waits on any pending prompt;
+ *  one this build cannot answer would hold the send forever, so it starts a turn instead. */
+export function mobileStructuredSendQueues(
+  queueCapable: boolean,
+  items: StructuredAgentSessionState['items']
+): boolean {
+  return queueCapable && !pendingPromptsAllUnanswerableHere(items)
+}
+
 export type StructuredMobileSendAttachment = StructuredAgentSessionAttachment & {
   id?: string
-  contentFingerprint?: string
 }
 
 export function useMobileStructuredSendWithOutcome(args: {
   agent: string | null
-  callerIdentity: string
   client: RpcClient | null
   sessionId: string | null
-  sessionKey: string
   enabled: boolean
   queueCapable: boolean
+  /** The host holds a /compact sent while the agent works as a card. */
+  commandsWait: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   commandPending: { current: boolean }
   controller: Pick<
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
   >
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
 }): (
   text: string,
   images?: string[],
@@ -50,15 +59,14 @@ export function useMobileStructuredSendWithOutcome(args: {
 ) => Promise<MobileNativeChatSendOutcome> {
   const {
     agent,
-    callerIdentity,
     client,
     commandPending,
+    commandsWait,
     controller,
     enabled,
     onSendError,
     queueCapable,
     sessionId,
-    sessionKey,
     stateRef
   } = args
   return useCallback(
@@ -94,11 +102,19 @@ export function useMobileStructuredSendWithOutcome(args: {
           agent: agent === 'claude' ? 'claude' : 'codex',
           ...controller
         },
-        canRun: () =>
-          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
-          !stateRef.current.items.some(
+        busy: () =>
+          stateRef.current.items.some(
             (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
-          ),
+          )
+            ? 'prompt'
+            : runningStructuredAgentSessionTurnId(stateRef.current)
+              ? 'working'
+              : null,
+        // A card waiting on a prompt nothing here can answer would hold it forever.
+        waitsInLine: (command) =>
+          command === 'compact' &&
+          commandsWait &&
+          !pendingPromptsAllUnanswerableHere(stateRef.current.items),
         onError: onSendError,
         timeoutMs
       })
@@ -112,14 +128,10 @@ export function useMobileStructuredSendWithOutcome(args: {
       return sendMobileStructuredAgentSessionMessage({
         client,
         sessionId,
-        sessionKey,
-        callerIdentity,
         expectedRuntimeFence: currentFence,
         text,
         attachments: sendAttachments,
-        // The host's queue waits on any pending prompt; one this build cannot answer would hold
-        // the send forever, so it starts a turn, whose card cancel then works.
-        ...(queueCapable && !pendingPromptsAllUnanswerableHere(stateRef.current.items)
+        ...(mobileStructuredSendQueues(queueCapable, stateRef.current.items)
           ? { delivery: 'queue-if-active' as const }
           : {}),
         deadline,
@@ -128,15 +140,14 @@ export function useMobileStructuredSendWithOutcome(args: {
     },
     [
       agent,
-      callerIdentity,
       client,
       commandPending,
+      commandsWait,
       controller,
       enabled,
       onSendError,
       queueCapable,
       sessionId,
-      sessionKey,
       stateRef
     ]
   )

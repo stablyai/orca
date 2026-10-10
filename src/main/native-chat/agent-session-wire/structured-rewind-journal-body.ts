@@ -115,3 +115,16 @@ function withKnownTurnOutcome(
   const { outcome: _outcome, ...rest } = lifecycle
   return { ...body, turnLifecycle: rest }
 }
+
+export function renameRewindTurnOpener(
+  body: AgentJournalItemBody,
+  rename: (itemId: string) => string
+): AgentJournalItemBody {
+  if (body.kind === 'turn' && body.userItemId !== undefined) {
+    return { ...body, userItemId: rename(body.userItemId) }
+  }
+  const lifecycle = body.kind === 'status' ? body.turnLifecycle : undefined
+  return body.kind === 'status' && lifecycle?.userItemId !== undefined
+    ? { ...body, turnLifecycle: { ...lifecycle, userItemId: rename(lifecycle.userItemId) } }
+    : body
+}

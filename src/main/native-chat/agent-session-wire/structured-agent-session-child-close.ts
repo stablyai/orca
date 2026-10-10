@@ -25,10 +25,16 @@ export async function joinStructuredAgentSessionChildClose(
   sessionId: string,
   child: StructuredAgentSessionProviderChild
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
+  // Read before the close: once the child is gone the provider can no longer say.
+  const unanswered = context.deps.adapter.startAnswered?.(sessionId) === false
   if (!(await closeProviderRoot(context, sessionId))) {
     return 'unverifiable'
   }
-  await context.endExitedChild(sessionId, child, { expected: true, reason: 'closed by Orca' })
+  await context.endExitedChild(sessionId, child, {
+    expected: true,
+    reason: 'closed by Orca',
+    ...(unanswered ? { startupUnanswered: true } : {})
+  })
   context.restartWitness?.stopped(sessionId)
   return 'exited'
 }

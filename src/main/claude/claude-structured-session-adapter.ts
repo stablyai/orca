@@ -1,4 +1,4 @@
-import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
 import type {
   AgentSessionAcquisition,
@@ -13,10 +13,7 @@ import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
-import {
-  awaitClaudeSessionStarted,
-  claudeStartupSettledWithin
-} from './claude-structured-session-startup-state'
+import { claudeStartupSettledWithin } from './claude-structured-session-startup-state'
 import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
 import {
   ClaudeAcquisitionRegistry,
@@ -129,18 +126,13 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
    *  apart without guessing at wall-clock. */
   drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)
 
-  /** Resolves once a published session's startup has landed, faulted, or been ended by a close;
-   *  with the reason when it did not land. */
-  awaitStarted = (sessionId: string): Promise<void | SubmissionRejectionFact> =>
-    awaitClaudeSessionStarted(this.sessions.get(sessionId))
-
   /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */
   providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
     input
   ) =>
     resolveClaudeProviderHistoryWindow({
       identity: input.identity,
-      accountHomePath: input.accountHome.path,
+      accountHomePath: requireLegacyAgentSessionAccountHome(input.accountHome).path,
       hasLiveSession:
         this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
     })
@@ -226,6 +218,14 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const session = this.sessions.get(sessionId)
     return session ? claudeHoldsDispatch(session) : false
   }
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return (
+      session?.acquisitionGeneration === acquisitionGeneration &&
+      session.connection.pid !== undefined &&
+      session.connection.exitVerdict.root === 'live'
+    )
+  }
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
@@ -234,6 +234,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input,
       this.deps.requestTimeoutMs
     )
+  startAnswered = (sessionId: string): boolean | undefined =>
+    this.sessions.get(sessionId)?.startup.answered
   awaitOptionWritable = (sessionId: string): Promise<void> =>
     claudeStartupSettledWithin(
       this.sessions.get(sessionId),

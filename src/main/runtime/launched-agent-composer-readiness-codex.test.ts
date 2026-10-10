@@ -22,6 +22,28 @@ async function launchedCodexPane(data: string) {
   })
 }
 
+async function waitForCodexComposer(
+  pane: Awaited<ReturnType<typeof launchedCodexPane>>,
+  timeoutMs: number,
+  streamedData?: string
+) {
+  // Pane creation uses real timers; only the readiness budget advances virtually.
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
+  try {
+    const ready = waitForLaunchedAgentComposer(pane.runtime, pane.handle, 'codex', timeoutMs)
+    void ready.catch(() => {})
+    if (streamedData !== undefined) {
+      pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, streamedData, Date.now())
+    }
+    await vi.advanceTimersByTimeAsync(timeoutMs + 1)
+    return await ready
+  } finally {
+    vi.useRealTimers()
+  }
+}
+
 // Why cut: on an Astra model 0.158 sparkles braille stars in the empty composer, redrawing every
 // 150 ms, then repaints it clean after 15 s. The capture ends on the first star frame, so replayed
 // whole it holds a starred composer still, which the live stream never does.
@@ -37,19 +59,19 @@ describe('launch readiness for a freshly launched Codex', () => {
     // Presence precondition: the cut keeps the live status row and drops every star.
     expect(data).toContain('GPT-6-Astra default')
     expect(data).not.toMatch(/48;2;30;30;30m[⠀-⣿]/)
-    const { runtime, handle } = await launchedCodexPane(data)
-    await expect(
-      waitForLaunchedAgentComposer(runtime, handle, 'codex', 8_000)
-    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    const pane = await launchedCodexPane(data)
+    await expect(waitForCodexComposer(pane, 8_000)).resolves.toMatchObject({
+      condition: 'tui-idle',
+      satisfied: true
+    })
   }, 15_000)
 
   it('codex-0157-plain-ready: reads the live chat as ready, so the prompt is pasted', async () => {
-    const { runtime, handle } = await launchedCodexPane(
-      readRuntimeFixture('codex-0157-plain-ready')
-    )
-    await expect(
-      waitForLaunchedAgentComposer(runtime, handle, 'codex', 8_000)
-    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+    const pane = await launchedCodexPane(readRuntimeFixture('codex-0157-plain-ready'))
+    await expect(waitForCodexComposer(pane, 8_000)).resolves.toMatchObject({
+      condition: 'tui-idle',
+      satisfied: true
+    })
   }, 15_000)
 
   it.each([
@@ -60,10 +82,11 @@ describe('launch readiness for a freshly launched Codex', () => {
   ])(
     '%s: stops at the dialog as %s instead of pasting into it',
     async (fixture, reason) => {
-      const { runtime, handle } = await launchedCodexPane(readRuntimeFixture(fixture))
-      await expect(
-        waitForLaunchedAgentComposer(runtime, handle, 'codex', 2_500)
-      ).resolves.toMatchObject({ satisfied: false, blockedReason: reason })
+      const pane = await launchedCodexPane(readRuntimeFixture(fixture))
+      await expect(waitForCodexComposer(pane, 2_500)).resolves.toMatchObject({
+        satisfied: false,
+        blockedReason: reason
+      })
     },
     15_000
   )
@@ -83,10 +106,11 @@ describe('launch readiness for a freshly launched Codex', () => {
       const data = readRuntimeFixture(fixture)
       // Presence precondition: the dialog draws Codex's composer glyph after bracketed paste.
       expect(data.slice(data.indexOf('\x1b[?2004h'))).toContain('›')
-      const { runtime, handle } = await launchedCodexPane('')
-      const ready = waitForLaunchedAgentComposer(runtime, handle, 'codex', 2_500)
-      runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
-      await expect(ready).resolves.toMatchObject({ satisfied: false, blockedReason: reason })
+      const pane = await launchedCodexPane('')
+      await expect(waitForCodexComposer(pane, 2_500, data)).resolves.toMatchObject({
+        satisfied: false,
+        blockedReason: reason
+      })
     },
     15_000
   )
@@ -99,9 +123,7 @@ describe('launch readiness for a freshly launched Codex', () => {
     expect(install).toBeGreaterThan(0)
     const provisional = full.slice(0, full.indexOf('\n', install) + 1)
     expect(provisional).toMatch(/model:.*loading/)
-    const { runtime, handle } = await launchedCodexPane(provisional)
-    await expect(waitForLaunchedAgentComposer(runtime, handle, 'codex', 5_000)).rejects.toThrow(
-      /timeout/
-    )
+    const pane = await launchedCodexPane(provisional)
+    await expect(waitForCodexComposer(pane, 5_000)).rejects.toThrow(/timeout/)
   }, 15_000)
 })

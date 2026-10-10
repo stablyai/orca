@@ -12,6 +12,8 @@ on:
       # recordings and the host params check, so any shared edit can move a golden or break mobile's
       # typecheck. Why the root lockfile: those modules resolve their packages from the root install.
       - 'src/shared/**'
+      # Mobile's Node RPC recording tools import this package.
+      - 'src/packages/process-host/**'
       - 'pnpm-lock.yaml'
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
       - 'src/main/agent-launch/**'
@@ -40,6 +42,7 @@ on:
     paths:
       - 'mobile/**'
       - 'src/shared/**'
+      - 'src/packages/process-host/**'
       - 'pnpm-lock.yaml'
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'

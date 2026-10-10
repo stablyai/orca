@@ -12,6 +12,11 @@ vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
 
+// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
+}))
+
 vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
 }))

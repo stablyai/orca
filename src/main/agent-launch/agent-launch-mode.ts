@@ -24,8 +24,9 @@ import type {
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
+import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 import {
-  prefersStructuredNativeChatByDefault,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -77,7 +78,14 @@ export type AgentLaunchModePlacement = {
   /** The root of the workspace the launch lands in, when the host has resolved it. Without it a
    *  requested `cwd` cannot be proven to name the root and is read as custom. */
   workspacePath?: string
+  /** False when the client asking for the launch cannot show this agent's chat; absent for the
+   *  host's own callers, which can. */
+  callerRendersStructured?: boolean
 }
+
+const REGISTERED_STRUCTURED_AGENTS: readonly string[] = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
+  ({ definition }) => definition.agent
+)
 
 const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, string> = {
   remote_execution_host: 'this launch runs on a remote execution host',
@@ -97,7 +105,6 @@ const BLOCKER_REASON: Record<
 > = {
   'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
-  'floating-workspace': 'structured_unsupported_on_host',
   'custom-start-directory': 'tui_launch_command',
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
@@ -123,11 +130,13 @@ const HOST_SUPPORT_REASON: Record<
 export function decideAgentLaunchMode(args: {
   placement: AgentLaunchModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  /** Host-internal: the caller's contract is a terminal handle, so the chat default cannot apply. */
+  terminalOnly?: boolean
   vocabulary?: AgentLaunchModeVocabulary
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (args.terminalOnly || !isNativeChatEnabled(settings)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
@@ -140,17 +149,17 @@ export function decideAgentLaunchMode(args: {
   if (placement.on) {
     return downgraded('remote_execution_host', vocabulary)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; the registered-agent check rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
     executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
-    // The floating workspace has nowhere to keep a session, so it is decided here rather than left
-    // to the host probe below, which cannot answer for a workspace with no record. WSL still is:
-    // the create-support probe reads the resolved workspace rather than guessing from a
-    // client-side project runtime.
+    // This host is the one that will run the agent, so its own registrations answer.
+    hostStructuredAgents: REGISTERED_STRUCTURED_AGENTS,
+    // The host resolves the floating workspace to its configured directory; create-support still
+    // answers for the resolved workspace, including whether it uses WSL.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
     // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
     // when it names somewhere other than the workspace root, by the same shared rule.
@@ -161,6 +170,10 @@ export function decideAgentLaunchMode(args: {
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker], vocabulary)
+  }
+  // A chat its caller can neither show nor close is no launch; that caller gets the terminal.
+  if (placement.callerRendersStructured === false) {
+    return downgraded(BLOCKER_REASON['client-capability'], vocabulary)
   }
   return {
     mode: 'structured',
@@ -198,7 +211,7 @@ async function readStructuredCreateSupport(
   worktreeId: string,
   agent: TuiAgent | undefined
 ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
-  if (agent !== 'claude' && agent !== 'codex') {
+  if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
     return { supported: false, reason: 'agent' }
   }
   try {
@@ -210,7 +223,7 @@ async function readStructuredCreateSupport(
 
 /**
  * Applies the executing host's `agentSession.createSupport` answer, which is the authority on WSL,
- * remoteness and the Windows process-start-time gate for the resolved workspace.
+ * remoteness and per-agent support for the resolved workspace.
  */
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
@@ -239,6 +252,16 @@ function downgraded(
     preferred: 'structured',
     reason,
     detail: `Your default is a structured chat session, but ${why}; started ${vocabulary.terminal} instead.`
+  }
+}
+
+/** One main-log line when a launch the user's default asked to be a chat opened a terminal. */
+export function warnStructuredLaunchDowngrade(
+  agent: string,
+  receipt: AgentLaunchModeReceipt
+): void {
+  if (receipt.mode === 'terminal' && receipt.preferred === 'structured') {
+    console.warn(`[agent-launch] ${agent} opened a terminal: ${receipt.reason}`)
   }
 }
 

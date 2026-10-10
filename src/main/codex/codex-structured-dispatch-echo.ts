@@ -15,7 +15,7 @@ export const MAX_CODEX_RECORDED_TURN_ENDS = 64
 export type CodexTurnEnd =
   | { status: 'completed' }
   | { status: 'interrupted' }
-  | { status: 'failed'; detail?: ProviderDiagnostic }
+  | { status: 'failed'; detail?: ProviderDiagnostic; notSignedIn?: true }
 
 export type CodexDispatchRequestOrigin = {
   requestedAt: number
@@ -52,6 +52,10 @@ export type CodexDispatchEchoes = {
   answeredUnopenedTurn: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
   /** Codex did not open this answered turn within a wait, so no later wait is spent on it. */
   leftUnopened: (threadId: string, turnId: string) => void
+  /** Codex opened this turn, by its `turn/started`. */
+  opened: (threadId: string, turnId: string) => void
+  /** Whether Codex opened this turn: an `error` naming one it never opened is that turn's end. */
+  hasOpened: (threadId: string, turnId: string) => boolean
   /** The latest armed send's answered turn a wait left unopened, neither open nor ended: Codex may
    *  still open it, though no wait is spent on it again. */
   answeredTurnLeftUnopened: (threadId: string, openTurnIds: ReadonlySet<string>) => string | null
@@ -84,9 +88,19 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
   >()
   const endedTurns = new Map<string, CodexTurnEnd>()
   const unopenedTurns = new Set<string>()
+  const openedTurns = new Set<string>()
   let nextSequence = 0
   const turnKey = (threadId: string, turnId: string): string => JSON.stringify([threadId, turnId])
   const settles = (end: CodexTurnEnd): boolean => end.status !== 'completed'
+  const leftUnopened = (threadId: string, turnId: string): void => {
+    unopenedTurns.add(turnKey(threadId, turnId))
+    for (const oldest of unopenedTurns) {
+      if (unopenedTurns.size <= MAX_CODEX_RECORDED_TURN_ENDS) {
+        break
+      }
+      unopenedTurns.delete(oldest)
+    }
+  }
   const answeredTurn = (
     threadId: string,
     openTurnIds: ReadonlySet<string>,
@@ -133,15 +147,17 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       answeredTurn(threadId, openTurnIds, (key) => !unopenedTurns.has(key)),
     answeredTurnLeftUnopened: (threadId, openTurnIds) =>
       answeredTurn(threadId, openTurnIds, (key) => unopenedTurns.has(key)),
-    leftUnopened: (threadId, turnId) => {
-      unopenedTurns.add(turnKey(threadId, turnId))
-      for (const oldest of unopenedTurns) {
-        if (unopenedTurns.size <= MAX_CODEX_RECORDED_TURN_ENDS) {
+    leftUnopened,
+    opened: (threadId, turnId) => {
+      openedTurns.add(turnKey(threadId, turnId))
+      for (const oldest of openedTurns) {
+        if (openedTurns.size <= MAX_CODEX_RECORDED_TURN_ENDS) {
           break
         }
-        unopenedTurns.delete(oldest)
+        openedTurns.delete(oldest)
       }
     },
+    hasOpened: (threadId, turnId) => openedTurns.has(turnKey(threadId, turnId)),
     endTurn: (threadId, turnId, end) => {
       const turn = turnKey(threadId, turnId)
       endedTurns.delete(turn)
@@ -176,6 +192,7 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
       armed.clear()
       endedTurns.clear()
       unopenedTurns.clear()
+      openedTurns.clear()
       nextSequence = 0
     },
     get size() {

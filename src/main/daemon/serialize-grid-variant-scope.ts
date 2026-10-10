@@ -48,12 +48,13 @@ function hasTrailingBackgroundRow(
   if (buffer.length - start > rows || buffer.cursorX >= cols) {
     return false
   }
+  const scratch = buffer.getNullCell()
   // Text as the serializer counts it: width-0 cells (e.g. an orphan combining mark) never are.
   let lastTextRow = start - 1
   for (let y = start; y < end; y++) {
     const line = buffer.getLine(y)
     for (let x = 0; x < cols; x++) {
-      const cell = line?.getCell(x)
+      const cell = line?.getCell(x, scratch)
       if (cell && cell.getWidth() > 0 && cell.getChars() !== '') {
         lastTextRow = y
         break
@@ -63,7 +64,7 @@ function hasTrailingBackgroundRow(
   for (let y = lastTextRow + 1; y < end; y++) {
     const line = buffer.getLine(y)
     for (let x = 0; x < cols; x++) {
-      if (line?.getCell(x)?.isBgDefault() === false) {
+      if (line?.getCell(x, scratch)?.isBgDefault() === false) {
         return true
       }
     }

@@ -53,6 +53,14 @@ const realZshUsage =
   /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|program:\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
+  it('enforces process-host boundaries in the required static-analysis checks', () => {
+    const guard = workflow.jobs.preflight.steps.find((step) =>
+      step.run?.includes('pnpm run check:process-host-imports')
+    )
+    expect(guard?.if).toBe("needs.code_paths.outputs.static_analysis == 'true'")
+    expect(guard?.['continue-on-error']).toBeUndefined()
+  })
+
   it('keeps lightweight orchestration jobs on the free slim runner', () => {
     expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
     expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
@@ -224,6 +232,27 @@ describe('PR workflow parallelism', () => {
     expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
   })
 
+  it('bounds package tooling refresh and keeps required installation fatal', () => {
+    const steps = workflow.jobs.package.steps
+    const installStep = steps.find((step) => step.id === 'linux-package-tools')
+    const commands = installStep.run
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n')
+
+    expect(installStep.background).toBe(true)
+    expect(commands).toContain('Acquire::http::Timeout "15";')
+    expect(commands).toContain('Acquire::https::Timeout "15";')
+    expect(commands).toContain('Acquire::Retries "1";')
+    expect(commands).toMatch(/^timeout 120 sudo apt-get update \|\| true$/m)
+    expect(commands).toMatch(/^timeout 300 sudo apt-get install -y cpio rpm$/m)
+    expect(commands.trim().split('\n').at(-1)).toBe('timeout 300 sudo apt-get install -y cpio rpm')
+    expect(steps.find((step) => step.wait?.includes('linux-package-tools')).wait).toEqual([
+      'linux-package-tools',
+      'web-client'
+    ])
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       // Why this file is excluded: it carries the detector pattern as a literal
@@ -273,9 +302,14 @@ describe('PR workflow parallelism', () => {
       (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
     )
 
+    const processHostIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/smoke-process-host-node18.mjs'
+    )
+
     expect(installIndex).toBeLessThan(buildIndex)
     expect(buildIndex).toBeLessThan(node18Index)
     expect(node18Index).toBeLessThan(smokeIndex)
+    expect(node18Index).toBeLessThan(processHostIndex)
   })
 
   it('restores the pnpm store before dependency installation', () => {

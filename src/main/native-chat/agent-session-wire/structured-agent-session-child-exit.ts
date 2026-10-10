@@ -3,7 +3,10 @@
 // every step after it is bookkeeping: each is attempted and reported, none keeps the child on
 // record, and the record ends in `finally`. `expected` changes only what the chat is told.
 
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  type SubmissionRejectionFact
+} from '../../../shared/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -18,15 +21,16 @@ import {
   type StructuredAgentSessionLeaseStore
 } from './structured-agent-session-lease-release'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
+import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 import {
   captureUnfinishedStructuredAgentSessionWork,
-  settleStructuredAgentSessionDeadGeneration,
   type DeadGenerationJournal,
   unfinishedStructuredAgentSessionWorkWasInterrupted
-} from './structured-agent-session-dead-generation-settlement'
+} from './structured-agent-session-unfinished-work'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { evictStructuredAgentSession } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 
 /** How the child's root went: the close this host asked for, or a death of its own. */
 export type StructuredAgentSessionChildExit = {
@@ -37,6 +41,7 @@ export type StructuredAgentSessionChildExit = {
   /** Host receipt of the exit: the end time of a turn it interrupted. */
   observedAt?: number
   startupUnproven?: true
+  startupUnanswered?: true
 }
 
 export type StructuredAgentSessionChildExitSession = Pick<
@@ -54,9 +59,18 @@ export type StructuredAgentSessionChildExitContext<
   publishStatus?: (sessionId: string) => void
   /** The delivery loop hands over whatever is queued once the child is off the record. */
   wakeDelivery?: (sessionId: string) => void
+  /** An ended child's start, if still open, has nothing left to time. */
+  startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   logger: StructuredAgentSessionLogger
+  /** Settles what a child that ended before it answered its start was handed and never echoed, as
+   *  the chat settles a queued send for the same end (`holdUnsentSends`). */
+  holdUnrunSends?: (
+    sessionId: string,
+    fence: number,
+    cause: 'chatClosed' | 'hostRestarted'
+  ) => Promise<void>
   /** Lets the child's sink and the adapter's route for it go; absent leaves both to the next attach. */
   route?: {
     runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'eventSinkFor' | 'discardEventSink'>
@@ -81,7 +95,8 @@ export function settleStructuredAgentSessionChildExit<
       reason: event.reason,
       ...(event.failure ? { failure: event.failure } : {}),
       ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
-      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
+      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {}),
+      ...(event.startupUnanswered ? { startupUnanswered: event.startupUnanswered } : {})
     })
   })
 }
@@ -106,7 +121,32 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   // The host's own phase decides, so a provider that omits the flag still gets a start that
   // failed told as one: the row says so.
   const exitedDuringStartup = exit.startupUnproven === true || child.phase === 'starting'
+  // A close during startup settles what the child was handed, never echoed, by who asked: a
+  // person's Stop stops it; the host's stop fails the start, as an exit of its own would.
+  const startClose = expected && exitedDuringStartup ? close?.cause : undefined
+  const startFailure = expected
+    ? startClose === 'host-stop'
+      ? agentSessionFailureFact('hostStopped')
+      : undefined
+    : exit.failure
+  // A send the child was handed and never echoed cannot have run when a person's Stop ended its
+  // start, or any close ended it before it answered its start: settled as the chat settles a queued
+  // send for the same end. A Stop withdraws it as cancelled; a quit or close keeps a person's
+  // message as a held card. A host stop fails the start (`startFailure`).
+  const unrunRejection =
+    startClose === 'user-stop' ? agentSessionFailureFact('cancelled') : undefined
+  const unrunHold =
+    expected &&
+    exit.startupUnanswered &&
+    close?.cause !== 'host-stop' &&
+    close?.cause !== 'user-stop' &&
+    close?.cause !== 'context-clear'
+      ? close?.quit
+        ? ('hostRestarted' as const)
+        : ('chatClosed' as const)
+      : undefined
   const endChild = (): void => {
+    context.startupAttempts?.childEnded(sessionId, child)
     endProviderChild(session, {
       generation: child.generation,
       fence: child.fence,
@@ -138,10 +178,22 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     } catch (error) {
       logExitFailure(context, sessionId, 'exit-lifecycle-barrier', error)
     }
+    if (unrunHold && context.holdUnrunSends) {
+      await context
+        .holdUnrunSends(sessionId, child.fence, unrunHold)
+        .catch((error: unknown) => logExitFailure(context, sessionId, 'exit-unrun-hold', error))
+    }
     const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
+    // The host's stop fails only a start something was handed to; an idle one goes quietly.
+    const startFailed =
+      exitedDuringStartup &&
+      (!expected || (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
     // Folded before the fallback's end is built, so the end reads it (`turnEndAfterStop`).
     await close?.recorded
     const generation = child.generation ?? 'unknown'
+    // The exit proves this child gone, as the record's death evidence later says: what it left
+    // `unverifiable` is revised now, not at the next open.
+    const watched = { ownerFence: child.fence, observedAt }
     const settled = await settleStructuredAgentSessionDeadGeneration({
       journal: session.journal,
       sessionId,
@@ -156,17 +208,20 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       failureTextContext: structuredAgentSessionFailureWordsContext(record, session.journal),
       // A failed start always says why: no response was running to carry the reason.
       showUnexpectedExitOutcome:
-        !expected &&
-        (exitedDuringStartup ||
+        startFailed ||
+        (!expected &&
           unfinishedStructuredAgentSessionWorkWasInterrupted(
             unfinishedWork,
             session.journal,
-            observedAt
+            observedAt,
+            watched
           )),
-      ...(!expected && exit.failure ? { exitFailure: exit.failure } : {}),
-      ...(!expected && exitedDuringStartup && child.generation
+      ...(startFailure ? { exitFailure: startFailure } : {}),
+      ...(startFailed && child.generation
         ? { exitedDuringStartup: { generation: child.generation } }
-        : {})
+        : {}),
+      exit: watched,
+      ...(unrunRejection ? { unrunRejection } : {})
     })
     if (!settled.ok) {
       logExitFailure(context, sessionId, 'exit-settlement', settled.error)

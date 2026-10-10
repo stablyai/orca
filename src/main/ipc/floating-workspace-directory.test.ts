@@ -1,18 +1,9 @@
 import { mkdtemp, mkdir, realpath, rm, symlink, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-
-const { appGetPathMock } = vi.hoisted(() => ({
-  appGetPathMock: vi.fn()
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: appGetPathMock
-  }
-}))
 
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -53,14 +44,16 @@ describe('floating workspace directory', () => {
     homeDir = path.join(tempRoot, 'home')
     userDataDir = path.join(tempRoot, 'user-data')
     await mkdir(homeDir)
-    appGetPathMock.mockImplementation((name: string) => {
-      if (name === 'home') {
-        return homeDir
+    installFakeAppEnvironment({
+      getPath: (name) => {
+        if (name === 'home') {
+          return homeDir
+        }
+        if (name === 'userData') {
+          return userDataDir
+        }
+        throw new Error(`unexpected app path: ${name}`)
       }
-      if (name === 'userData') {
-        return userDataDir
-      }
-      throw new Error(`unexpected app path: ${name}`)
     })
   })
 

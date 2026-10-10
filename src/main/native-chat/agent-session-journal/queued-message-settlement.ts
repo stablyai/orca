@@ -11,6 +11,8 @@ import {
   journalDispatchRowNewlyRejects
 } from './journal-dispatch-settlement'
 import type { JournalReducerState } from './journal-reducer'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
 import type { JournalRow } from './journal-row-schema'
 import { draftDeliveredByEcho, draftsDeliveredByAppliedEcho } from './queued-message-delivered-echo'
 import {
@@ -33,6 +35,21 @@ export function queuedMessageSettlementOwed(
       row.consumedAs !== null &&
       consumedSubmissionWasRejected(submissions.get(row.consumedAs))
   )
+}
+
+/** A card waits, or is mid-hand-off and may come back to waiting: a chat that stops running
+ *  marks it (`AgentSessionJournal.markQueueReopen`). */
+export function queuedMessagesAwaitReopenMark(
+  rows: readonly QueuedMessageRow[],
+  submissions: Submissions
+): boolean {
+  return rows.some((row) => {
+    if (row.state === 'waiting') {
+      return true
+    }
+    const handOff = row.consumedAs ? submissions.get(row.consumedAs)?.dispatchState : undefined
+    return row.state === 'dispatched' && (handOff === 'pending' || handOff === 'unknown')
+  })
 }
 
 /** Applies each owed settlement, and withdraws each waiting draft an applied echo proves
@@ -58,7 +75,7 @@ export function settleOwedQueuedMessages(
       consumedRef,
       reason: submission?.reason ?? null,
       rejection: submission?.rejection,
-      origin: submission?.origin,
+      commandTurnReported: commandTurnReported(input.state, consumedRef),
       now: input.now
     })
     settled += changed ? 1 : 0
@@ -124,8 +141,15 @@ export function settleQueuedMessagesForRow(
     consumedRef: row.clientMessageId,
     reason: row.reason,
     rejection: row.rejection,
-    origin: submission?.origin,
+    commandTurnReported: commandTurnReported(input.state, row.clientMessageId),
     now: input.now
   })
   return changed + (settled ? 1 : 0)
+}
+
+/** The submission's command turn is in the journal: its own row reports the refusal. */
+function commandTurnReported(state: JournalReducerState, clientMessageId: string): boolean {
+  return state.items.has(
+    agentJournalItemKey(structuredAgentSessionCommandTurnIdentity(clientMessageId))
+  )
 }

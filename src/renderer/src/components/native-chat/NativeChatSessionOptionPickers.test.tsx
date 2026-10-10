@@ -3,6 +3,12 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OMP_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-omp'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../../../shared/structured-agent-session-options'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
@@ -158,6 +164,35 @@ vi.mock('@/components/ui/dropdown-menu', () => {
   }
 })
 
+// Same test ids as the dropdown mock: the model pill is a popover, the options pill a menu.
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-testid="dropdown-root" data-open={open ? 'true' : 'false'}>
+      {children}
+    </div>
+  ),
+  PopoverTrigger: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
+    <div data-disabled={disabled || undefined}>{children}</div>
+  ),
+  PopoverContent: ({
+    children,
+    side,
+    collisionPadding
+  }: {
+    children: React.ReactNode
+    side?: string
+    collisionPadding?: number
+  }) => (
+    <div
+      data-testid="session-option-menu"
+      data-side={side}
+      data-collision-padding={collisionPadding}
+    >
+      {children}
+    </div>
+  )
+}))
+
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
 const surface = {
@@ -268,6 +303,19 @@ describe('NativeChatSessionOptionPickers', () => {
     )
   })
 
+  it('sends a picked model to the session surface', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model()]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('option', { name: 'Sonnet 5' }).click()
+    await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('model', 'sonnet'))
+  })
+
   it('prefers collision-aware upward placement for model and option menus', () => {
     render(
       <NativeChatSessionOptionPickers
@@ -341,42 +389,21 @@ describe('NativeChatSessionOptionPickers', () => {
     ).toBe('true')
   })
 
-  it('keeps the model pill shut, label intact, while its choices are still listed', async () => {
-    const pending = model({ settable: false, choicesPending: true })
-    const { rerender } = render(
+  it('renders a session with no reported model without an empty model control', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('omp'),
+      OMP_SESSION_OPTION_CATALOG,
+      { models: [], current: { effort: 'off', confirmed: ['effort'] } }
+    )
+    render(
       <NativeChatSessionOptionPickers
         surface={surface}
-        snapshot={[pending, effort]}
+        snapshot={structuredAgentSessionOptionSnapshot(state)}
         isWorking={false}
-        pickerRequest={{ id: 'model', sequence: 1 }}
       />
     )
-    const trigger = screen.getByRole('button', { name: 'Model Opus 4.8' })
-    expect(trigger.parentElement?.getAttribute('data-disabled')).toBe('true')
-    expect(trigger.closest('[data-testid="dropdown-root"]')?.getAttribute('data-open')).toBe(
-      'false'
-    )
-    expect(
-      screen
-        .getByRole('button', { name: 'Effort High' })
-        .parentElement?.getAttribute('data-disabled')
-    ).toBeNull()
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'model', sequence: 2 }}
-      />
-    )
-    const listed = screen.getByRole('button', { name: 'Model Opus 4.8' })
-    expect(listed.parentElement?.getAttribute('data-disabled')).toBeNull()
-    await waitFor(() =>
-      expect(listed.closest('[data-testid="dropdown-root"]')?.getAttribute('data-open')).toBe(
-        'true'
-      )
-    )
+    expect(screen.queryByRole('button', { name: /^Model/ })).toBeNull()
+    expect(screen.queryAllByRole('button', { name: '' })).toEqual([])
   })
 
   it('does not duplicate titles for unknown values or misname generic controls', () => {

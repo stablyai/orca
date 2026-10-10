@@ -13,10 +13,10 @@ import { openAgentSessionJournal } from '../agent-session-journal/journal-store-
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
-  captureUnfinishedStructuredAgentSessionWork,
   settleStaleStructuredAgentSessionState,
   settleStructuredAgentSessionDeadGeneration
 } from './structured-agent-session-dead-generation-settlement'
+import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-session-unfinished-work'
 
 const SESSION = 'session-reasoning-sweep'
 const THREAD = 'thread-1'

@@ -1,3 +1,5 @@
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
+import type { WorkspaceReferenceTerminalContext } from '@/lib/workspace-attachment-terminal-origin'
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
@@ -265,7 +267,7 @@ export type WorktreeSlice = {
    *  the user is waiting on should read the result and say what went wrong. */
   updateWorktreeMeta: (
     worktreeId: string,
-    updates: Partial<WorktreeMeta>,
+    updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
     options?: WorktreeMetaUpdateOptions
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
@@ -277,7 +279,11 @@ export type WorktreeSlice = {
    */
   setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
-  observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
+  observeTerminalGitHubPullRequestLink: (
+    worktreeId: string,
+    link: TerminalGitHubPRLink,
+    context?: WorkspaceReferenceTerminalContext
+  ) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
    *  ghostty's "show until interact" model. Persists isUnread=false. */
@@ -312,7 +318,11 @@ export type WorktreeSlice = {
   setActiveWorktree: (
     worktreeId: string | null,
     executionHostId?: ExecutionHostId,
-    options?: { stateTransition?: ActiveWorktreeStateTransition }
+    options?: {
+      stateTransition?: ActiveWorktreeStateTransition
+      /** Tabs the caller just created there: their first spawn is new work, not a wake. */
+      createdTabIds?: readonly string[]
+    }
   ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so

@@ -9,6 +9,11 @@ import type { AgentTurnOutcome } from './agent-turn-outcome'
 export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
   working: 'Working…',
+  stopping: 'Stopping…',
+  /** The composer's placeholder while the chat reads Stopping, where the host queues sends. */
+  queueAfterStop: 'Queue a message to run after the stop',
+  /** The same where it does not: the host holds the send until the stop lands. */
+  sendAfterStop: 'Send a message to run after the stop',
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',
   interruptedAfter: 'Interrupted after {{value0}}',
@@ -76,22 +81,35 @@ function settledTurnStatusKey(
 export type NativeChatLiveTurnIndicator = {
   thinking: boolean
   activityText: string | null
+  /** A person's Stop is ending the turn. */
+  stopping?: boolean
+  /** This client's own Stop request is in flight: only then does its Stop control hold. */
+  stopRequestInFlight?: boolean
+  /** While stopping: a message sent now is queued as a card where the host queues sends, else sent
+   *  for the host to hold until the stop lands. */
+  afterStop?: 'queue' | 'send'
 }
 
 export type NativeChatActiveTurnLabel =
   | { source: 'activity'; text: string }
-  | { source: 'status'; key: 'thinking' | 'working' }
+  | { source: 'status'; key: 'thinking' | 'working' | 'stopping' }
 
-/** The live tail line's label. Provider activity wins because it is the only text
- *  that says what the turn is actually doing; reasoning is next. It never carries
- *  the clock — the turn bar owns that. Shared so desktop and mobile cannot disagree. */
+/** The live tail line's label. The person's own Stop wins: whatever the turn was doing, it is
+ *  now ending. Provider activity is next because it is the only text that says what the turn is
+ *  actually doing; reasoning is next. It never carries the clock — the turn bar owns that.
+ *  Shared so desktop and mobile cannot disagree. */
 export function describeNativeChatActiveTurnLabel({
   activityText,
-  thinking
+  thinking,
+  stopping = false
 }: {
   activityText?: string | null
   thinking: boolean
+  stopping?: boolean
 }): NativeChatActiveTurnLabel {
+  if (stopping) {
+    return { source: 'status', key: 'stopping' }
+  }
   const text = activityText?.trim()
   if (text) {
     return { source: 'activity', text }
@@ -103,6 +121,7 @@ export function describeNativeChatActiveTurnLabel({
 export function formatNativeChatActiveTurnLabel(input: {
   activityText?: string | null
   thinking: boolean
+  stopping?: boolean
 }): string {
   const label = describeNativeChatActiveTurnLabel(input)
   return label.source === 'activity' ? label.text : NATIVE_CHAT_TURN_STATUS_COPY[label.key]

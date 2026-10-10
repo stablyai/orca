@@ -24,7 +24,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: { list: vi.fn(), remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
-  repos: { remove: vi.fn() },
+  repos: { removeForHost: vi.fn() },
   folderWorkspaces: { delete: vi.fn() },
   pty: { kill: vi.fn() },
   runtimeEnvironments: { call: vi.fn().mockResolvedValue({ ok: true, result: {} }) }
@@ -43,11 +43,17 @@ import {
 } from './store-test-helpers'
 import {
   clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
   readNativeChatComposerDraft,
   setNativeChatComposerDraftOwnerResolver,
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  addNativeChatPendingAttachment,
+  clearNativeChatPendingAttachmentsForTests,
+  settleNativeChatPendingAttachment
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
 import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
 
 const WT1 = 'repo1::/path/wt1'
@@ -102,12 +108,75 @@ function draftTexts(): string[] {
   return [CHAT, PANE, OTHER].map((key) => readNativeChatComposerDraft(key).text)
 }
 
+/** A pasted image still uploading in each scope; its chip's id is the scope's. */
+function pasteStillUploading(...scopeKeys: string[]): void {
+  for (const scopeKey of scopeKeys) {
+    addNativeChatPendingAttachment(scopeKey, { id: scopeKey, path: '', pending: true })
+  }
+}
+
+/** Each upload completes, as one does after its composer is gone; answers which scopes it reached. */
+function uploadsComplete(...scopeKeys: string[]): string[] {
+  return scopeKeys.filter((scopeKey) =>
+    settleNativeChatPendingAttachment(scopeKey, scopeKey, `/store/${scopeKey}.png`)
+  )
+}
+
+function draftImageCount(scopeKey: string): number {
+  return readNativeChatComposerDraft(scopeKey).images.length
+}
+
+function trackDraftOwners(store: ReturnType<typeof createTestStore>): void {
+  setNativeChatComposerDraftOwnerResolver((scopeKey) =>
+    resolveNativeChatDraftOwner(store.getState(), scopeKey)
+  )
+}
+
+const FOLDER: FolderWorkspace = {
+  id: 'folder-1',
+  projectGroupId: 'group-a',
+  name: 'Folder',
+  folderPath: '/workspace/folder',
+  linkedTask: null,
+  comment: '',
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 1,
+  lastActivityAt: 0,
+  createdAt: 1,
+  updatedAt: 1
+}
+
+function seedFolderWorkspace(store: ReturnType<typeof createTestStore>): void {
+  store.setState({
+    projectGroups: [
+      {
+        id: 'group-a',
+        name: 'A',
+        parentPath: '/workspace',
+        parentGroupId: null,
+        createdFrom: 'manual',
+        tabOrder: 0,
+        isCollapsed: false,
+        color: null,
+        createdAt: 1,
+        updatedAt: 1,
+        executionHostId: 'local'
+      }
+    ],
+    folderWorkspaces: [FOLDER]
+  })
+  seedWorkspace(store, folderWorkspaceKey(FOLDER.id))
+}
+
 describe('workspace chat drafts on removal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
-    mockApi.repos.remove.mockResolvedValue(undefined)
+    mockApi.repos.removeForHost.mockResolvedValue(undefined)
     clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
   })
 
   it('removing a worktree deletes its drafts even when a listing purge lands mid-removal', async () => {
@@ -217,51 +286,100 @@ describe('workspace chat drafts on removal', () => {
       }
     })
 
-    await store.getState().removeProject('repo1')
+    await store.getState().removeProject('repo1', { hostId: 'local' })
 
     expect(draftTexts()).toEqual(['', '', 'other'])
   })
 
   it('deleting a folder workspace deletes its drafts', async () => {
-    const folder: FolderWorkspace = {
-      id: 'folder-1',
-      projectGroupId: 'group-a',
-      name: 'Folder',
-      folderPath: '/workspace/folder',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
     mockApi.folderWorkspaces.delete.mockResolvedValue(true)
     const store = createTestStore()
-    store.setState({
-      projectGroups: [
-        {
-          id: 'group-a',
-          name: 'A',
-          parentPath: '/workspace',
-          parentGroupId: null,
-          createdFrom: 'manual',
-          tabOrder: 0,
-          isCollapsed: false,
-          color: null,
-          createdAt: 1,
-          updatedAt: 1,
-          executionHostId: 'local'
-        }
-      ],
-      folderWorkspaces: [folder]
-    })
-    seedWorkspace(store, folderWorkspaceKey(folder.id))
+    seedFolderWorkspace(store)
 
-    await expect(store.getState().deleteFolderWorkspace(folder.id)).resolves.toBe(true)
+    await expect(store.getState().deleteFolderWorkspace(FOLDER.id)).resolves.toBe(true)
 
     expect(draftTexts()).toEqual(['', '', 'other'])
+  })
+
+  it('a paste still uploading when its folder workspace is deleted never writes a draft back', async () => {
+    mockApi.folderWorkspaces.delete.mockResolvedValue(true)
+    const store = createTestStore()
+    seedFolderWorkspace(store)
+    trackDraftOwners(store)
+    pasteStillUploading(CHAT, PANE, OTHER)
+
+    await expect(store.getState().deleteFolderWorkspace(FOLDER.id)).resolves.toBe(true)
+
+    expect(uploadsComplete(CHAT, PANE, OTHER)).toEqual([OTHER])
+    expect([CHAT, PANE, OTHER].map(draftImageCount)).toEqual([0, 0, 1])
+    expect(draftTexts()).toEqual(['', '', 'other'])
+  })
+
+  it('drops the uploads of its open chats and panes even when no owner was named', async () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    pasteStillUploading(CHAT, PANE, OTHER)
+
+    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
+
+    expect(uploadsComplete(CHAT, PANE, OTHER)).toEqual([OTHER])
+    expect([CHAT, PANE, OTHER].map(draftImageCount)).toEqual([0, 0, 1])
+  })
+
+  it('drops the upload of a chat whose tab closed while it was still on its way', async () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    trackDraftOwners(store)
+    pasteStillUploading(CHAT)
+    store.getState().closeUnifiedTab('chat-tab')
+
+    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
+
+    expect(uploadsComplete(CHAT)).toEqual([])
+    expect(draftImageCount(CHAT)).toBe(0)
+  })
+
+  it('deletes a draft an upload wrote after its chat’s tab closed, by the owner it began in', async () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    trackDraftOwners(store)
+    const later = structuredAgentSessionDraftScopeKey('session-later')
+    seedStore(store, {
+      unifiedTabsByWorktree: {
+        [WT1]: [
+          ...(store.getState().unifiedTabsByWorktree[WT1] ?? []),
+          makeUnifiedTab({
+            id: 'later-tab',
+            entityId: 'session-later',
+            contentType: 'agent-session',
+            worktreeId: WT1,
+            groupId: 'group-1'
+          })
+        ]
+      }
+    })
+    // As at startup: the saved drafts have loaded before any upload settles.
+    await hydrateNativeChatComposerDrafts()
+    pasteStillUploading(later)
+    store.getState().closeUnifiedTab('later-tab')
+    expect(uploadsComplete(later)).toEqual([later])
+
+    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
+
+    expect(draftImageCount(later)).toBe(0)
+  })
+
+  it('a removal the host refuses keeps the uploads, which still reach their drafts', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = createTestStore()
+    seedWorktree(store)
+    trackDraftOwners(store)
+    pasteStillUploading(CHAT, PANE)
+    mockApi.worktrees.remove.mockRejectedValue(new Error('Permission denied'))
+
+    await store.getState().removeWorktree({ id: WT1, executionHostId: null }, true)
+
+    expect(uploadsComplete(CHAT, PANE)).toEqual([CHAT, PANE])
+    expect([CHAT, PANE].map(draftImageCount)).toEqual([1, 1])
   })
 })

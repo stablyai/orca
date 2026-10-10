@@ -1,4 +1,9 @@
 import {
+  expectSupersededRewindReplay,
+  expectRetainedPrefixRewindReplay
+} from './structured-agent-session-rewind-replay.test-fixture'
+import { expectRawStopNoteRewindRecovery } from './structured-agent-session-rewind-stop-note.test-fixture'
+import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
@@ -186,7 +191,16 @@ async function params(itemId: string, epoch?: string) {
   }
 }
 
+const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
+
 describe('host rewind', () => {
+  it('replays the original ordinary rewind after another rewind replaces its record', () =>
+    expectSupersededRewindReplay({ host, store, rewind, recoverRewind, seed, params }))
+
+  it('retains the raw Stop failure and recovers a committed rewind against raw bodies', async () => {
+    await expectRawStopNoteRewindRecovery({ host, store, rewind })
+  })
+
   it('resolves accepted codex user submissions to provider targets', async () => {
     const target = await seed(true)
     expect(target.startsWith('orca:')).toBe(true)
@@ -259,18 +273,8 @@ describe('host rewind', () => {
     expect(await second).toMatchObject({ ok: false, refusal: { rewindReason: 'stale-epoch' } })
     expect(rewind).toHaveBeenCalledTimes(1)
   })
-  it('replaces the epoch with the retained prefix and replays without another provider call', async () => {
-    const target = await seed()
-    const request = await params(target)
-    const result = await host.rewind(caller, request)
-    expect(result).toMatchObject({ ok: true })
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).not.toBe(
-      request.expectedEpoch
-    )
-    expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
-    expect(rewind).toHaveBeenCalledTimes(1)
-  })
+  it('replaces the epoch with the retained prefix and replays without another provider call', () =>
+    expectRetainedPrefixRewindReplay({ host, rewind, seed, params }))
   it('keeps when each kept message was first seen, not when the rewind re-read it', async () => {
     const target = await seed()
     const kept = (await host.journalSnapshot(HOST_TEST_SESSION)).items[0]!
@@ -317,6 +321,41 @@ describe('host rewind', () => {
       refusal: { rewindReason: 'busy' }
     })
     expect(rewind).not.toHaveBeenCalled()
+  })
+  it('is busy exactly while the chat shows a sent message unanswered', async () => {
+    const target = await seed()
+    const body = hostTestMessage('unanswered')
+    const clientOperationId = hostTestOperationId()
+    // Accepted: the wait below sees its submission settle in doubt.
+    await host.send(caller, {
+      body,
+      envelope: {
+        ...(await params(target)).envelope,
+        clientOperationId,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId: HOST_TEST_SESSION,
+          fields: { body }
+        })
+      }
+    })
+    // The adapter's reply is lost: a live doubt, which the chat shows as working.
+    const sent = async () =>
+      (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+        (entry) => entry.clientMessageId === clientOperationId
+      )
+    await vi.waitFor(async () => expect((await sent())?.dispatchState).toBe('unknown'))
+    expect(await host.rewind(caller, await params(target))).toMatchObject({
+      ok: false,
+      refusal: { rewindReason: 'busy' }
+    })
+    await host.settleLateDispatch({
+      sessionId: HOST_TEST_SESSION,
+      clientMessageId: clientOperationId,
+      providerIdentity: LATE
+    })
+    expect(await host.rewind(caller, await params(target))).toMatchObject({ ok: true })
+    expect(rewind).toHaveBeenCalledOnce()
   })
   it('refuses stale epochs and targets from another provider', async () => {
     const target = await seed()

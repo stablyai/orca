@@ -6,6 +6,7 @@ import {
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
 import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
+import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
@@ -53,6 +54,43 @@ describe('recordAgentSessionProviderHandle', () => {
     })
     expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'leaf-2' })
     expect(next.lease).toMatchObject({ claimStatus: 'reserved', provenHandleLinkId: null })
+  })
+
+  it('rejects delayed old-child proof and records fresh creation behind the clear boundary', () => {
+    const previous = agentSessionRecordFixture()
+    const record = {
+      ...previous,
+      providerHandleChain: [],
+      lease: { ...previous.lease, runtimeFence: 8 },
+      providerContextBoundary: { operationId: 'clear', afterFence: 7, clearedAt: 4500 }
+    }
+    expect(() =>
+      recordAgentSessionProviderHandle({
+        record,
+        fence: 7,
+        link: resumedLink(7),
+        now: 5000
+      })
+    ).toThrow('agent_session_stale_fence')
+    expect(activeProviderContext(record).head).toBeNull()
+    const fresh = recordAgentSessionProviderHandle({
+      record,
+      fence: 8,
+      now: 5000,
+      link: {
+        linkId: 'fresh',
+        origin: 'created',
+        mintedAtFence: 8,
+        observedAt: 5000,
+        handle: claudeProviderHandle('fresh-context', null)
+      }
+    })
+    expect(fresh.providerHandleChain).toHaveLength(1)
+    expect(activeProviderContext(fresh).head).toMatchObject({
+      linkId: 'fresh',
+      origin: 'created'
+    })
+    expect(fresh.providerHandleChain[0]?.replaces).toBeUndefined()
   })
 })
 

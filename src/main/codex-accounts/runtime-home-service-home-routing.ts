@@ -4,6 +4,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { getDefaultWslDistro, getWslHome } from '../wsl'
 import {
   getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
@@ -27,7 +28,7 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     const homes = [this.getRuntimeHomePath()]
-    if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
+    if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared
       // mirror, so include the real root for both directly-routed host lanes.
@@ -121,15 +122,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: the real-home hook installer flips this gate off when the trust-grant
-  // client reports the host incapable, keeping that host byte-identical to the
-  // managed lane instead of shipping status-blind panes.
-  protected realHomeLaneGate: () => boolean = () => true
-
-  setRealHomeLaneGate(gate: () => boolean): void {
-    this.realHomeLaneGate = gate
-  }
-
   // Why: real-home routing applies only to the host system-default selection.
   // Managed accounts run in their own homes; custom CODEX_HOMEs stay on the
   // mirror until cleanup can be tracked across old homes.
@@ -140,19 +132,8 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     )
   }
 
-  isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
-  }
-
-  // Why: launch prep evaluates the real-home lane AFTER clearing an unusable
-  // managed selection; read-only siblings need that same verdict with the
-  // selection ignored rather than cleared.
-  protected wouldSystemDefaultRouteToRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return !hasCustomCodexHomeOverrideForLaunch(launchEnv) && this.realHomeLaneGate()
-  }
-
   reconcileLegacySharedHomeForRetainedPanes(): void {
-    if (!this.isHostSystemDefaultRealHome() || !hasRecordedLegacySharedCodexPane()) {
+    if (!this.isHostSystemDefaultRealHomeSelected() || !hasRecordedLegacySharedCodexPane()) {
       return
     }
     this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
@@ -297,7 +278,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       }
       this.clearSelfContainedManagedSelection(selfContainedAccount)
     }
-    if (this.isHostSystemDefaultRealHome()) {
+    if (this.isHostSystemDefaultRealHomeSelected()) {
       this.copyMirrorLoginIntoEmptySystemHome()
       if (hasRecordedLegacySharedCodexPane()) {
         this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
@@ -308,9 +289,29 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       // pin this non-interactive lane to the native home explicitly.
       return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
     }
-    this.syncForCurrentSelection()
+    this.syncMirrorForReadOnlyAppServer()
+    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
+  }
+
+  /**
+   * Before a read-only app-server reads the shared mirror home (the model catalog probe), the
+   * same sync launch prep and the usage poll run, so it reads the login a launch would. Any other
+   * home is left alone: a per-account home holds its own auth, and its sync restarts a bridge.
+   */
+  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+    if (
+      this.getSelfContainedManagedHostAccount() ||
+      normalizeRuntimePathForComparison(homePath) !==
+        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+    ) {
+      return
+    }
+    this.syncMirrorForReadOnlyAppServer(launchEnv)
+  }
+
+  private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {
+    this.syncForCurrentSelection(undefined, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
-    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
   }
 }

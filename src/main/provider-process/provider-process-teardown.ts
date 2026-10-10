@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '../../shared/child-process/run-process'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-descendant-termination'
 import {
   terminateDescendantSnapshotWithVerdict,
@@ -20,7 +20,8 @@ export type ProviderProcessTeardownDeps = {
   dedicatedProcessGroup?: boolean
   captureDescendants?: (rootPid: number) => Promise<DescendantSnapshot | null>
   terminateDescendants?: (snapshot: DescendantSnapshot) => Promise<DescendantTreeVerdict>
-  terminateWindowsTree?: (rootPid: number, deps?: { site?: string }) => Promise<void>
+  /** Resolves true only when taskkill reports the whole tree terminated. */
+  terminateWindowsTree?: (rootPid: number, deps?: { site?: string }) => Promise<boolean>
   signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void
 }
 
@@ -114,11 +115,11 @@ async function terminateOnce(
   }
   if ((deps.platform ?? process.platform) === 'win32') {
     const terminate = deps.terminateWindowsTree ?? terminateWindowsProcessTree
-    await terminate(rootPid, { site: deps.site })
+    const treeTerminated = await terminate(rootPid, { site: deps.site })
     // taskkill owns the tree; this preserves the prior direct-child fallback when it fails.
     child.kill('SIGKILL')
-    // taskkill resolves alike on success, failure and timeout, so nothing was observed.
-    return null
+    // Taskkill's own report, not an observation: only its clean exit says the tree is gone.
+    return treeTerminated ? 'exited' : 'unverifiable'
   }
   if (deps.dedicatedProcessGroup) {
     return terminateDedicatedPosixGroup(rootPid, deps)

@@ -13,6 +13,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
+import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
 import {
   isJournalStopOrResumeRow,
@@ -70,6 +71,12 @@ export function projectJournalBatch(input: {
   }
 
   const live = liveItemsById(input.snapshot.items)
+  const notes = stopNotesByTurn(input.snapshot.items)
+  for (const itemId of touchedItemIds) {
+    for (const noteId of notes.get(itemId) ?? []) {
+      touchedItemIds.add(noteId)
+    }
+  }
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
@@ -87,7 +94,7 @@ export function projectJournalBatch(input: {
   }
 }
 
-// Both indexes are keyed on the snapshot arrays themselves, which the reducer
+// The indexes are keyed on the snapshot arrays themselves, which the reducer
 // rebuilds on every change, so a paged catch-up over one snapshot pays for them
 // once instead of once per page — including the byte-shrink loop's re-projections.
 const liveItemsByTimeline = new WeakMap<
@@ -98,6 +105,36 @@ const aliasesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],
   ReadonlyMap<string, string>
 >()
+const stopNotesByTimeline = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  ReadonlyMap<string, readonly string[]>
+>()
+
+function stopNotesByTurn(
+  items: readonly AgentJournalRenderItem[]
+): ReadonlyMap<string, readonly string[]> {
+  const cached = stopNotesByTimeline.get(items)
+  if (cached) {
+    return cached
+  }
+  const notes = new Map<string, string[]>()
+  for (const item of items) {
+    // Every Stop note is a status row. Not filtered on its failure: a note already projected
+    // without one must still re-emit when its turn row is removed.
+    if (
+      item.body.kind === 'status' &&
+      item.turnScope?.kind === 'turn' &&
+      isStructuredAgentSessionStopNote(item.itemId)
+    ) {
+      const turnItemId = item.turnScope.turnItemId
+      const ids = notes.get(turnItemId) ?? []
+      ids.push(item.itemId)
+      notes.set(turnItemId, ids)
+    }
+  }
+  stopNotesByTimeline.set(items, notes)
+  return notes
+}
 
 function liveItemsById(
   items: readonly AgentJournalRenderItem[]

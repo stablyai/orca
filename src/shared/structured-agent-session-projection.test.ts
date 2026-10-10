@@ -77,8 +77,8 @@ describe('structured agent session status projection', () => {
       blocks: [{ type: 'tool-call' }, { type: 'tool-result', output: '@@\n+second' }]
     })
     expect(second?.blocks).toEqual([
-      { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' } },
-      { type: 'tool-result', output: '@@\n+second' }
+      { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' }, callId: 'diff' },
+      { type: 'tool-result', output: '@@\n+second', callId: 'diff' }
     ])
     const pending = item('approval', 2, {
       kind: 'approval',
@@ -517,16 +517,16 @@ describe('structured agent session status projection', () => {
 
   it('preserves structured tool lifecycle state for the live renderer', () => {
     const projected = projectStructuredItemToNativeChat(
-      item('running-tool', 1, {
+      item('ls', 1, {
         kind: 'tool-call',
         name: 'shell',
-        input: { command: 'cat package.json' },
+        input: { command: 'ls' },
         state: 'running'
       })
     )
 
     expect(projected?.blocks).toEqual([
-      { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
+      { type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'running', callId: 'ls' }
     ])
   })
 
@@ -555,6 +555,7 @@ describe('structured agent session status projection', () => {
 describe('notice projection for desktop and mobile consumers', () => {
   it.each([
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },

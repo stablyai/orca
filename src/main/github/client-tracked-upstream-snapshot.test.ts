@@ -26,11 +26,11 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import {
-  getPRForBranch,
   _getTrackedUpstreamBranchCacheSizesForTests,
   __resetTrackedUpstreamBranchCacheForTests
-} from './client'
+} from './client/lookup/tracked-upstream-cache'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const {

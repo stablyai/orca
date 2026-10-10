@@ -228,7 +228,8 @@ export function useTabBarCreateMenuController({
       agent,
       worktreeId,
       groupId: resolvedGroupId,
-      launchSource: 'tab_bar_quick_launch'
+      launchSource: 'tab_bar_quick_launch',
+      freshNewTab: true
     })
     if (!result) {
       toast.error(

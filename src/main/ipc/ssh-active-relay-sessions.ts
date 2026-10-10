@@ -1,5 +1,8 @@
 import type { SshRelaySession } from '../ssh/ssh-relay-session'
-import { setSshActiveMultiplexerResolver } from '../ssh/ssh-target-registry'
+import {
+  setDirectSshAuthorityResolver,
+  setSshActiveMultiplexerResolver
+} from '../ssh/ssh-target-registry'
 import { setWorktreeRemovalSshHostHomeResolver } from '../worktree-removal-execution-host-route'
 
 // One session per SSH target owns the whole relay lifecycle (mux, providers, abort controller, state machine).
@@ -22,3 +25,5 @@ export function getActiveSshHostHomeDirectory(targetId: string): string | null {
 }
 
 setWorktreeRemovalSshHostHomeResolver(getActiveSshHostHomeDirectory)
+
+setDirectSshAuthorityResolver((targetId) => activeSessions.has(targetId))

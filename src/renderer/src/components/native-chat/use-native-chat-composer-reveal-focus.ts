@@ -75,7 +75,8 @@ export function useNativeChatComposerRevealFocus({
       }
       const active = rootRef.current?.ownerDocument.activeElement ?? null
       // Focus already inside this pane is our own take landing or the user's click; either ends it.
-      if (rootRef.current?.contains(active) === true) {
+      // A just-collapsed card is hidden and inert, so focus left in it is about to drop to body.
+      if (rootRef.current?.contains(active) === true && !active?.closest('[hidden], [inert]')) {
         finish()
         return
       }

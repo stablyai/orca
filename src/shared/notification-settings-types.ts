@@ -1,3 +1,4 @@
+import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
 import type { AgentStatusState, AgentType } from './agent-status-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import type { NotificationSourceId } from './notification-source'
@@ -26,6 +27,10 @@ export type NotificationSettings = {
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+
+export type StructuredNotificationRead = StructuredAttentionRead & {
+  paneKey: string
+}
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
@@ -56,6 +61,12 @@ export type NotificationDispatchRequest = {
    * terminal lane, which is every sender that predates structured chat.
    */
   surface?: 'terminal' | 'agent-session'
+  /** The news's own identity, set only by a producer that announces each one once. Delivery dedupes
+   *  on it instead of the per-workspace burst window, which would drop distinct news. */
+  attentionKey?: string
+  structuredOrigin?: StructuredAttentionOrigin
+  /** The execution host already pushed this to its paired phones, so main must not fan it out again. */
+  mobileDeliveredByHost?: boolean
 }
 
 export type NotificationDispatchResult = {

@@ -17,7 +17,12 @@ const open: NativeChatMessage = {
   source: 'transcript',
   state: 'running'
 }
-const line = (fields: { draws?: boolean; thinking?: boolean; activityText?: string | null }) =>
+const line = (fields: {
+  draws?: boolean
+  thinking?: boolean
+  stopping?: boolean
+  activityText?: string | null
+}) =>
   nativeChatLiveLine({
     draws: true,
     thinking: true,
@@ -30,6 +35,7 @@ describe('the live line both clients draw', () => {
   it('discloses the open block while it reads "Thinking"', () => {
     expect(line({})).toEqual({
       thinking: true,
+      stopping: false,
       activityText: null,
       reasoning: { message: open, markdown: 'Weighing two approaches' }
     })
@@ -40,6 +46,17 @@ describe('the live line both clients draw', () => {
     expect(line({ draws: false })).toBeNull()
     expect(line({ thinking: false })).toEqual({
       thinking: false,
+      stopping: false,
+      activityText: null,
+      reasoning: null
+    })
+  })
+
+  // While a Stop ends the turn the line reads "Stopping…", so the open block's own row draws it.
+  it('discloses no block while a Stop is ending the turn', () => {
+    expect(line({ stopping: true })).toEqual({
+      thinking: true,
+      stopping: true,
       activityText: null,
       reasoning: null
     })

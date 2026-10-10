@@ -36,7 +36,7 @@ Keep `ORCA_BACKGROUND_LAUNCH=1`: the application must still suppress automatic r
 `isWindowlessLaunch` describes that automatic launch policy, not the window's current visibility.
 This exception belongs only to this benchmark fixture; do not generalize it to local or self-hosted
 runs, paired-client helpers, native-focus tests, or production window policy. Background terminal
-panes remain hidden. Evidence: `docs/reference/terminal-perf-latency-investigation.md`.
+panes remain hidden.
 
 ## Isolated native IBus presentation
 

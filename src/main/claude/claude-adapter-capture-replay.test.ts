@@ -24,7 +24,8 @@ import type {
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID
+  PROVIDER_SESSION_ID,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 type CapturedEvent =
@@ -153,7 +154,7 @@ async function replayCapture(name: string): Promise<Replay> {
     if (event.kind === 'dispatch') {
       if (!startedAwaited) {
         // The proof frames have been delivered by now; startup can settle.
-        await adapter.awaitStarted('session-1')
+        await claudeStartupSettled(adapter, 'session-1')
         startedAwaited = true
       }
       const body: AgentJournalMessageItem = {

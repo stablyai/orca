@@ -15,7 +15,7 @@ import {
   applyAgentSessionReservation,
   type AgentSessionReserveRequest
 } from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -67,8 +67,6 @@ function reserveRequest(
 
 function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionStoreState {
   return {
-    schemaVersion: 2,
-    hostId: 'local',
     records: new Map(records.map((record) => [record.sessionId, record])),
     operations: new Map(),
     retiredClaimKeys: [],
@@ -96,6 +94,21 @@ describe('adopted handle chain seeding', () => {
     const { record } = applyAgentSessionReservation(storeState(), reserveRequest(), LEASE_TTL_MS)
 
     expect(record.providerHandleChain).toEqual([])
+  })
+})
+
+describe('floating launch directory reservation', () => {
+  it('stores the host-selected folder when the record is first reserved', () => {
+    const request = reserveRequest({ launchDirectory: '/host/first-folder' })
+    const { record, disposition } = applyAgentSessionReservation(
+      storeState(),
+      request,
+      LEASE_TTL_MS
+    )
+
+    expect(disposition).toBe('created')
+    expect(record.launchDirectory).toBe('/host/first-folder')
+    expect(record.lease.claimStatus).toBe('reserved')
   })
 })
 
@@ -149,6 +162,7 @@ describe('adopted conversation ownership', () => {
       ),
       location: LOCATION,
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+      launchDirectory: '/original-folder',
       providerHandleChain: [link]
     }
 
@@ -156,6 +170,7 @@ describe('adopted conversation ownership', () => {
       storeState([committed]),
       reserveRequest({
         adoptedHandleLink: link,
+        launchDirectory: '/changed-folder',
         expectedFence: 1,
         handoffOperationId: 'handoff-1'
       }),
@@ -164,6 +179,7 @@ describe('adopted conversation ownership', () => {
 
     expect(disposition).toBe('retry-reservation')
     expect(record.providerHandleChain).toEqual([link])
+    expect(record.launchDirectory).toBe('/original-folder')
   })
 
   it('refuses a Codex adoption another record already holds', () => {

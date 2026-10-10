@@ -10,14 +10,14 @@ import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shar
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
-import { PINNED_GROUP_KEY } from '../grouping/group-keys'
-import { scopePinnedSectionCollapse } from '../../host-pinned-sections'
+import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../../host-section-collapse'
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
@@ -56,6 +56,7 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
     } else if (row.type === 'item') {
       keys.add(row.rowKey)
     } else if (row.type === 'folder-workspace') {
+      keys.add(getFolderWorkspaceHostIdentity(row.folderWorkspace))
       keys.add(folderWorkspaceKey(row.folderWorkspace.id))
     } else if (row.type === 'pending-creation') {
       keys.add(`pending:${row.creationId}`)
@@ -143,17 +144,16 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [hostOptions]
   )
 
-  const hostScopedPinnedGroups =
+  const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
-  // Host sections apply pinned collapse after splitting the rows by owner.
-  const rowCollapsedGroups = useMemo(() => {
-    if (!hostScopedPinnedGroups || !effectiveCollapsedGroups.has(PINNED_GROUP_KEY)) {
-      return effectiveCollapsedGroups
-    }
-    const next = new Set(effectiveCollapsedGroups)
-    next.delete(PINNED_GROUP_KEY)
-    return next
-  }, [effectiveCollapsedGroups, hostScopedPinnedGroups])
+  // Host sections apply lane collapse after splitting the rows by owner.
+  const rowCollapsedGroups = useMemo(
+    () =>
+      hostScopedGroups
+        ? deferHostSectionCollapse(effectiveCollapsedGroups)
+        : effectiveCollapsedGroups,
+    [effectiveCollapsedGroups, hostScopedGroups]
+  )
 
   const rows: Row[] = useMemo(
     () =>
@@ -241,11 +241,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
       preferProjectGrouping: true
     })
-    return hostScopedPinnedGroups
-      ? scopePinnedSectionCollapse({
+    return hostScopedGroups
+      ? scopeHostSectionCollapse({
           rows: sectioned,
-          collapsedGroups: effectiveCollapsedGroups,
-          defaultHostId
+          collapsedGroups: effectiveCollapsedGroups
         })
       : sectioned
   }, [
@@ -254,7 +253,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     defaultHostId,
     effectiveCollapsedGroups,
     hostDragActive,
-    hostScopedPinnedGroups,
+    hostScopedGroups,
     orderedHostOptions,
     rows
   ])

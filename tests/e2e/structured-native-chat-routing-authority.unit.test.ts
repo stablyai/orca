@@ -43,7 +43,6 @@ const placements = [
 const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
-  'floating-workspace',
   'custom-start-directory',
   'remote-execution-host',
   'project-runtime',
@@ -119,8 +118,7 @@ describe('shared feasibility owns every caller decision', () => {
             promptDelivery,
             hostCapabilities: RUNTIME_CAPABILITIES,
             startsOutsideWorkspaceRoot: true,
-            workspaceKind: 'folder',
-            initialSessionOptions: { model: 'model-1', effort: 'high' }
+            workspaceKind: 'folder'
           }
           predicate.mockReturnValue({ supported: true })
           expect(resolveAgentLaunchRoute(input)).toBe('structured-native-chat')

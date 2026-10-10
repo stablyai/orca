@@ -67,3 +67,40 @@ it('serializes rapid sends through their acknowledged Enter and preserves the pa
     NATIVE_CHAT_SUBMIT
   ])
 })
+
+it.each(['accepted', 'refused', 'unknown'] as const)(
+  'reports a pasted answer as acknowledged only after %s settlement',
+  async (outcome) => {
+    const settled = vi.fn()
+    if (outcome === 'refused') {
+      io.verified.mockResolvedValueOnce(false)
+    } else if (outcome === 'unknown') {
+      io.verified.mockRejectedValueOnce(new Error('lost acknowledgment'))
+    }
+    sendNativeChatMessage(null, 'pane', 'answer', { onDeliverySettled: settled })
+    expect(settled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(settled).toHaveBeenCalledExactlyOnceWith(outcome === 'accepted')
+    expect(io.verified.mock.calls.map((call) => call[2])).toEqual(
+      outcome === 'refused'
+        ? [buildNativeChatPasteBytes('answer')]
+        : [buildNativeChatPasteBytes('answer'), NATIVE_CHAT_SUBMIT]
+    )
+  }
+)
+
+it('ignores a pasted answer acknowledgment after cancellation', async () => {
+  let acknowledge: (accepted: boolean) => void = () => {}
+  io.verified.mockReturnValueOnce(
+    new Promise<boolean>((resolve) => {
+      acknowledge = resolve
+    })
+  )
+  const settled = vi.fn()
+  const handle = sendNativeChatMessage(null, 'pane', 'answer', { onDeliverySettled: settled })
+  handle.cancel()
+  acknowledge(true)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(settled).not.toHaveBeenCalled()
+  expect(io.verified).toHaveBeenCalledOnce()
+})

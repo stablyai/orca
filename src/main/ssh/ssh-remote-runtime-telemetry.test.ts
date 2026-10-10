@@ -16,6 +16,7 @@ const {
 const linux = getRemoteHostPlatform('linux-x64')
 const base = {
   rung: 'C' as const,
+  outcome: 'resolved' as const,
   host: linux,
   facts: { target: 'linux-x64-glibc' as const, glibc: { major: 2, minor: 28 } },
   firstRefusal: 'illegal_instruction',
@@ -43,7 +44,8 @@ describe('ssh_remote_runtime_resolved', () => {
       self_test: 'passed',
       runtime_transfer: 'uploaded',
       host_node_major: '18',
-      duration_bucket: '5s_15s'
+      duration_bucket: '5s_15s',
+      outcome: 'resolved'
     })
     expect(eventSchemas.ssh_remote_runtime_resolved.safeParse(props).success).toBe(true)
   })
@@ -69,6 +71,35 @@ describe('ssh_remote_runtime_resolved', () => {
     expect(
       sshRemoteRuntimeResolvedProps({ ...base, rung: 'A', hostNode: null })
     ).not.toHaveProperty('host_node_major')
+  })
+
+  it('names an antivirus refusal and an unverifiable self-test instead of dropping them', () => {
+    const props = sshRemoteRuntimeResolvedProps({
+      ...base,
+      rung: 'A',
+      host: getRemoteHostPlatform('win32-x64'),
+      facts: null,
+      firstRefusal: 'security_software',
+      selfTest: 'unverifiable',
+      outcome: 'unverifiable',
+      hostNode: null
+    })
+    expect(props).toMatchObject({
+      first_refusal: 'security_software',
+      self_test: 'unverifiable',
+      outcome: 'unverifiable'
+    })
+    expect(eventSchemas.ssh_remote_runtime_resolved.safeParse(props).success).toBe(true)
+  })
+
+  it('reports an unverifiable attempt without using up the later resolved report', () => {
+    trackSshRemoteRuntimeResolved('target-1', { ...base, outcome: 'unverifiable' })
+    trackSshRemoteRuntimeResolved('target-1', { ...base, outcome: 'unverifiable' })
+    trackSshRemoteRuntimeResolved('target-1', base)
+    expect(vi.mocked(track).mock.calls.map(([, props]) => JSON.stringify(props))).toEqual([
+      JSON.stringify(sshRemoteRuntimeResolvedProps({ ...base, outcome: 'unverifiable' })),
+      JSON.stringify(sshRemoteRuntimeResolvedProps(base))
+    ])
   })
 
   it('reports each host once per app session', () => {

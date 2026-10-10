@@ -1,11 +1,29 @@
 import type { IPtyProvider } from '../../../providers/types'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
-import { getProvider, getProviderForPty } from '../provider/registry'
+import {
+  getProviderForPty,
+  getPtySshConnectionId,
+  resolvePtyExecutionHost
+} from '../provider/registry'
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { errorMessage } from '../../../../shared/error-message'
+
+// Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
+const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
+
+function publishSyntheticExit(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  code: number,
+  incarnationId: string | undefined
+): void {
+  deps.runtime?.onPtyExit(ptyId, code, incarnationId)
+  deps.rememberSyntheticKillExit(ptyId, incarnationId)
+  deps.sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
+}
 
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
@@ -16,15 +34,11 @@ export function killPtyFromRuntimeController(
     store,
     getLocalPtyProviderStartupPromise,
     shutdownProviderAndDetectExit,
-    rememberSyntheticKillExit,
-    sendPtyExitToRenderer,
     finishPtyShutdown,
     retiredRejectedPtyIds
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
-  let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
-  const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
-  connectionId ??= parsedSshId?.connectionId
+  const connectionId = getPtySshConnectionId(ptyId)
   const recordUndelivered = (incarnationId?: string): void => {
     recordUndeliveredSshPtyKill({
       store,
@@ -34,10 +48,23 @@ export function killPtyFromRuntimeController(
       incarnationId
     })
   }
+  // Why: close runtime tails without clearing provider ownership, so
+  // a retry can still target a PTY that survived the failed shutdown.
+  const reportStopFailure = (err: unknown): void => {
+    const msg = errorMessage(err)
+    console.warn(`[pty] Failed to stop PTY ${ptyId}: ${msg}`)
+    if (retiredRejectedPtyIds.has(ptyId)) {
+      return
+    }
+    if (connectionId) {
+      runtime?.markPtyLivenessUnverifiable?.(ptyId, msg)
+    }
+    runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
+  }
   const killWithCurrentProvider = (): boolean => {
     let provider: IPtyProvider
     try {
-      provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+      provider = getProviderForPty(ptyId)
     } catch {
       if (connectionId) {
         // Why: runtime/CLI close can target a detached SSH PTY after its
@@ -46,13 +73,7 @@ export function killPtyFromRuntimeController(
         const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
         // The relay was never asked, so the remote shell is still running. Keep the order.
         recordUndelivered(incarnationId)
-        runtime?.onPtyExit(ptyId, -1, incarnationId)
-        rememberSyntheticKillExit(ptyId, incarnationId)
-        sendPtyExitToRenderer({
-          id: ptyId,
-          code: -1,
-          ...(incarnationId ? { incarnationId } : {})
-        })
+        publishSyntheticExit(deps, ptyId, -1, incarnationId)
         runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
         return false
       }
@@ -64,13 +85,7 @@ export function killPtyFromRuntimeController(
         const retired = retiredRejectedPtyIds.has(ptyId)
         const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
         if (!providerExitObserved && !retired) {
-          runtime?.onPtyExit(ptyId, -1, incarnationId)
-          rememberSyntheticKillExit(ptyId, incarnationId)
-          sendPtyExitToRenderer({
-            id: ptyId,
-            code: -1,
-            ...(incarnationId ? { incarnationId } : {})
-          })
+          publishSyntheticExit(deps, ptyId, -1, incarnationId)
         }
       })
       .catch((err) => {
@@ -78,52 +93,22 @@ export function killPtyFromRuntimeController(
         if (isPtyAlreadyGoneError(err)) {
           const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
           if (!retired) {
-            runtime?.onPtyExit(ptyId, -1, incarnationId)
-            rememberSyntheticKillExit(ptyId, incarnationId)
-            sendPtyExitToRenderer({
-              id: ptyId,
-              code: -1,
-              ...(incarnationId ? { incarnationId } : {})
-            })
+            publishSyntheticExit(deps, ptyId, -1, incarnationId)
           }
           return
         }
-        console.warn(
-          `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-        // Why: close runtime tails without clearing provider ownership, so
-        // a retry can still target a PTY that survived the failed shutdown.
-        if (!retired) {
-          if (connectionId) {
-            runtime?.markPtyLivenessUnverifiable?.(
-              ptyId,
-              err instanceof Error ? err.message : String(err)
-            )
-          }
-          runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
-        }
+        reportStopFailure(err)
         // Outside the `retired` guard: the remote process outlives this client's bookkeeping
         // either way, and the intent is what the next handshake replays.
         recordUndelivered()
       })
     return true
   }
-  const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
   if (startupPromise) {
     // Why: select the provider after the daemon swap; the fallback first can report success while orphaning a daemon PTY.
     void startupPromise.then(killWithCurrentProvider).catch((err) => {
-      console.warn(
-        `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
-      )
-      if (!retiredRejectedPtyIds.has(ptyId)) {
-        if (connectionId) {
-          runtime?.markPtyLivenessUnverifiable?.(
-            ptyId,
-            err instanceof Error ? err.message : String(err)
-          )
-        }
-        runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
-      }
+      reportStopFailure(err)
       recordUndelivered()
     })
     return true
@@ -136,14 +121,7 @@ export function retireRejectedPtyFromRuntimeController(
   ptyId: string,
   stopConfirmed: boolean
 ): void {
-  const {
-    runtime,
-    store,
-    rememberRetiredRejectedPty,
-    rememberSyntheticKillExit,
-    sendPtyExitToRenderer,
-    finishPtyShutdown
-  } = deps
+  const { runtime, store, rememberRetiredRejectedPty, finishPtyShutdown } = deps
   rememberRetiredRejectedPty(ptyId)
   if (!stopConfirmed) {
     runtime?.markPtyLivenessUnverifiable?.(
@@ -153,14 +131,7 @@ export function retireRejectedPtyFromRuntimeController(
     if (!ptyOwnership.has(ptyId)) {
       return
     }
-    const incarnationId = ptyIncarnationById.get(ptyId)
-    runtime?.onPtyExit(ptyId, -1, incarnationId)
-    rememberSyntheticKillExit(ptyId, incarnationId)
-    sendPtyExitToRenderer({
-      id: ptyId,
-      code: -1,
-      ...(ptyIncarnationById.get(ptyId) ? { incarnationId: ptyIncarnationById.get(ptyId) } : {})
-    })
+    publishSyntheticExit(deps, ptyId, -1, ptyIncarnationById.get(ptyId))
     return
   }
   // Why: a completed stop already cleared provider state, tombstoned the lease and told the
@@ -170,17 +141,8 @@ export function retireRejectedPtyFromRuntimeController(
     runtime?.onPtyExit(ptyId, 0, ptyIncarnationById.get(ptyId))
     return
   }
-  let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
-  const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
-  connectionId ??= parsedSshId?.connectionId
-  const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-  runtime?.onPtyExit(ptyId, 0, incarnationId)
-  rememberSyntheticKillExit(ptyId, incarnationId)
-  sendPtyExitToRenderer({
-    id: ptyId,
-    code: 0,
-    ...(incarnationId ? { incarnationId } : {})
-  })
+  const connectionId = getPtySshConnectionId(ptyId)
+  publishSyntheticExit(deps, ptyId, 0, finishPtyShutdown(ptyId, connectionId, store))
 }
 
 /**
@@ -201,19 +163,15 @@ export async function stopAndWaitPtyFromRuntimeController(
     store,
     getLocalPtyProviderStartupPromise,
     shutdownProviderAndDetectExit,
-    rememberSyntheticKillExit,
-    sendPtyExitToRenderer,
     finishPtyShutdown
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
-  let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
-  const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
-  connectionId ??= parsedSshId?.connectionId
+  const connectionId = getPtySshConnectionId(ptyId)
   // Why: destructive teardown threads one absolute deadline through every await
   // below; each RPC leaf converts it to the remaining time when it issues, so
   // sequential RPCs share the budget and cannot overrun the sweep deadline.
   const deadlineMs = opts?.deadlineMs
-  const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
   if (startupPromise) {
     // Why: exact-stop must resolve the provider after daemon startup just
     // like renderer kills, or the fallback can falsely confirm teardown.
@@ -238,19 +196,13 @@ export async function stopAndWaitPtyFromRuntimeController(
   }
   let provider: IPtyProvider
   try {
-    provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+    provider = getProviderForPty(ptyId)
   } catch {
     if (connectionId) {
       // Why: an absent SSH provider means there is no live target left to
       // await, but the relay lease must still be tombstoned.
       const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-      runtime?.onPtyExit(ptyId, -1, incarnationId)
-      rememberSyntheticKillExit(ptyId, incarnationId)
-      sendPtyExitToRenderer({
-        id: ptyId,
-        code: -1,
-        ...(incarnationId ? { incarnationId } : {})
-      })
+      publishSyntheticExit(deps, ptyId, -1, incarnationId)
       runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
     }
     return false
@@ -265,14 +217,9 @@ export async function stopAndWaitPtyFromRuntimeController(
   } catch (err) {
     if (!isPtyAlreadyGoneError(err)) {
       if (connectionId) {
-        runtime?.markPtyLivenessUnverifiable?.(
-          ptyId,
-          err instanceof Error ? err.message : String(err)
-        )
+        runtime?.markPtyLivenessUnverifiable?.(ptyId, errorMessage(err))
       }
-      console.warn(
-        `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
-      )
+      console.warn(`[pty] Failed to stop PTY ${ptyId}: ${errorMessage(err)}`)
       return false
     }
   }
@@ -283,29 +230,21 @@ export async function stopAndWaitPtyFromRuntimeController(
     }
   } catch (err) {
     if (connectionId) {
-      runtime?.markPtyLivenessUnverifiable?.(
-        ptyId,
-        err instanceof Error ? err.message : String(err)
-      )
+      runtime?.markPtyLivenessUnverifiable?.(ptyId, errorMessage(err))
     }
-    console.warn(
-      `[pty] Failed to verify PTY ${ptyId} stopped: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    )
+    console.warn(`[pty] Failed to verify PTY ${ptyId} stopped: ${errorMessage(err)}`)
     return false
   }
   const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
   if (!providerExitObserved) {
     // The owning provider's fresh inventory observed absence, so this is a
     // death certificate even when its exit event was missed.
-    runtime?.onPtyExit(ptyId, 0, incarnationId)
-    rememberSyntheticKillExit(ptyId, incarnationId)
-    sendPtyExitToRenderer({
-      id: ptyId,
-      code: 0,
-      ...(incarnationId ? { incarnationId } : {})
-    })
+    publishSyntheticExit(deps, ptyId, 0, incarnationId)
+  } else {
+    // Why: an SSH exit frame reaches the runtime only after its output intake drains, so callers
+    // reading the verdict right after this stop would otherwise see a still-connected PTY.
+    const waitUntil = Math.min(deadlineMs ?? Infinity, Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS)
+    await runtime?.waitForPtyExitRecord?.(ptyId, waitUntil - Date.now())
   }
   return true
 }

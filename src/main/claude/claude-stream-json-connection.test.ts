@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
-import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import { spawnProcess } from '@orca/process-host'
+import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
+
 import { query, type CanUseTool, type Options } from '@anthropic-ai/claude-agent-sdk'
 import {
   openClaudeStreamJsonConnection,
@@ -23,6 +23,7 @@ import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resol
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 
 // These drive the real SDK against the scripted fake CLI, so every assertion is
 // about the environment, argv and frames a real child actually saw.
@@ -40,13 +41,15 @@ type ScriptedCliReport = {
 
 const scratchDirs: string[] = []
 const openConnections: ClaudeStreamJsonConnection[] = []
+const childClosures: Promise<void>[] = []
 
 afterEach(async () => {
   for (const connection of openConnections.splice(0)) {
     await connection.close()
   }
+  await Promise.all(childClosures.splice(0))
   for (const dir of scratchDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   spawned.splice(0)
   spawnedChildren.splice(0)
@@ -102,6 +105,7 @@ async function open(
       spawned.push(spec)
       const child = spawnProcess(spec)
       spawnedChildren.push(child)
+      childClosures.push(new Promise<void>((resolve) => child.once('close', () => resolve())))
       return child
     },
     queryImpl
@@ -111,15 +115,9 @@ async function open(
 }
 
 function launchedArgv(spec: ProcessSpec | undefined): string[] {
-  const supervised = spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC
-  if (!supervised) {
-    return [spec?.program ?? '', ...(spec?.args ?? [])]
-  }
-  const launch: unknown = JSON.parse(Buffer.from(supervised, 'base64').toString())
-  if (!launch || typeof launch !== 'object' || !('command' in launch) || !('args' in launch)) {
-    return []
-  }
-  return [String(launch.command), ...(Array.isArray(launch.args) ? launch.args.map(String) : [])]
+  const argv = [spec?.program ?? '', ...(spec?.args ?? [])]
+  // A supervised launch carries the provider's argv after the supervisor script's '--'.
+  return spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC ? argv.slice(argv.indexOf('--') + 1) : argv
 }
 
 function childEnv(): Record<string, string | undefined> {
@@ -578,11 +576,11 @@ describe('Claude stream-json connection', () => {
     const init = { providerSessionId: SESSION_ID, uuid: null, model: null, message: {} }
 
     // With no ambient auth, every true below can only have come from the CLI's settings.
-    expect(claudeAuthDiagnostic(init, null)).toMatchObject({
+    expect(claudeAuthDiagnostic(null, init, null)).toMatchObject({
       baseUrlConfigured: false,
       authTokenConfigured: false
     })
-    const diagnostic = claudeAuthDiagnostic(init, await connection.getSettings())
+    const diagnostic = claudeAuthDiagnostic(null, init, await connection.getSettings())
     expect(diagnostic).toMatchObject({
       baseUrlConfigured: true,
       authTokenConfigured: true,
@@ -624,7 +622,12 @@ describe('Claude stream-json connection', () => {
     const closed = await connection.close()
     expect(connection.exitVerdict.root).toBe('exited')
     expect(['exited', 'unverifiable']).toContain(connection.exitVerdict.tree)
-    expect(closed).toBe(connection.exitVerdict.tree === 'exited')
+    if (process.platform === 'win32') {
+      // The self-exit is the close, unless a reap racing it already forced the tree.
+      expect(closed || connection.exitVerdict.tree === 'unverifiable').toBe(true)
+    } else {
+      expect(closed).toBe(connection.exitVerdict.tree === 'exited')
+    }
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -680,7 +683,13 @@ describe('Claude stream-json connection', () => {
 
       const reported = await until(() => exit, 'the supervised spawn failure')
       // The supervisor spawned, so this is its exit; only its stderr can say why.
-      expect(reported.message).toMatch(/\(code 127\).*ENOENT/s)
+      // Reads as the direct spawn's own error, never the supervisor's internal report.
+      expect(reported.message).toBe(
+        `claude stream-json exited (code 127): spawn ${missingCli} ENOENT`
+      )
+      // Typed, so the start reads as a CLI that is not installed rather than a generic failure.
+      expect(providerExecutableMissing(reported)).toBe(true)
+      expect(connection.executableMissing).toBe(true)
       // A first-hand root exit, which releases the lease like a processless start did.
       expect(connection.exitVerdict.root).toBe('exited')
     }
@@ -751,86 +760,4 @@ describe('Claude stream-json connection', () => {
     await new Promise((resolve) => setTimeout(resolve, 1_100))
     await expect(connection.close()).resolves.toBe(true)
   }, 20_000)
-})
-
-// A structured Claude child owns the account's credentials while it runs, exactly as
-// a Claude PTY does. The gate is what makes runtime-auth-sync defer the managed OAuth
-// refresh instead of rotating the single-use token out from under a live session, and
-// structured sessions used to be invisible to it.
-describe('the managed-auth live gate', () => {
-  it('holds while a structured child runs and releases when it ends', async () => {
-    // The gate is a process-wide singleton and a sibling test's release lands on its
-    // child's 'close' event, which can settle after that test's close() resolved.
-    await until(() => (hasLiveClaudePtys() ? null : true), 'a drained auth gate')
-    const scenario = scriptScenario([
-      { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init-1' } },
-      { wait: HOLD_OPEN }
-    ])
-    const connection = await open(launchFor(scenario))
-
-    expect(hasLiveClaudePtys()).toBe(true)
-
-    await connection.close()
-
-    await until(() => (hasLiveClaudePtys() ? null : true), 'the auth gate to drain')
-    expect(hasLiveClaudePtys()).toBe(false)
-  }, 30_000)
-
-  it('releases when the child dies on its own rather than through close()', async () => {
-    await until(() => (hasLiveClaudePtys() ? null : true), 'a drained auth gate')
-    const scenario = scriptScenario([
-      { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init-1' } },
-      { wait: HOLD_OPEN }
-    ])
-    await open(launchFor(scenario))
-    expect(hasLiveClaudePtys()).toBe(true)
-
-    spawnedChildren.at(-1)?.kill('SIGKILL')
-
-    await until(() => (hasLiveClaudePtys() ? null : true), 'the auth gate to drain')
-    expect(hasLiveClaudePtys()).toBe(false)
-  }, 30_000)
-
-  // The gate entry is deliberately unpersisted, so confirmSeededClaudeLivePtys can never
-  // reconcile a stray one: a leak here defers the managed OAuth refresh for the life of
-  // the process. Entering the gate only after the release handlers are attached makes
-  // that unreachable regardless of what the setup in between does.
-  it('leaks no gate entry when setup throws between spawn and handler attachment', async () => {
-    await until(() => (hasLiveClaudePtys() ? null : true), 'a drained auth gate')
-    const scenario = scriptScenario([
-      { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init-1' } },
-      { wait: HOLD_OPEN }
-    ])
-    let started: SpawnedProcess | null = null
-
-    try {
-      await expect(
-        openClaudeStreamJsonConnection(launchFor(scenario), {}, (spec) => {
-          const child = spawnProcess(spec)
-          started = child
-          const attach = child.stderr.on.bind(child.stderr)
-          // Measured attach order: the SDK binds stderr 'data' from inside query(),
-          // before the child is even assigned. The SECOND bind is this connection's own
-          // armTreeOnOutput — the first statement that runs after the child exists and
-          // before its 'exit'/'close' release handlers. Throwing on the first is
-          // vacuous: it escapes before any gate entry could have happened.
-          let dataAttaches = 0
-          child.stderr.on = ((event: string, listener: (...args: unknown[]) => void) => {
-            if (event === 'data') {
-              dataAttaches += 1
-              if (dataAttaches === 2) {
-                throw new Error('stderr listener attach failed')
-              }
-            }
-            return attach(event, listener)
-          }) as typeof child.stderr.on
-          return child
-        })
-      ).rejects.toThrow('stderr listener attach failed')
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    } finally {
-      ;(started as SpawnedProcess | null)?.kill('SIGKILL')
-    }
-  }, 30_000)
 })

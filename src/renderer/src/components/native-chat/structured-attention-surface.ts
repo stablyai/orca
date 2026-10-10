@@ -17,6 +17,7 @@ import type {
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { isOrcaWindowForegroundFocused } from '../terminal-pane/terminal-notification-pane-visibility'
+import { isTabOnVisibleSurface } from '@/hooks/agent-auto-ack-targets'
 import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
@@ -66,20 +67,15 @@ function admitStructuredSession(
     : { admitted: false, cause: 'superseded-surface' }
 }
 
-/** The tab the workspace's focused group is currently showing, if it is this structured tab. */
 function isViewedStructuredTab(
   state: StoreSnapshot,
   workspaceId: string,
   tab: StructuredTab
 ): boolean {
-  if (!isOrcaWindowForegroundFocused() || state.activeWorktreeId !== workspaceId) {
-    return false
-  }
-  const activeGroupId = state.activeGroupIdByWorktree[workspaceId]
-  const group = (state.groupsByWorktree[workspaceId] ?? []).find(
-    (candidate) => candidate.id === activeGroupId
+  return (
+    isOrcaWindowForegroundFocused() &&
+    isTabOnVisibleSurface(state, workspaceId, tab.id, 'structured')
   )
-  return group?.activeTabId === tab.id
 }
 
 function collectStructuredAttentionRemainder(

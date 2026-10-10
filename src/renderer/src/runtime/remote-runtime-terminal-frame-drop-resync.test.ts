@@ -43,6 +43,7 @@ class FakeMultiplexServer {
   dropNextRecoverySnapshotEnd = false
   holdNextRecoverySnapshot = false
   snapshotRequests: (number | undefined)[] = []
+  snapshotRequestRows: (number | undefined)[] = []
   private heldManualRequestId: number | null = null
   private snapshotData = 'INITIAL'
 
@@ -64,8 +65,11 @@ class FakeMultiplexServer {
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotRequest) {
-      const payload = decodeTerminalStreamJson<{ requestId?: number }>(frame.payload)
+      const payload = decodeTerminalStreamJson<{ requestId?: number; scrollbackRows?: number }>(
+        frame.payload
+      )
       this.snapshotRequests.push(payload?.requestId)
+      this.snapshotRequestRows.push(payload?.scrollbackRows)
       if (typeof payload?.requestId === 'number' && this.holdNextManualSnapshot) {
         this.holdNextManualSnapshot = false
         this.heldManualRequestId = payload.requestId
@@ -244,6 +248,8 @@ describe('remote terminal frame-drop resync', () => {
     expect(server.droppedFrames).toBe(1)
     // Instead, a fresh authoritative snapshot recovers the terminal.
     expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    // P2-5: the gap lost output, so the resync asks for history to replace the pane's own.
+    expect(server.snapshotRequestRows).toEqual([1000])
 
     server.replaySnapshotCoveredOutput('ccc')
     server.output('ddd')

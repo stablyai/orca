@@ -1,3 +1,4 @@
+import { NativeChatExpandable } from './NativeChatExpandable'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { ChevronRight, FilePlus2, FileMinus2, FilePen } from 'lucide-react'
@@ -5,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   unifiedLineNumber,
   type NativeChatEditFile,
@@ -105,6 +108,32 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
   )
 }
 
+/** The card's rows. Its own component so a collapsed card builds none of them. */
+function DiffCardRows({
+  lines,
+  gutterWidth
+}: {
+  lines: NativeChatEditFile['lines']
+  gutterWidth: number
+}): React.JSX.Element {
+  const seen = new Map<string, number>()
+  return (
+    // Focusable so the rows can be scrolled from the keyboard.
+    <div
+      data-native-chat-code-content
+      tabIndex={0}
+      className="ml-6 mt-1 max-h-72 overflow-auto rounded-lg border border-chat-code-border bg-chat-code-surface py-1 font-mono text-xs leading-relaxed text-chat-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+    >
+      {lines.map((line) => {
+        const signature = `${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${line.text}`
+        const occurrence = seen.get(signature) ?? 0
+        seen.set(signature, occurrence + 1)
+        return <DiffRow key={`${signature}:${occurrence}`} line={line} gutterWidth={gutterWidth} />
+      })}
+    </div>
+  )
+}
+
 /** Inline card for one file an agent edited: verb header, path with change
  *  counts, and the unified rows. The gutter is blank when the provider gave no
  *  resolved ranges, because a snippet-relative number would read as a file
@@ -114,20 +143,17 @@ export function NativeChatDiffCard({
   file,
   revealSignal,
   onReveal,
-  initiallyExpanded = false,
-  disclosureKey
+  disclosureKey,
+  onLinkClick
 }: {
   file: NativeChatEditFile
   revealSignal?: number
   onReveal?: (element: HTMLElement) => void
-  initiallyExpanded?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
 }): React.JSX.Element {
-  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(
-    disclosureKey,
-    initiallyExpanded
-  )
+  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(disclosureKey, false)
   const cardRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (revealSignal && cardRef.current) {
@@ -175,14 +201,13 @@ export function NativeChatDiffCard({
               <span className="shrink-0 text-chat-foreground-faint">→</span>
             </>
           ) : null}
-          <span
+          <NativeChatToolFileTarget
+            path={file.path}
+            label={baseName(file.path)}
             className="min-w-0 truncate text-chat-foreground"
-            title={file.path}
-            aria-hidden="true"
-          >
-            {baseName(file.path)}
-          </span>
-          <span className="sr-only">{file.path}</span>
+            // A deleted file has nothing left to open.
+            onLinkClick={file.changeKind === 'deleted' ? undefined : onLinkClick}
+          />
           <DiffLineCounts added={file.added} removed={file.removed} size="sm" />
           {file.truncated ? (
             <span className="shrink-0 text-xs text-chat-foreground-faint">
@@ -204,25 +229,10 @@ export function NativeChatDiffCard({
           className="ml-auto shrink-0"
         />
       </div>
-      {hasBody && expanded ? (
-        // Focusable so the rows can be scrolled from the keyboard.
-        <div
-          data-native-chat-code-content
-          tabIndex={0}
-          className="ml-6 mt-1 max-h-72 overflow-auto rounded-lg border border-chat-code-border bg-chat-code-surface py-1 font-mono text-xs leading-relaxed text-chat-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
-        >
-          {(() => {
-            const seen = new Map<string, number>()
-            return file.lines.map((line) => {
-              const signature = `${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${line.text}`
-              const occurrence = seen.get(signature) ?? 0
-              seen.set(signature, occurrence + 1)
-              return (
-                <DiffRow key={`${signature}:${occurrence}`} line={line} gutterWidth={gutterWidth} />
-              )
-            })
-          })()}
-        </div>
+      {hasBody ? (
+        <NativeChatExpandable open={expanded}>
+          <DiffCardRows lines={file.lines} gutterWidth={gutterWidth} />
+        </NativeChatExpandable>
       ) : null}
     </div>
   )

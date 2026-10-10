@@ -7,7 +7,9 @@ import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
+import { RelayAgentProcessLifetime } from './relay-agent-process-lifetime'
 import { resolveLoginShellEnvironment } from '../main/startup/login-shell-environment'
+import { errorMessage } from '../shared/error-message'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -112,6 +114,7 @@ type ExecResult = {
  * and a clean exit code instead of an interactive session.
  */
 export class AgentExecHandler {
+  private readonly processLifetime = new RelayAgentProcessLifetime()
   // Why: commit-message and PR-field generation can run together for one cwd;
   // operation lanes let cancel target only the user-visible job that stopped.
   private inFlightByLane = new Map<string, InFlightExec>()
@@ -122,6 +125,12 @@ export class AgentExecHandler {
     )
     dispatcher.onRequest('agent.cancelExec', (p) => this.cancel(p as CancelParams))
   }
+
+  dispose(): Promise<void> {
+    return this.processLifetime.dispose()
+  }
+
+  reopen = (): void => this.processLifetime.reopen()
 
   private async cancel(params: CancelParams): Promise<{ canceled: boolean }> {
     const cwd = typeof params.cwd === 'string' ? params.cwd : ''
@@ -134,6 +143,7 @@ export class AgentExecHandler {
   }
 
   private async exec(params: ExecParams, context?: RequestContext): Promise<ExecResult> {
+    this.processLifetime.assertAdmission()
     const binary = typeof params.binary === 'string' ? params.binary : ''
     if (!binary) {
       throw new Error('agent.execNonInteractive: binary is required')
@@ -186,6 +196,8 @@ export class AgentExecHandler {
         return { stdout: '', stderr: '', exitCode: null, timedOut: false, canceled: true }
       }
     }
+    // Why again: shutdown may have fenced while the login shell resolved.
+    this.processLifetime.assertAdmission()
     if (Date.now() >= deadline) {
       return { stdout: '', stderr: '', exitCode: null, timedOut: true }
     }
@@ -223,11 +235,12 @@ export class AgentExecHandler {
           stderr: '',
           exitCode: null,
           timedOut: false,
-          spawnError: error instanceof Error ? error.message : String(error)
+          spawnError: errorMessage(error)
         })
         return
       }
 
+      this.processLifetime.track(child)
       let stdout = ''
       let stderr = ''
       let stdoutBytes = 0
@@ -325,11 +338,7 @@ export class AgentExecHandler {
         }
       }
 
-      if (stdinPayload !== null) {
-        child.stdin?.end(stdinPayload)
-      } else {
-        child.stdin?.end()
-      }
+      child.stdin?.end(stdinPayload ?? undefined)
     })
   }
 }

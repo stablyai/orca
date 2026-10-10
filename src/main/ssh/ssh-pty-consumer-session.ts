@@ -5,7 +5,7 @@ import {
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 
 export const SSH_PTY_OPEN_CLIENT_METHOD = 'pty.openClient'
-export const SSH_PTY_OPEN_CLIENT_TIMEOUT_MS = 10_000
+const SSH_PTY_OPEN_CLIENT_TIMEOUT_MS = 10_000
 
 export type SshPtyConsumerOwnerState = {
   mode: 'negotiated'
@@ -98,7 +98,7 @@ function validateGrant(
 }
 
 export async function openSshPtyConsumerSession(
-  mux: SshChannelMultiplexer,
+  mux: Pick<SshChannelMultiplexer, 'request'>,
   options: OpenSshPtyConsumerSessionOptions
 ): Promise<SshPtyConsumerAdmission> {
   let result: unknown

@@ -1,7 +1,9 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
+import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
 import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 import {
@@ -42,11 +44,12 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 export async function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: typeof spawnProcess = spawnProcess
+  spawnImpl: PipedProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
     spawnImpl,
-    site: 'codex-app-server-teardown'
+    site: 'codex-app-server-teardown',
+    ...(handlers.onOutput ? { onOutput: handlers.onOutput } : {})
   })
   const { child, terminateTree: terminateProcessTree } = managed
 
@@ -59,7 +62,8 @@ export async function openCodexAppServerConnection(
   let terminalError: Error | null = null
 
   function buildExitError(cause?: Error): Error {
-    return buildCodexAppServerExitError(managed.stderrTail(), cause)
+    const error = buildCodexAppServerExitError(managed.stderrTail(), cause)
+    return managed.executableMissing ? withMissingProviderExecutable(error) : error
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({

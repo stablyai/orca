@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ChevronRightIcon, CircleIcon } from 'lucide-react'
-import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
+import * as ContextMenuPrimitive from 'radix-ui/context-menu'
 
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'

@@ -1,5 +1,9 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
+import {
+  ptyOwnership,
+  ptyIncarnationById,
+  setAdoptedPtyOwnership
+} from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { commitRuntimePtySize } from './spawn-commit-pty-size'
 import {
@@ -7,7 +11,6 @@ import {
   recordCodexPaneAccountForSpawn,
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -24,7 +27,10 @@ import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../../../runtime/terminal-model-query-authority'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
@@ -102,7 +108,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       ctx.result,
       ctx.hostSessionBinding?.expectedSourceBinding
     )
-    ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
+    setAdoptedPtyOwnership(ctx.result.id, args.connectionId)
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
     if (ctx.result.incarnationId) {
       ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
@@ -137,7 +143,8 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
-      const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
+      const { store, worktreeId, tabId, leafId, expectedSourceBinding, placement } =
+        ctx.hostSessionBinding
       const binding = {
         worktreeId,
         tabId,
@@ -147,6 +154,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(expectedSourceBinding ? { expectedSourceBinding } : {}),
+        ...(placement ? { placement } : {}),
         origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)
       }
       const persisted = args.connectionId
@@ -206,7 +214,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (args.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
   }
-  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+  ptyOwnership.set(ctx.result.id, getConnectionExecutionHostId(args.connectionId))
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }
@@ -237,9 +245,6 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)

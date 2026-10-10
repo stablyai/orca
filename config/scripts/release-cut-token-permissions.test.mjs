@@ -11,6 +11,9 @@ const EXPECTED_MATRIX = {
   '.github/workflows/e2e.yml#build': { contents: 'read' },
   '.github/workflows/e2e.yml#changed-e2e': { contents: 'read' },
   '.github/workflows/e2e.yml#e2e': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-auto-convert-docker': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-serve-mode-switch': { contents: 'read' },
+  '.github/workflows/e2e.yml#orcad-serve-mode-switch-windows': { contents: 'read' },
   '.github/workflows/e2e.yml#prepare-native-cache': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-browser-network-route': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-localhost': { contents: 'read' },
@@ -61,6 +64,10 @@ const EXPECTED_MATRIX = {
   },
   [`${RELEASE_WORKFLOW}#post-release-e2e`]: { actions: 'write' },
   [`${RELEASE_WORKFLOW}#publish-release`]: { contents: 'write' },
+  [`${RELEASE_WORKFLOW}#release-javascript`]: { contents: 'read' },
+  [`${RELEASE_WORKFLOW}#release-javascript -> .github/workflows/release-javascript.yml#bundle`]: {
+    contents: 'read'
+  },
   [`${RELEASE_WORKFLOW}#release-preflight`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#relay-windows-process-tree`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#relay-windows-process-tree -> .github/workflows/relay-windows-process-tree.yml#build`]:

@@ -1,19 +1,17 @@
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess
 } from '../provider-process/managed-provider-process'
-import { claudeChildClosePolicy } from './claude-child-exit-proof-ladder'
-
-/** Derived rather than imported: only src/shared/child-process may name node:child_process. */
-type ClaudeCodeChild = ReturnType<typeof spawnProcess>
+import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
 export type ClaudeCodeProcessSpawn = {
   /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
-  spawn: (options: ClaudeAgentSdkSpawnOptions) => ClaudeCodeChild
+  spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
   /** The retained child, so Orca keeps its own tree-kill and exit-proof ladder. Null until the SDK spawns. */
-  readonly child: ClaudeCodeChild | null
+  readonly child: PipedChildProcess | null
   readonly managed: ManagedProviderProcess | null
   /**
    * Ownership proof: the durable lease adjudicates on this pid plus start time plus the spawn
@@ -45,8 +43,9 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
  * nobody watching. Windows has no supervisor and spawns Claude directly.
  */
 export function createClaudeCodeProcessSpawn(
-  spawnImpl: typeof spawnProcess = spawnProcess,
-  platform: NodeJS.Platform = process.platform
+  spawnImpl: PipedProcessSpawner = spawnProcess,
+  platform: NodeJS.Platform = process.platform,
+  onOutput?: () => void
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
@@ -63,8 +62,9 @@ export function createClaudeCodeProcessSpawn(
           platform,
           inheritedEnv: definedEnv(options.env),
           site: 'claude-stream-json-teardown',
-          policy: claudeChildClosePolicy,
-          acceptClose: (result) => result.root === 'exited' && result.tree === 'exited'
+          policy: (supervised) => claudeChildClosePolicy(supervised, platform),
+          acceptClose: claudeChildCloseProven,
+          ...(onOutput ? { onOutput } : {})
         }
       )
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.

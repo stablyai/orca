@@ -55,7 +55,7 @@ describe('Linear description images', () => {
       description,
       descriptionImageUrls: { [source]: signed }
     })
-    expect(getPublicFileUrlClient).toHaveBeenCalledWith(entry)
+    expect(getPublicFileUrlClient).toHaveBeenCalledWith(entry, expect.any(AbortSignal))
     expect(rawRequest.mock.calls[0][1]).toEqual({ id: 'issue-1' })
   })
 

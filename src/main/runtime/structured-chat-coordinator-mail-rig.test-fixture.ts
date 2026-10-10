@@ -14,7 +14,7 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
@@ -92,10 +92,9 @@ export async function openChat(sessionId: string): Promise<FakeConnection> {
 export const threadBySession = new Map<string, string>()
 
 export function connectionFor(sessionId: string): FakeConnection {
-  // A cleared chat's successor starts on its first message; its record then names its thread.
-  const head = agentSessionProviderHandleChainHead(
-    host.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
-  )
+  // A cleared context starts on its first message; its record then names its new thread.
+  const record = host.deps.store.getRecord(sessionId)
+  const head = record ? activeProviderContext(record).head : null
   const thread = threadBySession.get(sessionId) ?? head?.handle.nativeId
   const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
   if (!connection) {
@@ -157,11 +156,11 @@ export async function userTexts(sessionId: string): Promise<string[]> {
   )
 }
 
-/** A supervised terminal worker under the coordinator's Run, and its worker_done. */
+/** A supervised terminal worker under the coordinator's Run, and its worker_done; its dispatch id. */
 export async function finishWorker(
   taskId: string,
   worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
-): Promise<void> {
+): Promise<string> {
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,
@@ -184,6 +183,7 @@ export async function finishWorker(
     type: 'worker_done',
     payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
   })
+  return started.dispatch.id
 }
 
 export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string }> {
@@ -205,7 +205,7 @@ export async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: 
   return { runId, taskId: idOf(task.task) }
 }
 
-/** `/clear` as the chat surface runs it: the conversation continues in a new session. */
+/** `/clear` as the chat surface runs it: the same conversation gets a fresh context. */
 export async function clearChat(sessionId: string): Promise<string> {
   const command = 'clear' as const
   const cleared = await host.conversationCommand(
@@ -224,21 +224,21 @@ export async function clearChat(sessionId: string): Promise<string> {
       }
     }
   )
-  const successor = cleared.ok ? cleared.value.replacementSessionId : undefined
-  if (!successor) {
+  expect(cleared, JSON.stringify(cleared)).toMatchObject({ ok: true })
+  if (!cleared.ok) {
     throw new Error(`clear failed: ${JSON.stringify(cleared)}`)
   }
-  // The surface swaps the tab over to the session that continues the chat.
-  await host.setSessionTabVisibility(sessionId, false)
-  await host.setSessionTabVisibility(successor, true)
-  return successor
+  expect(cleared.value.replacementSessionId).toBeUndefined()
+  expect(host.deps.store.getVisibleSessionTabIndex().sessionIds).toContain(sessionId)
+  threadBySession.delete(sessionId)
+  return sessionId
 }
 
-/** A cleared chat's successor runs once the user writes to it; only then can its agent act. */
-export async function startSuccessor(successor: string): Promise<void> {
-  expect(await sendUserMessage(successor, 'hello')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
-  await settleTurn(successor, 0)
+/** A cleared context starts when the user writes to the same conversation. */
+export async function startClearedContext(sessionId: string): Promise<void> {
+  expect(await sendUserMessage(sessionId, 'hello')).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(connectionFor(sessionId).turns).toHaveLength(1), WAIT)
+  await settleTurn(sessionId, 0)
 }
 
 beforeEach(async () => {
@@ -254,12 +254,14 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     openCodexConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     // The same calls the runtime's own host install makes.
-    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary)
+    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary),
+    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })
@@ -271,6 +273,10 @@ export function startRuntime(): OrcaRuntimeService {
   vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
+  )
+  // The exact process `finishWorker` records, so a worker's report is accepted and settles.
+  vi.spyOn(started, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
+    handle === 'term_worker' || handle === 'term_worker_2' ? `runtime_test:${handle}:1` : null
   )
   return started
 }

@@ -178,8 +178,9 @@ export function proveAgentSessionOwner(args: {
 
 /**
  * A renewal asserts two things at once: the host is running its loop, and the child still matches
- * the recorded identity. A host that cannot re-verify the child stops renewing rather than
- * extending a lease it can no longer vouch for.
+ * the recorded identity — re-proven by a PID probe, or held by this runtime with no exit seen. A
+ * host that cannot re-verify the child stops renewing rather than extending a lease it can no
+ * longer vouch for.
  */
 export function renewAgentSessionLease(args: {
   record: AgentSessionRecord

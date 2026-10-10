@@ -16,9 +16,8 @@ const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdap
     pauseAdapterMock: vi.fn()
   }))
 
-vi.mock('./ssh-relay-deploy', () => ({
-  deployAndLaunchRelay: vi.fn()
-}))
+vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+vi.mock('./ssh-previous-relay-terminals', () => import('./ssh-previous-relay-census-test-double'))
 
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
@@ -516,7 +515,7 @@ describe('SshRelaySession', () => {
     await session.establish(mockConn)
 
     expect(mockAttach).toHaveBeenCalledWith('pty-1')
-    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'ssh:target-1')
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('target-1', [
       'pty-1'
     ])
@@ -559,7 +558,7 @@ describe('SshRelaySession', () => {
     expect(mockAttach).not.toHaveBeenCalledWith('pty-superseded')
     expect(mockAttach).not.toHaveBeenCalledWith('pty-recycled')
     expect(mockAttach).not.toHaveBeenCalledWith('pty-terminated')
-    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'ssh:target-1')
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(
       'target-1',
@@ -673,7 +672,7 @@ describe('SshRelaySession', () => {
     resolveAttach()
 
     await expect(establish).rejects.toThrow('Session disposed during establish')
-    expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'target-1')
+    expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'ssh:target-1')
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
@@ -703,7 +702,7 @@ describe('SshRelaySession', () => {
     resolveAttach()
     await reconnect
 
-    expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'target-1')
+    expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'ssh:target-1')
     expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 

@@ -8,6 +8,8 @@ import {
   type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
 } from '../../../../shared/agent-session-failure-copy'
+import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
+import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
@@ -40,6 +42,31 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.couldNotRestart,
         values
       ),
+    argumentsUnsupportedOption: (values) =>
+      translate(
+        'components.native-chat.failureWords.argumentsUnsupportedOption',
+        COPY.argumentsUnsupportedOption,
+        values
+      ),
+    argumentsMissingValue: (values) =>
+      translate(
+        'components.native-chat.failureWords.argumentsMissingValue',
+        COPY.argumentsMissingValue,
+        values
+      ),
+    argumentsMultipleValues: (values) =>
+      translate(
+        'components.native-chat.failureWords.argumentsMultipleValues',
+        COPY.argumentsMultipleValues,
+        values
+      ),
+    argumentsPositionalPrompt: () =>
+      translate(
+        'components.native-chat.failureWords.argumentsPositionalPrompt',
+        COPY.argumentsPositionalPrompt
+      ),
+    editSavedArguments: () =>
+      translate('components.native-chat.failureWords.editSavedArguments', COPY.editSavedArguments),
     terminalAgentHoldsChat: () =>
       translate(
         'components.native-chat.writeNotice.terminalAgentHoldsChat',
@@ -51,6 +78,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate('components.native-chat.writeNotice.startNewChat', COPY.startNewChat),
     notSignedIn: (values) =>
       translate('components.native-chat.failureWords.notSignedIn', COPY.notSignedIn, values),
+    ...AVAILABILITY_PIECES,
     signInFirst: () =>
       translate('components.native-chat.failureWords.signInFirst', COPY.signInFirst),
     signInThenRunCommand: (values) =>
@@ -77,6 +105,32 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.managedAccountUnsupported',
         COPY.managedAccountUnsupported
+      ),
+    launchFolderMissing: () =>
+      translate(
+        'components.native-chat.failureWords.launchFolderMissing',
+        COPY.launchFolderMissing
+      ),
+    historyInOtherAccount: () =>
+      translate(
+        'components.native-chat.failureWords.historyInOtherAccount',
+        COPY.historyInOtherAccount
+      ),
+    claudeAccountFolderMissing: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountFolderMissing',
+        COPY.claudeAccountFolderMissing
+      ),
+    claudeAccountSetupFailed: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountSetupFailed',
+        COPY.claudeAccountSetupFailed
+      ),
+    agentCommandNotRunnable: (values) =>
+      translate(
+        'components.native-chat.failureWords.agentCommandNotRunnable',
+        COPY.agentCommandNotRunnable,
+        values
       ),
     chooseClaudeAccount: () =>
       translate(
@@ -114,52 +168,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.providerRejectedQuoted,
         values
       ),
-    attachmentEmpty: () =>
-      translate('components.native-chat.failureWords.attachmentEmpty', COPY.attachmentEmpty),
-    attachmentTooLarge: () =>
-      translate('components.native-chat.failureWords.attachmentTooLarge', COPY.attachmentTooLarge),
-    attachmentLargerThan: (values) =>
-      translate(
-        'components.native-chat.failureWords.attachmentLargerThan',
-        COPY.attachmentLargerThan,
-        values
-      ),
-    attachmentTooMany: () =>
-      translate('components.native-chat.failureWords.attachmentTooMany', COPY.attachmentTooMany),
-    attachmentAtMost: (values) =>
-      translate(
-        'components.native-chat.failureWords.attachmentAtMost',
-        COPY.attachmentAtMost,
-        values
-      ),
-    attachmentTotalTooLarge: () =>
-      translate(
-        'components.native-chat.failureWords.attachmentTotalTooLarge',
-        COPY.attachmentTotalTooLarge
-      ),
-    attachmentTotalMoreThan: (values) =>
-      translate(
-        'components.native-chat.failureWords.attachmentTotalMoreThan',
-        COPY.attachmentTotalMoreThan,
-        values
-      ),
-    attachmentUnsupportedType: (values) =>
-      translate(
-        'components.native-chat.failureWords.attachmentUnsupportedType',
-        COPY.attachmentUnsupportedType,
-        values
-      ),
-    attachmentNotAFile: () =>
-      translate('components.native-chat.failureWords.attachmentNotAFile', COPY.attachmentNotAFile),
-    attachmentNoSource: () =>
-      translate('components.native-chat.failureWords.attachmentNoSource', COPY.attachmentNoSource),
-    attachmentInvalid: () =>
-      translate('components.native-chat.failureWords.attachmentInvalid', COPY.attachmentInvalid),
-    attachmentUnreadable: () =>
-      translate(
-        'components.native-chat.failureWords.attachmentUnreadable',
-        COPY.attachmentUnreadable
-      ),
+    ...ATTACHMENT_FAILURE_PIECES,
     emptyMessage: () =>
       translate('components.native-chat.failureWords.emptyMessage', COPY.emptyMessage),
     queueFull: () => translate('components.native-chat.failureWords.queueFull', COPY.queueFull),
@@ -182,6 +191,34 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.commandRefusedTryAgain',
         COPY.commandRefusedTryAgain
+      ),
+    backgroundTasksRunning: () =>
+      translate(
+        'components.native-chat.writeNotice.backgroundTasksRunning',
+        COPY.backgroundTasksRunning
+      ),
+    waitForBackgroundTasks: () =>
+      translate(
+        'components.native-chat.writeNotice.waitForBackgroundTasks',
+        COPY.waitForBackgroundTasks
+      ),
+    agentStarting: () =>
+      translate('components.native-chat.writeNotice.agentStarting', COPY.agentStarting),
+    waitForStart: () =>
+      translate('components.native-chat.writeNotice.waitForStart', COPY.waitForStart),
+    agentStillWorking: () =>
+      translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
+    runCommandWhenDone: (values) =>
+      translate(
+        'components.native-chat.failureWords.runCommandWhenDone',
+        COPY.runCommandWhenDone,
+        values
+      ),
+    commandAfterAnswer: (values) =>
+      translate(
+        'components.native-chat.failureWords.commandAfterAnswer',
+        COPY.commandAfterAnswer,
+        values
       ),
     compactionFailed: () =>
       translate('components.native-chat.failureWords.compactionFailed', COPY.compactionFailed),
@@ -233,10 +270,34 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.providerRetryingQuoted,
         values
       ),
+    providerRetryNumber: (values) =>
+      translate(
+        'components.native-chat.failureWords.providerRetryNumber',
+        COPY.providerRetryNumber,
+        values
+      ),
+    providerRetryNumberOf: (values) =>
+      translate(
+        'components.native-chat.failureWords.providerRetryNumberOf',
+        COPY.providerRetryNumberOf,
+        values
+      ),
+    providerRetryLastError: (values) =>
+      translate(
+        'components.native-chat.failureWords.providerRetryLastError',
+        COPY.providerRetryLastError,
+        values
+      ),
     previousExitUnverifiable: (values) =>
       translate(
         'components.native-chat.failureWords.previousExitUnverifiable',
         COPY.previousExitUnverifiable,
+        values
+      ),
+    sessionNotRestored: (values) =>
+      translate(
+        'components.native-chat.failureWords.sessionNotRestored',
+        COPY.sessionNotRestored,
         values
       )
   }

@@ -1,8 +1,9 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import type * as RecordFile from './orcad-remote-record-file'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
@@ -11,11 +12,17 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
 vi.mock('./ssh-relay-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
+  isRelayInstallLockStale: vi.fn().mockResolvedValue(false),
+  RemoteInstallLockBusyError: class extends Error {},
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
 vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
   writeRelayFile: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('./orcad-remote-record-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof RecordFile>()),
+  writeAtomicOrcadRemoteRecord: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./orcad-remote-node-runtime', () => ({
   ensureRemoteOrcadNodeRuntime: vi.fn().mockResolvedValue(undefined)
@@ -25,8 +32,9 @@ vi.mock('./orcad-local-build-hash', () => ({
 }))
 
 import { execCommand } from './ssh-relay-deploy-helpers'
-import { acquireInstallLock } from './ssh-relay-install-lock'
-import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
+import { acquireInstallLock, isRelayInstallLockStale } from './ssh-relay-install-lock'
+import { uploadRelayDirectory } from './ssh-relay-install-transfers'
+import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
 import { installOrcadBundle } from './orcad-remote-install'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
@@ -35,10 +43,20 @@ import {
   finalizeInstall,
   isRemoteInstallComplete
 } from './ssh-relay-versioned-install'
-import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
+import {
+  emptyOrcadActivationRecord,
+  withActivatedVersion,
+  withDeactivatedVersionCommitted,
+  type OrcadActivationRecord
+} from './orcad-activation-record'
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { isReadinessRead } from './orcad-activation-host-test-harness'
+import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
 import type { SshConnection } from './ssh-connection'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
+import { serializeOrcadActivationTransaction } from './orcad-activation-transaction'
+import { createOrcadActivationTransaction } from './orcad-activation-transaction-transitions'
 
 const mockExec = vi.mocked(execCommand)
 const NEW_VERSION = '0.2.0+bb0100000000'
@@ -53,6 +71,7 @@ vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
 }))
 
 function readyLine(overrides: {
+  version?: string
   buildHash?: string
   daemonState?: 'live' | 'degraded' | 'absent'
   selfTestOk?: boolean
@@ -67,7 +86,7 @@ function readyLine(overrides: {
     pairing: { available: false, reason: 'disabled_by_operator', guidance: 'n/a' },
     health: {
       buildHash: overrides.buildHash ?? 'abc123def4567890',
-      buildVersion: NEW_VERSION,
+      buildVersion: overrides.version ?? NEW_VERSION,
       nodeVersion: '20.11.0',
       nodeAbi: '115',
       platform: 'linux',
@@ -101,15 +120,30 @@ type HostScript = {
   comparisonResult?: string
   candidateStopResult?: string
   readinessAtMs?: number
+  orcadLog?: string
 }
 
 function scriptHost(script: HostScript): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
-    if (text.startsWith('cat ') && text.includes('orcad-active.json')) {
-      return script.activationRecord
+    if (text.startsWith('tail -c')) {
+      return script.orcadLog ?? ''
     }
-    if (text.includes('.orcad-readiness') && text.startsWith('cat ')) {
+    if (text.includes('__ORCAD_RECORD_PRESENT__') && text.includes('orcad-active.json')) {
+      return script.activationRecord
+        ? `__ORCAD_RECORD_PRESENT__\n${script.activationRecord}`
+        : '__ORCAD_RECORD_ABSENT__\n'
+    }
+    if (text.includes('__ORCAD_RECORD_PRESENT__') && text.includes('transaction.json')) {
+      return '__ORCAD_RECORD_ABSENT__\n'
+    }
+    if (text.includes('__ORCAD_BUILD_HASH__')) {
+      return '__ORCAD_BUILD_HASH__ abc123def4567890\n'
+    }
+    if (text.includes('orcad.lock') && text.includes('orca-runtime.json')) {
+      return 'CLEAR'
+    }
+    if (text.includes('.orcad-readiness') && isReadinessRead(text)) {
       if (script.readinessAtMs !== undefined && Date.now() < script.readinessAtMs) {
         return ''
       }
@@ -139,7 +173,7 @@ function scriptHost(script: HostScript): void {
       script.log.push(`stop:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
       return text.includes(NEW_VERSION) ? (script.candidateStopResult ?? 'STOPPED') : 'STOPPED'
     }
-    if (text.includes('tar -C') && text.includes('-cf')) {
+    if (isSnapshotCaptureCommand(text)) {
       script.log.push('snapshot')
       return script.snapshotResult ?? 'CAPTURED'
     }
@@ -162,7 +196,7 @@ function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOption
     userDataDir: '/home/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0 },
+    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -272,8 +306,8 @@ describe('deployOrcad', () => {
       expect(script.log).toEqual(['preflight'])
       expect(
         vi
-          .mocked(writeRelayFile)
-          .mock.calls.some(([, , path]) => path.includes('orcad-active.json'))
+          .mocked(writeAtomicOrcadRemoteRecord)
+          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
       ).toBe(false)
     }
   )
@@ -307,7 +341,7 @@ describe('deployOrcad', () => {
         options({
           host: getRemoteHostPlatform(platform),
           target,
-          census: { liveSessions: 1, startedSinceActivation: 0 }
+          census: { liveSessions: 1, startedSinceActivation: 0, daemonProtocolVersion: 3 }
         })
       )
       const chmod = mockExec.mock.calls.findIndex(([, command]) =>
@@ -351,12 +385,65 @@ describe('deployOrcad', () => {
     )
   })
 
+  it.each([
+    ['a fresh fence with no journal', false, false, 'orcad_activation_fence_busy'],
+    ['a stale fence over a journal', true, true, 'orcad_activation_recovery_required'],
+    ['a fresh fence over a live run journal', false, true, 'orcad_activation_fence_busy']
+  ])('refuses before uploading on %s', async (_label, stale, journal, code) => {
+    vi.mocked(isRelayInstallLockStale).mockResolvedValueOnce(stale)
+    const JOURNAL = serializeOrcadActivationTransaction(
+      createOrcadActivationTransaction({
+        transactionId: '00000000-0000-4000-8000-000000000001',
+        candidateVersion: NEW_VERSION,
+        recordBefore: emptyOrcadActivationRecord(),
+        snapshotDirName: 'pre-1',
+        now: new Date(0)
+      })
+    )
+    mockExec.mockImplementation(async (_conn, command) => {
+      const text = String(command)
+      if (text.includes('echo LOCKED || echo OPEN')) {
+        return 'LOCKED\n'
+      }
+      if (text.includes('__ORCAD_RECORD_ABSENT__') && text.includes('transaction.json')) {
+        return journal ? `__ORCAD_RECORD_PRESENT__\n${JOURNAL}` : '__ORCAD_RECORD_ABSENT__\n'
+      }
+      return text.includes('__ORCAD_RECORD_ABSENT__') ? '__ORCAD_RECORD_ABSENT__\n' : ''
+    })
+    await expect(deployOrcad(options())).resolves.toMatchObject({
+      outcome: 'installed-not-activated',
+      code
+    })
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+  })
+
+  // BUG-21: a bare stale fence (a wake cut short) failed every update with "Recover it first".
+  it('clears a stale fence no journal backs and goes on with the update', async () => {
+    vi.mocked(isRelayInstallLockStale).mockResolvedValueOnce(true)
+    let fenced = true
+    mockExec.mockImplementation(async (_conn, command) => {
+      const text = String(command)
+      if (text.includes('echo LOCKED || echo OPEN')) {
+        return fenced ? 'LOCKED\n' : 'OPEN\n'
+      }
+      if (text.includes('echo RELEASED')) {
+        fenced = false
+      }
+      return text.includes('__ORCAD_RECORD_ABSENT__') ? '__ORCAD_RECORD_ABSENT__\n' : ''
+    })
+    await deployOrcad(options()).catch(() => undefined)
+    expect(vi.mocked(acquireInstallLock).mock.calls[0]?.[3]).toMatchObject({
+      allowStaleTakeover: true
+    })
+    expect(uploadRelayDirectory).toHaveBeenCalled()
+  })
+
   it('leaves an upload incomplete when the remote cannot make search executable', async () => {
     mockExec.mockImplementation(async (_conn, command) => {
       if (String(command).startsWith('chmod 755 ')) {
         throw new Error('chmod failed')
       }
-      return ''
+      return String(command).includes('__ORCAD_RECORD_ABSENT__') ? '__ORCAD_RECORD_ABSENT__\n' : ''
     })
     await expect(deployOrcad(options())).rejects.toThrow('chmod failed')
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
@@ -441,11 +528,91 @@ describe('deployOrcad', () => {
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ outcome: 'installed-and-activated', fullVersion: NEW_VERSION })
     const written = vi
-      .mocked(writeRelayFile)
-      .mock.calls.find((call) => String(call[2]).endsWith('orcad-active.json'))
-    expect(JSON.parse(String(written?.[3]))).toMatchObject({
+      .mocked(writeAtomicOrcadRemoteRecord)
+      .mock.calls.find((call) => String(call[1]).endsWith('orcad-active.json'))
+    expect(JSON.parse(String(written?.[2]))).toMatchObject({
       active: NEW_VERSION,
       previous: OLD_VERSION
+    })
+  })
+
+  it.each([
+    ['activates', 'mid-upload', (r: OrcadActivationRecord) => r],
+    ['activates then stops', 'mid-upload', withDeactivatedVersionCommitted],
+    ['activates', 'before the upload', (r: OrcadActivationRecord) => r],
+    ['activates then stops', 'before the upload', withDeactivatedVersionCommitted]
+  ])(
+    'applies the caller policy under the fence when another desktop %s a newer build %s',
+    async (_name, when, settle) => {
+      const newer = withActivatedVersion(
+        emptyOrcadActivationRecord(),
+        '0.3.0+cc01',
+        null,
+        new Date(1),
+        '1.6.0'
+      )
+      const script: HostScript = {
+        activationRecord: when === 'mid-upload' ? ACTIVE_OLD : JSON.stringify(settle(newer)),
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: []
+      }
+      scriptHost(script)
+      vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+        script.activationRecord = JSON.stringify(settle(newer))
+      })
+      const admitRecord = vi.fn((record: OrcadActivationRecord) =>
+        record.activeAppVersion === '1.6.0' ? 'host-newer' : null
+      )
+      expect(await deployOrcad(options({ admitRecord }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code: ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+      })
+      expect(admitRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ activeAppVersion: '1.6.0' }),
+        NEW_VERSION
+      )
+      // Nothing was preflighted, stopped, snapshotted or launched, and the record is untouched.
+      expect(script.log).toEqual([])
+      expect(
+        vi
+          .mocked(writeAtomicOrcadRemoteRecord)
+          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
+      ).toBe(false)
+    }
+  )
+
+  it('treats the census as unverifiable when another incumbent lands mid-upload', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const counted = JSON.parse(ACTIVE_OLD)
+    // An admitted peer activation: same app line, so only the census binding can catch it.
+    const peer = withActivatedVersion(counted, '0.1.5+dd01', null, new Date(5), '1.4.0')
+    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+      script.activationRecord = JSON.stringify(peer)
+    })
+    expect(
+      await deployOrcad(options({ censusRecord: counted, admitRecord: () => null }))
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_terminal_census_unavailable'
+    })
+    // The peer's server, which may own live terminals, was never stopped.
+    expect(script.log).toEqual([])
+  })
+
+  it('keeps the census when the incumbent under the fence is the one it counted', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    expect(await deployOrcad(options({ censusRecord: JSON.parse(ACTIVE_OLD) }))).toMatchObject({
+      outcome: 'installed-and-activated'
     })
   })
 
@@ -470,7 +637,7 @@ describe('deployOrcad', () => {
     }
     scriptHost(script)
     const result = await deployOrcad(
-      options({ census: { liveSessions: 2, startedSinceActivation: 0 } })
+      options({ census: { liveSessions: 2, startedSinceActivation: 0, daemonProtocolVersion: 3 } })
     )
     expect(result).toMatchObject({
       outcome: 'installed-not-activated',
@@ -485,15 +652,20 @@ describe('deployOrcad', () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({ daemonState: 'degraded' }) },
-      log: []
+      log: [],
+      orcadLog: 'daemon: starting\ndaemon: socket bind failed: EACCES\n'
     }
     scriptHost(script)
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ code: 'orcad_activation_daemon_degraded' })
+    // The error carries why the candidate failed, not only where its log is.
+    expect(result).toMatchObject({
+      reason: expect.stringMatching(/Last lines of orcad\.log:\ndaemon: starting\n.*EACCES$/u)
+    })
     expect(
       vi
-        .mocked(writeRelayFile)
-        .mock.calls.some((call) => String(call[2]).endsWith('orcad-active.json'))
+        .mocked(writeAtomicOrcadRemoteRecord)
+        .mock.calls.some((call) => String(call[1]).endsWith('orcad-active.json'))
     ).toBe(false)
   })
 
@@ -502,7 +674,7 @@ describe('deployOrcad', () => {
       activationRecord: ACTIVE_OLD,
       readiness: {
         [NEW_VERSION]: readyLine({ selfTestOk: false }),
-        [OLD_VERSION]: readyLine({})
+        [OLD_VERSION]: readyLine({ version: OLD_VERSION })
       },
       log: []
     }
@@ -546,7 +718,7 @@ describe('deployOrcad', () => {
         'compare-state'
       ])
       expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
-        'recovery requires a fresh host terminal census'
+        'Recover to restore the prelaunch snapshot'
       )
       expect(result.outcome === 'installed-not-activated' && result.reason).toContain(
         '/home/u/.orca-remote/orcad-state-snapshots/'
@@ -560,7 +732,7 @@ describe('deployOrcad', () => {
   it('restarts the incumbent when a quiescent snapshot cannot be captured', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
-      readiness: { [OLD_VERSION]: readyLine({}) },
+      readiness: { [OLD_VERSION]: readyLine({ version: OLD_VERSION }) },
       log: [],
       snapshotResult: 'tar: write failed'
     }
@@ -603,7 +775,7 @@ describe('deployOrcad', () => {
       activationRecord: ACTIVE_OLD,
       readiness: {
         [NEW_VERSION]: readyLine({ buildHash: 'deadbeefdeadbeef' }),
-        [OLD_VERSION]: readyLine({})
+        [OLD_VERSION]: readyLine({ version: OLD_VERSION })
       },
       log: []
     }

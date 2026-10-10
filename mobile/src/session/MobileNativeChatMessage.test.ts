@@ -7,6 +7,7 @@ import { projectStructuredItemToNativeChat } from '../../../src/shared/structure
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../src/shared/agent-session-host-status-rows'
 import { colors } from '../theme/mobile-theme'
+import { styles } from './mobile-native-chat-message-styles'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -94,6 +95,30 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
+  it('renders the shared clear boundary as one muted divider with prior history retained', () => {
+    const message = projectStructuredItemToNativeChat({
+      itemId: 'clear',
+      revision: 1,
+      sequence: 5,
+      observedAt: 5,
+      body: {
+        kind: 'status',
+        text: 'Context cleared',
+        presentation: 'context-cleared',
+        contextClear: { operationId: 'clear', afterFence: 3, clearedAt: 5 }
+      }
+    })!
+    const tree = render(message)
+    expect(textIn(tree.root)).toEqual(['Context cleared'])
+    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
+    expect(
+      tree.root.findAll(
+        (node) => String(node.type) === 'View' && node.props.style === styles.contextBoundary
+      )
+    ).toHaveLength(1)
+    expect(styles.contextBoundary.borderTopColor).toBe(colors.borderSubtle)
+  })
+
   it.each(['system', 'user'] as const)(
     'renders a %s host notice as selectable muted text rather than a markdown answer',
     (role) => {
@@ -118,6 +143,30 @@ describe('MobileNativeChatMessage', () => {
       })
     }
   )
+
+  it("names another agent's message and sets it apart from the person's bubble", () => {
+    const agentMessage: NativeChatMessage = {
+      ...userMessage([{ type: 'text', text: 'You have 1 orchestration message.' }]),
+      from: {
+        kind: 'agent',
+        senders: [
+          {
+            party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+            name: 'Coder'
+          }
+        ],
+        orchestration: null
+      }
+    }
+    const tree = render(agentMessage)
+    expect(textIn(tree.root)[0]).toBe('Message from Coder')
+    // Left-aligned agent prose, not the person's inverted bubble.
+    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(1)
+    const rows = tree.root.findAll(
+      (node) => String(node.type) === 'View' && Array.isArray(node.props.style)
+    )
+    expect(rows.some((row) => row.props.style.includes(styles.rowUser))).toBe(false)
+  })
 
   it('preserves an ordinary assistant answer without interpreting its text as a host notice', () => {
     const tree = render(toolMessage([{ type: 'text', text: 'provider fallback' }]))

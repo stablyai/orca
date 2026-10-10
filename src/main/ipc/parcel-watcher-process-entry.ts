@@ -21,10 +21,7 @@ import type {
   WatcherProcessSubscribeOptions,
   WatcherToHostMessage
 } from './parcel-watcher-process-protocol'
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
+import { errorMessage } from '../../shared/error-message'
 
 type WatcherSubscription = {
   unsubscribe: () => Promise<void>
@@ -118,7 +115,7 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
 function main(): void {
   const send = (message: WatcherToHostMessage): void => {
     try {
-      process.send?.(message)
+      process.send?.(message, () => undefined)
     } catch {
       // Host is gone; the disconnect handler below exits this process.
     }

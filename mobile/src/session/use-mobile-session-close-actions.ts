@@ -16,6 +16,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     terminalsRef,
     setSessionTabs,
     setFileDocs,
+    setMarkdownDocs,
     sessionTabsRef,
     reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
@@ -119,6 +120,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        if (tab.type === 'markdown') {
+          setMarkdownDocs((prev) => {
+            const doc = prev.get(tab.id)
+            if (!doc || (doc.status === 'ready' && doc.isDirty)) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.delete(tab.id)
+            return next
+          })
+        }
         if (tab.type === 'file') {
           setFileDocs((prev) => {
             if (!prev.has(tab.id)) {

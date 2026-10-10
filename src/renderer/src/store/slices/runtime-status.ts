@@ -21,10 +21,15 @@ import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 import {
-  ensureBrowserClientHostForRestartedRuntime,
+  ensureBrowserClientHostOnRuntimeContact,
   ensureBrowserClientHostsForRestoredPages
 } from '@/runtime/restored-client-hosted-browser-host-attach'
-import { applyRuntimeHostStatusSnapshot } from './runtime-status-snapshot'
+import { applyRuntimeHostStatusSnapshot, snapshotOutrunsCatalog } from './runtime-status-snapshot'
+import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
+import {
+  classifyPeerReplacements,
+  replacedRuntimeEnvironmentIds
+} from './runtime-environment-peer-replacement'
 
 export const clearRuntimeEnvironmentConnectionGenerationsForTests = (): void => {
   runtimeStatusConnectionGeneration.clearRuntimeEnvironmentConnectionGenerations()
@@ -55,22 +60,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   setRuntimeEnvironments: (environments) => {
-    const previousRevisionById = new Map(
-      get().runtimeEnvironments.map((environment) => [
-        environment.id,
-        environment.pairingRevision ?? environment.createdAt
-      ])
+    const previousEnvironments = get().runtimeEnvironments
+    const replacedEnvironmentIds = replacedRuntimeEnvironmentIds(previousEnvironments, environments)
+    const peerReplacement = classifyPeerReplacements(
+      previousEnvironments,
+      environments,
+      replacedEnvironmentIds
     )
-    const replacedEnvironmentIds = environments
-      .filter((environment) => {
-        const previousRevision = previousRevisionById.get(environment.id)
-        return (
-          previousRevision !== undefined &&
-          previousRevision !== (environment.pairingRevision ?? environment.createdAt)
-        )
-      })
-      .map((environment) => environment.id)
-    replaceRuntimeEnvironmentRevisions(environments)
+    // Why classified first: transports may follow only a same-host rotation; a replaced peer's
+    // transports are fenced before its new revision is published.
+    replaceRuntimeEnvironmentRevisions(environments, peerReplacement)
     // Why: diff against the accumulated in-memory saved list (not a second disk
     // read) so a main-initiated removal that never calls setRuntimeEnvironments
     // still enters the diff on the next list read. #8881.
@@ -148,8 +147,8 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       clearRuntimeCompatibilityCache(id)
       get().markEnvironmentSshStateStale?.(id)
     }
-    // Why: same-id re-pair publications belong to the retired peer just as surely as removed ids.
-    const retiredEnvironmentIds = [...new Set([...removedIds, ...replacedEnvironmentIds])]
+    // Why: a same-id re-pair to another peer retires it as surely as a removal.
+    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
@@ -157,15 +156,23 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }
   },
 
-  applyRuntimeHostStatusSnapshot: (snapshot) =>
-    applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
-      set((s) => ({
-        runtimeStatusByEnvironmentId: new Map(s.runtimeStatusByEnvironmentId).set(
-          snapshot.environmentId,
-          entry
-        )
-      }))
-    }),
+  applyRuntimeHostStatusSnapshot: (snapshot) => {
+    const apply = (): void =>
+      applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
+        set((s) => ({
+          runtimeStatusByEnvironmentId: new Map(s.runtimeStatusByEnvironmentId).set(
+            snapshot.environmentId,
+            entry
+          )
+        }))
+      })
+    if (snapshotOutrunsCatalog(snapshot, get())) {
+      // Applied once after the re-read; a catalog that is still behind drops it as before.
+      void refreshRuntimeEnvironmentCatalog().then(apply)
+      return
+    }
+    apply()
+  },
 
   setRuntimeEnvironmentStatus: (environmentId, status, options) => {
     const previous = get().runtimeStatusByEnvironmentId.get(environmentId)
@@ -181,6 +188,9 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       previousVerifiedStatus != null &&
       previousVerifiedStatus.runtimeId !== status.status.runtimeId
     )
+    // An outage past the browser-host lease grace drops this desktop's hosting, so regained contact
+    // must re-claim it just like a restart does.
+    const contactRegained = previous?.status === null && status.status !== null
     // Why: a non-null status proves the runtime just answered, so drop any stale
     // "offline" compat failure before this online transition fires the
     // reuse-flagged background refetches — a recovered host must re-probe.
@@ -215,10 +225,8 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       // mirror is keyed on. It still needs its own "the host is back" edge: the streams died with
       // the transport, an 'end' frame resubscribes nothing, and the parking layer retries only a
       // rejected subscribe. This counter is that edge, read only as a subscription-effect dep.
-      const reconnectedAfterLostContact = status.status !== null && previous?.status === null
       const hostContactEpoch =
-        (previous?.hostContactEpoch ?? status.hostContactEpoch ?? 0) +
-        (reconnectedAfterLostContact ? 1 : 0)
+        (previous?.hostContactEpoch ?? status.hostContactEpoch ?? 0) + (contactRegained ? 1 : 0)
       // Why the session flag and not `connectionChanged`: integration-readiness caches key
       // off the runtime session, for which a first publication is a real transition.
       if (activeEnvironmentId === environmentId && (sessionEnded || runtimeSessionStarted)) {
@@ -252,12 +260,12 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })
-    if (runtimeRestarted) {
-      void ensureBrowserClientHostForRestartedRuntime(get(), environmentId)
+    if (runtimeRestarted || contactRegained) {
+      void ensureBrowserClientHostOnRuntimeContact(get(), environmentId)
     }
     if (options?.suppressDisconnectToast) {
       dismissRuntimeDisconnectedToast(environmentId)
-    } else if (previous?.status === null && status.status !== null) {
+    } else if (contactRegained) {
       dismissRuntimeDisconnectedToast(environmentId)
     } else if (previous && previous.status !== null && status.status === null) {
       showRuntimeDisconnectedToast(environmentId, get)

@@ -77,11 +77,11 @@ describe('a Claude api_retry frame', () => {
     expect(rows).toHaveLength(1)
     const [row] = rows
     expect(row).toMatchObject({
-      text: 'Claude is rate-limited and retrying.',
+      text: 'Claude is rate-limited and retrying. Retry 3 of 10.\nLast error: HTTP 429 rate limit.',
       tone: 'warning',
       failure: {
         kind: 'providerRetrying',
-        retry: { error: 'rate_limit', status: 429 },
+        retry: { error: 'rate_limit', status: 429, attempt: 3, maxRetries: 10 },
         detail: { audience: 'log' }
       }
     })
@@ -90,11 +90,21 @@ describe('a Claude api_retry frame', () => {
     expect(row.failure?.detail?.text).toContain('"attempt":3')
   })
 
+  it('says how far a gateway failure has got, and the code it failed with', async () => {
+    const [row] = await statusRowsFor([
+      apiRetry(1, { error: 'server_error', error_status: 502 }),
+      apiRetry(2, { error: 'server_error', error_status: 502 })
+    ])
+    expect(row?.text).toBe(
+      'Claude hit a temporary problem and is retrying. Retry 2 of 10.\nLast error: HTTP 502 server error.'
+    )
+  })
+
   it('starts a new row when a later run starts over', async () => {
     const rows = await statusRowsFor([apiRetry(1), apiRetry(2), apiRetry(1)])
-    expect(rows.map((row) => row.text)).toEqual([
-      'Claude is rate-limited and retrying.',
-      'Claude is rate-limited and retrying.'
+    expect(rows.map((row) => row.text.split('\n')[0])).toEqual([
+      'Claude is rate-limited and retrying. Retry 2 of 10.',
+      'Claude is rate-limited and retrying. Retry 1 of 10.'
     ])
   })
 
@@ -106,10 +116,10 @@ describe('a Claude api_retry frame', () => {
       apiRetry(1, { error: 'something_new', error_status: 429 })
     ])
     expect(rows.map((row) => row.text)).toEqual([
-      'Claude hit a temporary problem and is retrying.',
-      'Claude hit a temporary problem and is retrying.',
-      'Claude hit a temporary problem and is retrying.',
-      'Claude is rate-limited and retrying.'
+      'Claude hit a temporary problem and is retrying. Retry 1 of 10.\nLast error: HTTP 529 overloaded.',
+      'Claude hit a temporary problem and is retrying. Retry 1 of 10.\nLast error: HTTP 500 server error.',
+      'Claude hit a temporary problem and is retrying. Retry 1 of 10.',
+      'Claude is rate-limited and retrying. Retry 1 of 10.\nLast error: HTTP 429 something new.'
     ])
     expect(rows[0]?.failure).toMatchObject({ retry: { error: 'overloaded', status: 529 } })
   })

@@ -2,10 +2,12 @@
  * Which view a launch moves: the requesting connection's, never the host's or another client's.
  *
  * A paired client (a phone, or a desktop client of a remote server) that launches into an existing
- * workspace gets the new tab as its own selection, recorded the way `session.tabs.createTerminal`
- * selects the tab it creates for its caller. In-process callers keep today's behaviour, and a
- * launch that creates its workspace keeps `worktree.create`'s navigation, whose host activation is
- * what runs the new workspace's setup.
+ * workspace, or into a folder workspace it creates, gets the new tab as its own selection, recorded
+ * the way `session.tabs.createTerminal` selects the tab it creates for its caller. In-process
+ * callers keep today's behaviour, and their launch that creates a worktree keeps
+ * `worktree.create`'s navigation. A paired client's worktree create never activates the host
+ * window: its setup and default tabs are provisioned in the background. A folder workspace has
+ * neither, and its create activates nothing, so it is selected for its caller like an existing one.
  */
 
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
@@ -17,12 +19,11 @@ import type { RpcContext } from '../core'
 /** The paired client whose view this launch should move, or null when it moves the host's. */
 export function agentLaunchCallerNavigationId(
   target: AgentLaunchTarget,
-  context: Pick<RpcContext, 'clientKind' | 'pairedDeviceId'>
+  context: Pick<RpcContext, 'caller'>
 ): string | null {
-  if (target.kind !== 'existing' || context.clientKind === undefined) {
-    return null
-  }
-  return context.pairedDeviceId?.trim() || null
+  return target.kind !== 'create-worktree' && context.caller?.kind === 'paired-device'
+    ? context.caller.deviceId
+    : null
 }
 
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */

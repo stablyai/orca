@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AppRelaunch from '../app-relaunch'
 
 const {
   handlers,
@@ -97,7 +98,8 @@ vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
 }))
 
-vi.mock('../app-relaunch', () => ({
+vi.mock('../app-relaunch', async (importOriginal) => ({
+  ...(await importOriginal<typeof AppRelaunch>()),
   relaunchApp: relaunchAppMock
 }))
 

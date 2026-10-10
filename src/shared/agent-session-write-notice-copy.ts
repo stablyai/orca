@@ -2,9 +2,14 @@
 
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import {
+  AGENT_STARTING,
+  AGENT_STILL_WORKING,
+  BACKGROUND_TASKS_RUNNING,
   QUIT_TERMINAL_AGENT,
   START_NEW_CHAT,
-  TERMINAL_AGENT_HOLDS_CHAT
+  TERMINAL_AGENT_HOLDS_CHAT,
+  WAIT_FOR_BACKGROUND_TASKS,
+  WAIT_FOR_START
 } from './agent-session-failure-copy'
 import type {
   AgentSessionFailureSurface,
@@ -26,7 +31,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneCommand: "The command didn't run.",
   notDoneGoal: "The goal wasn't changed.",
   restartFailed: "The agent couldn't restart.",
-  capacity: 'Orca has received too many requests in the last day.',
+  capacity:
+    'Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.',
   outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
   sendOutcomeLost:
     "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
@@ -41,23 +47,37 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   unsupported:
     'This needs a newer Orca on the computer running this chat. Update Orca there, then try again.',
   notAvailable: "This isn't available in this chat.",
+  cannotRunHere: "Orca can't run this agent in a chat here.",
   unreachable: "Orca couldn't reach the agent.",
   recordFailed: "Orca couldn't save this to the chat's history.",
+  attachmentExpired: 'This attachment expired.',
+  reattachFile: 'Remove it and attach it again.',
   conversationCleared: 'This conversation has been cleared.',
   openCurrentConversation: 'Open the current conversation to continue.',
   clearUnfinished: "The last /clear didn't finish.",
   commandRunning: 'A /compact or /clear is still running.',
   waitForCommand: 'Wait for the /compact or /clear to finish.',
-  agentStarting: 'The agent is still starting.',
-  waitForStart: 'Wait for the agent to finish starting.',
+  agentStarting: AGENT_STARTING,
+  waitForStart: WAIT_FOR_START,
   turnActive: 'The agent is still responding.',
   waitForTurn: 'Wait for the agent to finish responding, or stop it.',
   promptPending: 'The agent is waiting for an answer to a question or approval.',
   answerFirst: 'Answer the question or approval first.',
-  backgroundTasksRunning: 'Background tasks are still running.',
-  waitForBackgroundTasks: 'Wait for the background tasks to finish.',
+  backgroundTasksRunning: BACKGROUND_TASKS_RUNNING,
+  waitForBackgroundTasks: WAIT_FOR_BACKGROUND_TASKS,
   messagesUnsettled: "A message you sent earlier isn't confirmed yet.",
   settleEarlierMessage: 'Wait for your earlier message to go through, or retry it.',
+  agentStillWorking: AGENT_STILL_WORKING,
+  runClearWhenDone: "Run /clear when it's done.",
+  clearAfterAnswer: "Answer the agent's question or approval, then run /clear.",
+  runCompactWhenDone: "Run /compact when it's done.",
+  compactAfterAnswer: "Answer the agent's question or approval, then run /compact.",
+  clearAfterRetry: 'Retry your earlier message, then run /clear.',
+  compactAfterRetry: 'Retry your earlier message, then run /compact.',
+  clearAfterSending: 'Your earlier message is still being sent. Run /clear once it has gone.',
+  compactAfterSending: 'Your earlier message is still being sent. Run /compact once it has gone.',
+  queueTooLarge: 'Too much text is waiting in the queue.',
+  shrinkQueue: 'Delete a queued message, or wait for one to go through, then try again.',
   optionRejected: "The agent didn't accept this setting.",
   goalsUnsupported: "This agent doesn't support goals.",
   agentRefused: 'The agent turned this down.',

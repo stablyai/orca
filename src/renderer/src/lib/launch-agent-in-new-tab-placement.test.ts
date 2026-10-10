@@ -2,6 +2,7 @@
 // launch-agent-in-new-tab.test.ts to keep both files within the lines budget.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
@@ -15,8 +16,6 @@ type PlacementSettings = {
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
   experimentalNativeChat?: boolean
-  experimentalStructuredNativeChat?: boolean
-  openAgentTabsInChatByDefault?: boolean
   nativeChatSessionOptions?: Record<
     string,
     { model?: string; valuesByModel?: Record<string, Record<string, string>> }
@@ -87,26 +86,29 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
 describe('launchAgentInNewTab terminal tab activation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // The local runtime has answered (without structured support), so no launch waits on it.
+    setLocalRuntimeCapabilitiesForTests([])
     store.settings = placementSettings()
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
 
-  it('shows terminals in the worktree it launched into', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  // Why: the store scopes activation to the launch's own workspace, so the floating panel launches
+  // like every other caller and cannot move the main window's selection.
+  it.each(['wt-1', FLOATING_TERMINAL_WORKTREE_ID])(
+    'selects the new tab within %s only',
+    async (worktreeId) => {
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId: 'wt-1' })
+      launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId })
 
-    expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
-    // Why: an unscoped call targets the active worktree — the main window — whatever worktree the
-    // launch landed in, which is how a floating launch dropped the main window off its editor.
-    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
-  })
+      expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
+      expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', worktreeId)
+    }
+  )
 
-  it('honours the chat default in a floating launch and scopes its surface to the floating workspace', async () => {
+  it('scopes a floating terminal fallback to the floating workspace with Chat UI on', async () => {
     store.settings = placementSettings({
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
-      openAgentTabsInChatByDefault: true,
       nativeChatSessionOptions: {
         codex: {
           model: 'gpt-5.2-codex',
@@ -128,18 +130,14 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       undefined,
       {
         launchAgent: 'codex',
-        viewMode: 'chat'
+        quickCommandLabel: undefined
       }
     )
     expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
       'terminal',
       FLOATING_TERMINAL_WORKTREE_ID
     )
-    // Why: the panel hosts the chat pane itself, so the launch carries the user's model/effort
-    // preferences the same way a main-window launch does.
-    expect(mockSeedNativeChatAppliedSessionOptions).toHaveBeenCalledWith('tab-1', 'codex', {
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
+    // Chat UI model preferences belong to structured chats, not a terminal fallback.
+    expect(mockQueueTabStartupCommand.mock.calls[0]?.[1]).not.toHaveProperty('sessionOptions')
   })
 })

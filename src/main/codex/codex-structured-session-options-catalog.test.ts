@@ -7,14 +7,16 @@ import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
+import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
 import {
+  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AGENT_MODEL_CATALOG_FRESH_MS,
-  AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS,
   AgentModelCatalogStore,
   type AgentModelCatalogProbe
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 
@@ -62,7 +64,6 @@ function storeSession(
     prompts: new CodexAcquisitionWindow().prompts,
     options: new Map(),
     reportedOptions: { model: 'gpt-live', effort: 'high' },
-    fastModeTierByModel: new Map(),
     dispatchEchoes: createCodexDispatchEchoes(),
     turnOpenWaits: createCodexTurnOpenWaits(),
     translator: null,
@@ -71,20 +72,63 @@ function storeSession(
 }
 
 function seedEntry(store: AgentModelCatalogStore, ...ids: string[]): void {
-  store.recordSuccess(FINGERPRINT, 'codex', {
-    models: ids.map((id, index) => ({
-      id,
-      label: id.toUpperCase(),
-      isDefault: index === 0,
-      efforts: [{ value: 'high', label: 'High' }],
-      defaultEffort: 'high'
-    })),
-    fastModeTierByModel: new Map(),
-    origin: 'live-session'
-  })
+  store.recordSuccess(
+    FINGERPRINT,
+    'codex',
+    {
+      models: ids.map((id, index) => ({
+        id,
+        label: id.toUpperCase(),
+        isDefault: index === 0,
+        efforts: [{ value: 'high', label: 'High' }],
+        defaultEffort: 'high'
+      })),
+      fastModeTierByModel: new Map(),
+      origin: 'live-session'
+    },
+    'discovery'
+  )
 }
 
 describe('Codex session options through the host catalog store', () => {
+  it("keeps the probe's signed-out verdict when the chat's own picker lists", async () => {
+    const store = new AgentModelCatalogStore({ now: () => 1000 })
+    const signedOut: AgentModelCatalogProbe = async () => {
+      throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn', account: 'system' })
+    }
+    await store.refresh(FINGERPRINT, 'codex', signedOut, () =>
+      signedOut({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const result = await readLiveCodexSessionOptions(storeSession(request, store), undefined)
+    expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    expect(store.failure(FINGERPRINT)?.unavailable).toEqual({
+      reason: 'notSignedIn',
+      account: 'system'
+    })
+  })
+
+  it('never re-lists for an aged signed-out verdict beside a fresh entry', async () => {
+    let at = 1_000
+    const store = new AgentModelCatalogStore({ now: () => at })
+    seedEntry(store, 'gpt-live')
+    const signedOut: AgentModelCatalogProbe = async () => {
+      throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn', account: 'system' })
+    }
+    await store.refresh(FINGERPRINT, 'codex', signedOut, () =>
+      signedOut({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
+    at += AGENT_MODEL_CATALOG_FAILURE_TTL_MS
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const session = storeSession(request, store)
+    // Only a probe re-derives the verdict, so the chat's own listing would repeat on every read.
+    await readLiveCodexSessionOptions(session, undefined)
+    await readLiveCodexSessionOptions(session, undefined)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(modelListCalls(request)).toBe(0)
+    expect(store.probeDue(FINGERPRINT)).toBe(true)
+  })
+
   it('lists once at the first read and serves every later read from the store', async () => {
     const store = new AgentModelCatalogStore()
     const request = vi.fn(async () => listAnswer('gpt-live', 'gpt-next'))
@@ -109,7 +153,9 @@ describe('Codex session options through the host catalog store', () => {
     const store = new AgentModelCatalogStore()
     // Opening the chat's picker kicked the host probe for this account; its Codex never answers.
     const hungProbe: AgentModelCatalogProbe = () => new Promise<never>(() => {})
-    void store.refresh(FINGERPRINT, 'codex', hungProbe, () => hungProbe('/homes/a'))
+    void store.refresh(FINGERPRINT, 'codex', hungProbe, () =>
+      hungProbe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
     const request = vi.fn(async () => listAnswer('gpt-live'))
     const session = storeSession(request, store)
     // The acquire-time restore read: joining the probe would fail the chat at the probe's deadline.
@@ -227,14 +273,26 @@ describe('Codex session options through the host catalog store', () => {
     expect(modelListCalls(request)).toBe(1)
   })
 
-  it('waits for one refresh when the picked model is missing from a stale entry', async () => {
+  it('accepts a new model after the picker refreshes a stale entry', async () => {
     let at = 1_000
     const store = new AgentModelCatalogStore({ now: () => at })
     seedEntry(store, 'gpt-live')
-    at += AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS
+    at += AGENT_MODEL_CATALOG_FRESH_MS
     const request = vi.fn(async () => listAnswer('gpt-live', 'gpt-next'))
     const session = storeSession(request, store)
-    const committed = await applyCodexStructuredSessionOption(session, 'model', 'gpt-next', 5_000)
+    expect((await readLiveCodexSessionOptions(session, undefined)).models.map((m) => m.id)).toEqual(
+      ['gpt-live']
+    )
+    await vi.waitFor(() =>
+      expect(store.get(FINGERPRINT)!.models.map((model) => model.id)).toEqual([
+        'gpt-live',
+        'gpt-next'
+      ])
+    )
+    expect((await readLiveCodexSessionOptions(session, undefined)).models.map((m) => m.id)).toEqual(
+      ['gpt-live', 'gpt-next']
+    )
+    const committed = await applyCodexStructuredSessionOption(session, 'model', 'gpt-next')
     expect(committed.model).toBe('gpt-next')
     expect(modelListCalls(request)).toBe(1)
   })
@@ -244,26 +302,58 @@ describe('Codex session options through the host catalog store', () => {
     seedEntry(store, 'gpt-live')
     const request = vi.fn(async () => listAnswer('gpt-live', 'gpt-next'))
     const session = storeSession(request, store)
-    await expect(
-      applyCodexStructuredSessionOption(session, 'model', 'gpt-next', 5_000)
-    ).rejects.toThrow(/does not offer model gpt-next/)
+    await expect(applyCodexStructuredSessionOption(session, 'model', 'gpt-next')).rejects.toThrow(
+      /does not offer model gpt-next/
+    )
     expect(request).not.toHaveBeenCalled()
   })
 
-  it('falls back to the stored entry when the validation refresh fails', async () => {
+  it('keeps the stored entry when a picker refresh fails', async () => {
     let at = 1_000
     const store = new AgentModelCatalogStore({ now: () => at })
     seedEntry(store, 'gpt-live')
-    at += AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS
+    at += AGENT_MODEL_CATALOG_FRESH_MS
     const request = vi.fn(async () => {
       throw new Error('provider gone')
     })
     const session = storeSession(request, store)
-    await expect(
-      applyCodexStructuredSessionOption(session, 'model', 'gpt-next', 5_000)
-    ).rejects.toThrow(/does not offer model gpt-next/)
+    await readLiveCodexSessionOptions(session, undefined)
+    await expect(applyCodexStructuredSessionOption(session, 'model', 'gpt-next')).rejects.toThrow(
+      /does not offer model gpt-next/
+    )
     expect(modelListCalls(request)).toBe(1)
     // The failed refresh never displaced the last good listing.
     expect(store.get(FINGERPRINT)!.models.map((model) => model.id)).toEqual(['gpt-live'])
+  })
+})
+
+describe('first-turn catalog deadline', () => {
+  it('budgets all pages and config/read against one 30-second deadline', async () => {
+    let now = 1_000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const timeouts: number[] = []
+    const request = vi.fn(
+      async (
+        method: string,
+        _params?: Record<string, unknown>,
+        options?: { timeoutMs?: number }
+      ) => {
+        timeouts.push(options?.timeoutMs ?? 0)
+        if (method === 'model/list') {
+          now += 15_001
+          return { data: [modelRow('gpt-live')], nextCursor: timeouts.length === 1 ? 'more' : null }
+        }
+        return { config: {} }
+      }
+    )
+    try {
+      await expect(
+        fetchCodexModelCatalogListing({ connection: { request }, deadlineMs: 30_000 })
+      ).rejects.toThrow('deadline exceeded')
+      expect(request.mock.calls.map(([method]) => method)).toEqual(['model/list', 'model/list'])
+      expect(timeouts).toEqual([30_000, 14_999])
+    } finally {
+      clock.mockRestore()
+    }
   })
 })

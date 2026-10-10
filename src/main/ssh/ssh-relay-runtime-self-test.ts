@@ -73,6 +73,10 @@ export function classifyPinnedRuntimeFailure(
   if (/\b(?:GLIBC|GLIBCXX|CXXABI)_[0-9.]+'? not found/.test(output)) {
     return 'libc_floor'
   }
+  // NixOS's stub loader answers in place of the generic ELF interpreter it does not ship.
+  if (exitStatus === 127 && /Could not start dynamically linked executable/.test(output)) {
+    return 'wrong_libc'
+  }
   // A glibc binary on musl (or the reverse) fails in the ELF interpreter or on relocation.
   if (/ld-linux[\w.-]*\.so|ld-musl[\w.-]*\.so/i.test(output)) {
     return 'wrong_libc'

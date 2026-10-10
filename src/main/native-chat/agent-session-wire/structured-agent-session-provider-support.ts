@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
+import { agentPinsAccountHome } from '../../../shared/agent-session-account-home'
 
 export function adapterSupportsCreate(
   adapter: StructuredAgentSessionAdapter,
@@ -31,7 +32,7 @@ export function adapterSupportsCreateIfDeclared(
 }
 
 /** Whether this build can start the agent of `session`: the agent is registered here, its account
- *  variable is that agent's own (it becomes the child's environment), and every handle it holds is
+ *  is the kind that agent pins (it becomes the child's environment), and every handle it holds is
  *  in the transport the agent's adapter speaks. A record failing this stays readable (tab, history);
  *  only starting its agent is refused, by the one launch admission every agent passes through. */
 export function agentDrivesSession(
@@ -41,7 +42,7 @@ export function agentDrivesSession(
   const definition = agents.definition(session.provider)
   return (
     definition !== null &&
-    session.accountHome.variable === definition.accountHomeVariable &&
+    agentPinsAccountHome(definition, session.accountHome) &&
     session.providerHandleChain.every(
       ({ handle }) =>
         handle.transport === definition.handleTransport && handle.agent === definition.agent
@@ -63,4 +64,17 @@ export function hostCanStartRecord(
     adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider) &&
     agentDrivesSession(deps.agents, record)
   )
+}
+
+/** Saved chats can outlive their registration; both vocabularies bound a client's audience. */
+export function knownAgentIds(deps: {
+  agents: Pick<StructuredAgentRegistry, 'definitions'>
+  store: { listRecords: () => readonly Pick<AgentSessionRecord, 'provider'>[] }
+}): readonly string[] {
+  return [
+    ...new Set([
+      ...deps.agents.definitions().map(({ agent }) => agent),
+      ...deps.store.listRecords().map(({ provider }) => provider)
+    ])
+  ]
 }

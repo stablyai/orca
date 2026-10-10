@@ -7,7 +7,7 @@ import { RipgrepSearchDiagnostics } from '../shared/ripgrep-search-diagnostics'
  * so they are straightforward to test independently.
  */
 import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import { spawnProcess } from '../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { abortSignalReason } from '../shared/abort-signal-reason'
 import { open } from 'node:fs/promises'
 import {
@@ -18,6 +18,7 @@ import {
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../shared/binary-buffer'
 import type { SearchResult as SharedSearchResult } from '../shared/code-search-types'
 import {
   absorbPendingRipgrepSpawnError,
@@ -44,7 +45,6 @@ export const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
 // Reads above the legacy 16MB single-frame budget go through fs.readFileStream,
 // which chunks at STREAM_CHUNK_SIZE; see docs/relay-file-stream-design.md.
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-export const BINARY_PROBE_BYTES = 8192
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000
 
@@ -53,26 +53,18 @@ export const IMAGE_MIME_TYPES: Record<string, string> = {
   '.pdf': 'application/pdf'
 }
 
-// ─── Binary detection ────────────────────────────────────────────────
-
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
-}
-
-export async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
+export async function isBinaryFilePrefix(
+  filePath: string,
+  releaseHandle: (handle: Awaited<ReturnType<typeof open>>) => Promise<void> = (handle) =>
+    handle.close()
+): Promise<boolean> {
   const handle = await open(filePath, 'r')
   try {
     const probe = Buffer.alloc(BINARY_PROBE_BYTES)
     const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
     return isBinaryBuffer(probe.subarray(0, bytesRead))
   } finally {
-    await handle.close()
+    await releaseHandle(handle)
   }
 }
 

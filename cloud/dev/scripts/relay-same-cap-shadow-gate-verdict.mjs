@@ -28,7 +28,8 @@ export const FLEET_POOL_CELL_IDS = [
   'production-gce-c28',
   'production-gce-c29',
   'production-gce-c30',
-  'production-gce-c31'
+  'production-gce-c31',
+  'production-gce-c34'
 ]
 
 export const SHADOW_GATE_THRESHOLDS = {

@@ -50,6 +50,7 @@ vi.mock('./relay-runtime-services', async () => {
         daemonMocks.runtimePtyHandler = this.ptyHandler
       }
       async disposeOwnedProcesses(): Promise<void> {}
+      async disposeExitOnlyServices(): Promise<void> {}
       disposeHandlers(): void {}
     }
   }

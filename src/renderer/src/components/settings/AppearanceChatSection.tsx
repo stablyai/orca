@@ -7,10 +7,16 @@ import {
 import { useAppStore } from '../../store'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { NumberField, SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
-import { getChatAppearanceEntriesByKey, getChatWidthOptions } from './chat-appearance-search'
+import {
+  chatTerminalControlledHint,
+  chatTerminalControlledTooltip,
+  getChatAppearanceEntriesByKey,
+  getChatWidthOptions
+} from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../native-chat/native-chat-appearance-write'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -26,6 +32,7 @@ export function AppearanceChatSection({
   forceVisiblePrimary = false
 }: AppearanceChatSectionProps): React.JSX.Element {
   const appearance = resolveNativeChatAppearanceSettings(settings.nativeChatAppearance)
+  const matching = appearance.matchTerminalInterface
   const keybindings = useAppStore((state) => state.keybindings)
   const increase = formatPrimaryShortcutLabel('zoom.in', keybindings)
   const decrease = formatPrimaryShortcutLabel('zoom.out', keybindings)
@@ -38,6 +45,11 @@ export function AppearanceChatSection({
   }
   return (
     <div className="divide-y divide-border/40">
+      <AppearanceChatContrastControls
+        appearance={appearance}
+        onChange={update}
+        forceVisiblePrimary={forceVisiblePrimary}
+      />
       <SearchableSetting
         id={entries.textSize.targetSectionId}
         {...entries.textSize}
@@ -45,9 +57,11 @@ export function AppearanceChatSection({
       >
         <NumberField
           label={entries.textSize.title}
-          description={entries.textSize.description}
+          description={matching ? chatTerminalControlledHint() : entries.textSize.description}
           value={appearance.fontSize}
-          defaultValue={14}
+          defaultValue={matching ? undefined : 14}
+          disabled={matching}
+          disabledReason={chatTerminalControlledTooltip()}
           min={12}
           max={20}
           integer
@@ -62,9 +76,11 @@ export function AppearanceChatSection({
       >
         <NumberField
           label={entries.codeTextSize.title}
-          description={entries.codeTextSize.description}
+          description={matching ? chatTerminalControlledHint() : entries.codeTextSize.description}
           value={appearance.codeFontSize}
-          defaultValue={12}
+          defaultValue={matching ? undefined : 12}
+          disabled={matching}
+          disabledReason={chatTerminalControlledTooltip()}
           min={10}
           max={18}
           integer

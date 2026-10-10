@@ -259,6 +259,40 @@ describe('selective profile domain serialization', () => {
     expect(encodeCount).toBe(0)
   })
 
+  it('selects pane alias and migration sections exactly as the full save serializes them', () => {
+    const state = getDefaultPersistedState('/synthetic-profile')
+    state.legacyPaneKeyAliasEntries = [
+      { ptyId: 'ssh:ssh-1@@b', legacyPaneKey: 'b', stablePaneKey: 'tab:2', updatedAt: 2.5 },
+      { ptyId: 'a', legacyPaneKey: 'a', stablePaneKey: 'tab:1', updatedAt: 1 }
+    ]
+    state.migrationUnsupportedPtyEntries = []
+    const serialization = new StateSerializationSecretHandlingOperations({
+      state,
+      protectedSecrets: new ProtectedSecretPersistence()
+    })
+    const domains = ['legacyPaneKeyAliasEntries', 'migrationUnsupportedPtyEntries']
+    const full = serialization.buildStateToSave(true).domains ?? []
+
+    expect(serialization.buildStateDomainsToSave(new Set(domains))?.replacements).toEqual(
+      domains.map((domain) => full.find((replacement) => replacement.domain === domain))
+    )
+    expect(full.find(({ domain }) => domain === 'migrationUnsupportedPtyEntries')?.payload).toBe(
+      '[]'
+    )
+
+    // A missing section is a deletion in both paths: omitted from a full save, null when selected.
+    Reflect.deleteProperty(state, 'migrationUnsupportedPtyEntries')
+    expect(
+      serialization
+        .buildStateToSave(true)
+        .domains?.some(({ domain }) => domain === 'migrationUnsupportedPtyEntries')
+    ).toBe(false)
+    expect(
+      serialization.buildStateDomainsToSave(new Set(['migrationUnsupportedPtyEntries']))
+        ?.replacements
+    ).toEqual([{ domain: 'migrationUnsupportedPtyEntries', payload: null }])
+  })
+
   it('retains the full-write fallback for unknown domains or pending secret encryption', () => {
     const protectedSecrets = new ProtectedSecretPersistence()
     const serialization = new StateSerializationSecretHandlingOperations({

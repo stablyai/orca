@@ -28,6 +28,11 @@ import {
   windowState
 } from './native-chat-windowing-test-harness'
 
+// Pacing is not this test's subject.
+vi.mock('./use-native-chat-paced-text', async (importOriginal) =>
+  (await import('./native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
+)
+
 afterEach(cleanup)
 
 function scrollRoot(container: HTMLElement): HTMLElement {
@@ -139,6 +144,24 @@ describe('transcript follow ownership across growth and appends', () => {
     layout.belowTranscriptPx = BELOW_TRANSCRIPT_PX
     layout.aboveTranscriptPx = 0
     vi.restoreAllMocks()
+  })
+
+  it('pins a mounted row before the virtualizer receives its resized height', () => {
+    setMeasuredTail(4)
+    const { container } = render(streamingList(4))
+    paint(container)
+    const scroller = scrollRoot(container)
+    const before = scroller.scrollHeight
+
+    setMeasuredTail(8)
+    expect(scroller.scrollHeight - before).toBe(tailHeightAt(8) - tailHeightAt(4))
+    act(() => deliverResizes((target) => target.hasAttribute('data-native-chat-transcript-column')))
+    expect(distanceFromBottom(container)).toBe(0)
+    const pinned = scroller.scrollTop
+
+    paint(container)
+    expect(scroller.scrollTop).toBe(pinned)
+    expect(distanceFromBottom(container)).toBe(0)
   })
 
   it('holds the pin, the mount and the reserved total at every frame of the growth', () => {
@@ -453,6 +476,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const scheduleSpy = vi.spyOn(window, 'requestAnimationFrame')
     const scrollToSpy = vi.spyOn(scroller, 'scrollTo')
     const readingAt = 2000
+    fireEvent.wheel(scroller, { deltaY: -100 })
     scroller.scrollTop = readingAt
     fireEvent.scroll(scroller)
     expect(scrollToSpy).toHaveBeenLastCalledWith({ behavior: 'auto', top: readingAt })

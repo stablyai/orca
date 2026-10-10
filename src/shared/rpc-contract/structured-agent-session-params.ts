@@ -1,6 +1,29 @@
+import {
+  SendBody,
+  MAX_OPTION_LABEL,
+  MAX_PROMPT_BYTES
+} from './structured-agent-session-message-params'
+export {
+  SendBlock,
+  MAX_BLOCKS,
+  MAX_OPTION_LABEL,
+  MAX_PROMPT_BYTES
+} from './structured-agent-session-message-params'
+import {
+  Identifier,
+  JournalCursor,
+  MAX_ID_LENGTH,
+  SessionId
+} from './structured-agent-session-identifiers'
+export {
+  Identifier,
+  JournalCursor,
+  MAX_ID_LENGTH,
+  SessionId
+} from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
-import { isAgentSessionId } from '../agent-session-record'
+import { isAgentSessionOptions } from '../agent-session-record'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
@@ -8,48 +31,20 @@ import {
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
 } from '../agent-session-question-answer'
 import {
-  AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH
 } from '../agent-session-wire'
 
-export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
-
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
-
-export const MAX_PROMPT_BYTES = 256 * 1024
 
 /** Matches the journal's bounds on one grouped prompt. */
 const MAX_QUESTION_ANSWER_QUESTIONS = 4
 const MAX_QUESTION_ANSWER_OPTIONS = 64
 
-export const MAX_BLOCKS = 64
-
-export const MAX_OPTION_LABEL = 512
-
 /** One relaunch cannot offer more chats than a profile plausibly holds. */
 export const MAX_RESTART_RESUME_SESSIONS = 512
-
-export const SessionId = z
-  .string()
-  .max(MAX_ID_LENGTH)
-  .refine(isAgentSessionId, 'Invalid agent session id')
-
-export const Identifier = (message: string, maxLength = MAX_ID_LENGTH) =>
-  z
-    .string()
-    .min(1, message)
-    .max(maxLength, message)
-    .refine((value) => value === value.trim(), message)
-
-export const JournalCursor = z
-  .object({
-    epoch: Identifier('Invalid journal epoch'),
-    sequence: z.number().int().nonnegative()
-  })
-  .strict()
 
 export const MutationEnvelope = z
   .object({
@@ -125,51 +120,12 @@ export const ResumeSource = z
   })
   .strict()
 
-export const CreateIntentParams = z
-  .object({
-    envelope: MutationEnvelope,
-    worktree: Identifier('Invalid worktree selector'),
-    agent: StructuredAgent,
-    resumeFrom: ResumeSource.optional(),
-    /**
-     * The tab id the client reserved for this chat, so it can place the tab before the reply. The
-     * host owns the id from here: it is persisted on the session record and is what the host's tab
-     * snapshot will publish, so it must be a host tab id, as `agent.launch` requires of `paneKey`.
-     *
-     * This object is strict, so an older host refuses a payload carrying it. A client sends it
-     * only after `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY` is advertised.
-     */
-    tabId: z.string().refine(isAgentSessionSurfaceTabId, 'Invalid chat tab ID').optional()
-  })
-  .strict()
-
-export const CreateParams = z.union([AttachParams, CreateIntentParams])
-
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent
   })
   .strict()
-
-/** Clients may only author user turns. Accepting an assistant or tool role here
- *  would let one client write words into the agent's mouth in another's
- *  timeline, and the provider — not the client — owns those. */
-export const SendBlock = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), text: z.string() }).strict(),
-  z
-    .object({
-      type: z.literal('image-ref'),
-      path: z.string().min(1).max(4096).optional(),
-      url: z.string().min(1).max(4096).optional(),
-      alt: z.string().max(MAX_OPTION_LABEL).optional()
-    })
-    .strict()
-    .refine(
-      (value) => Boolean(value.path) !== Boolean(value.url),
-      'Provide exactly one of path/url'
-    )
-])
 
 export const SendParams = z
   .object({
@@ -179,19 +135,31 @@ export const SendParams = z
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
      *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
-    body: z
-      .object({
-        kind: z.literal('message'),
-        role: z.literal('user'),
-        blocks: z.array(SendBlock).min(1).max(MAX_BLOCKS)
-      })
-      .strict()
-      .refine(
-        (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,
-        'Message is too large'
-      )
+    body: SendBody
   })
   .strict()
+
+export const CreateIntentParams = z
+  .object({
+    envelope: MutationEnvelope,
+    worktree: Identifier('Invalid worktree selector'),
+    agent: StructuredAgent,
+    resumeFrom: ResumeSource.optional(),
+    /** Strict payload: send only after the host advertises the create-tab-id capability. */
+    tabId: z.string().refine(isAgentSessionSurfaceTabId, 'Invalid chat tab ID').optional(),
+    /** Both fields require `agentSession.create.message.v1` on the executing host. */
+    firstMessage: z
+      .object({
+        clientMessageId: Identifier('Invalid client message id'),
+        body: SendParams.shape.body
+      })
+      .strict()
+      .optional(),
+    options: z.record(z.string(), z.string()).refine(isAgentSessionOptions).optional()
+  })
+  .strict()
+
+export const CreateParams = z.union([AttachParams, CreateIntentParams])
 
 export const CancelParams = z
   .object({
@@ -297,6 +265,7 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
@@ -310,13 +279,21 @@ export const ModelCatalogParams = z.strictObject({
   agent: StructuredAgent,
   sessionId: SessionId.optional(),
   worktree: Identifier('Invalid worktree selector').optional(),
-  waitForListing: z.boolean().optional()
+  waitForListing: z.boolean().optional(),
+  // Answer only from what the host has saved; never start a listing. Sent only to a host advertising
+  // the saved-only capability: an older one refuses the unknown key.
+  savedOnly: z.boolean().optional()
 })
 
 export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
-    command: z.enum(['clear', 'compact'])
+    command: z.enum(['clear', 'compact']),
+    /** A /compact while the agent is working waits as a host-held card, like a queued send.
+     *  Strict object, so an older host refuses it: clients send it only when
+     *  `agent-session.queued-commands.v1` is advertised. A /clear never waits: its operation
+     *  fingerprints no `delivery`, so one sent with it is refused as a conflict. */
+    delivery: z.literal('queue-if-active').optional()
   })
   .strict()
 
@@ -372,6 +349,9 @@ export const HistoryParams = z
 export const SubscribeParams = z
   .object({ sessionId: SessionId, cursor: JournalCursor.optional() })
   .strict()
+
+// Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
+export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
 
 export const UnsubscribeParams = z
   .object({

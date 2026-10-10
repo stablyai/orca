@@ -166,7 +166,9 @@ describe('ScrcpyStreamSession video buffering', () => {
       session.close()
     }
     expect(callbacks.onFrame).toHaveBeenCalledTimes(1)
-    expect(callbacks.onFrame.mock.calls[0][0].data).toEqual(frame.subarray(12))
+    const data = callbacks.onFrame.mock.calls[0][0].data
+    expect(Buffer.isBuffer(data)).toBe(true)
+    expect(data.equals(frame.subarray(12))).toBe(true)
     expect(concatenatedBytes).toBeLessThanOrEqual(frame.length * 2)
   })
 })

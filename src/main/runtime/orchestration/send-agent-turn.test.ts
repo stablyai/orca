@@ -55,7 +55,12 @@ function structuredHost(answer: HostSendAnswer, settled?: AgentJournalSubmission
 
 const MAIL_SOURCE: AgentMessageSource = {
   kind: 'agent',
-  senders: [],
+  senders: [
+    {
+      party: { address: 'term_peer', terminalHandle: 'term_peer', orcaSessionId: null },
+      name: 'Claude'
+    }
+  ],
   orchestration: {
     message: 'mail-notice',
     mailbox: 'dispatch:d1',
@@ -69,6 +74,12 @@ const turn: StructuredSessionTurn = {
   delivery: 'now',
   operationId: 'op-1',
   expectedRuntimeFence: 7
+}
+
+const mailTurn: StructuredSessionTurn = {
+  ...turn,
+  body: { ...turn.body, from: MAIL_SOURCE },
+  delivery: 'queue'
 }
 
 const structured = (host: StructuredAgentTurnHost, sent: StructuredSessionTurn = turn) =>
@@ -146,16 +157,14 @@ describe('sendAgentTurn to a structured session', () => {
     })
   })
 
-  it('asks the host queue to hold a `queue` send, fingerprinted as the host digests it', async () => {
+  it('asks the host queue to hold a `queue` send, fingerprinted without its sender', async () => {
     const fake = structuredHost(
       accepted({
         clientMessageId: 'op-1',
         queued: { messageId: 'op-1', position: 0, state: 'waiting' }
       })
     )
-    await expect(
-      sendAgentTurn(structured(fake.host, { ...turn, delivery: 'queue', source: MAIL_SOURCE }))
-    ).resolves.toEqual({
+    await expect(sendAgentTurn(structured(fake.host, mailTurn))).resolves.toEqual({
       kind: 'queued',
       clientMessageId: 'op-1',
       queued: { messageId: 'op-1', position: 0, state: 'waiting' }
@@ -167,12 +176,11 @@ describe('sendAgentTurn to a structured session', () => {
           sessionId: 's1',
           clientOperationId: 'op-1',
           expectedRuntimeFence: 7,
+          // The sender rides on the body, outside the fingerprint: a retry still replays.
           payloadFingerprint: hostFingerprint({ body: turn.body, delivery: 'queue-if-active' })
         },
-        body: turn.body,
-        delivery: 'queue-if-active',
-        // Host-local: who the card is from rides beside the envelope, outside its fingerprint.
-        source: MAIL_SOURCE
+        body: mailTurn.body,
+        delivery: 'queue-if-active'
       }
     )
     expect(fake.waitForSendSettlement).not.toHaveBeenCalled()
@@ -185,9 +193,10 @@ describe('sendAgentTurn to a structured session', () => {
         queued: { messageId: 'op-1', position: 0, state: 'returned' }
       })
     )
-    await expect(
-      sendAgentTurn(structured(fake.host, { ...turn, delivery: 'queue', source: MAIL_SOURCE }))
-    ).resolves.toMatchObject({ kind: 'queued', queued: { state: 'returned' } })
+    await expect(sendAgentTurn(structured(fake.host, mailTurn))).resolves.toMatchObject({
+      kind: 'queued',
+      queued: { state: 'returned' }
+    })
   })
 })
 

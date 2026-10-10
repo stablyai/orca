@@ -283,6 +283,12 @@ describe('CodexHookService', () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     mkdirSync(managedCodexHome, { recursive: true })
+    // Why ~/.codex holds it too: remove() rebuilds the mirror's user hooks from ~/.codex.
+    mkdirSync(join(homes.tmpHome, '.codex'), { recursive: true })
+    writeFileSync(
+      join(homes.tmpHome, '.codex', 'hooks.json'),
+      JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'user-hook' }] }] } })
+    )
     writeFileSync(
       managedHooksPath,
       `${JSON.stringify(
@@ -397,6 +403,6 @@ describe('CodexHookService', () => {
     expect(systemToml).toContain('codex_hooks = true')
     expect(systemToml).not.toContain(':session_start:0:0')
     expect(existsSync(legacyProfilePath)).toBe(false)
-    expect(service.getStatus().state).toBe('installed')
+    expect(service.getStatus(managedCodexHome).state).toBe('installed')
   })
 })

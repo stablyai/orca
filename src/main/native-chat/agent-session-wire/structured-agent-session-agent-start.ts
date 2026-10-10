@@ -7,8 +7,10 @@
 
 import {
   providerDiagnosticOf,
+  type AgentSessionArgumentProblem,
   type ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
+import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
   readAgentSessionRefusalReference,
@@ -48,6 +50,11 @@ export type StructuredAgentSessionResumeOutcome =
       /** What the provider said about the failed start, for the chat's own record; host-side
        *  only, never on the refusal. */
       diagnostic?: ProviderDiagnostic
+      /** The host's own close, Stop or quit aborted the start, so it failed nothing it was for. */
+      aborted?: true
+      /** The start went silent or hit its ceiling before it proved itself: Orca stopped it. */
+      expired?: true
+      argumentProblem?: AgentSessionArgumentProblem
     }
 
 /** The attach's caller key: the ledger row a start settles is Orca's own. */
@@ -162,11 +169,19 @@ async function startStructuredAgentSessionAgent(
   }
   let attached: AgentSessionMutationResult<AgentSessionAttachResult>
   let acquisitionError: unknown
+  let aborted = false
+  let expired = false
   try {
     attached = await attachStructuredAgentSessionUnderSerialize(context, callerKey, params, {
       ...(startedFor === undefined ? {} : { startedFor }),
       onAcquisitionFailed: (error) => {
         acquisitionError = error
+      },
+      onAborted: () => {
+        aborted = true
+      },
+      onStartupExpired: () => {
+        expired = true
       }
     })
   } catch (error) {
@@ -181,19 +196,30 @@ async function startStructuredAgentSessionAgent(
       error
     )
     if (settled) {
-      return withDiagnostic(settled.refusal, error)
+      return withDiagnostic(settled.refusal, error, { aborted, expired })
     }
     throw error
   }
-  return attached.ok ? { ok: true } : withDiagnostic(attached.refusal, acquisitionError)
+  return attached.ok
+    ? { ok: true }
+    : withDiagnostic(attached.refusal, acquisitionError, { aborted, expired })
 }
 
 function withDiagnostic(
   refusal: AgentSessionWireRefusal,
-  error: unknown
+  error: unknown,
+  { aborted, expired }: { aborted: boolean; expired: boolean }
 ): StructuredAgentSessionResumeOutcome {
   const diagnostic = providerDiagnosticOf(error)
-  return { ok: false, refusal, ...(diagnostic ? { diagnostic } : {}) }
+  const argumentProblem = argumentProblemOf(error)
+  return {
+    ok: false,
+    refusal,
+    ...(diagnostic ? { diagnostic } : {}),
+    ...(aborted ? { aborted: true as const } : {}),
+    ...(expired ? { expired: true as const } : {}),
+    ...(argumentProblem ? { argumentProblem } : {})
+  }
 }
 
 function settledResumeRefusal(

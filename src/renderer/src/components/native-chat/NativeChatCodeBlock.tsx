@@ -3,14 +3,17 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getCodeBlockLanguageLabel } from '@/components/editor/rich-markdown-code-block-languages'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 
 /** Code fences need their own copy target rather than the whole chat message. */
 export function NativeChatCodeBlock({
   children,
-  language
+  language,
+  plain = false
 }: {
   children?: React.ReactNode
   language?: string
+  plain?: boolean
 }): React.JSX.Element {
   const code = extractCodeText(children)
 
@@ -36,11 +39,17 @@ export function NativeChatCodeBlock({
       <pre
         data-native-chat-code-content
         className={cn(
-          'scrollbar-sleek m-0 max-h-80 max-w-full overflow-x-auto font-mono text-[12px] text-chat-code-foreground',
+          'scrollbar-sleek m-0 max-w-full overflow-x-auto font-mono text-[12px] text-chat-code-foreground',
           language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-10'
         )}
       >
-        {children}
+        {language && code && !plain ? (
+          <code>
+            <NativeChatHighlightedCode code={code} language={language} />
+          </code>
+        ) : (
+          children
+        )}
       </pre>
       {code && !language ? (
         <NativeChatCopyButton
@@ -51,6 +60,14 @@ export function NativeChatCodeBlock({
       ) : null}
     </div>
   )
+}
+
+/** For dimmed rows: their code keeps the row's faint color, so it is not tokenized at all. */
+export function NativeChatPlainCodeBlock(props: {
+  children?: React.ReactNode
+  language?: string
+}): React.JSX.Element {
+  return <NativeChatCodeBlock {...props} plain />
 }
 
 function extractCodeText(node: React.ReactNode): string {

@@ -1,0 +1,105 @@
+name: Windows packaged orcad serve switch E2E
+
+# Why: proves D7 on a real Windows install. The installed desktop app forks its terminal daemon
+# from the relocated %LOCALAPPDATA%\Orca\daemon-host; `orca serve` then serves the same profile
+# on orcad and must adopt that daemon, and the desktop must reattach the terminal afterwards and
+# still write its settings under orcad's data-root ACL. Unpackaged e2e cannot exercise the
+# relocation, which only packaged builds do. A CI runner is the only safe place to install.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/main/daemon/**'
+      - '!src/main/daemon/**/*.test.ts'
+      - 'src/main/orcad/**'
+      - 'src/cli/runtime/**'
+      - 'src/shared/orcad-local-serve-selection.ts'
+      - 'tests/tools/win-update-e2e/**'
+      - '.github/workflows/win-orcad-serve-switch-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-orcad-serve-switch-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  serve-switch:
+    name: packaged Windows Electron/orcad serve switch (D7)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: windows-2022
+    timeout-minutes: 75
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      # Same key inputs as win-update-survival-e2e: a harness-only edit skips the installer build.
+      - name: Cache branch installer
+        id: cache-installer
+        uses: actions/cache/restore@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: serve-switch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      # Before the template exists: packaging verifies a present template for every target.
+      - name: Build Windows installer (unsigned)
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          pnpm run build:desktop
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      - name: Cache the built installer
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: ${{ steps.cache-installer.outputs.cache-primary-key }}
+
+      # The win32-x64 template the harness drops into the install, which is where serve looks.
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: 'true'
+          restore-windows-cache: 'true'
+      - name: Build the win32-x64 orcad template
+        shell: bash
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=node
+          pnpm build:orcad
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-orcad-template.mjs --targets win32-x64
+
+      - name: Switch serve hosts on the installed app's profile
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          node tests/tools/win-update-e2e/serve-switch.mjs \
+            --installer dist/orca-windows-setup.exe \
+            --template out/orcad-template 2>&1 | tee artifacts/serve-switch.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload serve switch output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-orcad-serve-switch-output
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn

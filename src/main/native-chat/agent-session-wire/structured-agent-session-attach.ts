@@ -1,3 +1,4 @@
+import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -40,7 +41,6 @@ import {
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
@@ -87,6 +87,7 @@ export type AgentSessionAttachParams = {
 
 /** Host-supplied half of the reservation. */
 export type AgentSessionAttachAuthority = {
+  launchDirectory?: string
   spawnToken: string | (() => string)
   claimKeyId: string
   handoffOperationId: string | null
@@ -162,10 +163,13 @@ export function journalIdentityFor(
   record: AgentSessionRecord,
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
-  const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+  const active = activeProviderContext(record)
+  const head = active.head
   const providerHandle =
     head?.handle ??
-    (params.providerHandle ? agentSessionProviderHandleFromWire(params.providerHandle) : null)
+    (!active.pendingClear && params.providerHandle
+      ? agentSessionProviderHandleFromWire(params.providerHandle)
+      : null)
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -319,6 +323,7 @@ export function reserveRequestFor(input: {
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
+    ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

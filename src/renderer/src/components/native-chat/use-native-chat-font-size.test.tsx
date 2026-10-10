@@ -19,7 +19,7 @@ import { useNativeChatFontSize } from './use-native-chat-font-size'
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.web }))
 import { isMacPlatform } from './native-chat-shortcut'
 
-function key(key: string, target: EventTarget = window): void {
+function key(key: string, target: EventTarget = window): KeyboardEvent {
   const code =
     key === '+'
       ? 'Equal'
@@ -28,17 +28,17 @@ function key(key: string, target: EventTarget = window): void {
         : key === '0'
           ? 'Digit0'
           : `Key${key.toUpperCase()}`
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      code,
-      bubbles: true,
-      cancelable: true,
-      metaKey: isMacPlatform(),
-      ctrlKey: !isMacPlatform(),
-      shiftKey: key === '+' || key === '_'
-    })
-  )
+  const event = new KeyboardEvent('keydown', {
+    key,
+    code,
+    bubbles: true,
+    cancelable: true,
+    metaKey: isMacPlatform(),
+    ctrlKey: !isMacPlatform(),
+    shiftKey: key === '+' || key === '_'
+  })
+  target.dispatchEvent(event)
+  return event
 }
 afterEach(() => {
   cleanup()
@@ -49,6 +49,21 @@ afterEach(() => {
 })
 
 describe('persisted chat font-size shortcuts', () => {
+  it('consumes matching chat size keys without writing the saved font size', async () => {
+    mocks.settings.nativeChatAppearance = { fontSize: 18, matchTerminalInterface: true }
+    renderHook(() => useNativeChatFontSize(true))
+    const events: KeyboardEvent[] = []
+    act(() => {
+      events.push(key('+'), key('-'), key('0'))
+    })
+    await Promise.resolve()
+    expect(events.every((event) => event.defaultPrevented)).toBe(true)
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+    expect(mocks.settings.nativeChatAppearance).toEqual({
+      fontSize: 18,
+      matchTerminalInterface: true
+    })
+  })
   it('serializes quick repeats against the latest stored size, clamps, and resets only text size', async () => {
     mocks.settings.nativeChatAppearance = { fontSize: 19, codeFontSize: 16, width: 'wide' }
     renderHook(() => useNativeChatFontSize(true))

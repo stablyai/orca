@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastMessage: vi.fn(),
   outboxSend: vi.fn(),
-  outboxRetry: vi.fn(),
   remoteCapabilities: new Set<string>()
 }))
 
@@ -55,13 +54,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: mocks.operationId,
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: mocks.operationId
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: mocks.outboxSend,
-    retry: mocks.outboxRetry
+    stopSends: vi.fn()
   })
 }))
 
@@ -246,9 +247,7 @@ describe('useStructuredAgentSession rewind RPC', () => {
     expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(nativeChatRewindReturnedUnknownCopy())
     expect(view.result.current.error).toBeNull()
     view.result.current.send('Prompt', [])
-    view.result.current.retry('message-1')
     expect(mocks.outboxSend).toHaveBeenCalledOnce()
-    expect(mocks.outboxRetry).toHaveBeenCalledOnce()
   })
 
   it("lets the host's in-doubt latch disable only the action", async () => {

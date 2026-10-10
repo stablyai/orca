@@ -59,8 +59,6 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
@@ -72,7 +70,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _p, _m, id) => map.get(id) ?? null
+    getSummary: (id) => summariesById.get(id) ?? null
   })
   return row
 }
@@ -82,6 +80,16 @@ beforeEach(() => {
 })
 
 describe('worktree ps reports structured sessions', () => {
+  it("lists a person's Stop still ending the turn, and drops it once the host does", () => {
+    expect(attach([summary({ stopping: true })]).agents[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    const ended = attach([summary({ stopping: true }), summary({ updatedAt: 1_757_030_401_000 })])
+    expect(ended.agents[0]?.state).toBe('working')
+    expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
+  })
+
   it('a busy structured session is not reported idle', () => {
     const row = attach([summary()])
     expect(row.agents).toHaveLength(1)

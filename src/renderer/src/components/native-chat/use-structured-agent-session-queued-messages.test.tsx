@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
-// The queued-message controller: which RPC each card action issues, and Edit's
-// copy-first order — the card's shown text is in the composer before the Delete
-// goes out, so no RPC outcome can lose it.
+// The queued-message controller: which RPC each card action issues, and that a host which cannot
+// edit in place gets no Edit at all, never the old copy-and-delete.
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,17 +10,15 @@ import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
-import { toast } from 'sonner'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
-import {
-  createMemoryNativeChatComposerDraftStorage,
-  setNativeChatComposerDraftStorageForTests
-} from './native-chat-composer-draft-storage'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import type {
+  StructuredAgentSessionMutate,
+  StructuredAgentSessionWrite
+} from './use-structured-agent-session-mutate'
 
 type MutateCall = [string, string, Record<string, unknown>]
 
@@ -34,6 +31,7 @@ function draft(id: string, position: number): AgentSessionQueuedMessage {
 }
 
 const SCOPE = 'tab-1:pane-scope'
+const write: StructuredAgentSessionWrite = vi.fn(async () => ({ kind: 'dropped' as const }))
 
 function createHarness(
   overrides: {
@@ -55,9 +53,11 @@ function createHarness(
       queuePause: null,
       submissions: [],
       hasPendingPrompt: false,
+      isWorking: false,
       composerScopeKey: 'composerScopeKey' in overrides ? overrides.composerScopeKey : SCOPE,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each scripted answer is the result shape of the one mutate it responds to; generic erasure cannot express that.
-      mutate: mutate as StructuredAgentSessionMutate
+      mutate: mutate as StructuredAgentSessionMutate,
+      editTransport: { target: { kind: 'local' }, sessionId: 'session', capable: false, write }
     })
   )
   return { ...rendered, mutate, mutateCalls }
@@ -109,74 +109,14 @@ describe('queued message actions', () => {
     expect(readNativeChatDraftCache(SCOPE)).toBe('')
   })
 
-  it('Edit puts the shown text in the composer BEFORE the Delete goes out, then deletes', async () => {
-    let draftWhenDeleteArrived: string | null = null
-    const harness = createHarness({
-      mutateResult: (call) => {
-        draftWhenDeleteArrived = readNativeChatDraftCache(SCOPE)
-        return { deleted: true, messageId: call[2].messageId }
-      }
-    })
-    await act(() => harness.result.current.edit('draft-1'))
-    expect(harness.mutateCalls).toEqual([
-      [
-        'agentSession.queuedMessageDelete',
-        'agentSession.queuedMessageDelete',
-        { messageId: 'draft-1' }
-      ]
-    ])
-    // Copy-first: the composer already held the text when the RPC was issued.
-    expect(draftWhenDeleteArrived).toBe('text of draft-1')
-    expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
-  })
-
-  it('the text survives a failed Delete: the card stays and the composer keeps the copy', async () => {
-    // mutate answers null for a refused or lost write; the card remains on the host's list.
+  it('a host that cannot edit in place offers no Edit and never copies or deletes', async () => {
     const harness = createHarness()
     await act(() => harness.result.current.edit('draft-1'))
-    expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
-    expect(harness.result.current.cards.map((card) => card.messageId)).toEqual([
-      'draft-1',
-      'draft-2'
-    ])
-  })
-
-  it('an Edit whose draft was already dispatched says so, and the copy stays', async () => {
-    const harness = createHarness({
-      mutateResult: (call) => ({
-        deleted: false,
-        messageId: call[2].messageId,
-        disposition: 'dispatched'
-      })
-    })
-    await act(() => harness.result.current.edit('draft-1'))
-    expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
-    expect(toast.error).toHaveBeenCalledWith('Already sent — your text is still in the composer.')
-  })
-
-  it('Edit deletes the card only once storage holds the text, and keeps it when storage refuses', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const storage = createMemoryNativeChatComposerDraftStorage()
-    storage.refuseWrites = true
-    setNativeChatComposerDraftStorageForTests(storage)
-    try {
-      const harness = createHarness()
-      await act(() => harness.result.current.edit('draft-1'))
-      expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
-      expect(harness.mutate).not.toHaveBeenCalled()
-
-      storage.refuseWrites = false
-      await act(() => harness.result.current.edit('draft-2'))
-      expect(harness.mutate).toHaveBeenCalledTimes(1)
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
-  it('Edit with no composer to hold the text deletes nothing', async () => {
-    const harness = createHarness({ composerScopeKey: undefined })
-    await act(() => harness.result.current.edit('draft-1'))
+    expect(harness.result.current.editCapable).toBe(false)
+    expect(harness.result.current.editor).toBeUndefined()
     expect(harness.mutate).not.toHaveBeenCalled()
+    expect(write).not.toHaveBeenCalled()
+    expect(readNativeChatDraftCache(SCOPE)).toBe('')
   })
 
   it('a second press on a card while its action is in flight sends nothing more', async () => {

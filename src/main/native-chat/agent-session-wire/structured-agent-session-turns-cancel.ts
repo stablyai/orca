@@ -6,8 +6,8 @@ import type {
   AgentJournalStatusItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import { refuseUnclassified } from '../../../shared/agent-session-wire-refusals'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type { AgentSessionCancelOutcome } from './structured-agent-session-adapter'
 import {
@@ -26,12 +26,15 @@ import {
   structuredAgentSessionStoppedTurnId
 } from './structured-agent-session-turn-stop-notes'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
-import { runningTurnLifecycleRevisions } from './structured-agent-session-stale-turn-verdict'
+import type { StructuredAgentSessionStopWindDown } from './structured-agent-session-stop-wind-down'
+import type { JournalStopFailedOn } from '../agent-session-journal/queued-message-pause'
+import { structuredAgentSessionFailedStopMark } from './structured-agent-session-stopping'
 import { sendStopCanTakeBack } from './structured-agent-session-unopened-send-withdrawal'
+import { settleTakenStop } from './structured-agent-session-taken-stop-settle'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
-/** Whether the fold reads working. Every write has landed by its call's return, and the open paid
- *  any owed import, so a Stop reads it without waiting on the write queue. */
+/** Whether the fold reads working. Every write has landed by its call's return, so a Stop reads it
+ *  without waiting on the write queue. */
 export function isMainAgentWorking(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>
 ): boolean {
@@ -58,7 +61,7 @@ function stillRunsStoppedTurn(
   return stoppedTurnId === null || ctx.journal.activeTurnId() === stoppedTurnId
 }
 
-/** Whether the child's end took back every send the Stop found in flight, none of them having run
+/** Whether the Stop took back every send it found in flight, none of them having run
  *  (`withdrawCodexSendsNoTurnOpenedFor`). */
 function tookBackEverySend(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
@@ -88,71 +91,12 @@ function stopRefusedNote(
   }
 }
 
-/** What a Stop that ends the provider's session leaves its next serialized step: whether the
- *  provider took the interrupt, so its wind-down is worth waiting on, and when the interrupt went
- *  out. No turn id: that step runs right behind the Stop, so no later turn can slip in between.
- *  `settled` closes the Stop's settle once the wind-down finishes, whether or not the child's exit
- *  was proven: until then, what ends is the Stop's. */
-export type StructuredAgentSessionStopWindDown = {
-  waitsForProvider: boolean
-  stoppedAt: number
-  settled?: () => void
-}
-
-/**
- * A session-ending Stop's second step, queued behind its first in the same tick so nothing sent
- * meanwhile reaches the child it ends. The Stop has answered: a failure here is reported. A close
- * it could not prove keeps the child on record, and the next operation that reaches the agent
- * joins that close.
- */
-export async function endStoppedStructuredAgentSession(
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'adapter'>,
-  windDown: StructuredAgentSessionStopWindDown,
-  stopChild: () => Promise<void>,
-  onError: (error: unknown) => void
-): Promise<void> {
-  try {
-    if (windDown.waitsForProvider) {
-      await ctx.adapter.awaitStoppedRequestEnd?.(ctx.sessionId, windDown.stoppedAt)
-    }
-    await stopChild()
-  } catch (error) {
-    onError(error)
-  } finally {
-    windDown.settled?.()
-  }
-}
-
-/** A turn the Stop's interrupt took that still reads running: the Stop ends it, once, while it
- *  still binds it. The provider's stream lands as it arrives, so the fold already holds any end it
- *  sent. Bookkeeping: a failure is reported, never the Stop's. */
-async function endStoppedTurnAtSettle(ctx: AgentSessionTurnContext, turnId: string): Promise<void> {
-  try {
-    const running = ctx.journal
-      .snapshot()
-      .items.filter((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
-    const mutations = runningTurnLifecycleRevisions(running, {
-      state: 'interrupted',
-      completedAt: ctx.now()
-    })
-    if (mutations.length > 0) {
-      await ctx.journal.appendLifecycleBatch({
-        settlementId: `stop-settled:${turnId}`,
-        mutations,
-        fence: ctx.fence
-      })
-    }
-  } catch (error) {
-    ctx.logger.warn("ending a stopped turn at its Stop's settle failed", {
-      scope: 'stop-settle',
-      sessionId: ctx.sessionId,
-      error
-    })
-  }
-}
-
 /** What the Stop's settle binds: the turn it stopped, and whether its wind-down closes it. */
-type StopSettleBinding = { turnId?: string; closedByWindDown?: true }
+type StopSettleBinding = {
+  turnId?: string
+  failedOn?: JournalStopFailedOn
+  closedByWindDown?: true
+}
 
 export async function performCancel(
   ctx: AgentSessionTurnContext,
@@ -167,7 +111,9 @@ export async function performCancel(
   // A person's Stop that named no turn binds what ends while it settles (`beginJournalStopSettle`).
   const settle = input.opensSettle ? ctx.journal.stopMarks.beginSettle() : null
   const binding: StopSettleBinding = {}
-  const close = (): void => ctx.journal.stopMarks.settled(settle, binding.turnId)
+  // A wind-down that failed with work running on marks that work's turn, as a failed Stop does.
+  const close = (failedOn?: JournalStopFailedOn): void =>
+    ctx.journal.stopMarks.settled(settle, binding.turnId, binding.failedOn ?? failedOn)
   try {
     return await cancelAndNote(ctx, input, binding, close)
   } finally {
@@ -208,7 +154,7 @@ async function cancelAndNote(
   ctx: AgentSessionTurnContext,
   input: PerformCancelInput,
   binding: StopSettleBinding,
-  closeSettle: () => void
+  closeSettle: (failedOn?: JournalStopFailedOn) => void
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   let cancelled = false
   let note: AgentJournalStatusItem | null = {
@@ -249,19 +195,29 @@ async function cancelAndNote(
   let stoppedTurn: string | undefined
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
+    const background =
+      input.scope && !stoppedBefore
+        ? await ctx.adapter.stopBackgroundTasks?.({
+            sessionId: ctx.sessionId,
+            fence: ctx.fence,
+            taskIds: agentChildWorkStopTargets(input.childWork?.(), input.taskId)
+          })
+        : undefined
+    // A background Stop writes no row, so a task the agent shows still running after it goes back
+    // to the client that pressed it.
+    if (background?.stillRunning) {
+      return {
+        ok: false,
+        refusal: refuseUnclassified(
+          'agent_session_operation_invalid',
+          'a background task still runs after its stop'
+        )
+      }
+    }
     const outcome: AgentSessionCancelOutcome = stoppedBefore
       ? { cancelled: false }
       : input.scope
-        ? {
-            cancelled:
-              (
-                await ctx.adapter.stopBackgroundTasks?.({
-                  sessionId: ctx.sessionId,
-                  fence: ctx.fence,
-                  taskIds: agentChildWorkStopTargets(input.childWork?.(), input.taskId)
-                })
-              )?.cancelled === true
-          }
+        ? { cancelled: background?.cancelled === true }
         : await ctx.adapter.cancelTurn({
             sessionId: ctx.sessionId,
             ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
@@ -293,6 +249,16 @@ async function cancelAndNote(
     if (input.prompt) {
       throw error
     }
+    // A timeout or lost contact proves nothing about the task: unconfirmed, never "not stopped".
+    if (input.scope) {
+      return {
+        ok: false,
+        refusal: refuseUnclassified(
+          'agent_session_operation_unknown',
+          `background task stop unconfirmed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }
     interruptFailed = true
     // The adapter's error is Orca's; the row says only that the stop is unconfirmed.
     note = {
@@ -300,13 +266,23 @@ async function cancelAndNote(
       ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
     }
   }
+  // Keyed by the turn it stopped, as the provider names it, so another Stop of that turn rewrites
+  // this row, never adds one.
+  const noteIdentity = structuredAgentSessionStopNoteIdentity(
+    stoppedTurn ?? stoppedTurnId ?? input.clientOperationId
+  )
   // A Stop naming a turn that has since ended keeps the session only when the provider declined
   // it: an interrupt, answered or not, can stop a follow-up whose turn has not opened.
   if (endsSession && (!namesTurnNotLive || taken !== false)) {
     // An interrupt the provider took is worth waiting on, turn row or not: a Stop before the echo
     // has none, and the echo still opens the turn the Stop interrupted.
     binding.closedByWindDown = true
-    input.endSession?.({ waitsForProvider: taken === true, stoppedAt, settled: closeSettle })
+    input.endSession?.({
+      waitsForProvider: taken === true,
+      stoppedAt,
+      stopNote: noteIdentity,
+      settled: closeSettle
+    })
     cancelled = true
     // The child's end confirms the Stop, so a refused or unconfirmed interrupt says nothing more.
     if (note !== null) {
@@ -336,8 +312,8 @@ async function cancelAndNote(
     if (ended) {
       cancelled = true
       // A child end that took back every send it found, with no turn running, ended a run that
-      // never started: its message is back in the composer, and a row would sit under the turn
-      // before as if that turn were stopped.
+      // never started: a client draws that send where it was sent, with its own row saying so. A
+      // row here would say it twice, and an older client draws it under the turn before.
       note =
         stoppedTurnId === null && tookBackEverySend(ctx, sentBeforeStop)
           ? null
@@ -352,9 +328,16 @@ async function cancelAndNote(
   }
   if (cancelled) {
     binding.turnId = stoppedTurn ?? stoppedTurnId ?? undefined
+  } else if (interruptFailed) {
+    // A Stop that failed reads "Stopping…" through the turn it could not stop; its end stays its own.
+    binding.failedOn = structuredAgentSessionFailedStopMark(ctx.journal)
   }
   if (taken === true && stoppedTurn !== undefined && !binding.closedByWindDown && !input.scope) {
-    await endStoppedTurnAtSettle(ctx, stoppedTurn)
+    const opened = await settleTakenStop(ctx, stoppedTurn)
+    // As after a child's end: the send's own row says it never started.
+    if (!opened && stoppedTurnId === null && tookBackEverySend(ctx, sentBeforeStop)) {
+      note = null
+    }
   }
   const value = { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled }
   if (input.scope || note === null) {
@@ -366,11 +349,6 @@ async function cancelAndNote(
     (stoppedTurn !== undefined
       ? structuredAgentSessionNamedTurnScope(ctx.journal, stoppedTurn)
       : null) ?? turnScope
-  // Keyed by the turn it stopped, so another Stop of that turn rewrites this row, never adds one.
-  await ctx.journal.appendItem(
-    structuredAgentSessionStopNoteIdentity(stoppedTurn ?? stoppedTurnId ?? input.clientOperationId),
-    note,
-    { fence: ctx.fence, turnScope: noteScope }
-  )
+  await ctx.journal.appendItem(noteIdentity, note, { fence: ctx.fence, turnScope: noteScope })
   return { ok: true, value }
 }

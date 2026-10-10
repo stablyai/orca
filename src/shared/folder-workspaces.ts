@@ -5,6 +5,7 @@ import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import { getWorkspaceAttachments } from './workspace-attachments'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -73,6 +74,15 @@ export function normalizeFolderWorkspaces(
             : (group?.connectionId ?? null),
       ...(creatorProvenance ? { creatorProvenance } : {}),
       linkedTask,
+      ...(raw.linkedItems !== undefined
+        ? {
+            linkedItems: getWorkspaceAttachments({
+              linkedItems: raw.linkedItems,
+              linkedWorkItem: linkedTask,
+              linkedTaskSourceContext
+            })
+          }
+        : {}),
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
         linkedTask,
         linkedTaskSourceContext

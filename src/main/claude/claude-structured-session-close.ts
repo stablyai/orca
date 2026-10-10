@@ -15,7 +15,7 @@ import {
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
+import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
@@ -119,8 +119,9 @@ async function finalizeClaudePublishedSession(
     rootExitVerdict = cleanupError
   }
   // Queues the session's ending for the host's child records; the adapter delivers it after close.
-  // A close that proved the whole tree gone stopped what still ran. One that saw a descendant
-  // survive, like an exit of the session's own, leaves how it ended unknown.
+  // A proven close stopped what still ran: on POSIX the whole tree was seen gone; on Windows Claude
+  // left after its stdin ended, or taskkill reported its tree terminated. Any other end, like an
+  // exit of the session's own, leaves how it ended unknown.
   if (connectionClosed === true) {
     session.childWork.stopLive()
   }
@@ -142,7 +143,7 @@ async function finalizeClaudePublishedSession(
   }
   if (!session.closeEnded) {
     session.closeEnded = true
-    const ended = {
+    const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId: input.sessionId,
       reason: 'claude session closed',
@@ -150,8 +151,9 @@ async function finalizeClaudePublishedSession(
       cause: 'requested-close',
       fence: session.fence,
       acquisitionGeneration: session.acquisitionGeneration,
-      observedAt: Date.now()
-    } as const
+      observedAt: Date.now(),
+      ...(session.startup.answered ? {} : { startupUnanswered: true as const })
+    }
     try {
       try {
         session.translator?.handle(ended)

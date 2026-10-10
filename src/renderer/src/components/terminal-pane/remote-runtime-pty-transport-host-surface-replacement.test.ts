@@ -249,9 +249,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
 
       const listCallsAfterBound = hostListCalls
-      await expect(
-        transport.sendInputAccepted?.('retry while reconnecting', 'driving')
-      ).resolves.toBe(false)
+      // Why: held for terminal-stale; the replacement handle below must never receive it (#10065).
+      const heldWhileReconnecting = transport.sendInputAccepted?.(
+        'retry while reconnecting',
+        'driving'
+      )
       await vi.advanceTimersByTimeAsync(16_000)
 
       // The accepted-snapshot listener already owns recovery. User input must
@@ -291,6 +293,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         'remote:env-1@@terminal-after-timeout',
         'remote:env-1@@terminal-stale'
       )
+      await expect(heldWhileReconnecting).resolves.toBe(false)
       expect(onPtyExit).not.toHaveBeenCalled()
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-after-timeout')
       expect(transport.isConnected()).toBe(false)

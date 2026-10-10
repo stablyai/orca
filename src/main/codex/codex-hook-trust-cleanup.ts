@@ -26,6 +26,7 @@ import {
   removeStaleWslCodexManagedHookTrustEntries
 } from './codex-managed-trust-reconciliation'
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
 import type { CodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
 
 export function collectManagedTrustEntries(
@@ -110,9 +111,11 @@ export function removeStaleRuntimeHookTrustEntries(
 
 export function removeSystemManagedHookTrustEntries(
   systemHomePath: string,
-  sourcePaths: readonly [string, ...string[]]
+  sourcePaths: readonly [string, ...string[]],
+  codexHashes: readonly CodexHookHashes[]
 ): void {
   removeCodexManagedHookTrustEntries({
+    codexHashes,
     tomlPath: getSystemCodexConfigTomlPath(),
     runtimeHomePath: systemHomePath,
     sourcePaths,
@@ -122,9 +125,13 @@ export function removeSystemManagedHookTrustEntries(
   })
 }
 
-export function removeRuntimeManagedHookTrustEntries(configPath: string): void {
+export function removeRuntimeManagedHookTrustEntries(
+  configPath: string,
+  codexHashes: readonly CodexHookHashes[]
+): void {
   try {
     removeCodexManagedHookTrustEntries({
+      codexHashes,
       tomlPath: getCodexConfigTomlPath(),
       runtimeHomePath: getOrcaManagedCodexHomePath(),
       sourcePaths: [configPath],

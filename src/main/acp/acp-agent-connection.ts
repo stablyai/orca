@@ -1,4 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
@@ -13,13 +14,15 @@ export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> &
   peer?: Omit<AcpPeerOptions, 'closeOnInputEnd'>
   /** Process exit evidence, including expected closes and processless spawn failures. */
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
+  /** Any stdout or stderr chunk from the child. */
+  onOutput?: () => void
 }
 
 /** The execution host owns the child and protocol lifetime; the adapter owns turns and Stop. */
 export function createAcpAgentConnection(
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions = {},
-  spawnImpl: typeof spawnProcess = spawnProcess
+  spawnImpl: PipedProcessSpawner = spawnProcess
 ): AcpAgentConnection {
   return new AcpAgentConnection(launch, options, spawnImpl)
 }
@@ -33,11 +36,15 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   constructor(
     launch: ProviderProcessLaunch,
     options: AcpAgentConnectionOptions = {},
-    spawnImpl: typeof spawnProcess = spawnProcess
+    spawnImpl: PipedProcessSpawner = spawnProcess
   ) {
     // Validate before spawning so invalid limits cannot leave an unowned child.
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })
-    const managed = spawnManagedProviderProcess(launch, { spawnImpl, site: 'acp-agent-teardown' })
+    const managed = spawnManagedProviderProcess(launch, {
+      spawnImpl,
+      site: 'acp-agent-teardown',
+      ...(options.onOutput ? { onOutput: options.onOutput } : {})
+    })
     const lifecycle: { closing: boolean; error?: Error } = { closing: false }
     const diagnose = (message: string): void => {
       try {
@@ -144,7 +151,10 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   override close(error?: Error): Promise<boolean> {
     this.lifecycle.closing ||= this.managed.rootVerdict !== 'exited'
-    super.close(error)
-    return this.managed.close().then((result) => result.root === 'exited')
+    this.drainNotifications(error)
+    return this.managed
+      .close()
+      .then((result) => result.root === 'exited')
+      .finally(() => super.close(error))
   }
 }

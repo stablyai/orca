@@ -16,7 +16,7 @@ export function useNativeChatTranscriptSlots({
   line,
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId'> & {
-  line: { draws: boolean; thinking: boolean; activityText?: string | null }
+  line: { draws: boolean; thinking: boolean; stopping?: boolean; activityText?: string | null }
 }): { slots: NativeChatTranscriptSlot[]; liveLine: NativeChatLiveLine | null } {
   const {
     messages,
@@ -32,12 +32,13 @@ export function useNativeChatTranscriptSlots({
     subagentSections,
     subagentChoices
   } = input
-  const { draws, thinking, activityText } = line
+  const { draws, thinking, stopping = false, activityText } = line
   const liveLine = useMemo(
     () =>
       nativeChatLiveLine({
         draws,
         thinking,
+        stopping,
         activityText,
         messages,
         inLiveWorkingTurn: (index) =>
@@ -47,7 +48,17 @@ export function useNativeChatTranscriptSlots({
             isWorking || lifecycleWorking
           )
       }),
-    [activityText, draws, isWorking, lifecycleWorking, liveTurnKey, messages, thinking, turnKeys]
+    [
+      activityText,
+      draws,
+      isWorking,
+      lifecycleWorking,
+      liveTurnKey,
+      messages,
+      stopping,
+      thinking,
+      turnKeys
+    ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
   const slots = useMemo(

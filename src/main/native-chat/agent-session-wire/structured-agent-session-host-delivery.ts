@@ -22,6 +22,7 @@ import type {
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
+import { retireSignedOutStructuredAgentSessionChild } from './structured-agent-session-signed-out-child'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -34,6 +35,9 @@ export type StructuredAgentSessionConversationDelivery = {
    *  queue. Enqueued through the session's serialize, never read here, so a commit that lands while
    *  a step is deciding to stop wakes the loop after that step rather than being lost to it. */
   afterCommit: (sessionId: string, journal: AgentSessionJournal) => void
+  /** A person's Stop settle opened or closed. It writes no row, so only what reads the settle
+   *  moves: the session's status row and the steer hold's handover. Never activity. */
+  afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
   /** Stops the loop and the resettle on a proof of death; quit's first step. */
   dispose: () => void
   /** Indexes a conversation some other open produced, as `open` would have. */
@@ -53,7 +57,12 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     startedFor: string
   ) => Promise<StructuredAgentSessionResumeOutcome>
-  clientDelivery: Pick<StructuredAgentSessionClientDelivery, 'publishRestored' | 'readChildWork'>
+  /** Stops a child that reported it is not signed in, so the start after it reads a new login. */
+  stopSignedOutAgent: (sessionId: string) => Promise<void>
+  clientDelivery: Pick<
+    StructuredAgentSessionClientDelivery,
+    'publishRestored' | 'readChildWork' | 'readStopping' | 'publishStatus'
+  >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
   const loop = new StructuredAgentSessionDeliveryLoop({
@@ -62,13 +71,35 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     agents: deps.agents,
     serialize: input.serialize,
     trackStart: input.trackStart,
-    ensureProviderChild: input.ensureProviderChild,
+    ensureProviderChild: async (sessionId, startedFor) => {
+      // A send waiting on a person's Stop is not handed over yet; the step after the Stop decides.
+      const session = input.clientDelivery.readStopping(sessionId)
+        ? undefined
+        : sessions.get(sessionId)
+      await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
+        work: {
+          childWork: () => input.clientDelivery.readChildWork(sessionId),
+          hasOpenDispatch: () => {
+            const record = deps.store.getRecord(sessionId)
+            return record !== null && deps.hasOpenDispatch?.(record) === true
+          },
+          providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
+        },
+        startUnavailable: () => deps.adapter.startUnavailable?.(sessionId),
+        stopAgent: input.stopSignedOutAgent,
+        logger: deps.logger
+      })
+      return input.ensureProviderChild(sessionId, startedFor)
+    },
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),
     holdClosed: async (sessionId, which) => {
       const session = sessions.get(sessionId)
       return session
-        ? holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, which)
+        ? holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, {
+            mark: 'settled',
+            which
+          })
         : true
     },
     failureTextContext: (sessionId) =>
@@ -79,6 +110,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     logger: deps.logger,
     record: (sessionId) => deps.store.getRecord(sessionId),
     readChildWork: input.clientDelivery.readChildWork,
+    stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now()
   })
   const adoptOpened = async (
@@ -139,6 +171,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   return {
     loop,
     afterCommit,
+    afterSettleEdge: (sessionId, journal) => {
+      input.clientDelivery.publishStatus(sessionId)
+      afterCommit(sessionId, journal)
+    },
     adoptOpened,
     dispose: () => {
       loop.dispose()

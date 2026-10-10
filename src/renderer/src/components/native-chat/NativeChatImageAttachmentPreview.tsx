@@ -1,21 +1,29 @@
-import { useEffect, useRef, useState } from 'react'
-import { Image as ImageIcon, ImageOff, Loader2, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { FileText, Image as ImageIcon, ImageOff, Loader2, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
-import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
+import {
+  isNativeChatImageAttachmentPath,
+  isNativeChatPastedImagePath
+} from './native-chat-image-paste'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
 
 type Props = {
   attachment: NativeChatComposerImageAttachment
+  /** The paired server the chat runs on; a file stored there is read back through it. */
+  hostEnvironmentId?: string
   onRemove: (id: string) => void
 }
 
 /** Thumbnail for a pending image, with an in-app full-size preview on click. */
 export function NativeChatImageAttachmentPreview({
   attachment,
+  hostEnvironmentId,
   onRemove
 }: Props): React.JSX.Element {
   if (attachment.unavailableName !== undefined) {
@@ -27,7 +35,13 @@ export function NativeChatImageAttachmentPreview({
       />
     )
   }
-  return <NativeChatImageThumbnail attachment={attachment} onRemove={onRemove} />
+  return (
+    <NativeChatImageThumbnail
+      attachment={attachment}
+      hostEnvironmentId={hostEnvironmentId}
+      onRemove={onRemove}
+    />
+  )
 }
 
 function attachmentLabel(path: string): string {
@@ -97,7 +111,11 @@ function NativeChatUnavailableImageChip({
   )
 }
 
-function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.Element {
+function NativeChatImageThumbnail({
+  attachment,
+  hostEnvironmentId,
+  onRemove
+}: Props): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
   const [isNearViewport, setIsNearViewport] = useState(false)
   const thumbnailRef = useRef<HTMLDivElement>(null)
@@ -123,11 +141,27 @@ function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.El
     return () => observer.disconnect()
   }, [])
   const isPending = attachment.pending === true
+  // A stored attachment is a path on the paired server, read back through that server.
+  const readEnvironmentId =
+    hostEnvironmentId && isAgentSessionAttachmentStorePath(attachment.path)
+      ? hostEnvironmentId
+      : undefined
+  const hostReadContext = useMemo(
+    () =>
+      readEnvironmentId
+        ? {
+            settings: { activeRuntimeEnvironmentId: readEnvironmentId },
+            worktreeId: null,
+            worktreePath: null
+          }
+        : undefined,
+    [readEnvironmentId]
+  )
   const localSrc = useLocalImageSrc(
     !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
     attachment.path,
     attachment.connectionId,
-    undefined,
+    hostReadContext,
     // Why chat-image: a draft handed off from the host queue may carry paths a paired client chose.
     chatImageAccess()
   )
@@ -136,11 +170,18 @@ function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.El
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
   const filename = attachmentLabel(attachment.path)
-  const pendingLabel = translate(
-    'components.native-chat.composer.imageSaving',
-    'Saving pasted image…'
-  )
-  const label = isPending ? pendingLabel : filename
+  const pendingLabel = attachment.pendingName
+    ? translate('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
+        name: attachment.pendingName
+      })
+    : translate('components.native-chat.composer.imageSaving', 'Saving pasted image…')
+  const label = isPending ? (attachment.pendingName ?? pendingLabel) : filename
+  // A dropped document uploads as a chip too, and becomes an `@` reference once stored.
+  const isFile =
+    attachment.pendingName !== undefined && !isNativeChatImageAttachmentPath(attachment.pendingName)
+  const KindIcon = isFile ? FileText : ImageIcon
+  // The thumbnail may be the downscaled clipboard preview; copy only the file.
+  const copySrc = copyableNativeChatImageSrc(localSrc)
 
   return (
     <>
@@ -154,6 +195,7 @@ function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.El
           }
           aria-busy={isPending}
           title={label}
+          data-native-chat-copy-image-src={copySrc}
           onClick={() => setIsOpen(true)}
           className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -163,8 +205,15 @@ function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.El
               alt={label}
               className={`size-full object-cover${isPending ? ' opacity-50' : ''}`}
             />
+          ) : attachment.pendingName ? (
+            <span className="flex max-w-full flex-col items-center gap-0.5 px-1">
+              <KindIcon className="size-5 shrink-0 text-muted-foreground" />
+              <span className="max-w-full truncate text-xs text-muted-foreground">
+                {attachment.pendingName}
+              </span>
+            </span>
           ) : (
-            <ImageIcon className="size-5 text-muted-foreground" />
+            <KindIcon className="size-5 text-muted-foreground" />
           )}
         </button>
         {isPending ? (
@@ -175,7 +224,10 @@ function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.El
         <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
       </div>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="flex max-h-[90vh] max-w-[90vw] flex-col gap-3 border-border bg-background p-3 sm:max-w-4xl">
+        <DialogContent
+          onInteractOutside={keepPreviewOpenForChatMenu}
+          className="flex max-h-[90vh] max-w-[90vw] flex-col sm:max-w-4xl"
+        >
           <DialogTitle className="truncate text-sm">{label}</DialogTitle>
           <DialogDescription className="sr-only">
             {translate('components.native-chat.composer.imagePreview', 'Full-size image preview')}
@@ -185,6 +237,7 @@ function NativeChatImageThumbnail({ attachment, onRemove }: Props): React.JSX.El
               <img
                 src={fullSizeSrc}
                 alt={label}
+                data-native-chat-copy-image-src={copySrc}
                 className="max-h-[75vh] max-w-full object-contain"
               />
             ) : (

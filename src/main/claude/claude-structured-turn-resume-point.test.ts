@@ -138,11 +138,12 @@ describe('Claude durable resume point at turn end', () => {
     expect(head).toMatchObject({ resumeCursor: 'a2' })
 
     const resolve = createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only getRecord from its store.
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
-      resolveAuthPolicy: () => ({ stripAuthEnv: false })
+      resolveAuthPolicy: () => ({ account: 'system' })
     })
     const launch = await resolve({
       identity: {

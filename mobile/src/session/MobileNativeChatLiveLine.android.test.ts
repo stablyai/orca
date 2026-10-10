@@ -56,7 +56,13 @@ describe('MobileNativeChatLiveLine on Android', () => {
     act(() => {
       renderer = create(
         createElement(MobileNativeChatLiveLine, {
-          line: { thinking: true, activityText: null, reasoning: block, reasoningExpanded: true },
+          line: {
+            thinking: true,
+            stopping: false,
+            activityText: null,
+            reasoning: block,
+            reasoningExpanded: true
+          },
           onToggleReasoning: vi.fn(),
           fontScale: 1
         })
@@ -78,7 +84,13 @@ describe('MobileNativeChatLiveLine on Android', () => {
   it('keeps the sheet through the block ending, and never opens one for the next by itself', () => {
     const line = (reasoning: NativeChatLiveReasoning | null) =>
       createElement(MobileNativeChatLiveLine, {
-        line: { thinking: true, activityText: null, reasoning, reasoningExpanded: true },
+        line: {
+          thinking: true,
+          stopping: false,
+          activityText: null,
+          reasoning,
+          reasoningExpanded: true
+        },
         onToggleReasoning: vi.fn(),
         fontScale: 1
       })
@@ -103,7 +115,13 @@ describe('MobileNativeChatLiveLine on Android', () => {
   it('opens no sheet for the next block when the first ends with the sheet open', () => {
     const line = (reasoning: NativeChatLiveReasoning | null) =>
       createElement(MobileNativeChatLiveLine, {
-        line: { thinking: true, activityText: null, reasoning, reasoningExpanded: true },
+        line: {
+          thinking: true,
+          stopping: false,
+          activityText: null,
+          reasoning,
+          reasoningExpanded: true
+        },
         onToggleReasoning: vi.fn(),
         fontScale: 1
       })

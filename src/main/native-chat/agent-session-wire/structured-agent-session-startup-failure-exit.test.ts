@@ -25,11 +25,10 @@ function startedSession(): StructuredAgentSessionChildExitSession & {
     journal: {
       cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       itemBody: () => null,
+      itemFence: () => undefined,
       // Nothing ran: the start failed before any response or acknowledged prompt.
       snapshot: () => ({ items: [] }),
-      appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
-      markPendingSubmissionsUnknown: vi.fn(async () => []),
-      rejectPendingSubmissions: vi.fn(async () => [])
+      appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
     }
   }
 }
@@ -93,7 +92,7 @@ describe('a provider that ends before it finished starting', () => {
             identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
             body: {
               kind: 'status',
-              text: 'Claude is not signed in for the selected account. Sign in, then send your message again.',
+              text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
               tone: 'error',
               failure: { kind: 'notSignedIn' }
             }
@@ -160,12 +159,17 @@ describe('a provider that ends before it finished starting', () => {
     await settleStructuredAgentSessionChildExit(contextFor(session), ended)
 
     const text = 'Claude stopped before it finished starting. Run /compact again.'
-    expect(session.journal.rejectPendingSubmissions).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({ reason: text })
-    )
     expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
+        dispatches: [
+          expect.objectContaining({
+            clientMessageId: 'compact-1',
+            state: 'rejected',
+            reason: text,
+            fence: 7,
+            recovered: true
+          })
+        ],
         mutations: [expect.objectContaining({ body: expect.objectContaining({ text }) })]
       })
     )

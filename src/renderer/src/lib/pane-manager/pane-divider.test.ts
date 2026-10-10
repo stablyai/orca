@@ -205,7 +205,7 @@ describe('disposeDivider', () => {
     expect(nextPane.style.flex).toBe('220 1 0%')
     expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
     expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
-    expect(onLayoutChanged).toHaveBeenCalledTimes(1)
+    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
     expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
     expect(divider.releasePointerCapture).toHaveBeenCalledWith(9)
     expect(windowListeners.has('pointermove')).toBe(false)

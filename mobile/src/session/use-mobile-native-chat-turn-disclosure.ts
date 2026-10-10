@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isSubagentGroupBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../src/shared/native-chat-reasoning-row'
 import {
   nativeChatLiveLine,
@@ -8,10 +8,10 @@ import {
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   isNativeChatRowInLiveWorkingTurn,
-  nativeChatMessagesWaitingBehindLiveTurn,
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../src/shared/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -33,11 +33,17 @@ export type MobileNativeChatTurnRow = {
   /** Set only on a settled turn — the one row that has activity to disclose. */
   turnKey?: string
   activeTurnIsWorking: boolean
+  /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
+  mayStillGrow: boolean
   /** The live activity line discloses this open reasoning block, so its row draws nothing. */
   reasoningIsLive: boolean
   /** A reasoning row's disclosure, keyed like the live line's so an opened block stays open. */
   reasoningExpanded: boolean
   onToggleReasoning: (key: string) => void
+  /** The roster groups the reader opened, by group id; set only on a row that carries one, so a
+   *  toggle re-renders roster rows alone. */
+  subagentGroupsOpen?: ReadonlySet<string>
+  onToggleSubagentGroup: (groupId: string) => void
 }
 
 /** The live activity line, when it draws, and whether the reader opened the block it discloses. */
@@ -82,6 +88,7 @@ export function useMobileNativeChatTurnDisclosure({
   turnJournal = null,
   thinking = false,
   activityText = null,
+  stopping = false,
   lineYields = false,
   scopeKey
 }: {
@@ -97,6 +104,8 @@ export function useMobileNativeChatTurnDisclosure({
   thinking?: boolean
   /** What the provider says the live turn is doing; outranks the other labels. */
   activityText?: string | null
+  /** A person's Stop is ending the live turn: the sends the host holds draw after its status. */
+  stopping?: boolean
   /** A prompt the reader must answer replaces the live activity line. */
   lineYields?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
@@ -131,7 +140,14 @@ export function useMobileNativeChatTurnDisclosure({
   }, [enabled, messages, turnJournal])
   // A message waiting behind the live turn draws after that turn's live status, not in the list.
   const waiting = useMemo(() => {
-    const ids = enabled ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items) : null
+    const ids = enabled
+      ? nativeChatMessagesWaitingBehindLiveTurn(
+          rows,
+          turnJournal?.items,
+          stopping,
+          turnJournal?.submissions
+        )
+      : null
     if (!ids?.size) {
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
@@ -140,7 +156,7 @@ export function useMobileNativeChatTurnDisclosure({
       waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
-  }, [enabled, rows, turnJournal])
+  }, [enabled, rows, stopping, turnJournal])
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -153,6 +169,7 @@ export function useMobileNativeChatTurnDisclosure({
   })
   const [expandedTurnIds, toggleExpandedTurn] = useScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
+  const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
@@ -167,11 +184,12 @@ export function useMobileNativeChatTurnDisclosure({
       nativeChatLiveLine({
         draws: enabled && isWorking && !lineYields && active !== null,
         thinking: active?.thinking === true,
+        stopping,
         activityText: activeActivityText,
         messages: rows,
         inLiveWorkingTurn
       }),
-    [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows]
+    [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
   )
   const liveReasoningId = line?.reasoning?.message.id
   const liveLine = useMemo<MobileNativeChatLiveLine | null>(
@@ -183,6 +201,10 @@ export function useMobileNativeChatTurnDisclosure({
           expandedReasoning.has(nativeChatReasoningDisclosureKey(line.reasoning.message.id))
       },
     [expandedReasoning, line]
+  )
+  const latestAssistantId = useMemo(
+    () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
+    [waiting.listMessages]
   )
   const resolveRow = useCallback(
     (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
@@ -208,11 +230,16 @@ export function useMobileNativeChatTurnDisclosure({
         turnKey: turnKey && turnStatus?.workedSeconds != null ? turnKey : undefined,
         // With no user boundary at all, the session's working state stays authoritative.
         activeTurnIsWorking: inLiveWorkingTurn(index),
+        mayStillGrow: !lineYields && message.id === latestAssistantId,
         reasoningIsLive: message.id === liveReasoningId,
         reasoningExpanded:
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
-        onToggleReasoning: toggleReasoning
+        onToggleReasoning: toggleReasoning,
+        ...(message.blocks.some(isSubagentGroupBlock)
+          ? { subagentGroupsOpen: openSubagentGroups }
+          : {}),
+        onToggleSubagentGroup: toggleSubagentGroup
       }
     },
     [
@@ -225,9 +252,13 @@ export function useMobileNativeChatTurnDisclosure({
       completedByTurn,
       expandedTurnIds,
       inLiveWorkingTurn,
+      latestAssistantId,
+      lineYields,
       liveReasoningId,
       expandedReasoning,
-      toggleReasoning
+      toggleReasoning,
+      openSubagentGroups,
+      toggleSubagentGroup
     ]
   )
 

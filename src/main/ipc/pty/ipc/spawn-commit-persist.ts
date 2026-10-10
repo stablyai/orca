@@ -1,4 +1,7 @@
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 import { closeStartupQueryAuthorityForPty, getRelayPtyId } from '../provider/registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
@@ -16,6 +19,7 @@ import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 
 export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<PtyGrid> {
   const args = ctx.args
@@ -52,6 +56,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
     !ctx.stablePaneBindingPersisted
   ) {
     try {
+      const placement = parseTerminalPanePlacement(args.placement)
       const binding = {
         worktreeId: args.worktreeId,
         tabId: args.tabId,
@@ -59,6 +64,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
         ptyId: ctx.result.id,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
+        ...(placement ? { placement } : {}),
         origin: spawnCommitBindingOrigin(ctx.result)
       }
       const hostId = args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
@@ -106,7 +112,7 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
   })
-  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+  ptyOwnership.set(ctx.result.id, getConnectionExecutionHostId(args.connectionId))
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }

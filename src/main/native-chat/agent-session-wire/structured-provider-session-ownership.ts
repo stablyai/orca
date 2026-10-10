@@ -6,6 +6,7 @@ export type StructuredProviderSessionOwnership = {
   workspaceId: string
   provider: StructuredAgentId
   providerSessionId: string
+  conversationName?: string
   lease: AgentSessionLease
 }
 
@@ -18,6 +19,7 @@ export function listStructuredProviderSessionOwnership(
       workspaceId: record.location.workspaceId,
       provider: record.provider,
       providerSessionId: link.handle.nativeId,
+      conversationName: record.conversationName,
       lease: record.lease
     }))
   )

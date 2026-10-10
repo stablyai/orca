@@ -21,7 +21,7 @@ export type StructuredAgentSessionRestartOfferWithdrawal = ReturnType<
 
 export type StructuredAgentSessionRestartOfferSession = Pick<
   StructuredAgentSessionHostSession,
-  'journal' | 'child' | 'lastEndedChild'
+  'journal' | 'child' | 'lastEndedChild' | 'restartResume'
 >
 
 export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {

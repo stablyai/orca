@@ -184,9 +184,16 @@ export type StructuredCodexRpcHarness = {
 }
 
 export async function openStructuredCodexRpcHarness(
-  clientCapabilities: readonly RuntimeCapability[] = DEFAULT_CLIENT_CAPABILITIES
+  clientCapabilities: readonly RuntimeCapability[] = DEFAULT_CLIENT_CAPABILITIES,
+  /** What the transport stamps, as a paired device's authenticated socket does. */
+  transport: { clientId?: string; pairedDeviceId?: string } = {}
 ): Promise<StructuredCodexRpcHarness> {
-  const client = { clientId: 'device-a', clientKind: 'runtime' as const, clientCapabilities }
+  const client = {
+    clientId: 'device-a',
+    clientKind: 'runtime' as const,
+    clientCapabilities,
+    ...transport
+  }
   let operations = 0
   const root = await mkdtemp(join(tmpdir(), 'orca-structured-integration-'))
   const codex = fakeCodex()
@@ -213,7 +220,8 @@ export async function openStructuredCodexRpcHarness(
     claimKeyId: 'key-1',
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({
       PATH: '/shell/bin:/usr/bin',
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',

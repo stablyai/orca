@@ -34,9 +34,7 @@ vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
 }))
 vi.mock('./quick-open-file-navigation', () => ({ openQuickOpenFile: mocks.open }))
 vi.mock('@/lib/quick-open-file-history', () => ({
-  quickOpenHistoryScope: () => 'workspace',
-  readQuickOpenHistory: () => history,
-  subscribeQuickOpenHistory: () => () => {}
+  useQuickOpenHistory: () => history
 }))
 vi.mock('@/hooks/useModalReturnFocus', () => ({
   useModalReturnFocus: () => ({ captureReturnFocus: () => {}, skipReturnFocus: mocks.skip })

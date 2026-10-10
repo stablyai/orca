@@ -179,6 +179,7 @@ function IpynbSourceEditor({
     const { lineHeight, paddingX, paddingY } = CODE_LAYOUT
     const model = monaco.editor.createModel(source, cell.language)
     const editorInstance = monaco.editor.create(container, {
+      dropIntoEditor: { enabled: false },
       model,
       automaticLayout: true,
       fontFamily,

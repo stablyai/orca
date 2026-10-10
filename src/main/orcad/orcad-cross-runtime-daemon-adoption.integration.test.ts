@@ -18,7 +18,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
@@ -28,8 +28,11 @@ import {
   orcadBunRuntimeFilename,
   orcadNodeRuntimeRelativePath
 } from '../../shared/orcad-artifacts'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { readDaemonPidRecord } from '../daemon/daemon-endpoint-incarnation'
+import {
+  killAndAwaitExit,
+  killProfileDaemons,
+  removeTestRoot
+} from './orcad-daemon-teardown-fixture'
 import { PROTOCOL_VERSION } from '../daemon/types'
 import type { ServeReadiness } from '../server/serve-readiness'
 import {
@@ -176,7 +179,8 @@ async function launch(slot: Slot, userDataDir: string): Promise<ServeReadiness> 
           fullVersion: slot.version,
           userDataDir,
           bindHost: '127.0.0.1',
-          port: 0
+          port: 0,
+          activationRoot: join(userDataDir, '.orcad-activation-transaction')
         })
       )
     ).trim()
@@ -256,13 +260,10 @@ async function backUpProfile(slot: Slot, runtime: string, userDataDir: string): 
   expect(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')).toEqual({ ok: true })
 }
 
-function killLaunched(): void {
-  for (const pid of launched) {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {}
-  }
+async function killLaunched(): Promise<void> {
+  const pids = [...launched]
   launched.clear()
+  await killAndAwaitExit(pids)
 }
 
 /** The protocol the Bun slot's own daemon reports, read from a throwaway launch. */
@@ -276,17 +277,9 @@ async function probeBunDaemonProtocol(): Promise<number> {
     return daemon.protocolVersion!
   } finally {
     await stop(slot).catch(() => {})
-    killLaunched()
+    await killLaunched()
     // Even after a failed launch: the daemon outlives orcad, and only its pid file names it.
-    const daemonDir = join(userDataDir, 'daemon')
-    for (const name of existsSync(daemonDir) ? readdirSync(daemonDir) : []) {
-      const pid = /^daemon-v\d+\.pid$/.test(name)
-        ? readDaemonPidRecord(join(daemonDir, name))?.pid
-        : undefined
-      if (pid && isAlive(pid)) {
-        process.kill(pid, 'SIGKILL')
-      }
-    }
+    await killProfileDaemons(userDataDir)
   }
 }
 
@@ -362,8 +355,8 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
 
   afterEach(killLaunched)
 
-  afterAll(() => {
-    removeTreeSync(root)
+  afterAll(async () => {
+    await removeTestRoot(root)
   })
 
   it.for([
@@ -459,8 +452,8 @@ worker.on('error', (error) => { console.error(error); process.exitCode = 1 })
         await daemonClient('kill', userDataDir, sessionId, '')
         await vi.waitFor(() => expect(isAlive(created.pid)).toBe(false), { timeout: 10_000 })
       } finally {
-        if (daemonPid && isAlive(daemonPid)) {
-          process.kill(daemonPid, 'SIGKILL')
+        if (daemonPid) {
+          await killAndAwaitExit([daemonPid])
         }
       }
     }

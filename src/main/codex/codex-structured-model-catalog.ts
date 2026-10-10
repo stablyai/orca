@@ -82,7 +82,7 @@ function modelOption(value: unknown): ParsedCodexModelOption | null {
 }
 
 export type CodexSessionOptionCatalog = {
-  result: AgentSessionOptionsResult
+  result: AgentSessionOptionsResult & { current: { model: string } }
   fastModeTierByModel: Map<string, string>
 }
 
@@ -96,7 +96,19 @@ export type CodexModelCatalogListing = {
 export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   timeoutMs?: number
+  deadlineMs?: number
 }): Promise<CodexModelCatalogListing> {
+  const deadline = input.deadlineMs === undefined ? null : Date.now() + input.deadlineMs
+  const remainingTimeout = (): number | undefined => {
+    if (deadline === null) {
+      return input.timeoutMs
+    }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      throw new Error('codex model listing deadline exceeded')
+    }
+    return Math.min(remaining, input.timeoutMs ?? remaining)
+  }
   const parsedModels: ParsedCodexModelOption[] = []
   let cursor: string | null = null
   for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
@@ -104,7 +116,7 @@ export async function fetchCodexModelCatalogListing(input: {
       await input.connection.request(
         'model/list',
         { limit: MODEL_PAGE_LIMIT, includeHidden: false, ...(cursor ? { cursor } : {}) },
-        { timeoutMs: input.timeoutMs }
+        { timeoutMs: remainingTimeout() }
       )
     )
     const rows = Array.isArray(response?.data) ? response.data : []
@@ -119,7 +131,7 @@ export async function fetchCodexModelCatalogListing(input: {
       break
     }
   }
-  const configured = await readCodexConfiguredLaunchDefaults(input.connection)
+  const configured = await readCodexConfiguredLaunchDefaults(input.connection, remainingTimeout())
   return {
     models: applyCodexConfiguredLaunchDefaults(
       parsedModels.map((entry) => entry.option),

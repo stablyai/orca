@@ -16,7 +16,7 @@ import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcAnyMethodDeclaration, RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -101,10 +101,11 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
       [
         STATUS_SESSION,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt() and snapshot() of a journal.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
           journal: {
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
+            stopMarks: { latest: () => null, revision: () => 0 },
             snapshot: () => ({ items: STATUS_ITEMS, submissions: [] })
           } as unknown as AgentSessionJournal,
           params: {
@@ -207,14 +208,19 @@ export function hostStub(): StructuredAgentSessionHost {
     subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
       statusFeed().subscribe(subscriber)
     ),
+    subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn()
   })
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger })
+  const logger = recordingStructuredAgentSessionLogger().logger
+  Reflect.set(hostCalls, 'deps', { logger, store: { getOperationRow: vi.fn(() => null) } })
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
-export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatcher {
+export function dispatcher(
+  runtimeOverrides: Record<string, unknown> = {},
+  methods: readonly RpcAnyMethodDeclaration[] = STRUCTURED_AGENT_SESSION_METHODS
+): RpcDispatcher {
   reset(runtimeCalls)
   Object.assign(runtimeCalls, {
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
@@ -243,7 +249,7 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
   })
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -252,7 +258,7 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
   }
   return new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
-    methods: STRUCTURED_AGENT_SESSION_METHODS
+    methods
   })
 }
 
@@ -267,10 +273,11 @@ export async function call(
     clientCapabilities?: string[]
     signal?: AbortSignal
   },
-  runtimeOverrides: Record<string, unknown> = {}
+  runtimeOverrides: Record<string, unknown> = {},
+  methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
-  await dispatcher(runtimeOverrides).dispatchStreaming(
+  await dispatcher(runtimeOverrides, methods).dispatchStreaming(
     request(method, params),
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     client
@@ -280,6 +287,21 @@ export async function call(
     throw new Error(`no reply for ${method}`)
   }
   return first
+}
+
+/** For a stream that opens with nothing to say: every reply it sent, possibly none. */
+export async function openStream(
+  method: string,
+  params: unknown,
+  client: Parameters<typeof call>[2]
+): Promise<RpcResponse[]> {
+  const replies: RpcResponse[] = []
+  await dispatcher().dispatchStreaming(
+    request(method, params),
+    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
+    client
+  )
+  return replies
 }
 
 export const STRUCTURED_CLIENT = {

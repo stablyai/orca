@@ -38,11 +38,12 @@ function context(closeError?: Error): StructuredAgentSessionEvictionContext & { 
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
-  return new StructuredAgentSessionHostRuntimeState({
+  const deps = {
     store: {},
     adapter: {},
     logger: recordingStructuredAgentSessionLogger().logger
-  } as never)
+  } as never
+  return new StructuredAgentSessionHostRuntimeState(deps, new Map())
 }
 
 describe("the route release after a child's exit", () => {

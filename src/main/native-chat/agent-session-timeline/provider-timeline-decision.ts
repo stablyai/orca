@@ -76,7 +76,11 @@ export type ProviderTimelineDecision = {
   /** The event's change to the state, made when the sink admits it. */
   commit?: (state: ProviderTimelineState) => void
   /** The settlement the event owes, read from the journal when it runs. */
-  settle?: { what: string; resolve: (journal: Journal) => readonly JournalLifecycleMutationInput[] }
+  settle?: {
+    what: string
+    recovered?: true
+    resolve: (journal: Journal) => readonly JournalLifecycleMutationInput[]
+  }
   writes?: readonly ProviderTimelineItemWrite[]
   /** The streamed item whose text this event's full snapshot replaces. */
   closes?: string

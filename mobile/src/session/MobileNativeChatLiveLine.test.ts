@@ -61,6 +61,7 @@ describe('MobileNativeChatLiveLine', () => {
   function element(
     fields: {
       thinking?: boolean
+      stopping?: boolean
       activityText?: string | null
       reasoning?: NativeChatLiveReasoning | null
       reasoningExpanded?: boolean
@@ -69,6 +70,7 @@ describe('MobileNativeChatLiveLine', () => {
     return createElement(MobileNativeChatLiveLine, {
       line: {
         thinking: true,
+        stopping: false,
         activityText: null,
         reasoning: null,
         reasoningExpanded: false,
@@ -108,6 +110,11 @@ describe('MobileNativeChatLiveLine', () => {
 
   it('lets provider activity text beat both fallbacks', () => {
     expect(labels(render({ activityText: 'Running pnpm test' }))).toEqual(['Running pnpm test'])
+  })
+
+  it("reads Stopping over provider activity once a person's Stop is ending the turn", () => {
+    const root = render({ thinking: false, activityText: 'Running pnpm test', stopping: true })
+    expect(labels(root)).toEqual(['Stopping…'])
   })
 
   it('announces what it says to assistive tech, and is no button while it discloses nothing', () => {

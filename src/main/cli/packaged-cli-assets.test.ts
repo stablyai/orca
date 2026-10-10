@@ -17,7 +17,8 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { createPackageWithOptions, statFile } from '@electron/asar'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -76,7 +77,9 @@ describe('packaged CLI assets', () => {
           '--composite',
           'false',
           '--incremental',
-          'false'
+          'false',
+          // This fixture checks the emitted package; the CLI typecheck runs separately.
+          '--noCheck'
         ],
         cwd: projectDir,
         timeoutMs: 60_000
@@ -94,6 +97,7 @@ describe('packaged CLI assets', () => {
           }
         )
       }
+      await stagePackagedProcessHost(join(root, 'resources'))
       await createPackageWithOptions(source, archive, {
         unpack: `{${builderConfig.asarUnpack?.map((pattern) => join(source, pattern).split(sep).join('/')).join(',')}}`
       })
@@ -117,6 +121,8 @@ describe('packaged CLI assets', () => {
         env: {
           ...process.env,
           ORCA_BACKGROUND_LAUNCH: '1',
+          NODE_PATH: '',
+          NODE_OPTIONS: '',
           ORCA_USER_DATA_PATH: join(root, 'user-data'),
           HOME: join(root, 'home')
         },
@@ -146,6 +152,7 @@ describe('packaged CLI assets', () => {
         join('node_modules', 'ws'),
         join('node_modules', 'tweetnacl'),
         join('node_modules', 'zod'),
+        join('node_modules', '@orca', 'process-host'),
         join('node_modules', 'yaml'),
         join('node_modules', 'jsonc-parser'),
         join('node_modules', 'node-pty'),

@@ -16,7 +16,7 @@ Thanks for contributing to Orca.
 
 ## Local Setup
 
-Install Node 24, pnpm, and the Bun version in [`config/bun-version`](../config/bun-version).
+Install Node 24, pnpm, and the Bun version in [`config/.bun-version`](../config/.bun-version).
 `pnpm test` runs Vitest on Bun, with Node workers for runtime contracts such as SQLite,
 native PTYs, socket liveness, and V8 memory behavior. `pnpm test:node` runs the same suites
 entirely on Node. Builds and dependency installation still use Node and pnpm.
@@ -29,7 +29,6 @@ pnpm dev
 Ordinary installs include native optional dependencies for the current OS and CPU only.
 Before a cross-architecture build (including `pnpm build:mac`, which produces both x64 and
 arm64 artifacts by default), run `pnpm install:release` to add the other CPU's variants.
-See [the install policy](../docs/reference/pnpm-install-policy.md).
 
 ## Branch Naming
 

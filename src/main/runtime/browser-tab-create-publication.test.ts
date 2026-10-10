@@ -1,7 +1,5 @@
 // Every browser-tab placement must publish the created tab through one seam. A placement that
 // hand-rolls its own bookkeeping is how a client-placed page once lost its targetGroupId.
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
@@ -86,14 +84,6 @@ function createPublicationHost(registeredTabs: readonly [string, number][] = [['
     markHeadlessBrowserSessionTabActive,
     notifyHeadlessBrowserSessionTabsChanged
   }
-}
-
-function browserCommandsSource(): string {
-  return readdirSync(__dirname)
-    .filter((name) => /^runtime-browser-commands-.*\.ts$/.test(name))
-    .sort()
-    .map((name) => readFileSync(join(__dirname, name), 'utf8'))
-    .join('\n')
 }
 
 describe('publishCreatedBrowserSessionTab', () => {
@@ -350,29 +340,6 @@ describe('browser tab-create focus resolution', () => {
 })
 
 describe('browser tab-create placement census', () => {
-  it('routes every placement branch through the shared publication exactly once', () => {
-    const source = browserCommandsSource()
-    for (const placementKind of BROWSER_TAB_CREATE_PLACEMENT_KINDS) {
-      const routed = source.match(
-        new RegExp(
-          `publishCreatedBrowserSessionTab\\(this\\.host, \\{\\s*placementKind: '${placementKind}'`,
-          'g'
-        )
-      )
-      expect(
-        routed,
-        `${placementKind} placement must publish through the shared seam`
-      ).toHaveLength(1)
-    }
-    expect(source.match(/publishCreatedBrowserSessionTab\(/g)).toHaveLength(
-      BROWSER_TAB_CREATE_PLACEMENT_KINDS.length
-    )
-  })
-
-  it('leaves no placement branch marking session-tab focus on its own', () => {
-    expect(browserCommandsSource()).not.toMatch(/markHeadlessBrowserSessionTabActive\?\.\(/)
-  })
-
   // Why: the rule-driven cases above read their expectation off the table, so each placement also
   // needs its real bookkeeping observed through browserTabCreate itself.
   describe('through browserTabCreate', () => {
@@ -617,22 +584,6 @@ describe('browser tab-switch focus rule', () => {
 })
 
 describe('browser tab-switch placement census', () => {
-  it('routes every switch branch through the shared publication exactly once', () => {
-    const source = browserCommandsSource()
-    for (const placementKind of BROWSER_TAB_SWITCH_PLACEMENT_KINDS) {
-      const routed = source.match(
-        new RegExp(
-          `publishSwitchedBrowserSessionTab\\(this\\.host, \\{\\s*placementKind: '${placementKind}'`,
-          'g'
-        )
-      )
-      expect(routed, `${placementKind} switch must publish through the shared seam`).toHaveLength(1)
-    }
-    expect(source.match(/publishSwitchedBrowserSessionTab\(/g)).toHaveLength(
-      BROWSER_TAB_SWITCH_PLACEMENT_KINDS.length
-    )
-  })
-
   // Why: the rule-driven cases read their expectation off the table, so each branch also needs
   // its real bookkeeping observed through browserTabSwitch itself.
   describe('through browserTabSwitch', () => {

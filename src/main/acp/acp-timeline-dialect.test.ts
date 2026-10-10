@@ -82,7 +82,7 @@ describe('ACP dialect request and turn boundaries', () => {
     })
   })
 
-  it('encodes labels and free text under the question text, validates grouped choices, and gives exact plan replies', async () => {
+  it('encodes labels and free text under the question text, validates grouped choices, and settles a plan without a gate', async () => {
     const { translator } = await dialectRig()
     const ask = translator.request('_x.ai/ask_user_question', question, 0).presentation!
     expect(
@@ -134,17 +134,17 @@ describe('ACP dialect request and turn boundaries', () => {
       outcome: 'accepted',
       answers: { 'Choose a test?': ['Unit', 'Integration'], 'Another?': 'Yes' }
     })
+    // A plan is shown, never put to the person as an approval, and never approved for them.
     const plan = translator.request(
       '_x.ai/exit_plan_mode',
-      { sessionId: 'provider-1', toolCallId: 'plan-1', planContent: 'Plan' },
+      { sessionId: 'provider-1', toolCallId: 'plan-1', planContent: '# Plan' },
       2
-    ).presentation!
-    expect(plan.reply({ kind: 'option', optionId: 'approved' })).toEqual({ outcome: 'approved' })
-    expect(plan.reply({ kind: 'option', optionId: 'request_changes' })).toEqual({
-      outcome: 'request_changes'
-    })
-    expect(plan.reply(null)).toEqual({ outcome: 'abandoned' })
-    expect(() => plan.reply({ kind: 'option', optionId: 'allow' })).toThrow('offered option')
+    )
+    expect(plan.presentation).toBeUndefined()
+    expect(plan.settled?.reply).toEqual({ outcome: 'abandoned', feedback: expect.any(String) })
+    expect(plan.events).toMatchObject([
+      { body: { kind: 'status', presentation: 'plan-document', text: '# Plan' } }
+    ])
   })
 
   it('keeps client prompt settlement on the response, and never gives an autonomous turn invented success', async () => {

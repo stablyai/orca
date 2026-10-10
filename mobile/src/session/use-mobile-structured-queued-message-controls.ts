@@ -1,13 +1,17 @@
 // The queued-draft surface the structured session exposes: cards derived from
 // the published list and the Send-now / Delete / Edit actions. Shown whatever
 // the queue capability says: a host that does not queue sends still publishes a
-// message it kept across a restart or a close, and only queueing a new send is
-// gated. A host older than the queue publishes no list, so shows no cards.
+// message it kept as a card across a restart or a close, and only queueing a new
+// send is gated. A host older than the queue publishes no list, so shows no cards.
 // Nothing here is durable: the host owns the queue, and the published list is
 // the only truth a card action ever needs.
 
 import { useCallback, useMemo } from 'react'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session-journal-types'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
 import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
@@ -46,10 +50,14 @@ export type MobileStructuredQueuedMessageControls = {
 
 export function useMobileStructuredQueuedMessageControls(args: {
   sessionKey: string
+  agentName?: string
+  journalItems?: readonly AgentJournalRenderItem[]
   queuedMessages: MobileQueuedMessageFeed
   queuePause: MobileQueuePause
   submissions: readonly AgentJournalSubmission[]
   pendingPrompt: boolean
+  /** The chat shows the agent working: a command card offers no send then. */
+  agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
   /** The active pane's live composer, Edit's copy target; absent = Edit refuses. False when
    *  nothing was copied. */
@@ -69,13 +77,27 @@ export function useMobileStructuredQueuedMessageControls(args: {
     sessionKey,
     submissions
   } = args
+  const agentWorking = args.agentWorking === true
   const cards = useMemo(
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
         pendingPrompt,
+        agentWorking,
+        agentName: args.agentName,
+        statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
+          ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
+          : [],
         queuePaused: queuePause !== null
       }),
-    [pendingPrompt, queuePause, queuedMessages, submissions]
+    [
+      agentWorking,
+      args.agentName,
+      args.journalItems,
+      pendingPrompt,
+      queuePause,
+      queuedMessages,
+      submissions
+    ]
   )
   const resolved = useCallback(
     (accepted: boolean): boolean => {
@@ -135,7 +157,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
       // leaves the card beside the copy, visibly, never a silent duplicate. No
       // copy (no composer yet, or an empty card) means no Delete: Edit never
       // removes text it did not keep.
-      if (!card || !appendComposerText?.(card.text)) {
+      // A command's text is not a draft: edited, it would become a message.
+      if (!card || card.command || !appendComposerText?.(card.text)) {
         return false
       }
       onCopied?.()

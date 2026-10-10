@@ -18,6 +18,15 @@ export function routeNativeChatRootKeyToInput(
   composer: NativeChatComposerHandle | null,
   questionAnswerInput: HTMLInputElement | null
 ): void {
+  // The focused transcript owns Space paging; typing elsewhere still reaches the composer.
+  if (
+    event.key === ' ' &&
+    event.target instanceof HTMLElement &&
+    event.target.matches('[data-native-chat-scroll]') &&
+    event.target.ownerDocument.activeElement === event.target
+  ) {
+    return
+  }
   // Backspace/Delete outside an input focuses the composer (like typing)
   // but inserts nothing — let the now-focused field handle the keystroke.
   if (shouldFocusNativeChatComposerFromEditingKey(event)) {

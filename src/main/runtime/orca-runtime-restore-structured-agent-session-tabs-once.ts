@@ -2,8 +2,6 @@
 import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-runtime-get-structured-agent-session-create-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
-import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { seedStructuredAgentSessionTabIndex } from './structured-agent-session-tab-index-seed'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -30,27 +28,6 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithGetStructuredAgentSessionCreateSupport {
-  /** Projects only: a replacement's chat already has its tab in the store, which the /clear commit
-   *  moved in the same write. */
-  replaceStructuredAgentSessionTab(replacement: ConversationReplacement): void {
-    const prior = this.mobileSessionTabsByWorktree.get(replacement.workspaceId)
-    const next = prior ? replaceConversationInSnapshot(prior, replacement) : null
-    if (next && next !== prior) {
-      const stored = this.storeMobileSessionSnapshot(replacement.workspaceId, next)
-      this.emitMobileSessionTabsSnapshot(stored)
-    } else if (
-      !prior?.tabs.some(
-        (tab) => tab.type === 'agent-session' && tab.sessionId === replacement.sessionId
-      )
-    ) {
-      this.projectStructuredAgentSessionTab({
-        ...replacement,
-        replacesSessionId: replacement.sourceSessionId,
-        activate: false
-      })
-    }
-  }
-
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
@@ -61,11 +38,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const profileIds = collectSavedStructuredAgentSessionIds(
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
     )
-    // Unrecorded, the profile's chats join the tabs chats opened while the import was owed left.
-    // First: after a /clear the profile's chat would take their tab id, so seeds hit tabIdTaken.
-    const targets = persistedVisibleIndex.present
-      ? persistedVisibleIndex.sessionIds
-      : [...new Set([...persistedVisibleIndex.sessionIds, ...profileIds])]
+    const targets = persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
     await host?.restoreReadableSessions(targets)
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
@@ -88,19 +61,13 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       restored.map((session) => session.sessionId)
     )
     // Past the seed, projecting records nothing.
-    for (const replacement of host?.conversationReplacements?.() ?? []) {
-      this.replaceStructuredAgentSessionTab(replacement)
-    }
     for (const session of restored) {
       this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
     }
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
-    // No host, or one still owed the records file's chats, means no one can say which chats exist;
-    // with none on disk, empty is the answer.
-    const importOwed =
-      typeof host?.legacyRecordImportOwed === 'function' && host.legacyRecordImportOwed()
+    // No host means no one can say which chats exist; with none on disk, empty is the answer.
     this.structuredAgentSessionInventoryUnverifiable =
-      (!host || importOwed) && this.hasPersistedStructuredAgentSessionStore()
+      !host && this.hasPersistedStructuredAgentSessionStore()
     // This restore published quietly; subscribers still hold the frames that said "cannot tell".
     if (wasUnverifiable && !this.structuredAgentSessionInventoryUnverifiable) {
       this.notifyMobileSessionTabSnapshots()
@@ -113,7 +80,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     agent: StructuredAgentId
     activate: boolean
     notify?: boolean
-    replacesSessionId?: string
     /** The host tab id a create reserved; a session that already has a tab keeps its own. */
     tabId?: string
   }): Promise<void> {
@@ -141,7 +107,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     agent: StructuredAgentId
     activate: boolean
     notify?: boolean
-    replacesSessionId?: string
   }): void {
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
@@ -179,7 +144,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       id,
       title: defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
-      ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,
       isActive: input.activate
     }

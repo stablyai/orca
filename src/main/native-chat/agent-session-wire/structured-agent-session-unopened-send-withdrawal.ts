@@ -1,5 +1,5 @@
-// Which unanswered sends a dying Codex child takes with it as never sent, read from the journal at
-// the settlement that lands, so a retried wind-down reads the same rows.
+// Which unanswered sends a person's Stop takes back as never sent, when Codex takes it or the child
+// ends, read from the journal at the settlement that lands, so a retried settle reads the same rows.
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -9,13 +9,14 @@ import type { AgentType } from '../../../shared/agent-status-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 
 /** What the derivation reads; absent members (a narrow double) withdraw nothing. */
 export type UnopenedSendJournal = {
   agent?: AgentType
   queuedMessages?: Pick<AgentSessionJournal['queuedMessages'], 'userStopInForce'>
   snapshot: () => Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
-  submissions?: () => Pick<
+  submissions?: () => (Pick<
     AgentJournalSubmission,
     | 'clientMessageId'
     | 'dispatchState'
@@ -23,7 +24,7 @@ export type UnopenedSendJournal = {
     | 'handoverRecorded'
     | 'handedOverAt'
     | 'acceptedSequence'
-  >[]
+  > & { reason?: string | null })[]
   resolveDispatch?: AgentSessionJournal['resolveDispatch']
 }
 
@@ -44,7 +45,7 @@ export function sendStopCanTakeBack(
 
 /**
  * Withdraws the sends a Codex child left unanswered when a person's Stop, in force since they were
- * sent, ends it: each one that started its own turn (handed over with no turn running, so its
+ * sent, ends the child or is taken by Codex: each one that started its own turn (handed over with no turn running, so its
  * message belongs to no turn) when no turn has opened since. Codex records a prompt only once its
  * turn starts (core tasks/regular.rs:50, session/turn.rs:886-902), so they never ran. A send that
  * joined a running turn may be in it, so it, a send with no recorded place, and any other end stay
@@ -54,41 +55,55 @@ export async function withdrawCodexSendsNoTurnOpenedFor(
   journal: UnopenedSendJournal,
   fence: number
 ): Promise<void> {
-  const stop = journal.agent === 'codex' ? journal.queuedMessages?.userStopInForce() : null
-  if (!stop || !journal.submissions || !journal.resolveDispatch) {
+  if (!journal.resolveDispatch) {
     return
+  }
+  for (const resolution of codexUnopenedSendResolutions(journal, fence)) {
+    await journal.resolveDispatch(resolution)
+  }
+}
+
+export function codexUnopenedSendResolutions(
+  journal: UnopenedSendJournal,
+  fence: number
+): ResolveDispatchInput[] {
+  const stop = journal.agent === 'codex' ? journal.queuedMessages?.userStopInForce() : null
+  if (!stop || !journal.submissions) {
+    return []
   }
   const { items } = journal.snapshot()
   const turns = items.flatMap((item) => {
     const turn = readAgentJournalTurn(item.body)
     return turn ? [{ running: turn.state === 'running', sequence: item.sequence }] : []
   })
-  // Its message's place, recorded at handover: the turn it joined, or the conversation.
-  const startedOwnTurn = (clientMessageId: string): boolean =>
-    items.find((item) => item.itemId === agentJournalSubmissionKey(clientMessageId))?.turnScope
-      ?.kind === 'thread'
-  const opened = (acceptedSequence: number): boolean =>
-    turns.some((turn) => turn.running || turn.sequence > acceptedSequence)
-  const unopened = journal
-    .submissions()
-    .filter(
-      (entry) =>
-        sendStopCanTakeBack(entry) &&
-        entry.acceptedSequence !== undefined &&
-        entry.acceptedSequence < stop.sequence &&
-        startedOwnTurn(entry.clientMessageId) &&
-        !opened(entry.acceptedSequence)
+  // Its message's place, recorded at handover: the turn it joined, or the conversation. A send
+  // that started its own turn has the conversation's; one with no turn recorded since then never ran.
+  const ownTurnHandover = (clientMessageId: string): number | undefined => {
+    const handover = items.find(
+      (item) => item.itemId === agentJournalSubmissionKey(clientMessageId)
     )
+    return handover?.turnScope?.kind === 'thread' ? handover.sequence : undefined
+  }
+  const openedSince = (handoverSequence: number): boolean =>
+    turns.some((turn) => turn.running || turn.sequence > handoverSequence)
+  const unopened = journal.submissions().filter((entry) => {
+    const handover = ownTurnHandover(entry.clientMessageId)
+    return (
+      sendStopCanTakeBack(entry) &&
+      entry.acceptedSequence !== undefined &&
+      entry.acceptedSequence < stop.sequence &&
+      handover !== undefined &&
+      !openedSince(handover)
+    )
+  })
   const withdrawn = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
     surface: 'rejection'
   })
-  for (const entry of unopened) {
-    await journal.resolveDispatch({
-      clientMessageId: entry.clientMessageId,
-      state: 'rejected',
-      ...withdrawn,
-      fence,
-      recovered: true
-    })
-  }
+  return unopened.map((entry): ResolveDispatchInput => ({
+    clientMessageId: entry.clientMessageId,
+    state: 'rejected',
+    ...withdrawn,
+    fence,
+    recovered: true
+  }))
 }

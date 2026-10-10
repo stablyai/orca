@@ -85,6 +85,18 @@ it('lets scheduled warmers wait while pushes, PR updates, and manual runs can re
   })
 })
 
+it('keeps compiler changes validated without starting warmers for test-only edits', () => {
+  for (const event of ['push', 'pull_request']) {
+    const paths = workflow.on[event].paths
+    expect(paths).toContain('config/scripts/headless-detector-compiler-cache.mjs')
+    expect(paths).not.toContain('config/scripts/headless-detector-compiler-cache*')
+    expect(paths).not.toContain('config/scripts/headless-detector-compiler-cache.test.mjs')
+    expect(paths).not.toContain('config/scripts/ci-cache-warmup-workflow.test.mjs')
+    expect(paths).toContain('.github/workflows/ci-cache-warmup.yml')
+    expect(paths).toContain('.github/actions/prepare-headless-compiler/**')
+  }
+})
+
 it('warms and probes both Windows images with the persistence job runtime', () => {
   const job = workflow.jobs['warm-windows']
   expect(job.strategy.matrix.os).toEqual(

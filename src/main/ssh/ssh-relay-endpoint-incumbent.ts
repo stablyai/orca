@@ -19,7 +19,7 @@
  *   reason is `unverifiable`. It cannot authorize client cleanup; guarded launch still
  *   delegates socket takeover checks to the daemon.
  */
-import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
+import { RELAY_LSOF_PROBE_JS } from '@orca/process-host/posix-lsof-probe'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import {

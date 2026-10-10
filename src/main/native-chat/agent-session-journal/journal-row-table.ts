@@ -21,8 +21,6 @@ const SELECT_ROWS_AFTER = `SELECT seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
 const DELETE_EPOCH = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ?'
-const DELETE_UNPUBLISHED = `DELETE FROM journal_rows WHERE session_id = ?
-AND epoch IS NOT (SELECT epoch FROM journal_sessions WHERE session_id = ?)`
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
@@ -41,7 +39,8 @@ export function publishJournalSessionEpoch(
 export function insertJournalRow(
   db: Database.Database,
   sessionId: string,
-  row: JournalRow
+  row: JournalRow,
+  savedAt = row.ts
 ): number {
   const rowJson = serializeJournalRow(row)
   // A row the reader rejects would fail the chat's next load, so it is never written: the throw
@@ -53,7 +52,8 @@ export function insertJournalRow(
       `the ${row.kind} row for ${sessionId} would not read back, so it was not written`
     )
   }
-  db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, row.ts, rowJson)
+  // The table timestamp records the save; the JSON timestamp can remain pinned to item start.
+  db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, savedAt, rowJson)
   return Buffer.byteLength(rowJson, 'utf8')
 }
 
@@ -105,9 +105,4 @@ export function deleteJournalEpochRows(
   epoch: string
 ): void {
   db.prepare(DELETE_EPOCH).run(sessionId, epoch)
-}
-
-/** Rows of this chat under any epoch its pointer does not name: a copy that never published. */
-export function deleteUnpublishedJournalRows(db: Database.Database, sessionId: string): void {
-  db.prepare(DELETE_UNPUBLISHED).run(sessionId, sessionId)
 }

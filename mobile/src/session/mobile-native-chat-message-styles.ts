@@ -29,6 +29,11 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
+  contextBoundary: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    paddingTop: spacing.sm
+  },
   hostNotice: {
     color: colors.textMuted,
     fontSize: TEXT_SIZE,
@@ -60,6 +65,15 @@ export const styles = StyleSheet.create({
   reasoningBody: {
     // The common cap for an open reasoning block (about ten lines).
     maxHeight: 240
+  },
+  agentMessage: {
+    paddingLeft: spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.borderSubtle
+  },
+  agentAttribution: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
   },
   toolRun: {
     marginTop: spacing.xs

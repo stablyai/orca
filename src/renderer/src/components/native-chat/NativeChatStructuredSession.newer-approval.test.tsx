@@ -88,6 +88,25 @@ it('sends nothing for the card when no turn is running', () => {
   expect(mocks.cancel).not.toHaveBeenCalled()
 })
 
+it('cancels a Pi extension dialog outside a model turn', () => {
+  mocks.promptItems = [NEWER_APPROVAL]
+  render(
+    <NativeChatStructuredSession
+      isVisible
+      isFocusedGroup
+      tabId="pi-dialog-tab"
+      sessionId="pi-dialog-session"
+      target={{ kind: 'local' }}
+      agent="pi"
+    />
+  )
+  mocks.approvalCardProps?.onCancel?.()
+  expect(mocks.cancel).toHaveBeenCalledWith(undefined, {
+    itemId: 'approval-item',
+    expectedRevision: 3
+  })
+})
+
 function renderSession() {
   render(
     <NativeChatStructuredSession
