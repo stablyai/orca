@@ -212,6 +212,37 @@ describe('RuntimeFileCommands file watching', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it.each([false, true])(
+    'closes Windows removal watchers after Git unregisters an external worktree (watched: %s)',
+    async (watched) => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const rootPath = 'C:\\projects\\repo-feature'
+      const watcher = createWindowsWatcher(() => {
+        queueMicrotask(() => watcher.emit('close'))
+      })
+      watchMock.mockReturnValue(watcher)
+      resolveAuthorizedPathMock.mockResolvedValue(rootPath)
+      statMock.mockResolvedValue({ isDirectory: () => true })
+      const { commands } = createRuntimeFileCommands(rootPath)
+      if (watched) {
+        await commands.watchFileExplorer('id:wt-1', vi.fn())
+      }
+      // Git can remove its registration before Windows releases the remaining files.
+      resolveAuthorizedPathMock.mockReset()
+      resolveAuthorizedPathMock.mockRejectedValue(
+        new Error('Access denied: path resolves outside allowed directories')
+      )
+
+      await expect(commands.closeFileExplorerWatchersForPath(rootPath)).resolves.toBeUndefined()
+
+      expect(watcher.close).toHaveBeenCalledTimes(watched ? 1 : 0)
+      expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
+      expect(closeWatcherInWatcherProcessMock).not.toHaveBeenCalled()
+      commands.forgetFileExplorerWatchersAfterRemoval(rootPath)
+      expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
+    }
+  )
+
   it('retains Windows close ownership until late physical exit without retry leaks', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const watcher = createWindowsWatcher(() => undefined)

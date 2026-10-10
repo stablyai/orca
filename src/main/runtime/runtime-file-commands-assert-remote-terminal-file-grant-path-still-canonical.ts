@@ -170,7 +170,8 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     if (leases) {
       await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
-    if (!connectionId) {
+    // Windows owns only the leases above; Git may already have revoked this path's registration.
+    if (!connectionId && process.platform !== 'win32') {
       // Why: setup can fail before registerRuntimeFileWatcherRelease publishes its callback while the child owner still lives.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
