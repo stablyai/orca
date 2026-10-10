@@ -101,8 +101,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         agent,
         worktreeId: activeWorktreeId,
         groupId: targetGroupId,
-        launchSource: 'shortcut',
-        freshNewTab: true
+        launchSource: 'shortcut'
       })
       if (!result) {
         toast.error(

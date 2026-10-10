@@ -43,8 +43,7 @@ describe('launchDashboardAgent', () => {
       requestId: expect.any(String),
       agent: 'codex',
       worktreeId: 'folder:docs',
-      launchSource: 'unknown',
-      freshNewTab: true
+      launchSource: 'unknown'
     })
   })
 })

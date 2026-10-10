@@ -19,8 +19,7 @@ export function launchDashboardAgent({ worktreeId, agent }: DashboardSpawnAgentA
       requestId: newAgentLaunchRequestId(),
       agent,
       worktreeId,
-      launchSource: 'unknown',
-      freshNewTab: true
+      launchSource: 'unknown'
     }) !== null
   )
 }
