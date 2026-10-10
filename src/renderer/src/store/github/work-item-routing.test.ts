@@ -15,13 +15,22 @@ const localSource: TaskSourceContext = {
   hostId: 'local',
   repoId: 'repo-1'
 }
-const runtimeRepo: Pick<Repo, 'connectionId' | 'executionHostId'> = {
-  connectionId: null,
-  executionHostId: 'runtime:owner-runtime'
+function makeRepo(executionHostId: Repo['executionHostId']): Repo {
+  return {
+    id: 'repo-1',
+    path: '/repo',
+    displayName: 'repo',
+    badgeColor: '',
+    addedAt: 0,
+    connectionId: null,
+    executionHostId
+  }
 }
-const localRepo: Pick<Repo, 'connectionId' | 'executionHostId'> = {
-  connectionId: null,
-  executionHostId: 'local'
+const runtimeRepo = makeRepo('runtime:owner-runtime')
+const localRepo = makeRepo('local')
+
+function stateWith(repos: Repo[]): Parameters<typeof getGitHubRepoSourceSettings>[0] {
+  return { settings, repos }
 }
 
 describe.each([
@@ -29,20 +38,30 @@ describe.each([
   ['getGitHubWorkItemSourceSettings', getGitHubWorkItemSourceSettings]
 ])('%s with a GitHub task source', (_name, resolve) => {
   it('keeps a runtime-owned repo on its owner when the source has no runtime (#7623)', () => {
-    expect(resolve(settings, runtimeRepo, localSource)?.activeRuntimeEnvironmentId).toBe(
-      'owner-runtime'
-    )
+    expect(
+      resolve(stateWith([runtimeRepo]), runtimeRepo, localSource)?.activeRuntimeEnvironmentId
+    ).toBe('owner-runtime')
   })
 
   it('lets a runtime source override the repo owner', () => {
     expect(
-      resolve(settings, runtimeRepo, { ...localSource, hostId: 'runtime:source-runtime' })
-        ?.activeRuntimeEnvironmentId
+      resolve(stateWith([runtimeRepo]), runtimeRepo, {
+        ...localSource,
+        hostId: 'runtime:source-runtime'
+      })?.activeRuntimeEnvironmentId
     ).toBe('source-runtime')
   })
 
   it('never routes a local source to the focused runtime', () => {
-    expect(resolve(settings, localRepo, localSource)?.activeRuntimeEnvironmentId).toBeNull()
-    expect(resolve(settings, undefined, localSource)?.activeRuntimeEnvironmentId).toBeNull()
+    expect(
+      resolve(stateWith([localRepo]), localRepo, localSource)?.activeRuntimeEnvironmentId
+    ).toBeNull()
+    expect(resolve(stateWith([]), undefined, localSource)?.activeRuntimeEnvironmentId).toBeNull()
+  })
+
+  it('keeps a local source local when the repo id also exists on a server', () => {
+    const state = stateWith([runtimeRepo, localRepo])
+    expect(resolve(state, runtimeRepo, localSource)?.activeRuntimeEnvironmentId).toBeNull()
+    expect(resolve(state, localRepo, localSource)?.activeRuntimeEnvironmentId).toBeNull()
   })
 })

@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/execution-host'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
 import { callRuntimeRpc, RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
 import { workItemsCacheKey } from './cache-identity'
 import {
   findRepoForGitHubOwner,
@@ -29,6 +30,8 @@ export type GitHubWorkItemRequestContext = {
 export type GitHubWorkItemRequestTarget =
   | { kind: 'environment'; environmentId: string; runtimeRepoId: string }
   | { kind: 'local' }
+
+type GitHubSourceRoutingState = Pick<AppState, 'settings' | 'repos'>
 
 export type GitHubWorkItemsListArgs = {
   limit: number
@@ -62,20 +65,18 @@ function withActiveRuntimeEnvironmentId(
       ({ activeRuntimeEnvironmentId } as AppState['settings'])
 }
 
-// Why: a source without a runtime host carries no owner, so it defers to the repo's own owner
-// instead of clobbering a runtime-owned repo to local (#7623); focus is never consulted.
 function settingsForGitHubTaskSource(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id'> | undefined,
   sourceContext: TaskSourceContext
 ): AppState['settings'] {
   const sourceHost = parseExecutionHostId(sourceContext.hostId)
-  if (sourceHost?.kind === 'runtime') {
-    return withActiveRuntimeEnvironmentId(settings, sourceHost.environmentId)
-  }
-  return repo
-    ? settingsForGitHubRepoOwner(settings, repo)
-    : withActiveRuntimeEnvironmentId(settings, null)
+  return withActiveRuntimeEnvironmentId(
+    state.settings,
+    sourceHost?.kind === 'runtime'
+      ? sourceHost.environmentId
+      : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+  )
 }
 
 export function settingsForGitHubFocusedRepoOwner(
@@ -128,25 +129,25 @@ export function getGitHubWorkItemSourceCacheScope(
 }
 
 export function getGitHubWorkItemSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return settingsForGitHubTaskSource(settings, repo, sourceContext)
+    return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
-  return settingsForGitHubFocusedRepoOwner(settings, repo)
+  return settingsForGitHubFocusedRepoOwner(state.settings, repo)
 }
 
 export function getGitHubRepoSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return settingsForGitHubTaskSource(settings, repo, sourceContext)
+    return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
-  return settingsForGitHubRepoOwner(settings, repo)
+  return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
 export function getGitHubWorkItemRequestContext(

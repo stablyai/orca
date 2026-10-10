@@ -7,6 +7,7 @@ import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   getExplicitRuntimeOwnerEnvironmentId,
+  getHostlessSourceRepoOwnerEnvironmentId,
   type RepoRuntimeOwnerState
 } from './repo-runtime-owner'
 
@@ -40,9 +41,14 @@ export function getGitHubRepoRoutingSettings(
   sourceContext: TaskSourceContext | null | undefined
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
   const sourceHost = getGitHubSourceRuntimeHost(sourceContext)
+  if (sourceHost) {
+    return { activeRuntimeEnvironmentId: sourceHost.environmentId }
+  }
   return {
     activeRuntimeEnvironmentId:
-      sourceHost?.environmentId ?? getExplicitRuntimeOwnerEnvironmentId(state, repoId)
+      sourceContext?.provider === 'github'
+        ? getHostlessSourceRepoOwnerEnvironmentId(state.repos, repoId)
+        : getExplicitRuntimeOwnerEnvironmentId(state, repoId)
   }
 }
 

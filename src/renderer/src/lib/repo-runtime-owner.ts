@@ -66,6 +66,20 @@ export function getExplicitRuntimeOwnerEnvironmentId(
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
 }
 
+// Why: a source without a runtime host inherits a repo's runtime owner only when exactly one
+// row has that id; duplicate ids across hosts fail closed to the source's own host (#7623).
+export function getHostlessSourceRepoOwnerEnvironmentId(
+  repos: RepoRuntimeOwnerState['repos'],
+  repoId: string | null | undefined
+): string | null {
+  const matches = repoId ? (repos?.filter((entry) => entry.id === repoId) ?? []) : []
+  if (matches.length !== 1) {
+    return null
+  }
+  const parsed = parseExecutionHostId(getRepoExecutionHostId(matches[0]))
+  return parsed?.kind === 'runtime' ? parsed.environmentId : null
+}
+
 type OwnerRoutedSettingsCacheEntry = {
   settingsSource: RepoRuntimeOwnerState['settings']
   reposSource: RepoRuntimeOwnerState['repos']

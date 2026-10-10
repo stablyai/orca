@@ -113,6 +113,23 @@ describe('getGitHubRepoRoutingSettings', () => {
     ).toEqual({ kind: 'local' })
   })
 
+  it('keeps a local source local when the repo id also exists on a server', () => {
+    const duplicateIds: RepoRuntimeOwnerState = {
+      settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+      repos: [
+        { id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' },
+        { id: 'repo-1', connectionId: null, executionHostId: 'local' }
+      ]
+    }
+    expect(
+      resolveTarget(duplicateIds, 'repo-1', {
+        ...runtimeSourceContext,
+        hostId: 'local',
+        repoId: 'repo-1'
+      })
+    ).toEqual({ kind: 'local' })
+  })
+
   it('ignores runtime hosts on non-GitHub sources', () => {
     expect(
       resolveTarget(runtimeOwnedRepo, 'repo-1', {
