@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
+  collectBaseLineBlocks,
   diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
@@ -123,6 +125,31 @@ describe('moved-code exemption', () => {
 
   it('never exempts an empty highlight', () => {
     expect(isMovedCode(['', '   '], [['a()']])).toBe(false)
+  })
+
+  it('reads the base text of a file that was renamed away', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-rename-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({
+          program: 'git',
+          args: ['-c', 'commit.gpgsign=false', ...args],
+          cwd: repo
+        })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      writeFileSync(path.join(repo, 'old.ts'), 'const moved = value as Thing\n')
+      git('add', 'old.ts')
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      git('mv', 'old.ts', 'new.ts')
+
+      expect(collectBaseLineBlocks(repo, base)).toEqual([['const moved = value as Thing']])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
   })
 })
 
