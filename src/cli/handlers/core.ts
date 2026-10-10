@@ -129,7 +129,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     process.exitCode = exitCode
   },
   status: async ({ client, json }) => {
-    const result = await client.getCliStatus()
+    const result = await client.getCliStatus({ includeRemoteServer: json })
     if (!json && !result.result.runtime.reachable) {
       process.exitCode = 1
     }

@@ -1,3 +1,4 @@
+import type { RemoteServerStatus } from './remote-server-status'
 import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
@@ -63,6 +64,8 @@ export function browserUnavailableMessage(
 }
 
 export type RuntimeStatus = {
+  /** Absent for older hosts or callers without server diagnostics access. */
+  remoteServer?: RemoteServerStatus
   runtimeId: string
   /** Authenticated requester identity. Missing for in-process callers and older hosts. */
   pairedDeviceId?: string
@@ -109,6 +112,7 @@ export type CliRuntimeState =
   | 'stale_bootstrap'
 
 export type CliStatusResult = {
+  remoteServer?: RemoteServerStatus
   target?: { kind: 'local' } | { kind: 'environment'; environment: string }
   app: {
     running: boolean

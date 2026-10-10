@@ -288,6 +288,7 @@ describe('MobileSocketWiring', () => {
       notificationError
     )
     expect(transport.setClientId).not.toHaveBeenCalled()
+    expect(wiring.getAuthenticatedConnections()).toEqual([])
     expect(ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
     expect(wiring.channelCount).toBe(0)
     consoleError.mockRestore()
@@ -469,6 +470,34 @@ describe('MobileSocketWiring', () => {
       },
       0n
     )
+    expect(wiring.getAuthenticatedConnections()).toEqual([
+      { deviceId: 'device-1', scope: 'mobile', transport: 'relay' }
+    ])
+    const direct = new FakeTransport()
+    const directSocket = new FakeSocket()
+    wiring.attachTransport(direct)
+    direct.receive(
+      directSocket,
+      JSON.stringify({
+        type: 'e2ee_hello',
+        publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+      })
+    )
+    expect(wiring.getAuthenticatedConnections()).toHaveLength(1)
+    direct.receive(
+      directSocket,
+      encrypt(
+        JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }),
+        deriveSharedKey(phone.secretKey, desktop.publicKey)
+      )
+    )
+    expect(wiring.getAuthenticatedConnections()).toEqual([
+      { deviceId: 'device-1', scope: 'mobile', transport: 'relay' },
+      { deviceId: 'device-1', scope: 'mobile', transport: 'direct' }
+    ])
+    directSocket.readyState = 2
+    expect(wiring.getAuthenticatedConnections()).toHaveLength(1)
+    direct.disconnect(directSocket)
     const capabilityFrame = {
       type: 'e2ee_client_capabilities',
       v: 1,

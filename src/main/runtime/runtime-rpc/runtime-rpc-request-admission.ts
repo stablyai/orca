@@ -39,7 +39,10 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     try {
       return await this.dispatcher.dispatch(request, {
         signal: longPoll ? context?.signal : undefined,
-        callerScope
+        callerScope,
+        // Why: an SSH bridge credential authenticates here too, but server diagnostics are owner-only.
+        readRemoteServerStatus:
+          callerScope.kind === 'owner' ? () => this.readRemoteServerStatus() : undefined
       })
     } finally {
       this.releaseLongPoll(longPoll)

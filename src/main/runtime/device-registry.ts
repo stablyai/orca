@@ -3,7 +3,7 @@
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hardenExistingSecureFile,
@@ -14,6 +14,7 @@ import type { DeviceScope } from '../../shared/runtime-types'
 import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
+import { validRelayBinding } from './device-registry-relay-binding'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from './rpc/rpc-method-permission'
@@ -62,25 +63,6 @@ function sameGrants(entry: DeviceEntry, grants: readonly RuntimeDeviceGrant[]): 
   return current.length === grants.length && current.every((grant) => grants.includes(grant))
 }
 
-function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
-  if (!value || typeof value !== 'object') {
-    return undefined
-  }
-  const binding = value as Partial<RelayDeviceBinding>
-  return binding.relayDeviceId === deviceId &&
-    typeof binding.relayHostId === 'string' &&
-    typeof binding.ownerIdentityKey === 'string'
-    ? {
-        relayHostId: binding.relayHostId,
-        relayDeviceId: binding.relayDeviceId,
-        ownerIdentityKey: binding.ownerIdentityKey,
-        ...(typeof binding.inviteExpiresAt === 'number' && Number.isFinite(binding.inviteExpiresAt)
-          ? { inviteExpiresAt: binding.inviteExpiresAt }
-          : {})
-      }
-    : undefined
-}
-
 // Why: a lastSeen refresh is pure bookkeeping, so coalesce reconnect bursts into one write instead of
 // paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
@@ -91,6 +73,7 @@ export class DeviceRegistry {
   private devices: DeviceEntry[] = []
   /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
   private registryUnreadable = false
+  private diagnosticsAvailable = true
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
@@ -269,6 +252,10 @@ export class DeviceRegistry {
     return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
   }
 
+  get statusAvailable(): boolean {
+    return this.diagnosticsAvailable
+  }
+
   listDevices(): readonly DeviceEntry[] {
     return this.devices
   }
@@ -346,6 +333,14 @@ export class DeviceRegistry {
 
   private load(): void {
     if (!existsSync(this.registryPath)) {
+      // existsSync also returns false for access errors; only ENOENT proves an empty registry.
+      this.diagnosticsAvailable = false
+      try {
+        statSync(this.registryPath)
+      } catch (error) {
+        this.diagnosticsAvailable =
+          error instanceof Error && 'code' in error && error.code === 'ENOENT'
+      }
       this.devices = []
       return
     }
@@ -372,6 +367,7 @@ export class DeviceRegistry {
     } catch (error) {
       // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
       // denied would erase every paired device's bearer token, and the write would succeed.
+      this.diagnosticsAvailable = false
       this.registryUnreadable = isUnreadableError(error)
       this.devices = []
     }
@@ -384,6 +380,7 @@ export class DeviceRegistry {
       )
     }
     writeSecureJsonFile(this.registryPath, devices)
+    this.diagnosticsAvailable = true
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()
   }

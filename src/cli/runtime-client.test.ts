@@ -319,14 +319,15 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('openOrca waits for a reachable headless runtime to expose a desktop window', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')
-    let statusRequests = 0
+    const requestParams: unknown[] = []
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
       socket.once('data', (data) => {
-        const request = JSON.parse(String(data).trim()) as { id: string }
-        statusRequests += 1
-        const available = statusRequests > 1
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture reads requests emitted by RuntimeClient and asserts every probe's params.
+        const request = JSON.parse(String(data).trim()) as { id: string; params?: unknown }
+        requestParams.push(request.params)
+        const available = requestParams.length > 2
         socket.write(
           `${JSON.stringify({
             id: request.id,
@@ -354,7 +355,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
 
     expect(launchOrcaApp).toHaveBeenCalledOnce()
     expect(status.result.app.desktopWindowStatus).toBe('available')
-    expect(statusRequests).toBeGreaterThan(1)
+    expect(requestParams).toEqual([undefined, undefined, undefined])
   })
 
   it('openOrca fails explicitly when the serve owner cannot promote safely', async () => {

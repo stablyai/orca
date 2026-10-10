@@ -157,7 +157,7 @@ describe('recorded requests against the host params contract', () => {
       [
         request('nothing.here', {}),
         request('worktree.activate', {}),
-        request('status.get', { verbose: true }),
+        request('preflight.detectAgents', { verbose: true }),
         request('terminal.close', { terminal: 'term-1', extra: 1 })
       ],
       [{ method: 'terminal.close', path: '.gone', reason: 'made up' }]
@@ -165,7 +165,7 @@ describe('recorded requests against the host params contract', () => {
     expect(problems).toEqual([
       expect.stringContaining('the host has no method nothing.here'),
       expect.stringContaining('the host refuses it'),
-      expect.stringContaining('status.get takes no params; the host ignores these'),
+      expect.stringContaining('preflight.detectAgents takes no params; the host ignores these'),
       expect.stringContaining('the host drops .extra'),
       'terminal.close .gone: no recorded request sends it any more'
     ])

@@ -177,3 +177,27 @@ describe('orca claude-teams CLI handler', () => {
     expect(spawnEnv.ANTHROPIC_API_KEY).toBe('sk-ant-system')
   })
 })
+
+it.each([true, false])('requests diagnostics only for JSON status (json=%s)', async (json) => {
+  const getCliStatus = vi.fn().mockResolvedValue({
+    id: 'status',
+    ok: true,
+    result: {
+      app: { running: false, pid: null },
+      runtime: { state: 'not_running', reachable: false, runtimeId: null },
+      graph: { state: 'not_running' }
+    },
+    _meta: { runtimeId: 'none' }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the unreachable status fixture makes this handler use only getCliStatus.
+  const client = { getCliStatus } as unknown as RuntimeClient
+  const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const exitCode = process.exitCode
+  try {
+    await CORE_HANDLERS.status({ client, json, flags: new Map(), cwd: '/tmp/repo' })
+    expect(getCliStatus).toHaveBeenCalledExactlyOnceWith({ includeRemoteServer: json })
+  } finally {
+    output.mockRestore()
+    process.exitCode = exitCode
+  }
+})

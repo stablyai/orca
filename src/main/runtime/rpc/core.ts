@@ -1,3 +1,4 @@
+import type { RemoteServerStatus } from '../../../shared/remote-server-status'
 // Why: single boundary between raw RPC frames and OrcaRuntimeService; keeps schema, handler, and result type on one object.
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
@@ -81,6 +82,8 @@ export type RpcContext = {
   caller?: RpcCallerIdentity
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
+  /** Supplied only by an authenticated server-owner boundary, never request params. */
+  readRemoteServerStatus?: () => RemoteServerStatus
   // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
   clientCapabilities?: readonly RuntimeCapability[]
   // Why: mobile v2 auth is exact-key validated; capability upgrades must mutate only the authenticated socket after auth.

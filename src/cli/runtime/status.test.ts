@@ -30,60 +30,81 @@ afterEach(async () => {
 // Why: legacy runtime metadata compatibility only applies to local Unix socket
 // metadata; Windows uses named pipes and cannot run this fixture directly.
 describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
-  it('uses the legacy singular runtime transport when reporting status', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', (data) => {
-        const request = JSON.parse(String(data).trim()) as { id: string }
-        socket.write(
-          `${JSON.stringify({
-            id: request.id,
-            ok: true,
-            result: {
-              runtimeId: 'runtime-legacy',
-              rendererGraphEpoch: 1,
-              graphStatus: 'ready',
-              authoritativeWindowId: null,
-              liveTabCount: 0,
-              degradations: [
-                {
-                  code: 'browser_unavailable',
-                  capability: 'browser.headless.v1',
-                  message: 'Browser automation is unavailable.'
-                }
-              ]
-            },
-            _meta: { runtimeId: 'runtime-legacy' }
-          })}\n`
-        )
+  it.each([
+    undefined,
+    {
+      listener: { state: 'disabled' as const },
+      grants: { state: 'unavailable' as const },
+      connectedClients: { state: 'unavailable' as const }
+    }
+  ])(
+    'preserves optional server diagnostics through legacy local metadata (%j)',
+    async (remoteServer) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
+      const endpoint = join(userDataPath, 'runtime.sock')
+      const requestParams: unknown[] = []
+      const server = createServer((socket) => {
+        sockets.add(socket)
+        socket.once('close', () => sockets.delete(socket))
+        socket.once('data', (data) => {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture reads requests emitted by RuntimeClient; the diagnostic assertion requires its opt-in parameter.
+          const request = JSON.parse(String(data).trim()) as {
+            id: string
+            params?: { includeRemoteServer?: boolean }
+          }
+          requestParams.push(request.params)
+          socket.write(
+            `${JSON.stringify({
+              id: request.id,
+              ok: true,
+              result: {
+                runtimeId: 'runtime-legacy',
+                ...(request.params?.includeRemoteServer && remoteServer ? { remoteServer } : {}),
+                rendererGraphEpoch: 1,
+                graphStatus: 'ready',
+                authoritativeWindowId: null,
+                liveTabCount: 0,
+                degradations: [
+                  {
+                    code: 'browser_unavailable',
+                    capability: 'browser.headless.v1',
+                    message: 'Browser automation is unavailable.'
+                  }
+                ]
+              },
+              _meta: { runtimeId: 'runtime-legacy' }
+            })}\n`
+          )
+        })
       })
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-    writeFileSync(
-      getRuntimeMetadataPath(userDataPath),
-      JSON.stringify({
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+      writeFileSync(
+        getRuntimeMetadataPath(userDataPath),
+        JSON.stringify({
+          runtimeId: 'runtime-legacy',
+          pid: process.pid,
+          transport: { kind: 'unix', endpoint },
+          authToken: 'token',
+          startedAt: Date.now()
+        })
+      )
+
+      const client = new RuntimeClient(userDataPath)
+      expect((await client.getCliStatus()).result).not.toHaveProperty('remoteServer')
+      const status = await client.getCliStatus({ includeRemoteServer: true })
+
+      expect(requestParams).toEqual([undefined, { includeRemoteServer: true }])
+      expect(status.result.remoteServer).toEqual(remoteServer)
+      expect(status.result.runtime).toMatchObject({
+        reachable: true,
+        connectionState: 'connected',
         runtimeId: 'runtime-legacy',
-        pid: process.pid,
-        transport: { kind: 'unix', endpoint },
-        authToken: 'token',
-        startedAt: Date.now()
+        state: 'ready',
+        degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
       })
-    )
-
-    const status = await new RuntimeClient(userDataPath).getCliStatus()
-
-    expect(status.result.runtime).toMatchObject({
-      reachable: true,
-      connectionState: 'connected',
-      runtimeId: 'runtime-legacy',
-      state: 'ready',
-      degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
-    })
-  })
+    }
+  )
 })
 
 // Why: `kill(pid, 0)` answers EPERM when the pid exists under another uid — an Orca the

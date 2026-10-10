@@ -122,6 +122,20 @@ export class MobileSocketWiring {
     return this.connectionIds.size
   }
 
+  getAuthenticatedConnections(): {
+    deviceId: string
+    scope: DeviceEntry['scope']
+    transport: 'direct' | 'relay'
+  }[] {
+    return Array.from(this.authenticatedSockets.values())
+      .filter(({ ws }) => ws.readyState === ws.OPEN)
+      .map(({ device, transport }) => ({
+        deviceId: device.deviceId,
+        scope: device.scope,
+        transport: transport.transport
+      }))
+  }
+
   terminateDeviceConnections(deviceToken: string): number {
     let terminated = 0
     for (const transport of this.transports) {

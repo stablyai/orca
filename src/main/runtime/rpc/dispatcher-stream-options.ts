@@ -13,6 +13,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'pairedDeviceId'
   | 'caller'
   | 'clientKind'
+  | 'readRemoteServerStatus'
   | 'clientCapabilities'
   | 'updateClientCapabilities'
   | 'pairing'
@@ -44,6 +45,7 @@ export function rpcContextFromTransport(
     pairedDeviceId: options?.pairedDeviceId,
     caller: resolveRpcCallerIdentity(options),
     clientKind: options?.clientKind,
+    readRemoteServerStatus: options?.readRemoteServerStatus,
     clientCapabilities: options?.clientCapabilities,
     updateClientCapabilities: options?.updateClientCapabilities,
     authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,

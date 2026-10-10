@@ -181,6 +181,44 @@ orca-ide serve --pairing-address 100.64.1.20 --mobile-pairing
 
 Keep the phone on the same tailnet, open Orca Mobile, choose **Pair**, and scan the terminal QR code or paste the printed link.
 
+## Inspect the server from the CLI
+
+Run `orca status --json` on the server (`orca-ide status --json` on Linux),
+or select a paired runtime with `orca --environment <name> status --json`.
+The CLI explicitly requests the optional `remoteServer` block. Routine RPC status
+probes omit it. The block describes the server answering that request:
+
+- `listener` reports `listening` with the actual bind `address` and `port`,
+  `not_listening`, or `disabled`. A wildcard address is a bind address, not a
+  connection URL. This does not test firewall/Tailscale reachability or retain a
+  previously advertised pairing URL.
+- `grants` reports `total`, `pending`, `byScope`, and `entries`. Each entry has
+  `deviceId`, `name`, `scope`, `createdAt`, and `lastSeenAt`. Times are Unix
+  milliseconds; `lastSeenAt: null` means never used. A past connection is not
+  evidence that a client is connected now.
+- `connectedClients` reports distinct pairing identities in `count`, authenticated
+  open sockets in `connectionCount`, and `byScope`. Its entries identify clients
+  and count their `direct` and `relay` connections. Multiple sockets from one
+  grant count as one client; separate grants on one physical computer count
+  separately. The requesting runtime connection is included. Network loss is
+  reflected when the existing connection/heartbeat handling detects it.
+
+Both lists return up to 100 entries and indicate omitted entries with
+`truncated: true`; totals still cover all observed records. This status endpoint
+has no pagination or continuation for retrieving omitted entries. Names are limited to
+160 characters and stripped of terminal controls. Tokens, keys, pairing URLs,
+relay credentials, and push registrations are never included.
+
+Diagnostics are available to the local CLI authenticated with this host's owner
+token and to paired **runtime** clients. Mobile clients keep their existing
+status response without these diagnostics. A section with
+`state: "unavailable"` could not be observed; it does not mean zero clients or
+grants. An absent `remoteServer` means an older host or an unsupported/unauthorized
+path, including an SSH host's `orca` CLI (which reaches the controlling desktop
+only with a scoped bridge credential) and the legacy in-process SSH bridge. It is
+never filled with another host's data. Reading status does not create grants or
+widen the listener.
+
 ## Desktop app or `orca serve`?
 
 |               | Desktop app on the server           | `orca serve`                                       |

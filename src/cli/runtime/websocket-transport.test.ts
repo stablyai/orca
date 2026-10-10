@@ -15,6 +15,7 @@ import {
   publicKeyToBase64
 } from '../../shared/e2ee-crypto'
 import { RuntimeClient } from './client'
+import { terminalSendHandler } from '../handlers/terminal-send'
 import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
@@ -45,6 +46,7 @@ type TestRuntime = {
   deviceToken: string
   authFrames: Record<string, unknown>[]
   requestMethods: string[]
+  requestParams: unknown[]
   connectionCount: () => number
   close: () => Promise<void>
 }
@@ -101,6 +103,11 @@ describe('CLI remote WebSocket transport', () => {
 
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
     const runtime = await startTestRuntime('runtime-ws-2', {
+      remoteServer: {
+        listener: { state: 'listening', address: '192.0.2.10', port: 31337 },
+        grants: { state: 'unavailable' },
+        connectedClients: { state: 'unavailable' }
+      },
       appVersion: '1.5.0',
       remoteUpdateSupport: {
         installMode: 'unsupported-headless-serve',
@@ -129,11 +136,38 @@ describe('CLI remote WebSocket transport', () => {
     )!
 
     const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
-    const status = await client.getCliStatus()
+    expect((await client.getCliStatus()).result).not.toHaveProperty('remoteServer')
+    expect((await client.openOrca()).result).not.toHaveProperty('remoteServer')
+    await expect(
+      terminalSendHandler({
+        client,
+        flags: new Map<string, string | true>([
+          ['terminal', 'term-test'],
+          ['text', 'synthetic prompt'],
+          ['enter', true],
+          ['wait-submit', '1']
+        ]),
+        cwd: '/tmp/unused',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    const status = await client.getCliStatus({ includeRemoteServer: true })
 
+    expect(runtime.requestMethods).toEqual(Array(4).fill('status.get'))
+    expect(runtime.requestParams).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      { includeRemoteServer: true }
+    ])
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
+    expect(status.result.remoteServer).toEqual({
+      listener: { state: 'listening', address: '192.0.2.10', port: 31337 },
+      grants: { state: 'unavailable' },
+      connectedClients: { state: 'unavailable' }
+    })
     expect(status.result.runtime).toMatchObject({
       appVersion: '1.5.0',
       remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
@@ -184,6 +218,7 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-env-1')
+    expect(status.result).not.toHaveProperty('remoteServer')
   })
 
   it('blocks remote RPCs when the server protocol is too old', async () => {
@@ -261,6 +296,7 @@ async function startTestRuntime(
     runtimeProtocolVersion?: number
     minCompatibleRuntimeClientVersion?: number
     desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
+    remoteServer?: RuntimeStatus['remoteServer']
     appVersion?: string
     remoteUpdateSupport?: {
       installMode: 'unsupported-headless-serve'
@@ -277,6 +313,7 @@ async function startTestRuntime(
   const wss = new WebSocketServer({ server: httpServer })
   const authFrames: Record<string, unknown>[] = []
   const requestMethods: string[] = []
+  const requestParams: unknown[] = []
   let connectionCount = 0
 
   wss.on('connection', (ws) => {
@@ -318,8 +355,14 @@ async function startTestRuntime(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string; method: string }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture reads authenticated requests emitted by RuntimeClient; tests assert the resulting status.
+      const request = JSON.parse(plaintext) as {
+        id: string
+        method: string
+        params?: { includeRemoteServer?: boolean }
+      }
       requestMethods.push(request.method)
+      requestParams.push(request.params)
       const response =
         request.method === 'status.get'
           ? {
@@ -338,6 +381,9 @@ async function startTestRuntime(
                 minCompatibleRuntimeClientVersion:
                   statusOverrides.minCompatibleRuntimeClientVersion ??
                   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+                ...(request.params?.includeRemoteServer
+                  ? { remoteServer: statusOverrides.remoteServer }
+                  : {}),
                 appVersion: statusOverrides.appVersion,
                 remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
                 capabilities: statusOverrides.capabilities,
@@ -367,6 +413,7 @@ async function startTestRuntime(
     deviceToken,
     authFrames,
     requestMethods,
+    requestParams,
     connectionCount: () => connectionCount,
     close: async () => {
       await new Promise<void>((resolve) => {

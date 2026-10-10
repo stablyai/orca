@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto'
+import { WebSocketTransport } from '../rpc/ws-transport'
+import { collectRemoteServerStatus } from '../remote-server-status'
+import type { RemoteServerStatus } from '../../../shared/remote-server-status'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
@@ -95,6 +98,18 @@ export class RuntimeRpcState {
   protected readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
   protected clientRequestsInFlight = 0
   protected lastClientRequestAt = Date.now()
+
+  protected readRemoteServerStatus(): RemoteServerStatus {
+    const transport = this.activeTransports.find(
+      (candidate) => candidate instanceof WebSocketTransport
+    )
+    const address = transport?.resolvedHost
+    const listener: RemoteServerStatus['listener'] =
+      address && transport
+        ? { state: 'listening', address, port: transport.resolvedPort }
+        : { state: this.enableWebSocket ? 'not_listening' : 'disabled' }
+    return collectRemoteServerStatus(listener, this.deviceRegistry, this.mobileSocketWiring)
+  }
 
   constructor({
     runtime,

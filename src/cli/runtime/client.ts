@@ -11,7 +11,7 @@ import {
 import type { PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, projectRemoteAppStatus } from './status'
+import { getCliStatus, projectRemoteAppStatus, type CliStatusOptions } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import {
@@ -204,9 +204,12 @@ export class RuntimeClient {
     return this.requestTimeoutMs
   }
 
-  async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
+  async getCliStatus(options: CliStatusOptions = {}): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     if (this.remotePairing) {
-      const response = await this.call<RuntimeStatus>('status.get')
+      const response = await this.call<RuntimeStatus>(
+        'status.get',
+        options.includeRemoteServer ? { includeRemoteServer: true } : undefined
+      )
       this.remoteCompat.noteVerifiedStatus(response.result)
       const graphState = response.result.graphStatus
       return {
@@ -218,6 +221,9 @@ export class RuntimeClient {
             environment: this.environmentSelector ?? 'pairing-code'
           },
           app: projectRemoteAppStatus(response.result),
+          ...(options.includeRemoteServer && response.result.remoteServer
+            ? { remoteServer: response.result.remoteServer }
+            : {}),
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
             reachable: true,
@@ -240,7 +246,7 @@ export class RuntimeClient {
         _meta: response._meta
       }
     }
-    return getCliStatus(this.userDataPath)
+    return getCliStatus(this.userDataPath, options)
   }
 
   private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
