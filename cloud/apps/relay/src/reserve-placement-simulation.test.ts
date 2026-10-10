@@ -43,7 +43,7 @@ function expectInvariants(report: SimulationReport): void {
 
 describe('step 5 deterministic simulation', () => {
   it.each(SEEDS)(
-    'holds invariants 1-3 and 5-7 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
+    'holds invariants 1-3 and 5-8 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
     async (seed) => {
       const report = await runReservePlacementSimulation({
         seed,
@@ -76,6 +76,7 @@ describe('step 5 deterministic simulation', () => {
       expect(report.seatedAtEnd).toBeGreaterThan(4_000)
       // The run reached the paths the invariants guard, so a pass is not vacuous.
       expect(report.supersedes).toBeGreaterThan(0)
+      expect(report.rowAheadDemotions).toBeGreaterThan(0)
       expect(report.directorRestarts).toBe(2)
       expect(report.stickyReserves).toBeGreaterThan(0)
       expect(report.databasePlacements).toBeGreaterThan(0)
@@ -227,6 +228,12 @@ describe('step 5 deterministic simulation', () => {
     ...mixed({ skipSupersede: true }),
     drains: [{ at: 60_000, cellId: 'us05', paceMs: 30_000 }]
   })
+  // Long enough for two reconciles: a seat behind its row must not survive the second.
+  const rowAheadLeftAlone = (): SimulationConfig => ({
+    ...mixed({ noRowAheadDemote: true }),
+    durationMs: 25 * 60_000,
+    oldDirectors: 1
+  })
   const restartedMidQueue = (): SimulationConfig => ({
     ...mixed({ noBootReconcile: true }),
     durationMs: 2 * 60_000,
@@ -240,6 +247,7 @@ describe('step 5 deterministic simulation', () => {
     [5, mixed({ unguardedLedger: true })],
     // A director restart mid-queue loses its booked joins' rows until its boot reconcile.
     [5, restartedMidQueue()],
+    [8, rowAheadLeftAlone()],
     [7, mixed({ noEpochFloor: true })]
   ] as const)('invariant %i fires when its rule is broken', async (invariant, config) => {
     const report = await runReservePlacementSimulation(config)

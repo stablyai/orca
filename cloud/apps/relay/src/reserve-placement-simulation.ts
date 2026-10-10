@@ -93,6 +93,8 @@ type CellLogEntry =
 const RECENT_SEAT_MS = 10 * 60_000
 const DEMOTE_CLOSE_MS = 60_000
 const CONTROL_RENEWAL_MS = 25_000
+// As the director's: a seat this young may still be superseded.
+const RECONCILE_SETTLE_MS = 30_000
 // A drained seat lingers this long (its splices finishing) unless superseded first.
 const DRAIN_GRACE_MS = 30_000
 // A cell closes a control silent for 75 s, checked once per 25 s ping.
@@ -112,6 +114,8 @@ export type SimulationFaults = {
   skipSupersede?: boolean
   // A restarted director forgets its ledger queue and never reconciles.
   noBootReconcile?: boolean
+  // The reconcile leaves a seat whose row is ahead of it alone.
+  noRowAheadDemote?: boolean
   unguardedLedger?: boolean
   noEpochFloor?: boolean
 }
@@ -359,6 +363,7 @@ export type SimulationReport = {
   // Rows that named a placement the desktop never used, rewritten to its real seat.
   supersedes: number
   directorRestarts: number
+  rowAheadDemotions: number
   intakeRefusals: number
   stickyReserves: number
   stickyAnswers: number
@@ -466,6 +471,7 @@ export async function runReservePlacementSimulation(
     reservePlacements: 0,
     supersedes: 0,
     directorRestarts: 0,
+    rowAheadDemotions: 0,
     intakeRefusals: 0,
     stickyReserves: 0,
     stickyAnswers: 0,
@@ -665,12 +671,30 @@ export async function runReservePlacementSimulation(
     director.ledgerQueue = []
   }
 
+  // Invariant 8: a reserve seat behind its row (today's path wrote a newer epoch, and the
+  // desktop was answered the old seat from memory) is gone by the next reconcile.
+  const behindRow = new Map<string, number>()
   function reconcileLedger(director: SimDirector): void {
     if (!database.up || director.old) return
     for (const [cellId, view] of director.views) {
       if (!view.placement.reserve) continue
       for (const [host, seat] of view.seats) {
-        if (!seat.demoted) database.upsert(host, cellId, seat.epoch)
+        if (seat.demoted || clock.now - seat.joinedAt < RECONCILE_SETTLE_MS) continue
+        const row = database.rows.get(host)
+        const live = cellById.get(cellId)!.seats.get(host)
+        if (row && row.epoch > seat.epoch && live && live.joinedAt === seat.joinedAt && !live.demoted) {
+          const key = `${director.id}\u0000${host}\u0000${cellId}\u0000${seat.joinedAt}`
+          if (behindRow.has(key)) violate(8, `${host}@${seat.epoch} on ${cellId} still behind row @${row.epoch}`)
+          behindRow.set(key, clock.now)
+          if (faults.noRowAheadDemote) continue
+          report.rowAheadDemotions += 1
+          const cell = cellById.get(cellId)!
+          clock.schedule(config.rttMs(cell.region), () =>
+            cell.demote(host, seat.epoch, seat.joinedAt, () => onSeatClosed(host, cellId, seat.epoch))
+          )
+          continue
+        }
+        database.upsert(host, cellId, seat.epoch)
       }
     }
   }
