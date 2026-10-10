@@ -1,5 +1,4 @@
-import { getCellHeight } from './fit-scale'
-import { getCellWidth, getTotalScale } from './viewport-transform'
+import { getCellHeight, getCellWidth, getTotalScale } from './cell-geometry'
 import { viewportPoint } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
 

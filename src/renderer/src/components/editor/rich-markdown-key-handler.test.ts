@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Editor, type JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { history } from '@tiptap/pm/history'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
@@ -448,4 +449,362 @@ describe('rich markdown key handler', () => {
       editor.destroy()
     }
   })
+
+  it('splits the trailing text into a paragraph on Enter in the middle of a heading', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'SectionTwo' }]
+        }
+      ]
+    })
+
+    try {
+      // Position after "Section", before "Two".
+      editor.commands.setTextSelection(1 + 'Section'.length)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: 'Section' }]
+          },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Two' }] }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+})
+
+describe('heading Enter continuation', () => {
+  it.each([1, 2, 3, 4, 5, 6])('splits heading level %i into a paragraph', (level) => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level }, content: [{ type: 'text', text: 'Section Two' }] }
+      ]
+    })
+    try {
+      editor.commands.setTextSelection(9)
+      const event = keyEvent('Enter')
+      const handled = createRichMarkdownKeyHandler(createContext(editor, false))(null, event)
+      if (!handled) {
+        editor.commands.splitBlock()
+      }
+      expect(editor.getJSON().content?.slice(0, 2)).toEqual([
+        { type: 'heading', attrs: { level }, content: [{ type: 'text', text: 'Section ' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Two' }] }
+      ])
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.selection.$from.parentOffset).toBe(0)
+    } finally {
+      editor.destroy()
+    }
+  })
+})
+
+describe('heading Enter guards and transactions', () => {
+  function headingEditor(): Editor {
+    return createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section Two' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Body' }] }
+      ]
+    })
+  }
+
+  it.each([
+    [2, 7],
+    [7, 2],
+    [2, 16],
+    [16, 2]
+  ])('leaves nonempty selection %i→%i to the existing keymap', (from, to) => {
+    const editor = headingEditor()
+    try {
+      editor.commands.setTextSelection({ from, to })
+      const before = editor.getJSON()
+      const event = keyEvent('Enter')
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(editor.getJSON()).toEqual(before)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it.each(['start', 'end', 'empty'] as const)(
+    'preserves the default %s-heading behavior',
+    (edge) => {
+      const editor =
+        edge === 'empty'
+          ? createEditor({
+              type: 'doc',
+              content: [{ type: 'heading', attrs: { level: 2 } }]
+            })
+          : headingEditor()
+      try {
+        editor.commands.setTextSelection(edge === 'end' ? 12 : 1)
+        const before = editor.getJSON()
+        const event = keyEvent('Enter')
+        expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(false)
+        expect(event.preventDefault).not.toHaveBeenCalled()
+        expect(editor.getJSON()).toEqual(before)
+        expect(editor.commands.splitBlock()).toBe(true)
+        expect(editor.state.selection.$from.parent.type.name).toBe(
+          edge === 'start' ? 'heading' : 'paragraph'
+        )
+        if (edge !== 'empty') {
+          expect(editor.getText()).toContain('Section Two')
+        }
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
+  it.each([
+    { isComposing: true },
+    { keyCode: 229 },
+    { shiftKey: true },
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { ctrlKey: true, metaKey: true }
+  ])('does not split a heading for candidate or modified Enter: %j', (flags) => {
+    for (const isMac of [true, false]) {
+      const editor = headingEditor()
+      try {
+        editor.commands.setTextSelection(9)
+        const before = editor.getJSON()
+        const ctx = createContext(editor, false)
+        ctx.isMac = isMac
+        const event = keyEvent('Enter', flags)
+        expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+        expect(event.preventDefault).not.toHaveBeenCalled()
+        expect(editor.getJSON()).toEqual(before)
+      } finally {
+        editor.destroy()
+      }
+    }
+  })
+
+  it('does not rewrite a heading while the view is composing', () => {
+    const editor = headingEditor()
+    try {
+      editor.commands.setTextSelection(9)
+      const view = editor.view
+      Object.defineProperty(view, 'composing', { configurable: true, value: true })
+      const getter = vi.spyOn(editor, 'view', 'get').mockReturnValue(view)
+      try {
+        const before = editor.getJSON()
+        const event = keyEvent('Enter')
+        expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(false)
+        expect(editor.getJSON()).toEqual(before)
+      } finally {
+        getter.mockRestore()
+      }
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it.each(['bold', 'italic', 'code', 'link'])(
+    'retains %s marks on both sides of the split',
+    (type) => {
+      const editor = createEditor({
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 3 },
+            content: [
+              {
+                type: 'text',
+                text: 'SectionTwo',
+                marks: [
+                  { type, ...(type === 'link' ? { attrs: { href: 'https://example.com' } } : {}) }
+                ]
+              }
+            ]
+          }
+        ]
+      })
+      try {
+        editor.commands.setTextSelection(8)
+        const marks = editor.getJSON().content?.[0].content?.[0].marks
+        expect(
+          createRichMarkdownKeyHandler(createContext(editor, false))(null, keyEvent('Enter'))
+        ).toBe(true)
+        expect(editor.getJSON().content?.slice(0, 2)).toEqual([
+          {
+            type: 'heading',
+            attrs: { level: 3 },
+            content: [{ type: 'text', text: 'Section', marks }]
+          },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Two', marks }] }
+        ])
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
+  it('keeps the prefix formatting for typing at an inline mark boundary', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [
+            { type: 'text', text: 'Section', marks: [{ type: 'bold' }] },
+            { type: 'text', text: 'Two' }
+          ]
+        }
+      ]
+    })
+    try {
+      editor.commands.setTextSelection(8)
+      expect(
+        createRichMarkdownKeyHandler(createContext(editor, false))(null, keyEvent('Enter'))
+      ).toBe(true)
+      editor.view.dispatch(editor.state.tr.insertText('New'))
+      expect(editor.getJSON().content?.[1]).toEqual({
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'New', marks: [{ type: 'bold' }] },
+          { type: 'text', text: 'Two' }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('restores the heading and split with one undo and redo', () => {
+    const editor = headingEditor()
+    try {
+      editor.registerPlugin(history())
+      editor.commands.setTextSelection(9)
+      const before = editor.getJSON()
+      expect(
+        createRichMarkdownKeyHandler(createContext(editor, false))(null, keyEvent('Enter'))
+      ).toBe(true)
+      const after = editor.getJSON()
+      expect(editor.commands.undo()).toBe(true)
+      expect(editor.getJSON()).toEqual(before)
+      expect(editor.commands.redo()).toBe(true)
+      expect(editor.getJSON()).toEqual(after)
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.selection.$from.parentOffset).toBe(0)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it.each(['bold', 'italic', 'code', 'link'])(
+    'keeps the default %s mark policy for text typed after Enter',
+    (type) => {
+      const editor = headingEditor()
+      try {
+        editor.commands.setTextSelection(9)
+        editor.commands.setMark(type, type === 'link' ? { href: 'https://example.com' } : undefined)
+        expect(editor.state.storedMarks?.map((mark) => mark.type.name)).toContain(type)
+        expect(
+          createRichMarkdownKeyHandler(createContext(editor, false))(null, keyEvent('Enter'))
+        ).toBe(true)
+        editor.view.dispatch(editor.state.tr.insertText('New'))
+        const text = editor.getJSON().content?.[1].content?.[0]
+        if (!text || !('text' in text)) {
+          throw new Error('Missing text inserted after Enter')
+        }
+        expect(text.text).toBe(type === 'link' ? 'NewTwo' : 'New')
+        expect(text?.marks?.map((mark) => mark.type)).toEqual(type === 'link' ? undefined : [type])
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
+  it.each(['slash', 'document'] as const)(
+    'lets the %s menu commit without splitting the heading',
+    (menu) => {
+      const editor = headingEditor()
+      try {
+        editor.commands.setTextSelection(9)
+        const ctx = createContext(editor, false)
+        const run = vi.fn()
+        if (menu === 'slash') {
+          ctx.slashMenuRef.current = { query: '', from: 9, to: 9, left: 0, top: 0 }
+          ctx.filteredSlashCommandsRef.current = [
+            {
+              id: 'heading-1',
+              label: 'Heading',
+              aliases: [],
+              icon: { kind: 'text', value: 'H' },
+              group: 'Basic blocks',
+              description: 'Heading',
+              run
+            }
+          ]
+        } else {
+          ctx.docLinkMenuRef.current = { query: '', from: 9, to: 9, left: 0, top: 0 }
+          ctx.filteredDocLinkRowsRef.current = [
+            { kind: 'action', id: 'heading', label: 'Heading', run }
+          ]
+        }
+        const event = keyEvent('Enter')
+        expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+        expect(run).toHaveBeenCalledWith(editor)
+        expect(editor.state.doc.firstChild?.type.name).toBe('heading')
+        expect(editor.state.doc.firstChild?.textContent).toBe('Section Two')
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
+
+  it.each(['blockquote', 'listItem'])(
+    'splits a heading inside a %s using the parent schema',
+    (parent) => {
+      const heading = {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: 'SectionTwo' }]
+      }
+      const editor = createEditor({
+        type: 'doc',
+        content: [
+          parent === 'blockquote'
+            ? { type: 'blockquote', content: [heading] }
+            : {
+                type: 'bulletList',
+                content: [{ type: 'listItem', content: [{ type: 'paragraph' }, heading] }]
+              }
+        ]
+      })
+      try {
+        editor.commands.setTextSelection(caretAtText(editor, 'SectionTwo') + 7)
+        expect(
+          createRichMarkdownKeyHandler(createContext(editor, false))(null, keyEvent('Enter'))
+        ).toBe(true)
+        expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+        expect(editor.state.selection.$from.parent.textContent).toBe('Two')
+        expect(editor.state.selection.$from.node(-1).type.name).toBe(parent)
+        expect(editor.state.doc.textContent).toBe('SectionTwo')
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
 })
