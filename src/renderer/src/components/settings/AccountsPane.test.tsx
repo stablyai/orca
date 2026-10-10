@@ -6,6 +6,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
+import { resolveSettingsHostScope } from './settings-host-scope'
 
 function renderPane(
   settings: GlobalSettings,
@@ -15,6 +16,13 @@ function renderPane(
     React.createElement(AccountsPane, {
       settings,
       updateSettings: vi.fn(),
+      // Why: mirrors the page before the user picks a host — the default host setting.
+      hostScope: resolveSettingsHostScope({
+        choice: null,
+        defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
+        savedEnvironmentIds: [],
+        catalogHydrated: false
+      }),
       ...props
     })
   )

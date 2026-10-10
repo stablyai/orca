@@ -32,11 +32,9 @@
 1 src/renderer/src/components/pull-request-page/reviewers/panel.tsx
 2 src/renderer/src/components/pull-request-page/reviewers/request-actions.ts
 1 src/renderer/src/components/quick-open-file-navigation.ts
-3 src/renderer/src/components/settings/AccountsPane.tsx
 1 src/renderer/src/components/settings/GeneralPane.tsx
 1 src/renderer/src/components/settings/RepositoryGitHubAccountSection.tsx
 1 src/renderer/src/components/settings/RepositoryIconPicker.tsx
-1 src/renderer/src/components/settings/use-settings-terminal-model.ts
 1 src/renderer/src/components/setup-guide/setup-guide-progress-readiness.ts
 1 src/renderer/src/components/sidebar/add-repo-runtime-owner.ts
 1 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
@@ -92,7 +90,6 @@
 3 src/renderer/src/runtime/runtime-hooks-client.ts
 1 src/renderer/src/runtime/runtime-jira-target.ts
 1 src/renderer/src/runtime/runtime-linear-client.ts
-7 src/renderer/src/runtime/runtime-provider-accounts-client.ts
 3 src/renderer/src/runtime/runtime-repo-client.ts
 3 src/renderer/src/runtime/runtime-terminal-inspection.ts
 1 src/renderer/src/runtime/runtime-terminal-stream.ts

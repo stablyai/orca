@@ -107,7 +107,11 @@ export function ClaudeSwitcherMenu({
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
   // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    const snapshot = await fetchProviderAccountsSnapshot(
+      activeRuntimeEnvironmentId
+        ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
+        : { kind: 'local' }
+    )
     // Why: a failed Claude half is a substituted empty roster; keep prior state.
     if (snapshot.failedProviders?.includes('claude')) {
       console.error('Claude account list failed; keeping previous status bar state.')
@@ -164,7 +168,7 @@ export function ClaudeSwitcherMenu({
     }
     setIsSwitching(true)
     try {
-      const next = await selectClaudeProviderAccount(settings, {
+      const next = await selectClaudeProviderAccount(runtimeTarget, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro

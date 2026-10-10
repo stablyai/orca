@@ -45,6 +45,7 @@ function render(
   const model: AccountsPaneSectionModel = {
     // Unused by the Claude section; present only so the model is the real type.
     updateSettings: vi.fn(),
+    accountOwner: { kind: 'local' },
     searchQuery: '',
     recordFeatureInteraction: vi.fn(),
     wslSupportedPlatform: false,

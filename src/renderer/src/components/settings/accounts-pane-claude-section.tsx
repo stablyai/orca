@@ -32,6 +32,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     runClaudeAccountAction,
     setRemoveClaudeTarget,
     settings,
+    accountOwner,
     systemClaudeActive,
     updateSettings,
     visibleClaudeAccounts,
@@ -153,7 +154,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             type="button"
             onClick={() =>
               void runClaudeAccountAction('select:system', () =>
-                selectClaudeProviderAccount(settings, {
+                selectClaudeProviderAccount(accountOwner, {
                   accountId: null,
                   runtime: accountRuntime.runtime,
                   wslDistro: accountRuntime.wslDistro
@@ -271,7 +272,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                         void runClaudeAccountAction(
                           `select:${account.id}`,
                           () =>
-                            selectClaudeProviderAccount(settings, {
+                            selectClaudeProviderAccount(accountOwner, {
                               accountId: account.id,
                               ...accountRuntimeView
                             }),

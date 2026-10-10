@@ -6,14 +6,30 @@ import type {
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { AccountsPane } from './AccountsPane'
+import type { SettingsHostScope } from './settings-host-scope'
+
+// Why: focus deliberately points at another server; the pane must follow hostScope only.
+const focusedElsewhere = {
+  ...getDefaultSettings('/synthetic'),
+  activeRuntimeEnvironmentId: 'focused-server'
+}
+const scopeFor = (environmentId: string | null): SettingsHostScope => ({
+  target: environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
+  available: true
+})
+const renderPane = (scope: SettingsHostScope): React.JSX.Element => (
+  <AccountsPane settings={focusedElsewhere} updateSettings={vi.fn()} hostScope={scope} />
+)
 
 const fake = vi.hoisted(() => {
   const state: {
     pendingSelect: ((roster: unknown) => void) | null
     write: ReturnType<typeof vi.fn>
     rosters: Map<string, unknown>
-  } = { pendingSelect: null, write: vi.fn(), rosters: new Map() }
+    watchedTargets: unknown[]
+  } = { pendingSelect: null, write: vi.fn(), rosters: new Map(), watchedTargets: [] }
   return state
 })
 vi.mock('@/i18n/i18n', () => ({
@@ -49,16 +65,15 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => {
   return {
     emptyClaudeAccountsState: empty,
     emptyCodexAccountsState: empty,
-    getProviderAccountsOwnerKey: (settings: { activeRuntimeEnvironmentId?: string | null }) =>
-      settings.activeRuntimeEnvironmentId ?? 'local',
-    hasRemoteProviderAccountOwner: (settings: { activeRuntimeEnvironmentId?: string | null }) =>
-      Boolean(settings.activeRuntimeEnvironmentId),
+    getProviderAccountsOwnerKey: (target: RuntimeClientTarget) =>
+      target.kind === 'environment' ? target.environmentId : 'local',
     watchProviderAccounts: (
-      settings: { activeRuntimeEnvironmentId?: string | null },
+      target: RuntimeClientTarget,
       handlers: { onSnapshot: (snapshot: unknown) => void }
     ) => {
+      fake.watchedTargets.push(target)
       handlers.onSnapshot({
-        claude: fake.rosters.get(settings.activeRuntimeEnvironmentId ?? 'local'),
+        claude: fake.rosters.get(target.kind === 'environment' ? target.environmentId : 'local'),
         codex: empty(),
         rateLimits: null
       })
@@ -93,12 +108,17 @@ function claudeRoster(id: string, email: string, active: boolean): ClaudeRateLim
 
 beforeEach(() => {
   fake.pendingSelect = null
+  fake.watchedTargets = []
+  fake.rosters.set('local', claudeRoster('acct-l', 'local@desktop.test', false))
   fake.rosters.set('server-a', claudeRoster('acct-a', 'alpha@server-a.test', false))
   fake.rosters.set('server-b', claudeRoster('acct-b', 'beta@server-b.test', false))
   Object.assign(window, {
     api: {
       minimaxCredentials: {
         getStatus: vi.fn(async () => ({ cookieConfigured: false, apiKeyConfigured: false }))
+      },
+      codexConfigSync: {
+        status: vi.fn(async () => ({ state: 'synced', reason: null, systemConfigPath: '/x' }))
       }
     }
   })
@@ -108,19 +128,20 @@ afterEach(() => {
   Reflect.deleteProperty(window, 'api')
 })
 
-it("drops a server's late account result after the default runtime moves to another server", async () => {
-  const settingsFor = (environmentId: string) => ({
-    ...getDefaultSettings('/synthetic'),
-    activeRuntimeEnvironmentId: environmentId
-  })
-  const view = render(<AccountsPane settings={settingsFor('server-a')} updateSettings={vi.fn()} />)
+it('lists the accounts of the host chosen in the page, not the focused server', async () => {
+  render(renderPane(scopeFor(null)))
+  await act(async () => {})
+  expect(screen.getByText('local@desktop.test')).toBeTruthy()
+  expect(fake.watchedTargets).toEqual([{ kind: 'local' }])
+})
+
+it("drops a server's late account result after the page moves to another server", async () => {
+  const view = render(renderPane(scopeFor('server-a')))
   await act(async () => {})
   fireEvent.click(screen.getByText('alpha@server-a.test'))
   expect(fake.pendingSelect).not.toBeNull()
 
-  await act(async () =>
-    view.rerender(<AccountsPane settings={settingsFor('server-b')} updateSettings={vi.fn()} />)
-  )
+  await act(async () => view.rerender(renderPane(scopeFor('server-b'))))
   expect(screen.getByText('beta@server-b.test')).toBeTruthy()
 
   await act(async () => fake.pendingSelect?.(claudeRoster('acct-a', 'alpha@server-a.test', true)))
@@ -131,17 +152,11 @@ it("drops a server's late account result after the default runtime moves to anot
 })
 
 it('keeps a late account result once the pane is back on the server it was sent to', async () => {
-  const settingsFor = (environmentId: string) => ({
-    ...getDefaultSettings('/synthetic'),
-    activeRuntimeEnvironmentId: environmentId
-  })
-  const view = render(<AccountsPane settings={settingsFor('server-a')} updateSettings={vi.fn()} />)
+  const view = render(renderPane(scopeFor('server-a')))
   await act(async () => {})
   fireEvent.click(screen.getByText('alpha@server-a.test'))
   for (const environmentId of ['server-b', 'server-a']) {
-    await act(async () =>
-      view.rerender(<AccountsPane settings={settingsFor(environmentId)} updateSettings={vi.fn()} />)
-    )
+    await act(async () => view.rerender(renderPane(scopeFor(environmentId))))
   }
   const alphaRow = (): HTMLElement => {
     const row = screen.getByText('alpha@server-a.test').closest('button')

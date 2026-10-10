@@ -5,6 +5,7 @@ import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { VoicePane } from './VoicePane'
 import { SettingsSection } from './SettingsSection'
+import { SettingsHostScopeUnavailableNotice } from './SettingsHostScopePicker'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
 
@@ -24,6 +25,7 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
         <AgentsPane
           settings={model.settings}
           updateSettings={model.updateSettings}
+          hostScope={model.settingsHostScope}
           wslSupportedPlatform={terminal.localWslSupportedPlatform}
           wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
           wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
@@ -47,17 +49,20 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
       badge={translate('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')}
       searchEntries={navigation.getSectionSearchEntries('accounts')}
     >
-      {view.isSectionMounted('accounts') ? (
+      {!view.isSectionMounted('accounts') ? null : model.settingsHostScope.available ? (
         <AccountsPane
           settings={model.settings}
           updateSettings={model.updateSettings}
+          hostScope={model.settingsHostScope}
           wslSupportedPlatform={terminal.runtimeWslSupportedPlatform}
           wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
           wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
           wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
           accountOwnerPlatform={terminal.windowsTerminalCapabilities.hostPlatform}
         />
-      ) : null}
+      ) : (
+        <SettingsHostScopeUnavailableNotice />
+      )}
     </SettingsSection>
   )
 }

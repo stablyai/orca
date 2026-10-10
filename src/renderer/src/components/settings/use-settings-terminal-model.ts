@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
@@ -11,34 +10,36 @@ import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
 import { getSettingsEntryHostSelection, getSettingsProjectHostRepo } from './settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
+import { getSettingsHostScopeEnvironmentId } from './settings-host-scope'
 
 export function useSettingsTerminalModel(
   model: SettingsStoreModel,
   navigation: SettingsNavigationModel
 ) {
-  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
-    model.settings?.activeRuntimeEnvironmentId
-  )
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(model.settings), [model.settings])
+  const scopeEnvironmentId = getSettingsHostScopeEnvironmentId(model.settingsHostScope)
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(scopeEnvironmentId)
+  const runtimeTarget = model.settingsHostScope.target
   const capabilityLoadTarget = useMemo(
     () => (model.isWebClient ? { kind: 'local' as const } : runtimeTarget),
     [model.isWebClient, runtimeTarget]
   )
-  const hasActiveRuntimeEnvironment = Boolean(model.settings?.activeRuntimeEnvironmentId?.trim())
+  const hasActiveRuntimeEnvironment = scopeEnvironmentId !== null
   const needsRepoWindowsRuntimeCapabilities = [...navigation.neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
   )
   const needsLocalWindowsRuntimeCapabilities =
     (model.isWindows || model.isWebClient) &&
     (navigation.neededSectionIds.has('agents') || navigation.neededSectionIds.has('general'))
+  // Why: a server that is no longer saved has no capabilities to load; never probe another host.
   const shouldLoadWindowsTerminalCapabilities =
-    hasActiveRuntimeEnvironment ||
-    ((model.isWindows || model.isWebClient) &&
-      (navigation.neededSectionIds.has('terminal') ||
-        navigation.neededSectionIds.has('accounts') ||
-        needsRepoWindowsRuntimeCapabilities ||
-        (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
-  // Why: terminal, account, and repository settings describe the active execution host.
+    model.settingsHostScope.available &&
+    (hasActiveRuntimeEnvironment ||
+      ((model.isWindows || model.isWebClient) &&
+        (navigation.neededSectionIds.has('terminal') ||
+          navigation.neededSectionIds.has('accounts') ||
+          needsRepoWindowsRuntimeCapabilities ||
+          (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities))))
+  // Why: terminal, account, and repository settings describe the host chosen in the page.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,

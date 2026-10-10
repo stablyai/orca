@@ -13,7 +13,6 @@ import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
   getProviderAccountsOwnerKey,
-  hasRemoteProviderAccountOwner,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
 import {
@@ -42,7 +41,8 @@ import {
 } from './provider-account-visibility'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsHostScopeEnvironmentId } from './settings-host-scope'
 import { CursorAccountsSection } from './CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './ZcodePlanAccountsSection'
 import type {
@@ -75,6 +75,7 @@ export { getAccountsPaneSearchEntries }
 export function AccountsPane({
   settings,
   updateSettings,
+  hostScope,
   wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -107,13 +108,14 @@ export function AccountsPane({
     wslDistros,
     wslCapabilitiesLoading
   )
-  // Why: with a Remote Orca Server active the server owns provider accounts
-  // (see #7973); every list/select/remove below must scope to it, not host/WSL.
-  const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
-  const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
-  // Why: a select/remove can outlive a default-runtime change; its result
+  // Why: a server owns its provider accounts (see #7973); every list/select/remove
+  // below goes to the host chosen in the page, never to the focused one.
+  const accountOwner = hostScope.target
+  const isRemoteAccountScope = accountOwner.kind === 'environment'
+  const scopeEnvironmentId = getSettingsHostScopeEnvironmentId(hostScope)
+  // Why: a select/remove can outlive a host change; its result
   // belongs to the owner it was sent to, not the one now shown.
-  const accountOwnerKey = getProviderAccountsOwnerKey(settings)
+  const accountOwnerKey = getProviderAccountsOwnerKey(accountOwner)
   const currentAccountOwnerKeyRef = useRef(accountOwnerKey)
   useEffect(() => {
     currentAccountOwnerKeyRef.current = accountOwnerKey
@@ -122,8 +124,8 @@ export function AccountsPane({
   // Why: keep the real name separate from the prose fallback below; the scope
   // label must not interpolate the fallback.
   const remoteServerName = isRemoteAccountScope
-    ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
-        ?.name ?? null)
+    ? (runtimeEnvironments.find((environment) => environment.id === scopeEnvironmentId)?.name ??
+      null)
     : null
   const remoteServerLabel = isRemoteAccountScope
     ? (remoteServerName ??
@@ -275,38 +277,38 @@ export function AccountsPane({
   }, [])
 
   useEffect(() => {
+    const owner: RuntimeClientTarget = scopeEnvironmentId
+      ? { kind: 'environment', environmentId: scopeEnvironmentId }
+      : { kind: 'local' }
     // Why: remote snapshots stream usage refreshes after the synchronous ready
     // message, so the watcher stays open for the pane's lifetime; the local
     // path resolves once and the close() is a no-op.
-    const watcher = watchProviderAccounts(
-      { activeRuntimeEnvironmentId },
-      {
-        onSnapshot: (snapshot) => {
-          // Why: a failed provider's half is a substituted empty roster, not
-          // authoritative data; keep prior state and leave the loaded gate shut.
-          if (!snapshot.failedProviders?.includes('codex')) {
-            setCodexAccounts(snapshot.codex)
-            setCodexAccountsLoaded(true)
-          }
-          if (!snapshot.failedProviders?.includes('claude')) {
-            setClaudeAccounts(snapshot.claude)
-          }
-        },
-        onError: (error) => {
-          toast.error(
-            translate(
-              'auto.components.settings.AccountsPane.loadAccountsFailed',
-              'Could not load provider accounts.'
-            ),
-            { description: String((error as Error)?.message ?? error) }
-          )
+    const watcher = watchProviderAccounts(owner, {
+      onSnapshot: (snapshot) => {
+        // Why: a failed provider's half is a substituted empty roster, not
+        // authoritative data; keep prior state and leave the loaded gate shut.
+        if (!snapshot.failedProviders?.includes('codex')) {
+          setCodexAccounts(snapshot.codex)
+          setCodexAccountsLoaded(true)
         }
+        if (!snapshot.failedProviders?.includes('claude')) {
+          setClaudeAccounts(snapshot.claude)
+        }
+      },
+      onError: (error) => {
+        toast.error(
+          translate(
+            'auto.components.settings.AccountsPane.loadAccountsFailed',
+            'Could not load provider accounts.'
+          ),
+          { description: String((error as Error)?.message ?? error) }
+        )
       }
-    )
+    })
     return () => {
       watcher.close()
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [scopeEnvironmentId])
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
@@ -333,6 +335,7 @@ export function AccountsPane({
   })
   const model: AccountsPaneSectionModel = {
     settings,
+    accountOwner,
     updateSettings,
     searchQuery,
     recordFeatureInteraction,
@@ -388,9 +391,9 @@ export function AccountsPane({
   }
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
-      <div key={settings.activeRuntimeEnvironmentId ?? 'local'} className="space-y-8">
-        <ManagedDataAccountsSection provider="opencode" target={getActiveRuntimeTarget(settings)} />
-        <ManagedDataAccountsSection provider="devin" target={getActiveRuntimeTarget(settings)} />
+      <div key={accountOwnerKey} className="space-y-8">
+        <ManagedDataAccountsSection provider="opencode" target={accountOwner} />
+        <ManagedDataAccountsSection provider="devin" target={accountOwner} />
       </div>
     ) : null,
     wslSupportedPlatform &&
@@ -409,8 +412,8 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
       <AntigravityAccountsSection
-        key={`antigravity:${settings.activeRuntimeEnvironmentId ?? 'local'}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}
-        owner={getActiveRuntimeTarget(settings)}
+        key={`antigravity:${accountOwnerKey}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}
+        owner={accountOwner}
         target={{ runtime: accountRuntime.runtime, wslDistro: accountRuntime.wslDistro }}
         label={accountRuntimeSentenceLabel}
       />

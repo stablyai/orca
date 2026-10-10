@@ -87,7 +87,11 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
   // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    const snapshot = await fetchProviderAccountsSnapshot(
+      activeRuntimeEnvironmentId
+        ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
+        : { kind: 'local' }
+    )
     // Why: a failed Codex half is a substituted empty roster; keep prior state.
     if (snapshot.failedProviders?.includes('codex')) {
       console.error('Codex account list failed; keeping previous status bar state.')
@@ -127,7 +131,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await selectCodexProviderAccount(settings, {
+      const next = await selectCodexProviderAccount(runtimeTarget, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro

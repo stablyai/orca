@@ -6918,7 +6918,8 @@
               "placeholder": "Leave blank to use the key saved by /connect or OPENCODE_API_KEY",
               "help": "Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts."
             }
-          }
+          },
+          "remoteScopeLocalAccountsKeptHostPicker": "Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -12695,6 +12696,12 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "SettingsHostScopePicker": {
+          "label": "Host",
+          "unavailable": "{{value0}} (unavailable)",
+          "description": "Accounts, detected agents and terminal options below are for this host.",
+          "unavailableNotice": "This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings."
         }
       },
       "right": {
