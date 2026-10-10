@@ -43,7 +43,7 @@ function expectInvariants(report: SimulationReport): void {
 
 describe('step 5 deterministic simulation', () => {
   it.each(SEEDS)(
-    'holds invariants 1-7 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
+    'holds invariants 1-3 and 5-7 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
     async (seed) => {
       const report = await runReservePlacementSimulation({
         seed,
@@ -63,6 +63,8 @@ describe('step 5 deterministic simulation', () => {
         rttMs: rtt,
         cellRestarts: [{ at: 6 * 60_000, cellId: 'us04' }, { at: 14 * 60_000, cellId: 'asia2' }],
         directorRestarts: [{ at: 8 * 60_000, director: 2 }, { at: 16 * 60_000, director: 4 }],
+        // Drained hosts land elsewhere while their old seat lingers: placement supersedes it.
+        drains: [{ at: 12 * 60_000, cellId: 'us05', paceMs: 60_000 }],
         databaseStalls: Array.from({ length: 3 }, (_, index) => ({
           at: (index * 610 + 120) * 1_000,
           durationMs: 7_000
@@ -73,7 +75,8 @@ describe('step 5 deterministic simulation', () => {
       expect(report.stickyAnswers).toBeGreaterThan(500)
       expect(report.seatedAtEnd).toBeGreaterThan(4_000)
       // The run reached the paths the invariants guard, so a pass is not vacuous.
-      expect(report.demotions).toBeGreaterThan(0)
+      expect(report.supersedes).toBeGreaterThan(0)
+      expect(report.directorRestarts).toBe(2)
       expect(report.stickyReserves).toBeGreaterThan(0)
       expect(report.databasePlacements).toBeGreaterThan(0)
     },
@@ -219,12 +222,24 @@ describe('step 5 deterministic simulation', () => {
     meanSessionMs: 0,
     drains: [{ at: 10_000, cellId: 'asia0', paceMs: 60_000 }]
   })
+  // The database stalls, the queue grows, and the director restarts before it drains.
+  const drainedWithoutSupersede = (): SimulationConfig => ({
+    ...mixed({ skipSupersede: true }),
+    drains: [{ at: 60_000, cellId: 'us05', paceMs: 30_000 }]
+  })
+  const restartedMidQueue = (): SimulationConfig => ({
+    ...mixed({ noBootReconcile: true }),
+    durationMs: 2 * 60_000,
+    databaseStalls: [{ at: 50_000, durationMs: 20_000 }],
+    directorRestarts: [0, 1, 2, 3, 4].map((director) => ({ at: 65_000, director }))
+  })
   it.each([
     [1, nearFull({ bookPastCap: true })],
     [2, drain({ intakeBurst: 200, directorShare: 0.05 })],
-    [3, mixed({ skipDemotion: true })],
-    [4, mixed({ splitWinner: true })],
+    [3, drainedWithoutSupersede()],
     [5, mixed({ unguardedLedger: true })],
+    // A director restart mid-queue loses its booked joins' rows until its boot reconcile.
+    [5, restartedMidQueue()],
     [7, mixed({ noEpochFloor: true })]
   ] as const)('invariant %i fires when its rule is broken', async (invariant, config) => {
     const report = await runReservePlacementSimulation(config)
