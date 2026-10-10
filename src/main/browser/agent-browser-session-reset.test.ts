@@ -1,9 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 
-const { lstatSync } = vi.hoisted(() => ({ lstatSync: vi.fn() }))
-vi.mock('node:fs', () => ({ lstatSync }))
-import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
+const { lstatSync, existsSync } = vi.hoisted(() => ({
+  lstatSync: vi.fn(),
+  existsSync: vi.fn((..._args: unknown[]) => false)
+}))
+vi.mock('node:fs', () => ({ lstatSync, existsSync }))
+vi.mock('node:os', () => ({ homedir: () => '/home/me' }))
+import {
+  canSkipAgentBrowserSessionReset,
+  resolveAgentBrowserSocketDirectory,
+  waitForAgentBrowserSessionExit
+} from './agent-browser-session-reset'
 
 const owned = {
   ownsSocketDirectory: true,
@@ -14,6 +22,8 @@ const socketPath = join(owned.socketDirectory, 'orca-tab-page.sock')
 
 beforeEach(() => {
   lstatSync.mockReset()
+  existsSync.mockReset()
+  existsSync.mockReturnValue(false)
 })
 
 it('skips an absent owned socket', () => {
@@ -48,4 +58,45 @@ it.each([
 ])('requires reset without an owned Unix socket address: %j', (override) => {
   expect(canSkipAgentBrowserSessionReset({ ...owned, ...override })).toBe(false)
   expect(lstatSync).not.toHaveBeenCalled()
+})
+
+it('resolves the socket directory the way agent-browser does', () => {
+  expect(resolveAgentBrowserSocketDirectory({ AGENT_BROWSER_SOCKET_DIR: '/tmp/ab' })).toBe(
+    '/tmp/ab'
+  )
+  expect(
+    resolveAgentBrowserSocketDirectory({ AGENT_BROWSER_SOCKET_DIR: '', XDG_RUNTIME_DIR: '/run/u' })
+  ).toBe(join('/run/u', 'agent-browser'))
+  expect(resolveAgentBrowserSocketDirectory({})).toBe(join('/home/me', '.agent-browser'))
+})
+
+it('waits until the closing daemon removes its pid file', async () => {
+  let checks = 0
+  existsSync.mockImplementation(() => ++checks <= 2)
+  const exited = await waitForAgentBrowserSessionExit({
+    env: { AGENT_BROWSER_SOCKET_DIR: '/tmp/ab' },
+    sessionName: 'orca-tab-page',
+    deadline: Date.now() + 1_000
+  })
+  expect(exited).toBe(true)
+  expect(checks).toBe(3)
+  expect(existsSync).toHaveBeenCalledWith(join('/tmp/ab', 'orca-tab-page.pid'))
+})
+
+it('gives up at the deadline while the daemon is still alive', async () => {
+  existsSync.mockReturnValue(true)
+  const exited = await waitForAgentBrowserSessionExit({
+    env: { AGENT_BROWSER_SOCKET_DIR: '/tmp/ab' },
+    sessionName: 'orca-tab-page',
+    deadline: Date.now() + 60
+  })
+  expect(exited).toBe(false)
+})
+
+it('never builds a pid path from an unsafe session name', async () => {
+  existsSync.mockReturnValue(true)
+  expect(
+    await waitForAgentBrowserSessionExit({ env: {}, sessionName: '../x', deadline: Date.now() })
+  ).toBe(true)
+  expect(existsSync).not.toHaveBeenCalled()
 })

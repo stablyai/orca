@@ -12,7 +12,10 @@ import {
 import { translateResult } from './agent-browser-bridge-result'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
-import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
+import {
+  canSkipAgentBrowserSessionReset,
+  waitForAgentBrowserSessionExit
+} from './agent-browser-session-reset'
 import {
   STALE_SESSION_CLOSE_TIMEOUT_MS,
   type AgentBrowserExecOptions,
@@ -200,15 +203,16 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         }
       }
 
+      const unverifiedClose = (): BrowserError =>
+        new BrowserError(
+          'browser_owner_unavailable',
+          `Could not reset stale helper session ${sessionName}; retry after agent-browser exits`
+        )
+      const deadline = Date.now() + STALE_SESSION_CLOSE_TIMEOUT_MS
       // Why: proceeding after an unverified close can reuse a daemon that owns an unrelated browser.
       const timeout = setTimeout(() => {
         child?.kill()
-        finish(
-          new BrowserError(
-            'browser_owner_unavailable',
-            `Could not reset stale helper session ${sessionName}; retry after agent-browser exits`
-          )
-        )
+        finish(unverifiedClose())
       }, STALE_SESSION_CLOSE_TIMEOUT_MS)
 
       try {
@@ -224,15 +228,22 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
             timeout: STALE_SESSION_CLOSE_TIMEOUT_MS,
             windowsHide: true
           },
-          (error) =>
-            finish(
-              error
-                ? new BrowserError(
-                    'browser_owner_unavailable',
-                    `Could not reset stale helper session ${sessionName}: ${error.message}`
-                  )
-                : undefined
-            )
+          (error) => {
+            if (error) {
+              finish(
+                new BrowserError(
+                  'browser_owner_unavailable',
+                  `Could not reset stale helper session ${sessionName}: ${error.message}`
+                )
+              )
+              return
+            }
+            void waitForAgentBrowserSessionExit({
+              env: this.agentBrowserEnv,
+              sessionName,
+              deadline
+            }).then((exited) => finish(exited ? undefined : unverifiedClose()))
+          }
         )
       } catch (error) {
         finish(

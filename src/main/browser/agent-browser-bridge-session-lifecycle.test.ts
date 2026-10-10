@@ -154,6 +154,63 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
+  it('runs the first command only after the daemon that answered the reset close exits', async () => {
+    ownSocketDirectory()
+    lstatSyncMock.mockReturnValue({})
+    let pidChecks = 0
+    existsSyncMock.mockImplementation(
+      (...args: unknown[]) => args[0] === '/tmp/orca-ab-test/orca-tab-tab-1.pid' && ++pidChecks <= 2
+    )
+    const order: string[] = []
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        if (args.includes('close')) {
+          order.push('close')
+          cb(null, '', '')
+        } else if (args.includes('snapshot')) {
+          order.push(`snapshot after ${pidChecks} pid checks`)
+          cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+        } else {
+          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+        }
+        return createFakeAgentBrowserChild({ kill: vi.fn() })
+      }
+    )
+
+    expect(await bridge.snapshot()).toMatchObject({ snapshot: 'ready' })
+    expect(order).toEqual(['close', 'snapshot after 3 pid checks'])
+  })
+
+  it('fails closed when the daemon that answered the reset close never exits', async () => {
+    ownSocketDirectory()
+    lstatSyncMock.mockReturnValue({})
+    existsSyncMock.mockImplementation(
+      (...args: unknown[]) => args[0] === '/tmp/orca-ab-test/orca-tab-tab-1.pid'
+    )
+    vi.useFakeTimers()
+    try {
+      execFileMock.mockImplementation(
+        (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+          if (!args.includes('close')) {
+            throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+          }
+          cb(null, '', '')
+          return createFakeAgentBrowserChild({ kill: vi.fn() })
+        }
+      )
+
+      const rejection = expect(bridge.snapshot()).rejects.toMatchObject({
+        code: 'browser_owner_unavailable',
+        message:
+          'Could not reset stale helper session orca-tab-tab-1; retry after agent-browser exits'
+      })
+      await vi.advanceTimersByTimeAsync(3_000)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // ── Timeout escalation ──
 
   it('destroys session after 3 consecutive timeouts', async () => {

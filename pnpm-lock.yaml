@@ -207,8 +207,8 @@ importers:
         specifier: 6.1.0-beta.302
         version: 6.1.0-beta.302
       agent-browser:
-        specifier: ~0.27.0
-        version: 0.27.0
+        specifier: ~0.27.3
+        version: 0.27.3
       electron-updater:
         specifier: ^6.8.10
         version: 6.8.10(supports-color@7.2.0)
@@ -4247,8 +4247,9 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  agent-browser@0.27.0:
-    resolution: {integrity: sha512-mmHzVsYFVA6nshNNGJzg83aVMgKpf4h98ytY3pvtJB1Cot0ZyA2bfnkbSngGD56Azkj+GlhVH6qx9DfKOVE0yg==}
+  agent-browser@0.27.3:
+    resolution: {integrity: sha512-isQ1xWoYOnfR8BigYRlYmkFOrqw71tKEmUEMmFJGStQFOyCrLSsKoOAZEu8TjPZdmjD1nPQ/hLLYlxTwdHnA0Q==}
+    engines: {node: '>=24.0.0', pnpm: '>=11.0.0'}
     hasBin: true
 
   ajv-formats@3.0.1:
@@ -11272,7 +11273,7 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  agent-browser@0.27.0: {}
+  agent-browser@0.27.3: {}
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
