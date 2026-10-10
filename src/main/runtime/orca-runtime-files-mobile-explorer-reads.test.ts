@@ -219,6 +219,30 @@ describe('RuntimeFileCommands', () => {
     )
   })
 
+  it('names a paired server as the owner of a diff its catalog row is stamped with', async () => {
+    const openDiff = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      executionHostId: 'runtime:env-a'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openDiff,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+
+    await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
+
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/remote/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      'env-a',
+      undefined
+    )
+  })
+
   it.each(['docs/example.pdf', 'dist/bundle.zip'])(
     'opens binary %s in the desktop editor like the File Explorer does',
     async (relativePath) => {
