@@ -16,7 +16,6 @@ import {
   projectStructuredPermission,
   projectStructuredQuestion
 } from './mobile-structured-agent-prompts'
-import type { StructuredMobileSession } from './mobile-structured-agent-session-contract'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { RpcClient } from '../transport/rpc-client'
@@ -27,7 +26,6 @@ import { useMobileStructuredPromptResponses } from './use-mobile-structured-prom
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
-import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 import {
   pendingStructuredPromptIdentity,
   requestMobileStructuredAgentSessionCancel
@@ -90,7 +88,6 @@ export function useMobileStructuredAgentSession(args: {
     loadingOlder,
     loadEarlier
   } = useMobileStructuredAgentState(stateArgs)
-  useMobileStructuredSendOperationReconciliation(state.submissions, queuedMessages)
   const mutate = useMobileStructuredAgentMutate({
     client,
     sessionId,
