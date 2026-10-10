@@ -23,6 +23,7 @@ function idlePorts(): OrcadManagedIdleExitPorts {
     countDaemonSessions: async () => 0,
     hasDaemon: () => true,
     agentStates: () => [{ state: 'done' }],
+    hasChatProviders: () => false,
     hasStagedMigration: () => false,
     automationsBusy: () => false,
     activationFenceExists: async () => false
@@ -73,6 +74,7 @@ describe('createOrcadIdleProbes', () => {
       clients: 'idle',
       terminals: 'idle',
       agents: 'idle',
+      'chat-providers': 'idle',
       migration: 'idle',
       automations: 'idle',
       activation: 'idle'
@@ -97,6 +99,7 @@ describe('createOrcadIdleProbes', () => {
     ['an in-process terminal', { listTerminals: async () => [{ id: 'pty-1' }] }, 'terminals'],
     ['a live daemon session', { countDaemonSessions: async () => 2 }, 'terminals'],
     ['a working agent', { agentStates: () => [{ state: 'working' }] }, 'agents'],
+    ['a loaded chat provider', { hasChatProviders: () => true }, 'chat-providers'],
     ['a staged migration', { hasStagedMigration: () => true }, 'migration'],
     ['an enabled or running automation', { automationsBusy: () => true }, 'automations'],
     ['a held activation fence', { activationFenceExists: async () => true }, 'activation']

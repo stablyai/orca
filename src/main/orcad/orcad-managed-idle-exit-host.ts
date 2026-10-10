@@ -15,6 +15,7 @@ import {
 } from './orcad-idle-stop-record'
 import type { OrcadShutdownTrigger } from './orcad-lifecycle'
 import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 let requestIdleShutdown: OrcadShutdownTrigger | null = null
 
@@ -67,6 +68,8 @@ async function startOrcadManagedIdleExit(
   const { countLiveOrcadDaemonSessions, retireOrcadDaemonIfIdle } =
     await import('./orcad-daemon-retirement')
   const idleRecord = createIdleStopRecordOwnership(input.userDataPath)
+  const hasChatProviders = (): boolean =>
+    getStructuredAgentSessionHost()?.hasLoadedProviders() ?? false
   const dispose = installOrcadManagedIdleExit({
     config: input.config,
     ports: {
@@ -75,14 +78,26 @@ async function startOrcadManagedIdleExit(
       countDaemonSessions: countLiveOrcadDaemonSessions,
       hasDaemon: () => getDaemonEndpointFacts() !== null,
       agentStates: input.agentStates,
+      hasChatProviders,
       hasStagedMigration: input.hasStagedMigration,
       automationsBusy: input.automationsBusy,
       activationFenceExists
     },
-    stop: (evidence) => {
-      void stopForIdle(input, evidence, retireOrcadDaemonIfIdle).finally(() =>
-        idleRecord.requestShutdown(requestIdleShutdown)
-      )
+    stop: async (evidence) => {
+      await stopForIdle(input, evidence, retireOrcadDaemonIfIdle)
+      // Clients or providers may return while daemon retirement awaits its reply.
+      const activity = input.rpc.readClientActivity()
+      if (
+        hasChatProviders() ||
+        activity.openConnections > 0 ||
+        activity.requestsInFlight > 0 ||
+        activity.lastRequestAt > evidence.quietSince
+      ) {
+        discardOrcadIdleStopRecord(input.userDataPath)
+        return false
+      }
+      idleRecord.requestShutdown(requestIdleShutdown)
+      return true
     }
   })
   input.registerCleanup(() => {
