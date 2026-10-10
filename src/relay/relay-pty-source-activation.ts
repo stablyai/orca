@@ -8,7 +8,7 @@ import type {
   PtySourceDeliveryIdentity,
   PtySourceDeliverySnapshot
 } from '../shared/pty-source-credit-contract'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import type {
   RelayPtySourceDeliveryRecord,
   RelayPtySourceSendScheduler

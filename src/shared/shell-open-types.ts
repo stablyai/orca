@@ -1,7 +1,11 @@
+import type { ExecutionHostId } from './execution-host'
+
 export type ShellOpenExternalEditorRequest = {
   path: string
   command?: string
   connectionId?: string | null
+  /** Host that owns `path`; main refuses unless it is `local` or, with `connectionId`, that SSH host. */
+  ownerHostId: ExecutionHostId
 }
 
 export type ShellOpenPathFailureReason =

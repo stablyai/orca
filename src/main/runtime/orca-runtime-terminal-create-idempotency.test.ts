@@ -259,7 +259,7 @@ describe('terminal create idempotency', () => {
 })
 
 // Mirrors listProcessesFromRuntimeController: `undefined` aggregates every provider and
-// silently drops a non-answering SSH host, `null` is local-only, a string is host-scoped
+// silently drops a non-answering SSH host, `local` is local-only, an `ssh:` host is host-scoped
 // and rethrows the host's failure.
 function createHostScopedInventory(hosts: {
   local?: PtyProcessInfo[]
@@ -267,12 +267,12 @@ function createHostScopedInventory(hosts: {
 }) {
   const local = hosts.local ?? []
   const ssh = hosts.ssh ?? {}
-  return vi.fn(async (connectionId?: string | null): Promise<PtyProcessInfo[]> => {
-    if (connectionId === null) {
+  return vi.fn(async (hostId?: string): Promise<PtyProcessInfo[]> => {
+    if (hostId === 'local') {
       return local
     }
-    if (typeof connectionId === 'string') {
-      const host = ssh[connectionId]
+    if (typeof hostId === 'string') {
+      const host = ssh[hostId.slice('ssh:'.length)]
       if (host === undefined || host === 'unreachable') {
         throw new Error('ssh relay did not answer')
       }
@@ -310,7 +310,7 @@ describe('terminal create reconciliation scopes inventory to the owning executio
       runtime.dedupeTerminalCreate('device-a', 'id:worktree-1', 'mutation-1', true, create)
     ).rejects.toThrow('runtime_unavailable')
     expect(create).not.toHaveBeenCalled()
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
   })
 
   it('adopts the original PTY from the owning host listing', async () => {
@@ -343,7 +343,7 @@ describe('terminal create reconciliation scopes inventory to the owning executio
     )
 
     expect(create).toHaveBeenCalledWith('id:worktree-1', result.handle)
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
   })
 
   it('scopes the listing to the local host for a workspace with no connection', async () => {
@@ -357,7 +357,7 @@ describe('terminal create reconciliation scopes inventory to the owning executio
     await expect(
       runtime.dedupeTerminalCreate('device-a', 'id:worktree-1', 'mutation-1', true, create)
     ).resolves.toMatchObject({ handle, ptyId: 'worktree-1@@session-a' })
-    expect(listProcesses).toHaveBeenCalledWith(null)
+    expect(listProcesses).toHaveBeenCalledWith('local')
     expect(create).not.toHaveBeenCalled()
   })
 
@@ -377,6 +377,6 @@ describe('terminal create reconciliation scopes inventory to the owning executio
     )
 
     expect(create).toHaveBeenCalledWith('id:folder:folder-1', result.handle)
-    expect(listProcesses).toHaveBeenCalledWith(null)
+    expect(listProcesses).toHaveBeenCalledWith('local')
   })
 })

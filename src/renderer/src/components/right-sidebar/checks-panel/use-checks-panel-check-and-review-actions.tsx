@@ -1,3 +1,4 @@
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
@@ -25,6 +26,7 @@ function hasGitHubCheckHandle(check: PRCheckDetail): boolean {
 export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndReviewActionsInput) {
   const {
     activeReview,
+    activeWorktree,
     activeWorktreeId,
     asyncResultKeyRef,
     branch,
@@ -46,7 +48,6 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     pr,
     prCacheKey,
     repo,
-    settings,
     setChecks,
     setChecksLoading,
     setComments,
@@ -95,7 +96,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
               ? await loadGitLabJobLogDetails({
                   repoPath: repo.path,
                   repoId: repo.id,
-                  settings,
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
                   check,
                   projectRef: gitLabProjectRefRef.current
                 })
@@ -156,7 +157,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     isFixingChecksWithAI,
     pr?.prRepo,
     repo,
-    settings,
+    activeWorktree,
     sourceControlAiActionsVisible,
     stateRequestKey,
     setIsFixingChecksWithAI,

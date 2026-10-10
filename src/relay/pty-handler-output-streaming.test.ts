@@ -37,8 +37,8 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 }))
 
 import { PtyHandler } from './pty-handler'
-import { RelayDispatcher } from './dispatcher'
-import { encodeJsonRpcFrame } from './protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import { encodeJsonRpcFrame } from '../wsl-guest/protocol'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import {
   beginPtyHandlerTest,

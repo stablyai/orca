@@ -78,7 +78,7 @@ function tasks(
     sessionKey,
     view: structuredSessionBackgroundTasksView(state, null),
     rowContext: agentChildRowContextForSessionStream(true, 0),
-    stop: vi.fn(async () => undefined)
+    stop: vi.fn(async () => ({ status: 'rejected' as const }))
   }
 }
 

@@ -14,7 +14,7 @@ import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../opencode/h
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import { codexHookService } from '../codex/hook-service'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { PluginSources } from '../../relay/plugin-overlay'
+import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 import {
   isWslDistroRunning,
   resolveWslHookRelayBundle,

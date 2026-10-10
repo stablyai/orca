@@ -24,6 +24,7 @@ import {
 } from './orchestration/worker-terminal-process-liveness'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(
@@ -176,7 +177,11 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       return 'unverifiable'
     }
     const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
+      this.ptyController.listProcesses(
+        hostScope.kind === 'ssh'
+          ? toSshExecutionHostId(hostScope.targetId)
+          : LOCAL_EXECUTION_HOST_ID
+      ),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!listed.ok) {

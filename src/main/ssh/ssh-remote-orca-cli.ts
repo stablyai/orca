@@ -3,12 +3,12 @@ import { runtimeHostConnectionState } from '../../shared/runtime-host-connection
 import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { randomUUID } from 'node:crypto'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
-import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { getRuntimeSourceStamp } from '../runtime/host-descriptor'
 import {
   HostCliUnavailableError,
   runHostOrcaCliPassthrough,
@@ -32,6 +32,7 @@ import {
   resolveRemoteOrchestrationSender
 } from './ssh-remote-orchestration-send'
 import { formatInProcessRemoteCliResult } from './ssh-remote-cli-in-process-result'
+import { remoteCliOrchestrationEvidence } from './ssh-remote-orchestration-post-output'
 
 export type { RemoteOrcaCliRequest, RemoteOrcaCliResult } from './ssh-remote-cli-host-passthrough'
 
@@ -84,7 +85,10 @@ export async function runRemoteOrcaCli(
 
   let passthroughFailure: HostCliUnavailableError | null = null
   try {
-    return await runHostOrcaCliPassthrough(request, passthroughOptions)
+    return await runHostOrcaCliPassthrough(request, {
+      runtimeSource: getRuntimeSourceStamp(runtime),
+      ...passthroughOptions
+    })
   } catch (err) {
     if (!(err instanceof HostCliUnavailableError)) {
       throw err
@@ -129,10 +133,8 @@ async function runLegacyRemoteOrcaCli(
     const code =
       err instanceof RemoteCliArgumentError
         ? err.code
-        : err instanceof Error &&
-            'code' in err &&
-            typeof (err as { code: unknown }).code === 'string'
-          ? (err as { code: string }).code
+        : err instanceof Error && 'code' in err && typeof err.code === 'string'
+          ? err.code
           : 'runtime_error'
     if (json) {
       return {
@@ -154,10 +156,7 @@ async function dispatchRemoteCli(
   runtimeAuthority: RemoteOrcaCliRequest['runtimeAuthority']
 ): Promise<RpcResponse> {
   const command = parsed.commandPath.join(' ')
-  const inheritedEvidence = readOrchestrationCompatibilityEvidence(env)
-  const orchestrationCompatibilityEvidence = runtimeAuthority
-    ? { ...inheritedEvidence, host: runtimeAuthority }
-    : inheritedEvidence
+  const orchestrationCompatibilityEvidence = remoteCliOrchestrationEvidence(env, runtimeAuthority)
   const compatibilityEnvelope: RuntimeOrchestrationEnvelope = {
     compatibilityInvocationId: randomUUID(),
     orchestrationRequestId:

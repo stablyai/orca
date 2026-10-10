@@ -8,7 +8,7 @@ import {
   type JsonRpcRequest,
   type JsonRpcResponse,
   type JsonRpcNotification
-} from './protocol'
+} from '../wsl-guest/protocol'
 
 export type RelayProcess = {
   proc: ChildProcess

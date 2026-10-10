@@ -1,5 +1,6 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import type { DashboardRevealAgentArgs } from '../../../../shared/dashboard-snapshot'
 
 /**
@@ -19,5 +20,6 @@ export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
     return false
   }
   activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+  activateTerminalTabOnOwner(args.worktreeId, args.tabId, args.leafId)
   return true
 }

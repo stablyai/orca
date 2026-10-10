@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
@@ -75,8 +76,8 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
   // OS; a resolved remote owner downloads first, and no owner at all is refused below.
   const ownedByThisMachine =
     connectionId === null && runtimeEnvironmentId === null && worktreeRoot !== null
-  if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext, document.filePath)) {
-    void window.api.shell.openFilePath(document.filePath)
+  if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext)) {
+    void window.api.shell.openFilePath(document.filePath, LOCAL_EXECUTION_HOST_ID)
     return
   }
   // Why refuse instead of downloading: with neither owner resolved the download route reads the

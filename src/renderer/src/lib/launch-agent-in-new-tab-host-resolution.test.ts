@@ -35,7 +35,14 @@ const store = {
   repos: [] as StoreRepo[],
   folderWorkspaces: [] as unknown[],
   projectGroups: [] as unknown[],
-  sshConnectionStates: new Map<string, { status: string }>(),
+  sshConnectionStates: new Map<string, { status: string; remotePlatform?: string }>([
+    ['openclaw', { status: 'connected', remotePlatform: 'linux' }],
+    ['m4air', { status: 'connected', remotePlatform: 'linux' }]
+  ]),
+  sshStateByEnvironment: new Map([
+    ['vm-1', { connectionStates: new Map([['nested', { remotePlatform: 'linux' }]]) }]
+  ]),
+  runtimeStatusByEnvironmentId: new Map([['vm-1', { status: { hostPlatform: 'linux' } }]]),
   transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   worktreesByRepo: {} as Record<string, StoreWorktree[]>,
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1'] ?? []),

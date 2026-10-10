@@ -26,7 +26,7 @@ import {
 import { closeOrcadManagedTunnel, ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { clearManagedOrcadUpdateDeferral } from './orcad-managed-update-deferrals'
 import { removeOrcadMigrationJournalsForDestination } from './orcad-migration-cutover-journal'
-import { decommissionRemoteOrcad } from './orcad-remote-stop'
+import { decommissionRemoteOrcad } from './orcad-remote-decommission'
 import { withManagedOrcadLifecycle } from './orcad-runtime-maintenance'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { RemoteInstallLockBusyError } from './ssh-relay-install-lock'

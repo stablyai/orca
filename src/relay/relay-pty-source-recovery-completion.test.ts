@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { RelayDispatcher, SinkWriteSettlement } from './dispatcher'
+import type { RelayDispatcher, SinkWriteSettlement } from '../wsl-guest/dispatcher'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import {
   RelayPtySourceSendScheduler,

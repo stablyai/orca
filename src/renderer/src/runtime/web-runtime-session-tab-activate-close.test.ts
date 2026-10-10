@@ -182,6 +182,31 @@ describe('web runtime session tab actions', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 
+  it('carries the picked split pane and the visible tab guard to the owner and focus intent', async () => {
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue('host-terminal')
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'activate', ok: true, result: {} })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await activateWebRuntimeSessionTab({
+      worktreeId: WORKTREE_ID,
+      tabId: 'local-terminal',
+      leafId: 'leaf-b',
+      expectedCurrentLocalTabId: 'unified-local-terminal'
+    })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.activate',
+        params: expect.objectContaining({ tabId: 'host-terminal', leafId: 'leaf-b' })
+      })
+    )
+    expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual({
+      hostTabId: 'host-terminal',
+      leafId: 'leaf-b',
+      expectedCurrentLocalTabId: 'unified-local-terminal'
+    })
+  })
+
   it('supersedes browser focus intent when a terminal is activated next', async () => {
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>

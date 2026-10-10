@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import { toVisibleTabType } from '../../../../../shared/tab-types'
 import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 
 export type ActiveSurfaceSourceState = Pick<
   AppState,
@@ -69,15 +70,11 @@ export function deriveActiveSurfaceForWorktree(
   let activeTabType: WorkspaceVisibleTabType
 
   if (activeUnifiedTab) {
-    activeFileId =
-      activeUnifiedTab.contentType === 'editor' ||
-      activeUnifiedTab.contentType === 'diff' ||
-      activeUnifiedTab.contentType === 'conflict-review' ||
-      activeUnifiedTab.contentType === 'check-details'
-        ? activeUnifiedTab.entityId
-        : fileStillOpen
-          ? restoredFileId
-          : null
+    activeFileId = isEditorTabContentType(activeUnifiedTab.contentType)
+      ? activeUnifiedTab.entityId
+      : fileStillOpen
+        ? restoredFileId
+        : null
     activeBrowserTabId =
       activeUnifiedTab.contentType === 'browser'
         ? activeUnifiedTab.entityId

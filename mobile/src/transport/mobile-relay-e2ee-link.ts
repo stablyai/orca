@@ -16,7 +16,11 @@ import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
 
 export class RelayOuterError extends Error {
-  constructor(readonly code: number) {
+  // rejectedByRelayHello: the relay refused in a relay-hello frame, not just a close code.
+  constructor(
+    readonly code: number,
+    readonly rejectedByRelayHello = false
+  ) {
     super(`relay_outer_${code}`)
   }
 }
@@ -167,7 +171,7 @@ export class MobileRelayE2eeLink {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      throw new RelayOuterError(parsed.data.code)
+      throw new RelayOuterError(parsed.data.code, true)
     }
     if (parsed.data.credentialKind !== this.options.expectedCredentialKind) {
       throw new Error('relay credential resolved as an unexpected credential kind')

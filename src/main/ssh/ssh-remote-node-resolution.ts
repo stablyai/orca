@@ -109,7 +109,7 @@ export async function tryResolveViaKnownPaths<T>(
   const script = REMOTE_NODE_PATH_PROBE_SCRIPT
 
   try {
-    const result = await execCommandWithOptionalOptions(conn, script, signalOnlyOptions(options))
+    const result = await execCommand(conn, script, { signal: options?.signal })
     const seen = new Set<string>()
     for (const line of result.split('\n')) {
       const candidate = line.trim()
@@ -150,22 +150,21 @@ export async function tryResolveViaLoginShell<T>(
     // Using it — rather than hardcoding bash — means zsh/fish users whose
     // custom PATH hooks live in profile files get coverage too. We fall back
     // to sh if $SHELL is unset (rare, e.g. restricted accounts).
-    const shellResult = await execCommand(
-      conn,
-      'echo "${SHELL:-/bin/sh}"',
-      commandOptions({ timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
-    )
+    const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+      signal: options?.signal
+    })
     const shell = shellResult.trim().split('\n')[0]
     if (!shell) {
       return null
     }
 
     const probe = buildSshLoginShellCommand(shell, 'command -v node')
-    const nodePath = await execCommand(
-      conn,
-      probe.command,
-      commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
-    )
+    const nodePath = await execCommand(conn, probe.command, {
+      wrapCommand: false,
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+      signal: options?.signal
+    })
     const candidate = probe.readStdout(nodePath)?.trim().split('\n')[0]
     if (!candidate) {
       return null
@@ -197,7 +196,7 @@ async function nodeToolchainMeetsRequirements(
       buildPosixNodeToolchainProbe(nodePath),
       // Why: the paired probe uses POSIX PATH assignment syntax, which fish
       // and csh cannot parse when sshd delegates directly to the login shell.
-      commandOptions({ wrapCommand: true }, options)
+      { wrapCommand: true, signal: options?.signal }
     )
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
@@ -231,11 +230,10 @@ async function resolveRemoteWindowsNodePath(
   ].join('\n')
 
   try {
-    const result = await execCommand(
-      conn,
-      powerShellCommand(script),
-      commandOptions({ wrapCommand: false }, options)
-    )
+    const result = await execCommand(conn, powerShellCommand(script), {
+      wrapCommand: false,
+      signal: options?.signal
+    })
     for (const line of result.split('\n')) {
       const nodePath = line.trim()
       if (!nodePath) {
@@ -265,7 +263,7 @@ async function windowsNodeToolchainMeetsRequirements(
     const versionOutput = await execCommand(
       conn,
       powerShellCommand(buildWindowsNodeToolchainProbe(nodePath)),
-      commandOptions({ wrapCommand: false }, options)
+      { wrapCommand: false, signal: options?.signal }
     )
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
@@ -309,31 +307,4 @@ export function throwIfAborted(options?: RemoteNodeResolutionOptions): void {
   if (options?.signal?.aborted) {
     throw createSshOperationAbortError()
   }
-}
-
-function signalOnlyOptions(
-  options?: RemoteNodeResolutionOptions
-): { signal: AbortSignal } | undefined {
-  return options?.signal ? { signal: options.signal } : undefined
-}
-
-type RemoteExecOptions = {
-  wrapCommand?: boolean
-  timeoutMs?: number
-  signal?: AbortSignal
-}
-
-export function commandOptions(
-  base: RemoteExecOptions,
-  options?: RemoteNodeResolutionOptions
-): RemoteExecOptions {
-  return options?.signal ? { ...base, signal: options.signal } : base
-}
-
-async function execCommandWithOptionalOptions(
-  conn: SshConnection,
-  command: string,
-  options?: { signal: AbortSignal }
-): Promise<string> {
-  return options ? execCommand(conn, command, options) : execCommand(conn, command)
 }

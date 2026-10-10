@@ -2,10 +2,10 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { PI_RPC_RUNTIME_REGISTRATION } from './rpc-runtime-registration'
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
 type LaunchInput = Parameters<NonNullable<typeof PI_RPC_RUNTIME_REGISTRATION.supportsLaunch>>[0]
 function supportsLaunch(launch: LaunchInput): Promise<boolean> {

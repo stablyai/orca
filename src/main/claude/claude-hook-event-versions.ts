@@ -1,5 +1,5 @@
 import { hasReachedAppVersion, isValidAppVersion } from '../../shared/app-version'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import path from 'node:path'
 
 // Why: Claude 1.0.23 through 2.1.100 validate `hooks` against a closed event enum and discard the
@@ -89,4 +89,18 @@ export async function probeClaudeCliVersion(
   } catch {
     return null
   }
+}
+
+const RECENT_VERSION_MS = 5 * 60_000
+const recentVersions = new Map<string, { at: number; value: Promise<string | null> }>()
+
+/** Why remembered: account folders refresh before every launch, and a hook plan needs only a recent version. */
+export function probeRecentClaudeCliVersion(executablePath: string): Promise<string | null> {
+  const recent = recentVersions.get(executablePath)
+  if (recent && Date.now() - recent.at <= RECENT_VERSION_MS) {
+    return recent.value
+  }
+  const value = probeClaudeCliVersion(executablePath)
+  recentVersions.set(executablePath, { at: Date.now(), value })
+  return value
 }

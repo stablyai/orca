@@ -1,4 +1,4 @@
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 type RelayTerminalWatchOwners = {
   rootPath: string

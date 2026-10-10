@@ -26,6 +26,7 @@ function renderDrop(strict = false) {
         promptTextareaRef: createRef<HTMLTextAreaElement>(),
         selectedRepoPath: '/folder-workspace',
         selectedRepoSettings: null,
+        selectedWorktreeId: null,
         setAgentPrompt: prompt,
         setAttachmentPaths: attach
       }),

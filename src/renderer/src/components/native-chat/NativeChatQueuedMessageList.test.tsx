@@ -78,6 +78,8 @@ function controller(
   return {
     cards,
     queueCapable,
+    editCapable: true,
+    editor: undefined,
     pause,
     resume: vi.fn(async () => false),
     resuming: false,
@@ -108,7 +110,8 @@ function waitingDraft(
  *  Nothing runs after a Stop or a /clear. */
 function renderHeldQueue(
   queuedMessages: AgentSessionQueuedMessage[],
-  queuePause: AgentSessionQueuePause | null
+  queuePause: AgentSessionQueuePause | null,
+  hasPendingPrompt = false
 ) {
   const mutate = vi.fn(async (..._call: [string, string, Record<string, unknown>]) => null)
   function HeldQueue(): React.JSX.Element {
@@ -117,11 +120,17 @@ function renderHeldQueue(
       queuedMessages,
       queuePause,
       submissions: [],
-      hasPendingPrompt: false,
+      hasPendingPrompt,
       isWorking: false,
       composerScopeKey: undefined,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list only awaits mutate; its answer is never read.
-      mutate: mutate as StructuredAgentSessionMutate
+      mutate: mutate as StructuredAgentSessionMutate,
+      editTransport: {
+        target: { kind: 'local' },
+        sessionId: 'session',
+        capable: false,
+        write: async () => ({ kind: 'dropped' })
+      }
     })
     return <NativeChatQueuedMessageList chatWorktreeId={null} controller={owner} />
   }
@@ -464,6 +473,21 @@ describe('NativeChatQueuedMessageList', () => {
     }
   )
 
+  it('a card behind an open question shows no caption and keeps its actions', () => {
+    const { mutate } = renderHeldQueue([waitingDraft('mail', 1)], null, true)
+    const row = screen.getByRole('listitem')
+    // The open question below already says the agent waits; the text is the card's only line.
+    expect(row.querySelectorAll('p')).toHaveLength(1)
+    expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy()
+    expect(within(row).getByRole('button', { name: 'More actions' })).toBeTruthy()
+    fireEvent.click(within(row).getByRole('button', { name: 'Steer' }))
+    expect(mutate).toHaveBeenCalledWith(
+      'agentSession.queuedMessageSend',
+      'agentSession.queuedMessageSend',
+      { messageId: 'mail' }
+    )
+  })
+
   it('a paused queue holds every card, in order, under one header', () => {
     renderHeldQueue([waitingDraft('a', 1), waitingDraft('b', 2)], { reason: 'stopped' })
     expect(screen.getByText('Queue paused because you interrupted')).toBeTruthy()
@@ -630,7 +654,7 @@ describe('NativeChatQueuedMessageList', () => {
   })
 
   it('every card still waiting on the queue reads Steer; one held on its own or returned, Send', () => {
-    for (const hold of ['turn', 'awaiting-answer', 'behind-returned', 'queue-paused'] as const) {
+    for (const hold of ['turn', 'behind-returned', 'queue-paused'] as const) {
       expect(queuedMessageCardSendNow(card({ messageId: hold, hold }))).toEqual({
         steers: true,
         label: 'Steer',

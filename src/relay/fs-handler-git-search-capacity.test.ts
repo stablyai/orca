@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
-vi.mock('../shared/child-process/run-process', () => ({ spawnProcess: spawnMock }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawnMock }))
 import { searchWithGitGrep } from './fs-handler-git-search'
 import { GitGrepRecordCapacityError } from '../shared/git-grep-record-limit'
 

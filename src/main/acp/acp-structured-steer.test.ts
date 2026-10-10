@@ -317,6 +317,7 @@ describe('Steer on a Grok card, through the host', () => {
     await waitFor(() => expect(framesOf(rig.rig.child(), 'session/cancel')).toHaveLength(1))
     agent.reply(prompt, { stopReason: 'cancelled' })
     await rig.rig.frame('session/prompt', 1)
+    answersCancels(agent)
     await rig.host.close(SESSION, 'user-close')
   })
 

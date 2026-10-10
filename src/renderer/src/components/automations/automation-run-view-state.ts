@@ -51,11 +51,14 @@ export function canRerunAutomationRun({
 export function getAutomationRunViewState({
   run,
   workspaceExists,
-  terminalTargetExists
+  terminalTargetExists,
+  terminalOnPairedServer = false
 }: {
   run: AutomationRun
   workspaceExists: boolean
   terminalTargetExists: boolean
+  /** The workspace's paired server holds the terminal; only it can say whether it still lives. */
+  terminalOnPairedServer?: boolean
 }): AutomationRunViewState {
   const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
   if (run.workspaceId && workspaceExists && terminalTargetExists) {
@@ -63,6 +66,15 @@ export function getAutomationRunViewState({
       availability: 'terminal',
       actionLabel: 'View run',
       statusLabel: 'Run is open',
+      canOpen: true
+    }
+  }
+
+  if (run.workspaceId && workspaceExists && hasTerminalIdentity && terminalOnPairedServer) {
+    return {
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run terminal is on the paired server.',
       canOpen: true
     }
   }

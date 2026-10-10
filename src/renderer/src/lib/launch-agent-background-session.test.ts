@@ -27,6 +27,7 @@ const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
+const mockHostKind = vi.fn<() => 'local' | 'runtime'>(() => 'local')
 const state = createAgentBackgroundSessionTestState({
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
@@ -53,9 +54,18 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-vi.mock('@/lib/agent-launch-platform', () => ({
-  getAgentLaunchPlatformForRepo: mockGetAgentLaunchPlatformForRepo
-}))
+vi.mock('@/lib/execution-host-facts', async (importOriginal) => {
+  const hostFact = () => ({
+    kind: 'known' as const,
+    platform: mockGetAgentLaunchPlatformForRepo(),
+    hostKind: mockHostKind()
+  })
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    resolveRepoExecutionHostPlatform: hostFact,
+    resolveWorktreeExecutionHostPlatform: hostFact
+  }
+})
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
@@ -610,6 +620,25 @@ describe('launchAgentBackgroundSession', () => {
       expect.objectContaining({
         command: expect.stringContaining('powershell.exe -NoProfile -EncodedCommand'),
         env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
+      })
+    )
+  })
+
+  it("keeps this client's Git Bash setting off a Windows Orca server's launch", async () => {
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('win32')
+    mockHostKind.mockReturnValueOnce('runtime')
+    Object.assign(state.settings, { terminalWindowsShell: 'bash.exe' })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('powershell.exe -NoProfile -EncodedCommand')
       })
     )
   })

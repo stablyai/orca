@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type * as NodeProcess from 'node:process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as WorkspaceSpaceScanBudgetModule from '../shared/workspace-space-scan-budget'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 
 const { execFileMock, budgetState } = vi.hoisted(() => ({
   execFileMock: vi.fn(),

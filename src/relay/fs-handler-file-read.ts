@@ -1,18 +1,17 @@
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
-import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from './protocol'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
+import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from '../wsl-guest/protocol'
 import type { RelayStreamRegistry } from './fs-stream-registry'
-import { reserveTerminalFrameSlot } from './fs-stream-terminal-frame-slots'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../shared/binary-buffer'
 import {
-  BINARY_PROBE_BYTES,
   IMAGE_MIME_TYPES,
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE,
-  isBinaryBuffer,
   isBinaryFilePrefix
 } from './fs-handler-utils'
+import { errorMessage as describeError } from '../shared/error-message'
 
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
@@ -124,7 +123,7 @@ async function prepareRelayFileStream(
 
   // Why: reserved before the fd opens so a refusal costs nothing, and released only
   // once the terminal frame settles — see reserveTerminalFrameSlot.
-  const releaseTerminalFrameSlot = reserveTerminalFrameSlot(registry, context.clientId)
+  const releaseTerminalFrameSlot = registry.reserveTerminalFrameSlot(context.clientId)
   let handle: FileHandle | undefined
   let streamId: number
   try {
@@ -267,7 +266,7 @@ async function pumpChunks(
       } else {
         endReason = 'error'
         errorCode = code ?? 'ESTREAMREAD'
-        errorMessage = err instanceof Error ? err.message : String(err)
+        errorMessage = describeError(err)
       }
     }
 
@@ -310,9 +309,7 @@ async function pumpChunks(
         process.stderr.write(`[relay] stream stale id=${streamId}\n`)
       }
     } catch (err) {
-      process.stderr.write(
-        `[relay] stream notify failed id=${streamId}: ${err instanceof Error ? err.message : String(err)}\n`
-      )
+      process.stderr.write(`[relay] stream notify failed id=${streamId}: ${describeError(err)}\n`)
     }
   } finally {
     // Why: the fd goes back first — a terminal frame that can never be delivered must not

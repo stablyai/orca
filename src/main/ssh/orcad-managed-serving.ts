@@ -45,8 +45,8 @@ const VERDICT_REUSE_MS = 5_000
 type ServingTransport = { connection: SshConnection; generation: number; remotePort: number }
 // Why per transport: a check on a dropped connection fails, and a caller on the reconnected one
 // must run its own instead of inheriting that failure as "could not be started".
-const inFlight = new Map<string, ServingTransport & { check: Promise<OrcadManagedServing> }>()
-const recent = new Map<string, ServingTransport & { at: number; serving: OrcadManagedServing }>()
+type ServingCheck = ServingTransport & { check: Promise<OrcadManagedServing>; settledAt?: number }
+const checks = new Map<string, ServingCheck>()
 
 function sameTransport(a: ServingTransport, b: ServingTransport): boolean {
   return (
@@ -77,32 +77,31 @@ export function ensureManagedOrcadServing(
     generation: input.connection.getConnectGeneration(),
     remotePort: input.remotePort
   }
-  const cached = recent.get(id)
-  if (cached && sameTransport(cached, transport) && now() - cached.at < VERDICT_REUSE_MS) {
-    return Promise.resolve(cached.serving)
+  const entry = checks.get(id)
+  if (
+    entry &&
+    sameTransport(entry, transport) &&
+    (entry.settledAt === undefined || now() - entry.settledAt < VERDICT_REUSE_MS)
+  ) {
+    return entry.check
   }
-  const pending = inFlight.get(id)
-  if (pending && sameTransport(pending, transport)) {
-    return pending.check
-  }
-  const check = checkAndStart(input)
-    .then((serving) => {
-      recent.set(id, { ...transport, at: now(), serving })
-      return serving
-    })
-    .finally(() => {
-      if (inFlight.get(id)?.check === check) {
-        inFlight.delete(id)
-      }
-    })
-  inFlight.set(id, { ...transport, check })
-  return check
+  const next: ServingCheck = { ...transport, check: checkAndStart(input) }
+  checks.set(id, next)
+  // A rejected check is never reused.
+  void next.check.then(
+    () => {
+      next.settledAt = now()
+    },
+    () => {
+      next.settledAt = -Infinity
+    }
+  )
+  return next.check
 }
 
 /** Test-only: forget cached verdicts. */
 export function resetManagedOrcadServingForTests(): void {
-  inFlight.clear()
-  recent.clear()
+  checks.clear()
 }
 
 async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadManagedServing> {

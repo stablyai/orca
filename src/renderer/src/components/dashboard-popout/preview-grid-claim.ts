@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
+import { terminalPreviewApiFor } from './terminal-preview-api'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
 /**
@@ -52,10 +53,12 @@ export function createPreviewGridClaim(args: {
       return
     }
     lastRequestedFit = fitKey
-    // The resize triggers a main-side resync push; the reconnect snapshot
+    // The resize triggers a resync push from the PTY's owner; the reconnect snapshot
     // carries the new grid. If the claim didn't land (a phone owns the size),
     // the dialog's scaled fallback rendering stays correct as-is.
-    void window.api.terminalPreview.fit(args.ptyId, cols, rows).catch(() => undefined)
+    void terminalPreviewApiFor(args.ptyId)
+      .fit(args.ptyId, cols, rows)
+      .catch(() => undefined)
   }
 
   const schedule = (): void => {

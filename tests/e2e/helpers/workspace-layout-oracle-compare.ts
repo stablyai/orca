@@ -3,7 +3,7 @@
  * layout and what a view shows. Per-viewer state (selection, focus, sizes) is never compared.
  */
 
-import { isTerminalOwnerPartition } from '../../../src/main/persistence/terminal-topology/terminal-owner-invariants'
+import { isTerminalOwnerPartition } from '../../../src/shared/workspace-layout/terminal-owner-invariants'
 import { leafIdsInOrder, type WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
 import type { ClientView, DrawnLayout, DrawnTerminalSurface } from './workspace-layout-oracle-views'
 

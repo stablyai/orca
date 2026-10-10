@@ -31,6 +31,7 @@ import {
   buildSettingsProjectList,
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
+import { resolveSettingsHostScope, type SettingsHostChoice } from './settings-host-scope'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)
@@ -58,6 +59,8 @@ export function useSettingsStoreModel() {
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
 
   const projectHostSetupProjection = useProjectHostSetupProjection()
   // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
@@ -144,6 +147,27 @@ export function useSettingsStoreModel() {
   const confirm = useConfirmationDialog()
   // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
+  const [settingsHostChoice, setSettingsHostChoice] = useState<SettingsHostChoice | null>(null)
+  const defaultRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId
+  // Why: keyed on ids so status-only catalog updates keep the scope (and its loads) stable.
+  const savedEnvironmentIdsKey = runtimeEnvironments.map((environment) => environment.id).join('\n')
+  // Why: the web client's only host is its server, so it never offers a choice.
+  const settingsHostScope = useMemo(
+    () =>
+      resolveSettingsHostScope({
+        choice: isWebClient ? null : settingsHostChoice,
+        defaultEnvironmentId: defaultRuntimeEnvironmentId,
+        savedEnvironmentIds: savedEnvironmentIdsKey ? savedEnvironmentIdsKey.split('\n') : [],
+        catalogHydrated: runtimeEnvironmentCatalogHydrated
+      }),
+    [
+      defaultRuntimeEnvironmentId,
+      isWebClient,
+      runtimeEnvironmentCatalogHydrated,
+      savedEnvironmentIdsKey,
+      settingsHostChoice
+    ]
+  )
 
   return {
     settings,
@@ -220,7 +244,10 @@ export function useSettingsStoreModel() {
     setSourceControlAiPromptDiscardSignal,
     confirm,
     hiddenExperimentalUnlocked,
-    setHiddenExperimentalUnlocked
+    setHiddenExperimentalUnlocked,
+    runtimeEnvironments,
+    settingsHostScope,
+    setSettingsHostChoice
   }
 }
 

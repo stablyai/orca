@@ -28,8 +28,12 @@ for (const selectedHost of ['A', 'B'] as const) {
         throw new Error('Docker controls unavailable')
       }
       const folderPath = '/tmp/orca-same-id-folder'
-      hostA.exec(`mkdir -p '${folderPath}' && printf 'initial A\n' > '${folderPath}/INITIAL_A.txt'`)
-      hostB.exec(`mkdir -p '${folderPath}' && printf 'initial B\n' > '${folderPath}/INITIAL_B.txt'`)
+      hostA.exec(
+        `mkdir -p '${folderPath}/nested' && printf 'initial A\n' > '${folderPath}/INITIAL_A.txt' && printf 'nested A\n' > '${folderPath}/nested/NESTED_A.txt'`
+      )
+      hostB.exec(
+        `mkdir -p '${folderPath}/nested' && printf 'initial B\n' > '${folderPath}/INITIAL_B.txt' && printf 'nested B\n' > '${folderPath}/nested/NESTED_B.txt'`
+      )
       const first = await session.launch()
       app = first.app
       await waitForSessionReady(first.page)
@@ -150,6 +154,11 @@ for (const selectedHost of ['A', 'B'] as const) {
       await expect(
         page.getByText(`INITIAL_${selectedHost === 'A' ? 'B' : 'A'}.txt`, { exact: true })
       ).toHaveCount(0)
+      await page
+        .locator('[data-orca-explorer-shell]')
+        .getByRole('button', { name: 'nested', exact: true })
+        .click()
+      await expect(page.getByText(`NESTED_${selectedHost}.txt`, { exact: true })).toBeVisible()
       console.log(
         '[selected-folder-host]',
         index,
@@ -191,6 +200,66 @@ for (const selectedHost of ['A', 'B'] as const) {
       host.exec?.(`rm '${folderPath}/${marker}'`)
       await expect(page.getByText(marker, { exact: true })).toHaveCount(0, { timeout: 10_000 })
       await page.screenshot({ path: testInfo.outputPath(`host-${index}-folder-watch.png`) })
+      const otherName = selectedHost === 'A' ? 'B' : 'A'
+      const otherEnvironment = selectedHost === 'A' ? environmentB : environmentA
+      await page
+        .getByRole('option')
+        .filter({ hasText: `Folder host ${otherName}` })
+        .click()
+      await expect
+        .poll(() => page.evaluate(() => window.__store?.getState().activeWorkspaceExecutionHostId))
+        .toBe(toRuntimeExecutionHostId(otherEnvironment.id))
+      console.log(
+        '[switched-host-positive-read]',
+        await serverCall(page, otherEnvironment.id, 'files.read', {
+          worktree: `id:${worktreeId}`,
+          relativePath: `INITIAL_${otherName}.txt`
+        })
+      )
+      await page.screenshot({ path: testInfo.outputPath('same-path-host-switch-observed.png') })
+      await expect(page.getByText(`INITIAL_${otherName}.txt`, { exact: true })).toBeVisible({
+        timeout: 10_000
+      })
+      await expect(page.getByText(`INITIAL_${selectedHost}.txt`, { exact: true })).toHaveCount(0)
+      await expect(page.getByText(`NESTED_${otherName}.txt`, { exact: true })).toBeVisible()
+      await expect(page.getByText(`NESTED_${selectedHost}.txt`, { exact: true })).toHaveCount(0)
+      await page.screenshot({ path: testInfo.outputPath('same-path-host-switch-refreshed.png') })
+      await page.waitForTimeout(1_000)
+      const switchedMarker = `SWITCHED_HOST_${otherName}.txt`
+      const switchedChange = page.waitForEvent('console', {
+        predicate: (message) =>
+          message.text().startsWith('[file-change-event]') &&
+          message.text().includes(switchedMarker) &&
+          message.text().includes(otherEnvironment.id),
+        timeout: 15_000
+      })
+      otherHost.exec?.(`printf 'switched host\\n' > '${folderPath}/${switchedMarker}'`)
+      console.log(
+        '[switched-host-created-file]',
+        await serverCall(page, otherEnvironment.id, 'files.read', {
+          worktree: `id:${worktreeId}`,
+          relativePath: switchedMarker
+        })
+      )
+      await page.screenshot({ path: testInfo.outputPath('switched-host-new-file-observed.png') })
+      await switchedChange
+      await expect(page.getByText(switchedMarker, { exact: true })).toBeVisible({ timeout: 10_000 })
+      await page.screenshot({ path: testInfo.outputPath('switched-host-new-file-visible.png') })
+      await page
+        .getByRole('option')
+        .filter({ hasText: `Folder host ${selectedHost}` })
+        .click()
+      await expect(page.getByText(`INITIAL_${selectedHost}.txt`, { exact: true })).toBeVisible({
+        timeout: 10_000
+      })
+      await expect(page.getByText(`INITIAL_${otherName}.txt`, { exact: true })).toHaveCount(0)
+      await expect(page.getByText(`NESTED_${selectedHost}.txt`, { exact: true })).toBeVisible()
+      await page.evaluate(() => window.__store?.getState().setRightSidebarOpen(false))
+      await expect
+        .poll(() => page.evaluate(() => window.__store?.getState().rightSidebarOpen))
+        .toBe(false)
+      await page.evaluate(() => window.__store?.getState().setRightSidebarOpen(true))
+      await expect(page.getByText(`NESTED_${selectedHost}.txt`, { exact: true })).toBeVisible()
     } finally {
       if (app) {
         await session.close(app)

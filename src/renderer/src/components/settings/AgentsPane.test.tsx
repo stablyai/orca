@@ -34,6 +34,7 @@ import {
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
+import { resolveSettingsHostScope } from './settings-host-scope'
 
 const detectedAgentsMock = vi.hoisted(() => ({
   detectedIds: ['claude'] as TuiAgent[] | null,
@@ -104,6 +105,13 @@ function renderPane(
       React.createElement(AgentsPane, {
         settings,
         updateSettings: vi.fn(),
+        // Why: mirrors the page before the user picks a host — the default host setting.
+        hostScope: resolveSettingsHostScope({
+          choice: null,
+          defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
+          savedEnvironmentIds: [],
+          catalogHydrated: false
+        }),
         ...props
       })
     )
@@ -204,6 +212,15 @@ describe('AgentsPane', () => {
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }
+  })
+
+  it('detects agents on the host chosen in the page, not the focused server', () => {
+    renderPane(
+      { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
+      { hostScope: { target: { kind: 'local' }, available: true } }
+    )
+
+    expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'local' })
   })
 
   it('shows a retryable error when initial remote detection fails', () => {

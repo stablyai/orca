@@ -6,7 +6,7 @@ import { quickOpenRecentCandidateSet } from '../shared/quick-open-recent-candida
 import { QUICK_OPEN_SEARCH_VERSION } from '../shared/quick-open-path-search'
 import { pathsExistOnRelay } from './fs-path-existence'
 import { tmpdir } from 'node:os'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
 // (see docs/relay-fs-allowlist-removal.md), but no longer consulted on FS ops.

@@ -1,7 +1,7 @@
 import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AiVaultHandler } from '../../relay/ai-vault-handler'
-import type { RelayDispatcher } from '../../relay/dispatcher'
+import type { RelayDispatcher } from '../../wsl-guest/dispatcher'
 import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
 import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'

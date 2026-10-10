@@ -96,6 +96,17 @@ describe('editorTabFileAccess', () => {
       'user-file'
     ],
     [
+      'a read-only link to this computer opened in a server workspace backed by SSH',
+      {
+        filePath: '/Users/me/Desktop/review.md',
+        relativePath: '/Users/me/Desktop/review.md',
+        worktreeId: 'repo-ssh::/work/project',
+        runtimeEnvironmentId: null,
+        readOnly: true
+      },
+      'user-file'
+    ],
+    [
       'a project tab, which stays inside its root',
       { filePath: '/Users/me/project/a.ts', relativePath: 'a.ts', worktreeId: localWorktreeId },
       undefined
@@ -208,6 +219,7 @@ const USER_NAMED_ACCESS_IMPORTERS = [
   'components/browser-pane/describe-page/browser-artifact-upload.ts',
   'components/native-chat/use-native-chat-external-attachments.ts',
   'components/sidebar/useSidebarProjectDrop.ts',
+  'components/terminal-pane/terminal-host-workspace-file.ts',
   'hooks/composer-state/attachment-drop-state.ts',
   'lib/local-file-access.ts',
   'lib/user-opened-local-path.ts'

@@ -7,6 +7,14 @@ import { RelayAssignmentStore } from './assignment-store.js'
 import { loadRelayConfig } from './config.js'
 import { startCellHeartbeat } from './cell-heartbeat-client.js'
 import {
+  CELL_FLAG_DEFAULTS,
+  CELL_FLAGS_APPLIED_EVENT,
+  type CellFlags,
+  cellFlagObjectName,
+  cellFlagParser
+} from './cell-flags.js'
+import { startControlFlagChannel } from './relay-control-flag-channel.js'
+import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
 } from './cell-admission-startup.js'
@@ -21,6 +29,7 @@ import { runRelayBackgroundOperation } from './relay-background-operation.js'
 import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
 import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
+import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
 import {
@@ -28,15 +37,33 @@ import {
   readRegisteredMigrationInventory
 } from './registered-migration-inventory.js'
 
+// Both read the cell's switch file once it exists; until then, the boot values.
+let cellFlagsApplied: (() => CellFlags) | null = null
+// Before anything can start a database promise.
+process.on('unhandledRejection', (reason) =>
+  handleRelayUnhandledRejection(reason, cellFlagsApplied?.().rejectionFence ?? true)
+)
 const config = loadRelayConfig()
 const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
   applicationName: `orca-relay/${config.role}/${config.cellId}`,
-  appliesPostgresSchema: config.role !== 'cell'
+  appliesPostgresSchema: config.role !== 'cell',
+  readTimeoutMarginOverrideMs: () => cellFlagsApplied?.().readTimeoutMarginMs
 })
 await reconcileCellAdmissionAtStartup(config, new RelayAssignmentStore(database))
+// Never awaited: the cell listens on defaults (all off) until the first read lands.
+const cellFlagChannel =
+  config.role === 'cell'
+    ? startControlFlagChannel({
+        objectName: cellFlagObjectName(config.cellId),
+        defaults: CELL_FLAG_DEFAULTS,
+        parse: cellFlagParser(config.cellId),
+        appliedEvent: CELL_FLAGS_APPLIED_EVENT
+      })
+    : null
+cellFlagsApplied = cellFlagChannel ? () => cellFlagChannel.applied().flags : null
 const {
   server,
   sessions,
@@ -46,8 +73,9 @@ const {
   runtimeCounts,
   connectionSnapshot,
   ready,
-  cellIncarnation
-} = createRelayServer(config, database)
+  cellIncarnation,
+  shadowSeatPoller
+} = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied })
 // Same owner as the assignment sweep: the cleanup only expires credentials that every reader
 // already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
 // without changing any answer.
@@ -158,6 +186,8 @@ const shutdown = (): void => {
   observability.stop()
   heartbeat?.stop()
   regionalRehomeWorker?.stop()
+  shadowSeatPoller?.stop()
+  cellFlagChannel?.stop()
   sessions.drain(0)
   server.close(() => void database.close().catch(() => undefined))
 }

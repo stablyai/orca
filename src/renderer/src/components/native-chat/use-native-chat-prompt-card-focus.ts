@@ -40,12 +40,13 @@ export function useNativeChatPromptCardFocus(
   useLayoutEffect(() => {
     const card = cardRef.current
     const active = document.activeElement
-    // The pane's find bar is a surface of its own: a card arriving mid-query does not take its keys.
+    // The pane's find bar and an open queued-message editor are surfaces of their own: a card
+    // arriving mid-query or mid-edit does not take their keys.
     if (
       shouldFocus &&
       isInNativeChatPaneOf(card, active) &&
       !card?.contains(active) &&
-      !active?.closest('[data-native-chat-find-bar]')
+      !active?.closest('[data-native-chat-find-bar], [data-queued-message-editor]')
     ) {
       card?.focus()
     }

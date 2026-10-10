@@ -1,3 +1,4 @@
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
@@ -36,7 +37,7 @@ export function useGitLabReviewActions(
     }
     setReviewerOptionsLoading(true)
     try {
-      const users = await window.api.gl.listAssignableUsers(repoSelector)
+      const users = await gitLabApiFor(repoSelector).listAssignableUsers(repoSelector)
       if (mountedRef.current) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
@@ -77,7 +78,7 @@ export function useGitLabReviewActions(
       }
       setReviewerUpdating(true)
       try {
-        const result = await window.api.gl.updateMRReviewers({
+        const result = await gitLabApiFor(repoSelector).updateMRReviewers({
           ...repoSelector,
           iid: item.number,
           reviewerIds,
@@ -156,7 +157,7 @@ export function useGitLabReviewActions(
     }
     setInlineCommentSubmitting(true)
     try {
-      const result = await window.api.gl.addMRInlineComment({
+      const result = await gitLabApiFor(repoSelector).addMRInlineComment({
         ...repoSelector,
         iid: item.number,
         projectRef: details.item.projectRef ?? item.projectRef ?? null,
@@ -214,7 +215,7 @@ export function useGitLabReviewActions(
       }
       setResolvingThreadId(threadId)
       try {
-        const res = await window.api.gl.resolveMRDiscussion({
+        const res = await gitLabApiFor(repoSelector).resolveMRDiscussion({
           ...repoSelector,
           iid: item.number,
           discussionId: threadId,

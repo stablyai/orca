@@ -30,8 +30,8 @@ export function getRemoteAccountsPaneScope(serverName: string | null): ProviderA
           'Remote server'
         ),
     description: translate(
-      'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKept',
-      'Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.'
+      'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKeptHostPicker',
+      'Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.'
     )
   }
 }

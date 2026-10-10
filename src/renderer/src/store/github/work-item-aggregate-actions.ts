@@ -114,11 +114,7 @@ export const createWorkItemAggregateActions = (
       repos.map(async (r) => {
         const requestState = get()
         const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
-        const requestSettings = getGitHubWorkItemSourceSettings(
-          requestState.settings,
-          repo,
-          r.sourceContext
-        )
+        const requestSettings = getGitHubWorkItemSourceSettings(requestState, repo, r.sourceContext)
         const requestContext = getGitHubWorkItemRequestContext(
           requestState,
           requestSettings,
@@ -199,7 +195,7 @@ export const createWorkItemAggregateActions = (
           const requestState = get()
           const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
           const requestSettings = getGitHubWorkItemSourceSettings(
-            requestState.settings,
+            requestState,
             repo,
             r.sourceContext
           )
@@ -241,7 +237,7 @@ export const createWorkItemAggregateActions = (
         : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
     const cached = get().workItemsCache[key]
     const requestSettings = getGitHubWorkItemSourceSettings(
-      requestState.settings,
+      requestState,
       repo,
       options?.sourceContext
     )

@@ -94,7 +94,7 @@ it.each(
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
     runtime.onPtySpawned(binding.ptyId, replacementIncarnation)
     ptyIncarnationById.set(binding.ptyId, replacementIncarnation)
-    ptyOwnership.set(binding.ptyId, 'successor-host')
+    ptyOwnership.set(binding.ptyId, 'ssh:successor-host')
     if (replacementDuring === 'save') {
       gate.finish.reject(Object.assign(new Error('worker exited'), { code }))
     }
@@ -109,7 +109,7 @@ it.each(
       })
     }
     expect(ptyIncarnationById.get(binding.ptyId)).toBe(replacementIncarnation)
-    expect(ptyOwnership.get(binding.ptyId)).toBe('successor-host')
+    expect(ptyOwnership.get(binding.ptyId)).toBe('ssh:successor-host')
     await runtime.onPtyExit(binding.ptyId, 0, replacementIncarnation, {
       providerExitObserved: true
     })

@@ -3,7 +3,7 @@ import type {
   PtySourceDeliveryIdentity,
   PtySourceDeliverySnapshot
 } from '../shared/pty-source-credit-contract'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import {
   RelayPtySourceSendScheduler,
   type RelayPtySourceDeliveryRecord,

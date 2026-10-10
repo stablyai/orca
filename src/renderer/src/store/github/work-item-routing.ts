@@ -3,7 +3,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import {
@@ -14,6 +13,7 @@ import {
 } from '../../../../shared/execution-host'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
 import { callRuntimeRpc, RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
 import { workItemsCacheKey } from './cache-identity'
 import {
   findRepoForGitHubOwner,
@@ -31,6 +31,8 @@ export type GitHubWorkItemRequestTarget =
   | { kind: 'environment'; environmentId: string; runtimeRepoId: string }
   | { kind: 'local' }
 
+type GitHubSourceRoutingState = Pick<AppState, 'settings' | 'repos'>
+
 export type GitHubWorkItemsListArgs = {
   limit: number
   query?: string
@@ -46,15 +48,35 @@ export function settingsForGitHubRepoOwner(
     return settings
   }
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
   // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
+  return withActiveRuntimeEnvironmentId(
+    settings,
+    parsed?.kind === 'runtime' ? parsed.environmentId : null
+  )
+}
+
+function withActiveRuntimeEnvironmentId(
+  settings: AppState['settings'],
+  activeRuntimeEnvironmentId: string | null
+): AppState['settings'] {
   return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+    ? { ...settings, activeRuntimeEnvironmentId }
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
+      ({ activeRuntimeEnvironmentId } as AppState['settings'])
+}
+
+function settingsForGitHubTaskSource(
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id'> | undefined,
+  sourceContext: TaskSourceContext
+): AppState['settings'] {
+  const sourceHost = parseExecutionHostId(sourceContext.hostId)
+  return withActiveRuntimeEnvironmentId(
+    state.settings,
+    sourceHost?.kind === 'runtime'
+      ? sourceHost.environmentId
+      : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+  )
 }
 
 export function settingsForGitHubFocusedRepoOwner(
@@ -107,31 +129,25 @@ export function getGitHubWorkItemSourceCacheScope(
 }
 
 export function getGitHubWorkItemSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
-  return settingsForGitHubFocusedRepoOwner(settings, repo)
+  return settingsForGitHubFocusedRepoOwner(state.settings, repo)
 }
 
 export function getGitHubRepoSourceSettings(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  state: GitHubSourceRoutingState,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    return settingsForGitHubTaskSource(state, repo, sourceContext)
   }
-  return settingsForGitHubRepoOwner(settings, repo)
+  return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
 export function getGitHubWorkItemRequestContext(

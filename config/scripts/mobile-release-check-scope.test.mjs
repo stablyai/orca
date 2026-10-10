@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, matchesGlob, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { shouldRunMobileReleaseChecks } from './mobile-release-check-scope.mjs'
 
 const root = resolve(import.meta.dirname, '../..')

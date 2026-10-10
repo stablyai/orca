@@ -2,6 +2,7 @@
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": [
     "../src/relay/**/*",
+    "../src/wsl-guest/**/*",
     "../src/main/pty/overlay-mirror.ts",
     "../src/main/pty/shell-startup-env.ts"
   ],

@@ -13,8 +13,10 @@ const ClaimsSchema = z.object({
 
 export type RelayTokenClaims = z.infer<typeof ClaimsSchema>
 
-export function createRelayTokenVerifier(config: RelayConfig): (token: string) => Promise<RelayTokenClaims | null> {
-  const jwks = createRemoteJWKSet(new URL(config.jwksUrl))
+export function createRelayTokenVerifier(
+  config: RelayConfig,
+  jwks: ReturnType<typeof createRemoteJWKSet> = createRemoteJWKSet(new URL(config.jwksUrl))
+): (token: string) => Promise<RelayTokenClaims | null> {
   return async (token) => {
     try {
       const verified = await jwtVerify(token, jwks, {

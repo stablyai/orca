@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => {
   }
   return {
     canOpenWithSystemDefault: true,
-    downloadAndOpen: vi.fn(),
     openDetectedFilePath: vi.fn(),
     settings,
     worktreeRoot: false
@@ -19,7 +18,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./terminal-file-open-routing', () => ({
-  getTerminalFileContext: () => ({}),
+  getTerminalFileContext: () => ({ sourceHostResolved: true }),
   mapTerminalFilePath: (filePath: string) => filePath,
   openDetectedFilePath: mocks.openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault: () => mocks.canOpenWithSystemDefault,
@@ -28,10 +27,6 @@ vi.mock('./terminal-file-open-routing', () => ({
 
 vi.mock('./terminal-worktree-path-link', () => ({
   resolveKnownWorktreeRootPathLink: () => (mocks.worktreeRoot ? { id: 'wt-2' } : null)
-}))
-
-vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
 
 import { handleTerminalFileLink } from './terminal-file-link-actions'
@@ -140,8 +135,11 @@ describe('terminal file link actions', () => {
     expect(actionRequest.alternate.label).toBe('Download & open with default app')
 
     actionRequest.alternate.run()
-    expect(mocks.downloadAndOpen).toHaveBeenCalledWith({}, '/repo/docs/report.html')
-    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+    // The open flow downloads a host file and opens a path the host disowns on this computer.
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/docs/report.html', null, null, {
+      ...deps,
+      openWithSystemDefault: true
+    })
   })
 
   it('keeps row parity between local and remote previewable files', () => {
@@ -194,7 +192,7 @@ describe('terminal file link actions', () => {
       // Marked external so the popover draws the same icon as every other Reveal item.
       expect(row).toMatchObject({ external: true })
       await row.run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts', 'local')
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
     })
 
@@ -211,7 +209,7 @@ describe('terminal file link actions', () => {
       )
 
       await revealRow(request).run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app', 'local')
       expect(shellApi.openFilePath).not.toHaveBeenCalled()
       expect(fsApi.stat).not.toHaveBeenCalled()
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
@@ -265,11 +263,11 @@ describe('terminal file link actions', () => {
       expect(request.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
     })
 
-    it('omits the row while a remote runtime is focused, or for a runtime-owned link', () => {
+    it('keeps the row for a local link while a server is focused, and omits it for a runtime-owned link', () => {
       mocks.settings = { activeRuntimeEnvironmentId: 'env-1' }
       const focused = vi.fn()
       handleTerminalFileLink('/repo/src/main.ts', null, null, plainEvent(), deps, context(focused))
-      expect(focused.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
+      expect(focused.mock.calls[0][0]).toHaveProperty('secondaryActions')
 
       mocks.settings = { activeRuntimeEnvironmentId: null }
       const owned = vi.fn()

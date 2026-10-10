@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MethodHandler, RelayDispatcher } from './dispatcher'
+import type { MethodHandler, RelayDispatcher } from '../wsl-guest/dispatcher'
 import { createSkillPackageArchive } from '../main/skills/skill-package-creation'
 import { createSkillBundleArchive } from '../main/skills/skill-bundle-creation'
 import {

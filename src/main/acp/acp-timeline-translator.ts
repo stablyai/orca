@@ -161,6 +161,12 @@ export class AcpTimelineTranslator {
     )
   }
 
+  /** Settles a task the agent says it no longer runs; its own later ending may still overwrite this. */
+  reconcileBackgroundTask(taskId: string): ProviderTimelineEvent[] {
+    const update = { taskId, state: 'unverifiable' as const, summary: '', error: '' }
+    return this.backgroundTasks.translate([update], { thread: this.options.sessionId })
+  }
+
   sessionEvent(event: AcpSessionEvent, at: number): ProviderTimelineEvent[] {
     return this.notification(
       'session/update',

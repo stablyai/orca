@@ -17,11 +17,7 @@ export const createCommentFetchActions = (
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = getGitHubRepoSourceSettings(
-      get().settings,
-      repo,
-      options?.sourceContext
-    )
+    const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,

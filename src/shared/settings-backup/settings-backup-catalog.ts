@@ -277,6 +277,7 @@ export const SETTINGS_BACKUP_KEY_CLASSES = {
   agentsSidebarIntroShown: 'internal',
   agentsSidebarMigratedFromExperimental: 'internal',
   dismissedSkillFreshnessNudges: 'internal',
+  claudeCopiedSystemDefaultNoticeDismissed: 'internal',
   tabSwitchKeybindingSeed: 'internal',
   autoRenameBranchFromWorkDefaultedOn: 'internal',
   primarySelectionMiddleClickPasteDefaultedForLinux: 'internal',

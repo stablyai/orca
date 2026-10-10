@@ -2,13 +2,8 @@
  * Registers the plain SSH providers for a target whose runtime ladder ended at rung D, feeds
  * their output through the same SSH output intake the relay uses, and removes them again.
  */
-import type { SshPlainSshMode } from '../../shared/ssh-types'
-import {
-  getSshPtyProvider,
-  isCurrentPtyExit,
-  registerSshPtyProvider,
-  unregisterSshPtyProvider
-} from '../ipc/pty'
+import type { SshPlainSshMode, SshRemotePlatform } from '../../shared/ssh-types'
+import { isCurrentPtyExit } from '../ipc/pty'
 import {
   acceptSshPtyOutputData,
   acceptSshPtyOutputExit,
@@ -17,13 +12,9 @@ import {
 } from '../ipc/ssh-pty-output-intake-registry'
 import { SshPlainShellPtyProvider } from '../providers/ssh-plain-shell-pty-provider'
 import type { SshPtyExitCallback } from '../providers/ssh-pty-provider-contract'
-import {
-  getSshFilesystemProvider,
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
 import { SshSftpFilesystemProvider } from '../providers/ssh-sftp-filesystem-provider'
 import type { SshConnection } from './ssh-connection'
+import { registerSshHostProviders, retireSshHostProviders } from './ssh-host-provider-set'
 import {
   clearSshPlainSshMode,
   plainSshModeFromRuntimeUnavailable,
@@ -40,7 +31,9 @@ export class SshPlainSshModeSession {
     readonly targetId: string,
     readonly mode: SshPlainSshMode,
     private readonly ptyProvider: SshPlainShellPtyProvider,
-    private readonly fsProvider: SshSftpFilesystemProvider
+    private readonly fsProvider: SshSftpFilesystemProvider,
+    /** OS the runtime ladder detected before it gave up; agent launches quote for it. */
+    readonly remotePlatform: SshRemotePlatform | undefined
   ) {}
 
   static enter(args: {
@@ -66,7 +59,14 @@ export class SshPlainSshModeSession {
       mode,
       windowsHost
     )
-    const session = new SshPlainSshModeSession(targetId, mode, ptyProvider, fsProvider)
+    const detected = args.error.data.host.platform
+    const session = new SshPlainSshModeSession(
+      targetId,
+      mode,
+      ptyProvider,
+      fsProvider,
+      detected === 'linux' || detected === 'darwin' || detected === 'win32' ? detected : undefined
+    )
     ptyProvider.onData((payload) => {
       if (session.left) {
         return
@@ -94,8 +94,7 @@ export class SshPlainSshModeSession {
         .catch(() => {})
     })
     setSshPlainSshMode(targetId, mode)
-    registerSshPtyProvider(targetId, ptyProvider)
-    registerSshFilesystemProvider(targetId, fsProvider)
+    registerSshHostProviders(targetId, { pty: ptyProvider, fs: fsProvider, git: null })
     return session
   }
 
@@ -111,13 +110,6 @@ export class SshPlainSshModeSession {
     this.left = true
     clearSshPlainSshMode(this.targetId)
     closeSshPtyOutputGeneration(this.ptyProvider.providerGeneration, 'connection_lost')
-    this.ptyProvider.dispose()
-    this.fsProvider.dispose()
-    if (getSshPtyProvider(this.targetId) === this.ptyProvider) {
-      unregisterSshPtyProvider(this.targetId)
-    }
-    if (getSshFilesystemProvider(this.targetId) === this.fsProvider) {
-      unregisterSshFilesystemProvider(this.targetId)
-    }
+    retireSshHostProviders(this.targetId, { pty: this.ptyProvider, fs: this.fsProvider })
   }
 }

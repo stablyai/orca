@@ -46,6 +46,11 @@ import {
   retireStructuredAgentSessionTab,
   suppressCancelledStructuredSessionTabs
 } from './structured-agent-session-tab-retirement'
+import {
+  getStructuredAgentSessionReadOwner,
+  findStructuredAgentSessionReadOwner,
+  resetStructuredAgentSessionReadOwnersForTests
+} from '@/components/native-chat/structured-agent-session-read-owner'
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
@@ -79,6 +84,7 @@ function snapshot(): RuntimeMobileSessionTabsResult {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetStructuredAgentSessionReadOwnersForTests()
   mocks.closeSession.mockResolvedValue('closed')
   mocks.callRuntime.mockResolvedValue(undefined)
   mocks.hasTombstone.mockReturnValue(false)
@@ -146,5 +152,33 @@ describe('structured agent session tab retirement', () => {
     })
     expect(mocks.closeSession).toHaveBeenCalledTimes(1)
     release()
+  })
+
+  it('retires an unmounted created reader only on the owning host', async () => {
+    const local = getStructuredAgentSessionReadOwner('session-1', target)
+    const remoteTarget = { kind: 'environment', environmentId: 'server-1' } as const
+    const remote = getStructuredAgentSessionReadOwner('session-1', remoteTarget)
+    const dispose = vi.spyOn(local, 'dispose')
+    retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
+    expect(findStructuredAgentSessionReadOwner('session-1', target)).toBeUndefined()
+    expect(findStructuredAgentSessionReadOwner('session-1', remoteTarget)).toBe(remote)
+    expect(dispose).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
+  })
+
+  it('still closes the host tab if reader disposal fails', async () => {
+    const owner = getStructuredAgentSessionReadOwner('session-1', target)
+    vi.spyOn(owner, 'dispose').mockImplementation(() => {
+      throw new Error('subscription cleanup failed')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(() =>
+      retireStructuredAgentSessionTab({ target, worktreeId: 'wt-1', sessionId: 'session-1' })
+    ).not.toThrow()
+    expect(findStructuredAgentSessionReadOwner('session-1', target)).toBeUndefined()
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
+    expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
+    expect(warn).toHaveBeenCalledOnce()
+    warn.mockRestore()
   })
 })

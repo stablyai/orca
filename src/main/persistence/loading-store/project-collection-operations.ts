@@ -224,12 +224,3 @@ export function getFolderWorkspaceOperations(
     })
   return owner[projectCollectionOperationsContext].runtime.folderWorkspaceOperations
 }
-
-export function installProjectCollectionOperationsContext(
-  target: ProjectCollectionOperations,
-  source: ProjectCollectionOperations
-): void {
-  Object.defineProperty(target, projectCollectionOperationsContext, {
-    value: source[projectCollectionOperationsContext]
-  })
-}

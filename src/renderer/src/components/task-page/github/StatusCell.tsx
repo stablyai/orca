@@ -1,10 +1,7 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubIssueUpdate } from '../../../../../shared/issue-mutation-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import {
-  type TaskSourceContext,
-  getTaskSourceRuntimeSettings
-} from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import React, { useState, useMemo, useCallback } from 'react'
 import {
   createTaskPageGitHubStatusStateDraft,
@@ -13,7 +10,7 @@ import {
 } from '@/components/task-page-github-status-state'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
   getTaskPageGitHubDuplicateCandidates,
@@ -53,18 +50,8 @@ export function GHStatusCell({
   const [duplicateSearch, setDuplicateSearch] = useState('')
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, repo?.id ?? null, sourceContext))
   )
   const parsedIssueLink = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
   const filteredDuplicateCandidates = useMemo(

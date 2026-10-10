@@ -237,6 +237,39 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it.each([false, true])(
+    'copies the workspace ID of an inactive tab (pinned: %s)',
+    async (isPinned) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      const onClose = vi.fn()
+      const onRenameOpen = vi.fn()
+      const apiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { ui: { writeClipboardText } }
+      })
+      try {
+        const { container, onActivate } = renderMenu({
+          isActive: false,
+          isPinned,
+          onClose,
+          onRenameOpen
+        })
+        await act(async () => getButton(container, 'Copy Tab ID').click())
+        expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('orcaTabId: tab-1')
+        expect(onActivate).not.toHaveBeenCalled()
+        expect(onClose).not.toHaveBeenCalled()
+        expect(onRenameOpen).not.toHaveBeenCalled()
+      } finally {
+        if (apiDescriptor) {
+          Object.defineProperty(window, 'api', apiDescriptor)
+        } else {
+          Reflect.deleteProperty(window, 'api')
+        }
+      }
+    }
+  )
+
   it('does not expose a native/terminal view switch', () => {
     const { container } = renderMenu()
 

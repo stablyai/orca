@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import type { SshTarget } from '../../shared/ssh-types'
-import { runProcess, runProcessSync } from '../../shared/child-process/run-process'
+import { runProcess, runProcessSync } from '@orca/process-host'
 import {
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_VERIFIED_MARKER,
@@ -24,7 +24,7 @@ import { findSystemSsh } from './system-ssh-binary'
 import { uploadDirectoryViaSystemSsh } from './system-ssh-file-transfer'
 import { runSftpBatch } from './system-ssh-sftp-transfer'
 
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   runProcess: vi.fn()
 }))

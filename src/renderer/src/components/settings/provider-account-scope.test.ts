@@ -41,7 +41,7 @@ describe('getProviderAccountScope', () => {
 
 describe('getRemoteAccountsPaneScope', () => {
   const LOCAL_ACCOUNTS_KEPT =
-    'Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.'
+    'Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.'
 
   it('names the owning server once the saved-server list resolves', () => {
     expect(getRemoteAccountsPaneScope(' build-box ')).toEqual({

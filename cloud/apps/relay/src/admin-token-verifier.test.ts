@@ -67,6 +67,13 @@ describe('Relay admin route authorization', () => {
       expect(relayAdminIdentityMayAccess('monitor', route)).toBe(false)
     }
     expect(RELAY_MONITOR_ADMIN_ROUTES).toContain('/v1/admin/evacuation-status')
+    // Read-only on-call lookup: monitor and fence read it, capacity and asia-proof do not.
+    for (const identity of ['monitor', 'fence', 'fence-broker', 'deploy'] as const) {
+      expect(relayAdminIdentityMayAccess(identity, '/v1/admin/host-whereabouts')).toBe(true)
+    }
+    for (const identity of ['capacity', 'asia-proof'] as const) {
+      expect(relayAdminIdentityMayAccess(identity, '/v1/admin/host-whereabouts')).toBe(false)
+    }
   })
 
   it('allows only reviewed fence evidence mutations beyond aggregate reads', () => {

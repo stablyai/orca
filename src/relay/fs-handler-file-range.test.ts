@@ -9,8 +9,8 @@ import {
   MAX_FILE_RANGE_READ_BYTES,
   validateFileRangeRequest
 } from '../shared/file-range-read'
-import { HEADER_LENGTH, prepareJsonRpcPayload } from './protocol'
-import { DISPATCHER_CONTROL_QUEUE_MAX_BYTES } from './dispatcher-writer-admission'
+import { HEADER_LENGTH, prepareJsonRpcPayload } from '../wsl-guest/protocol'
+import { DISPATCHER_CONTROL_QUEUE_MAX_BYTES } from '../wsl-guest/dispatcher-writer-admission'
 
 let roots: string[] = []
 

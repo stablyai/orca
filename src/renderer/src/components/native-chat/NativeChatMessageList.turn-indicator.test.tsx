@@ -92,7 +92,7 @@ describe('NativeChatMessageList turn indicator', () => {
     const row = activity.closest('[data-native-chat-turn-activity]')
     const spinner = row?.querySelector('svg')
     expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
-    expect(spinner).toHaveClass('size-4', 'animate-spin', 'motion-reduce:animate-none')
+    expect(spinner).toHaveClass('size-4', 'animate-spin', 'motion-reduce:hidden')
     expect(row).toHaveAttribute('aria-live', 'polite')
     expect(screen.getByText('The answer is still streaming.').compareDocumentPosition(row!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
@@ -137,7 +137,7 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(activity).not.toHaveTextContent('pnpm test')
     const spinner = activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')
     expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
-    expect(spinner).toHaveClass('animate-spin', 'motion-reduce:animate-none')
+    expect(spinner).toHaveClass('animate-spin', 'motion-reduce:hidden')
   })
 
   it('hides foreground turn activity without settling live tool state', () => {

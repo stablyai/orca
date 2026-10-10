@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
-import { RelayDispatcher } from './dispatcher'
-import { encodeJsonRpcFrame, RelayErrorCode } from './protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import { encodeJsonRpcFrame, RelayErrorCode } from '../wsl-guest/protocol'
 import { FileRangeReadRequestError, MAX_FILE_RANGE_READ_BYTES } from '../shared/file-range-read'
 
 /** Minimal dispatcher: this suite only needs the registered request handlers.

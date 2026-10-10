@@ -1,6 +1,7 @@
 import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host'
+import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -172,15 +173,19 @@ export function createCreateWorktree(
       }
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
+      if (isUnresolvedOwnerHostId(options?.executionHostId)) {
+        // Why: the direct-SSH fallback below would otherwise create it on this machine.
+        throw new Error('The workspace host is unresolved. Choose a host and retry.')
+      }
       // Direct SSH still uses desktop IPC; paired runtimes use their captured environment.
       const target = options?.executionHostId
         ? (runtimeTargetForExecutionHostId(options.executionHostId) ?? { kind: 'local' as const })
         : getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
-      const creationHostId =
-        options?.executionHostId ??
-        (target.kind === 'environment'
-          ? toRuntimeExecutionHostId(target.environmentId)
-          : repoHostId(get(), repoId))
+      const creationHostId = adoptFromEndpoint(target, {
+        kind: 'createdWorktree',
+        requestedHostId: options?.executionHostId,
+        resolveOwnHostId: () => repoHostId(get(), repoId)
+      })
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||

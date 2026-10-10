@@ -90,7 +90,7 @@ export const createWorkItemFetchActions = (
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
     const requestSettings = getGitHubWorkItemSourceSettings(
-      requestState.settings,
+      requestState,
       repo,
       options?.sourceContext
     )

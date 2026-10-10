@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WatcherProcessEvent } from '../main/ipc/parcel-watcher-process-protocol'
-import { RelayDispatcher } from './dispatcher'
-import type { RelayClientSinkOptions, RelayClientWrite } from './dispatcher-writer-sink'
-import { encodeJsonRpcFrame } from './protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import type { RelayClientSinkOptions, RelayClientWrite } from '../wsl-guest/dispatcher-writer-sink'
+import { encodeJsonRpcFrame } from '../wsl-guest/protocol'
 import { emitRelayWatcherEvents } from './relay-watcher-event-emitter'
 
 type WatcherPayload = { kind: string; absolutePath: string; isDirectory?: boolean }

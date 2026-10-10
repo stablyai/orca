@@ -79,7 +79,10 @@ async function extractToTemporaryCatalog(root, tempDir) {
   const outputPattern = path.join(tempDir, '{{language}}.json')
   // Why: extraction output is evidence for this check, not another committed
   // catalog that feature authors must keep synchronized.
-  const { runProcessSync, describeProcessFailure } = await import('./script-child-process.mjs')
+  const [{ runProcessSync }, { describeProcessFailure }] = await Promise.all([
+    import('@orca/process-host'),
+    import('./process-failure-message.mjs')
+  ])
   let program = process.execPath
   try {
     const version = (await fs.readFile(path.join(root, 'config', '.bun-version'), 'utf8')).trim()

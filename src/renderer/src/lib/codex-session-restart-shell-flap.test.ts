@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
+
+// Why: these cases model a switch made on the focused host, as the status bar does.
+const focusedOwner = () => getActiveRuntimeTarget(useAppStore.getState().settings)
 import {
   markLiveCodexSessionsForRestart,
   markRestoredStaleCodexSessionsForRestart
@@ -99,6 +103,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex-aarch64-ap')
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -114,6 +119,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -125,6 +131,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockRejectedValue(new Error('daemon busy'))
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -138,6 +145,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     ).confirmForegroundProcess = undefined
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -149,6 +157,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     seedPane()
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -164,6 +173,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     })
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -183,6 +193,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     })
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })

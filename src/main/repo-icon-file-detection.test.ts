@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type * as FsPromisesModule from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
+import {
+  resolveFilesystemRouteForHost,
+  type ExecutionHostFilesystemRoute
+} from './providers/execution-host-provider-dispatch'
 import type { FileReadResult, FileStat, IFilesystemProvider } from './providers/types'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
 
@@ -132,7 +135,7 @@ describe('detectRepoFileIcon connection boundary', () => {
     vi.mocked(stat).mockClear()
 
     await expect(
-      detectRepoFileIcon('/repo', { kind: 'local', hostId: 'local' })
+      detectRepoFileIcon('/repo', resolveFilesystemRouteForHost('local'))
     ).resolves.toBeNull()
 
     expect(stat).toHaveBeenCalled()
@@ -174,7 +177,9 @@ describe('declared repo icons through production filesystem routes', () => {
         }
       })
       const route: ExecutionHostFilesystemRoute =
-        kind === 'local' ? { kind: 'local', hostId: 'local' } : sshRoute('icon-oracle', provider)
+        kind === 'local'
+          ? resolveFilesystemRouteForHost('local')
+          : sshRoute('icon-oracle', provider)
       await expect(detectRepoFileIcon(directory, route)).resolves.toEqual(
         noIcon
           ? null

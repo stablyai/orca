@@ -127,6 +127,16 @@ describe('SshRelaySession plain SSH mode (runtime rung D)', () => {
     expect(getSshPlainSshMode('target-1')?.message).toContain('plain SSH terminals')
   })
 
+  it('keeps the OS the runtime ladder detected so agent launches quote for that host', async () => {
+    const { session } = createSession()
+    const { conn } = createConnection()
+
+    await session.establish(conn)
+
+    expect(session.getHostPlatform()).toBeNull()
+    expect(session.getPlainSshSession()?.remotePlatform).toBe('linux')
+  })
+
   it('routes shell output and a proven exit through the SSH output intake', async () => {
     const { session, deps } = createSession()
     const { conn, channel, shell } = createConnection()

@@ -24,9 +24,38 @@ import {
   type OrcadDecommissionTransaction
 } from './orcad-decommission-transaction'
 import { errorMessage } from '../../shared/error-message'
+import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
+import { RELAY_REMOTE_DIR } from './relay-protocol'
+import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
 export const ORCAD_ACTIVATION_TRANSACTION_FILENAME = 'transaction.json'
 export const ORCAD_ACTIVATION_TRANSACTION_DIRNAME = '.orcad-activation-transaction'
+
+export function orcadActivationTransactionRoot(
+  host: RemoteHostPlatform,
+  remoteHome: string
+): string {
+  return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, ORCAD_ACTIVATION_TRANSACTION_DIRNAME)
+}
+
+export function orcadActivationFenceLockDir(host: RemoteHostPlatform, remoteHome: string): string {
+  return joinRemotePath(
+    host,
+    orcadActivationTransactionRoot(host, remoteHome),
+    RELAY_INSTALL_LOCK_NAME
+  )
+}
+
+export function orcadActivationTransactionPath(
+  host: RemoteHostPlatform,
+  remoteHome: string
+): string {
+  return joinRemotePath(
+    host,
+    orcadActivationTransactionRoot(host, remoteHome),
+    ORCAD_ACTIVATION_TRANSACTION_FILENAME
+  )
+}
 
 export type OrcadSnapshotVerdict = {
   dirName: string

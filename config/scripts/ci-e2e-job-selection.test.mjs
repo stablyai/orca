@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   classifyE2eJobs,
   DEDICATED_E2E_SPECS,
@@ -288,7 +288,11 @@ it.each([
 
 it.each([
   'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts',
-  'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts'
+  'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts',
+  'src/renderer/src/components/right-sidebar/FileExplorer.tsx',
+  'src/renderer/src/hooks/editor-external-watch-targets.ts',
+  'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts',
+  'src/renderer/src/components/right-sidebar/use-file-explorer-tree-load-effects.ts'
 ])('routes %s to the template-building selected-host explorer lane', (file) => {
   const spec = 'tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'
   expect(selectPrE2eSpecs([file])).toContain(spec)
@@ -298,4 +302,25 @@ it.each([
   expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
     spec
   )
+})
+
+it('runs managed terminal root ownership in the Docker conversion lane', () => {
+  const spec = 'tests/e2e/ssh-orcad-terminal-root-owner.spec.ts'
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const lane = workflow.jobs['orcad-auto-convert-docker']
+  expect(lane.if).toContain(spec)
+  expect(
+    lane.steps.some((step) => step.run?.includes(spec) && step.env?.ORCA_E2E_SSH_DOCKER === '1')
+  ).toBe(true)
+  for (const source of [
+    'src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-link-actions.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-link-hit-testing.ts',
+    'src/renderer/src/components/terminal-pane/terminal-link-handlers.ts',
+    'src/renderer/src/lib/worktree-owner-route.ts',
+    'tests/e2e/helpers/terminal-workspace-root-link.ts'
+  ]) {
+    expect(selectPrE2eSpecs([source]), source).toContain(spec)
+  }
 })

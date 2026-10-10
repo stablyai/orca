@@ -190,7 +190,7 @@ function DescriptorMenuRows(props: {
           disabled={!descriptor.settable || pending}
         >
           <NativeChatSessionOptionChoiceBody
-            label={nativeChatSessionChoiceLabel(choice)}
+            label={nativeChatSessionChoiceLabel(choice, descriptor.id)}
             description={choice.description}
           />
         </DropdownMenuRadioItem>

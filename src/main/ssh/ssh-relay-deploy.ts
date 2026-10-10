@@ -19,7 +19,7 @@ import {
 } from './ssh-relay-runtime-ladder'
 import {
   RelayRuntimeLadderRun,
-  remoteRuntimeUnavailableError,
+  RemoteRuntimeUnavailableError,
   sshTargetRelayRuntimeDecisionStore
 } from './ssh-relay-runtime-resolution'
 import { planRelayRuntimeStep } from './ssh-relay-runtime-step-plan'
@@ -119,6 +119,7 @@ import {
   type RemoteHostPlatform
 } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import {
   classifyWindowsRelayLaunchError,
@@ -180,20 +181,6 @@ class RelayDirectoryGcConflictError extends Error {
   ) {
     super(`Relay directory GC is in progress at ${remoteRelayDir}`)
   }
-}
-
-function execHostCommand(
-  conn: SshConnection,
-  hostPlatform: RemoteHostPlatform,
-  command: string,
-  options?: { timeoutMs?: number; signal?: AbortSignal; onStderr?: (stderr: string) => void }
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: !isWindowsRemoteHost(hostPlatform),
-    timeoutMs: options?.timeoutMs,
-    signal: options?.signal,
-    onStderr: options?.onStderr
-  })
 }
 
 /**
@@ -300,19 +287,10 @@ async function resolveRemoteInstallState(
     throw new Error(`Remote home is not a valid path: ${remoteHome.slice(0, 100)}`)
   }
   const remoteRelayDir = computeRemoteRelayDir(remoteHome, fullVersion, hostPlatform.pathFlavor)
-  const probeOptions =
-    options?.rethrowSessionLimitErrors || options?.signal
-      ? {
-          rethrowSessionLimitErrors: options.rethrowSessionLimitErrors,
-          signal: options.signal
-        }
-      : undefined
-  const alreadyInstalled = await isRelayAlreadyInstalled(
-    conn,
-    remoteRelayDir,
-    hostPlatform,
-    probeOptions
-  )
+  const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform, {
+    rethrowSessionLimitErrors: options?.rethrowSessionLimitErrors,
+    signal: options?.signal
+  })
   return { remoteHome, remoteRelayDir, alreadyInstalled }
 }
 
@@ -446,16 +424,16 @@ async function deployAndLaunchRelayInner(
           recordSshRelayRuntimeStep(target.id, false)
         }
         run.settle('D')
-        throw remoteRuntimeUnavailableError(run)
+        throw new RemoteRuntimeUnavailableError(run)
       }
       run.launchStarted = false
       const result = await deployAndLaunchRelayAttempt(
         conn,
+        { step, run },
         onProgress,
         graceTimeSeconds,
         relayInstanceId,
-        deploySignal,
-        { step, run }
+        deploySignal
       )
       // Why only a laddered pass: a plain host-npm connect has no rung decision to record.
       if (run.laddered) {
@@ -518,14 +496,11 @@ type RelayRuntimeRequest = { step: RelayRuntimeStep; run: RelayRuntimeLadderRun 
 
 async function deployAndLaunchRelayAttempt(
   conn: SshConnection,
+  runtimeRequest: RelayRuntimeRequest,
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  deploySignal?: AbortSignal,
-  runtimeRequest: RelayRuntimeRequest = {
-    step: 'legacy',
-    run: new RelayRuntimeLadderRun(relayInstanceId ?? '', null, false)
-  }
+  deploySignal?: AbortSignal
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
