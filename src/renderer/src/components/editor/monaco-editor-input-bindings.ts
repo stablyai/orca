@@ -17,6 +17,7 @@ import {
 import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
 import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
+import { installMonacoJsxCommentAction } from './monaco-jsx-comment-action'
 
 type MonacoEditorInputBindingsParams = {
   editorInstance: editor.IStandaloneCodeEditor
@@ -58,6 +59,10 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const jsxCommentAction = installMonacoJsxCommentAction(
+    editorInstance,
+    () => propsRef.current.relativePath
+  )
   // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
@@ -132,6 +137,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
+      jsxCommentAction.dispose()
       cleanupAddReviewNoteShortcut()
       editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()

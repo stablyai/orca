@@ -1,0 +1,5 @@
+Project: TypeScript-TmLanguage
+Source: https://github.com/microsoft/TypeScript-TmLanguage
+Revision: 48f608692aa6d6ad7bd65b478187906c798234a8
+Grammar source: VS Code revision 86f5a62f058e3905f74a9fa65d04b2f3b533408e, extensions/typescript-basics/syntaxes/TypeScriptReact.tmLanguage.json.
+Orca loads this unchanged grammar only to classify JSX/TSX comment targets; the JavaScriptReact grammar has identical rules with different scope suffixes.
