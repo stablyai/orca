@@ -35,8 +35,14 @@ function worktree(
   return { id: WORKTREE_ID, repoId: 'repo-1', hostId, runtimeOwnerEnvironmentId }
 }
 
-function folder(executionHostId: `runtime:${string}` | 'local' | null) {
-  return { id: 'f1', projectGroupId: 'g1', connectionId: null, executionHostId, diffComments: [] }
+function folder(executionHostId: `runtime:${string}` | 'local' | null, connectionId?: string) {
+  return {
+    id: 'f1',
+    projectGroupId: 'g1',
+    connectionId: connectionId ?? null,
+    executionHostId,
+    diffComments: []
+  }
 }
 
 type ActiveServer = 'local' | 'other' | 'deleted'
@@ -120,6 +126,15 @@ const ROWS: Row[] = [
     owner: envAt('env-a', 'ssh:t')
   },
   {
+    name: 'SSH target behind a paired server, known only from its repo',
+    rows: {
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-a', connectionId: 't' }],
+      worktreesByRepo: { 'repo-1': [worktree('runtime:env-a', 'env-a')] }
+    },
+    ref: { workspaceId: WORKTREE_ID },
+    owner: envAt('env-a', 'ssh:t')
+  },
+  {
     name: 'same ssh:t behind two servers',
     rows: {
       worktreesByRepo: { 'repo-1': [worktree('ssh:t', 'env-a'), worktree('ssh:t', 'env-b')] }
@@ -133,6 +148,16 @@ const ROWS: Row[] = [
       worktreesByRepo: { 'repo-1': [worktree('ssh:t', 'env-a'), worktree('ssh:t', 'env-b')] }
     },
     ref: { workspaceId: WORKTREE_ID, hostId: 'ssh:t' },
+    owner: ambiguous
+  },
+  {
+    name: 'same ssh:t behind two servers, selected as the active workspace',
+    rows: {
+      worktreesByRepo: { 'repo-1': [worktree('ssh:t', 'env-a'), worktree('ssh:t', 'env-b')] },
+      activeWorktreeId: WORKTREE_ID,
+      activeWorkspaceExecutionHostId: 'ssh:t'
+    },
+    ref: { workspaceId: WORKTREE_ID },
     owner: ambiguous
   },
   {
@@ -161,6 +186,21 @@ const ROWS: Row[] = [
     rows: { folderWorkspaces: [folder('runtime:env-a')] },
     ref: { workspaceId: 'folder:f1' },
     owner: envAt('env-a')
+  },
+  {
+    name: 'folder, SSH target behind a paired server',
+    rows: { folderWorkspaces: [folder('runtime:env-a', 't')] },
+    ref: { workspaceId: 'folder:f1' },
+    owner: envAt('env-a', 'ssh:t')
+  },
+  {
+    name: 'folder, SSH target behind a paired server, stamped on its group',
+    rows: {
+      folderWorkspaces: [folder(null)],
+      projectGroups: [{ id: 'g1', connectionId: 't', executionHostId: 'runtime:env-a' }]
+    },
+    ref: { workspaceId: 'folder:f1' },
+    owner: envAt('env-a', 'ssh:t')
   },
   {
     name: 'folder, unstamped, one saved server',
