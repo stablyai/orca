@@ -104,6 +104,25 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect((await reserve.controlLeases()).map((row) => row.relay_host_id)).toEqual([fine.identity.hostId])
   }, 30_000)
 
+  it('gives up on a refusal from a database that answered, as on a row naming another seat', async () => {
+    let now = Date.now()
+    const reserve = await cell(() => now)
+    const host = await reserve.bookedHost(5)
+    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockRejectedValue(
+      new Error('activity_lease_shape_mismatch')
+    )
+    reserve.setAdmitMode('db')
+    for (let step = 0; step < 3 * REREGISTER_MAX_ATTEMPTS && host.socket.readyState === WebSocket.OPEN; step += 1) {
+      now += 6_000
+      if (host.socket.readyState === WebSocket.OPEN) host.socket.send(JSON.stringify({ type: 'pong', t: now }))
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    }
+    expect(await host.closeCode).toBe(4409)
+    // The cell stops reporting reserve once nothing is left to re-register.
+    await until(() => reserve.relay.sessions.reregistrationPending() === 0)
+    expect(reserve.relay.sessions.inReserveMode()).toBe(false)
+  }, 30_000)
+
   it('retries a stalled database for as long as the control is open, and closes nobody for it', async () => {
     let now = Date.now()
     const reserve = await cell(() => now)
@@ -114,7 +133,8 @@ describe('flipping a reserve-mode cell back to the database', () => {
     vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockImplementation(async (...args) => {
       if (stalls < 3 * REREGISTER_MAX_ATTEMPTS) {
         stalls += 1
-        throw new Error('database_temporarily_unavailable')
+        // A dropped connection: the database never answered.
+        throw Object.assign(new Error('terminating connection due to administrator command'), { code: '57P01' })
       }
       return await real(...args)
     })

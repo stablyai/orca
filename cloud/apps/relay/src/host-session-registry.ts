@@ -34,6 +34,7 @@ import type { RelayAssignmentStore } from './assignment-store.js'
 import type { CellAdmitMode, CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
 import { CellSeatLog, type CellSeatChange, type CellSeatFeedPage } from './cell-seat-log.js'
+import { isRelayDatabaseTransientError } from './database.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
 import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
 import { HostCloseReasonMemory } from './host-close-reason-memory.js'
@@ -251,7 +252,7 @@ export function reregisterInFlightLimit(flag: number | undefined, databasePoolMa
   return Math.max(1, Math.min(flag, databasePoolMax - 2))
 }
 
-// `attempts` counts only wrong-assignment answers; `stalls` paces database retries.
+// `attempts` counts refusals from a database that answered; `stalls` paces retries of one that did not.
 type ReregistrationEntry = { key: string; generation: number; attempts: number; stalls?: number; dueAt: number }
 
 export class HostSessionRegistry {
@@ -578,11 +579,14 @@ export class HostSessionRegistry {
           this.sessions.get(entry.key) === session &&
           session.generation === entry.generation &&
           socket?.readyState === socket?.OPEN
-        // Only the row naming another seat counts toward giving up (it may still be the
-        // ledger's write on its way). A database stall is retried for as long as the control
-        // is open: a fleet-wide flip back must not close everyone over a slow database.
-        const wrongAssignment = error instanceof Error && error.message === 'wrong_assignment'
-        if (!wrongAssignment) {
+        // A database that did not answer (a stall, a dropped connection, a busy lock) is retried
+        // for as long as the control is open: a fleet-wide flip back must not close everyone over
+        // a slow database. An answer that refuses (a row naming another seat, which may still be
+        // the ledger's write on its way, or any other refusal) counts toward giving up.
+        const unanswered =
+          isRelayDatabaseTransientError(error) ||
+          (error instanceof Error && error.message === 'database_lock_unavailable')
+        if (unanswered) {
           if (!current) return
           entry.stalls = (entry.stalls ?? 0) + 1
           if (entry.stalls % REREGISTER_STALL_LOG_EVERY === 0) {
