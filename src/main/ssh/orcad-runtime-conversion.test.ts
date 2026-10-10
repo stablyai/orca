@@ -155,7 +155,8 @@ describe('converting an SSH host into a managed server', () => {
 
   it('refuses before touching the host while terminals run or cannot be counted', async () => {
     store.upsertSshRemotePtyLease({ targetId: TARGET.id, ptyId: 'p', state: 'expired' })
-    await expect(convert(null)).resolves.toMatchObject({
+    const uncounted = async () => ({ verdict: 'unverifiable' as const, count: 0 })
+    await expect(convert(null, uncounted)).resolves.toMatchObject({
       outcome: 'refused',
       verdict: 'unverifiable'
     })
