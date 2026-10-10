@@ -262,6 +262,21 @@ export function mergeTerminalListWithKnownRecords(
   })
 }
 
+/** Optimistic tab-strip title. Returns the same array when nothing changed. */
+export function renameTerminalSessionTabTitle<
+  T extends { type: string; title?: string; terminal?: string | null }
+>(tabs: readonly T[], handle: string, title: string): T[] {
+  let changed = false
+  const next = tabs.map((tab) => {
+    if (tab.type !== 'terminal' || tab.terminal !== handle || tab.title === title) {
+      return tab
+    }
+    changed = true
+    return { ...tab, title }
+  })
+  return changed ? next : (tabs as T[])
+}
+
 export function terminalRecordsEqual(
   a: readonly TerminalRecord[],
   b: readonly TerminalRecord[]

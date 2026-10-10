@@ -10,6 +10,9 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** Desktop custom title. Present only while the user has renamed the tab.
+   *  Live OSC titles must not replace it. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
