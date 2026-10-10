@@ -3,19 +3,38 @@ import { StringDecoder } from 'node:string_decoder'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Socket } from 'node:net'
 import { UnixSocketTransport } from './unix-socket-transport'
+import type { UnixSocketStreamUpgrade } from './unix-socket-stream-upgrade'
+import { UNIX_SOCKET_STREAM_MAX_BUFFERED_BYTES } from './unix-socket-stream-connection'
+import {
+  RUNTIME_LOCAL_STREAM_UPGRADE_METHOD,
+  RuntimeLocalStreamFrameKind,
+  encodeRuntimeLocalStreamFrame
+} from '../../../shared/runtime-local-stream-protocol'
 
 class FakeSocket extends EventEmitter {
   destroyed = false
   writable = true
+  writableLength = 0
+  ended = false
+  idleTimeoutMs: number | null = null
   readonly writes: string[] = []
+  readonly binaryWrites: Buffer[] = []
 
   setEncoding(): void {}
   setNoDelay(): void {}
-  setTimeout(): void {}
-  end(): void {}
+  setTimeout(ms: number): void {
+    this.idleTimeoutMs = ms
+  }
+  end(): void {
+    this.ended = true
+  }
 
-  write(data: string): boolean {
-    this.writes.push(data)
+  write(data: string | Buffer): boolean {
+    if (typeof data === 'string') {
+      this.writes.push(data)
+    } else {
+      this.binaryWrites.push(data)
+    }
     return true
   }
 
@@ -116,5 +135,100 @@ describe('UnixSocketTransport', () => {
 
     vi.advanceTimersByTime(500)
     expect(socket.writes).toHaveLength(1)
+  })
+})
+
+describe('UnixSocketTransport stream upgrade', () => {
+  const upgradeLine = JSON.stringify({
+    id: 'u1',
+    authToken: 'token',
+    method: RUNTIME_LOCAL_STREAM_UPGRADE_METHOD,
+    params: { protocol: 'orca-local-stream', versions: [1] }
+  })
+
+  function createUpgradeReceiver() {
+    const transport = new UnixSocketTransport({ endpoint: 'test-pipe', kind: 'named-pipe' })
+    const socket = new FakeSocket()
+    const messages: string[] = []
+    const upgrades: { raw: string; upgrade: UnixSocketStreamUpgrade }[] = []
+    transport.onMessage((message, reply) => {
+      messages.push(message)
+      reply('unary')
+    })
+    transport.onStreamUpgrade((raw, upgrade) => upgrades.push({ raw, upgrade }))
+    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
+      socket as unknown as Socket
+    )
+    return { socket, messages, upgrades }
+  }
+
+  it('hands the first upgrade line to the upgrade handler and frames pipelined bytes after accept', () => {
+    const { socket, messages, upgrades } = createUpgradeReceiver()
+    const early = encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Text, '{"id":"r1"}')
+    socket.emit('data', Buffer.concat([Buffer.from(`${upgradeLine}\n`), early.subarray(0, 3)]))
+    socket.emit('data', early.subarray(3))
+    expect(messages).toEqual([])
+    expect(upgrades.map((entry) => entry.raw)).toEqual([upgradeLine])
+
+    const texts: string[] = []
+    const connection = upgrades[0]!.upgrade.accept('{"id":"u1","ok":true}')
+    connection?.bind({ onText: (text) => texts.push(text), onBinary: () => {}, onClose: () => {} })
+    expect(socket.writes).toEqual(['{"id":"u1","ok":true}\n'])
+    expect(socket.idleTimeoutMs).toBe(0)
+    expect(texts).toEqual(['{"id":"r1"}'])
+
+    socket.emit('data', encodeRuntimeLocalStreamFrame(RuntimeLocalStreamFrameKind.Text, 'next\n'))
+    expect(texts).toEqual(['{"id":"r1"}', 'next\n'])
+    expect(messages).toEqual([])
+
+    expect(connection?.sendBinary(new Uint8Array([1, 2]))).toBe(true)
+    expect([...socket.binaryWrites[0]!]).toEqual([
+      RuntimeLocalStreamFrameKind.Binary,
+      0,
+      0,
+      0,
+      2,
+      1,
+      2
+    ])
+  })
+
+  it('writes the refusal and ends the socket when the runtime rejects the upgrade', () => {
+    const { socket, upgrades } = createUpgradeReceiver()
+    socket.emit('data', `${upgradeLine}\n`)
+    upgrades[0]!.upgrade.reject('{"id":"u1","ok":false}')
+    expect(socket.writes).toEqual(['{"id":"u1","ok":false}\n'])
+    expect(socket.ended).toBe(true)
+    expect(upgrades[0]!.upgrade.accept('{"id":"u1","ok":true}')).toBeNull()
+  })
+
+  it('keeps an upgrade line after another request on the unary path', () => {
+    const { socket, messages, upgrades } = createUpgradeReceiver()
+    socket.emit('data', `{"id":"a","method":"status.get"}\n${upgradeLine}\n`)
+    expect(upgrades).toEqual([])
+    expect(messages).toEqual(['{"id":"a","method":"status.get"}', upgradeLine])
+  })
+
+  it('closes a stream whose frame exceeds the inbound cap', () => {
+    const { socket, upgrades } = createUpgradeReceiver()
+    socket.emit('data', `${upgradeLine}\n`)
+    const connection = upgrades[0]!.upgrade.accept('{"id":"u1","ok":true}')
+    const onClose = vi.fn()
+    connection?.bind({ onText: () => {}, onBinary: () => {}, onClose })
+    const header = Buffer.alloc(5)
+    header[0] = RuntimeLocalStreamFrameKind.Binary
+    header.writeUInt32BE(2 * 1024 * 1024, 1)
+    socket.emit('data', header)
+    expect(socket.destroyed).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a discard instead of queueing binary frames past the buffered ceiling', () => {
+    const { socket, upgrades } = createUpgradeReceiver()
+    socket.emit('data', `${upgradeLine}\n`)
+    const connection = upgrades[0]!.upgrade.accept('{"id":"u1","ok":true}')
+    socket.writableLength = UNIX_SOCKET_STREAM_MAX_BUFFERED_BYTES
+    expect(connection?.sendBinary(new Uint8Array([1]))).toBe(false)
+    expect(socket.destroyed).toBe(false)
   })
 })

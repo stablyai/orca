@@ -16,7 +16,8 @@ export class RuntimeRpcShutdown extends RuntimeRpcMobilePairing {
   /** What a host's idle exit reads to know whether any client is still using this server. */
   readClientActivity(): RuntimeRpcClientActivity {
     return {
-      openConnections: this.mobileSocketWiring?.connectionCount ?? 0,
+      openConnections:
+        (this.mobileSocketWiring?.connectionCount ?? 0) + this.localStreamConnections.size,
       requestsInFlight: this.clientRequestsInFlight,
       lastRequestAt: this.lastClientRequestAt
     }

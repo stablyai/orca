@@ -3,10 +3,17 @@
 // 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
-// away. See design doc §3.1.
+// away. See design doc §3.1. A connection whose first line is a `transport.upgrade`
+// request can switch to length-prefixed streaming frames (unix-socket-stream-connection.ts).
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
+import type { UnixSocketStreamConnection } from './unix-socket-stream-connection'
+import {
+  PendingUnixSocketStreamUpgrade,
+  isUnixSocketStreamUpgradeRequest,
+  type UnixSocketStreamUpgradeHandler
+} from './unix-socket-stream-upgrade'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
@@ -35,6 +42,7 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly keepaliveIntervalMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
+  private streamUpgradeHandler: UnixSocketStreamUpgradeHandler | null = null
   private readonly activeSockets = new Set<Socket>()
 
   constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
@@ -45,6 +53,11 @@ export class UnixSocketTransport implements RpcTransport {
 
   onMessage(handler: MessageHandler): void {
     this.messageHandler = handler
+  }
+
+  // Why: without a handler the upgrade line stays an ordinary request, which answers method_not_found.
+  onStreamUpgrade(handler: UnixSocketStreamUpgradeHandler): void {
+    this.streamUpgradeHandler = handler
   }
 
   async start(): Promise<void> {
@@ -104,9 +117,14 @@ export class UnixSocketTransport implements RpcTransport {
 
   private handleConnection(socket: Socket): void {
     this.activeSockets.add(socket)
-    let buffer = ''
+    // Why bytes, not setEncoding: an upgraded connection switches to binary frames mid-stream, and a
+    // decoder cannot be removed. Splitting on 0x0a is safe because it never occurs inside a UTF-8 sequence.
+    let tail: Buffer[] = []
     let retainedBytes = 0
     let oversized = false
+    let sawFirstMessage = false
+    let pendingUpgrade: PendingUnixSocketStreamUpgrade | null = null
+    let stream: UnixSocketStreamConnection | null = null
     // Why: each in-flight dispatch registers its own AbortController here so
     // `socket.on('close')` can abort them all at once. Keeping the set scoped
     // to the connection (rather than a single shared controller) means
@@ -115,7 +133,6 @@ export class UnixSocketTransport implements RpcTransport {
     // multiplexes sequential requests.
     const inflight = new Set<() => void>()
 
-    socket.setEncoding('utf8')
     socket.setNoDelay(true)
     socket.setTimeout(RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS, () => {
       socket.destroy()
@@ -130,37 +147,67 @@ export class UnixSocketTransport implements RpcTransport {
       inflight.clear()
       this.activeSockets.delete(socket)
     })
-    socket.on('data', (chunk: string) => {
+
+    socket.on('data', (data: Buffer | string) => {
+      const chunk = typeof data === 'string' ? Buffer.from(data, 'utf8') : data
+      if (stream) {
+        stream.feed(chunk)
+        return
+      }
+      if (pendingUpgrade) {
+        pendingUpgrade.push(chunk)
+        return
+      }
       if (oversized) {
         return
       }
-      buffer += chunk
-      // setEncoding('utf8') keeps split codepoints intact, so chunk byte lengths add exactly.
-      retainedBytes += Buffer.byteLength(chunk, 'utf8')
+      retainedBytes += chunk.length
       // Why: the Orca runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
       if (retainedBytes > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
         oversized = true
+        tail = []
         this.messageHandler?.('', (response) => {
           socket.write(`${response}\n`)
           socket.end()
         })
         return
       }
-      if (!chunk.includes('\n')) {
+      if (!chunk.includes(0x0a)) {
+        tail.push(chunk)
         return
       }
-      let newlineIndex = buffer.indexOf('\n')
+      const buffer = tail.length > 0 ? Buffer.concat([...tail, chunk]) : chunk
+      tail = []
+      let start = 0
+      let newlineIndex = buffer.indexOf(0x0a)
       while (newlineIndex !== -1) {
-        const rawMessage = buffer.slice(0, newlineIndex).trim()
-        buffer = buffer.slice(newlineIndex + 1)
+        const rawMessage = buffer.toString('utf8', start, newlineIndex).trim()
+        start = newlineIndex + 1
         if (rawMessage) {
+          const upgradeHandler = this.streamUpgradeHandler
+          if (!sawFirstMessage && upgradeHandler && isUnixSocketStreamUpgradeRequest(rawMessage)) {
+            pendingUpgrade = new PendingUnixSocketStreamUpgrade(
+              socket,
+              buffer.subarray(start),
+              MAX_RUNTIME_RPC_MESSAGE_BYTES,
+              (connection) => {
+                stream = connection
+              }
+            )
+            upgradeHandler(rawMessage, pendingUpgrade.upgrade)
+            return
+          }
+          sawFirstMessage = true
           this.dispatchMessage(socket, rawMessage, inflight)
         }
-        newlineIndex = buffer.indexOf('\n')
+        newlineIndex = buffer.indexOf(0x0a, start)
       }
-      retainedBytes = Buffer.byteLength(buffer, 'utf8')
+      // Why copy: a short partial tail must not pin the whole read buffer it was sliced from.
+      const remainder = buffer.subarray(start)
+      tail = remainder.length > 0 ? [Buffer.from(remainder)] : []
+      retainedBytes = remainder.length
     })
   }
 

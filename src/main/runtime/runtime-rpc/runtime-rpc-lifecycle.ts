@@ -14,7 +14,7 @@ import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
 import { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
+import { RuntimeRpcLocalStreamDispatch } from './runtime-rpc-local-stream-dispatch'
 import {
   formatWsEndpoint,
   WS_BIND_HOST_ALL_INTERFACES,
@@ -27,7 +27,7 @@ import {
 import { errorMessage } from '../../../shared/error-message'
 import { loadHostDescriptor, publishHostDescriptor } from '../host-descriptor'
 
-export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
+export class RuntimeRpcLifecycle extends RuntimeRpcLocalStreamDispatch {
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
@@ -72,6 +72,11 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
         })
     })
+
+    // Kill switch: ORCA_LOCAL_STREAM_TRANSPORT=0 answers upgrades with method_not_found, as older runtimes do.
+    if (process.env.ORCA_LOCAL_STREAM_TRANSPORT !== '0') {
+      socketTransport.onStreamUpgrade((msg, upgrade) => this.handleLocalStreamUpgrade(msg, upgrade))
+    }
 
     await socketTransport.start()
 

@@ -10,7 +10,8 @@
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 
 export type RpcCallerIdentity =
-  /** The `orca` CLI over the runtime socket, and the in-process bridges that relay it. */
+  /** The `orca` CLI over the runtime socket, an owner's local stream on that socket, and the
+   *  in-process bridges that relay it. */
   | { kind: 'local-cli' }
   /** This host's own desktop app over IPC. One identity for every window, so a reload or an app
    *  restart still names the same caller. */
@@ -19,6 +20,7 @@ export type RpcCallerIdentity =
   | { kind: 'paired-device'; deviceId: string }
 
 export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
+export const LOCAL_CLI_RPC_CALLER: RpcCallerIdentity = { kind: 'local-cli' }
 
 /**
  * A transport that names its caller is believed; one that declares no client at all is the
