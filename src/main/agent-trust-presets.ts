@@ -164,10 +164,12 @@ export function markAntigravityWorkspaceTrusted(workspacePath: string, home: str
  *
  * `configFiles` names every config.toml the launched Codex may read, in the
  * hook installer's lock order (an Orca-owned CODEX_HOME before the system one).
+ * `onTableCreated` hears about each table this call created, not one it found.
  */
 export function markCodexProjectTrusted(
   workspacePath: string,
-  configFiles: readonly string[]
+  configFiles: readonly string[],
+  onTableCreated?: (configFile: string, projectPath: string) => void
 ): Promise<void> {
   // Why: Codex checks the cwd's own entry before the repo root, so no git-layout logic is needed.
   const absPath = canonicalize(workspacePath)
@@ -178,7 +180,14 @@ export function markCodexProjectTrusted(
     (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
     async () => {
       for (const configFile of configFiles) {
-        upsertProjectTrustLevel(configFile, absPath, 'trusted')
+        if (upsertProjectTrustLevel(configFile, absPath, 'trusted')) {
+          try {
+            onTableCreated?.(configFile, absPath)
+          } catch (error) {
+            // Why: cleanup bookkeeping must never cost the launch its trust in the remaining files.
+            console.warn('[agent-trust] Could not record Codex project trust in the ledger', error)
+          }
+        }
       }
     }
   )

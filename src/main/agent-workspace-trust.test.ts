@@ -82,8 +82,9 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
   ] as const)('writes the %s preset for the workspace', async (preset, writer) => {
     await expect(applyAgentWorkspaceTrust(preset, WORKSPACE, local)).resolves.toEqual({})
     expect(writer).toHaveBeenCalledWith(
-      WORKSPACE,
-      preset === 'codex' ? CODEX_CONFIG_FILES : homedir()
+      ...(preset === 'codex'
+        ? [WORKSPACE, CODEX_CONFIG_FILES, expect.any(Function)]
+        : [WORKSPACE, homedir()])
     )
   })
 
@@ -155,7 +156,7 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     for (const preset of ['codex', 'cursor', 'antigravity'] as const) {
       await applyAgentWorkspaceTrust(preset, homedir(), noConfig)
     }
-    expect(mocks.codex).toHaveBeenCalledWith(homedir(), CODEX_CONFIG_FILES)
+    expect(mocks.codex).toHaveBeenCalledWith(homedir(), CODEX_CONFIG_FILES, expect.any(Function))
     expect(mocks.cursor).toHaveBeenCalledWith(homedir(), homedir())
     expect(mocks.antigravity).toHaveBeenCalledWith(homedir(), homedir())
   })

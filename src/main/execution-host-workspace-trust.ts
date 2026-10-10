@@ -29,6 +29,8 @@ export type WorkspaceTrustHost = {
   claudeConfig: () => ClaudeTrustConfigTarget | null
   /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
   codexConfigFiles: () => readonly string[]
+  /** Records a Codex project table Orca created, so removing the workspace can remove it. */
+  recordCodexTrustCreated?: (configFile: string, projectPath: string) => void
   deadlineMs: number
 }
 
@@ -103,7 +105,11 @@ async function writePreset(
       return
     }
     case 'codex':
-      return markCodexProjectTrusted(storedPath, host.codexConfigFiles())
+      return markCodexProjectTrusted(
+        storedPath,
+        host.codexConfigFiles(),
+        host.recordCodexTrustCreated
+      )
     case 'cursor':
       return markCursorWorkspaceTrusted(storedPath, host.agentHome)
     case 'copilot':

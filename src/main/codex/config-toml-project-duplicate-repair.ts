@@ -8,7 +8,7 @@ import {
 import { findProjectTrustLevelEntries } from './config-toml-project-trust-level'
 import { escapeTomlBasicString } from './config-toml-syntax'
 
-type TomlTable = {
+export type TomlTable = {
   /** Line index of the header; the body runs to the next table's header. */
   headerLine: number
   endLine: number
@@ -79,7 +79,7 @@ export function repairOrcaDuplicateTrustTables(content: string): string {
     : refuseRepair(content, `duplicate table ${remainingDuplicate} remains`)
 }
 
-function readTomlTables(lines: string[]): TomlTable[] {
+export function readTomlTables(lines: string[]): TomlTable[] {
   const tables: TomlTable[] = []
   let scanState = createTomlLineScanState()
   for (let index = 0; index < lines.length; index += 1) {
@@ -107,7 +107,7 @@ function readTomlTables(lines: string[]): TomlTable[] {
 
 type TrustTableKind = 'project' | 'hook-state' | 'hook-state-parent'
 
-function getTrustTableKind(table: TomlTable): TrustTableKind | null {
+export function getTrustTableKind(table: TomlTable): TrustTableKind | null {
   const segments = table.segments
   if (table.isArray || !segments) {
     return null
@@ -122,7 +122,7 @@ function getTrustTableKind(table: TomlTable): TrustTableKind | null {
 }
 
 // Why: only the exact bytes Orca's writers emit are safe to delete without asking.
-function isOrcaWrittenTable(lines: string[], table: TomlTable): boolean {
+export function isOrcaWrittenTable(lines: string[], table: TomlTable): boolean {
   const header = stripCr(lines[table.headerLine])
   const body = lines
     .slice(table.headerLine + 1, table.endLine)
