@@ -173,7 +173,8 @@
       "refreshFailed": "Preview update failed. Showing the previous version; open source view for current content."
     },
     "fileLoad": {
-      "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
+      "hostUnresolved": "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip.",
+      "fileTooLarge": "This document is too large for the server to send in full."
     }
   },
   "githubChecks": {
