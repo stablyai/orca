@@ -28,6 +28,16 @@ describe('responsive layout metrics', () => {
     })
   })
 
+  it('uses the full available width on large landscape displays', () => {
+    expect(getResponsiveLayoutMetrics(1920, 1080)).toMatchObject({
+      isLandscape: true,
+      isTabletLayout: true,
+      isWideLayout: true,
+      contentMaxWidth: 1920,
+      horizontalPadding: spacing.xl
+    })
+  })
+
   it('keeps landscape phones out of wide tablet layout', () => {
     expect(getResponsiveLayoutMetrics(932, 430)).toMatchObject({
       isLandscape: true,
