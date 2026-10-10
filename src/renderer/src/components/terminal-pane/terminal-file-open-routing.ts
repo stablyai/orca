@@ -22,6 +22,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { resolveHostWorkspaceFile, type HostWorkspaceFile } from './terminal-host-workspace-file'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 
 export {
@@ -108,7 +109,8 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const { openWithSystemDefault = false, runtimeEnvironmentId } = deps
+  let { worktreeId, worktreePath } = deps
   const mappedFilePath = mapTerminalFilePath(
     filePath,
     worktreePath,
@@ -119,7 +121,8 @@ export function openDetectedFilePath(
 
   void (async () => {
     let statResult
-    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    let hostWorkspaceFile: HostWorkspaceFile | null = null
     if (!fileContext.sourceHostResolved) {
       // Why: with no owner the host is unknown — refuse rather than touch this machine's files.
       deps.onOpenFailure?.({
@@ -154,7 +157,15 @@ export function openDetectedFilePath(
     }
 
     try {
-      statResult = await statUserOpenedPath(fileContext, mappedFilePath)
+      hostWorkspaceFile = await resolveHostWorkspaceFile(fileContext, mappedFilePath)
+      if (hostWorkspaceFile) {
+        // Why: the host already stat'ed the path inside the workspace that holds it; open it there.
+        ;({ worktreeId, worktreePath } = hostWorkspaceFile)
+        fileContext = { ...fileContext, worktreeId, worktreePath }
+        statResult = { isDirectory: hostWorkspaceFile.isDirectory, escapesWorktree: false }
+      } else {
+        statResult = await statUserOpenedPath(fileContext, mappedFilePath)
+      }
     } catch (error) {
       if (requestId === latestOpenDetectedFilePathRequestId && deps.onOpenFailure) {
         // Why: loss of contact with the host is not evidence the file is gone.
@@ -215,7 +226,7 @@ export function openDetectedFilePath(
 
     const store = useAppStore.getState()
     let targetWorktreeId = worktreeId
-    let targetExecutionHostId: ExecutionHostId | undefined
+    let targetExecutionHostId: ExecutionHostId | undefined = hostWorkspaceFile?.executionHostId
     let relativePath = mappedFilePath
     if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
       const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
