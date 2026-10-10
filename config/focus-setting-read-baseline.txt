@@ -122,6 +122,7 @@
 1 src/renderer/src/lib/automation-session-observer.ts
 1 src/renderer/src/lib/client-creation-action-policy.ts
 1 src/renderer/src/lib/codex-pane-selection-lane.ts
+1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
 1 src/renderer/src/lib/file-search-result-owner.ts
 1 src/renderer/src/lib/github-pr-start-point.ts
 1 src/renderer/src/lib/github-source-runtime-context.ts
