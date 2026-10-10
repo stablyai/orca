@@ -127,7 +127,11 @@ export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean; terminationReason?: string } = {}
+  options: {
+    workerProcessExited?: boolean
+    workerSessionUnrecoverable?: boolean
+    terminationReason?: string
+  } = {}
 ): DispatchContextRow | undefined {
   // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot cause SQLITE_BUSY_SNAPSHOT.
   const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
@@ -136,13 +140,18 @@ export function failDispatch(
       | DispatchContextRow
       | undefined
     const workerBefore = this.getWorkerDispatch(ctxId)
+    const settlesWorker = options.workerProcessExited || options.workerSessionUnrecoverable
     if (!before || !['pending', 'dispatched'].includes(before.status)) {
+      if (options.workerSessionUnrecoverable) {
+        commitLifecycleWriteTransaction(this.db, transaction)
+        return undefined
+      }
       const worker = workerBefore
       if (
         before &&
         worker &&
         !['failed', 'succeeded', 'stopped', 'abandoned'].includes(worker.state) &&
-        !options.workerProcessExited
+        !settlesWorker
       ) {
         throw new OrchestrationError(
           'task_not_startable',
@@ -153,8 +162,15 @@ export function failDispatch(
       commitLifecycleWriteTransaction(this.db, transaction)
       return before
     }
+    // Why: an explicit, unrecoverable agent-session verdict can settle the worker while its PTY
+    // remains live. It is valid only for a ready worker; a concurrent stop or other settlement
+    // keeps ownership and the Dispatch untouched.
+    if (options.workerSessionUnrecoverable && workerBefore?.state !== 'ready') {
+      commitLifecycleWriteTransaction(this.db, transaction)
+      return undefined
+    }
     if (
-      !options.workerProcessExited &&
+      !settlesWorker &&
       workerBefore &&
       !['failed', 'succeeded', 'stopped', 'abandoned'].includes(workerBefore.state)
     ) {
@@ -201,10 +217,25 @@ export function failDispatch(
           updated_at: new Date().toISOString()
         }
       })
+    } else if (worker && options.workerSessionUnrecoverable) {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'worker',
+        id: ctxId,
+        from: 'ready',
+        to: 'failed',
+        projection: {
+          stage: 'session_unrecoverable',
+          last_error: error,
+          updated_at: new Date().toISOString()
+        }
+      })
     }
 
-    // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
-    const taskStatus: TaskStatus = ctx.status === 'circuit_broken' ? 'failed' : 'ready'
+    // Why: a terminal banner can be emitted by displayed worker output, so avoid automatically
+    // replaying side effects while the original PTY remains alive; a coordinator can review and retry.
+    // Worker process exits keep the existing retry behavior until the circuit breaker trips.
+    const taskStatus: TaskStatus =
+      ctx.status === 'circuit_broken' || options.workerSessionUnrecoverable ? 'failed' : 'ready'
     // Why: the status guard keeps a late failure from reopening a task that already completed or was retried elsewhere.
     const task = this.getTask(ctx.task_id)
     if (
@@ -235,6 +266,42 @@ export function failDispatch(
   }
 }
 
+export function failCodexSessionUnrecoverableDispatch(
+  this: OrchestrationDb,
+  dispatchId: string,
+  error: string
+): 'retry' | 'ignored' | 'failed' | 'circuit_broken' {
+  const worker = this.getWorkerDispatch(dispatchId)
+  if (!worker || !['starting', 'start_unknown', 'ready'].includes(worker.state)) {
+    return 'ignored'
+  }
+  if (worker.state !== 'ready') {
+    return 'retry'
+  }
+  if (worker.stage !== 'input_accepted') {
+    return 'ignored'
+  }
+  let startOptions: unknown
+  try {
+    startOptions = JSON.parse(worker.start_options)
+  } catch {
+    return 'ignored'
+  }
+  if (
+    !startOptions ||
+    typeof startOptions !== 'object' ||
+    !('agent' in startOptions) ||
+    startOptions.agent !== 'codex'
+  ) {
+    return 'ignored'
+  }
+  const settled = this.failDispatch(dispatchId, error, { workerSessionUnrecoverable: true })
+  if (settled?.status === 'failed' || settled?.status === 'circuit_broken') {
+    return settled.status
+  }
+  return 'ignored'
+}
+
 export type DispatchCompletionMethods = {
   completeDispatch: typeof completeDispatch
   completeActiveDispatchesForTask: typeof completeActiveDispatchesForTask
@@ -242,6 +309,7 @@ export type DispatchCompletionMethods = {
   recordHeartbeat: typeof recordHeartbeat
   getStaleDispatches: typeof getStaleDispatches
   failDispatch: typeof failDispatch
+  failCodexSessionUnrecoverableDispatch: typeof failCodexSessionUnrecoverableDispatch
 }
 
 export function attachDispatchCompletion(ctor: { prototype: object }): void {
@@ -251,6 +319,7 @@ export function attachDispatchCompletion(ctor: { prototype: object }): void {
     failActiveDispatchForTask,
     recordHeartbeat,
     getStaleDispatches,
-    failDispatch
+    failDispatch,
+    failCodexSessionUnrecoverableDispatch
   })
 }
