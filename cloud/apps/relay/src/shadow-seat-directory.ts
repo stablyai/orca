@@ -95,6 +95,8 @@ export type SeatFeedCell = {
   heartbeatExpiresAt: number | null
   // Live, with capacity, and not roll-isolated: completeness waits only on these.
   requiredForComplete: boolean
+  // relay_cell_runtime's: a new one means the process that reported its switches is gone.
+  incarnation?: string
   // Admission state general and not roll-isolated: step 5 places only on these.
   general?: boolean
 }
@@ -137,6 +139,8 @@ export type SeatFeedCellState = {
   reportedSeats?: number
   reportedControls?: number
   flagsApplied?: SeatFeedResponse['flagsApplied']
+  // The incarnation whose feed reported `flagsApplied`.
+  flagsIncarnation?: string
   admitModeEffective?: 'db' | 'reserve'
   // Step 5: when the answered poll was sent, and the cell's own reserve numbers.
   polledAt?: number
@@ -255,6 +259,7 @@ export class ShadowSeatDirectory {
     cursor.reportedSeats = response.counts?.seats
     cursor.reportedControls = response.counts?.controls
     cursor.flagsApplied = response.flagsApplied
+    cursor.flagsIncarnation = response.incarnation
     cursor.admitModeEffective = response.admitModeEffective
     cursor.polledAt = polledAt
     cursor.bookings = response.counts?.bookings
@@ -281,19 +286,29 @@ export class ShadowSeatDirectory {
 
 
   // An old cell (404) has no feed; its last known seats stay, marked by status.
-  markNoFeed(cellId: string, now: number): void {
+  markNoFeed(cellId: string, now: number, runtimeIncarnation?: string): void {
     const cursor = this.cells.get(cellId)
     if (!cursor) return
     cursor.status = 'no-feed'
     cursor.lastAnsweredAt = now
     cursor.incarnation = undefined
     cursor.seq = undefined
-    // An image without the feed takes no booking. Its reserve switch is #27058's to keep.
+    // An image without the feed takes no booking.
     cursor.polledAt = undefined
     cursor.bookings = undefined
     cursor.units = undefined
     cursor.ceiling = undefined
     cursor.intake = undefined
+    // A reserve switch stands until a feed says db, or the cell's process is replaced: one 404
+    // must not read a reserve cell's seated hosts as idle. Anything else is forgotten.
+    const reserve = cursor.flagsApplied?.flags.admitMode === 'reserve'
+    const replaced =
+      runtimeIncarnation !== undefined && runtimeIncarnation !== cursor.flagsIncarnation
+    if (!reserve || replaced) {
+      cursor.flagsApplied = undefined
+      cursor.flagsIncarnation = undefined
+      cursor.admitModeEffective = undefined
+    }
   }
 
   fail(cellId: string, reason: string): void {
@@ -670,7 +685,7 @@ export function startShadowSeatPoller(
     if (stopped) return false
     if (response.status === 404) {
       await response.body?.cancel().catch(() => undefined)
-      directory.markNoFeed(cell.cellId, now())
+      directory.markNoFeed(cell.cellId, now(), cell.incarnation)
       return false
     }
     if (!response.ok) {

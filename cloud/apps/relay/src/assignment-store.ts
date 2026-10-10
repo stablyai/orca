@@ -7896,7 +7896,7 @@ export class RelayAssignmentStore {
     const rows = await this.database.query(
       `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
               admission.admission_state, admission.roll_isolated_at, runtime.ready,
-              runtime.last_heartbeat_at
+              runtime.last_heartbeat_at, runtime.cell_incarnation
        FROM relay_cells cell
        LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
        LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
@@ -7924,7 +7924,8 @@ export class RelayAssignmentStore {
         general:
           optionalText(row, 'admission_state') === 'general' &&
           optionalInteger(row, 'roll_isolated_at') === undefined &&
-          integer(row, 'capacity_requests') > 0
+          integer(row, 'capacity_requests') > 0,
+        ...incarnationField(optionalText(row, 'cell_incarnation'))
       }
     })
   }
@@ -9502,6 +9503,10 @@ function cellDrainAttempt(row: SqlRow): CellDrainAttempt {
 function optionalInteger(row: SqlRow, field: string): number | undefined {
   if (row[field] === null || row[field] === undefined) return undefined
   return integer(row, field)
+}
+
+function incarnationField(incarnation: string | undefined): { incarnation?: string } {
+  return incarnation === undefined ? {} : { incarnation }
 }
 
 function optionalText(row: SqlRow, field: string): string | undefined {
