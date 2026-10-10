@@ -66,9 +66,6 @@
 1 src/renderer/src/runtime/runtime-jira-target.ts
 1 src/renderer/src/runtime/runtime-linear-client.ts
 3 src/renderer/src/runtime/runtime-repo-client.ts
-3 src/renderer/src/runtime/runtime-terminal-inspection.ts
-1 src/renderer/src/runtime/runtime-terminal-stream.ts
-1 src/renderer/src/runtime/runtime-terminal-verified-input.ts
 1 src/renderer/src/store/folder-workspaces/folder-path-status-actions.ts
 2 src/renderer/src/store/folder-workspaces/folder-workspace-catalog-actions.ts
 3 src/renderer/src/store/folder-workspaces/folder-workspace-mutations.ts

@@ -131,7 +131,6 @@ describe('paired session-tab agent completion notifications', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -169,7 +168,6 @@ describe('paired session-tab agent completion notifications', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey,
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -263,7 +261,6 @@ describe('paired session-tab agent completion notifications', () => {
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true
@@ -285,7 +282,6 @@ describe('paired session-tab agent completion notifications', () => {
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       statusLane: 'hook',
       getPtyId: () => 'pty-1',
-      getSettings: () => null,
       inspectProcess: vi.fn(),
       dispatchCompletion,
       isLive: () => true

@@ -36,12 +36,15 @@ vi.mock('../../../src/main/ipc/pty/provider/registry', async (importOriginal) =>
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) } }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' }),
   callRuntimeRpc: (...args: unknown[]) => io.rpc(...args)
 }))
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
   getRemoteRuntimePtyEnvironmentId: (id: string) => (id.startsWith('remote:') ? 'owner' : null),
-  getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null)
+  getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null),
+  getRemoteRuntimePtyOwner: (id: string) =>
+    id.startsWith('remote:')
+      ? { target: { kind: 'environment', environmentId: 'owner' }, terminal: 'terminal' }
+      : null
 }))
 
 export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted') {

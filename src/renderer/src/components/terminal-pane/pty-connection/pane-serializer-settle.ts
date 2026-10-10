@@ -1,10 +1,8 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { useAppStore } from '@/store'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { isExpectedAgentProcess } from '../../../../../shared/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
@@ -117,28 +115,18 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     startupDraftPasteSettled = true
     session.startupDraftPasteAttempted = true
     session.cleanupStartupDraftPasteTimers()
-    const settings = getSettingsForWorktreeRuntimeOwner(
-      useAppStore.getState(),
-      session.deps.worktreeId
-    )
     // Why: xterm focus reports share this transport queue. Bypassing it can
     // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
-    void sendAgentDraftPasteContent(
-      settings,
-      ptyId,
-      session.startupDraftPrompt,
-      'launch',
-      async (data) => {
-        const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
-        if (accepted && !startupDraftInputRecorded) {
-          // Why: this transport write bypasses xterm's user-input signal; keep
-          // the composed draft from being discarded by later hibernation.
-          startupDraftInputRecorded = true
-          session.recordTerminalInputForHibernation()
-        }
-        return accepted
+    void sendAgentDraftPasteContent(ptyId, session.startupDraftPrompt, 'launch', async (data) => {
+      const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
+      if (accepted && !startupDraftInputRecorded) {
+        // Why: this transport write bypasses xterm's user-input signal; keep
+        // the composed draft from being discarded by later hibernation.
+        startupDraftInputRecorded = true
+        session.recordTerminalInputForHibernation()
       }
-    )
+      return accepted
+    })
       .catch(() => false)
       .finally(() => {
         startupDraftPasteInFlight = false
@@ -152,12 +140,8 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     if (!ptyId) {
       return
     }
-    const settings = getSettingsForWorktreeRuntimeOwner(
-      useAppStore.getState(),
-      session.deps.worktreeId
-    )
     try {
-      const process = await inspectRuntimeTerminalProcess(settings, ptyId)
+      const process = await inspectRuntimeTerminalProcess(ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
       if (
         getStartupDraftPtyId() === ptyId &&

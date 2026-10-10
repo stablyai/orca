@@ -244,7 +244,6 @@ export async function launchAgentBackgroundSession(
         throw new Error('Runtime terminal id is invalid.')
       }
       unsubscribeData = await subscribeToRuntimeTerminalData(
-        store.settings,
         ptyId,
         `desktop:background:${tab.id}`,
         handleData

@@ -45,7 +45,7 @@ describe('verified input that requires provider settlement', () => {
   ] as const)('reads the %s remote verdict', async (_label, send, accepted) => {
     hostReply(send)
     await expect(
-      sendRuntimePtyInputVerified(null, REMOTE_PTY, 'x', 'driving', {
+      sendRuntimePtyInputVerified(REMOTE_PTY, 'x', 'driving', {
         requireWriteSettlement: true
       })
     ).resolves.toBe(accepted)
@@ -67,7 +67,7 @@ describe('verified input that requires provider settlement', () => {
       }
     })
     await expect(
-      sendRuntimePtyInputVerified(null, REMOTE_PTY, 'x', 'driving', {
+      sendRuntimePtyInputVerified(REMOTE_PTY, 'x', 'driving', {
         requireWriteSettlement: true
       })
     ).rejects.toThrow('acknowledgment unavailable')
@@ -79,9 +79,9 @@ describe('verified input that requires provider settlement', () => {
 describe('local verified input', () => {
   it('keeps the fire-and-forget fallback for ordinary input the provider cannot accept', async () => {
     localWriteAccepted.mockResolvedValue(false)
-    await expect(
-      sendRuntimePtyInputVerified(null, 'ssh:conn-1@@pty-1', 'x', 'driving')
-    ).resolves.toBe(true)
+    await expect(sendRuntimePtyInputVerified('ssh:conn-1@@pty-1', 'x', 'driving')).resolves.toBe(
+      true
+    )
     expect(localWriteAccepted).toHaveBeenCalledWith('ssh:conn-1@@pty-1', 'x', 'driving')
     expect(localWrite).toHaveBeenCalledWith('ssh:conn-1@@pty-1', 'x', 'driving')
   })
@@ -90,17 +90,36 @@ describe('local verified input', () => {
     const settled = { requireWriteSettlement: true } as const
     localWriteAccepted.mockResolvedValueOnce(true)
     await expect(
-      sendRuntimePtyInputVerified(null, 'ssh:conn-1@@pty-1', 'answer', 'driving', settled)
+      sendRuntimePtyInputVerified('ssh:conn-1@@pty-1', 'answer', 'driving', settled)
     ).resolves.toBe(true)
     localWriteAccepted.mockResolvedValueOnce(false)
     await expect(
-      sendRuntimePtyInputVerified(null, 'ssh:conn-1@@pty-1', '1', 'driving', settled)
+      sendRuntimePtyInputVerified('ssh:conn-1@@pty-1', '1', 'driving', settled)
     ).resolves.toBe(false)
     localWriteAccepted.mockRejectedValueOnce(new Error('acknowledgment unavailable'))
     await expect(
-      sendRuntimePtyInputVerified(null, 'ssh:conn-1@@pty-1', '\r', 'driving', settled)
+      sendRuntimePtyInputVerified('ssh:conn-1@@pty-1', '\r', 'driving', settled)
     ).rejects.toThrow('acknowledgment unavailable')
     expect(localWriteAccepted).toHaveBeenCalledWith('ssh:conn-1@@pty-1', '\r', 'driving', settled)
     expect(localWrite).not.toHaveBeenCalled()
+  })
+})
+
+describe('owner of the PTY', () => {
+  it('never dials a server for a remote id that names no owner', async () => {
+    localWriteAccepted.mockResolvedValue(false)
+    // Why: this id used to reach whichever server was focused, even when another one owned it.
+    await sendRuntimePtyInputVerified('remote:terminal-1', 'x', 'driving', {
+      requireWriteSettlement: true
+    })
+    expect(runtimeSend).not.toHaveBeenCalled()
+  })
+
+  it('sends to the server the id names', async () => {
+    hostReply({ accepted: true })
+    await sendRuntimePtyInputVerified(REMOTE_PTY, 'x', 'driving')
+    expect(runtimeSend).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-1', method: 'terminal.send' })
+    )
   })
 })

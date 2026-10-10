@@ -1,6 +1,5 @@
 // Clearing the agent's unsubmitted input line before a chat send writes its body.
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 
 // Why: agent TUI composers treat Ctrl+U as kill-to-start-of-line. Chat sends
@@ -36,22 +35,11 @@ export type NativeChatSendOptions = {
   confirmCleared?: () => boolean
 }
 
-type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
-
-export function clearUnsubmittedAgentInput(
-  settings: RuntimeSettings,
-  ptyId: string,
-  options?: NativeChatSendOptions
-): void {
+export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSendOptions): void {
   if (options?.clearInput === '') {
     return
   }
-  sendRuntimePtyInput(
-    settings,
-    ptyId,
-    options?.clearInput ?? NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
-    'driving'
-  )
+  sendRuntimePtyInput(ptyId, options?.clearInput ?? NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT, 'driving')
 }
 
 /**
@@ -63,13 +51,12 @@ export function clearUnsubmittedAgentInput(
  * the buffer holds, since the user can type into the TUI directly.
  */
 export function clearThenWrite(
-  settings: RuntimeSettings,
   ptyId: string,
   options: NativeChatSendOptions | undefined,
   delay: (ms: number, fn: () => void) => void,
   writeBody: () => void
 ): void {
-  clearUnsubmittedAgentInput(settings, ptyId, options)
+  clearUnsubmittedAgentInput(ptyId, options)
   const confirmCleared = options?.confirmCleared
   if (!confirmCleared) {
     writeBody()
@@ -83,7 +70,7 @@ export function clearThenWrite(
       // An unreadable terminal is unconfirmed; the maximal clear remains safe.
     }
     if (!cleared) {
-      sendRuntimePtyInput(settings, ptyId, AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
+      sendRuntimePtyInput(ptyId, AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
     }
     writeBody()
   })

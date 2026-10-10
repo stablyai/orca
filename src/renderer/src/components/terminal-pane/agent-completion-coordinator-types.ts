@@ -1,5 +1,4 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
@@ -28,9 +27,7 @@ export type AgentCompletionCoordinatorOptions = {
   /** Remote authorities are event-triggered only; no periodic process polls. */
   isRemotePtyId?: (ptyId: string) => boolean
   getExpectedIncarnationId?: () => string | null
-  getSettings: () => Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   inspectProcess: (
-    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>

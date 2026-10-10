@@ -1,14 +1,10 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
 import { readTerminalSendAcknowledgment } from '../../../shared/terminal-send-acknowledgment'
 import { classifyTerminalProcessInspectionFailure } from '../../../shared/terminal-process-inspection'
-import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
-import {
-  getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle
-} from './runtime-terminal-stream'
+import { callRuntimeRpc } from './runtime-rpc-client'
+import { getRemoteRuntimePtyOwner } from './runtime-terminal-stream'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
 
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
@@ -18,7 +14,6 @@ const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
  * current host for its acknowledgment; a lost one rejects.
  */
 export async function sendRuntimePtyInputVerified(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
@@ -28,12 +23,8 @@ export async function sendRuntimePtyInputVerified(
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
     return false
   }
-  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
-  const target = ownerEnvironmentId
-    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
-    : getActiveRuntimeTarget(settings)
-  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
-  if (target.kind !== 'environment' || !terminal) {
+  const owner = getRemoteRuntimePtyOwner(ptyId)
+  if (!owner) {
     if (options?.requireWriteSettlement) {
       // Why: an answer that dismisses its card must not fall back to an unacknowledged write.
       const accepted = await window.api.pty.writeAccepted(ptyId, data, inputKind, options)
@@ -54,6 +45,7 @@ export async function sendRuntimePtyInputVerified(
     return accepted
   }
 
+  const { target, terminal } = owner
   try {
     const result = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
       target,

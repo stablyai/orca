@@ -40,7 +40,7 @@ describe('prompt delivery through production IPC, provider and paired host', () 
       [{ indices: [], other: text }]
     )
     const onSettled = vi.fn()
-    sendNativeChatAskAnswer(null, ssh.id, groups, onSettled)
+    sendNativeChatAskAnswer(ssh.id, groups, onSettled)
     await vi.advanceTimersByTimeAsync(2000)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
@@ -60,7 +60,6 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     close = ssh.close
     const onSettled = vi.fn()
     const handle = sendNativeChatAskAnswer(
-      null,
       ssh.id,
       [{ text: `${'X'.repeat(32768)}TAIL` }, { raw: '\r' }],
       onSettled
@@ -78,7 +77,7 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     const ssh = createSshDelivery()
     close = ssh.close
     const onDeliverySettled = vi.fn()
-    sendNativeChatMessage(null, ssh.id, 'body', { onDeliverySettled })
+    sendNativeChatMessage(ssh.id, 'body', { onDeliverySettled })
     await vi.advanceTimersByTimeAsync(600)
     expect(ssh.bytes.join('')).toBe('\x15body\r')
     expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(true)
@@ -103,15 +102,9 @@ describe('prompt delivery through production IPC, provider and paired host', () 
         }
         return reply.result
       })
-      const pending = sendRuntimePtyInputVerified(
-        null,
-        'remote:owner@@terminal',
-        '\x1b',
-        'driving',
-        {
-          requireWriteSettlement: true
-        }
-      )
+      const pending = sendRuntimePtyInputVerified('remote:owner@@terminal', '\x1b', 'driving', {
+        requireWriteSettlement: true
+      })
       await (mode === 'accepted'
         ? expect(pending).resolves.toBe(true)
         : expect(pending).rejects.toThrow('acknowledgment unavailable'))
@@ -145,15 +138,15 @@ describe('prompt delivery through production IPC, provider and paired host', () 
       return reply.result
     })
     await expect(
-      sendRuntimePtyInputVerified(null, 'remote:owner@@terminal', 'answer', 'driving', {
+      sendRuntimePtyInputVerified('remote:owner@@terminal', 'answer', 'driving', {
         requireWriteSettlement: true
       })
     ).resolves.toBe(true)
+    await expect(sendNativeChatMessageVerified('remote:owner@@terminal', 'body')).resolves.toBe(
+      true
+    )
     await expect(
-      sendNativeChatMessageVerified(null, 'remote:owner@@terminal', 'body')
-    ).resolves.toBe(true)
-    await expect(
-      sendAgentDraftPasteContentNow(null, 'remote:owner@@terminal', 'launch', 'launch')
+      sendAgentDraftPasteContentNow('remote:owner@@terminal', 'launch', 'launch')
     ).resolves.toBe(true)
     expect(ssh.bytes).toEqual(['answer', 'body', '\r', '\x1b[200~launch\x1b[201~'])
     expect(ssh.settlement).not.toHaveBeenCalled()
@@ -164,12 +157,12 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     io.rpc.mockResolvedValue({ send: { handle: 'terminal', accepted: true, bytesWritten: 1 } })
     const onWriteUnconfirmed = vi.fn()
     const onWriteRejected = vi.fn()
-    sendNativeChatMessage(null, 'remote:owner@@terminal', 'hello', {
+    sendNativeChatMessage('remote:owner@@terminal', 'hello', {
       onWriteRejected,
       onWriteUnconfirmed
     })
     const onDeliverySettled = vi.fn()
-    sendNativeChatMessage(null, 'remote:owner@@terminal', 'answer', { onDeliverySettled })
+    sendNativeChatMessage('remote:owner@@terminal', 'answer', { onDeliverySettled })
     await vi.advanceTimersByTimeAsync(2000)
     expect(onWriteUnconfirmed).not.toHaveBeenCalled()
     expect(onWriteRejected).not.toHaveBeenCalled()
@@ -179,7 +172,7 @@ describe('prompt delivery through production IPC, provider and paired host', () 
   it('sends ordinary paired input without asking the host for provider settlement', async () => {
     io.rpc.mockResolvedValue({ send: { handle: 'terminal', accepted: true, bytesWritten: 4 } })
     await expect(
-      sendRuntimePtyInputVerified(null, 'remote:owner@@terminal', 'body', 'driving')
+      sendRuntimePtyInputVerified('remote:owner@@terminal', 'body', 'driving')
     ).resolves.toBe(true)
     expect(io.rpc).toHaveBeenCalledWith(
       expect.anything(),
@@ -253,7 +246,7 @@ describe('prompt delivery through production IPC, provider and paired host', () 
       [{ indices: [], other: 'custom answer' }]
     )
     const onSettled = vi.fn()
-    sendNativeChatAskAnswer(null, 'remote:owner@@terminal', groups, onSettled)
+    sendNativeChatAskAnswer('remote:owner@@terminal', groups, onSettled)
     await vi.advanceTimersByTimeAsync(4000)
     expect(ssh.bytes).toEqual(groups.map((group) => ('raw' in group ? group.raw : group.text)))
     expect(ssh.settlement).not.toHaveBeenCalled()

@@ -1,5 +1,4 @@
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
-import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
 import {
   clearConfirmDurationMs,
@@ -10,7 +9,6 @@ import {
 
 /** Observe write refusals without mistaking transport success for provider acceptance. */
 export function sendNativeChatObservedWrites(
-  settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
   ptyId: string,
   writes: readonly { data: string; delayBeforeMs: number }[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
@@ -48,7 +46,7 @@ export function sendNativeChatObservedWrites(
           if (isCancelled()) {
             return
           }
-          void sendRuntimePtyInputVerified(settings, ptyId, write.data, 'driving', writeOptions)
+          void sendRuntimePtyInputVerified(ptyId, write.data, 'driving', writeOptions)
             .then((accepted) => {
               if (isCancelled()) {
                 return
@@ -86,8 +84,8 @@ export function sendNativeChatObservedWrites(
           send()
         }
       }
-      clearThenWrite(settings, ptyId, options, delay, () => writeAt(0))
+      clearThenWrite(ptyId, options, delay, () => writeAt(0))
     },
-    { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options) }
+    { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
   )
 }

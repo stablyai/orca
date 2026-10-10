@@ -183,7 +183,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
   })
 
   it('never routes a remote runtime pane through the local confirm bridge', async () => {
-    seedPane({ ptyId: 'remote:term-1', launchAgent: 'codex' })
+    seedPane({ ptyId: 'remote:env-1@@term-1', launchAgent: 'codex' })
     useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
