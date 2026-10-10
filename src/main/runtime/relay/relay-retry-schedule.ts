@@ -15,6 +15,11 @@ export class RelayRetrySchedule {
     return this.timer !== null
   }
 
+  // Consecutive scheduled retries since the last reset (a success or a fresh demand).
+  get attempts(): number {
+    return this.attempt
+  }
+
   get retryAt(): number | null {
     return this.dueAt
   }

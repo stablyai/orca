@@ -4,7 +4,7 @@ import { DesktopRelayService } from './desktop-relay-service'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import type { RelayAuthContext } from './relay-auth-identity'
 import { RelayHttpError } from './relay-http-client'
-import { relayUnavailableReasonFor } from './relay-readiness'
+import { relayRetryFloorMs, relayUnavailableReasonFor } from './relay-readiness'
 import { RelaySessionBroker } from './relay-session-broker'
 
 const context: RelayAuthContext = {
@@ -171,6 +171,41 @@ describe('relay readiness', () => {
       coordinator.stop()
     }
   )
+
+  it('floors a limit-coded or repeated rate limit, but keeps a lone 4429 fast (#21203)', () => {
+    const limitCoded = new Error('relay_control_error_limit_exceeded')
+    const closed4429 = new Error('relay_control_closed_4429')
+    expect(relayUnavailableReasonFor(limitCoded)).toBe('control_error_limit_exceeded')
+    expect(relayRetryFloorMs(limitCoded, 0)).toBe(5_000)
+    expect(relayRetryFloorMs(closed4429, 0)).toBe(0)
+    expect(relayRetryFloorMs(closed4429, 1)).toBe(5_000)
+    expect(relayRetryFloorMs(closed4429, 2)).toBe(10_000)
+    expect(relayRetryFloorMs(closed4429, 9)).toBe(30_000)
+    expect(relayRetryFloorMs(new Error('relay_control_error_unknown_control_message'), 3)).toBe(0)
+    expect(relayRetryFloorMs(new RelayHttpError('assignment', 503, 7_000), 0)).toBe(7_000)
+  })
+
+  it('paces a coordinator whose control keeps closing 4429', async () => {
+    vi.useFakeTimers()
+    const openBroker = vi.fn(async () => {
+      throw new Error('relay_control_closed_4429')
+    })
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: () => {},
+      random: () => 0
+    })
+    coordinator.reconcile()
+    // A lone 4429 retries at once (zero jitter); the repeat then waits 5 s.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openBroker).toHaveBeenCalledTimes(3)
+    coordinator.stop()
+  })
 
   it('classifies transport failures into actionable reasons', () => {
     const tls = new TypeError('fetch failed', {

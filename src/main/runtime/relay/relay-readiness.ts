@@ -71,6 +71,26 @@ export function relayUnavailableReasonFor(error: unknown): RelayUnavailableReaso
   return message ? `control_${message[1].slice('control_'.length)}` : 'network'
 }
 
+const RATE_LIMIT_FLOOR_BASE_MS = 5_000
+const RATE_LIMIT_FLOOR_MAX_MS = 30_000
+
+// The earliest a reconnect may retry. A lone 4429 is the relay's "retry this
+// cell" (also sent for a transient relay-side failure) and keeps the fast retry;
+// a limit-coded refusal or a 4429 repeated after a failed retry waits 5 s, then
+// 10 s, ... up to 30 s, so a rate-limited desktop stops keeping itself limited.
+export function relayRetryFloorMs(error: unknown, priorAttempts: number): number {
+  if (error instanceof RelayHttpError) {
+    return error.retryAfterMs ?? 0
+  }
+  const reason = relayUnavailableReasonFor(error)
+  const limitCoded = reason.startsWith('control_error_') && /limit|rate/.test(reason)
+  if (!limitCoded && !(reason === 'rate_limited' && priorAttempts > 0)) {
+    return 0
+  }
+  const doublings = Math.max(0, limitCoded ? priorAttempts : priorAttempts - 1)
+  return Math.min(RATE_LIMIT_FLOOR_MAX_MS, RATE_LIMIT_FLOOR_BASE_MS * 2 ** doublings)
+}
+
 // Bounds a readiness wait by its caller's deadline and lets a fence release it,
 // without cancelling the shared reconnect work other callers still need.
 export class RelayReadinessWaiters {

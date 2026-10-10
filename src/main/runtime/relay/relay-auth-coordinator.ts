@@ -5,9 +5,10 @@ import {
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
-import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
+import { shouldRetryRelayConnectionError } from './relay-http-client'
 import {
   RelayReadinessWaiters,
+  relayRetryFloorMs,
   relayUnavailableReasonFor,
   type RelayUnavailable
 } from './relay-readiness'
@@ -278,7 +279,7 @@ export class RelayAuthCoordinator {
         this.unavailableReason = relayUnavailableReasonFor(error)
         this.publish('offline')
         if (shouldRetryRelayConnectionError(error)) {
-          const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
+          const retryAfterMs = relayRetryFloorMs(error, this.retry.attempts)
           this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
         }
       }
