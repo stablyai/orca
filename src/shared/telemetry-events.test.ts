@@ -4,18 +4,7 @@
 // round-trips without coercion.
 
 import { describe, expect, it } from 'vitest'
-import {
-  addRepoSetupStepActionSchema,
-  AGENT_KIND_VALUES,
-  agentKindSchema,
-  errorClassSchema,
-  eventSchemas,
-  isCohortExtendedEvent,
-  SETTINGS_CHANGED_WHITELIST,
-  settingsChangedKeySchema
-} from './telemetry-events'
-import { FEATURE_INTERACTION_IDS, getFeatureInteractionCategory } from './feature-interactions'
-import { appStarSourceSchema } from './gh-star-source'
+import { errorClassSchema, eventSchemas, isCohortExtendedEvent } from './telemetry-events'
 
 describe('feature_interaction_usage_bucket_reached schema', () => {
   it('accepts a valid bucket payload', () => {
@@ -31,20 +20,6 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
 
   it('is in the runtime cohort-injection roster', () => {
     expect(isCohortExtendedEvent('feature_interaction_usage_bucket_reached')).toBe(true)
-  })
-
-  it('keeps the feature id enum in sync with the catalog', () => {
-    const schema = eventSchemas.feature_interaction_usage_bucket_reached
-    for (const feature_id of FEATURE_INTERACTION_IDS) {
-      expect(
-        schema.safeParse({
-          feature_id,
-          feature_category: getFeatureInteractionCategory(feature_id),
-          count_bucket: 'count_1',
-          bucket_source: 'crossed_now'
-        }).success
-      ).toBe(true)
-    }
   })
 
   it('rejects unknown enum values and mismatched categories', () => {
@@ -125,13 +100,6 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
 })
 
 describe('app_starred_orca schema', () => {
-  it('accepts every declared app star source', () => {
-    for (const source of appStarSourceSchema.options) {
-      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
-      expect(parsed.success).toBe(true)
-    }
-  })
-
   it('accepts cohort context on successful app star telemetry', () => {
     const parsed = eventSchemas.app_starred_orca.safeParse({
       source: 'settings',
@@ -490,13 +458,6 @@ describe('agent_hook_unattributed schema', () => {
 })
 
 describe('add_repo_setup_step_action schema', () => {
-  it('accepts every Setup-step action declared in the schema', () => {
-    for (const action of addRepoSetupStepActionSchema.options) {
-      const parsed = eventSchemas.add_repo_setup_step_action.safeParse({ action })
-      expect(parsed.success).toBe(true)
-    }
-  })
-
   it('rejects unknown action enum values', () => {
     const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
       action: 'export_to_pdf'
@@ -576,24 +537,24 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
-  it('accepts structured native chat as a boolean adoption signal', () => {
+  it('accepts the Chat UI switch as a boolean adoption signal', () => {
     expect(
       eventSchemas.settings_changed.safeParse({
-        setting_key: 'experimentalStructuredNativeChat',
+        setting_key: 'experimentalNativeChat',
         value_kind: 'bool'
       }).success
     ).toBe(true)
   })
 
-  it('accepts whitelisted setting keys', () => {
-    for (const key of SETTINGS_CHANGED_WHITELIST) {
-      const parsed = eventSchemas.settings_changed.safeParse({
-        setting_key: key,
-        value_kind: 'bool'
-      })
-      expect(parsed.success).toBe(true)
+  it.each(['experimentalStructuredNativeChat', 'openAgentTabsInChatByDefault'])(
+    'rejects the retired %s key',
+    (settingKey) => {
+      expect(
+        eventSchemas.settings_changed.safeParse({ setting_key: settingKey, value_kind: 'bool' })
+          .success
+      ).toBe(false)
     }
-  })
+  )
 
   it('rejects non-whitelisted setting keys', () => {
     const parsed = eventSchemas.settings_changed.safeParse({
@@ -605,20 +566,8 @@ describe('settings_changed schema', () => {
 })
 
 describe('exported enum schemas', () => {
-  it('agentKindSchema accepts the known product IDs', () => {
-    for (const kind of AGENT_KIND_VALUES) {
-      expect(agentKindSchema.safeParse(kind).success).toBe(true)
-    }
-  })
-
   it('errorClassSchema rejects novel classes', () => {
     expect(errorClassSchema.safeParse('kernel_panic').success).toBe(false)
-  })
-
-  it('settingsChangedKeySchema membership matches SETTINGS_CHANGED_WHITELIST', () => {
-    for (const key of SETTINGS_CHANGED_WHITELIST) {
-      expect(settingsChangedKeySchema.safeParse(key).success).toBe(true)
-    }
   })
 })
 

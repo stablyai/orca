@@ -35,6 +35,9 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   }
 }
 
+// Why separate: rung D connects without the Orca remote server, and the card must say so.
+export const PLAIN_SSH_STATUS_LABEL = 'Connected (plain SSH)'
+
 export function statusColor(status: SshConnectionStatus): string {
   switch (status) {
     case 'connected':
@@ -294,7 +297,11 @@ export function SshTargetCard({
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{target.label}</span>
           <span className={`size-2 shrink-0 rounded-full ${statusColor(status)}`} />
-          <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {status === 'connected' && state?.plainSsh
+              ? PLAIN_SSH_STATUS_LABEL
+              : STATUS_LABELS[status]}
+          </span>
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {endpoint}
@@ -305,6 +312,31 @@ export function SshTargetCard({
             and a one-line clamp with no tooltip made it unreachable even on hover. */}
         {state?.error ? (
           <p className="mt-0.5 text-xs text-red-400 [overflow-wrap:anywhere]">{state.error}</p>
+        ) : null}
+        {status === 'connected' && state?.plainSsh ? (
+          <p
+            data-ssh-plain-reason={state.plainSsh.reason}
+            className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere]"
+          >
+            {state.plainSsh.message}
+          </p>
+        ) : null}
+        {status === 'connected' && state?.hostNodeRuntime ? (
+          <p
+            data-ssh-host-node-runtime=""
+            className="mt-0.5 text-xs text-status-warning [overflow-wrap:anywhere]"
+          >
+            {/* Why two: only an opt-in can be undone in settings; Auto lands here when Orca-managed Node couldn't run. */}
+            {target.remoteRuntime === 'legacy'
+              ? translate(
+                  'auto.components.settings.SshTargetCard.hostNodeUnsupported',
+                  'Unsupported configuration: Orca runs on this host’s Node.js with terminal support installed by npm on the host. Set Runtime to Auto in this host’s SSH settings to use Orca-managed Node.'
+                )
+              : translate(
+                  'auto.components.settings.SshTargetCard.hostNodeFallback',
+                  'Unsupported configuration: Orca-managed Node isn’t available for this connection, so Orca runs on this host’s Node.js with terminal support installed by npm on the host.'
+                )}
+          </p>
         ) : null}
       </div>
 

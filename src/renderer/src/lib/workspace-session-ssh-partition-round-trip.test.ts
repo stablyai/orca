@@ -23,6 +23,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { mergeDirectSshRemoteWorkspaceSession } from '../hooks/remote-workspace-session-merge'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 const TARGET_ID = 'target-1'
 const SSH_HOST_ID: ExecutionHostId = `ssh:${TARGET_ID}`
@@ -121,11 +122,50 @@ describe('ssh host partition hydration', () => {
     ).toBe('session-1')
   })
 
-  it('leaves a workspace the local partition already holds tabs for untouched', async () => {
-    // The other direction of the same rule, and the reason adoption is only gap-filling: merging
-    // into a populated row would re-add tabs the user had closed on every launch.
+  it('ignores a stray local copy of a workspace the catalog places on the ssh target', async () => {
+    // `local` rows for an SSH workspace are residue (#23390, #25616). Keeping them restored tabs
+    // the user had closed and dropped the live ones the SSH partition holds.
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(strandedPartitions([tab('tab-runtime')], [tab('tab-local')])),
+      repos
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-runtime'
+    ])
+    expect(read.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBe('tab-runtime')
+    expect(read.contestedPrimaryHostBySessionKey[WORKTREE_ID]).toBe(SSH_HOST_ID)
+  })
+
+  it('keeps the ssh partition agent-resume records beside a stray local copy', async () => {
+    const partitions = strandedPartitions([tab('tab-runtime')], [tab('tab-local')])
+    partitions[SSH_HOST_ID] = session({
+      ...partitions[SSH_HOST_ID],
+      sleepingAgentSessionsByPaneKey: {
+        'tab-runtime:leaf-1': {
+          paneKey: 'tab-runtime:leaf-1',
+          worktreeId: WORKTREE_ID,
+          tabId: 'tab-runtime',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'resume me',
+          state: 'done',
+          capturedAt: 5,
+          updatedAt: 5
+        } satisfies SleepingAgentSessionRecord
+      }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
+
+    expect(Object.keys(read.session.sleepingAgentSessionsByPaneKey ?? {})).toEqual([
+      'tab-runtime:leaf-1'
+    ])
+  })
+
+  it('keeps local tabs when the ssh partition names the workspace but holds no tabs', async () => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(strandedPartitions([], [tab('tab-local')])),
       repos
     )
 
@@ -134,12 +174,107 @@ describe('ssh host partition hydration', () => {
     ])
   })
 
-  it("leaves that workspace's other rows alone as well", async () => {
+  it('ignores a stray local copy when the ssh partition keys its tabs by workspace key', async () => {
+    const partitions = strandedPartitions([tab('tab-runtime')], [tab('tab-local')])
+    partitions[SSH_HOST_ID] = session({
+      tabsByWorktree: { [worktreeWorkspaceKey(WORKTREE_ID)]: [tab('tab-runtime')] }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
+
+    expect(
+      Object.values(read.session.tabsByWorktree)
+        .flat()
+        .map((entry) => entry.id)
+    ).toEqual(['tab-runtime'])
+  })
+
+  it("replaces a stray local copy's records for a tab id the ssh partition shares", async () => {
+    // Relay reattach copied tab ids into `local`, so the stale and live rows can share a key.
+    const partitions = strandedPartitions([tab('tab-shared')], [tab('tab-shared')])
+    const layout = (activeLeafId: string) => ({ root: null, activeLeafId, expandedLeafId: null })
+    partitions.local = session({
+      ...partitions.local,
+      terminalLayoutsByTabId: { 'tab-shared': layout('leaf-stale') }
+    })
+    partitions[SSH_HOST_ID] = session({
+      ...partitions[SSH_HOST_ID],
+      terminalLayoutsByTabId: { 'tab-shared': layout('leaf-live') }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
+
+    expect(read.session.terminalLayoutsByTabId?.['tab-shared']?.activeLeafId).toBe('leaf-live')
+  })
+
+  it("keeps a stray local copy's unsaved draft beside the ssh partition's open files", async () => {
+    const openFile = (relativePath: string, dirtyDraftContent?: string) => ({
+      filePath: `${WORKTREE_PATH}/${relativePath}`,
+      relativePath,
+      worktreeId: WORKTREE_ID,
+      language: 'typescript',
+      ...(dirtyDraftContent === undefined ? {} : { dirtyDraftContent })
+    })
+    const partitions = strandedPartitions([tab('tab-runtime')], [tab('tab-local')])
+    partitions.local = session({
+      ...partitions.local,
+      openFilesByWorktree: { [WORKTREE_ID]: [openFile('src/main.ts', 'unsaved work')] }
+    })
+    partitions[SSH_HOST_ID] = session({
+      ...partitions[SSH_HOST_ID],
+      openFilesByWorktree: { [WORKTREE_ID]: [openFile('src/live.ts')] }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-runtime'
+    ])
+    expect(
+      read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((file) => [
+        file.relativePath,
+        file.dirtyDraftContent
+      ])
+    ).toEqual([
+      ['src/live.ts', undefined],
+      ['src/main.ts', 'unsaved work']
+    ])
+  })
+
+  it("keeps a stray local copy's unsaved draft over the ssh partition's clean entry", async () => {
+    const file = {
+      filePath: `${WORKTREE_PATH}/src/main.ts`,
+      relativePath: 'src/main.ts',
+      worktreeId: WORKTREE_ID,
+      language: 'typescript'
+    }
+    const partitions = strandedPartitions([tab('tab-runtime')], [tab('tab-local')])
+    partitions.local = session({
+      ...partitions.local,
+      openFilesByWorktree: { [WORKTREE_ID]: [{ ...file, dirtyDraftContent: 'unsaved work' }] }
+    })
+    partitions[SSH_HOST_ID] = session({
+      ...partitions[SSH_HOST_ID],
+      openFilesByWorktree: { [WORKTREE_ID]: [file] }
+    })
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
+
+    expect(
+      read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((entry) => entry.dirtyDraftContent)
+    ).toEqual(['unsaved work'])
+  })
+
+  it('leaves a populated local copy alone when the catalog cannot name its owner', async () => {
+    // Without a repo row the local copy may be the live one, so the gap-filling rule still applies.
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(strandedPartitions([tab('tab-runtime')], [tab('tab-local')])),
-      repos
+      []
     )
 
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-local'
+    ])
     expect(read.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBeUndefined()
   })
 
@@ -313,9 +448,10 @@ describe('ssh host partition rows the host has nothing for', () => {
     )
   })
 
-  it('still adopts a populated host row over the base leftovers', async () => {
+  it('still adopts a populated host row over the base leftovers, keeping only their drafts', async () => {
     // The other side of the same rule: the guard must be about the host having nothing, not about
-    // the base having something, or adoption stops repairing the split it exists for.
+    // the base having something, or adoption stops repairing the split it exists for. An unsaved
+    // draft the host row lacks is the one leftover kept, since nothing else can recover it.
     const partitions = emptyHostRowsOverBaseDraft(false)
     partitions[SSH_HOST_ID] = session({
       ...partitions[SSH_HOST_ID],
@@ -335,7 +471,7 @@ describe('ssh host partition rows the host has nothing for', () => {
 
     expect(
       read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((file) => file.relativePath)
-    ).toEqual(['src/host.ts'])
+    ).toEqual(['src/host.ts', 'src/main.ts'])
   })
 
   it('adopts the layout of a tab the host slice names only in unifiedTabs', async () => {
@@ -682,8 +818,7 @@ describe('ssh host partition remote-workspace round trip', () => {
       new Set([WORKTREE_ID]),
       read.session.tabsByWorktree,
       new Set(),
-      SSH_HOST_ID,
-      1
+      SSH_HOST_ID
     )
 
     expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])
@@ -718,8 +853,7 @@ describe('ssh host partition remote-workspace round trip', () => {
       new Set([WORKTREE_ID]),
       read.session.tabsByWorktree,
       new Set(),
-      SSH_HOST_ID,
-      2
+      SSH_HOST_ID
     )
 
     expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])

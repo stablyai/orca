@@ -143,7 +143,7 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
   return (
     args.snapshotIsFresh &&
     args.event.type === 'snapshot' &&
-    // Why: a synthesized unpublished frame (`UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0)
+    // Why: a synthesized unpublished frame (the `UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` placeholder)
     // is the runtime saying "ask me later", not a host with zero terminals. Seeding on it can
     // duplicate a pane the host is about to republish after a restart — the same "ask me later"
     // frame the tombstone write already refuses to treat as the user emptying the workspace.

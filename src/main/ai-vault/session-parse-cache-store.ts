@@ -6,7 +6,7 @@ import type { SkippedTranscriptRecord } from './session-transcript-record-budget
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
-const MAX_CACHE_ENTRIES = 4096
+export const MAX_CACHE_ENTRIES = 4096
 
 export type SessionParseResumePoint = {
   state: ResumableSessionParseState
@@ -77,17 +77,26 @@ export function snapshotSessionParseCacheForPersistence(): [
 export function seedSessionParseCache(
   entries: Iterable<[string, PersistedSessionParseCacheEntry]>
 ): void {
-  const list = [...entries]
-  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
-  // tail rather than seeding the oldest entries and dropping the tail.
-  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      return
-    }
-    // In-process entries are always fresher than persisted ones; never clobber.
+  const newest = new Map<string, PersistedSessionParseCacheEntry>()
+  for (const [path, entry] of entries) {
     if (cache.has(path)) {
       continue
     }
+    newest.delete(path)
+    newest.set(path, entry)
+    if (newest.size > MAX_CACHE_ENTRIES) {
+      const oldest = newest.keys().next()
+      if (!oldest.done) {
+        newest.delete(oldest.value)
+      }
+    }
+  }
+  const available = MAX_CACHE_ENTRIES - cache.size
+  if (available <= 0) {
+    return
+  }
+  // In-process entries win; among persisted duplicates the newest row wins.
+  for (const [path, entry] of [...newest].slice(-available)) {
     cache.set(path, {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,

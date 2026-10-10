@@ -117,4 +117,35 @@ describe('the editor document content', () => {
     expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
     expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
   })
+
+  it('reports one change for a checkbox tap, not one per event the tap raises', () => {
+    // One tap raises click, input and change, and all three bubble to `#editor`: the recorded
+    // sequence is the precondition, so a count of one cannot pass by the events going missing.
+    const editor = editorDocument()
+    editor.handle.setMarkdown('- [ ] Open', 1)
+    const reached: string[] = []
+    for (const name of ['click', 'input', 'change']) {
+      editor.editor.addEventListener(name, (event) => reached.push(event.type))
+    }
+    editor.editor.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(reached).toEqual(['click', 'input', 'change'])
+    expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
+    expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
+  })
+
+  it('reports one change for inline code over a selection, not one per emitting step', async () => {
+    // The wrap helper emitted and `runCommand` emits after every command: two identical changes.
+    const editor = editorDocument()
+    editor.handle.setMarkdown('one two', 1)
+    const text = editor.editor.querySelector('p')!.firstChild!
+    const range = document.createRange()
+    range.setStart(text, 0)
+    range.setEnd(text, 3)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    await editor.handle.runCommand('inlineCode')
+    expect(editor.editor.innerHTML).toBe('<p><code>one</code> two</p>')
+    expect(editor.posted).toEqual([{ type: 'change', markdown: '`one` two', generation: 1 }])
+  })
 })

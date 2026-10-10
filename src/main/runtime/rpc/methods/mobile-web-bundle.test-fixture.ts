@@ -22,7 +22,7 @@ export function mobileWebBundleFiller(byteLength: number, seed: number): Buffer 
   return bytes
 }
 
-type SyntheticAsset = { path: string; bytes: Buffer; contentType: string }
+export type SyntheticAsset = { path: string; bytes: Buffer; contentType: string }
 
 /**
  * A bundle the real builder cannot produce today: its largest asset spans three chunks, where every
@@ -57,10 +57,11 @@ export type SyntheticMobileWebBundle = {
 
 export function writeSyntheticMobileWebBundle(
   root: string,
-  seed: number
+  seed: number,
+  extraAssets: readonly SyntheticAsset[] = []
 ): SyntheticMobileWebBundle {
   mkdirSync(join(root, 'assets'), { recursive: true })
-  const written = syntheticAssets(seed)
+  const written = [...syntheticAssets(seed), ...extraAssets]
   for (const asset of written) {
     writeFileSync(join(root, asset.path), asset.bytes)
   }

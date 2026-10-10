@@ -6,6 +6,7 @@ import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { PtyBindingSourceExpectation } from '../../../persistence'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
@@ -47,6 +48,7 @@ export type RuntimePtySpawnState = {
         tabId: string
         leafId: string
         expectedSourceBinding?: PtyBindingSourceExpectation
+        placement?: TerminalPanePlacement
       }
     | undefined
   env: Record<string, string> | undefined
@@ -78,6 +80,7 @@ export type RuntimePtySpawnState = {
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   reportPtySpawnCommitted: () => void
+  preSpawnHiddenMarkId: string | null
 }
 
 export type RuntimePtySpawnArgs = {
@@ -104,8 +107,11 @@ export type RuntimePtySpawnArgs = {
   sessionId?: string
   shellOverride?: string
   isNewSession?: boolean
+  /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
+  initiallyHidden?: boolean
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation
+  placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
   agentSessionEnsure?: {
@@ -182,6 +188,7 @@ export function createRuntimePtySpawnState(
     snapshotKittyFlagsCoverReconciledSeq: true,
     preparedProvisionalExecutionContext: false,
     releaseWorktreeSpawn: undefined,
-    reportPtySpawnCommitted: () => {}
+    reportPtySpawnCommitted: () => {},
+    preSpawnHiddenMarkId: null
   }
 }

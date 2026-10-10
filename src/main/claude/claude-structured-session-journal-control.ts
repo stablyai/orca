@@ -1,21 +1,44 @@
+import {
+  bindClaudeContextUsageCapture,
+  type ClaudeContextUsageCaptureOptions
+} from './claude-context-usage'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { createClaudeInitDeadline } from './claude-structured-init-deadline'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
+import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeInitProof } from './claude-structured-init-proof'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks
 } from './claude-structured-session-state'
 
+export function createClaudeSessionJournalTranslator(
+  sink: StructuredAgentSessionEventSink | undefined,
+  fallbackIdPrefix: string,
+  failure: Parameters<typeof createClaudeJournalFailureHandler>[0]
+): ClaudeJournalTranslator | null {
+  const { attempt } = failure
+  return sink
+    ? createClaudeJournalTranslator({
+        sink,
+        account: () => attempt.account,
+        fallbackIdPrefix,
+        onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
+        bindPromptItemId: (itemId, promptKey) =>
+          attempt.prompts.bindJournalItemId(itemId, promptKey)
+      })
+    : null
+}
+
 export function createClaudeJournalFailureHandler(input: {
   attempt: ClaudeAcquisitionAttempt
-  initDeadline: ReturnType<typeof createClaudeInitDeadline>
+  initProof: ClaudeInitProof
   callbacks: ClaudeAcquireCallbacks
   sessionId: string
 }): (error: Error) => void {
   return (error) => {
     if (!input.attempt.published) {
-      input.initDeadline.reject(error)
+      input.initProof.reject(error)
       return
     }
     const connection = input.attempt.connection
@@ -50,4 +73,28 @@ export function bindClaudeJournalReadingControl(
       }
     }
   })
+}
+
+/**
+ * Every binding an acquisition makes between the connection and the journal:
+ * reading control, and the `/context` breakdown the translator asks for. One
+ * release covers both.
+ */
+export function bindClaudeConnectionJournalControls(
+  sink: StructuredAgentSessionEventSink | undefined,
+  connection: ClaudeStreamJsonConnection,
+  translator: ClaudeJournalTranslator | null,
+  capture: ClaudeContextUsageCaptureOptions
+): (() => void) | undefined {
+  const unbinds = [
+    bindClaudeJournalReadingControl(sink, connection, translator),
+    bindClaudeContextUsageCapture(connection, translator, capture)
+  ].filter((unbind): unbind is () => void => unbind !== undefined)
+  return unbinds.length === 0
+    ? undefined
+    : () => {
+        for (const unbind of unbinds) {
+          unbind()
+        }
+      }
 }

@@ -8,7 +8,7 @@
 // the original "stale daemon serves new client" bug.
 
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
@@ -45,6 +45,10 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('not-needed')
+}))
+
 vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayInstallMarkerModule>()),
   createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
@@ -57,6 +61,7 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import type { SshConnection } from './ssh-connection'
+import { REMOTE_INSTALL_ORDER_OK } from './remote-install-previous-version'
 
 function makeMockConnection(): SshConnection {
   return {
@@ -95,8 +100,11 @@ function makeMockConnection(): SshConnection {
 }
 
 describe('cross-version isolation', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('a v2 deploy never references the v1 install dir or v1 socket path', async () => {
@@ -145,6 +153,12 @@ describe('cross-version isolation', () => {
       }
       if (command.includes('test -S') && command.includes('echo ALIVE || echo DEAD')) {
         return Promise.resolve('DEAD')
+      }
+      if (command.includes(REMOTE_INSTALL_ORDER_OK)) {
+        // A newer v0 is the previous build, so v1 is kept only by its live socket.
+        return Promise.resolve(
+          `relay-0.1.0+222222222222\nrelay-0.1.0+000000000000\nrelay-0.1.0+111111111111\n${REMOTE_INSTALL_ORDER_OK}`
+        )
       }
       if (command.includes('__ORCA_RELAY_GC_FIND_STATUS__')) {
         return Promise.resolve('relay-0.1.0+111111111111\nrelay-0.1.0+222222222222\n')

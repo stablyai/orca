@@ -1,9 +1,8 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
   panels: { hostId: string; worktreeId: string; name?: string }[]
   /** `mount:<pathname>` / `unmount:<pathname>`, which is the only thing that tells a remount from
@@ -13,7 +12,6 @@ type RouteDependencies = {
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   routes: [],
   panels: [],
   lifecycle: [],
@@ -21,12 +19,12 @@ const dependencies = vi.hoisted((): RouteDependencies => ({
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
+}))
+
+vi.mock('react-native', () => ({
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: 'View'
 }))
 
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
@@ -76,13 +74,15 @@ async function renderRoute(): Promise<void> {
 
 describe('the native agent-history route that hands off to the shell', () => {
   beforeEach(() => {
-    dependencies.storage.clear()
     dependencies.routes.length = 0
     dependencies.panels.length = 0
     dependencies.lifecycle.length = 0
     dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-    Object.assign(globalThis, { __DEV__: true })
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('opens the shell on this screen, with the name as the search half', async () => {
@@ -92,26 +92,14 @@ describe('the native agent-history route that hands off to the shell', () => {
     ])
   })
 
-  it('renders the native panel while the flag read is still settling', async () => {
-    // `index.tsx`'s frame, for its reason: the read is async and a store build never reaches
-    // storage at all, so the native screen is the only thing this route may paint first.
-    await renderRoute()
-    expect(dependencies.panels[0]).toEqual({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      name: 'my worktree'
-    })
-    expect(dependencies.panels).toHaveLength(1)
-  })
-
   it('names no params when the caller named no worktree', async () => {
     dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1' }
     await renderRoute()
     expect(dependencies.routes).toEqual([{ pathname: '/h/host-1/agent-history/wt-1' }])
   })
 
-  it('renders the native panel with the flag off, which is every store build', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'false')
+  it('renders the native panel in a build without the shell, which is every store build', async () => {
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
     await renderRoute()
     expect(dependencies.routes).toEqual([])
     expect(dependencies.panels.at(-1)).toEqual({
@@ -188,11 +176,6 @@ describe('the native agent-history route that hands off to the shell', () => {
       const rendered: { tree: ReturnType<typeof create> | null } = { tree: null }
       await act(async () => {
         rendered.tree = create(createElement(MobileAgentSessionHistoryScreen))
-      })
-      // The flag read is async, so the shell is not on screen until it settles; the other cases here
-      // flush it the same way.
-      await act(async () => {
-        await Promise.resolve()
       })
       expect(dependencies.lifecycle).toEqual(['mount:/h/host-1/agent-history/wt-1'])
       dependencies.params = { hostId: 'host-1', worktreeId: 'wt-2', name: 'another worktree' }

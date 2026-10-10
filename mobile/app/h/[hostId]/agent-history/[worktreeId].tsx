@@ -2,16 +2,15 @@ import { useLocalSearchParams } from 'expo-router'
 import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/MobileAgentSessionHistoryPanel'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
 import { shellScreenRoute } from '../../../../src/mobile-web-shell/shell-screen-route'
-import { useMobileWebShellEnabled } from '../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { shellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 /**
  * Agent session history, from the desktop's bundle or from this app.
  *
  * The switch is `index.tsx`'s, for its reasons: the shell renders the page only for a route the
- * bundle lists with grants this app implements, `fallback` is what a negotiation that said no
- * falls back to, and a settling flag read renders the native panel because a store build never
- * reaches storage at all.
+ * bundle lists with grants this app implements, and `fallback` is what a negotiation that said no
+ * falls back to.
  *
  * Two dynamic segments rather than one, so both are encoded: `useLocalSearchParams` answers the
  * decoded value, and a worktree id or a deep-linked host id carrying `/`, `?`, `#` or whitespace
@@ -38,21 +37,22 @@ export default function MobileAgentSessionHistoryScreen() {
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   const name = firstParam(params.name)
-  const enabled = useMobileWebShellEnabled()
   const panel = (
     <MobileAgentSessionHistoryPanel hostId={hostId} worktreeId={worktreeId} name={name} />
   )
 
-  if (enabled !== true || !hostId || !worktreeId) {
-    return panel
-  }
-  const route = shellScreenRoute({
-    pathname: `/h/${encodeURIComponent(hostId)}/agent-history/${encodeURIComponent(worktreeId)}`,
-    // Omitted rather than empty: the page reads the label off the search half, and a `name=`
-    // with nothing after it is a label, where an absent one lets the panel derive its own.
-    ...(name === '' ? {} : { params: { name } })
-  })
-  if (route === null) {
+  const route =
+    hostId && worktreeId
+      ? shellScreenRoute({
+          pathname: `/h/${encodeURIComponent(hostId)}/agent-history/${encodeURIComponent(worktreeId)}`,
+          // Omitted rather than empty: the page reads the label off the search half, and a `name=`
+          // with nothing after it is a label, where an absent one lets the panel derive its own.
+          ...(name === '' ? {} : { params: { name } })
+        })
+      : null
+  const decision = shellSwitchDecision(route)
+
+  if (decision.kind === 'native') {
     return panel
   }
   // Keyed on the route: a host captures the grants its session was opened with, so a screen
@@ -60,6 +60,11 @@ export default function MobileAgentSessionHistoryScreen() {
   // page has left. The key is what makes the change a remount, which disposes that bridge in the
   // commit, and the new session starts with no grants until its own `init`.
   return (
-    <MobileWebShellScreen key={route.pathname} hostId={hostId} route={route} fallback={panel} />
+    <MobileWebShellScreen
+      key={decision.route.pathname}
+      hostId={hostId}
+      route={decision.route}
+      fallback={panel}
+    />
   )
 }

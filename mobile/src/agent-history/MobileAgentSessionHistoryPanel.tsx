@@ -1,13 +1,4 @@
-import { optionalSettingsRead } from '../transport/settings-read-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
-import { readAcceptedResumeList } from './resume-metadata-lists'
-import {
-  resumeFolderWorkspaceListRead,
-  resumeProjectGroupListRead,
-  resumeRepoListRead,
-  resumeWorktreeListRead
-} from './mobile-agent-history-operations'
+import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -15,22 +6,17 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useHostClient } from '../transport/client-context'
-import type { RpcClient } from '../transport/rpc-client'
-import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
+  readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal,
-  type MobileAiVaultResumeSettings
+  resumeAiVaultSessionInTerminal
 } from '../session/ai-vault-resume-launch'
-import {
-  prepareMobileAiVaultSessionResume,
-  RESUME_RPC_TIMEOUT_MS
-} from '../session/ai-vault-resume-preparation'
+import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -38,15 +24,11 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import {
-  resolveMobileAiVaultSessionResumeTarget,
-  type MobileAiVaultResumeFolderWorkspace,
-  type MobileAiVaultResumeProjectGroup,
-  type MobileAiVaultResumeRepo
-} from './agent-history-resume-target'
+import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
+import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -69,6 +51,12 @@ export function MobileAgentSessionHistoryPanel({
   // screen, and the session it resumes into is a native route the shell has to push.
   const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
+  const claimResumeOwnership = useMobileResumeOperationOwnership(
+    hostId,
+    worktreeId,
+    client,
+    connState
+  )
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
   const [query, setQuery] = useState('')
@@ -147,8 +135,8 @@ export function MobileAgentSessionHistoryPanel({
     [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now]
   )
 
-  const hostPlatform = useMemo(
-    () => readMobileRuntimeHostPlatform(hostStatusResult),
+  const resumeHost = useMemo(
+    () => readMobileAiVaultResumeHost(hostStatusResult),
     [hostStatusResult]
   )
   const hostTerminalWindowsShell = useMemo(
@@ -177,6 +165,7 @@ export function MobileAgentSessionHistoryPanel({
         return
       }
 
+      const assertCurrentOwner = claimResumeOwnership()
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(session.id)
       setResumeMessage(null)
@@ -188,6 +177,7 @@ export function MobileAgentSessionHistoryPanel({
           settings,
           worktrees: freshWorktrees
         } = await loadMobileResumeMetadata(client)
+        assertCurrentOwner()
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
@@ -207,7 +197,7 @@ export function MobileAgentSessionHistoryPanel({
 
         const platform = resolveMobileAiVaultResumePlatform(
           target.targetStatus,
-          hostPlatform,
+          resumeHost.platform,
           target.workspacePath,
           target.terminalPlatform
         )
@@ -218,18 +208,31 @@ export function MobileAgentSessionHistoryPanel({
         }
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
+        assertCurrentOwner()
         const launch = buildMobileAiVaultResumeLaunch({
           session: preparedSession,
           hostPlatform: platform,
           hostTerminalWindowsShell,
           settings
         })
-        await resumeAiVaultSessionInTerminal(client, target.worktreeId, {
-          ...launch,
-          clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
-        })
+        await resumeAiVaultSessionInTerminal(
+          client,
+          target.worktreeId,
+          {
+            ...launch,
+            hostCapabilities: resumeHost.capabilities,
+            clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
+          },
+          assertCurrentOwner
+        )
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
+        // The host accepted the resume; a cutover now only stops navigation.
+        try {
+          assertCurrentOwner()
+        } catch {
+          return
+        }
         setResumeMessage('Agent session queued.')
         router.push(
           `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
@@ -248,11 +251,12 @@ export function MobileAgentSessionHistoryPanel({
       client,
       connState,
       hostId,
-      hostPlatform,
+      resumeHost,
       hostTerminalWindowsShell,
       router,
       worktreeId,
-      worktrees
+      worktrees,
+      claimResumeOwnership
     ]
   )
 
@@ -303,9 +307,11 @@ export function MobileAgentSessionHistoryPanel({
         <View style={styles.state}>
           <Text style={styles.stateTitle}>Unable to Load</Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
-          <Pressable style={styles.retryButton} onPress={retry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          {retry ? (
+            <Pressable style={styles.retryButton} onPress={retry}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <>
@@ -374,57 +380,6 @@ export function MobileAgentSessionHistoryPanel({
 
 const EMPTY_SESSIONS: AiVaultSession[] = []
 const EMPTY_ISSUES: { agent: AiVaultSession['agent']; path: string; message: string }[] = []
-
-async function loadMobileResumeMetadata(client: RpcClient): Promise<{
-  repos: MobileAiVaultResumeRepo[]
-  folderWorkspaces: MobileAiVaultResumeFolderWorkspace[]
-  projectGroups: MobileAiVaultResumeProjectGroup[]
-  settings: MobileAiVaultResumeSettings | null
-  worktrees: Worktree[] | null
-}> {
-  // Why: repo.list can enrich repo remote identities, so fetch resume-only
-  // metadata after explicit user intent instead of delaying history browsing.
-  // timeoutMs: without it a socket drop parks these on the reconnect waiter
-  // for minutes, pinning the resume spinner (see RESUME_RPC_TIMEOUT_MS).
-  const [repoReply, folderWorkspaceReply, projectGroupReply, settingsReply, worktreeReply] =
-    await Promise.all([
-      resumeRepoListRead.request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),
-      resumeFolderWorkspaceListRead
-        .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-        .catch(() => null),
-      resumeProjectGroupListRead
-        .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-        .catch(() => null),
-      optionalSettingsRead
-        .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-        .catch(() => null),
-      resumeWorktreeListRead
-        .request(client, { limit: 10000 }, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-        .catch(() => null)
-    ])
-  const repoResult = interpretOrThrowRefusalMessage(
-    () => resumeRepoListRead.interpret(repoReply),
-    'Unable to load workspace metadata.'
-  )
-  const folderWorkspaceResult =
-    folderWorkspaceReply && resumeFolderWorkspaceListRead.interpret(folderWorkspaceReply)
-  const projectGroupResult =
-    projectGroupReply && resumeProjectGroupListRead.interpret(projectGroupReply)
-  const settingsResult = settingsReply ? optionalSettingsRead.interpret(settingsReply) : null
-  const settings = settingsResult?.accepted
-    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      (settingsResult.value as MobileAiVaultResumeSettings | null | undefined)
-    : null
-  const worktreeResult = worktreeReply && resumeWorktreeListRead.interpret(worktreeReply)
-  return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    repos: (rpcPayloadMember(repoResult, 'repos') as MobileAiVaultResumeRepo[] | undefined) ?? [],
-    folderWorkspaces: readAcceptedResumeList(folderWorkspaceResult, 'folderWorkspaces') ?? [],
-    projectGroups: readAcceptedResumeList(projectGroupResult, 'groups') ?? [],
-    settings: settings ?? null,
-    worktrees: readAcceptedResumeList(worktreeResult, 'worktrees') ?? null
-  }
-}
 
 function createMobileAiVaultResumeMutationId(sessionId: string): string {
   const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'

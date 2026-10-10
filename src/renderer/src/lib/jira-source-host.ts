@@ -1,8 +1,8 @@
 import {
+  getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 
@@ -13,9 +13,7 @@ export function resolveJiraSourceHostId(args: {
 }): ExecutionHostId {
   const groupHostId =
     normalizeExecutionHostId(args.groupExecutionHostId) ??
-    (args.groupConnectionId
-      ? toSshExecutionHostId(args.groupConnectionId)
-      : LOCAL_EXECUTION_HOST_ID)
+    getConnectionExecutionHostId(args.groupConnectionId)
   const hostId = normalizeExecutionHostId(args.workspaceHostId) ?? groupHostId
   return parseExecutionHostId(hostId)?.kind === 'ssh' ? LOCAL_EXECUTION_HOST_ID : hostId
 }

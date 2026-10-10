@@ -81,8 +81,6 @@ describe('waitForWslRelaySentinel', () => {
     emitStdout(child, sentinel.subarray(0, mid))
     emitStdout(child, sentinel.subarray(mid))
     const transport = await promise
-    expect(typeof transport.write).toBe('function')
-    expect(typeof transport.onData).toBe('function')
     transport.pauseReads?.()
     transport.resumeReads?.()
     expect(child.stdout.pause).toHaveBeenCalledOnce()

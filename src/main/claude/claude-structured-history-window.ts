@@ -5,7 +5,9 @@
 // conversation Orca is about to resume. Absence here is not an inference about a
 // dead child — it is the content of the next turn's context.
 //
-// The window is anchored on the leaf uuid Orca durably recorded for the session.
+// The window is anchored on the leaf uuid Orca durably recorded for the session
+// and walks back to it from the file's last transcript row, which is where a
+// resume by session id continues; Claude's marker lags a crash mid-turn.
 // Without that anchor the read has no proven start, and the branch proof is what
 // decides whether the file we just read still descends from it: a fork, a
 // compaction, a sibling branch, or a torn tail all fail the proof, and every one
@@ -14,6 +16,11 @@
 
 import { join } from 'node:path'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import {
+  CLAUDE_STRUCTURED_HANDLE_NAMESPACE,
+  claudeProviderHandleLeafUuid,
+  isAgentSessionProviderHandleInNamespace
+} from '../../shared/agent-session-provider-handle-encoding'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import type {
   ProviderHistoryItem,
@@ -240,10 +247,13 @@ export async function resolveClaudeProviderHistoryWindow(input: {
   hasLiveSession: boolean
 }): Promise<ProviderHistoryWindow | null> {
   const handle = input.identity.providerHandle
-  if (handle.kind !== 'claude') {
+  if (
+    !handle ||
+    !isAgentSessionProviderHandleInNamespace(handle, CLAUDE_STRUCTURED_HANDLE_NAMESPACE)
+  ) {
     return null
   }
-  const transcriptPath = await resolveSessionFilePath('claude', handle.sessionId, {
+  const transcriptPath = await resolveSessionFilePath('claude', handle.nativeId, {
     claudeProjectsDir: join(input.accountHomePath, 'projects')
   })
   if (!transcriptPath) {
@@ -251,8 +261,8 @@ export async function resolveClaudeProviderHistoryWindow(input: {
   }
   return readClaudeProviderHistoryWindow({
     transcriptPath,
-    providerSessionId: handle.sessionId,
-    previousLeafUuid: handle.leafUuid,
+    providerSessionId: handle.nativeId,
+    previousLeafUuid: claudeProviderHandleLeafUuid(handle),
     sessionId: input.identity.sessionId,
     turnInFlight: input.hasLiveSession
   })

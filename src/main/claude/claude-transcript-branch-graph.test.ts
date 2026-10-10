@@ -1,18 +1,40 @@
 // The graph's own contract, independent of which bytes a reader fed it.
 
 import { describe, expect, it } from 'vitest'
-import { createBranchProof } from './claude-transcript-branch-graph'
+import {
+  ClaudeTranscriptMarkerMissingError,
+  createBranchProof
+} from './claude-transcript-branch-graph'
 
 const row = (uuid: string, parentUuid: string | null): string =>
   JSON.stringify({ type: 'user', uuid, parentUuid, sessionId: 'provider' })
 
-function build(lines: string[], previousLeafUuid: string | null) {
-  const builder = createBranchProof({ providerSessionId: 'provider', previousLeafUuid })
+function build(lines: string[], previousLeafUuid: string | null, tip?: 'marker' | 'file-tail') {
+  const builder = createBranchProof({
+    providerSessionId: 'provider',
+    previousLeafUuid,
+    ...(tip === undefined ? {} : { tip })
+  })
   for (const [index, line] of lines.entries()) {
     builder.add(line, index, true)
   }
   return builder
 }
+
+describe('createBranchProof file-tail tip', () => {
+  const MARKERLESS = [row('anchor', null), row('mid', 'anchor'), row('leaf', 'mid')]
+
+  it('proves the tip from the last main-chain row with no last-prompt row anywhere', () => {
+    expect(build(MARKERLESS, 'anchor', 'file-tail').finish()).toEqual({
+      leafUuid: 'leaf',
+      relation: 'descendant'
+    })
+  })
+
+  it('still requires the marker on the same bytes in marker mode', () => {
+    expect(() => build(MARKERLESS, 'anchor').finish()).toThrow(ClaudeTranscriptMarkerMissingError)
+  })
+})
 
 describe('createBranchProof ancestry chain', () => {
   const MARKER = JSON.stringify({ type: 'last-prompt', sessionId: 'provider', leafUuid: 'leaf' })

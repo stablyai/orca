@@ -1,15 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runProcessMock, resolveCodexCommandMock } = vi.hoisted(() => ({
-  runProcessMock: vi.fn(),
-  resolveCodexCommandMock: vi.fn()
-}))
+const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
-
-vi.mock('../codex-cli/command', () => ({
-  resolveCodexCommand: resolveCodexCommandMock
-}))
 
 import { resolveCodexTrustGrantHost } from './codex-trust-grant-host'
 
@@ -18,7 +11,7 @@ beforeEach(() => {
   // Stand in for the guest shell: rc banner first, then the payload inside the
   // command's own fence. The identity script execs, so no closing fence is written.
   runProcessMock.mockImplementation((spec: { args: string[] }) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
     return Promise.resolve({
       code: 0,
       signal: null,
@@ -29,29 +22,10 @@ beforeEach(() => {
         `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__/home/alice/.local/bin/codex\ncodex-cli 1.2.3\n`
     })
   })
-  resolveCodexCommandMock.mockReset()
-  resolveCodexCommandMock.mockReturnValue(process.execPath)
 })
 
 describe('resolveCodexTrustGrantHost', () => {
-  it('resolves the native command once for both the binary stamp and request', async () => {
-    const host = await resolveCodexTrustGrantHost({ kind: 'native' })
-    const input = {
-      runtimeHomePath: '/tmp/codex-home',
-      managedCommand: '/bin/sh codex-hook.sh',
-      expectedTrustKeys: ['managed-key']
-    }
-
-    expect(host.binaryStamp).toMatchObject({ kind: 'native', path: process.execPath })
-    expect(host.buildRequest(input).invocation.command).toBe(process.execPath)
-    expect(host.buildRequest(input).invocation.command).toBe(process.execPath)
-    // Why: PATH/version-manager scans are synchronous launch-path I/O. Reusing
-    // the resolved command keeps one grant at one scan regardless of consumers.
-    expect(resolveCodexCommandMock).toHaveBeenCalledTimes(1)
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('builds WSL requests without scanning the native PATH', async () => {
+  it("builds WSL requests, stamped with the guest's codex path and version", async () => {
     const host = await resolveCodexTrustGrantHost({
       kind: 'wsl',
       distro: 'Ubuntu',
@@ -79,7 +53,6 @@ describe('resolveCodexTrustGrantHost', () => {
         timeoutMs: 5_000
       })
     )
-    expect(resolveCodexCommandMock).not.toHaveBeenCalled()
   })
 
   it('drops the stamp when the guest probe fails instead of trusting partial stdout', async () => {

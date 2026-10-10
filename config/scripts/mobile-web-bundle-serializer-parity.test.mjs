@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeMobileWebBundleBuildId,
   serializeMobileWebBundleAssets as serializeInBuilder
-} from './build-mobile-web-bundle.mjs'
+} from './mobile-web-bundle-manifest.mjs'
 import {
   computeMobileWebBundleId,
   MobileWebBundleManifestSchema,

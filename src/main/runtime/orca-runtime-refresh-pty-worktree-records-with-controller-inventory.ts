@@ -1,12 +1,12 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from './orca-runtime-refresh-pty-worktree-records-from-controller'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { PtyControllerInventory } from './runtime-pty-controller-contract'
+import type * as PtyControllerContract from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
+  getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  parseExecutionHostId
 } from '../../shared/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
@@ -38,8 +38,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     deadline?: number,
     connectionId?: string | null,
     retryStale = false,
-    inventoryOptions?: { includeForegroundProcessEvidence?: boolean }
-  ): Promise<PtyControllerInventory | null> {
+    inventoryOptions?: PtyControllerContract.PtyInventoryRefreshOptions
+  ): Promise<PtyControllerContract.PtyControllerInventory | null> {
     if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       const targetedLiveness = this.refreshFloatingWorkspacePtyLiveness()
       if (targetedLiveness !== null) {
@@ -54,9 +54,8 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     if (!this.ptyController?.listProcesses) {
       return null
     }
-    const inventoryGeneration = this.ptyControllerInventorySequence + 1
-    this.ptyControllerInventorySequence = inventoryGeneration
-    const providerKey = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+    const inventoryGeneration = ++this.ptyControllerInventorySequence
+    const providerKey = getConnectionExecutionHostId(connectionId)
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
@@ -77,13 +76,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
         ? this.ptyController.listProcessesWithHostScope(providerListOpts)
-        : this.ptyController.listProcesses(connectionId, providerListOpts).then((processes) => {
-            const hostId: ExecutionHostId =
-              connectionId === undefined || connectionId === null
-                ? LOCAL_EXECUTION_HOST_ID
-                : toSshExecutionHostId(connectionId)
-            return { processes, hostIds: [hostId] }
-          })
+        : this.ptyController
+            .listProcesses(connectionId === undefined ? undefined : providerKey, providerListOpts)
+            .then((processes) => ({ processes, hostIds: [providerKey] }))
     const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
       return null
@@ -145,14 +140,13 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
-      // The owning inventory positively observed this PTY again, so this is host evidence of life,
-      // not merely the absence of doubt.
+      // The owning inventory positively observed this PTY, providing host evidence of life.
       this.markPtyLivenessLive(session.id, livenessObservationAtStart)
       const sessionConnectionId =
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
       const persistedIndexes = getPersistedIndexes(
-        sessionConnectionId ? toSshExecutionHostId(sessionConnectionId) : LOCAL_EXECUTION_HOST_ID
+        getConnectionExecutionHostId(sessionConnectionId)
       )
       const controllerIdentity = controllerIdentityByPtyId.get(session.id)
       const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
@@ -233,7 +227,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         this.reconcileSubscriberDrivenProviderAttach(session.id)
       }
       // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
-      this.refreshPtyForegroundAgent(session.id)
+      if (inventoryOptions?.refreshForegroundAgents !== false) {
+        this.refreshPtyForegroundAgent(session.id)
+      }
     }
     for (const pty of this.ptysById.values()) {
       if (connectionId !== undefined && pty.connectionId !== connectionId) {
@@ -243,8 +239,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       const ptyHostId =
         encodedHostId === 'foreign'
           ? null
-          : (encodedHostId ??
-            (pty.connectionId ? toSshExecutionHostId(pty.connectionId) : LOCAL_EXECUTION_HOST_ID))
+          : (encodedHostId ?? getConnectionExecutionHostId(pty.connectionId))
       if (!ptyHostId) {
         continue
       }
@@ -288,10 +283,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         // clears `connected` for every one of its PTYs at once. Only `false` here
         // is an observed absence; `null` means no provider could be asked.
         if (observed === false) {
-          // Drops the doubt without asserting a death: `pty.listProcesses` returns the relay's
-          // CURRENT session map, so a restarted relay omits every id the previous one minted
-          // whether or not those shells died. That is the same union as pty.attach's not-found,
-          // and neither earns `exited` (docs/reference/ssh-execution-boundary.md).
+          // A restarted relay can omit surviving shells; its session map cannot prove exit.
           this.forgetPtyLivenessVerdict(pty.ptyId)
         } else if (observed === null && this.isSshOwnedPtyId(pty.ptyId)) {
           this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)

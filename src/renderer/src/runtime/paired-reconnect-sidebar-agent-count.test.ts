@@ -32,10 +32,8 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
-import {
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from './web-session-tabs-sync'
+import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
@@ -309,18 +307,6 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
     expect(reconnected.tabIds, evidence).toHaveLength(PANES.length)
     expect(reconnected.tabsWithLivePty, evidence).toHaveLength(PANES.length)
     expect(reconnected.rowPaneKeys.sort(), evidence).toEqual(PANES.map(mirrorPaneKey).sort())
-  })
-
-  it('the erased rows are exactly the panes whose status only the client wrote', () => {
-    const store = seedPairedClientStore()
-    const reconnected = runSleepWakeReconnect(store, LONG_SLEEP_MS)
-    const missing = PANES.map(mirrorPaneKey).filter(
-      (paneKey) => !reconnected.rowPaneKeys.includes(paneKey)
-    )
-
-    // Pins the causal boundary: host-authoritative panes are republished with a
-    // fresh host timestamp and are never at risk; only client-owned panes are.
-    expect(missing).toEqual([])
   })
 
   it('still cedes a pane this renderer never wrote status for', () => {

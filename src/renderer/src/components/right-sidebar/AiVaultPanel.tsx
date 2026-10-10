@@ -26,7 +26,7 @@ import {
 } from './ai-vault-session-resume'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
-import { resolveAiVaultSessionResumeInChatForWorkspace } from './ai-vault-session-resume-in-chat-workspace'
+import { resolveAiVaultHistoryRowResume } from './ai-vault-session-resume-in-chat-workspace'
 import {
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
@@ -59,7 +59,6 @@ import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from './AiVaultPanelSearch'
-
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
   const activeWorktree = useActiveWorktree()
@@ -69,6 +68,8 @@ export default function AiVaultPanel(): React.JSX.Element {
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const resumeTargetState = useAppStore(
     useShallow((state) => ({
+      projects: state.projects,
+      settings: state.settings,
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
       repos: state.repos,
@@ -78,8 +79,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
-  const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
-    useAiVaultOriginalPaneActions()
+  const paneActions = useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const {
@@ -99,7 +99,6 @@ export default function AiVaultPanel(): React.JSX.Element {
     resetViewOptions
   } = usePersistedAiVaultViewOptions()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-
   const runtimeHostOptions = useMemo(
     () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
     [runtimeEnvironments]
@@ -234,17 +233,21 @@ export default function AiVaultPanel(): React.JSX.Element {
     )
   }, [])
 
+  const getSessionRowResumeArgs = useCallback(
+    (session: AiVaultSession) => ({
+      session,
+      worktreeInfo: getSessionWorktreeInfo(session),
+      activeWorktreeId: effectiveActiveWorktreeId,
+      worktrees: allWorktrees,
+      repos,
+      targetState: resumeTargetState
+    }),
+    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
+  )
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
-      resolveAiVaultHistorySessionResumeState({
-        session,
-        worktreeInfo: getSessionWorktreeInfo(session),
-        activeWorktreeId: effectiveActiveWorktreeId,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
-      }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
+      resolveAiVaultHistorySessionResumeState(getSessionRowResumeArgs(session)),
+    [getSessionRowResumeArgs]
   )
 
   const getSessionResumeActions = useCallback(
@@ -267,14 +270,9 @@ export default function AiVaultPanel(): React.JSX.Element {
   // Claude looks its transcript up under a directory derived from the launch cwd.
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>
-      resolveAiVaultSessionResumeInChatForWorkspace({
-        session,
-        resumeState: getSessionResumeState(session),
-        activeWorkspaceId: effectiveActiveWorktreeId,
-        targetState: resumeTargetState,
-        settings
-      }),
-    [effectiveActiveWorktreeId, getSessionResumeState, resumeTargetState, settings]
+      resolveAiVaultHistoryRowResume({ ...getSessionRowResumeArgs(session), settings })
+        .resumeInChat,
+    [getSessionRowResumeArgs, settings]
   )
 
   // Settings asks for "everything, ready to type".
@@ -366,16 +364,18 @@ export default function AiVaultPanel(): React.JSX.Element {
             buildResumeStartup={launchActions.buildResumeStartup}
             getSessionResumeState={getSessionResumeState}
             getSessionResumeActions={getSessionResumeActions}
-            getOriginalPaneTarget={getOriginalPaneTarget}
-            getSessionLiveState={getSessionLiveState}
+            getOriginalPaneTarget={paneActions.getOriginalPaneTarget}
+            isStructuredSessionOpen={paneActions.isStructuredSessionOpen}
+            getSessionLiveState={paneActions.getSessionLiveState}
             getWorktreeInfo={getSessionWorktreeInfo}
             onToggleGroup={toggleGroup}
-            onJumpToOriginalPane={jumpToOriginalPane}
-            onJumpToWorktree={jumpToWorktree}
+            onJumpToOriginalPane={paneActions.jumpToOriginalPane}
+            onJumpToWorktree={paneActions.jumpToWorktree}
             onResume={launchActions.handleResume}
             getSessionResumeInChat={getSessionResumeInChat}
             onContinueInNewSession={launchActions.handleContinueInNewSession}
             onResumeInNewChat={launchActions.handleResumeInNewChat}
+            onResumeInNewCli={launchActions.handleResumeInNewCli}
             onCopyResume={(session, worktreeId) =>
               void launchActions.copyResumeCommand(session, worktreeId)
             }

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The crash boundary: the host wrote a submission row, dispatched, and died
 // before it learned whether the provider took the message. Replay must reconcile
 // without duplicating the user's message and without losing it.
@@ -16,21 +17,23 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
-import { dispatchWriteFailureReason } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { digestPayload } from './journal-payload-bounds'
 import {
   reconcileSubmissions,
   type ProviderHistoryItem,
   type ProviderHistoryWindow
 } from './journal-submission-reconciler'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const TURN_ID = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
@@ -61,7 +64,7 @@ const journals = createTrackedJournalOpener()
 async function open() {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => `epoch-${clock}`
   })
@@ -137,7 +140,10 @@ describe('crash between provider accept and journal commit', () => {
     })
     // The provider's own copy of the message arrives next, under the identity
     // reconciliation adopted. It must land in the bubble the user already sees.
-    await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), { fence: 2 })
+    await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), {
+      fence: 2,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     const items = restarted.snapshot().items
     expect(items).toHaveLength(1)
@@ -180,7 +186,7 @@ describe('crash between provider accept and journal commit', () => {
     await journal.resolveDispatch({
       clientMessageId: 'cm_write_failed',
       state: 'rejected',
-      reason: dispatchWriteFailureReason(new Error('broken pipe')),
+      ...agentSessionFailureWords(agentSessionFailureFact('writeFailed'), { surface: 'rejection' }),
       fence: 1
     })
 
@@ -191,7 +197,7 @@ describe('crash between provider accept and journal commit', () => {
     // so recovery must not reopen it as doubt.
     expect(restarted.submissions()[0]).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'provider_write_failed: broken pipe'
+      reason: 'provider_write_failed'
     })
     expect(restarted.submissions()[0]?.recovered).toBeUndefined()
     expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
@@ -250,7 +256,9 @@ describe('crash between provider accept and journal commit', () => {
     await restarted.resolveDispatch({
       clientMessageId: 'cm_1',
       state: 'rejected',
-      reason: 'not_delivered',
+      ...agentSessionFailureWords(agentSessionFailureFact('notDelivered'), {
+        surface: 'rejection'
+      }),
       fence: 2,
       recovered: true
     })

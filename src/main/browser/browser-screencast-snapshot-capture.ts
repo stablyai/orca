@@ -7,6 +7,10 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { positiveInteger, scaleSnapshotToFit } from './browser-screencast-viewport-fit'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+
+// Why: a hung capture would also wedge the viewport updates and stop queued behind it.
+const SNAPSHOT_CAPTURE_TIMEOUT_MS = 10_000
 
 type BrowserScreencastSnapshotCaptureDeps = {
   webContents: WebContents
@@ -76,19 +80,19 @@ export function createBrowserScreencastSnapshotCapture(
       }
       if (viewportWidth && viewportHeight && typeof webContents.capturePage === 'function') {
         try {
-          // Why: CDP captureScreenshot can tile BrowserView surfaces under
-          // mobile emulation; Electron captures the actual visible viewport.
-          const nativeImage = await webContents.capturePage({
-            x: 0,
-            y: 0,
-            width: viewportWidth,
-            height: viewportHeight
-          })
-          const capture = scaleSnapshotToFit(nativeImage, options)
-          const buffer =
-            options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
-          if (buffer.byteLength > 0) {
-            image = new Uint8Array(buffer)
+          // Why: captures the real viewport (CDP can tile it) but never settles once compositing stops.
+          const nativeImage = await withTimeout(
+            webContents.capturePage({ x: 0, y: 0, width: viewportWidth, height: viewportHeight }),
+            SNAPSHOT_CAPTURE_TIMEOUT_MS,
+            null
+          )
+          if (nativeImage) {
+            const capture = scaleSnapshotToFit(nativeImage, options)
+            const buffer =
+              options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+            if (buffer.byteLength > 0) {
+              image = new Uint8Array(buffer)
+            }
           }
         } catch {
           image = null

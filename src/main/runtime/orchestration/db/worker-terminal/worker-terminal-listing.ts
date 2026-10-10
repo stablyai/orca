@@ -36,15 +36,17 @@ export type WorkerTerminalListingSnapshot =
   | { createdAt: string; dispatchId: string }
 
 export function listWorkerTerminalReleaseBacklog(
-  this: OrchestrationDb
+  this: OrchestrationDb,
+  limit?: number
 ): WorkerTerminalResourceRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: LIMIT only bounds unchanged rows selected from the resource table.
   return this.db
     .prepare(
       `SELECT * FROM worker_terminal_resources
         WHERE release_state IN ('requested', 'releasing')
-        ORDER BY release_requested_at ASC`
+        ORDER BY release_requested_at ASC LIMIT ?`
     )
-    .all() as WorkerTerminalResourceRow[]
+    .all(limit ?? -1) as WorkerTerminalResourceRow[]
 }
 
 export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =

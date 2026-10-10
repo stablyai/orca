@@ -1,3 +1,7 @@
+import { useMemo } from 'react'
+import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
+import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-source-result'
+import { getWorkspaceReferenceLinearWorkspaceId } from './workspace-reference-details'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
@@ -79,8 +83,21 @@ export function useWorktreeCardReviewDetails({
           true
         )
       : ''
-  // Why: use 'all' — the issue may belong to a different Linear workspace than the selected one.
-  const linearIssueCacheKey = worktree.linkedLinearIssue ? `all::${worktree.linkedLinearIssue}` : ''
+  // Saved workspace bindings keep equal Linear identifiers separate.
+  const linearSourceContext = useMemo(
+    () => getWorkspaceAttachmentSourceContext('linear', repo, worktree),
+    [repo, worktree]
+  )
+  const linearWorkspaceId = getWorkspaceReferenceLinearWorkspaceId(
+    worktree.linkedLinearIssueWorkspaceId,
+    linearSourceContext
+  )
+  const linearIssueCacheKey = worktree.linkedLinearIssue
+    ? scopedLinearCacheKey(
+        getLinearReadScope(settings, linearSourceContext),
+        `${linearWorkspaceId}::${worktree.linkedLinearIssue}`
+      )
+    : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
   const hostedReviewEntry = useAppStore((s) =>
@@ -92,7 +109,9 @@ export function useWorktreeCardReviewDetails({
     linearIssueCacheKey ? s.linearIssueCache[linearIssueCacheKey] : undefined
   )
   const linearIssueFallbackEntry = useAppStore((s) =>
-    worktree.linkedLinearIssue ? s.linearIssueCache[worktree.linkedLinearIssue] : undefined
+    !linearSourceContext && worktree.linkedLinearIssue
+      ? s.linearIssueCache[worktree.linkedLinearIssue]
+      : undefined
   )
 
   const hostedReview: HostedReviewInfo | null | undefined =
@@ -188,6 +207,8 @@ export function useWorktreeCardReviewDetails({
     issueEntry,
     linearIssueEntry,
     linearIssueFallbackEntry,
+    linearSourceContext,
+    linearWorkspaceId,
     linkedGitHubPR,
     linkedGitLabMR,
     linkedBitbucketPR,

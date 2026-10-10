@@ -1,9 +1,11 @@
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import type { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { resolveOpenCodeStorageDirectory } from '../opencode/opencode-data-directory'
-import { listOpenCodeDatabases } from '../opencode-usage/opencode-database-discovery'
+import {
+  listOpenCodeDatabases,
+  listOpenCodeDatabasesInDirectory
+} from '../opencode-usage/opencode-database-discovery'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
 import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
@@ -24,11 +26,14 @@ export function opencodeDiscoveries(
           storageDir,
           dbPaths: dbPaths.filter((path) => !isOpenCodeV2DatabaseName(basename(path))),
           limitPerAgent: limit,
-          issues
+          issues,
+          signal: options.signal
         })
       ),
       // Current releases share opencode.db with v1; the worker checks for v2 tables.
-      paths.then((dbPaths) => discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues))
+      paths.then((dbPaths) =>
+        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options.signal)
+      )
     ]
   })
 }
@@ -53,52 +58,34 @@ async function opencodeDbPathsForSource(
   if (options.opencodeDbPaths) {
     return sourceIndex === 0 ? options.opencodeDbPaths : []
   }
+  const onRefusal = (path: string, error: WslTranscriptFsError): void => {
+    recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
+  }
   // Why: custom OpenCode storage roots still keep SQLite DBs in the parent data dir.
   if (sourceIndex === 0 && options.opencodeStorageDir) {
-    return listOpenCodeDatabasesInDirectory(dirname(storageDir), issues)
+    return listOpenCodeDatabasesInDirectory(dirname(storageDir), onRefusal, options.signal)
   }
   if (sourceIndex === 0) {
-    return listOpenCodeDatabases((path, error) => {
-      recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
-    })
+    return listOpenCodeDatabases(onRefusal, undefined, options.signal)
   }
   const wslHomeDir = wslHomeDirs[sourceIndex - 1]
   return wslHomeDir
-    ? listOpenCodeDatabasesInDirectory(join(wslHomeDir, '.local', 'share', 'opencode'), issues)
+    ? listOpenCodeDatabasesInDirectory(
+        join(wslHomeDir, '.local', 'share', 'opencode'),
+        onRefusal,
+        options.signal
+      )
     : []
-}
-
-async function listOpenCodeDatabasesInDirectory(
-  dataDir: string,
-  issues: AiVaultScanIssue[]
-): Promise<string[]> {
-  try {
-    const entries = await wslGatedReaddir(dataDir, 'scan')
-    return entries
-      .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
-      .map((entry) => join(dataDir, entry.name))
-      .sort()
-  } catch (error) {
-    // A stalled WSL data dir still degrades to "no databases", but the gap has
-    // to be reportable — an empty list otherwise reads as "OpenCode not used".
-    if (error instanceof WslTranscriptFsError) {
-      recordSessionScanIssue(issues, {
-        agent: 'opencode',
-        path: dataDir,
-        message: error.message
-      })
-    }
-    return []
-  }
 }
 
 async function discoverOpenCode2Sessions(
   storageDir: string,
   dbPaths: readonly string[],
   limit: number,
-  issues: AiVaultScanIssue[]
+  issues: AiVaultScanIssue[],
+  signal?: AbortSignal
 ): Promise<SessionFileDiscovery> {
-  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues })
+  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues, signal })
   return {
     agent: 'opencode2' as const,
     rootDir: storageDir,

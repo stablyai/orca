@@ -1,3 +1,4 @@
+import type { LinkedReviewHints } from './hosted-review-cache-identity'
 import type {
   CreateHostedReviewInput,
   CreateStackedHostedReviewInput,
@@ -11,12 +12,15 @@ import type { AppState } from '../types'
 export type HostedReviewCacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  stale?: boolean
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
 }
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
 export type HostedReviewFetchOptions = {
+  /** Source-qualified exact lookup; does not replace the branch’s selected review. */
+  exactReviewKey?: string
   force?: boolean
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
@@ -237,4 +241,26 @@ export function settingsForHostedReviewActionOwner(
     return settings
   }
   return settingsForHostedReviewRepoOwner(settings, repo)
+}
+
+export function hostedReviewBranchLookupArgs(
+  branch: string,
+  options?: HostedReviewFetchOptions & LinkedReviewHints
+) {
+  const fallbackGitHubPR =
+    options?.linkedGitHubPR == null ? (options?.fallbackGitHubPR ?? null) : null
+  return {
+    branch,
+    ...(options?.force === true ? { force: true } : {}),
+    ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
+    currentHeadOid: options?.currentHeadOid ?? null,
+    ...(options?.active === true ? { active: true } : {}),
+    linkedGitHubPR: options?.linkedGitHubPR ?? null,
+    ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
+    linkedGitLabMR: options?.linkedGitLabMR ?? null,
+    linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
+    linkedGiteaPR: options?.linkedGiteaPR ?? null
+  }
 }

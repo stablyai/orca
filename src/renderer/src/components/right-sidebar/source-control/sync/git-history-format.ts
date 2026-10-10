@@ -1,6 +1,7 @@
+// Why: the zone name disambiguates the repeated hour when clocks fall back.
 const gitHistoryTimestampFormatter = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric'
+  dateStyle: 'medium',
+  timeStyle: 'long'
 })
 
 export function formatGitHistoryTimestamp(timestamp: number | undefined): string {

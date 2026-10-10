@@ -1,7 +1,7 @@
 import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
-import { tryGetProviderForAgentSessionOwner } from '../provider/registry'
+import { tryGetProviderForPty } from '../provider/registry'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   agentSessionOwners,
@@ -17,6 +17,7 @@ import {
   isSshPtyIdentityMismatchError
 } from '../../../providers/ssh-pty-errors'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { markRuntimeSpawnHiddenBeforeSpawn } from './spawn-hidden-delivery'
 
 export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
   const args = ctx.args
@@ -42,6 +43,9 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           )
     const expectedPtyId =
       stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.sessionId
+    if (!stablePaneOwnerCandidate) {
+      markRuntimeSpawnHiddenBeforeSpawn(ctx)
+    }
     if (expectedPtyId) {
       ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
       ctx.pendingRegistrationPtyId = expectedPtyId
@@ -108,7 +112,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           }
         },
         isLive: async (owner) => {
-          const ownerProvider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+          const ownerProvider = tryGetProviderForPty(owner.ptyId)
           if (!ownerProvider) {
             // Why: a disconnected relay may keep its PTY alive during the
             // grace window; missing transport is unknown, never absence.

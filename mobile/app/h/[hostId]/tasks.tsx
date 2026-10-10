@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { useMobileWebShellEnabled } from '../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { shellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
 
@@ -21,19 +21,19 @@ export default function MobileTasksRoute() {
   }>()
   const hostId = firstParam(params.hostId)
   const taskSource = firstParam(params.taskSource)
-  const enabled = useMobileWebShellEnabled()
   const native = <MobileTasksScreen />
 
-  if (enabled !== true || !hostId) {
-    return native
-  }
-  const route = shellScreenRoute({
-    pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
-    // Omitted rather than empty: an absent provider lets the page pick its own default, where
-    // `taskSource=` is a provider named nothing.
-    ...(taskSource === '' ? {} : { params: { taskSource } })
-  })
-  if (route === null) {
+  const route = hostId
+    ? shellScreenRoute({
+        pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
+        // Omitted rather than empty: an absent provider lets the page pick its own default, where
+        // `taskSource=` is a provider named nothing.
+        ...(taskSource === '' ? {} : { params: { taskSource } })
+      })
+    : null
+  const decision = shellSwitchDecision(route)
+
+  if (decision.kind === 'native') {
     return native
   }
   return (
@@ -42,7 +42,7 @@ export default function MobileTasksRoute() {
       // with, so a host id change must be a remount rather than a prop update.
       key={hostId}
       hostId={hostId}
-      route={route}
+      route={decision.route}
       fallback={native}
     />
   )

@@ -18,8 +18,8 @@ import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrum
  * kills issued *from Electron main*, and nothing else:
  * - Main only: the families that import the gate directly —
  *   `terminateWindowsProcessTree`, the codex and claude account-login
- *   teardowns, the git command-runner abort, the notebook-cell and
- *   automation-precheck timeouts — plus the codex app-server POSIX group
+ *   teardowns, the git command-runner abort, the automation-precheck
+ *   timeout — plus the codex app-server POSIX group
  *   teardowns.
  * - Main *and* other hosts, through the `process-tree-kill-gate` seam main
  *   installs the same guard into: `signalProcessTree` (the `runProcess` choke
@@ -31,18 +31,12 @@ import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrum
  *   into that process's own ring, which nothing reads — no gate is installed
  *   there, and the tracer sink is a no-op.
  * - Never instrumented, and none of them a pid-addressed kill issued from main:
- *   the POSIX `process.kill(-pid, …)` group arms of the notebook, precheck,
+ *   the POSIX `process.kill(-pid, …)` group arms of the precheck,
  *   browser-route and ephemeral-VM kills, plus the macOS keyboard-input-source
  *   probe's group kill in `ipc/app.ts`; the relay's own
  *   `subprocess-tree-termination` taskkill and the CLI's login-interruption
  *   taskkill (neither runs in main); and the browser-route Electron probes,
  *   which are reached only from `*.electron.test.ts`.
- *
- * `main-process-tree-kill-gate.test.ts` is the ratchet that keeps that list
- * closed: it counts `/pid` call sites against gate admissions per file, so a new
- * pid-addressed kill fails it whether it lands in a new file or inside a family
- * that already asks the gate. It does not see a `/pid` argument built from a
- * variable.
  *
  * A daemon or relay kill missing from the count is a diagnostics gap, not a
  * missed suspect: those hosts cannot reach a Chromium pid in the first place
@@ -60,8 +54,8 @@ export type SelfInitiatedTreeKill = {
   at: number
 }
 
-// Why 32 and not the sibling ring's 16: one teardown fans out over every root of
-// a codex turn, so a single incident can spend a dozen entries on its own.
+// Why 32 and not the sibling ring's 16: a window close tears down every session at once,
+// a burst of 30+ group kills (see the eviction note below).
 const MAX_TRACKED_SELF_KILLS = 32
 
 // Why asymmetric: a kill older than this cannot plausibly explain the death,

@@ -1,7 +1,11 @@
-import { GitHandlerOperationContext, GIT_BULK_CHUNK_SIZE } from './git-handler-operation-context'
+import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { commitChangesRelay } from './git-handler-worktree-ops'
-
-const BULK_CHUNK_SIZE = GIT_BULK_CHUNK_SIZE
+import { encodeGitPathspecs } from '../shared/git-pathspec-stdin'
+import {
+  parseGitStageWorktreeScope,
+  stageGitWorktreeScope,
+  type GitStageWorktreeScopeReceipt
+} from '../shared/git-stage-worktree-scope'
 
 export class GitHandlerWorktreeChangeOperations extends GitHandlerOperationContext {
   async stage(params: Record<string, unknown>) {
@@ -31,24 +35,35 @@ export class GitHandlerWorktreeChangeOperations extends GitHandlerOperationConte
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     try {
-      await this.git(['restore', '--staged', '--', this.literalPathspec(filePath)], worktreePath)
+      // Reset treats an unborn HEAD as an empty tree, preserving the working file.
+      await this.git(['reset', '--quiet', '--', this.literalPathspec(filePath)], worktreePath)
     } finally {
       this.clearGitMutationReadCaches()
     }
   }
 
-  async bulkStage(params: Record<string, unknown>) {
+  async bulkStage(
+    params: Record<string, unknown>
+  ): Promise<GitStageWorktreeScopeReceipt | undefined> {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const filePaths = params.filePaths as string[]
+    // Why: optional so older clients keep the listed-paths behavior.
+    const scope = parseGitStageWorktreeScope(params.scope)
     try {
-      for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-        const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(
-          ['add', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
-          worktreePath
+      if (scope) {
+        // Why: the receipt is how the client tells this relay from an older one that ignored `scope`.
+        return await stageGitWorktreeScope(scope, (args, stdin) =>
+          this.git(args, worktreePath, stdin === undefined ? undefined : { stdin })
         )
       }
+      if (filePaths.length === 0) {
+        return undefined
+      }
+      await this.git(['add', '--pathspec-from-file=-', '--pathspec-file-nul'], worktreePath, {
+        stdin: encodeGitPathspecs(filePaths.map((filePath) => this.literalPathspec(filePath)))
+      })
+      return undefined
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -59,13 +74,14 @@ export class GitHandlerWorktreeChangeOperations extends GitHandlerOperationConte
     const worktreePath = params.worktreePath as string
     const filePaths = params.filePaths as string[]
     try {
-      for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-        const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(
-          ['restore', '--staged', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
-          worktreePath
-        )
+      if (filePaths.length === 0) {
+        return
       }
+      await this.git(
+        ['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        worktreePath,
+        { stdin: encodeGitPathspecs(filePaths.map((filePath) => this.literalPathspec(filePath))) }
+      )
     } finally {
       this.clearGitMutationReadCaches()
     }

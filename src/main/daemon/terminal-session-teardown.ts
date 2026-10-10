@@ -1,4 +1,5 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 import type { Session } from './session'
 
 type TeardownOperation = {
@@ -7,6 +8,8 @@ type TeardownOperation = {
   rootSignalled: boolean
   rootCompletion: Promise<void>
   session: Session
+  descendantVerification: Promise<unknown> | null
+  immediatePromise: Promise<void> | null
 }
 
 /** Owns teardown by session id until descendant capture and root signalling
@@ -23,7 +26,27 @@ export class TerminalSessionTeardown {
   /** Resolves once this id's tracked teardown has released the process — a rejected teardown
    *  released it too. Callers re-read session state afterwards and decide for themselves. */
   async settle(sessionId: string): Promise<void> {
-    await this.operations.get(sessionId)?.promise.catch(() => {})
+    const operation = this.operations.get(sessionId)
+    if (operation) {
+      await this.waitForOperation(operation)
+    }
+  }
+
+  isTracked(session: Session): boolean {
+    return [...this.operations.values()].some((operation) => operation.session === session)
+  }
+
+  requestImmediateAll(): Promise<void>[] {
+    return [...this.operations.keys()].flatMap((sessionId) => {
+      const pending = this.requestImmediate(sessionId)
+      return pending ? [pending] : []
+    })
+  }
+
+  private async waitForOperation(operation: TeardownOperation): Promise<void> {
+    await operation.promise.catch(() => {})
+    await operation.descendantVerification?.catch(() => {})
+    await operation.rootCompletion.catch(() => {})
   }
 
   requestImmediate(sessionId: string): Promise<void> | undefined {
@@ -36,7 +59,15 @@ export class TerminalSessionTeardown {
         pending.rootCompletion = pending.session.forceKillAndWaitForExit()
       }
     }
-    return pending?.promise
+    if (!pending) {
+      return undefined
+    }
+    pending.immediatePromise ??= this.settle(sessionId)
+    return pending.immediatePromise
+  }
+
+  async requestImmediateAndSettleAll(): Promise<void> {
+    await Promise.all(this.requestImmediateAll())
   }
 
   killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
@@ -66,7 +97,9 @@ export class TerminalSessionTeardown {
       immediate,
       rootSignalled: false,
       rootCompletion: Promise.resolve(),
-      session
+      session,
+      descendantVerification: null,
+      immediatePromise: null
     }
     const operation = run(entry)
     entry.promise = operation
@@ -76,7 +109,10 @@ export class TerminalSessionTeardown {
         this.operations.delete(sessionId)
       }
     }
-    void operation.then(clearOperation, clearOperation)
+    const settleOperation = (): void => {
+      void this.waitForOperation(entry).then(clearOperation, clearOperation)
+    }
+    void operation.then(settleOperation, settleOperation)
     return operation
   }
 
@@ -85,7 +121,9 @@ export class TerminalSessionTeardown {
     session.beginTermination()
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-      terminateOwnedTree: () => session.terminateOwnedTree()
+      terminateOwnedTree: () => session.terminateOwnedTree(),
+      terminateDescendants: terminateShutdownDescendants,
+      awaitEscalation: true
     })
     await session.forceKillAndWaitForExit()
   }
@@ -136,7 +174,12 @@ export class TerminalSessionTeardown {
             // Why: the descendant rows are only authoritative while this exact
             // Session still owns the root PID captured by ps.
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-            terminateOwnedTree: () => session.terminateOwnedTree()
+            terminateOwnedTree: () => session.terminateOwnedTree(),
+            terminateDescendants: (snapshot) => {
+              entry.descendantVerification = terminateShutdownDescendants(snapshot)
+              return entry.descendantVerification
+            },
+            awaitEscalation: () => entry.immediate
           }
         )
       )

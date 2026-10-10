@@ -45,6 +45,7 @@ export function SessionHistorySettingsPane({
   const isWebClient = isWebClientLocation()
   const closeSettingsPage = useAppStore((state) => state.closeSettingsPage)
   const showAiVaultSearch = useAppStore((state) => state.showAiVaultSearch)
+  const markFeatureTipsSeen = useAppStore((state) => state.markFeatureTipsSeen)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -91,6 +92,10 @@ export function SessionHistorySettingsPane({
   )
 
   function writePolicy(updates: Partial<typeof policy>): Promise<void> {
+    if (updates.enabled !== undefined) {
+      // Why: switching search proves the user found it; turning it off later must not re-offer the tip.
+      markFeatureTipsSeen(['agent-session-search'])
+    }
     return updateSettings({
       aiVaultSearch: AiVaultSearchSettingsSchema.parse({ ...policy, ...updates })
     })

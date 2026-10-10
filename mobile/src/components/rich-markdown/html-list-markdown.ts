@@ -23,6 +23,16 @@ export function directNestedLists(item: Element): Element[] {
 }
 
 /**
+ * Whether an element carries a list that no list item owns, and so is a block of its own.
+ *
+ * The mirror of `directNestedLists`: a list under an `li` is that item's, serialized at its own
+ * indentation, and any other list is a block wherever the engine put it — including inside a `<p>`.
+ */
+export function holdsUnownedList(element: Element): boolean {
+  return Array.from(element.querySelectorAll('ul, ol')).some((list) => list.closest('li') === null)
+}
+
+/**
  * A list element as markdown, two spaces deeper per level of nesting.
  *
  * An ordered item's own number is preferred over its position, because the browser renumbers a

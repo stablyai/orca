@@ -18,6 +18,10 @@ import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
+  PAGE_ROUTE_MODULES,
+  pageRouteModulesCoverTheManifest
+} from './mobile-web-app-page-route-modules.mjs'
+import {
   HAPTICS_KINDS_MODULE,
   HAPTICS_NATIVE,
   HAPTICS_SEAM,
@@ -33,16 +37,16 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const read = (file) => readFileSync(join(mobileDir, file), 'utf8')
 
-/** The route module behind each declared page route, which is what a closure is read from. */
-const ROUTE_MODULES = new Map([
-  ['/h/[hostId]', 'app/h/[hostId]/index.tsx'],
-  ['/h/[hostId]/agent-history/[worktreeId]', 'app/h/[hostId]/agent-history/[worktreeId].tsx'],
-  ['/h/[hostId]/tasks', 'app/h/[hostId]/tasks.tsx'],
-  ['/h/[hostId]/files/[worktreeId]', 'app/h/[hostId]/files/[worktreeId].tsx'],
-  ['/h/[hostId]/files/preview/[worktreeId]', 'app/h/[hostId]/files/preview/[worktreeId].tsx'],
-  ['/h/[hostId]/source-control/[worktreeId]', 'app/h/[hostId]/source-control/[worktreeId].tsx'],
-  ['/h/[hostId]/review/[worktreeId]', 'app/h/[hostId]/review/[worktreeId].tsx']
-])
+/** The route module behind each declared page route, shared with the screencast-lane census. */
+const ROUTE_MODULES = PAGE_ROUTE_MODULES
+
+// These cases read the same source tree; keep each route's real closure once.
+const closures = new Map()
+async function closureOf(module) {
+  const built = closures.get(module) ?? mobileWebAppRouteClosure(module)
+  closures.set(module, built)
+  return structuredClone(await built)
+}
 
 const HAPTICS_GRANT = 'haptics'
 
@@ -226,7 +230,7 @@ describeClosure(
   'every page route closure and the haptics seam',
   () => {
     it.each([...ROUTE_MODULES])('resolves the seam to the web sibling: %s', async (_route, mod) => {
-      const closure = await mobileWebAppRouteClosure(mod)
+      const closure = await closureOf(mod)
       expect(closure.local).toContain(HAPTICS_SEAM)
       expect(closure.local).not.toContain(HAPTICS_NATIVE)
       // The precondition an assertion about a closure needs: the walk read a page, not nothing.
@@ -236,7 +240,7 @@ describeClosure(
     it.each([...ROUTE_MODULES])(
       'imports the seam from at least one module, so the grant is not idle: %s',
       async (_route, mod) => {
-        const closure = await mobileWebAppRouteClosure(mod)
+        const closure = await closureOf(mod)
         expect(hapticsSeamImporters(mobileDir, closure).length).toBeGreaterThan(0)
       }
     )
@@ -256,7 +260,7 @@ describeClosure(
     it('declares haptics on exactly the routes whose closure reaches the seam', async () => {
       const reaching = []
       for (const [route, mod] of ROUTE_MODULES) {
-        const closure = await mobileWebAppRouteClosure(mod)
+        const closure = await closureOf(mod)
         if (hapticsSeamImporters(mobileDir, closure).length > 0) {
           reaching.push(route)
         }
@@ -269,10 +273,9 @@ describeClosure(
     })
 
     it('covers every declared page route, so a new one cannot be missed by this file', () => {
-      // The map above is a hand list of route modules; this is what holds it to the declarations.
-      expect([...ROUTE_MODULES.keys()].sort()).toEqual(
-        MOBILE_WEB_PAGE_ROUTES.map((route) => route.pathname).sort()
-      )
+      // The shared map is a hand list of route modules; this is what holds it to the declarations.
+      const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
+      expect(mapped).toEqual(declared)
     })
 
     /**
@@ -288,7 +291,7 @@ describeClosure(
      */
     it('adds one module to a page closure, and only the two haptics modules are in it', async () => {
       for (const mod of ROUTE_MODULES.values()) {
-        const closure = await mobileWebAppRouteClosure(mod)
+        const closure = await closureOf(mod)
         expect(closure.local.filter((file) => file.includes('haptics')).sort(), mod).toEqual([
           HAPTICS_KINDS_MODULE,
           HAPTICS_SEAM

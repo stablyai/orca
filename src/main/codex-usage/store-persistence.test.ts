@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { CodexUsagePersistedState } from './types'
@@ -18,7 +18,7 @@ vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn()
 }))
 
-import { normalizePersistedState } from './store'
+import { CodexUsageStore, normalizePersistedState } from './store'
 import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 describe('CodexUsageStore', () => {
@@ -81,7 +81,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 5,
+      schemaVersion: 6,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],
@@ -93,5 +93,40 @@ describe('CodexUsageStore', () => {
         lastScanError: null
       }
     })
+  })
+
+  it('rescans from scratch when the cache predates per-request long-context counts', async () => {
+    const processedFile = {
+      path: '/codex/sessions/rollout-1.jsonl',
+      mtimeMs: 1,
+      size: 10,
+      sessions: [],
+      dailyAggregates: [],
+      ownedEventKeys: [],
+      hasDeferredClaims: false,
+      parseResumeState: null
+    }
+    const scanMock = vi.mocked(scanCodexUsageFilesViaWorker)
+    scanMock.mockResolvedValue({
+      processedFiles: [processedFile],
+      sessions: [],
+      dailyAggregates: []
+    })
+    const cacheFile = join(storeEnv.tempUserData, 'orca-codex-usage.json')
+    const seeded = new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+    await seeded.setEnabled(true)
+    await seeded.refresh(true)
+    await seeded.flush()
+    const current = readFileSync(cacheFile, 'utf-8')
+
+    scanMock.mockClear()
+    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(true)
+    // Control: a current-schema cache hands its processed files back for reuse.
+    expect(scanMock).toHaveBeenLastCalledWith([], [processedFile])
+
+    writeFileSync(cacheFile, JSON.stringify({ ...JSON.parse(current), schemaVersion: 5 }))
+    scanMock.mockClear()
+    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(false)
+    expect(scanMock).toHaveBeenLastCalledWith([], [])
   })
 })

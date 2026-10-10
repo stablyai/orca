@@ -12,7 +12,7 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from './layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
@@ -83,7 +83,7 @@ export function createTerminalPaneManagerOptions(
         context.deps.updateTabTitle(tabId, paneTitle)
       }
     },
-    onLayoutChanged: () => {
+    onLayoutChanged: (intent) => {
       scheduleRuntimeGraphSync()
       context.deps.syncExpandedLayout()
       context.syncCanExpandState()
@@ -91,7 +91,7 @@ export function createTerminalPaneManagerOptions(
       context.syncPaneLayoutRevision()
       context.queueResizeAll(false)
       if (context.shouldPersistLayout()) {
-        context.deps.persistLayoutSnapshot()
+        context.deps.persistLayoutSnapshot(intent)
       }
     },
     onPaneDragActiveChange: (active) => {

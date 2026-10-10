@@ -247,6 +247,35 @@ describe('UsageRow', () => {
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
   })
+
+  it('labels ZCode MCP separately from Coding Plan windows in both roster modes', () => {
+    const zcode: ProviderRateLimits = {
+      provider: 'zcode',
+      session: { usedPercent: 1, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 94, windowMinutes: 10_080, resetsAt: null, resetDescription: null },
+      monthly: { usedPercent: 97, windowMinutes: 43_200, resetsAt: null, resetDescription: null },
+      updatedAt: mocks.now,
+      status: 'ok',
+      error: null
+    }
+    const renderRow = (mode: 'verbose' | 'compact') =>
+      renderToStaticMarkup(
+        <UsageRow
+          p={zcode}
+          display="used"
+          mode={mode}
+          state={{ kind: 'usage', statusLabel: null }}
+          showSignInAction={false}
+          now={mocks.now}
+        />
+      )
+
+    expect(renderRow('verbose')).toContain('data-usage-window="MCP"')
+    expect(renderRow('verbose')).toContain('MCP')
+    expect(renderRow('verbose')).not.toContain('30d')
+    expect(renderRow('compact')).toContain('MCP')
+    expect(renderRow('compact')).not.toContain('30d')
+  })
 })
 
 describe('UsageRosterPanel density picker', () => {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getDetachedHeadTooltip,
-  getWorktreeGitIdentityDisplay,
-  shortGitHead
-} from './worktree-git-identity-display'
+import { getWorktreeGitIdentityDisplay } from './worktree-git-identity-display'
 
 describe('worktree git identity display', () => {
   it('shows a branch name when the worktree has a branch ref', () => {
@@ -41,13 +37,5 @@ describe('worktree git identity display', () => {
 
   it('returns null when neither branch nor head is known', () => {
     expect(getWorktreeGitIdentityDisplay({ branch: '', head: '' })).toBeNull()
-  })
-})
-
-describe('detached HEAD copy', () => {
-  it('formats the required tooltip copy', () => {
-    expect(getDetachedHeadTooltip(shortGitHead('abc123456789'))).toBe(
-      'Detached HEAD at abc1234. You are viewing a commit, not a branch.'
-    )
   })
 })

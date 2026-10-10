@@ -4,6 +4,7 @@ import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/client-context'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
+import { isPageHostRemovalUnavailable } from '../transport/page-host-removal-refusal'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { setHostRouteNewWorktreeVisible } from '../host-route-action-state'
@@ -148,7 +149,13 @@ export function useHostWorktreeActions(args: {
     try {
       await removeHostAndCloseClient(hostId, forgetHostClient)
       leaveHost()
-    } catch {
+    } catch (error) {
+      if (isPageHostRemovalUnavailable(error)) {
+        // Neither the confirm nor "try again": on the page removal is refused, not failed, so
+        // re-offering the control would be advice that cannot work anywhere in this document.
+        setActionError(error.message)
+        return
+      }
       // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
       setConfirmRemoveHost(true)
       // Not `Alert.alert`: it is a silent no-op in React Native Web, so inside the shell's page

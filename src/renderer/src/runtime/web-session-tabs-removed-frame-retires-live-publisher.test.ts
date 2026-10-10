@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 import {
   recordReceivedWebSessionTabsRemoval,
   recordReceivedWebSessionTabsSnapshot,

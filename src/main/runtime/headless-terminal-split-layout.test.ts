@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
+import { terminalLayoutContainsLeaf } from '../../shared/workspace-session-pane-ownership'
 import {
   buildHeadlessTerminalSplitLayout,
-  countTerminalLayoutLeaves,
-  terminalLayoutContainsLeaf
+  countTerminalLayoutLeaves
 } from './headless-terminal-split-layout'
 
 describe('terminalLayoutContainsLeaf', () => {

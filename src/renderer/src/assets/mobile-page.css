@@ -729,6 +729,12 @@
   margin-top: 48px;
 }
 
+/* Why: inside the copy cell, not its own grid row, so the web client (where the field renders
+   nothing) keeps the copy-to-relay rhythm instead of an empty track and a second row gap. */
+.mobile-page-root .mp-pairing-machine {
+  margin-top: 18px;
+}
+
 .mobile-page-root .mp-pairing-relay {
   grid-area: relay;
   min-width: 0;

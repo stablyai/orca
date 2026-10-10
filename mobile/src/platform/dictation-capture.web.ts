@@ -73,15 +73,6 @@ export function createPageDictationCapture(
   const chunkHandlers: Handlers<(chunk: DictationCaptureChunk) => void> = new Set()
   const interruptionHandlers: Handlers<() => void> = new Set()
   let timer: ReturnType<typeof setInterval> | null = null
-  /** The end in flight; null when none is running. Cleared on settle rather than held, because
-   *  `begin` is not guaranteed to run between two ends and a finished one must shadow neither. */
-  let ending: Promise<void> | null = null
-  /** The screen went away: no later end reads or stops again. Cleared by `begin`. */
-  let released = false
-  /** The read in flight, if there is one. At most one: two would double the slots dictation spends
-   *  and can settle out of order, which is a splice of two moments reaching the transcriber as
-   *  speech. Held rather than flagged so a stop can wait for it before taking its own turn. */
-  let reading: Promise<void> | null = null
 
   function stopDraining(): void {
     if (timer !== null) {
@@ -98,16 +89,20 @@ export function createPageDictationCapture(
     }
   }
 
-  function deliver(reply: BridgeAudioChunk): void {
-    if (reply.base64.length > 0 || reply.droppedBytes > 0) {
-      const chunk: DictationCaptureChunk = {
-        data: decodeBase64(reply.base64),
-        droppedBytes: reply.droppedBytes
-      }
-      for (const handler of chunkHandlers) {
-        handler(chunk)
-      }
+  /** Nothing for an interval the microphone was silent through: an empty chunk is audio the page
+   *  would spend a budget and a send on. */
+  function deliverBytes(base64: string, droppedBytes: number): void {
+    if (base64.length === 0 && droppedBytes === 0) {
+      return
     }
+    const chunk: DictationCaptureChunk = { data: decodeBase64(base64), droppedBytes }
+    for (const handler of chunkHandlers) {
+      handler(chunk)
+    }
+  }
+
+  function deliver(reply: BridgeAudioChunk): void {
+    deliverBytes(reply.base64, reply.droppedBytes)
     // The same two kinds the native seam ends on: an `ended` on its own is the OS handing the
     // session back and leaves a live capture alone. `recording` is the shell's own state and ends
     // it whatever the kind — a capture it no longer has is gone however it went.
@@ -130,74 +125,24 @@ export function createPageDictationCapture(
     }
   }
 
-  function drain(): Promise<void> {
-    if (reading !== null) {
-      return reading
-    }
-    const run = readOnce().finally(() => {
-      reading = null
-    })
-    reading = run
-    return run
-  }
-
-  /** Best effort, and deliberately quiet, for the reason `end` never rejects. */
-  async function stopShell(): Promise<void> {
-    await verbs.stopAudio().catch(() => undefined)
-  }
-
   /**
-   * The tail, then the stop, in that order.
+   * The stop, which brings the tail back with it.
    *
    * Whatever is in the ring when the user lifts the button is up to one interval of what they
    * actually said, and no timer is coming for it — `stopDraining` has just cancelled the one that
-   * was. Stopping first would take the capture away and the read after it would be refused, so the
-   * order here is the whole fix. An in-flight drain is awaited before the last read rather than
-   * raced with it, because two reads settling out of order splice two moments together.
+   * was. The shell drains it into the stop's own reply, so there is no read to order against the
+   * stop, no flight to latch and nothing for an interruption to re-enter: a stop reply carries no
+   * interruption, and a second end reaches a shell with no capture and is answered with nothing.
+   *
+   * Never rejects, which the contract promises: a capture that will not end is not the page's to
+   * fix, and every caller reaches this inside a synchronous try that could not see a rejection.
    */
-  async function runEndCapture(): Promise<void> {
+  async function endCapture(): Promise<void> {
     stopDraining()
-    await reading
-    reading = null
-    await readOnce()
-    await stopShell()
-  }
-
-  /**
-   * Idempotent while one end is in flight, which is what stops a refused read looping.
-   *
-   * The hook's interruption handler is `() => void cancel()`, and `cancel` reaches `end()`
-   * synchronously through `closeDictationAudio`. So the last read here can raise an interruption
-   * that calls straight back into this function, whose own last read is refused for the same
-   * reason — the shell has no capture — and the recursion issues bridge reads until the page runs
-   * out of memory. Returning the in-flight promise makes the re-entrant call a no-op rather than a
-   * second read; the recursion happens while that promise is still pending, so guarding the flight
-   * is enough and outliving it is not required.
-   *
-   * Cleared on settle, because a finished end must not answer for the next capture. `open` starts
-   * the shell recording and the hook can reach `end` before `begin` — a start that goes stale
-   * after `activeIdRef` is set cleans up that way, and `begin` is the only thing that would have
-   * cleared a latch — so an end held past its own flight would report a stop it never issued and
-   * leave the shell holding a live microphone.
-   */
-  function endCapture(): Promise<void> {
-    // A released capture has already stopped the shell and has nobody to hand a tail to.
-    if (released) {
-      return Promise.resolve()
+    const stopped = await verbs.stopAudio().catch(() => null)
+    if (stopped !== null) {
+      deliverBytes(stopped.base64, stopped.droppedBytes)
     }
-    if (ending !== null) {
-      return ending
-    }
-    // Assigned before anything can await, so a handler re-entering from inside the read below
-    // finds it set rather than starting a second end.
-    const run = runEndCapture().finally(() => {
-      // Only its own flight: `begin` may have started a newer capture while this one settled.
-      if (ending === run) {
-        ending = null
-      }
-    })
-    ending = run
-    return run
   }
 
   return {
@@ -213,34 +158,23 @@ export function createPageDictationCapture(
     },
     begin: () => {
       // The shell began capturing inside `start`; this is the page's half, which is the drain.
-      ending = null
-      released = false
       stopDraining()
       timer = setInterval(() => {
-        void drain()
+        // Unguarded: replies cross one lane in the order the shell posted them, so a read that
+        // outlives its interval is followed by its successor and never overtaken by one.
+        void readOnce()
       }, drainIntervalMs)
       return true
     },
     end: endCapture,
-    // No last read: a release is the screen going away, and there is nobody left to hand the tail
-    // to. The shell sweeps the ring with the capture.
+    // The tail is dropped rather than delivered: a release is the screen going away, and there is
+    // nobody left to hand it to. The shell sweeps the ring with the capture.
     release: () => {
-      // Marked released so a later `end` neither reads nor stops again: the screen is going away.
-      // A flag rather than a settled `ending`, which now clears itself and would unlatch this.
-      released = true
       stopDraining()
-      void stopShell()
+      void verbs.stopAudio().catch(() => undefined)
     },
     onChunk: (handler) => subscribe(chunkHandlers, handler),
-    onInterruption: (handler) => subscribe(interruptionHandlers, handler),
-    keepAwake: {
-      activate: async (tag) => {
-        await verbs.setWakelock(true, tag)
-      },
-      deactivate: async (tag) => {
-        await verbs.setWakelock(false, tag)
-      }
-    }
+    onInterruption: (handler) => subscribe(interruptionHandlers, handler)
   }
 }
 

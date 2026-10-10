@@ -10,10 +10,10 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
-  loadMobileWebShellEnabled,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
+  mobileShellBuildKind,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
@@ -31,10 +31,12 @@ import {
   updateSessionViewOverride
 } from './session-view-preferences'
 
+// A store rather than two bare spies: the mirrored write path reads a key back after writing it,
+// so a `setItem` that answers with nothing is not a store any caller could have (ruling 35).
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(),
-    setItem: vi.fn()
+    setItem: vi.fn(async () => undefined)
   }
 }))
 
@@ -506,39 +508,37 @@ describe('terminal link open mode preference', () => {
   })
 })
 
-/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
- *  the test says which build kind it is running as without asserting a type on `globalThis`. */
-function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
-  if (isDevelopmentBuild === undefined) {
-    Reflect.deleteProperty(globalThis, '__DEV__')
+/** The build-time constant the release workflow sets. Under Metro this name is inlined before the
+ *  bundle is written, so these cases measure the answer the inlined value produces, not the read. */
+function setShellBuildSwitch(value: string | undefined): void {
+  if (value === undefined) {
+    Reflect.deleteProperty(process.env, 'EXPO_PUBLIC_MOBILE_SHELL')
     return
   }
-  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
+  process.env.EXPO_PUBLIC_MOBILE_SHELL = value
 }
 
-describe('hybrid shell flag', () => {
+describe('the mobile shell build kind', () => {
   beforeEach(() => {
-    vi.mocked(AsyncStorage.getItem).mockReset()
-    setDevelopmentBuild(undefined)
+    setShellBuildSwitch(undefined)
   })
 
-  it('reads the developer toggle in a development build', async () => {
-    setDevelopmentBuild(true)
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
-
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(true)
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:mobileWebShellEnabled')
+  it('is native when the build set no switch at all, which is every default build', () => {
+    expect(mobileShellBuildKind()).toBe('native')
   })
 
-  it.each([
-    ['a release build', false],
-    ['a runtime with no __DEV__ at all', undefined]
-  ])('is off in %s even with the key left on, and never reads it', async (_label, isDev) => {
-    setDevelopmentBuild(isDev)
-    // The value a development build left behind in a container the install-over kept.
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+  it.each([[''], ['native'], ['OTA'], [' ota'], ['ota-preview'], ['true']])(
+    'is native for %p, so only the exact word opts in',
+    (value) => {
+      setShellBuildSwitch(value)
 
-    await expect(loadMobileWebShellEnabled()).resolves.toBe(false)
-    expect(AsyncStorage.getItem).not.toHaveBeenCalled()
+      expect(mobileShellBuildKind()).toBe('native')
+    }
+  )
+
+  it('is ota when the build set exactly that', () => {
+    setShellBuildSwitch('ota')
+
+    expect(mobileShellBuildKind()).toBe('ota')
   })
 })

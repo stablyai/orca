@@ -4,6 +4,7 @@
  * push, plus main/renderer mirrors of xterm's XParseColor color-spec grammar
  * so main's responder replies byte-identically to a visible renderer xterm.
  */
+import type { TerminalOscColorQueryReplyColors } from './terminal-osc-color-reply'
 
 /** 8-bit-per-channel RGB triple — the same resolution xterm's theme service
  *  stores internally (`color.toColorRGB`). */
@@ -88,6 +89,20 @@ function padChannelTo16Bit(value: number): string {
  *  visible renderer xterm uses in OSC 4/10/11/12 query replies. */
 export function formatXColorRgbSpec(rgb: TerminalViewRgb): string {
   return `rgb:${padChannelTo16Bit(rgb[0])}/${padChannelTo16Bit(rgb[1])}/${padChannelTo16Bit(rgb[2])}`
+}
+
+export function terminalViewRgbToCssHex(rgb: readonly [number, number, number]): string {
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** The colours a PTY owner answers OSC 10/11 with for a viewer painting these attributes. */
+export function terminalViewColorQueryReplyColors(
+  attributes: Pick<TerminalViewAttributes, 'foreground' | 'background'>
+): Required<TerminalOscColorQueryReplyColors> {
+  return {
+    foreground: terminalViewRgbToCssHex(attributes.foreground),
+    background: terminalViewRgbToCssHex(attributes.background)
+  }
 }
 
 function rgbEqual(a: TerminalViewRgb, b: TerminalViewRgb): boolean {

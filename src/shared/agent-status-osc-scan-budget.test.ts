@@ -17,24 +17,26 @@ function parseWithSearchBudget(data: string) {
     }
     return found
   })
-  const execSpy = vi
-    .spyOn(RegExp.prototype, 'exec')
-    .mockImplementation(function (this: RegExp, input) {
-      const from = this.global || this.sticky ? this.lastIndex : 0
-      const found = exec.call(this, input)
-      if (input === data) {
-        searchedChars += (found === null ? data.length : found.index + found[0].length) - from
-      }
-      return found
-    })
-  const charCodeAtSpy = vi
-    .spyOn(String.prototype, 'charCodeAt')
-    .mockImplementation(function (this: string, index) {
-      if (this === data) {
-        searchedChars += 1
-      }
-      return charCodeAt.call(this, index)
-    })
+  const execSpy = vi.spyOn(RegExp.prototype, 'exec').mockImplementation(function (
+    this: RegExp,
+    input
+  ) {
+    const from = this.global || this.sticky ? this.lastIndex : 0
+    const found = exec.call(this, input)
+    if (input === data) {
+      searchedChars += (found === null ? data.length : found.index + found[0].length) - from
+    }
+    return found
+  })
+  const charCodeAtSpy = vi.spyOn(String.prototype, 'charCodeAt').mockImplementation(function (
+    this: string,
+    index
+  ) {
+    if (this === data) {
+      searchedChars += 1
+    }
+    return charCodeAt.call(this, index)
+  })
   try {
     return { result: createAgentStatusOscProcessor()(data), searchedChars }
   } finally {

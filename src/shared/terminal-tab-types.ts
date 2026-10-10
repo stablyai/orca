@@ -1,5 +1,6 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { TuiAgent } from './tui-agent'
+import type { AgentLaunchPaneOutcome } from './agent-launch-pane-verdict'
 
 /** Why recovery reasons live in the shared row type: the tab row carries the
  *  recovery ledger, and the ledger records which reason it last acted on. */
@@ -95,6 +96,14 @@ export type TerminalTab = {
    *  hook status overrides this once the agent does anything. Plain terminals
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
+  /**
+   * The pane an `agent.launch` laid out before its agent existed, while its fate is open or once it
+   * is final. Pending (no `outcome`): the pane's spawn reads the launch record. Cleared once the
+   * agent attaches or the pane is an ordinary terminal again. `outcome`: the launch never ran there,
+   * and the pane says so for the tab's life, until a different launch (`operationId`) reuses it; a
+   * retry of the same launch changes nothing.
+   */
+  agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting
@@ -132,6 +141,8 @@ export type TerminalLayoutSnapshot = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
   expandedLeafId: string | null
+  /** Stable leaf that owns the terminal tab's native chat surface. */
+  chatLeafId?: string
   /** Live PTY IDs per leaf for in-session remounts such as tab-group moves.
    *  Not used for app restart because PTYs are transient processes. */
   ptyIdsByLeafId?: Record<string, string>

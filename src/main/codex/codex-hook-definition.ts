@@ -1,19 +1,23 @@
 import { join } from 'node:path'
 import {
+  buildManagedCommandHook,
   getSharedManagedScriptPath,
-  buildWindowsHookPowerShellCommand,
-  wrapPosixHookCommand,
-  WINDOWS_CMD_SAFE_PATH,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
   writeHooksJson,
+  type HookCommandConfig,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { buildCodexHookCommand } from './codex-hook-command-form'
 import { CODEX_HOOK_EVENT_LABEL, getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexEventLabel } from './config-toml-trust'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
+import { computeCodexTrustedHash, normalizeCodexHookTimeoutSec } from './codex-trust-identity'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
+// Interrupt (Codex 0.150+) is the only hook an Esc-cancelled turn fires; older Codex ignores the unknown key.
 export const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -22,7 +26,8 @@ export const CODEX_EVENTS = [
   'PostToolUse',
   'SubagentStart',
   'SubagentStop',
-  'Stop'
+  'Stop',
+  'Interrupt'
 ] as const
 
 export function getConfigPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
@@ -52,12 +57,49 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
   SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
   SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
-  Stop: CODEX_HOOK_EVENT_LABEL.Stop!
+  Stop: CODEX_HOOK_EVENT_LABEL.Stop!,
+  Interrupt: CODEX_HOOK_EVENT_LABEL.Interrupt!
+}
+
+// Why: pre-clamped to Codex's per-event cap (Interrupt: 3s), which Codex warns about at every startup.
+export function buildCodexManagedHook(
+  command: string,
+  eventName: (typeof CODEX_EVENTS)[number]
+): HookCommandConfig {
+  return buildManagedCommandHook(
+    command,
+    normalizeCodexHookTimeoutSec(CODEX_EVENT_LABEL[eventName], MANAGED_HOOK_TIMEOUT_SECONDS)
+  )
 }
 
 export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
   CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
 )
+
+/**
+ * Orca's own hash of its entry in every managed event, as main wrote before
+ * asking Codex: the stopgap while Codex has not answered.
+ */
+export function computeOrcaCodexHookHashes(
+  command: string = getManagedCommand(getManagedScriptPath())
+): CodexHookHashes {
+  return Object.fromEntries(
+    CODEX_EVENTS.map((eventName) => {
+      const eventLabel = CODEX_EVENT_LABEL[eventName]
+      return [
+        eventLabel,
+        computeCodexTrustedHash({
+          sourcePath: '',
+          eventLabel,
+          groupIndex: 0,
+          handlerIndex: 0,
+          command,
+          timeoutSec: buildCodexManagedHook(command, eventName).timeout
+        })
+      ]
+    })
+  )
+}
 
 export const CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS = [
   '${CLAUDE_PLUGIN_ROOT}',
@@ -71,13 +113,7 @@ export function getManagedScriptPath(): string {
 }
 
 export function getManagedCommand(scriptPath: string): string {
-  if (process.platform !== 'win32') {
-    return wrapPosixHookCommand(scriptPath)
-  }
-  // Codex's default native Windows hook host is PowerShell; reuse it to avoid a second interpreter.
-  return WINDOWS_CMD_SAFE_PATH.test(scriptPath)
-    ? scriptPath
-    : buildWindowsHookPowerShellCommand(scriptPath)
+  return buildCodexHookCommand(scriptPath)
 }
 
 export type CodexManagedHookInstallMaterial = {

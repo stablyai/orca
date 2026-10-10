@@ -1,0 +1,12 @@
+/* Why: find matches are painted as CSS highlights (Ranges, no DOM mutation), in the
+   markdown preview's colors; see use-native-chat-find-matches.ts.
+   ::highlight() supports color/background only. */
+::highlight(native-chat-find-match) {
+  background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
+  color: inherit;
+}
+
+::highlight(native-chat-find-active-match) {
+  background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);
+  color: inherit;
+}

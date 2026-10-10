@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, StyleSheet, PanResponder } from 'react-native'
-import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
+import { View, StyleSheet, PanResponder, Platform } from 'react-native'
+import { useGlobalSearchParams, usePathname } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import {
@@ -12,6 +12,10 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from '../../src/host-screen/HostScreen'
+import { HostStack } from '../../src/navigation/host-stack'
+import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'
+import { HostAreaServingContext } from '../../src/mobile-web-shell/host-area-serving'
+import { usePageOwnsHostArea } from '../../src/mobile-web-shell/page-owns-host-area'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -25,43 +29,6 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
     Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - MIN_DETAIL_WIDTH)
   )
   return Math.min(hardMax, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
-}
-
-function HostStack({ animation }: { animation: 'none' | 'default' }) {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.bgBase },
-        // In the tablet split view the detail pane should swap instantly like
-        // a desktop master-detail; the default slide animates the outgoing
-        // screen and briefly reveals the one beneath it. Phones keep the slide.
-        animation
-      }}
-    >
-      <Stack.Screen name="[hostId]/index" options={{ title: 'Host' }} />
-      <Stack.Screen name="[hostId]/edit" options={{ title: 'Edit host' }} />
-      <Stack.Screen name="[hostId]/accounts" options={{ title: 'Accounts' }} />
-      <Stack.Screen name="[hostId]/tasks" options={{ title: 'Tasks' }} />
-      <Stack.Screen name="[hostId]/session/[worktreeId]" options={{ title: 'Terminal' }} />
-      <Stack.Screen
-        name="[hostId]/source-control/[worktreeId]"
-        options={{ title: 'Source Control' }}
-      />
-      <Stack.Screen
-        name="[hostId]/agent-history/[worktreeId]"
-        options={{ title: 'Agent Session History' }}
-      />
-      <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
-      <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />
-      {/* Dev-flag only: redirects to the host screen unless the hybrid shell flag is on. */}
-      <Stack.Screen name="[hostId]/web" options={{ title: 'Workspace' }} />
-      {/* Last, and matched last: every pathname above has a file of its own, so this takes only
-          what expo-router would otherwise send to Unmatched. Declared for the title alone — an
-          undeclared child still renders, appended after these with this group's screenOptions. */}
-      <Stack.Screen name="[hostId]/[...page]" options={{ title: 'Workspace' }} />
-    </Stack>
-  )
 }
 
 export default function HostGroupLayout() {
@@ -100,13 +67,18 @@ export default function HostGroupLayout() {
   }, [windowWidth])
 
   const hideSidebar = useCallback(() => setSidebarOpen(false), [])
-  const showSidebar = isWideLayout && !!hostId
+  const revealSidebar = useCallback(() => setSidebarOpen(true), [])
+  const [hostAreaServing, setHostAreaServing] = useState(false)
+  const pageOwnsHostArea = usePageOwnsHostArea()
+  // One owner: the page only with its init fact; natively all but a host route its page is serving.
+  const sidebarDrawnHere =
+    Platform.OS === 'web' ? pageOwnsHostArea : !(pathname === `/h/${hostId}` && hostAreaServing)
+  const showSidebar = isWideLayout && !!hostId && sidebarDrawnHere
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
   const canCollapseSidebar = showSidebar && detailHasContent
 
-  // Why: there is no reveal button — navigating Back to the base host route brings
-  // the sidebar back (and that route's detail pane is only a placeholder, so a
-  // hidden sidebar would leave nothing useful).
+  // Why: the base host route's detail pane is only a placeholder, so a hidden
+  // sidebar there would leave nothing useful.
   useEffect(() => {
     if (showSidebar && !detailHasContent) {
       setSidebarOpen(true)
@@ -160,7 +132,13 @@ export default function HostGroupLayout() {
           </View>
         ) : null}
         <View style={styles.detail}>
-          <HostStack animation={showSidebar ? 'none' : 'default'} />
+          <HostAreaServingContext.Provider value={setHostAreaServing}>
+            <HostSidebarRevealContext.Provider
+              value={showSidebar && !sidebarOpen ? revealSidebar : null}
+            >
+              <HostStack animation={showSidebar ? 'none' : 'default'} />
+            </HostSidebarRevealContext.Provider>
+          </HostAreaServingContext.Provider>
         </View>
       </View>
     </HostProtocolGate>

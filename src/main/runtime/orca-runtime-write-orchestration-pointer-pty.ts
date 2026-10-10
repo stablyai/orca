@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { isRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from './orca-runtime-refresh-floating-workspace-pty-liveness'
 import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
@@ -6,13 +7,11 @@ import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
-import type { RuntimeTerminalSummary, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
-import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
-import { findRuntimeWorktreeSummaryByPath } from './runtime-worktree-summary-paths'
+import type { RuntimeTerminalSummary } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { getLatestLeafTitle } from './runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
@@ -28,7 +27,6 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     return writeOrchestrationPointerWithSettlement({
       ptyId,
       data,
-      admissionByPtyId: this.orchestrationPointerAdmissionByPtyId,
       controller: this.ptyController
     })
   }
@@ -90,10 +88,10 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
 
   protected resolvePaneAgentIdentityField(
     launchAgent: TuiAgent | null | undefined,
-    foregroundAgent: TuiAgent | null | undefined,
+    foregroundAgent: TerminalAgent | null | undefined,
     title: string | null,
     paneKey: string | null
-  ): { agentIdentity?: TuiAgent } {
+  ): { agentIdentity?: TerminalAgent } {
     const hookRow = paneKey
       ? selectRuntimeHookAgentRowForPane(this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [])
       : null
@@ -108,38 +106,6 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     return agentIdentity ? { agentIdentity } : {}
   }
 
-  protected getSummaryForRuntimeWorktreeId(
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingRuntimeWorktreeIds: Set<string>,
-    runtimeWorktreeId: string
-  ): RuntimeWorktreePsSummary | null {
-    const exact = summaries.get(runtimeWorktreeId)
-    if (exact) {
-      return exact
-    }
-    if (missingRuntimeWorktreeIds.has(runtimeWorktreeId)) {
-      return null
-    }
-    const parsed = parseRuntimeWorktreeId(runtimeWorktreeId)
-    if (!parsed) {
-      return null
-    }
-    const comparisonPlatform =
-      runtimeWorktreeSummaryPathIndex.platformByRepoId.get(parsed.repoId) ?? process.platform
-    const indexed = findRuntimeWorktreeSummaryByPath(
-      runtimeWorktreeSummaryPathIndex,
-      parsed.repoId,
-      parsed.worktreePath,
-      comparisonPlatform
-    )
-    if (indexed) {
-      return indexed
-    }
-    missingRuntimeWorktreeIds.add(runtimeWorktreeId)
-    return null
-  }
-
   protected buildTerminalSummary(
     leaf: RuntimeLeafRecord,
     worktreesById: Map<string, ResolvedWorktree>,
@@ -149,7 +115,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     const tab = this.tabs.get(leaf.tabId) ?? null
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-    const title = getLatestLeafTitle(leaf, tab?.title ?? null)
+    const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
     // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
     // restored surface whose PTY died with a prior run still reads connected.
     // Demote only on a controller-proven absence, and only for locally-scoped
@@ -162,7 +128,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       provenLivePtyIds !== null &&
       leaf.ptyId !== null &&
       !provenLivePtyIds.has(leaf.ptyId) &&
-      !leaf.ptyId.startsWith('remote:') &&
+      !isRemoteRuntimePtyId(leaf.ptyId) &&
       parseAppSshPtyId(leaf.ptyId) === null &&
       this.ptyController?.hasPty?.(leaf.ptyId) !== true
     return {

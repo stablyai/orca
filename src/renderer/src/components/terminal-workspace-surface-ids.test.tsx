@@ -77,6 +77,7 @@ describe('workspace surface ids', () => {
   it('does not rebuild a surface-id array or set on a cold-activation render', () => {
     const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
     const { surfaces, mapCalls } = countingSurfaces(ids)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: applyTerminalColdActivation reads only the fields listed here; the rest of the foundation is render machinery this test never exercises.
     const controller = {
       activationDeferralPlanRevisionRef: { current: 0 },
       activationDeferredMountTabIdsByWorktreeRef: { current: new Map() },
@@ -89,6 +90,7 @@ describe('workspace surface ids', () => {
       groupsByWorktree: {},
       hydrationSucceeded: false,
       lastActivationWorktreeIdRef: { current: null },
+      startupTerminalTabHoldRef: { current: null },
       layoutByWorktree: {},
       mountedWorktreeIdsRef: { current: new Set(['repo::/worktree-0', 'repo::/gone']) },
       pairedRuntimeParkingEnvironmentIds: new Set(),

@@ -1,3 +1,5 @@
+import { BRIDGE_PROTOCOL_VERSION, type BridgeClientMessage } from './bridge-envelope'
+
 /** The page asks again until the shell answers; a session has no other way to start. */
 export const BRIDGE_READY_RETRY_MIN_MS = 50
 export const BRIDGE_READY_RETRY_MAX_MS = 2000
@@ -45,4 +47,10 @@ export function createBridgeInitHandshake(ask: () => void): BridgeInitHandshake 
       start()
     }
   }
+}
+
+/** What the page says on every ask. It declares nothing: the shell serves no page older than its
+ *  floor, so every page it talks to takes everything the shell sends. */
+export function createPageReadyFrame(): Extract<BridgeClientMessage, { type: 'ready' }> {
+  return { v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }
 }

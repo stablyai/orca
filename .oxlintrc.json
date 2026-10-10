@@ -141,9 +141,56 @@
   },
   "overrides": [
     {
+      "files": ["**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"],
+      "excludeFiles": [
+        "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
+        "**/__tests__/**",
+        "src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
+                "message": "This module is unit-test support. Import the production web-session owner instead."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error"
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shared/**/*.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "src/shared is compiled into the web bundle, where crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP). Use createNonSecureContextUuid() from './non-secure-context-uuid', or import randomUUID from 'node:crypto' in main-only code."
+          }
+        ]
       }
     },
     {
@@ -155,7 +202,7 @@
       }
     },
     {
-      "files": ["**/*.ts"],
+      "files": ["**/*.ts", "**/*.mts", "**/*.cts"],
       "rules": {
         "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
       }
@@ -173,13 +220,23 @@
       }
     },
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.test.mts",
+        "**/*.test.cts",
+        "**/*.spec.mts",
+        "**/*.spec.cts"
+      ],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
     }
   ],
   "ignorePatterns": [
+    "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
     "**/node_modules",
     "**/dist",

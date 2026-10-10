@@ -160,4 +160,24 @@ describe('launchStructuredWorktreeSession', () => {
     })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
+
+  it('logs a chat tab that throws while opening instead of dropping it silently', async () => {
+    const failure = new Error('tab store unavailable')
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation(() => {
+      throw failure
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+      accepted: true,
+      primaryTabId: null
+    })
+    expect(consoleError).toHaveBeenCalledWith(
+      'worktree create: structured chat tab failed to open',
+      'worktree-1',
+      failure
+    )
+    expect(mocks.unsubscribe).toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
 })

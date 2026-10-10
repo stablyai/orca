@@ -8,18 +8,18 @@
  *
  * Nothing here queues. The durable record that the text is owed already exists and is the journal's
  * own submission row: `performSend` appends it before dispatching and the attach path settles it, so
- * a second host-side copy could only disagree with it. What IS reused is the outbox's entry and
+ * a second host-side copy could only disagree with it. What IS reused is the clients' body and
  * envelope builders, so this send is shaped exactly like the renderer's and mobile's — same body,
  * same operation id as client message id, same payload fingerprint.
  *
  * The renderer still delivers its own launch prompts, because its launcher does not call
- * `agent.launch` yet; when it does, its launch-sourced outbox entries become this call.
+ * `agent.launch` yet; when it does, its staged launch prompts become this call.
  */
 
 import {
-  createStructuredAgentSessionOutboxEntry,
-  structuredAgentSessionSendMutation
-} from '../../../../shared/structured-agent-session-outbox'
+  structuredAgentSessionMessageSendMutation,
+  structuredAgentSessionSendBody
+} from '../../../../shared/structured-agent-session-send-mutation'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -46,33 +46,36 @@ export async function commitStructuredAgentSessionLaunchPrompt(args: {
     return null
   }
   const clientMessageId = createStructuredAgentSessionOperationId(randomUUID)
-  const entry = createStructuredAgentSessionOutboxEntry({
-    clientMessageId,
-    sessionId: args.sessionId,
-    text: args.text,
-    attachments: [],
-    queuedAt: Date.now()
-  })
   try {
-    const result = await args.host.send(
-      args.caller,
-      structuredAgentSessionSendMutation(entry, args.fence)
-    )
+    const result = await args.host.send(args.caller, {
+      ...structuredAgentSessionMessageSendMutation({
+        sessionId: args.sessionId,
+        clientOperationId: clientMessageId,
+        expectedRuntimeFence: args.fence,
+        body: structuredAgentSessionSendBody(args.text, [])
+      }),
+      // A person's first prompt, sent for them: kept as a card if a restart or a close comes first.
+      personsMessage: true
+    })
     return result.ok ? result.value.clientMessageId : null
   } catch (error) {
     // Settlement can fail after the journal append. Re-read the authoritative row before asking
     // the caller to resend, otherwise a retry creates a duplicate turn.
     try {
-      const committed = args.host
-        .journalSnapshot(args.sessionId)
-        .submissions.find((submission) => submission.clientMessageId === clientMessageId)
+      const committed = (await args.host.journalSnapshot(args.sessionId)).submissions.find(
+        (submission) => submission.clientMessageId === clientMessageId
+      )
       if (committed) {
         return clientMessageId
       }
     } catch {
       // The host may have gone away before the snapshot; the caller retains the text in that case.
     }
-    console.warn('[agent-launch] the session was created, its launch prompt was not sent', error)
+    args.host.deps.logger.warn("sending a created chat's launch prompt failed", {
+      scope: 'launch-prompt',
+      sessionId: args.sessionId,
+      error
+    })
     return null
   }
 }

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -83,14 +84,14 @@ describe('OrcaRuntimeService', () => {
       rows: 24
     })
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getRepos: () => [remoteRepo],
         getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
         getWorkspaceSession,
         setWorkspaceSession,
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -166,7 +167,7 @@ describe('OrcaRuntimeService', () => {
         exitedDispatchIds: [],
         deferredDispatchIds: []
       })
-      expect(listProcesses).toHaveBeenLastCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
+      expect(listProcesses).toHaveBeenLastCalledWith(`ssh:${connectionId}`, LIST_PROVIDER_DEADLINE)
     } finally {
       unregisterSshGitProvider(connectionId)
     }
@@ -220,7 +221,7 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getProjects: () => [
           {
@@ -228,17 +229,17 @@ describe('OrcaRuntimeService', () => {
             displayName: 'repo',
             badgeColor: 'blue',
             sourceRepoIds: [TEST_REPO_ID],
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
             createdAt: 0,
             updatedAt: 0
           }
         ],
         getSettings: () => ({
           ...store.getSettings(),
-          localWindowsRuntimeDefault: { kind: 'windows-host' }
+          localWindowsRuntimeDefault: { kind: 'windows-host' as const }
         }),
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -309,7 +310,13 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(revealTerminalSession).toHaveBeenCalledOnce()
     expect(listProcesses).toHaveBeenCalledTimes(5)
-    expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([null, null, null, null, null])
+    expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([
+      'local',
+      'local',
+      'local',
+      'local',
+      'local'
+    ])
   })
 
   it('restores orphan pane and group topology without replacing a newer host-owned tab', async () => {
@@ -353,7 +360,9 @@ describe('OrcaRuntimeService', () => {
       }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -524,7 +533,9 @@ describe('OrcaRuntimeService', () => {
       }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

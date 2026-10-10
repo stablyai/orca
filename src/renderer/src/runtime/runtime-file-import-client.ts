@@ -1,5 +1,6 @@
-import { basename, joinPath } from '@/lib/path'
+import { joinPath } from '@/lib/path'
 import type { ImportItemResult } from '../../../shared/filesystem-import-result-types'
+import { deconflictCopyName } from '../../../shared/import-copy-name'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
@@ -21,12 +22,19 @@ import {
 } from './runtime-file-upload-client'
 import { getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { localAccess } from './runtime-file-read-client'
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,
   sourcePaths: string[],
   destinationDir: string,
-  options?: { ensureDestinationDir?: boolean; assertCurrent?: () => void }
+  options?: {
+    ensureDestinationDir?: boolean
+    assertCurrent?: () => void
+    /** Local imports only; remote destinations stay root-relative. */
+    access?: LocalFileAccess
+  }
 ): Promise<{ results: ImportItemResult[] }> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
@@ -35,7 +43,8 @@ export async function importExternalPathsToRuntime(
         sourcePaths,
         destDir: destinationDir,
         connectionId: context.connectionId,
-        ensureDir: options?.ensureDestinationDir
+        ensureDir: options?.ensureDestinationDir,
+        ...localAccess(context.connectionId, options?.access)
       })
     )
   }
@@ -83,13 +92,16 @@ export async function importExternalPathsToRuntime(
     }
     let createdDirectoryImportRoot: string | null = null
     try {
-      const finalName = await deconflictRuntimeImportName(
-        context,
-        destinationDir,
-        source.name,
-        reservedNames,
-        importSession
-      )
+      const finalName = await deconflictCopyName(source.name, async (n) => {
+        importSession.assertCurrent()
+        return (
+          (await runtimePathExists(
+            context,
+            joinPath(destinationDir, n),
+            importSession.expectedEnvironmentPairingRevision
+          )) || reservedNames.has(n)
+        )
+      })
       const destPath = joinPath(destinationDir, finalName)
       const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
       for (const entry of source.entries) {
@@ -163,59 +175,4 @@ export async function importExternalPathsToRuntime(
   }
 
   return { results }
-}
-
-async function deconflictRuntimeImportName(
-  context: RuntimeFileOperationArgs,
-  destinationDir: string,
-  originalName: string,
-  reservedNames: Set<string>,
-  session: RuntimeFileImportSession
-): Promise<string> {
-  session.assertCurrent()
-  if (
-    !(await runtimePathExists(
-      context,
-      joinPath(destinationDir, originalName),
-      session.expectedEnvironmentPairingRevision
-    )) &&
-    !reservedNames.has(originalName)
-  ) {
-    return originalName
-  }
-
-  const dotIndex = originalName.lastIndexOf('.')
-  const hasMeaningfulExt = dotIndex > 0
-  const stem = hasMeaningfulExt ? originalName.slice(0, dotIndex) : originalName
-  const ext = hasMeaningfulExt ? originalName.slice(dotIndex) : ''
-  let candidate = `${stem} copy${ext}`
-  session.assertCurrent()
-  if (
-    !(await runtimePathExists(
-      context,
-      joinPath(destinationDir, candidate),
-      session.expectedEnvironmentPairingRevision
-    )) &&
-    !reservedNames.has(candidate)
-  ) {
-    return candidate
-  }
-
-  let counter = 2
-  while (counter < 10000) {
-    candidate = `${stem} copy ${counter}${ext}`
-    session.assertCurrent()
-    if (
-      !(await runtimePathExists(
-        context,
-        joinPath(destinationDir, candidate),
-        session.expectedEnvironmentPairingRevision
-      )) &&
-      !reservedNames.has(candidate)
-    ) {
-      return candidate
-    }
-    counter += 1
-  }
-  throw new Error(`Could not generate a unique name for '${basename(originalName)}'`)
 }

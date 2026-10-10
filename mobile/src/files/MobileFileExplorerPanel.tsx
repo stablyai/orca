@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   flattenDirectoryCache,
@@ -27,7 +28,8 @@ import {
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
 } from './directory-load-revisions'
-import { directoryCacheFromFileList, isMobileMethodUnavailableError } from './file-list-fallback'
+import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
+import { directoryCacheFromFileList } from './file-list-fallback'
 import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
@@ -248,8 +250,10 @@ export function MobileFileExplorerPanel(props: {
   const retryDirectory = useCallback(
     (relativePath: string) => {
       if (connState !== 'connected' && hostId) {
+        // Still worth a tap on the page, where nothing re-dials: the queued read runs when the
+        // shell's client reconnects on its own.
         pendingDirectoryRetriesRef.current.add(relativePath)
-        void forceReconnect(hostId)
+        void forceReconnect?.(hostId)
         return
       }
       void loadDirectory(relativePath)
@@ -320,6 +324,14 @@ export function MobileFileExplorerPanel(props: {
     </View>
   )
 
+  // Why: while disconnected, re-sending the request is useless — revive the parked transport
+  // instead (issue #5049); loadDirectory re-runs via its effect once the new client connects.
+  const rootRetry = connectionRetryAction({
+    hostId,
+    needsReconnect: connState !== 'connected',
+    forceReconnect,
+    reload: () => void loadDirectory('')
+  })
   const body = loading ? (
     <View style={styles.state}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -327,17 +339,11 @@ export function MobileFileExplorerPanel(props: {
   ) : error ? (
     <View style={styles.state}>
       <Text style={styles.errorText}>{error}</Text>
-      {/* Why: while disconnected, re-sending the request is useless — revive
-          the parked transport instead (issue #5049); loadDirectory re-runs via
-          its effect once the new client connects. */}
-      <Pressable
-        style={styles.retryButton}
-        onPress={() =>
-          connState !== 'connected' && hostId ? void forceReconnect(hostId) : void loadDirectory('')
-        }
-      >
-        <Text style={styles.retryText}>Retry</Text>
-      </Pressable>
+      {rootRetry ? (
+        <Pressable style={styles.retryButton} onPress={rootRetry}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      ) : null}
     </View>
   ) : rows.length === 0 ? (
     <View style={styles.state}>

@@ -4,6 +4,7 @@ import type { SshExecOptions } from '../ssh/ssh-connection-utils'
 import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
+import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
 export type RemoteDirEntry = {
   name: string
@@ -115,7 +116,10 @@ async function runBrowseCommand(
   pathFlavor: FilesystemPathFlavor,
   options?: SshExecOptions
 ): Promise<RemoteBrowseResult> {
-  const channel = options ? await conn.exec(command, options) : await conn.exec(command)
+  // Why: login-shell rc output would otherwise be read as the resolved path.
+  const fence = options?.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
+  const remoteCommand = fence?.command ?? command
+  const channel = options ? await conn.exec(remoteCommand, options) : await conn.exec(remoteCommand)
 
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -184,6 +188,7 @@ async function runBrowseCommand(
       rejectOnce(error)
     }
     const onClose = (): void => {
+      stdout = fence?.readStdout(stdout) ?? stdout
       // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
       if (exitCode !== 0) {
         const msg =

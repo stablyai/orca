@@ -20,6 +20,7 @@ import type {
 } from '../host-env/types'
 import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
+import type { ResolvedPtyHost } from '../provider/registry'
 
 export type PtySpawnIpcArgs = {
   cols: number
@@ -51,6 +52,10 @@ export type PtySpawnIpcArgs = {
   // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
   tabId?: string
   leafId?: string
+  // Why: a pane with a live owner is otherwise reattached, so a restart names the PTY it replaces.
+  replacesPtyId?: string
+  // Untyped on purpose: parseTerminalPanePlacement is the one check, and drops what it rejects.
+  placement?: unknown
   // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
   telemetry?: {
     agent_kind?: unknown
@@ -87,7 +92,7 @@ export type PtySpawnIpcDeps = {
     prepareCodexSessionResume?: PrepareCodexSessionResume
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   }
-  getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
   assertFolderWorkspacePtyPathUsable: (worktreeId: string | undefined) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
@@ -102,7 +107,7 @@ export type PtySpawnIpcDeps = {
     providerSession?: AgentProviderSessionMetadata
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
-    workspacePath?: string
+    useSelectedAccount?: boolean
   }) => PreparedCodexResumeHome | null
   noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
   resolveCodexResumeLaunch: (
@@ -121,4 +126,5 @@ export type PtySpawnIpcDeps = {
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void
   syncPtyBackgroundedDelivery: (id: string, caller: string) => void
+  stopReplacedPty: (id: string) => Promise<void>
 }

@@ -9,6 +9,7 @@ import {
   useMacNotificationPermissionState
 } from '@/components/notifications/mac-notification-permission-card'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
+import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
 import {
   createNotificationVolumeDraftState,
@@ -159,6 +160,25 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             terminalBell: !notificationSettings.terminalBell
+          })
+        }
+      />
+
+      <NotificationHostToggles
+        mutedNotificationSourceIds={notificationSettings.mutedNotificationSourceIds}
+        disabled={!notificationSettings.enabled}
+        onChange={(hostIds, muted) =>
+          void updateNotificationSettings({
+            mutedNotificationSourceIds: muted
+              ? [
+                  ...new Set([
+                    ...notificationSettingsRef.current.mutedNotificationSourceIds,
+                    ...hostIds
+                  ])
+                ]
+              : notificationSettingsRef.current.mutedNotificationSourceIds.filter(
+                  (id) => !hostIds.includes(id)
+                )
           })
         }
       />

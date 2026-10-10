@@ -1,19 +1,15 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "settings.task-preferences",
   "family": "settings-best-effort",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
-  "scenarioSha256": "cf671da175d50a4c2e1336f4e8338c24c4752db111e1eafd226bee6ff3582b1d",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "20067abe0cdb": {
+    "03d1fef54a8c": {
+      "name": "settings.update#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"my-issues\"}}"
+    },
+    "0e0e7cfa77f2": {
       "name": "settings.update#1",
       "ordinal": 2,
       "args": [
@@ -24,7 +20,76 @@
         {
           "name": "params",
           "value": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "0e6a18c4b259": {
+      "name": "settings.update#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "my-issues"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "38f60ac30222": {
+      "preset": "my-issues"
+    },
+    "50cc7bfddb0c": {
+      "name": "settings.update#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "my-issues"
           }
         },
         {
@@ -48,12 +113,12 @@
         }
       }
     },
-    "5957e7c52ab6": {
-      "name": "settings.update#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
+    "a10aec8208b3": {
+      "name": "defaultGitHubPreset",
+      "ordinal": 1,
+      "value": "my-issues"
     },
-    "5a2a900f746d": {
+    "a2be01c53c71": {
       "name": "settings.update#1",
       "ordinal": 2,
       "args": [
@@ -64,7 +129,7 @@
         {
           "name": "params",
           "value": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
           }
         },
         {
@@ -80,11 +145,14 @@
         "settledAt": 0,
         "value": {
           "id": "frame-1",
-          "ok": true
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
         }
       }
     },
-    "5a40ae118c80": {
+    "a4380be3778f": {
       "name": "settings.update#1",
       "ordinal": 2,
       "args": [
@@ -95,7 +163,7 @@
         {
           "name": "params",
           "value": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
           }
         },
         {
@@ -106,20 +174,20 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
     },
-    "5db909d58c6f": {
-      "preset": "assigned"
-    },
-    "66d0a96740cd": {
+    "ad6e66b54916": {
       "name": "settings.update#1",
       "ordinal": 2,
       "args": [
@@ -130,7 +198,41 @@
         {
           "name": "params",
           "value": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "af739459a0c3": {
+      "name": "settings.update#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "my-issues"
           }
         },
         {
@@ -156,7 +258,7 @@
         }
       }
     },
-    "773b3127c2df": {
+    "b07b2522267c": {
       "name": "settings.update#1",
       "ordinal": 2,
       "args": [
@@ -167,172 +269,7 @@
         {
           "name": "params",
           "value": {
-            "defaultTaskViewPreset": "assigned"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "77db919d5a63": {
-      "name": "settings.update#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultTaskViewPreset": "assigned"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "7a3df9a9d533": {
-      "name": "settings.update#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultTaskViewPreset": "assigned"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "7b47ae02f8c4": {
-      "name": "settings.update#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultTaskViewPreset": "assigned"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "ad91b485db0c": {
-      "name": "defaultGitHubPreset",
-      "ordinal": 1,
-      "value": "assigned"
-    },
-    "bbe37721bfbe": {
-      "name": "settings.update#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultTaskViewPreset": "assigned"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "c9f31916fca4": {
-      "name": "settings.update#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
           }
         },
         {
@@ -356,7 +293,7 @@
         }
       }
     },
-    "cbf52c7a2082": {
+    "b1e59b9278fe": {
       "name": "settings.update#1",
       "ordinal": 2,
       "args": [
@@ -367,7 +304,96 @@
         {
           "name": "params",
           "value": {
-            "defaultTaskViewPreset": "assigned"
+            "defaultTaskViewPreset": "my-issues"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "b45fc49714f4": {
+      "name": "settings.update#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "my-issues"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b6c9da6aafa0": {
+      "name": "settings.update#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "my-issues"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c8357df6a135": {
+      "name": "settings.update#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultTaskViewPreset": "my-issues"
           }
         },
         {
@@ -391,41 +417,6 @@
         }
       }
     },
-    "e5883522e7a1": {
-      "name": "settings.update#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.update"
-        },
-        {
-          "name": "params",
-          "value": {
-            "defaultTaskViewPreset": "assigned"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -441,157 +432,157 @@
       {
         "id": "settings-task-write.prelude:optimistic",
         "observation": {
-          "sender": ["bbe37721bfbe"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["b6c9da6aafa0"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.normal:settled",
         "observation": {
-          "sender": ["7b47ae02f8c4"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["0e6a18c4b259"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.result-absent:settled",
         "observation": {
-          "sender": ["5a2a900f746d"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["b1e59b9278fe"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.result-null:settled",
         "observation": {
-          "sender": ["7a3df9a9d533"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["ad6e66b54916"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.inner-ok-missing:settled",
         "observation": {
-          "sender": ["773b3127c2df"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["a2be01c53c71"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.inner-false-string-error:settled",
         "observation": {
-          "sender": ["e5883522e7a1"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["a4380be3778f"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.inner-false-object-error:settled",
         "observation": {
-          "sender": ["66d0a96740cd"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["af739459a0c3"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.outer-refused:settled",
         "observation": {
-          "sender": ["cbf52c7a2082"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["c8357df6a135"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["20067abe0cdb"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["50cc7bfddb0c"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.method-not-found:settled",
         "observation": {
-          "sender": ["c9f31916fca4"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["b07b2522267c"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.transport-rejection:settled",
         "observation": {
-          "sender": ["5a40ae118c80"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["0e0e7cfa77f2"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       },
       {
         "id": "settings-task-write.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["77db919d5a63"],
-          "payloads": ["5957e7c52ab6"],
+          "sender": ["b45fc49714f4"],
+          "payloads": ["03d1fef54a8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "write": "eb79a9b3682a"
           },
-          "state": "5db909d58c6f",
-          "effects": ["ad91b485db0c"]
+          "state": "38f60ac30222",
+          "effects": ["a10aec8208b3"]
         }
       }
     ]

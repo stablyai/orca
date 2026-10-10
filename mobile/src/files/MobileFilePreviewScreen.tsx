@@ -6,6 +6,7 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import {
   loadMobileFilePreview,
   previewError,
@@ -121,7 +122,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         return
       }
       const loadedContent =
-        result.status === 'ready' && result.kind !== 'image'
+        result.status === 'ready' && result.kind !== 'image' && result.kind !== 'media'
           ? result.content
           : result.status === 'empty'
             ? ''
@@ -156,21 +157,19 @@ export function MobileFilePreviewScreen({ route }: Props) {
     void loadPreview()
   }, [loadPreview])
 
-  const retry = useCallback(async () => {
-    if (!previewParams) {
-      void loadPreview()
-      return
-    }
-    if (
-      preview.status === 'waiting' ||
-      (preview.status === 'error' && preview.reconnect) ||
-      connState !== 'connected'
-    ) {
-      await forceReconnect(previewParams.hostId)
-      return
-    }
-    void loadPreview()
-  }, [connState, forceReconnect, loadPreview, preview, previewParams])
+  const retry = useMemo(
+    () =>
+      connectionRetryAction({
+        hostId: previewParams?.hostId,
+        needsReconnect:
+          preview.status === 'waiting' ||
+          (preview.status === 'error' && preview.reconnect) ||
+          connState !== 'connected',
+        forceReconnect,
+        reload: () => void loadPreview()
+      }),
+    [connState, forceReconnect, loadPreview, preview, previewParams]
+  )
 
   const displayPath =
     previewParams?.source === 'terminalArtifact'
@@ -262,6 +261,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
       </SafeAreaView>
       <MobileFilePreviewBody
         preview={preview}
+        client={client}
         relativePath={displayPath}
         title={title || 'File'}
         editable={isEditableTerminalArtifact}

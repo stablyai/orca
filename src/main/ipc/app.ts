@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -7,7 +6,8 @@ import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp } from '../app-relaunch'
+import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
+import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
@@ -15,10 +15,9 @@ import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
-import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
-  grantFloatingWorkspaceDirectory,
+  trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
@@ -26,15 +25,8 @@ import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
 import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
-
-const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
-const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
-// Why: defaults export reads live prefs (on-disk plist lags cfprefsd); xml1 dodges plutil's json abort on macOS 15 input-source arrays; absolute paths so a minimal PATH can't shadow the tools.
-const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
-  `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
-  '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - -',
-  '/usr/bin/plutil -convert json -o - -'
-].join(' | ')
+import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
+import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 
 type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -60,7 +52,6 @@ async function pickFloatingMarkdownDocument(
   if (!isMarkdownDocumentName(filePath)) {
     throw new Error('Selected file is not a markdown document.')
   }
-  authorizeExternalPath(filePath)
   return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
 }
 
@@ -70,7 +61,7 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    // Why: this picker only grants access to an existing directory; creation belongs to explicit file actions.
+    // Why: this picker only chooses an existing directory; creation belongs to explicit file actions.
     properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
@@ -80,8 +71,8 @@ async function pickFloatingWorkspaceDirectory(
     return null
   }
   const selectedDir = result.filePaths[0]
-  // Why: a user-approved picker selection is a trust grant for later markdown creation, unlike typed settings text.
-  await grantFloatingWorkspaceDirectory(store, selectedDir)
+  // Why: only a user-approved picker selection may become the floating terminal's cwd, unlike typed settings text.
+  await trustFloatingWorkspaceDirectory(store, selectedDir)
   return selectedDir
 }
 
@@ -112,141 +103,10 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-function readCommandStdout(
-  command: string,
-  args: string[],
-  timeoutMessage: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let child: ReturnType<typeof spawn> | undefined
-
-    // Why: killing only the shell orphans pipeline stages; detached spawn lets one negative-pid SIGKILL reap the whole group.
-    const killTree = (): void => {
-      if (!child?.pid) {
-        return
-      }
-      try {
-        process.kill(-child.pid, 'SIGKILL')
-      } catch {
-        child.kill()
-      }
-    }
-
-    // Why: short timeout so a wedged macOS probe never hangs; this timer owns the process-group kill.
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      killTree()
-      reject(new Error(timeoutMessage))
-    }, KEYBOARD_INPUT_SOURCE_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
-    }
-
-    try {
-      child = spawn(command, args, { detached: true, stdio: ['ignore', 'pipe', 'ignore'] })
-      let stdout = ''
-      child.stdout?.setEncoding('utf8')
-      child.stdout?.on('data', (chunk: string) => {
-        stdout += chunk
-      })
-      const failWith = (error: Error): void => {
-        killTree()
-        settle(() => reject(error))
-      }
-      // Why: an unhandled Readable 'error' would crash the main process; treat stdout errors like spawn errors.
-      child.stdout?.on('error', failWith)
-      child.on('error', failWith)
-      child.on('close', (code, signal) => {
-        settle(() =>
-          code === 0
-            ? resolve(stdout)
-            : reject(
-                new Error(
-                  `${command} exited with ${signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`}`
-                )
-              )
-        )
-      })
-    } catch (error) {
-      settle(() => reject(error))
-    }
-  })
-}
-
-function readSelectedInputSourceIdFromJson(stdout: string): string | null {
-  let records: unknown
-  try {
-    records = JSON.parse(stdout)
-  } catch {
-    return null
-  }
-  if (!Array.isArray(records)) {
-    return null
-  }
-
-  for (const record of records.slice().toReversed()) {
-    if (!record || typeof record !== 'object') {
-      continue
-    }
-    const fields = record as Record<string, unknown>
-    const kind = typeof fields.InputSourceKind === 'string' ? fields.InputSourceKind : ''
-    if (kind.toLowerCase().includes('non keyboard')) {
-      continue
-    }
-    const inputMode = fields['Input Mode']
-    if (typeof inputMode === 'string' && inputMode.trim()) {
-      return inputMode.trim()
-    }
-    const bundleId = fields['Bundle ID']
-    if (typeof bundleId === 'string' && bundleId.trim()) {
-      return bundleId.trim()
-    }
-  }
-  return null
-}
-
-async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
-  try {
-    const stdout = await readCommandStdout(
-      '/bin/sh',
-      ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
-      'Selected keyboard input source probe timed out'
-    )
-    return readSelectedInputSourceIdFromJson(stdout)
-  } catch {
-    return null
-  }
-}
-
-function readKeyboardLayoutInputSourceId(): Promise<string> {
-  return readCommandStdout(
-    '/usr/bin/defaults',
-    ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
-    'Keyboard layout input source probe timed out'
-  )
-}
-
-async function readKeyboardInputSourceId(): Promise<string | null> {
-  const selectedInputSourceId = await readSelectedKeyboardInputSourceId()
-  if (selectedInputSourceId) {
-    return selectedInputSourceId
-  }
-  return readKeyboardLayoutInputSourceId()
-}
-
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   registerRendererShutdownCheckpointHandler(store)
   registerMacKeyboardLayoutChangeNotifications()
+  ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -270,7 +130,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
-  // Why: renderer layout fingerprint tags ABC/CJK-Roman as 'us', breaking Option+letter (#1205); HIToolbox prefs override it.
+  // The selected IME identity must win over its US-shaped backing keyboard layout.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
     if (process.platform !== 'darwin') {
       return null
@@ -281,7 +141,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
     } catch {
-      // Why: probe can fail (missing keys on first boot, sandbox) — treat as "no signal" and fall back to the fingerprint.
+      // A failed probe must not promote an IME's backing layout into an Alt default.
       return null
     }
   })
@@ -304,7 +164,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       relaunchApp('admin-restart')
-      app.quit()
+      quitProcess()
     }, 150)
   })
 
@@ -325,18 +185,4 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
-}
-
-async function runBeforeRelaunchCleanup(
-  onBeforeRelaunch?: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await onBeforeRelaunch?.()
-  } catch (error) {
-    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
-    console.warn(
-      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
-      error instanceof Error ? error.name : typeof error
-    )
-  }
 }

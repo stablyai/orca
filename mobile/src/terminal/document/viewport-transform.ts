@@ -19,6 +19,15 @@ export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<
   } catch {}
 }
 
+/** 0 until the renderer has measured a cell. */
+export function getMeasuredCellHeight(scope: TerminalDocumentScope) {
+  const core = scope.term?._core
+  if (core && core._renderService && core._renderService.dimensions) {
+    return core._renderService.dimensions.css.cell.height || 0
+  }
+  return 0
+}
+
 export function getCellWidth(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term._core) {
     return 0
@@ -50,7 +59,11 @@ export function computeFitScale(scope: TerminalDocumentScope) {
   if (termWidth <= 0) {
     return 1
   }
-  const vpWidth = window.innerWidth
+  const vpWidth = scope.viewportRect().width
+  // Why: a viewport with no width yet (a page host never laid out) would give scale 0 and blank the grid.
+  if (vpWidth <= 0) {
+    return 1
+  }
   return Math.min(1, vpWidth / termWidth)
 }
 
@@ -83,7 +96,7 @@ export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: bool
     scope.scrollIndicator.classList.remove('visible')
     return
   }
-  const trackHeight = Math.max(0, window.innerHeight - 8)
+  const trackHeight = Math.max(0, scope.viewportRect().height - 8)
   const totalRows = maxViewportY + (scope.term.rows || 0)
   if (trackHeight <= 0 || totalRows <= 0) {
     return

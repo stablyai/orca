@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { PersistedState } from '../shared/persisted-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -13,6 +7,13 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { PersistedState } from '../shared/persisted-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -62,7 +63,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────

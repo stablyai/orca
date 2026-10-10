@@ -9,9 +9,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
 import {
   buildNativeChatRailItems,
+  mergeNativeChatRailOutline,
+  NATIVE_CHAT_RAIL_ROOMY_TICKS,
+  nativeChatRailReplyPreview,
+  nativeChatRailTickCapacity,
   selectNativeChatRailTicks,
-  NATIVE_CHAT_RAIL_MIN_ITEMS,
-  type NativeChatRailItem
+  type NativeChatRailItem,
+  type NativeChatRailOutlineEntry,
+  type NativeChatRailTurnRows
 } from './native-chat-message-rail-items'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
@@ -19,32 +24,60 @@ import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-wi
 /** Quiet period that counts as "stopped scrolling". */
 export const NATIVE_CHAT_RAIL_IDLE_MS = 120
 
-/** Narrower than this the panel would cover the message it previews, so the whole
- *  rail stands down rather than half-working in a split pane. */
+/** Narrower than this the preview card would cover the transcript it sits beside,
+ *  so the whole rail stands down rather than half-working in a split pane. */
 export const NATIVE_CHAT_RAIL_MIN_WIDTH_PX = 512
 
 export type NativeChatMessageRailState = {
   ticks: readonly NativeChatRailItem[]
   items: readonly NativeChatRailItem[]
   activeId: string | null
+  /** Light a tick now, ahead of the scroll that is taking the reader to it. */
+  onActivate: (id: string) => void
   visible: boolean
+  /** The item whose preview is open, if any. */
+  previewId: string | null
+  /** The item whose tick holds keyboard focus, if any. */
+  focusId: string | null
+  /** The rail names the item it focused, or is about to: an item named here
+   *  always has a tick, so arrow keys can walk every message, sampled or not. */
+  onFocusItem: (id: string | null) => void
+  /** What the agent answered the previewed item with; empty when nothing is
+   *  previewed or it has said nothing. Follows a reply that is still streaming. */
+  previewReply: string
+  /** The rail names the item its preview shows, or null once it closes. */
+  onPreview: (id: string | null) => void
 }
 
 export function useNativeChatMessageRail({
   scrollRef,
   slots,
-  virtualItems
+  turnRows,
+  virtualItems,
+  outline = null
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   slots: readonly NativeChatTranscriptSlot[]
+  /** The rows the slots were built from, for the previewed turn's reply. */
+  turnRows: NativeChatRailTurnRows
   virtualItems: NativeChatTranscriptWindow['virtualItems']
+  /** User messages older than the loaded window; null when none are known. */
+  outline?: readonly NativeChatRailOutlineEntry[] | null
 }): NativeChatMessageRailState {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [wideEnough, setWideEnough] = useState(true)
+  const [maxTicks, setMaxTicks] = useState(NATIVE_CHAT_RAIL_ROOMY_TICKS)
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
-  const items = buildNativeChatRailItems(slots, previousItemsRef.current)
-  previousItemsRef.current = items
+  const loadedItems = buildNativeChatRailItems(slots, previousItemsRef.current)
+  // Written after commit so a discarded render cannot become the next one's baseline.
+  useEffect(() => {
+    previousItemsRef.current = loadedItems
+  }, [loadedItems])
+  const items = useMemo(
+    () => mergeNativeChatRailOutline(outline, loadedItems),
+    [outline, loadedItems]
+  )
 
   // Read through refs so a settling scroll never re-subscribes the listener:
   // `virtualItems` is a fresh array on every frame of a scroll.
@@ -111,20 +144,34 @@ export function useNativeChatMessageRail({
     }
     const observer = new ResizeObserver(() => {
       setWideEnough(element.clientWidth >= NATIVE_CHAT_RAIL_MIN_WIDTH_PX)
+      setMaxTicks(nativeChatRailTickCapacity(element.clientHeight))
     })
     observer.observe(element)
     return () => observer.disconnect()
   }, [scrollRef])
 
-  const ticks = useMemo(() => selectNativeChatRailTicks({ items, activeId }), [items, activeId])
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const ticks = useMemo(
+    () => selectNativeChatRailTicks({ items, keepIds: [activeId, focusId, previewId], maxTicks }),
+    [items, activeId, focusId, previewId, maxTicks]
+  )
+  const previewReply =
+    previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)
 
   return useMemo(
     () => ({
       ticks,
       items,
       activeId,
-      visible: wideEnough && items.length >= NATIVE_CHAT_RAIL_MIN_ITEMS
+      onActivate: setActiveId,
+      visible: wideEnough && items.length > 0,
+      previewId,
+      previewReply,
+      onPreview: setPreviewId,
+      focusId,
+      onFocusItem: setFocusId
     }),
-    [ticks, items, activeId, wideEnough]
+    [ticks, items, activeId, wideEnough, previewId, previewReply, focusId]
   )
 }

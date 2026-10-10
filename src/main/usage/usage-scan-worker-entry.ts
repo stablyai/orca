@@ -2,6 +2,7 @@ import { parentPort } from 'node:worker_threads'
 import { scanClaudeUsageFiles } from '../claude-usage/scanner'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
+import { scanMuseUsageFiles } from '../muse-usage/scanner'
 import type {
   UsageScanWorkerProgress,
   UsageScanWorkerRequest,
@@ -9,7 +10,7 @@ import type {
   UsageScanWorkerValue
 } from './usage-scan-worker-protocol'
 
-// Why (#20940): the Claude/Codex/OpenCode usage scans parse whole history
+// Why (#20940): the Claude/Codex/OpenCode/Muse usage scans parse whole history
 // corpora and read SQLite synchronously. Running them on this worker thread
 // keeps that work off the Electron main-process event loop. The client
 // dispatches one request at a time, so this loop stays serial; imports must
@@ -62,7 +63,12 @@ async function runScan(
   // provider's own record type, so nothing here needs a type assertion.
   switch (request.providerId) {
     case 'claude': {
-      const result = await scanClaudeUsageFiles(request.worktrees, request.previous, onFilesScanned)
+      const result = await scanClaudeUsageFiles(
+        request.worktrees,
+        request.previous,
+        onFilesScanned,
+        request.profileDirs
+      )
       return {
         providerId: 'claude',
         source: result.processedFiles,
@@ -88,6 +94,15 @@ async function runScan(
       return {
         providerId: 'opencode',
         source: result.processedDatabases,
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'muse': {
+      const result = await scanMuseUsageFiles(request.worktrees, request.previous, onFilesScanned)
+      return {
+        providerId: 'muse',
+        source: result.processedFiles,
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }

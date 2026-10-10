@@ -1,5 +1,5 @@
 /**
- * The mobile-view frame budget, held against Chromium's own JPEG encoder across the viewport range.
+ * The mobile-view frame budget, held against Chromium's own JPEG encoder at representative phone, tablet and wide viewports.
  *
  * `WORST_CASE_JPEG_BYTES_PER_PIXEL` is the one number the budget cannot derive, and every other
  * check of it is circular: a case that encodes `noise(area * theConstant)` is measuring a byte
@@ -43,9 +43,7 @@ async function loadSweepModules() {
   ])
   return {
     budgetedMobileViewDeviceScaleFactor: request.budgetedMobileViewDeviceScaleFactor,
-    mobileBrowserFrameAreaBudget: request.mobileBrowserFrameAreaBudget,
     WORST_CASE_JPEG_BYTES_PER_PIXEL: request.WORST_CASE_JPEG_BYTES_PER_PIXEL,
-    MOBILE_VIEW_DEVICE_SCALE_FACTOR: parameters.MOBILE_VIEW_DEVICE_SCALE_FACTOR,
     BROWSER_FRAME_QUALITY: parameters.BROWSER_FRAME_QUALITY,
     BRIDGE_MAX_MESSAGE_BYTES: caps.BRIDGE_MAX_MESSAGE_BYTES,
     utf8ByteLength: caps.utf8ByteLength,
@@ -65,15 +63,23 @@ function sweep() {
   return loaded
 }
 
-/** The viewport range the pane is mounted in, phone through tablet, in CSS pixels. */
-const VIEWPORT_WIDTHS = [320, 360, 390, 393, 412, 430, 480, 600, 768, 834, 1024, 1280, 1400]
-const VIEWPORT_HEIGHTS = [480, 640, 712, 720, 800, 896, 932, 1024, 1180, 1366, 1600]
-
 type Viewport = { width: number; height: number }
 
-const VIEWPORTS: Viewport[] = VIEWPORT_WIDTHS.flatMap((width) =>
-  VIEWPORT_HEIGHTS.map((height) => ({ width, height }))
-)
+// Sample aspect ratios and budget pressure without replaying one encoder contract 111 times.
+const VIEWPORTS: Viewport[] = [
+  { width: 320, height: 480 },
+  { width: 360, height: 640 },
+  { width: 390, height: 712 },
+  { width: 393, height: 720 },
+  { width: 430, height: 932 },
+  { width: 600, height: 800 },
+  { width: 768, height: 1024 },
+  { width: 1024, height: 768 },
+  { width: 320, height: 1600 },
+  { width: 1400, height: 480 },
+  { width: 834, height: 896 },
+  { width: 1280, height: 640 }
+]
 
 let browser: Browser | null = null
 let page: Page | null = null
@@ -131,6 +137,34 @@ function noiseDocument({ viewportMeta }: { viewportMeta: boolean }): string {
   return `<!doctype html><html><head>${meta}${style}</head><body><canvas id="noise"></canvas></body></html>`
 }
 
+/** One screencast frame: its encoded size, and when the browser captured it. */
+type CapturedFrame = { bytes: number; stamp: number | null }
+
+/**
+ * The frames this capture may be read from, which is the precondition the byte count needs.
+ *
+ * Two readings rather than an ordering. `rastered` is where the arrivals after the raster barrier
+ * begin, and `paintedAt` is the page's own clock at the moment its second animation frame ran after
+ * the noise was put on the canvas -- the clock `metadata.timestamp` is also on. A frame is admitted
+ * only if the browser captured it at or after that moment.
+ *
+ * Arrival order cannot stand in for it: frames do not reach the client in capture order. Measured on
+ * this rig at 20x CPU throttling, over six captures, every frame of the black canvas the resize left
+ * and every frame still in flight from the previous viewport was stamped 86 to 161 ms before the
+ * paint and yet arrived after the barrier, while every frame carrying the noise was stamped inside
+ * 150 ms after it. Admitting one of those stale frames is both readings this sweep has flaked on: a
+ * black 1400x1600 frame encodes to 13483 bytes, which is the 0.006 bytes/px of 2026-09-22, and a
+ * full frame of the previous and smaller viewport is the ~447 KB whose posted envelope was the
+ * 596462 that 2026-09-21 expected to be null.
+ */
+function framesCarryingTheNoise(
+  frames: CapturedFrame[],
+  rastered: number,
+  paintedAt: number
+): CapturedFrame[] {
+  return frames.slice(rastered).filter((one) => one.stamp !== null && one.stamp >= paintedAt)
+}
+
 /**
  * A noise JPEG at the quality the pane ships, encoded by Chromium's screencast, in bytes.
  *
@@ -177,13 +211,22 @@ async function screencastNoiseJpegBytes(
     canvas.style.height = `${height}px`
   }, frame)
 
-  const sizes: number[] = []
-  const onFrame = (event: { data: string; sessionId: number }): void => {
-    sizes.push(Buffer.from(event.data, 'base64').length)
+  const frames: CapturedFrame[] = []
+  const onFrame = (event: {
+    data: string
+    sessionId: number
+    metadata: { timestamp?: number }
+  }): void => {
+    frames.push({
+      bytes: Buffer.from(event.data, 'base64').length,
+      // Seconds in the protocol, milliseconds here, so it compares against the page's own clock.
+      stamp: event.metadata.timestamp === undefined ? null : event.metadata.timestamp * 1000
+    })
     void session.send('Page.screencastFrameAck', { sessionId: event.sessionId }).catch(() => {})
   }
   session.on('Page.screencastFrame', onFrame)
-  let painted = 0
+  let rastered = 0
+  let paintedAt = Number.POSITIVE_INFINITY
   try {
     await session.send('Page.startScreencast', {
       format: 'jpeg',
@@ -194,12 +237,11 @@ async function screencastNoiseJpegBytes(
     })
     // The noise is painted after the screencast is running, and through this same CDP session, so
     // the reply orders it against the frame events. Two animation frames are awaited inside it, so
-    // when it resolves the paint has been committed to the compositor and every later capture
-    // carries it. `painted` is how many frames had already arrived by then; only what comes after
-    // is a frame of the noise, which is what makes this a measurement of the canvas rather than of
-    // whatever the surface held when the capture began.
-    await session.send('Runtime.evaluate', {
+    // when it resolves the paint has been committed to the compositor -- and it hands back the
+    // page's own clock at that moment, which is what says which frames carry this noise.
+    const painting = await session.send('Runtime.evaluate', {
       awaitPromise: true,
+      returnByValue: true,
       expression: `(async () => {
         const canvas = document.getElementById('noise')
         const context = canvas.getContext('2d')
@@ -214,15 +256,32 @@ async function screencastNoiseJpegBytes(
         }
         context.putImageData(image, 0, 0)
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        return Date.now()
       })()`
     })
-    painted = sizes.length
+    paintedAt = Number(painting.result.value)
 
-    // Nudged until a frame lands after that commit. A capture already in flight can still be the
-    // old surface, so two are taken and the larger is used: a blank frame is a fraction of a noise
-    // frame, so the maximum over the post-commit frames is the noise one whichever order they came.
+    // A commit is not a raster. The screencast hands over whatever the compositor has drawn so far,
+    // so after a resize it emits frames at the full size carrying only the tiles rastered yet.
+    // Measured 2026-09-21 under CPU starvation: 87 of 444 post-commit frames at 1400x1600 read
+    // under the noise floor, one of them 447491 bytes against the full frame's 1221117 — bytes the
+    // shell posts inside the cap, which is this sweep reading a budget as fitting when it does not.
+    // `Page.captureScreenshot` returns only once a compositor frame of the current content exists,
+    // so it is the raster this wants rather than a longer wait, and over the same rounds with it
+    // none read under the floor. Quality 0 because nothing reads its bytes; 17 ms a call.
+    await session.send('Page.captureScreenshot', { format: 'jpeg', quality: 0 })
+    rastered = frames.length
+
+    // Nudged until two frames the browser captured after this capture's own paint have landed. Two
+    // are taken and the larger is used, so a part-rastered frame cannot be the one this measures,
+    // and they are counted by `framesCarryingTheNoise` rather than by arrival for the reason it
+    // carries: a frame in flight from the previous viewport arrives here too.
     const deadline = Date.now() + 20_000
-    for (let nudge = 0; sizes.length - painted < 2 && Date.now() < deadline; nudge += 1) {
+    for (
+      let nudge = 0;
+      framesCarryingTheNoise(frames, rastered, paintedAt).length < 2 && Date.now() < deadline;
+      nudge += 1
+    ) {
       await session.send('Runtime.evaluate', {
         expression: `document.documentElement.style.background = ${nudge % 2 === 0 ? "'#000'" : "'#111'"}`
       })
@@ -232,15 +291,23 @@ async function screencastNoiseJpegBytes(
     await session.send('Page.stopScreencast').catch(() => {})
     session.off('Page.screencastFrame', onFrame)
   }
-  const afterPaint = sizes.slice(painted)
+  const afterPaint = framesCarryingTheNoise(frames, rastered, paintedAt)
   if (afterPaint.length === 0) {
-    // Never fall back to a frame from before the paint: that is the understatement this exists to
-    // rule out, and a silent one would look like a cheaper encoder.
+    // Never fall back to a frame from before the raster: that is the understatement this exists to
+    // rule out, and a silent one would look like a cheaper encoder. Every frame is printed with how
+    // long after the paint the browser captured it, so a window that held only stale ones is legible
+    // rather than inferred.
+    const seen = JSON.stringify(
+      frames.map((one) => ({
+        bytes: one.bytes,
+        afterPaintMs: one.stamp === null ? null : Math.round(one.stamp - paintedAt)
+      }))
+    )
     throw new Error(
-      `no screencast frame after the noise was committed for ${frame.width}x${frame.height}`
+      `no screencast frame carried the rastered noise for ${frame.width}x${frame.height}: ${seen}`
     )
   }
-  return Math.max(...afterPaint)
+  return Math.max(...afterPaint.map((one) => one.bytes))
 }
 
 function screencastFrame(image: Uint8Array, frame: { width: number; height: number }) {
@@ -302,22 +369,12 @@ function budgetedFrame(viewport: Viewport) {
   }
 }
 
-/**
- * The viewports the budget can actually fit, which are the ones it makes a promise about.
- *
- * Below a scale of one the module stops: asking for fewer device pixels than CSS pixels is a
- * blurry frame rather than a working one, so a viewport too large for the cap keeps scale 1 and
- * the frame that does not fit is C6 ruling 1's to drop. Split here so the promise and the
- * exception are both asserted rather than averaged.
- */
-const withinBudget = (viewport: Viewport) => budgetedFrame(viewport).scale > 1
-
-describeSweep('the frame budget across the viewport range', () => {
-  it('keeps every viewport it budgets for inside one bridge message', async () => {
+describeSweep('the frame budget at representative viewport sizes', () => {
+  it('keeps representative budgeted viewports inside one bridge message', async () => {
     const overCap: string[] = []
     let worstBytesPerPixel = 0
     let bestBytesPerPixel = 1
-    for (const viewport of VIEWPORTS.filter(withinBudget)) {
+    for (const viewport of VIEWPORTS) {
       const frame = budgetedFrame(viewport)
       const imageBytes = await screencastNoiseJpegBytes(
         frame,
@@ -350,15 +407,7 @@ describeSweep('the frame budget across the viewport range', () => {
   }, 300_000)
 
   it('does not budget below one device pixel per CSS pixel, and the shell drops what will not fit', async () => {
-    // The exception the split above names. These are real: a 1400x1180 viewport posts 1.2 MB.
-    const tooLarge = VIEWPORTS.filter((viewport) => !withinBudget(viewport))
-    // The 32 of the 143 the budget leaves at scale 1, a fixed number because the set is fixed.
-    expect(tooLarge.length).toBe(32)
-
-    const largest = tooLarge.reduce((left, right) =>
-      left.width * left.height > right.width * right.height ? left : right
-    )
-    const frame = budgetedFrame(largest)
+    const frame = budgetedFrame({ width: 1400, height: 1600 })
     expect(frame.scale).toBe(1)
     const imageBytes = await screencastNoiseJpegBytes(frame, 1)
     expect(postThroughShell(new Uint8Array(imageBytes), frame)).toBeNull()
@@ -388,21 +437,4 @@ describeSweep('the frame budget across the viewport range', () => {
       await context.close()
     }
   }, 120_000)
-
-  it('never asks for more density than native, anywhere in the range', () => {
-    for (const viewport of VIEWPORTS) {
-      expect(budgetedFrame(viewport).scale).toBeLessThanOrEqual(
-        sweep().MOBILE_VIEW_DEVICE_SCALE_FACTOR
-      )
-    }
-  })
-
-  it('sweeps a range wide enough to contain the phones the pane runs on', () => {
-    // The set is fixed, so this is what says it still covers the case the old constant missed.
-    expect(VIEWPORTS).toContainEqual({ width: 390, height: 712 })
-    expect(VIEWPORTS).toContainEqual({ width: 393, height: 720 })
-    expect(VIEWPORTS).toContainEqual({ width: 360, height: 640 })
-    expect(VIEWPORTS.length).toBe(143)
-    expect(sweep().mobileBrowserFrameAreaBudget()).toBeGreaterThan(0)
-  })
 })

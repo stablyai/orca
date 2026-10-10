@@ -24,6 +24,8 @@ export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engi
 export type OpenWorkspaceBrowserTabRequest = {
   workspaceId: string
   targetGroupId?: string
+  /** Client-local unified tab id of the source; a source-following open omits targetGroupId. */
+  afterTabId?: string
   url: string
   intent: WorkspaceBrowserTabIntent
   /** Keep the caller's current terminal/task surface selected while creating the tab. */
@@ -190,10 +192,12 @@ function createClientBrowserTab(
       activate: request.focusOnCreate !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
+      executionHostId: hostId,
       sessionProfileId:
         state.defaultBrowserSessionProfileIdByHostId[hostId] ??
         state.defaultBrowserSessionProfileId,
       targetGroupId: request.targetGroupId,
+      ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
       title: presentation.title
     })
   } catch (error) {
@@ -289,6 +293,7 @@ export async function openWorkspaceBrowserTab(
       environmentId,
       url: request.url,
       targetGroupId: request.targetGroupId,
+      ...(request.afterTabId ? { clientAfterTabId: request.afterTabId } : {}),
       // Owner-pinned links need the host tab published before client reconciliation.
       ...(expectedEnvironmentId !== null ? { waitForRegistration: true } : {}),
       ...(request.placementPreference !== undefined

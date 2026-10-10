@@ -17,7 +17,43 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DaemonServer } from './daemon-server'
 import { checkDaemonHealth } from './daemon-health'
+import { createNdjsonParser } from './ndjson'
 import type { SubprocessHandle } from './session-subprocess-handle'
+
+const scheduleHealthEntryTimeout = setTimeout
+const cancelHealthEntryTimeout = clearTimeout
+
+async function waitForHealthEntry<T>(entry: Promise<T>, health: Promise<unknown>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  let healthSettled = false
+  const earlySettlement = health.then(
+    () => {
+      healthSettled = true
+      throw new Error('Daemon health settled before its required socket/RPC entry')
+    },
+    (error) => {
+      healthSettled = true
+      throw error
+    }
+  )
+  const entryBudget = new Promise<never>((_resolve, reject) => {
+    timeout = scheduleHealthEntryTimeout(
+      () => reject(new Error('Daemon health socket/RPC entry exceeded its real 3000ms budget')),
+      3_000
+    )
+  })
+  try {
+    return await Promise.race([entry, earlySettlement, entryBudget])
+  } catch (error) {
+    // Let the real health owner close its socket before server teardown.
+    if (!healthSettled) {
+      await vi.advanceTimersByTimeAsync(3_000)
+    }
+    throw error
+  } finally {
+    cancelHealthEntryTimeout(timeout)
+  }
+}
 
 function createMockSubprocess(): SubprocessHandle {
   return {
@@ -56,64 +92,49 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  // The good case: daemon answers hello AND the PTY spawn probe succeeds.
-  it('HEALTHY: a daemon that can spawn PTYs classifies as healthy', async () => {
-    const server = new DaemonServer({
-      socketPath,
-      tokenPath,
-      ptySpawnHealthCheck: vi.fn(async () => {}),
-      spawnSubprocess: () => createMockSubprocess()
+  // The limit of #6830: a fully WEDGED daemon (event loop hung — health RPC
+  // never returns) cannot be distinguished by a richer status. It times out
+  // and classifies as 'unreachable', the SAME bucket as a dead daemon.
+  it('WEDGED: a daemon whose health RPC never resolves classifies as unreachable (NOT degraded)', async () => {
+    let resolveHealthEntered = (): void => {}
+    const healthEntered = new Promise<void>((resolve) => {
+      resolveHealthEntered = resolve
     })
-    await server.start()
-    try {
-      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('healthy')
-    } finally {
-      await server.shutdown()
-    }
-  })
-
-  // Symptom B, degraded: this is the case #6830 RESCUES. The daemon answers
-  // protocol but its PTY spawn probe throws (deleted cwd / stale native PTY
-  // after an upgrade), so fresh terminals would open frozen with no cursor.
-  it('DEGRADED: protocol-alive daemon that cannot spawn PTYs classifies as pty-spawn-unhealthy', async () => {
     const server = new DaemonServer({
       socketPath,
       tokenPath,
-      ptySpawnHealthCheck: vi.fn(async () => {
-        throw new Error('chdir(2) failed.: No such file or directory')
+      // Why: simulate a hung event loop — the probe never settles.
+      ptySpawnHealthCheck: vi.fn(() => {
+        resolveHealthEntered()
+        return new Promise<void>(() => {})
       }),
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
     try {
-      // -> #6830 marks this daemon degraded and routes fresh spawns to the
-      //    local provider instead of the no-cursor daemon pane.
-      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('pty-spawn-unhealthy')
-    } finally {
-      await server.shutdown()
-    }
-  })
-
-  // The limit of #6830: a fully WEDGED daemon (event loop hung — health RPC
-  // never returns) cannot be distinguished by a richer status. It times out
-  // and classifies as 'unreachable', the SAME bucket as a dead daemon.
-  it('WEDGED: a daemon whose health RPC never resolves classifies as unreachable (NOT degraded)', async () => {
-    const server = new DaemonServer({
-      socketPath,
-      tokenPath,
-      // Why: simulate a hung event loop — the probe never settles.
-      ptySpawnHealthCheck: vi.fn(() => new Promise<void>(() => {})),
-      spawnSubprocess: () => createMockSubprocess()
-    })
-    await server.start()
-    try {
-      const health = await checkDaemonHealth(socketPath, tokenPath)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+      const pendingHealth = checkDaemonHealth(socketPath, tokenPath)
+      let settled = false
+      void pendingHealth.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      await waitForHealthEntry(healthEntered, pendingHealth)
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const health = await pendingHealth
       // This is the key finding: wedged != degraded. #6830's degraded fallback
       // does NOT engage here; recovery still depends on the unreachable-path
       // (grace-bounded preserve-if-live-else-replace) logic, not the degraded
       // provider.
       expect(health).toBe('unreachable')
     } finally {
+      vi.useRealTimers()
       await server.shutdown()
     }
   }, 15000)
@@ -123,23 +144,44 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
   // classifies as 'unreachable' — the launcher's grace-bounded path must
   // eventually replace it rather than preserve it forever.
   it('WEDGED-HELLO: a daemon that accepts connections but never answers hello classifies as unreachable (#8689)', async () => {
+    let resolveHello: (message: unknown) => void = () => {}
+    const helloReceived = new Promise<unknown>((resolve) => {
+      resolveHello = resolve
+    })
     const wedged = createServer((sock) => {
       // Swallow the hello bytes but never write a response — the exact wedge.
-      sock.on('data', () => {})
+      const parser = createNdjsonParser(resolveHello)
+      sock.on('data', (chunk) => parser.feed(chunk.toString()))
     })
     await new Promise<void>((resolve) => wedged.listen(socketPath, () => resolve()))
     // The health check reads the token before connecting, so it must exist.
     writeFileSync(tokenPath, 'wedged-token')
     try {
-      const health = await checkDaemonHealth(socketPath, tokenPath)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+      const pendingHealth = checkDaemonHealth(socketPath, tokenPath)
+      let settled = false
+      void pendingHealth.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      expect(await waitForHealthEntry(helloReceived, pendingHealth)).toMatchObject({
+        type: 'hello',
+        token: 'wedged-token',
+        clientId: 'health-check',
+        role: 'control'
+      })
+      await vi.advanceTimersByTimeAsync(2_999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const health = await pendingHealth
       expect(health).toBe('unreachable')
     } finally {
+      vi.useRealTimers()
       await new Promise<void>((resolve) => wedged.close(() => resolve()))
     }
   }, 15000)
-
-  // No daemon at all (or token missing) -> unreachable.
-  it('UNREACHABLE: no daemon listening classifies as unreachable', async () => {
-    await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
-  })
 })

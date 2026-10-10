@@ -12,7 +12,8 @@ deploy, change admission, or write to Google Cloud.
 
 Run `Monitor Relay Production` manually. Choose:
 
-- `dry-run` for the required 15-minute pre-drain gate.
+- `dry-run` for the 15-minute pre-drain gate the rehome enable and the production candidate,
+  multi-target, and capacity mutations consume.
 - `monitor` for a 90-minute incident watch.
 
 Use the default `strict` migration policy for ordinary mutations. Select
@@ -48,59 +49,16 @@ a verdict within 35 minutes of its lineage start.
 Exit code `2` means the gate froze or a dry run failed. Missing, stale, malformed, unauthorized, or
 unavailable telemetry fails closed.
 
-## Gate override (break-glass)
+## Same-cap rolls sample inline
 
-`Deploy Relay Production Same-Cap` can skip this 15-minute dry-run gate. Supply both
-`gate-override-reason` and `gate-override-confirmation`, where the confirmation is exactly
-`SKIP_RELAY_MONITOR_GATE <target-image-digest>`. Supplying one without the other, a
-confirmation bound to any other digest, or a reason shorter than 12 characters fails the
-run before it touches production. `verify` mode rejects the override outright.
-
-### When it is legitimate
-
-The gate proves the fleet is healthy before a wave mutates it. That proof is the wrong
-question in exactly two situations.
-
-- **The roll is the fix for the measured condition.** When a chronic fault is the reason
-  the gate freezes, waiting for a green 15-minute window means waiting for the condition
-  the wave removes. On 2026-09-17 the gate froze 44 consecutive times on the recurring
-  Cloud SQL stall the rolling image addresses.
-- **An incident where the director is healthy.** Rolling back off a bad image should not
-  wait 15 minutes for aggregate evidence about a fleet the operator is already watching.
-
-It is not a way to move faster on an ordinary wave. Use it when you can name the signal
-the gate is freezing on and say why this wave is the answer to it.
-
-### What it does not skip
-
-Only the aggregate 15-minute dry-run and its sealed evidence are skipped. Every other
-control still runs, unchanged:
-
-- The live per-wave preflight, against the same thresholds this document lists. With no
-  sealed state to read, the expected selector comes from the dispatch inputs instead, and
-  the migration policy is pinned to `strict`. That membership is canonicalised exactly as
-  the monitor canonicalises its own, so it must still name every configured cell exactly
-  once and the order you type it in does not matter. A live threshold breach or selector
-  mismatch still fails the wave before any mutation.
-- Durable regional rehome disabled, and the exact selector generation and membership,
-  verified against the live director.
-- The reviewed Terraform plan, the exact image digest served by Artifact Registry, the
-  predecessor runtime check, and the new-incarnation check.
-- One cell at a time behind the Cloud SQL rollout lease, with the failed-wave failsafe
-  that leaves a cell isolated.
-- Single-dispatch mutation: a re-run still cannot replay a wave.
-
-### The audit trail
-
-Three places record it, and none of them depend on the operator writing anything down:
-
-- The workflow run's inputs, kept by GitHub for the life of the run.
-- The gate job's run summary: actor, mode, cells, target digest, reason, and confirmation.
-- The sealed canary artifact, under `gateOverride`, for a `canary-apply` wave.
-
-The canary authority a later batch verifies never carried a monitor run ID, so a batch can
-reuse a canary that was rolled under an override. The override is recorded in that
-artifact as audit trail, not as authority: each wave is authorized by its own confirmation.
+`Deploy Relay Production Same-Cap` does not consume this dry-run. Each `apply` wave samples
+the fleet itself right before it isolates its cell, with this monitor's evaluator, thresholds,
+and tolerances, for a window sized to the hosts the drain will re-place (3, 5, or 8 minutes),
+plus three lookback rules: no container exit in 10 minutes on a general or migration-only cell
+other than the one being rolled, no minute with more than 500
+director 503s in 10 minutes, and director concurrency p99 within this monitor's bar over 4
+minutes. See [pre-drain fleet-health sample](./relay-workflows.md#pre-drain-fleet-health-sample).
+The break-glass override that used to skip this gate for same-cap is gone with it.
 
 ## Local use
 
@@ -139,7 +97,7 @@ freezes as before.
 A production candidate or multi-target mutation must download the exact
 dry-run artifact by workflow run ID and attempt. It verifies the artifact
 hashes and provenance, requires a green completed 15-minute state no older
-than ten minutes (plus 75 minutes per predecessor same-cap wave), then
+than five minutes, then
 rechecks the live selector and one complete fresh sample of every safety
 signal immediately before running the mutation command.
 The signed state binds `strict` evidence to ordinary mutations and
@@ -269,6 +227,41 @@ name segments out as literal maps rather than deriving them, so the same test
 compares the two declarations directly. Adding a region to the contract
 without its segment is a compile error in relay-contract, not a silent gap.
 
+## Relay lock contention alert policies
+
+Two paging policies in `cloud/infra/terraform/relay-observability.tf` alert the
+relay channel when one transaction holds the relay cell table long enough to
+stall the fleet. `Orca Relay: cell table lock held over 1 second` fires on any
+30-second runtime sample from a cell whose `cellInventoryHoldMsMax` is at least
+1,000 ms, labelled with the cell's `cell_id`. `Orca Relay: lock timeout burst`
+fires when Postgres cancels at least 20 relay statements in one minute for
+waiting out their lock timeout. Auth traffic on the shared instance and
+fail-fast refusals from background sweeps are excluded. Replayed over
+2026-09-20 14:00 to 2026-09-22 15:00 UTC, the cell hold policy matched all 93
+holds from asia-east2 rehome commits, about 3.6 s each, and every one of the 88
+burst minutes overlapped one of them. First response to either alert: if a
+cell hold names an asia-east2 cell, pause regional rehoming through
+`Operate Relay Production Rehome` with action `pause`.
+
+Director holds of 1-2.5 s recur a few times a day even with rehoming paused.
+They go to `Orca Relay: director cell table lock held over 1 second`, which has
+no notification channel. If the burst alert fires with no cell hold in the same
+minute, look at that director policy rather than pausing rehome; on 2026-09-23
+at 04:23 UTC a 2,457 ms director hold produced 25 cancels while rehoming was
+paused. Do not drain or restart cells for a director hold. A cell that has
+stopped reporting emits no hold sample, so these policies catch lock convoys,
+not outages.
+
+Since the step-1 observability deploy, director holds also include the
+regional target rows a drain return locks (`cellInventoryHoldMaxSite:
+isolated-replacement`), so the director policy can fire during a roll's drain.
+That is expected and needs no action; `isolatedReplacementHoldMsP99` is the
+per-site view. The same deploy adds that lock's NOWAIT refusals and bounded-wait
+timeouts to the director's `cellInventoryLockUnavailable` and
+`cellInventoryLockTimeouts`, so compare those fields across the deploy only with
+that site subtracted; `orca_relay_cloud_sql_lock_timeouts` is unaffected. Drain
+returns run only on directors, so the paging cell policy is unchanged.
+
 ## Implementation log
 
 - Gave `collector_failed` the same two-consecutive-sample tolerance as an unread
@@ -330,7 +323,8 @@ without its segment is a compile error in relay-contract, not a silent gap.
   latest-sum over 24 healthy hours: mean ~100, 1-minute spikes to 216, with
   10 minutes over the old bar of 160 — enough to freeze roughly one in ten
   15-minute pre-drain gates on baseline noise. 250 cleared the healthy peaks
-  measured then and still fired well before the verified 400-connection ceiling;
+  measured then and still fired well before the 400-connection ceiling assumed at
+  the time (the live instance measured 500 on 2026-09-16);
   pool waiters and pool wait latency keep their strict thresholds. Superseded by
   the 2026-09-17 entry above, which re-measured a grown baseline against the
   490-connection budget.

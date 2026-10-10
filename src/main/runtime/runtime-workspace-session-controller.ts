@@ -1,8 +1,8 @@
 import {
-  LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -43,8 +43,7 @@ export class RuntimeWorkspaceSessionController {
         }
         return parsedHostId
       }
-      const connectionId = this.deps.resolveFolderConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      return getConnectionExecutionHostId(this.deps.resolveFolderConnectionId(workspace))
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
     const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
@@ -107,7 +106,16 @@ export class RuntimeWorkspaceSessionController {
     return hostId ? (this.deps.getStore()?.getWorkspaceSession?.(hostId) ?? null) : null
   }
 
-  set(worktreeId: string, session: WorkspaceSessionState): void {
+  /** The session only when the worktree's own host partition owns it, not a rotated-owner fallback. */
+  getOwnPartition(worktreeId: string): WorkspaceSessionState | null {
+    const store = this.deps.getStore()
+    const hostId = store ? this.getPreferredHostId(worktreeId, store) : null
+    return hostId && hostId === this.tryGetHostId(worktreeId)
+      ? (store?.getWorkspaceSession?.(hostId) ?? null)
+      : null
+  }
+
+  setForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
     this.deps.getStore()?.setWorkspaceSession?.(session, this.getHostId(worktreeId))
   }
 
@@ -147,11 +155,7 @@ export class RuntimeWorkspaceSessionController {
             ? (parseExecutionHostId(workspace.executionHostId)?.id ?? null)
             : null
         const connectionId = explicitHostId ? null : this.deps.resolveFolderConnectionId(workspace)
-        return [
-          workspace.id,
-          explicitHostId ??
-            (connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID)
-        ] as const
+        return [workspace.id, explicitHostId ?? getConnectionExecutionHostId(connectionId)] as const
       })
     )
     const hostIds = new Set<ExecutionHostId>(['local'])

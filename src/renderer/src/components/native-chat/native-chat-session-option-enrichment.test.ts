@@ -15,7 +15,8 @@ import {
 } from './native-chat-session-option-enrichment'
 
 const mocks = vi.hoisted(() => ({
-  discoverRuntimeCommitMessageModels: vi.fn()
+  discoverRuntimeCommitMessageModels: vi.fn(),
+  callStructuredAgentSession: vi.fn()
 }))
 
 vi.mock('@/runtime/runtime-git-client', () => ({
@@ -23,10 +24,57 @@ vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitScope: vi.fn()
 }))
 
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.callStructuredAgentSession
+}))
+
 describe('native chat session option enrichment', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     mocks.discoverRuntimeCommitMessageModels.mockReset()
+    mocks.callStructuredAgentSession.mockReset().mockResolvedValue({
+      origin: 'live-session',
+      models: [{ id: 'gpt-host', label: 'GPT Host', isDefault: true, efforts: [] }],
+      fetchedAt: 1
+    })
+  })
+
+  it('reads the host catalog only for a pane on this machine', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'gpt-cli', label: 'GPT CLI' }]
+    })
+    const context = { settings: {}, worktreeId: 'repo::/worktree', worktreePath: '/worktree' }
+
+    const local = await discoverNativeChatCatalogModels('codex', context, 'local')
+    expect(local?.map(({ id }) => id)).toEqual(['gpt-host'])
+    expect(mocks.discoverRuntimeCommitMessageModels).not.toHaveBeenCalled()
+
+    // A paired runtime's key also covers its SSH and WSL worktrees, which its
+    // native store cannot speak for; the worktree-scoped CLI listing answers.
+    mocks.callStructuredAgentSession.mockClear()
+    const paired = await discoverNativeChatCatalogModels('codex', context, 'runtime:env-1')
+    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalled()
+    expect(paired?.map(({ id }) => id)).toContain('gpt-cli')
+  })
+
+  it('lists through the CLI when this machine runs a custom launch command', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'gpt-custom', label: 'GPT Custom' }]
+    })
+    const context = {
+      settings: { agentCmdOverrides: { codex: 'codex-nightly' } },
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    }
+
+    // The structured catalog lists the built-in binary, which this terminal does not run.
+    const models = await discoverNativeChatCatalogModels('codex', context, 'local')
+    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalled()
+    expect(models?.map(({ id }) => id)).toContain('gpt-custom')
   })
 
   it('bounds settled host enrichment entries', async () => {
@@ -114,6 +162,37 @@ describe('native chat session option enrichment', () => {
     expect(resolveNativeChatModelDiscoveryHostKey({} as never, null, 'C:\\repo', null)).toBe(
       'local'
     )
+  })
+
+  it('carries the context window OMP lists for each model, absent from an older host', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'openai-codex/gpt-5.5',
+          label: 'GPT-5.5',
+          description: 'openai-codex',
+          contextWindowTokens: 272_000
+        },
+        { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', description: 'openai-codex' }
+      ]
+    })
+    const models = await discoverNativeChatCatalogModels('omp', {
+      settings: {},
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+    expect(models).toEqual([
+      {
+        id: 'openai-codex/gpt-5.5',
+        label: 'GPT-5.5',
+        description: 'openai-codex',
+        contextWindowTokens: 272_000,
+        options: []
+      },
+      { id: 'openai-codex/gpt-5.4', label: 'GPT-5.4', description: 'openai-codex', options: [] }
+    ])
   })
 
   it('uses only discovered Claude rows and capabilities per host', async () => {

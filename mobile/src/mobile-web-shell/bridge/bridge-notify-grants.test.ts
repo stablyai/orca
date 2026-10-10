@@ -5,7 +5,8 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
-import { bridgeNotifyRefusal, type BridgeNotifyName } from './bridge-notify-grants'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import { bridgeNotifyRefusal } from './bridge-notify-grants'
 
 const GRANTED = [BRIDGE_FAULT_GRANT]
 
@@ -159,24 +160,22 @@ describe('the haptics notify', () => {
 })
 
 /**
- * The totality shown rather than described.
+ * The page reporting on its own document.
  *
- * The docstring above says a name with no row is a compile error; this is the error. Every row the
- * table has, less the haptics one, against the same `Record` over the union — checked by
- * `tsconfig.test.json`, so the day the omission stops being an error the unused directive is.
+ * Ungranted for the same reason the param clear is: nothing here reaches the host or the device,
+ * and the shell acts on it only for a page whose `ready` declared it. It is still refused before
+ * `init`, because a frame from a document nothing has answered is not this document's word.
  */
-describe('a grant table missing a row', () => {
-  it('does not typecheck', () => {
-    // @ts-expect-error TS2741: no row for the haptics notify, the hole the Record closes.
-    const incomplete: Readonly<Record<BridgeNotifyName, string | null>> = {
-      foreground: null,
-      terminalViewport: null,
-      navigate: 'navigate',
-      [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
-      storage: 'storage',
-      [BRIDGE_EXTERNAL_LINK_GRANT]: BRIDGE_EXTERNAL_LINK_GRANT,
-      [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
-    }
-    expect(Object.keys(incomplete)).toHaveLength(7)
+describe('the page reporting its first frame', () => {
+  it('needs no grant once the session is open', () => {
+    expect(
+      bridgeNotifyRefusal({ name: BRIDGE_PAGE_PAINTED, initSent: true, granted: [] })
+    ).toBeNull()
+  })
+
+  it('is refused before the page has been told anything', () => {
+    expect(
+      bridgeNotifyRefusal({ name: BRIDGE_PAGE_PAINTED, initSent: false, granted: GRANTED })
+    ).toBe('before-ready')
   })
 })

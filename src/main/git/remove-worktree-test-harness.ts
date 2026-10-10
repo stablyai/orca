@@ -80,23 +80,11 @@ export function mockSparseCheckoutEnabledConfig(readFileMock: Mock): void {
   })
 }
 
-export type WorktreeTrashMocks = {
-  moveWorktreeDirectoryToTrashMock: Mock
-  restoreWorktreeDirectoryFromTrashMock: Mock
-  scheduleWorktreeTrashDeletionMock: Mock
-}
-
-/** Per-test reset shared by every worktree suite: caches cleared, trash rename unavailable. */
-export function resetWorktreeRemovalState(trashMocks: WorktreeTrashMocks): void {
+/** Per-test reset shared by every worktree suite: caches cleared. */
+export function resetWorktreeRemovalState(): void {
   clearGitCapabilityStateForTests()
   _resetWorktreeScanCacheForTests()
   __resetSparseCheckoutStateCacheForTests()
-  // Default: the checkout cannot be renamed aside, so removal deletes it in place.
-  trashMocks.moveWorktreeDirectoryToTrashMock.mockReset()
-  trashMocks.moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined)
-  trashMocks.restoreWorktreeDirectoryFromTrashMock.mockReset()
-  trashMocks.restoreWorktreeDirectoryFromTrashMock.mockResolvedValue(true)
-  trashMocks.scheduleWorktreeTrashDeletionMock.mockReset()
 }
 
 export type WorktreeGitMocks = {

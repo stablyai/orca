@@ -100,6 +100,15 @@ function resolveTrustedCodexSessionResume(args: {
   return null
 }
 
+/** The homes this host itself lists for Codex sessions: the only ones a pane may pin as CODEX_HOME. */
+export function trustedCodexResumeHomes(
+  runtimeHome: { getHostCodexHomePathsForSessionDiscovery(): string[] },
+  systemHomePath: string
+): string[] {
+  // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
+  return [systemHomePath, ...runtimeHome.getHostCodexHomePathsForSessionDiscovery()]
+}
+
 export function resolveTrustedCodexSessionResumeHome(args: {
   transcriptPath: string | undefined
   trustedCodexHomes: readonly string[]

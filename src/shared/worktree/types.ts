@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import type { WorktreeCatalogVersion } from './catalog-version'
 import type { AutomationExecutionTargetType } from '../automations-types'
 import type { TaskSourceContext } from '../task-source-context'
 import type { TuiAgent } from '../tui-agent'
@@ -7,6 +8,32 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
+
+export type WorkspaceAttachmentOrigin = {
+  kind: 'observed'
+  tabId: string
+  paneKey?: string
+  hostId?: ExecutionHostId
+  label?: string
+  agent?: string
+  sessionId?: string
+}
+
+export type WorkspaceAttachment = {
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'bitbucket' | 'azure-devops' | 'gitea'
+  type: 'issue' | 'pr' | 'mr'
+  number: number
+  identifier?: string
+  title?: string
+  url?: string
+  repoId?: string
+  linearIdentifier?: string
+  jiraIdentifier?: string
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
+  taskSourceContext?: TaskSourceContext
+  origins?: WorkspaceAttachmentOrigin[]
+}
 
 export type WorkspaceLinkedItem = {
   provider: 'github' | 'gitlab' | 'linear' | 'jira'
@@ -36,6 +63,9 @@ export type GitWorktreeInfo = {
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
+  /** Not from Git: the error of a local delete that failed after Git dropped this checkout's
+   *  registration. The host lists the leftover so Delete can retry it. */
+  removalError?: string
 }
 
 /** Head/branch snapshot read from Git metadata files without spawning Git.
@@ -102,6 +132,8 @@ export type Worktree = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  /** All attachments; singular fields select the active review/task for older readers. */
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean
@@ -142,6 +174,9 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  /** The host is deleting this checkout in the background; Git lists it until that finishes.
+   *  Sent only to clients that advertise `worktree.background-removal.v1`. */
+  removing?: true
 } & GitWorktreeInfo
 
 /** Provenance for workspaces created through `orca worktree create`. Absent on
@@ -226,4 +261,6 @@ export type DetectedWorktreeListResult = {
   unavailableReason?: string
   /** Structured cause captured by the execution host when a scan fails. */
   failureKind?: WorktreeScanFailureKind
+  /** Which catalog this listing describes; additive, older hosts omit it. */
+  catalogVersion?: WorktreeCatalogVersion
 }

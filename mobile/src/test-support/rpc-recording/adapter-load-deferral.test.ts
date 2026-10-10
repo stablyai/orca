@@ -6,9 +6,8 @@ import type { operationModuleLoader } from './operation-module-loader'
  * Building a module's table must name product sources without reading them. A `modules.load` hoisted
  * out of `useHook` and into the table literal loads at registration time instead of at mount time,
  * which breaks two things far from the edit: a mutant anchored in a file two families share is then
- * applied more than once and `assertMutationApplied` reports the wrong count, and
- * `golden-header-digest.test.ts` builds its tables in a tree holding one family's files and throws
- * `Module not found` for the rest. Both read as an engine fault; neither names the adapter.
+ * applied more than once and `assertMutationApplied` reports the wrong count. That reads as an
+ * engine fault and does not name the adapter.
  */
 function refusingLoader(): ReturnType<typeof operationModuleLoader> {
   return {

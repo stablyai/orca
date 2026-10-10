@@ -3,11 +3,14 @@ import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/sl
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import { NativeChatVisualTab } from '../native-chat/NativeChatVisualTab'
+import { NativeChatVisualUnavailable } from '../native-chat/NativeChatInlineVisual'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
+import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
@@ -151,6 +154,15 @@ export function EditorContent({
     )
   }
 
+  if (activeFile.mode === 'chat-visual') {
+    // Why key: a different visual is a different frame, never a reused one.
+    return activeFile.chatVisual ? (
+      <NativeChatVisualTab key={activeFile.id} visual={activeFile.chatVisual} />
+    ) : (
+      <NativeChatVisualUnavailable />
+    )
+  }
+
   if (activeFile.mode === 'conflict-review') {
     return (
       <EditorConflictReviewSurface
@@ -208,22 +220,25 @@ export function EditorContent({
       )
     }
     const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
+    const previewContent = editBuffers[previewSourceFileId] ?? fileContent.content
     return (
       <div className="min-h-0 flex-1">
-        <MarkdownPreview
-          key={viewStateScopeId}
-          content={editBuffers[previewSourceFileId] ?? fileContent.content}
-          filePath={activeFile.filePath}
-          sourceFileId={previewSourceFileId}
-          sourceWorktreeId={activeFile.worktreeId}
-          sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
-          scrollCacheKey={markdownPreviewViewStateKey}
-          initialAnchor={activeFile.markdownPreviewAnchor ?? null}
-          showTableOfContents={showMarkdownTableOfContents}
-          onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-          {...markdownDocuments.previewProps}
-        />
+        <MarkdownPreviewSizeGate content={previewContent}>
+          <MarkdownPreview
+            key={`${viewStateScopeId}:${markdownPreviewViewStateKey}`}
+            content={previewContent}
+            filePath={activeFile.filePath}
+            sourceFileId={previewSourceFileId}
+            sourceWorktreeId={activeFile.worktreeId}
+            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+            scrollCacheKey={markdownPreviewViewStateKey}
+            initialAnchor={activeFile.markdownPreviewAnchor ?? null}
+            showTableOfContents={showMarkdownTableOfContents}
+            onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+            {...markdownDocuments.previewProps}
+          />
+        </MarkdownPreviewSizeGate>
       </div>
     )
   }

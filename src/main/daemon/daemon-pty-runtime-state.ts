@@ -71,6 +71,12 @@ export type DaemonIdentityChangeEvent = {
   current: DaemonEndpointIdentity
 }
 
+export type DaemonIdleRetirementResult =
+  | { state: 'retiring' }
+  | { state: 'busy'; liveSessions: number | null; admissionReopened?: true }
+  | { state: 'unsupported' }
+  | { state: 'unverifiable' }
+
 export abstract class DaemonPtyRuntimeState {
   readonly protocolVersion: number
   protected socketPath: string
@@ -92,6 +98,9 @@ export abstract class DaemonPtyRuntimeState {
   protected packagedAppVersion: string | null
   protected pendingRespawnAdoptionRelease: (() => void) | null = null
   protected respawnAdoptionClosed = false
+  protected idleRetirementAdmissionClosed = false
+  protected idleRetirementState: 'open' | 'checking' | 'retiring' | 'unverifiable' = 'open'
+  protected idleRetirementPromise: Promise<DaemonIdleRetirementResult> | null = null
   protected respawnPromise: Promise<void> | null = null
   protected staleBundleReplacementPromise: Promise<void> | null = null
   protected writeRecoveryPromise: Promise<void> | null = null
@@ -238,9 +247,7 @@ export abstract class DaemonPtyRuntimeState {
   }
 
   // Why the id is read rather than ignored: the contract promises a fact about THIS pty, and
-  // getProviderForPty falls back to the local provider for any id it cannot place. A
-  // remote-runtime id therefore reaches this adapter, and answering from the protocol flag
-  // alone returned `true` for a session this daemon has never owned.
+  // answering from the protocol flag alone returned `true` for a session this daemon never owned.
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
     return this.supportsAuthoritativeBufferSnapshots && this.activeSessionIds.has(id)
   }

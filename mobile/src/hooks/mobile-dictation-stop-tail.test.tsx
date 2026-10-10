@@ -64,8 +64,7 @@ vi.mock('../platform/dictation-capture', () => {
         }
       }
     },
-    onInterruption: () => ({ remove: () => {} }),
-    keepAwake: { activate: async () => {}, deactivate: async () => {} }
+    onInterruption: () => ({ remove: () => {} })
   }
   return { useDictationCapture: () => capture }
 })
@@ -104,14 +103,26 @@ function audioOf(request: SentRequest): unknown {
     : null
 }
 
+/** Answers everything the hook has sent except one method, so a case can hold that reply open. */
+function settleExcept(rpc: FakeRpcClient, sent: SentRequest[], method: string): void {
+  for (const request of rpc.requests.splice(0)) {
+    sent.push(request)
+    if (request.method === method) {
+      rpc.requests.push(request)
+      continue
+    }
+    request.resolve({ id: 'desktop', ok: true, result: {} })
+  }
+}
+
 const held: { dictation: UseMobileDictationResult | null } = { dictation: null }
 
-function mount(client: FakeRpcClient): void {
+function mount(client: FakeRpcClient, onTranscript: (text: string) => void = () => {}): void {
   function Probe(): null {
     held.dictation = useMobileDictation({
       client,
       enabled: true,
-      onTranscript: () => {},
+      onTranscript,
       onError: () => {}
     })
     return null
@@ -189,5 +200,44 @@ describe('the audio a capture hands over as it ends', () => {
     expect(sent.filter((request) => request.method === 'speech.dictation.chunk')).toHaveLength(
       before
     )
+  })
+})
+
+describe('a finish whose dictation stopped being the current one', () => {
+  it('delivers no transcript when a cancel lands while the finish is in flight', async () => {
+    // What `finishingIdRef` was thought to guard, pinned against the two things that actually do:
+    // `cancel` bumps the generation and clears the active id, and the finish is read against both
+    // before its text reaches the composer. A transcript that arrived here would be typed into a
+    // field the user has already dismissed the microphone from.
+    const rpc = createFakeRpcClient()
+    const sent: SentRequest[] = []
+    const transcripts: string[] = []
+    mount(rpc, (text) => transcripts.push(text))
+    await act(async () => {
+      const started = dictation().start()
+      await pump(rpc, sent)
+      await started
+    })
+    let stopped: Promise<void> = Promise.resolve()
+    await act(async () => {
+      stopped = dictation().stop()
+      // Everything but the finish, which stays in flight while the user cancels.
+      for (let round = 0; round < 4; round += 1) {
+        settleExcept(rpc, sent, 'speech.dictation.finish')
+        await Promise.resolve()
+        await Promise.resolve()
+      }
+    })
+    expect(sent.map((request) => request.method)).toContain('speech.dictation.finish')
+    await act(async () => {
+      // Started rather than awaited: the cancel's own request has to be answered by the pump below
+      // before it settles, and awaiting it first would deadlock the case rather than the product.
+      const cancelled = dictation().cancel()
+      await pump(rpc, sent)
+      await cancelled
+      await stopped
+    })
+    expect(transcripts).toEqual([])
+    expect(dictation().status).toBe('idle')
   })
 })

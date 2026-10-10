@@ -32,9 +32,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       if (enrichedPayload.structuredHost) {
         continue
       }
-      const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
       const {
-        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
@@ -45,15 +43,20 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // A terminal handle belongs to the runtime that issued it; a hydrated one could only
         // rejoin a row to somebody else's terminal.
         terminalHandle: _terminalHandle,
+        hostTurnRevision: _hostTurnRevision,
         launchToken,
         ...persistedPayload
       } = enrichedPayload
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
+      // replaced is read at hydrate and never written again.
+      const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
+        persistedPayload.payload
       entries[paneKey] = {
         ...persistedPayload,
-        ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
+        payload: persistedStatus,
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)

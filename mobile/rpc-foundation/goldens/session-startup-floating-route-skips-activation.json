@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.startup",
   "family": "session.startup",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "6b08c394e37fd572cf63a4c11934247d379008f11117aa5af33b2926fbd32d1e",
-  "scenarioSha256": "82ff29efaa6ee0bf49ce41bfe7dff2083d0f942c10cc9d8bab48925354d17519",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "4f4cd2a4f041": {
       "name": "clear-pending-live-input-commit",

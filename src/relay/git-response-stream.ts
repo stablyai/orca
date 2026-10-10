@@ -1,7 +1,7 @@
 // Streams large RPC responses onto the bulk lane in chunks instead of one
 // JSON-RPC frame, so a big reply cannot head-of-line-block interactive pty.data
-// echo on the shared SSH channel. Mirrors the fs read-stream credit-window
-// pattern (see fs-handler-file-read.ts) but the payload is an in-memory
+// echo on the shared SSH channel. Shares RelayStreamAckWindow with the fs
+// read stream (see fs-handler-file-read.ts) but the payload is an in-memory
 // serialized string rather than a file handle.
 //
 // ONE REGISTRY PER RELAY. The `git.*` method names below are the shipped wire
@@ -18,17 +18,13 @@ import {
   GIT_RESPONSE_CHUNK_SIZE,
   GIT_RESPONSE_STREAM_THRESHOLD,
   STREAM_ACK_WINDOW_CHUNKS,
-  STREAM_ACK_STALL_RECHECK_MS,
   type GitResponseStreamMarker
 } from './protocol'
+import { settlesWithin } from './settles-within'
+import { RelayStreamAckWindow } from './relay-stream-ack-window'
+import { errorMessage } from '../shared/error-message'
 
-type GitResponseStreamEntry = {
-  ownerClientId: number
-  aborted: boolean
-  /** Highest chunk seq the client acknowledged (in-order; -1 = none yet). */
-  ackedThroughSeq: number
-  ackWaiters: Set<() => void>
-}
+type GitResponseStreamEntry = { ownerClientId: number; ack: RelayStreamAckWindow }
 
 /** Serialized git responses are chunked as base64 so multi-byte UTF-8
  * sequences never split across a chunk boundary (the client concatenates the
@@ -41,42 +37,38 @@ function encodeChunks(payload: Buffer, chunkBytes = GIT_RESPONSE_CHUNK_SIZE): st
   return chunks
 }
 
+// Why: a pump parked on a stalled but connected client's bulk lane is not woken by abort.
+const PUMP_DRAIN_DEADLINE_MS = 10_000
+
 export class GitResponseStreamRegistry {
   private streams = new Map<number, GitResponseStreamEntry>()
   private nextId = 1
+  private disposed = false
+  private readonly pendingPumps = new Set<Promise<void>>()
+
+  constructor(private readonly pumpDrainDeadlineMs = PUMP_DRAIN_DEADLINE_MS) {}
 
   private register(ownerClientId: number): number {
+    if (this.disposed) {
+      throw new Error('relay_response_stream_shutdown_fenced')
+    }
     const streamId = this.nextId++
-    this.streams.set(streamId, {
-      ownerClientId,
-      aborted: false,
-      ackedThroughSeq: -1,
-      ackWaiters: new Set()
-    })
+    this.streams.set(streamId, { ownerClientId, ack: new RelayStreamAckWindow() })
     return streamId
   }
 
   recordAck(streamId: number, seq: number, clientId: number): void {
     const entry = this.streams.get(streamId)
-    if (
-      !entry ||
-      entry.ownerClientId !== clientId ||
-      typeof seq !== 'number' ||
-      !Number.isFinite(seq)
-    ) {
+    if (!entry || entry.ownerClientId !== clientId) {
       return
     }
-    if (seq > entry.ackedThroughSeq) {
-      entry.ackedThroughSeq = seq
-    }
-    this.wake(entry)
+    entry.ack.recordAck(seq)
   }
 
   abort(streamId: number, clientId: number): void {
     const entry = this.streams.get(streamId)
     if (entry?.ownerClientId === clientId) {
-      entry.aborted = true
-      this.wake(entry)
+      entry.ack.abort()
     }
   }
 
@@ -84,36 +76,8 @@ export class GitResponseStreamRegistry {
    * detaches and its acks will never arrive. */
   wakeAll(): void {
     for (const entry of this.streams.values()) {
-      this.wake(entry)
+      entry.ack.wake()
     }
-  }
-
-  private wake(entry: GitResponseStreamEntry): void {
-    for (const waiter of Array.from(entry.ackWaiters)) {
-      waiter()
-    }
-  }
-
-  private waitForAck(streamId: number): Promise<void> {
-    const entry = this.streams.get(streamId)
-    if (!entry || entry.aborted) {
-      return Promise.resolve()
-    }
-    return new Promise<void>((resolve) => {
-      let settled = false
-      const finish = (): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timer)
-        entry.ackWaiters.delete(finish)
-        resolve()
-      }
-      const timer = setTimeout(finish, STREAM_ACK_STALL_RECHECK_MS)
-      timer.unref?.()
-      entry.ackWaiters.add(finish)
-    })
   }
 
   /**
@@ -141,8 +105,17 @@ export class GitResponseStreamRegistry {
     const chunks = encodeChunks(payload, Math.min(GIT_RESPONSE_CHUNK_SIZE, sinkChunkBytes))
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
+    // Why: no Promise.withResolvers — the relay bundle still targets Node 18 hosts.
+    let finish!: () => void
+    const completion = new Promise<void>((resolve) => {
+      finish = () => {
+        this.pendingPumps.delete(completion)
+        resolve()
+      }
+    })
+    this.pendingPumps.add(completion)
     setImmediate(() => {
-      void this.pump(streamId, chunks, dispatcher, context)
+      void this.pump(streamId, chunks, dispatcher, context).then(finish, finish)
     })
     return {
       __orcaGitResponseStream: { streamId, totalBytes: payload.length, chunkCount: chunks.length }
@@ -168,24 +141,24 @@ export class GitResponseStreamRegistry {
           endReason = 'stale'
           break
         }
-        if (entry.aborted) {
+        if (entry.ack.aborted) {
           endReason = 'aborted'
           break
         }
         // Why: credit window — the client acks each chunk, bounding how many
         // bulk bytes a keystroke echo can queue behind on the shared channel.
         while (
-          seq - entry.ackedThroughSeq > STREAM_ACK_WINDOW_CHUNKS &&
+          seq - entry.ack.ackedThroughSeq > STREAM_ACK_WINDOW_CHUNKS &&
           !context.isStale() &&
-          !entry.aborted
+          !entry.ack.aborted
         ) {
-          await this.waitForAck(streamId)
+          await entry.ack.wait()
         }
         if (context.isStale()) {
           endReason = 'stale'
           break
         }
-        if (entry.aborted) {
+        if (entry.ack.aborted) {
           endReason = 'aborted'
           break
         }
@@ -198,18 +171,21 @@ export class GitResponseStreamRegistry {
             clientId
           }
         )
+        // Sent chunks are never retried; ACK waits must not retain their encoded copies.
+        chunks[seq] = ''
       }
-      if (endReason === 'end') {
+      // Why: disposal may abort while the final chunk write is in flight.
+      if (endReason === 'end' && !entry.ack.aborted && !context.isStale()) {
         await dispatcher.notifyBulk('git.responseEnd', { streamId }, { clientId })
       }
     } catch (err) {
-      if (!context.isStale() && !entry.aborted) {
+      if (!context.isStale() && !entry.ack.aborted) {
         try {
           await dispatcher.notifyBulk(
             'git.responseError',
             {
               streamId,
-              message: err instanceof Error ? err.message : String(err)
+              message: errorMessage(err)
             },
             { clientId }
           )
@@ -223,12 +199,24 @@ export class GitResponseStreamRegistry {
     }
   }
 
+  /** Fences new streams until {@link reopen} and aborts every pump; disposeAllAndWait awaits them. */
   disposeAll(): void {
+    this.disposed = true
     for (const entry of this.streams.values()) {
-      entry.aborted = true
-      this.wake(entry)
+      entry.ack.abort()
     }
     this.streams.clear()
+  }
+
+  async disposeAllAndWait(): Promise<void> {
+    this.disposeAll()
+    if (!(await settlesWithin(Promise.all(this.pendingPumps), this.pumpDrainDeadlineMs))) {
+      throw new Error('relay_response_stream_operations_unsettled')
+    }
+  }
+
+  reopen(): void {
+    this.disposed = false
   }
 }
 

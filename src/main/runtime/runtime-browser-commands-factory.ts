@@ -26,6 +26,8 @@ export type RuntimeBrowserCommandsFactory = (
 ) => RuntimeBrowserCommands
 
 export type RuntimeBrowserCommandsFactoryOptions = {
+  /** The provider creates pages against this runtime's client-host lease registry. */
+  clientHosting?: boolean
   /** The provider owns browser pages without a renderer window. */
   headless?: boolean
   /** Live health probe; failure must remove advertised capability. */
@@ -55,6 +57,10 @@ export function runtimeBrowserCommandsFactoryIsAvailable(): boolean {
 
 export function runtimeBrowserCommandsFactoryIsHeadless(): boolean {
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.headless === true
+}
+
+export function runtimeBrowserCommandsFactorySupportsClientHosting(): boolean {
+  return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.clientHosting === true
 }
 
 export type RuntimeBrowserUnavailableCause = {

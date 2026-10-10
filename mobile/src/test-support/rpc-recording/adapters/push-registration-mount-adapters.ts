@@ -38,7 +38,8 @@ export function pushRegistrationMountAdapters(
                   {
                     platform: 'ios',
                     token: 'apns-token-1',
-                    ...(args.sandbox === true ? { apnsEnvironment: 'sandbox' } : {})
+                    // An iOS token always carries its APNs environment (`push-token.ts`).
+                    apnsEnvironment: args.sandbox === true ? 'sandbox' : 'production'
                   },
                   { onlyWhenDesktopAway: true, sound: args.sound !== false }
                 )

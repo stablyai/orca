@@ -149,7 +149,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)
   })
 
   it('returns the selected parent directory after the local picker applies it', async () => {
@@ -187,7 +187,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
       requireAuthoritative: true
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, undefined)
     expect(mocks.stateSetters[STATE_ERROR_MESSAGE]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
@@ -283,5 +283,19 @@ describe('useCreateRepo default-checkout handoff', () => {
       executionHostId: 'runtime:env-1'
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'runtime:env-1')
+  })
+
+  it('never creates on this computer while the chosen host is unresolved', async () => {
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
+      hostId: null,
+      runtimeEnvironmentId: null,
+      sshTargetId: null
+    })
+    await result.handleCreate()
+
+    expect(mocks.createRepo).not.toHaveBeenCalled()
+    expect(mocks.createRemoteRepo).not.toHaveBeenCalled()
   })
 })

@@ -7,8 +7,8 @@ import {
   waitForAgentPromptDelay,
   waitForAgentPromptPromise
 } from './orca-runtime-core'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import {
+  AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
   AGENT_PROMPT_SUBMIT,
   agentPromptSubmitJoinsPasteFrame,
   getAgentPromptSubmitDelayMs,
@@ -21,6 +21,7 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -28,13 +29,12 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions = {}
+    options: RuntimeAgentPromptWriteOptions
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
@@ -45,7 +45,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     )
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
-    const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+    // Why no gate for a ready composer: a live Claude never settles it, so Enter always waited out
+    // its 8 s cap, where the desktop's own paste submitted in about 2 s.
+    const renderGate = options.composerReady
+      ? null
+      : this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
     const waitTextCache: AgentPromptWaitTextCache = {}
     const preSubmitBaseline = submitWithPaste
       ? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
@@ -60,12 +64,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         permissionBaseline,
         this.getAgentPromptActivity(handle, ptyId)
       )
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
-      if (!this.ptyController?.write(ptyId, initialWrite)) {
+      if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
     } catch (error) {
@@ -82,20 +85,20 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       } finally {
         renderGate.dispose()
       }
+    } else if (options.composerReady) {
+      await waitForAgentPromptDelay(
+        AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + pasteIngestMs,
+        options.signal
+      )
     } else {
       const agent = this.getPtyAgent(ptyId)
       const submitDelayMs = options.promptForSchedule
-        ? resolveAgentPromptSubmitDelayForAgent(
-            writeHostPlatform,
-            options.promptForSchedule,
-            agent
-          )
+        ? resolveAgentPromptSubmitDelayForAgent(writeHostPlatform, options.promptForSchedule, agent)
         : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
       await waitForAgentPromptDelay(submitDelayMs, options.signal)
     }
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     if (!submitWithPaste) {
       try {
         await options.beforeWrite?.(ptyId)
@@ -110,12 +113,15 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     }
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     if (!submitWithPaste) {
-      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
+      if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
     }
+    const submits =
+      options.composerReady && !submitWithPaste
+        ? 1 + (await this.resubmitAgentPromptAfterRetryDelay(ptyId, generation, options))
+        : 1
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
@@ -124,7 +130,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         timeoutMs: effectTimeoutMs,
         signal: options.signal
       })
-      return { submits: 1 }
+      return { submits }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
@@ -156,7 +162,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     // receipt; they must not fail a Dispatch merely because Orca cannot prove
     // submission through hooks.
     if (!settlementAgent) {
-      return { submits: 1, prompt: inputAccepted }
+      return { submits, prompt: inputAccepted }
     }
     this.registerAgentPromptRequest(
       ptyId,
@@ -184,7 +190,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       })
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
       return {
-        submits: 1,
+        submits,
         prompt: {
           ...inputAccepted,
           stages: ['input_accepted', 'turn_started']
@@ -192,16 +198,40 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
-        return { submits: 1, prompt: inputAccepted }
+        return { submits, prompt: inputAccepted }
       }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return {
-          submits: 1,
+          submits,
           prompt: { ...inputAccepted, observation: 'permission' }
         }
       }
       throw error
+    }
+  }
+
+  /**
+   * The desktop draft paste's second Enter, for agents whose composer can render before Enter is
+   * live (`submitRetryDelayMs`). Best effort: it never fails a prompt the first Enter submitted.
+   */
+  private async resubmitAgentPromptAfterRetryDelay(
+    ptyId: string,
+    generation: number,
+    options: RuntimeAgentPromptWriteOptions
+  ): Promise<number> {
+    const agent = this.getPtyAgent(ptyId)
+    const retryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
+    if (retryDelayMs === undefined) {
+      return 0
+    }
+    try {
+      await waitForAgentPromptDelay(retryDelayMs, options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      await options.beforeWrite?.(ptyId)
+      return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind) ? 1 : 0
+    } catch {
+      return 0
     }
   }
 }

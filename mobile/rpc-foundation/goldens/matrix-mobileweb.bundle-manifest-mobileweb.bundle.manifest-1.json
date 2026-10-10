@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "mobileWeb.bundle-manifest",
   "family": "mobileWeb.bundle-manifest",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
-  "scenarioSha256": "8f5211fd3de1d77d3ea139f22bd6fc6119c72c08aa016f252a0df14bedf23ab3",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "12e970df3db8": {
       "outcome": "failed: refused: outer refused"

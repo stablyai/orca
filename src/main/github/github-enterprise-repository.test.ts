@@ -330,6 +330,29 @@ describe('isGitHubHostAuthenticated', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
+  it('retains a known authenticated host for 15 minutes', async () => {
+    mockHostAuthenticated()
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    await vi.advanceTimersByTimeAsync(14 * 60_000)
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('rechecks host authentication after the credential environment changes', async () => {
+    mockHostAuthenticated()
+    await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+    vi.stubEnv('GH_ENTERPRISE_TOKEN', 'test-only-changed-token')
+    try {
+      await isGitHubHostAuthenticated('github.acme-corp.com', '/repo')
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('coalesces concurrent probes for the same runtime and host', async () => {
     let finishProbe: (() => void) | undefined
     ghExecFileAsyncMock.mockImplementation(

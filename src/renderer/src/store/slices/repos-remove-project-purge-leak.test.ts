@@ -13,6 +13,7 @@
  * grew monotonically. The single `removeWorktree` path already routes through
  * `purgeWorktreeTerminalState`; project removal did not.
  */
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
@@ -28,7 +29,7 @@ beforeEach(() => {
   ptyKill.mockReset()
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
+      repos: { removeForHost: reposRemove },
       pty: { kill: ptyKill },
       runtimeEnvironments: { call: vi.fn() }
     }
@@ -63,7 +64,7 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     const store = createTestStore()
     seedTwoProjects(store)
 
-    await store.getState().removeProject(repo1.id)
+    await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
     const s = store.getState()
     // Removed project's worktree is purged from every map.
@@ -79,7 +80,7 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     const store = createTestStore()
     seedTwoProjects(store)
 
-    await store.getState().removeProject(repo1.id)
+    await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
     const s = store.getState()
     // Surviving project's worktree state is untouched (guard over-eviction).

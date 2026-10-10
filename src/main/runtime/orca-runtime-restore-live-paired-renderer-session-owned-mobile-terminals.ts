@@ -123,9 +123,9 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
     if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
-    if (this.ptyController?.write(pty.ptyId, command)) {
+    if (this.ptyController?.write(pty.ptyId, command, 'launch')) {
       // Why: Enter rides its own write so a long command cannot swallow it.
-      this.ptyController.write(pty.ptyId, '\r')
+      this.ptyController.write(pty.ptyId, '\r', 'launch')
       this.noteTerminalSpawnCommand(pty.ptyId, command)
     }
   }

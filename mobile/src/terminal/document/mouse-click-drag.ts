@@ -24,7 +24,7 @@ export type TerminalMouseGesture = {
 // One report per transition, built with the same encoding ladder as
 // buildMouseClickInput: SGR pixels (1016) > SGR (1006) > default. Returns ''
 // when the mode does not report this transition (x10 has no release, only
-// drag/any report motion) or the cell is not encodable.
+// drag/any report motion), the encoding is unproven, or the cell is not encodable.
 export function buildMouseButtonReport(
   scope: TerminalDocumentScope,
   kind: string,
@@ -32,7 +32,7 @@ export function buildMouseButtonReport(
   clientY: number
 ) {
   const mouseTrackingMode = getMouseTrackingMode(scope)
-  if (mouseTrackingMode === 'none') {
+  if (mouseTrackingMode === 'none' || !scope.mouseEncodingKnown) {
     return ''
   }
   if (kind === 'motion' && mouseTrackingMode !== 'drag' && mouseTrackingMode !== 'any') {
@@ -103,7 +103,8 @@ export function abandonMouseGesture(scope: TerminalDocumentScope) {
 
 export function beginMouseDrag(scope: TerminalDocumentScope, gesture: TerminalMouseGesture) {
   gesture.moved = true
-  if (getMouseTrackingMode(scope) !== 'none') {
+  // Why: with no proven encoding the program would get no reports, so select locally instead.
+  if (getMouseTrackingMode(scope) !== 'none' && scope.mouseEncodingKnown) {
     gesture.mode = 'tracking'
     gesture.lastCellKey = mouseReportCellKey(scope, gesture.startX, gesture.startY)
     const press = buildMouseButtonReport(scope, 'press', gesture.startX, gesture.startY)

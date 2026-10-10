@@ -83,7 +83,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
       return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' }, settlement }
     })
 
-    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1')
+    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
 
     expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -104,7 +104,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
       settlement: Promise.resolve({ kind: 'failed', error })
     })
 
-    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1')
+    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
     await vi.waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith(
         'Another chat is already holding this conversation.'
@@ -119,7 +119,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
       settlement: Promise.resolve({ kind: 'visibility-unknown', sessionId: 'session-1' })
     })
 
-    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1')
+    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
     await Promise.resolve()
     expect(mocks.toastError).not.toHaveBeenCalled()
   })

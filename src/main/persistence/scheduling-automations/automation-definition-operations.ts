@@ -3,10 +3,15 @@ import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationRun,
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import {
+  assertAutomationExtraAgentArgs,
+  storedExtraAgentArgs
+} from '../../../shared/automation-extra-agent-args-record'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -38,6 +43,7 @@ export type AutomationDefinitionOperations = {
   storageAuthority: AutomationStorageAuthority
   flush: () => void
   recordCreated: () => void
+  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
 }
 
 export function listAutomations(state: PersistedState): Automation[] {
@@ -79,6 +85,7 @@ export function createAutomation(
   }
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
+  const extraAgentArgs = storedExtraAgentArgs(input.extraAgentArgs)
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -86,6 +93,7 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -112,6 +120,7 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+  assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
   operations.flush()
@@ -159,6 +168,10 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+  // Omitted preserves; empty or whitespace clears.
+  const extraAgentArgs = Object.hasOwn(definedUpdates, 'extraAgentArgs')
+    ? storedExtraAgentArgs(definedUpdates.extraAgentArgs)
+    : storedExtraAgentArgs(current.extraAgentArgs)
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -216,6 +229,12 @@ export function updateAutomation(
       : current.nextRunAt,
     updatedAt: Date.now()
   }
+  if (extraAgentArgs === undefined) {
+    delete merged.extraAgentArgs
+  } else {
+    merged.extraAgentArgs = extraAgentArgs
+  }
+  assertAutomationExtraAgentArgs(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)
   const workspaceSshPinMoved = previousPin?.targetId !== workspaceSshPin?.targetId
@@ -263,6 +282,7 @@ export function deleteAutomation(
   operations.state.automationRuns = (operations.state.automationRuns ?? []).filter(
     (entry) => entry.automationId !== id
   )
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   // Why: the automation and its unfinished runs were pinning their workspace; both are gone (#17775).
   invalidateLocalWorktreeMetadataPruneInputs()
   operations.flush()

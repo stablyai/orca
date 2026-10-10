@@ -53,7 +53,6 @@ src/session/QuickCommandsSheet.test.ts
 src/session/ai-vault-resume-launch.test.ts
 src/session/mobile-file-tap-open.test.ts
 src/session/mobile-native-chat-open-file.test.ts
-src/session/mobile-session-route-parity.test.ts
 src/session/mobile-session-tab-activation.test.ts
 src/session/mobile-worker-takeover-send-sites.test.ts
 src/session/pending-terminal-handle-recovery-poll.test.ts
@@ -61,11 +60,9 @@ src/session/session-reply-schema.test.ts
 src/session/use-mobile-diff-review-send-actions.test.ts
 src/session/use-mobile-file-tap-handlers.test.ts
 src/session/use-mobile-native-chat-image-attachments.test.ts
-src/session/use-mobile-native-chat-turn-disclosure.test.tsx
 src/session/use-mobile-pr-branch-context.test.ts
 src/session/use-mobile-pr-sidebar-controller.test.ts
 src/session/use-mobile-session-terminal-create-actions.test.ts
-src/session/use-mobile-structured-agent-session-send.test.tsx
 src/session/use-mobile-structured-agent-session.test.tsx
 src/session/use-mobile-structured-prompt-responses.test.tsx
 src/session/use-mobile-terminal-inventory-recovery.test.ts
@@ -116,7 +113,6 @@ src/transport/mobile-relay-rpc-session.test.ts
 src/transport/mobile-relay-runtime-failover.test.ts
 src/transport/pairing-relay-candidate.test.ts
 src/transport/pre-profile-pairing-coordinator.test.ts
-src/transport/relay-host-signed-out-verdict.test.ts
 src/transport/rpc-client-synthesized-close-diagnostics.test.ts
 src/transport/rpc-operation.test.ts
 src/transport/rpc-session-liveness-watchdog.test.ts

@@ -1,8 +1,10 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -18,15 +20,17 @@ import {
   codexSubagentGroupIdentity
 } from '../../codex/codex-subagent-roster'
 import type { openAgentSessionJournal } from './journal-store-factory'
-import { createTrackedJournalOpener } from './journal-store-test-open'
-import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { lostLiveWorkJournalBody, staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import { endedUnseenMessageBody } from './journal-terminal-settlement'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const GROUP_ID = 'thread-1:turn-1'
@@ -44,7 +48,7 @@ const journals = createTrackedJournalOpener()
 async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
@@ -216,13 +220,84 @@ describe('staleSubagentRosterRevisions', () => {
 })
 
 describe('journal reopen after the writing host is gone', () => {
+  it('writes composed roster, task, reasoning and text-twin corrections as one settlement step', async () => {
+    const journal = await open()
+    const roster = rosterRow([
+      { id: 'working', label: 'read', state: 'working' },
+      { id: 'done', label: 'write', state: 'completed', settledAt: 20 }
+    ])
+    const task = backgroundTaskRow()
+    if (roster.body.kind !== 'message') {
+      throw new Error('a subagent roster is a message row')
+    }
+    const body: AgentJournalItemBody = {
+      ...roster.body,
+      state: 'running',
+      blocks: [...roster.body.blocks, ...task.body.blocks]
+    }
+    await journal.appendItem(roster.identity, body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const published: ReturnType<typeof journal.snapshot>[] = []
+    journal.observeCommits(() => published.push(journal.snapshot()))
+    const resolve = () => {
+      const current = journal.itemBody(agentJournalItemKey(roster.identity))
+      const lost = current && lostLiveWorkJournalBody(current)
+      if (!lost) {
+        return []
+      }
+      return [
+        {
+          kind: 'item' as const,
+          identity: roster.identity,
+          body: endedUnseenMessageBody(lost) ?? lost,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
+    }
+    await journal.appendSteps([
+      {
+        kind: 'settlement',
+        batch: { settlementId: 'composed:0', fence: 0, recovered: true, resolve }
+      }
+    ])
+    const settled = journal.snapshot()
+    const next = settled.items.at(-1)!.body
+    expect(next).toMatchObject({ state: 'completed' })
+    expect(rosterOf(next)).toMatchObject([
+      { state: 'unverifiable' },
+      { state: 'completed', settledAt: 20 }
+    ])
+    expect(taskOf(next)).toMatchObject({ state: 'unverifiable' })
+    expect(
+      next.kind === 'message' &&
+        next.blocks.filter((block) => block.type === 'text').map((block) => block.text)
+    ).toEqual([
+      'Ran 2 subagents (1 unverifiable)',
+      'Background command "sleep 20" stopped reporting'
+    ])
+    expect(published).toEqual([settled])
+    await journal.appendSteps([
+      {
+        kind: 'settlement',
+        batch: { settlementId: 'composed:0', fence: 0, recovered: true, resolve }
+      }
+    ])
+    expect(journal.snapshot()).toEqual(settled)
+    expect(published).toEqual([settled])
+  })
+
   it('settles a persisted working roster to unverifiable, while the live row still reads working', async () => {
     const live = await open()
     const row = rosterRow([
       { id: 'a', label: 'read_readme', state: 'working', startedAt: 10 },
       { id: 'b', label: 'read_package', state: 'working', startedAt: 10 }
     ])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     // Still the writing host: it can see the children, so the row says so.
     const beforeRestart = live.snapshot().items.at(-1)!
@@ -245,7 +320,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('revises the row in place rather than appending a second one', async () => {
     const live = await open()
     const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const before = live.snapshot().items.length
     await live.close()
 
@@ -257,7 +335,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('settles a persisted working background task to unverifiable', async () => {
     const live = await open()
     const row = backgroundTaskRow()
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const beforeRestart = live.snapshot().items.at(-1)!
     expect(taskOf(beforeRestart.body)).toMatchObject({ state: 'working' })
     expect(twinOf(beforeRestart.body)).toBe('Started background command "sleep 20"')
@@ -273,7 +354,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('writes nothing on a second reopen once every child is settled', async () => {
     const live = await open()
     const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await live.close()
 
     const once = await open()

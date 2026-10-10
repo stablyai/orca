@@ -1,161 +1,243 @@
+import { existsSync, readFileSync } from 'node:fs'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import { MANAGED_HOOK_TIMEOUT_SECONDS, readHooksJson } from '../agent-hooks/installer-utils'
+import { readHooksJson } from '../agent-hooks/installer-utils'
 import {
-  computeTrustKey,
-  computeTrustedHash,
-  getCodexExplicitHomeHookSourcePath,
-  normalizeHookTrustKeyForLookup,
+  assertLoadableHookTrustConfig,
+  isCodexConfigTomlRefusedError,
   readHookTrustEntries,
+  readHookTrustKeySpellings,
+  upsertHookTrustEntriesInContent,
   type CodexHookTrustState,
   type CodexTrustEntry
 } from './config-toml-trust'
 import {
+  buildCodexManagedHook,
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
-  getCodexConfigTomlPath,
-  getConfigPath,
   getManagedCommand,
   getManagedScriptPath
 } from './codex-hook-definition'
-import { getCodexHookTrustSignature } from './codex-hook-identity'
-import { getCodexLedgerTrustedHash } from './codex-managed-trust-reconciliation'
-import { readCurrentNativeCodexTrustGrantLedgerHome } from './codex-trust-grant-host'
-import { getOrcaManagedCodexHomePath } from './codex-home-paths'
+import {
+  approvalsAtOrcaEntries,
+  findOrcaEntrySlots,
+  getManagedCodexHookHome,
+  isKnownOrcaHash,
+  readKnownOrcaHashes,
+  getRealHomeCodexHookHome,
+  type CodexHookHome
+} from './codex-hook-orca-approvals'
+import type { CodexHookAnswer } from './codex-hook-trust-derivation'
+import { readKnownCodexHookAnswer } from './codex-hook-hash-lookup'
+import { resolveCodexHookStatusHome } from './codex-hook-reconcile'
+import {
+  getRealHomeHooksJsonPath,
+  readRealHomeHooksFileProblem
+} from './codex-real-home-hooks-json'
 
-export function getCodexHookStatusAfterInstall(
-  recentGrantEntries: readonly CodexTrustEntry[] | null,
-  runtimeHomePath: string = getOrcaManagedCodexHomePath()
-): AgentHookInstallStatus {
-  const configPath = getConfigPath(runtimeHomePath)
-  const scriptPath = getManagedScriptPath()
-  const config = readHooksJson(configPath)
-  if (!config) {
+/**
+ * Status for `runtimeHomePath`, or for the home the next native pane gets when
+ * none is named (~/.codex outside the app), against what Codex last answered.
+ */
+export function readCurrentCodexHookStatus(runtimeHomePath?: string): AgentHookInstallStatus {
+  const answer = readKnownCodexHookAnswer()
+  if (runtimeHomePath !== undefined) {
+    return readCodexHookHomeStatus(runtimeHomePath, answer)
+  }
+  const home = resolveCodexHookStatusHome()
+  if (home.kind === 'unknown') {
     return {
       agent: 'codex',
       state: 'error',
-      configPath,
+      configPath: getRealHomeHooksJsonPath(),
       managedHooksPresent: false,
-      detail: 'Could not parse Codex hooks.json'
+      detail: "The selected Codex account's home is not available yet"
     }
   }
+  if (home.kind === 'real') {
+    return readRealHomeCodexHookStatus(answer)
+  }
+  return readCodexHookHomeStatus(home.path, answer)
+}
 
-  // Why: Codex 0.129+ silently drops untrusted hooks, so report `partial` when managed events OR their trust entries are missing/stale.
-  const command = getManagedCommand(scriptPath)
-  const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
-  // Why: an unreadable config.toml (EACCES/EIO) is distinct from "file
-  // absent" (which returns an empty Map without throwing). Hooks.json may
-  // still be fine, so report partial with a specific reason rather than
-  // collapsing to a generic error or masking it as universally-stale trust.
-  let trustEntries: Map<string, CodexHookTrustState>
+/** Status for a managed home, read from its files. */
+export function readCodexHookHomeStatus(
+  runtimeHomePath: string,
+  answer: CodexHookAnswer | null
+): AgentHookInstallStatus {
+  return readHomeStatus(getManagedCodexHookHome(runtimeHomePath), answer)
+}
+
+/** Status for ~/.codex, under either spelling Codex keys it by. */
+function readRealHomeCodexHookStatus(answer: CodexHookAnswer | null): AgentHookInstallStatus {
+  const home = getRealHomeCodexHookHome()
+  const problem = readRealHomeHooksFileProblem()
+  if (problem) {
+    return {
+      agent: 'codex',
+      state: 'error',
+      configPath: home.hooksJsonPath,
+      managedHooksPresent: false,
+      detail: problem
+    }
+  }
+  const status = readHomeStatus(home, answer)
+  if (status.state === 'installed' || status.state === 'error') {
+    return status
+  }
+  const inline = describeInlineApprovals(home, answer)
+  return inline ? { ...status, detail: inline } : status
+}
+
+/**
+ * Codex hook status for one home, read from its files: Orca's entry in each
+ * event Codex lists, and that entry's approval holding Codex's own hash under
+ * any spelling Codex may key the file by. Without Codex's answer, the reason.
+ */
+function readHomeStatus(
+  home: CodexHookHome,
+  answer: CodexHookAnswer | null
+): AgentHookInstallStatus {
+  const configPath = home.hooksJsonPath
+  const command = getManagedCommand(getManagedScriptPath())
+  const status = (
+    state: AgentHookInstallState,
+    managedHooksPresent: boolean,
+    detail: string | null
+  ): AgentHookInstallStatus => ({ agent: 'codex', state, configPath, managedHooksPresent, detail })
+  const config = readHooksJson(configPath)
+  if (!config) {
+    return status('error', false, 'Could not parse Codex hooks.json')
+  }
+  const slots = findOrcaEntrySlots(config.hooks, command)
+  // Why: an unreadable config.toml is distinct from an absent one (an empty map).
+  let trustStates: ReadonlyMap<string, CodexHookTrustState>
+  let spelled: (key: string) => boolean = () => false
   let trustReadError: string | null = null
   try {
-    trustEntries = readHookTrustEntries(tomlPath)
+    trustStates = readHookTrustEntries(home.tomlPath)
+    spelled = readHookTrustKeySpellings(home.tomlPath)
   } catch (error) {
-    trustEntries = new Map()
+    trustStates = new Map()
     trustReadError = error instanceof Error ? error.message : String(error)
   }
-  // Why: RPC-granted entries store Codex's own hash, which is authoritative
-  // even when it differs from computeTrustedHash — that difference is the
-  // drift bug class this lane exists to absorb, not a stale entry.
-  // Why: install() already resolved the binary and either verified Codex's
-  // hashes or wrote fallback hashes. Re-resolving PATH here doubles sync launch work.
-  const ledgerHome =
-    recentGrantEntries === null ? readCurrentNativeCodexTrustGrantLedgerHome(runtimeHomePath) : null
-  const recentGrantHashes = new Map<string, { signature: string; trustedHash: string }>()
-  for (const entry of recentGrantEntries ?? []) {
-    if (entry.trustedHash) {
-      recentGrantHashes.set(normalizeHookTrustKeyForLookup(computeTrustKey(entry)), {
-        signature: getCodexHookTrustSignature(entry),
-        trustedHash: entry.trustedHash
-      })
+  // Why every spelling: Codex on Windows ignores an approval kept only under the forward-slash key.
+  const approvals = new Map(
+    [...approvalsAtOrcaEntries(trustStates, slots, home.keySourcePaths, command)].map(
+      ([eventLabel, held]) => [eventLabel, held.filter((approval) => spelled(approval.key))]
+    )
+  )
+  if (answer?.kind !== 'hashes') {
+    const reason = answer?.failure ?? 'Orca has not asked Codex yet'
+    if (slots.size === 0) {
+      return status('not_installed', false, reason)
     }
+    if (answer?.kind === 'refused') {
+      return status('partial', true, `Orca's hook entry is installed, but ${reason}`)
+    }
+    // Why not an error: until Codex answers, the approval is the home's earlier one or Orca's own hash.
+    const known = readKnownOrcaHashes(home, command)
+    const approved =
+      trustReadError === null &&
+      [...approvals].every(([eventLabel, held]) =>
+        held.some(
+          (approval) =>
+            approval.enabled !== false && isKnownOrcaHash(known, eventLabel, approval.trustedHash)
+        )
+      )
+    return approved
+      ? status('installed', true, `Approved by Orca; not yet confirmed by Codex (${reason})`)
+      : status('partial', true, `Orca's hook entry is not approved yet (${reason})`)
   }
-
+  const listedEvents = CODEX_EVENTS.filter(
+    (eventName) => answer.hashes[CODEX_EVENT_LABEL[eventName]] !== undefined
+  )
   const missing: string[] = []
-  const trustMissing: string[] = []
-  const disabled: string[] = []
-  const trustSourcePath = getCodexExplicitHomeHookSourcePath(configPath)
-  let presentCount = 0
-  for (const eventName of CODEX_EVENTS) {
-    const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
-    // Why: older installs appended, current ones prepend; last-match keeps status repair conservative when stale duplicate definitions survive.
-    let foundGroupIndex = -1
-    let foundHandlerIndex = -1
-    definitions.forEach((definition, idx) => {
-      const hooks = definition.hooks ?? []
-      // Why: last-match-wins at the group level — if merged hook arrays repeat our command, the surviving runtime entry is the last one.
-      const handlerIdx = hooks.findLastIndex((hook) => hook.command === command)
-      if (handlerIdx !== -1) {
-        foundGroupIndex = idx
-        foundHandlerIndex = handlerIdx
-      }
-    })
-    if (foundGroupIndex === -1) {
+  const unapproved: string[] = []
+  for (const eventName of listedEvents) {
+    const label = CODEX_EVENT_LABEL[eventName]
+    const hash = answer.hashes[label]
+    if (!slots.has(eventName)) {
       missing.push(eventName)
       continue
     }
-    presentCount += 1
-    // Why: a stale hash blocks firing like a missing entry, so compare against the canonical hash we would write.
-    // Why: Codex's hook_key is positional, so hardcoding handlerIndex 0 misreports trust for user-merged hook arrays.
-    // Why: hash the same `timeout` install() writes, since Codex folds it into the trust hash or every managed hook reports stale-trust.
-    const trustInput: CodexTrustEntry = {
-      sourcePath: trustSourcePath,
-      eventLabel: CODEX_EVENT_LABEL[eventName],
-      groupIndex: foundGroupIndex,
-      handlerIndex: foundHandlerIndex,
-      command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    // Why null passes: that Codex lists the entry with no hash, so it runs unapproved.
+    if (hash === null) {
+      continue
     }
-    const trustKey = computeTrustKey(trustInput)
-    const validHashes = new Set([computeTrustedHash(trustInput)])
-    const grantedHash = getCodexLedgerTrustedHash(ledgerHome, trustKey, trustInput)
-    if (grantedHash) {
-      validHashes.add(grantedHash)
-    }
-    const recentGrant = recentGrantHashes.get(normalizeHookTrustKeyForLookup(trustKey))
-    if (
-      recentGrant?.signature === getCodexHookTrustSignature(trustInput) &&
-      recentGrant.trustedHash
-    ) {
-      validHashes.add(recentGrant.trustedHash)
-    }
-    const actualState = trustEntries.get(trustKey)
-    if (!actualState?.trustedHash || !validHashes.has(actualState.trustedHash)) {
-      trustMissing.push(eventName)
-    } else if (actualState?.enabled === false) {
-      disabled.push(eventName)
+    const approved = approvals
+      .get(label)
+      ?.some((approval) => approval.trustedHash === hash && approval.enabled !== false)
+    if (trustReadError === null && !approved) {
+      unapproved.push(eventName)
     }
   }
-  const managedHooksPresent = presentCount > 0
-  let state: AgentHookInstallState
-  let detail: string | null
-  if (presentCount === 0) {
-    state = 'not_installed'
-    // Why: surface the trust read error even when not_installed, so a broken config.toml gives actionable info.
-    detail = trustReadError !== null ? `Trust entries unverifiable: ${trustReadError}` : null
-  } else if (
-    missing.length === 0 &&
-    trustMissing.length === 0 &&
-    disabled.length === 0 &&
-    trustReadError === null
-  ) {
-    state = 'installed'
-    detail = null
-  } else {
-    state = 'partial'
-    const parts: string[] = []
-    if (missing.length > 0) {
-      parts.push(`Managed hook missing for events: ${missing.join(', ')}`)
-    }
-    if (trustReadError !== null) {
-      parts.push(`Trust entries unverifiable: ${trustReadError}`)
-    } else if (trustMissing.length > 0) {
-      parts.push(`Trust entry missing or stale for events: ${trustMissing.join(', ')}`)
-    }
-    if (disabled.length > 0) {
-      parts.push(`Managed hook disabled for events: ${disabled.join(', ')}`)
-    }
-    detail = parts.join('; ')
+  if (missing.length === listedEvents.length) {
+    return status(
+      'not_installed',
+      false,
+      trustReadError && `Trust entries unverifiable: ${trustReadError}`
+    )
   }
-  return { agent: 'codex', state, configPath, managedHooksPresent, detail }
+  const parts = [
+    missing.length > 0 ? `Managed hook missing for events: ${missing.join(', ')}` : null,
+    trustReadError !== null
+      ? `Trust entries unverifiable: ${trustReadError}`
+      : unapproved.length > 0
+        ? `Approval missing, stale or disabled for events: ${unapproved.join(', ')}`
+        : null
+  ].filter((part): part is string => part !== null)
+  return parts.length === 0
+    ? status('installed', true, null)
+    : status('partial', true, parts.join('; '))
+}
+
+/**
+ * Why Orca's approvals are missing, when it is config.toml's inline approvals:
+ * adding Orca's own there would leave a file Codex cannot load. Read now.
+ */
+function describeInlineApprovals(
+  home: CodexHookHome,
+  answer: CodexHookAnswer | null
+): string | null {
+  if (!existsSync(home.tomlPath)) {
+    return null
+  }
+  const command = getManagedCommand(getManagedScriptPath())
+  const hooks = readHooksJson(home.hooksJsonPath)?.hooks
+  const slots = findOrcaEntrySlots(hooks, command)
+  const probes: CodexTrustEntry[] = CODEX_EVENTS.flatMap((eventName) => {
+    const label = CODEX_EVENT_LABEL[eventName]
+    const hash = answer?.kind === 'hashes' ? answer.hashes[label] : 'probe'
+    const definitions = hooks?.[eventName]
+    const slot = slots.get(eventName) ?? {
+      groupIndex: Array.isArray(definitions) ? definitions.length : 0,
+      handlerIndex: 0
+    }
+    return typeof hash === 'string'
+      ? [
+          {
+            sourcePath: home.keySourcePaths[0],
+            eventLabel: label,
+            command,
+            timeoutSec: buildCodexManagedHook(command, eventName).timeout,
+            trustedHash: hash,
+            enabled: true,
+            ...slot
+          }
+        ]
+      : []
+  })
+  try {
+    const previous = readFileSync(home.tomlPath, 'utf-8')
+    assertLoadableHookTrustConfig(
+      home.tomlPath,
+      previous,
+      upsertHookTrustEntriesInContent(previous, probes)
+    )
+    return null
+  } catch (error) {
+    return isCodexConfigTomlRefusedError(error)
+      ? `${home.tomlPath} keeps hook approvals inline, so Orca cannot add its own there; Orca shows no status for ~/.codex until they are tables`
+      : null
+  }
 }
