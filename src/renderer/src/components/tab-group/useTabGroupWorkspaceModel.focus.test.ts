@@ -211,7 +211,9 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null, {
+      refreshImeContext: true
+    })
   })
 
   it('routes durable native owner close through the unified tab action', async () => {
@@ -290,7 +292,9 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     model.commands.activateTerminal('terminal-1')
 
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'right-leaf')
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', 'right-leaf', {
+      refreshImeContext: true
+    })
   })
 
   it('toggles pane expansion from the split-group tab bar collapse button', async () => {
