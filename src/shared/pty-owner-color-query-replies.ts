@@ -3,6 +3,7 @@ import {
   resolvePtyOwnerColorQueryColors
 } from './pty-owner-color-query-colors'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
+import type { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import { TerminalOscColorOverrideTracker } from './terminal-osc-color-override-tracker'
 import {
   terminalOscColorQueryReplies,
@@ -26,6 +27,14 @@ export class PtyOwnerColorQueryReplies {
 
   replies(slots: readonly TerminalOscColorQuerySlot[]): readonly string[] {
     return terminalOscColorQueryReplies(this.overrides.resolve(this.themeColors()), slots) ?? []
+  }
+
+  /** True when the first reply landed; a failed write stops the rest in order. */
+  answer(delivery: PtyStartupReplyDelivery, slots: readonly TerminalOscColorQuerySlot[]): boolean {
+    const replies = this.replies(slots)
+    return (
+      replies.length > 0 && replies.findIndex((reply) => !delivery.answer(reply, 'owner')) !== 0
+    )
   }
 
   private themeColors(): TerminalOscColorQueryReplyColors {

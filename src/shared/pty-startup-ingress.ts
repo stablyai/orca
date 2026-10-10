@@ -1,7 +1,6 @@
 import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
 import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
-import type { TerminalOscColorQuerySlot } from './terminal-osc-color-reply'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
@@ -112,6 +111,17 @@ export class PtyStartupIngress {
   drainAndClose(): number {
     this.enqueue({ kind: 'teardown' })
     return this.rawHighWater
+  }
+
+  /** Failed unattached construction has no downstream owner to drain into. */
+  discardAndClose(): void {
+    this.closed = true
+    this.operations.length = 0
+    this.queryPending = null
+    this.takeEchoPending()
+    this.delivery.close()
+    this.clearDeadline()
+    this.clearQueryHold()
   }
 
   private enqueue(operation: PtyStartupIngressOperation): void {
@@ -287,7 +297,7 @@ export class PtyStartupIngress {
       const answered =
         query.kind === 'kitty'
           ? this.delivery.answer(`\x1b[?${this.kittyModes.flags}u`, 'owner')
-          : this.answerColorQuery(query.slots)
+          : this.colorQueries.answer(this.delivery, query.slots)
       if (query.kind === 'kitty' && answered) {
         this.kittyQueryOpen = false
       }
@@ -301,15 +311,6 @@ export class PtyStartupIngress {
       scanOffset = query.endIndex
       emittedOffset = query.endIndex
     }
-  }
-
-  /** True when at least the first reply landed; a failed write stops the rest in order. */
-  private answerColorQuery(slots: readonly TerminalOscColorQuerySlot[]): boolean {
-    const replies = this.colorQueries.replies(slots)
-    return (
-      replies.length > 0 &&
-      replies.findIndex((reply) => !this.delivery.answer(reply, 'owner')) !== 0
-    )
   }
 
   private releaseQueryPending(): void {

@@ -7,7 +7,10 @@ export class ColdRestoreReplayWriter {
   private chars = 0
   private operations = 0
 
-  constructor(private readonly emulator: HeadlessEmulator) {}
+  constructor(
+    private readonly emulator: HeadlessEmulator,
+    private readonly assertReplayAllowed?: () => void
+  ) {}
 
   async write(data: string): Promise<boolean> {
     let offset = 0
@@ -16,6 +19,7 @@ export class ColdRestoreReplayWriter {
       if (pendingYield) {
         await pendingYield
       }
+      this.assertReplayAllowed?.()
       const remainingBudget = REPLAY_CHARS_PER_TURN - this.chars
       let end = Math.min(data.length, offset + remainingBudget)
       // Why: xterm must receive UTF-16 surrogate pairs together when a replay slice lands between them.

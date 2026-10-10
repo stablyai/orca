@@ -10,6 +10,7 @@ import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
 import { Session } from './session'
+import { PreparedSessionHistorySeed } from './session-output-plane'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
@@ -119,23 +120,45 @@ async function spawnAndPublishSession(
   // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
   const cwdReadableByDaemon =
     opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd) : null
-  const subprocess = await deps.spawnSubprocess({
-    sessionId: opts.sessionId,
-    cols: size.cols,
-    rows: size.rows,
-    cwd: opts.cwd,
-    env: opts.env,
-    envToDelete: opts.envToDelete,
-    command: opts.command,
-    startupCommandDelivery: opts.startupCommandDelivery,
-    ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-    shellOverride: opts.shellOverride,
-    terminalShellArgs: opts.terminalShellArgs,
-    terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
-    terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-    isCanceled: opts.isCanceled,
-    ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
-  })
+  const preparedHistorySeed =
+    opts.historySeedChunks === undefined
+      ? undefined
+      : await PreparedSessionHistorySeed.create(
+          {
+            cols: size.cols,
+            rows: size.rows,
+            scrollback: resolveDaemonSessionScrollbackRows(),
+            wslDistro,
+            historySeedChunks: opts.historySeedChunks
+          },
+          deps.assertCreateAllowed
+        )
+  let subprocess: Awaited<ReturnType<TerminalHostOptions['spawnSubprocess']>>
+  try {
+    if (preparedHistorySeed) {
+      deps.assertCreateAllowed()
+    }
+    subprocess = await deps.spawnSubprocess({
+      sessionId: opts.sessionId,
+      cols: size.cols,
+      rows: size.rows,
+      cwd: opts.cwd,
+      env: opts.env,
+      envToDelete: opts.envToDelete,
+      command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      shellOverride: opts.shellOverride,
+      terminalShellArgs: opts.terminalShellArgs,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
+      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+      isCanceled: opts.isCanceled,
+      ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
+    })
+  } catch (error) {
+    preparedHistorySeed?.dispose()
+    throw error
+  }
 
   let staging: StartupCommandStaging | undefined
   // Why: a fallback shell does not emit the preferred shell's ready marker;
@@ -143,34 +166,40 @@ async function spawnAndPublishSession(
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
-  const session = new Session({
-    sessionId: opts.sessionId,
-    cols: size.cols,
-    rows: size.rows,
-    terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
-    launchAgent: opts.launchAgent,
-    subprocess,
-    ownerBackend: resolvePtyOwnerBackend({
-      platform: process.platform,
-      shellPath: subprocess.shellPath,
-      wslDistro
-    }),
-    shellReadySupported,
-    scrollback: resolveDaemonSessionScrollbackRows(),
-    historySeedChunks: opts.historySeedChunks,
-    ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
-    wslDistro,
-    onExit: createSessionExitHandler(
-      deps.onSessionExit,
-      opts.sessionId,
-      opts.agentSessionGeneration,
-      () => discardStagedStartupCommand(staging)
-    ),
-    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
-    ...(opts.shellReadyTimeoutMs !== undefined
-      ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
-      : {})
-  })
+  let session: Session
+  try {
+    session = new Session({
+      sessionId: opts.sessionId,
+      cols: size.cols,
+      rows: size.rows,
+      terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
+      launchAgent: opts.launchAgent,
+      subprocess,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: subprocess.shellPath,
+        wslDistro
+      }),
+      shellReadySupported,
+      scrollback: resolveDaemonSessionScrollbackRows(),
+      preparedHistorySeed,
+      ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
+      wslDistro,
+      onExit: createSessionExitHandler(
+        deps.onSessionExit,
+        opts.sessionId,
+        opts.agentSessionGeneration,
+        () => discardStagedStartupCommand(staging)
+      ),
+      ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
+      ...(opts.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
+    })
+  } catch (error) {
+    preparedHistorySeed?.dispose()
+    throw error
+  }
 
   if (opts.isCanceled?.()) {
     // Retain cleanup ownership if the native child refuses to exit.

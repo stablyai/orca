@@ -2,7 +2,7 @@ import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
-import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -10,7 +10,7 @@ import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 
 import type {
   SessionState,
@@ -49,51 +49,39 @@ export class Session {
     this.subprocess = opts.subprocess
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
-    const pipeline = createSessionOutputPipeline({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks,
-      subprocess: this.subprocess,
-      isAlive: () => !this._disposed && this._state !== 'exited'
-    })
+    const pipeline = createSessionOutputPipeline(
+      opts,
+      () => !this._disposed && this._state !== 'exited',
+      (data) => this.startupIngress.accept(data)
+    )
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
-    this.producerPause = new SessionProducerPause(this.subprocess)
-    this.termination = new SessionTerminationController({
-      sessionId: this.sessionId,
-      subprocess: this.subprocess,
-      launchAgent: this.launchAgent,
-      isExited: () => this._state === 'exited',
-      releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
-    })
+    this.shellReady = pipeline.shellReady
+    this.startupIngress = pipeline.startupIngress
+    try {
+      this.producerPause = new SessionProducerPause(this.subprocess)
+      this.termination = new SessionTerminationController({
+        sessionId: this.sessionId,
+        subprocess: this.subprocess,
+        launchAgent: this.launchAgent,
+        isExited: () => this._state === 'exited',
+        releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
+      })
 
-    this.shellReady = new SessionShellReadyBarrier({
-      sessionId: this.sessionId,
-      subprocess: this.subprocess,
-      responderParser: this.output.responderParser,
-      shellReadySupported: opts.shellReadySupported,
-      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
-      shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
-      installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
-      releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      acceptStartupIngress: (data) => this.startupIngress.accept(data)
-    })
-
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.recoveryBarrier.accept(emission)
-    })
-    this.shellReady.startPromptReadinessProbe()
-    this.subprocess.onData((data) => {
-      if (!this._disposed) {
-        this.shellReady.ingestSubprocessData(data)
-      }
-    })
-    this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+      this.shellReady.startPromptReadinessProbe()
+      this.subprocess.onData((data) => {
+        if (!this._disposed) {
+          this.shellReady.ingestSubprocessData(data)
+        }
+      })
+      this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+    } catch (error) {
+      this.startupIngress.discardAndClose()
+      this.shellReady.dispose()
+      this.recoveryBarrier.dispose()
+      this.output.disposeEmulator()
+      throw error
+    }
   }
 
   get state(): SessionState {

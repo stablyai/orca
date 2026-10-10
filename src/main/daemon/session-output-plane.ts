@@ -7,6 +7,7 @@ import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } f
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
 // overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
@@ -24,9 +25,66 @@ export type SessionOutputPlaneOptions = {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  preparedHistorySeed?: PreparedSessionHistorySeed | undefined
   /** Read from the recovery barrier at snapshot time; the barrier scans bytes
    *  before this plane receives them, so its owner never lags the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
+}
+
+function createSessionEmulator(opts: SessionOutputPlaneOptions): HeadlessEmulator {
+  const size = normalizePtySize(opts.cols, opts.rows)
+  // The renderer owns query replies; recovery replay must not answer the child.
+  return new HeadlessEmulator({
+    cols: size.cols,
+    rows: size.rows,
+    scrollback: opts.scrollback,
+    wslDistro: opts.wslDistro
+  })
+}
+
+/** Owns a replayed emulator until synchronous session construction takes it. */
+export class PreparedSessionHistorySeed {
+  private constructor(
+    private emulator: HeadlessEmulator | null,
+    readonly historySeeded: boolean
+  ) {}
+
+  static async create(
+    opts: SessionOutputPlaneOptions & { historySeedChunks: readonly string[] },
+    assertReplayAllowed: () => void
+  ): Promise<PreparedSessionHistorySeed> {
+    assertReplayAllowed()
+    const emulator = createSessionEmulator(opts)
+    try {
+      const replay = new ColdRestoreReplayWriter(emulator, assertReplayAllowed)
+      let historySeeded = true
+      for (const chunk of opts.historySeedChunks) {
+        if (!(chunk.length === 0 ? emulator.writeSync(chunk) : await replay.write(chunk))) {
+          historySeeded = false
+          break
+        }
+      }
+      assertReplayAllowed()
+      return new PreparedSessionHistorySeed(emulator, historySeeded)
+    } catch (error) {
+      emulator.dispose()
+      throw error
+    }
+  }
+
+  adopt(): HeadlessEmulator {
+    const emulator = this.emulator
+    if (!emulator) {
+      throw new Error('Terminal history seed emulator is no longer owned')
+    }
+    this.emulator = null
+    return emulator
+  }
+
+  dispose(): void {
+    this.emulator?.dispose()
+    this.emulator = null
+  }
 }
 
 /** Everything downstream of the PTY: the scrollback emulator, the pending-output record buffer that
@@ -45,24 +103,16 @@ export class SessionOutputPlane {
   private disposed = false
 
   constructor(opts: SessionOutputPlaneOptions) {
-    const size = normalizePtySize(opts.cols, opts.rows)
-    this.emulator = new HeadlessEmulator({
-      cols: size.cols,
-      rows: size.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro
-      // No onData: the daemon emulator must never reply to query sequences — the renderer's xterm is
-      // the authoritative responder and a daemon reply would race ahead and clobber it. See HeadlessEmulator.
-      // The one exception is DA1 while the shell-ready barrier holds (below): the renderer's reply
-      // would be queued behind the marker it is needed to produce, so it cannot be authoritative there.
-    })
+    this.emulator = opts.preparedHistorySeed?.adopt() ?? createSessionEmulator(opts)
     // Why: seed recovery must precede listener registration; shells can emit their prompt synchronously once onData subscribes.
     // Why the every() short-circuit is safe: writeSync only fails emulator-wide (disposed / no sync write API), so later
     // chunks could not land either — and writing them past a dropped chunk would seed a torn stream.
     this.historySeeded =
-      opts.historySeedChunks === undefined
-        ? undefined
-        : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
+      opts.preparedHistorySeed !== undefined
+        ? opts.preparedHistorySeed.historySeeded
+        : opts.historySeedChunks === undefined
+          ? undefined
+          : opts.historySeedChunks.every((chunk) => this.emulator.writeSync(chunk))
     this.readTerminalOwner = opts.getTerminalOwner
   }
 

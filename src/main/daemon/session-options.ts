@@ -2,6 +2,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import type { PreparedSessionHistorySeed } from './session-output-plane'
 
 export type SessionOptions = {
   sessionId: string
@@ -16,6 +17,7 @@ export type SessionOptions = {
    *  Why not console: the detached daemon runs with stdio 'ignore'. */
   reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
   historySeedChunks?: readonly string[]
+  preparedHistorySeed?: PreparedSessionHistorySeed | undefined
   scrollback?: number
   wslDistro?: string
   // Fired once the session reaches a terminal state so the owner (TerminalHost) can reap it; without
