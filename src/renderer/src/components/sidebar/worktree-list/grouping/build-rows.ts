@@ -30,9 +30,10 @@ import {
   buildPendingCreationRow
 } from './row-builders'
 import {
-  compareFolderWorkspacesForDisplay,
+  buildFolderWorkspaceComparator,
   getRenderableFolderWorkspaces
 } from './folder-workspace-lanes'
+import type { SortBy } from '../../smart-sort'
 import { getPinnedWorktreeDisplayPolicy } from './row-types'
 import type {
   ImportedWorktreesCardCandidate,
@@ -70,9 +71,11 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  sortBy: SortBy = 'manual'
 ): Row[] {
   const result: Row[] = []
+  const compareFolderWorkspaces = buildFolderWorkspaceComparator(sortBy, Date.now())
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).
@@ -186,7 +189,7 @@ export function buildRows(
           cyclicLineageIds
         })
         for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
-          compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+          compareFolderWorkspaces(left.folderWorkspace, right.folderWorkspace)
         )) {
           result.push(buildFolderWorkspaceRow(pair, 0))
         }
@@ -209,7 +212,8 @@ export function buildRows(
     pendingByRepo,
     repoOrder,
     projectOrderBy,
-    folderWorkspaces: renderableFolderWorkspaces
+    folderWorkspaces: renderableFolderWorkspaces,
+    compareFolderWorkspaces
   })
 
   const sectionContext: SectionAppendContext = {
@@ -244,6 +248,7 @@ export function buildRows(
     orderedGroups,
     projectGroups,
     folderWorkspaces: renderableFolderWorkspaces,
+    compareFolderWorkspaces,
     projectOrderBy,
     repoOrder
   })

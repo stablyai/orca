@@ -102,6 +102,7 @@ describe('recent project rank scan budget', () => {
         }
       ],
       folderWorkspaces: [],
+      compareFolderWorkspaces: () => 0,
       projectOrderBy: 'recent',
       repoOrder: undefined
     })

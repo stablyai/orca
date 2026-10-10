@@ -1,7 +1,4 @@
-import {
-  compareFolderWorkspacesForDisplay,
-  type RenderableFolderWorkspace
-} from './folder-workspace-lanes'
+import type { FolderWorkspaceComparator, RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project-groups'
@@ -22,11 +19,19 @@ export function appendProjectGroupSections(
     orderedGroups: OrderedGroupEntry[]
     projectGroups: readonly ProjectGroup[]
     folderWorkspaces: readonly RenderableFolderWorkspace[]
+    compareFolderWorkspaces: FolderWorkspaceComparator
     projectOrderBy: ProjectOrderBy
     repoOrder: Map<string, number> | undefined
   }
 ): void {
-  const { orderedGroups, projectGroups, folderWorkspaces, projectOrderBy, repoOrder } = args
+  const {
+    orderedGroups,
+    projectGroups,
+    folderWorkspaces,
+    compareFolderWorkspaces,
+    projectOrderBy,
+    repoOrder
+  } = args
   const { result, collapsedGroups } = ctx
 
   const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
@@ -69,9 +74,7 @@ export function appendProjectGroupSections(
     folderWorkspacesByProjectGroupId.set(groupId, list)
   }
   for (const list of folderWorkspacesByProjectGroupId.values()) {
-    list.sort((left, right) =>
-      compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
-    )
+    list.sort((left, right) => compareFolderWorkspaces(left.folderWorkspace, right.folderWorkspace))
   }
   const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
   for (const group of projectGroups) {

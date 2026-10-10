@@ -5,6 +5,7 @@ import {
   getWorkspaceStatus,
   getWorkspaceStatusGroupKey
 } from '../../../../../../shared/workspace-statuses'
+import { effectiveRecentActivity, type SortBy } from '../../smart-sort'
 import { ALL_GROUP_KEY, getPRLaneKey } from './group-keys'
 import type { WorktreeGroupBy } from './row-types'
 
@@ -65,13 +66,31 @@ export function getFolderWorkspaceLaneKey(
   }
 }
 
-/** Sidebar display order: user-authored order first, then name. Mirrors the rule
- *  the project-group emitter has always used, so lanes and groups agree. */
-export function compareFolderWorkspacesForDisplay(
-  left: FolderWorkspace,
-  right: FolderWorkspace
-): number {
-  const leftOrder = left.manualOrder ?? left.sortOrder
-  const rightOrder = right.manualOrder ?? right.sortOrder
-  return rightOrder - leftOrder || left.name.localeCompare(right.name)
+export type FolderWorkspaceComparator = (left: FolderWorkspace, right: FolderWorkspace) => number
+
+/** Sidebar display order for folder workspaces, following the sidebar Sort by mode
+ *  so they line up with worktrees. Folder workspaces have no repo or agent
+ *  attention, so Repo falls back to name and Smart to recency. */
+export function buildFolderWorkspaceComparator(
+  sortBy: SortBy,
+  now: number
+): FolderWorkspaceComparator {
+  return (left, right) => {
+    switch (sortBy) {
+      case 'name':
+      case 'repo':
+        return left.name.localeCompare(right.name)
+      case 'smart':
+      case 'recent':
+        return (
+          effectiveRecentActivity(right, now) - effectiveRecentActivity(left, now) ||
+          left.name.localeCompare(right.name)
+        )
+      case 'manual':
+        return (
+          (right.manualOrder ?? right.sortOrder) - (left.manualOrder ?? left.sortOrder) ||
+          left.name.localeCompare(right.name)
+        )
+    }
+  }
 }

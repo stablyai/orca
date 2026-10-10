@@ -35,7 +35,10 @@ export const CREATE_GRACE_MS = 5 * 60 * 1000
  * without `createdAt` (discovered on disk, or persisted before this field
  * existed).
  */
-export function effectiveRecentActivity(worktree: Worktree, now: number): number {
+export function effectiveRecentActivity(
+  worktree: Pick<Worktree, 'lastActivityAt' | 'createdAt'>,
+  now: number
+): number {
   const { lastActivityAt, createdAt } = worktree
   // Why bound by now: a worktree with createdAt set but no subsequent activity
   // should not retain artificially-high recency forever; the floor exists to
