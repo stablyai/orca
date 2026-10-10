@@ -33,6 +33,7 @@ export type RuntimeStore = {
   pruneSessionlessMissingLocalWorktreeMetadataForRepo?: Store['pruneSessionlessMissingLocalWorktreeMetadataForRepo']
   getProfileStorageDirectory?: Store['getProfileStorageDirectory']
   getWorktreeMeta: Store['getWorktreeMeta']
+  getWorktreeMetaForHost?: Store['getWorktreeMetaForHost']
   setWorktreeMeta: Store['setWorktreeMeta']
   isCurrentWorktreeMetadata?: Store['isCurrentWorktreeMetadata']
   updateExistingWorktreeMeta?: Store['updateExistingWorktreeMeta']

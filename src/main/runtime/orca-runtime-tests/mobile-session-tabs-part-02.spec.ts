@@ -143,10 +143,17 @@ describe('OrcaRuntimeService', () => {
       return metaById[worktreeId]
     })
     const worktreesChanged = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this legacy fake checks admitted writes against its per-test qualified metadata methods.
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMetaForHost: (
+        worktreeId: string,
+        _hostId: string,
+        updates: Partial<WorktreeMeta>
+      ) => setWorktreeMeta(worktreeId, updates),
       setWorktreeMeta
     } as never)
     runtime.setNotifier({

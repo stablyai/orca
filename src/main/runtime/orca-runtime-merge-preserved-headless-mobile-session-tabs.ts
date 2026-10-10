@@ -13,13 +13,14 @@ import {
 } from './mobile-session-tab-merge'
 import { terminalLayoutContainsLeaf } from '../../shared/workspace-session-pane-ownership'
 import { getHeadlessMobileSessionGroupId } from './mobile-session-layout-projection'
+import { runtimeSessionSnapshotsShareOwner } from './runtime-workspace-session-owner'
 
 export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends OrcaRuntimeWithSyncMobileSessionTabs {
   protected mergePreservedHeadlessMobileSessionTabs(
     snapshot: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): RuntimeMobileSessionTabsSnapshot {
-    if (!existing) {
+    if (!existing || !runtimeSessionSnapshotsShareOwner(snapshot, existing)) {
       return snapshot
     }
     const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
@@ -104,10 +105,17 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): void {
-    if (!existing || this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)) {
+    if (
+      !existing ||
+      !runtimeSessionSnapshotsShareOwner(incoming, existing) ||
+      this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
+    ) {
       return
     }
-    const session = this.getWorkspaceSessionForWorktree(existing.worktree)
+    const session = this.getWorkspaceSessionForWorktree(
+      existing.worktree,
+      existing.worktreeIdentity
+    )
     const persistedTabs = session?.tabsByWorktree?.[existing.worktree]
     if (!session || !persistedTabs) {
       return
