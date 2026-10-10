@@ -173,6 +173,19 @@ export function getLaunchableWorkItemDraftContent(args: {
   return args.url
 }
 
+/** Appends a caller-supplied agent draft (e.g. a plugin task's start prompt)
+ *  after any linked-item draft; the result is still delivered as a draft. */
+export function appendAgentLaunchDraft(
+  draftPrompt: string | null,
+  agentDraft: string | null | undefined
+): string | null {
+  const extra = agentDraft?.trim()
+  if (!extra) {
+    return draftPrompt
+  }
+  return formatDraftContextBlock(draftPrompt ? `${draftPrompt.trimEnd()}\n\n${extra}` : extra)
+}
+
 export function resolveQuickCreateLinkedWorkItemPrompt(
   linkedWorkItem:
     | (Pick<

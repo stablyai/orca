@@ -20,6 +20,8 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  /** Explicit options for this launch (e.g. a plugin task's model/effort); they win over agent args. */
+  sessionOptionOverrides?: Record<string, string>
 }
 
 export type QuickComposerStartup = {
@@ -30,6 +32,9 @@ export type QuickComposerStartup = {
 
 export function buildQuickComposerStartup(input: QuickComposerStartupInput): QuickComposerStartup {
   const { agent, draftPrompt, prompt, settings } = input
+  const launchSessionOptions = input.sessionOptionOverrides
+    ? { sessionOptions: input.sessionOptionOverrides, sessionOptionsOverrideAgentArgs: true }
+    : {}
   const draftLaunchPlan =
     agent === null || !draftPrompt
       ? null
@@ -41,7 +46,8 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
           platform: input.platform,
           shell: input.shell ?? undefined,
-          isRemote: input.isRemote
+          isRemote: input.isRemote,
+          ...launchSessionOptions
         })
   let startupPlan: AgentStartupPlan | null = null
   if (draftLaunchPlan) {
@@ -54,7 +60,8 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       ...(draftLaunchPlan.startupCommandDelivery
         ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
         : {}),
-      ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
+      ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {}),
+      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {})
     }
   } else if (agent !== null) {
     startupPlan = buildAgentStartupPlan({
@@ -66,7 +73,8 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       platform: input.platform,
       shell: input.shell ?? undefined,
       isRemote: input.isRemote,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      ...launchSessionOptions
     })
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt

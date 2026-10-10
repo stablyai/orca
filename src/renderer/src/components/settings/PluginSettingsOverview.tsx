@@ -27,6 +27,7 @@ type PluginSettingsOverviewProps = {
   onMarketplaceInstalled: (pluginKey: string) => Promise<void>
   onRollbackRequest: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
+  onOpenSettings: (pluginKey: string) => void
   onUpdateDevPaths: (paths: string[]) => Promise<void>
 }
 
@@ -60,6 +61,7 @@ export function PluginSettingsOverview({
   onMarketplaceInstalled,
   onRollbackRequest,
   onRemoveRequest,
+  onOpenSettings,
   onUpdateDevPaths
 }: PluginSettingsOverviewProps): React.JSX.Element {
   return (
@@ -156,6 +158,7 @@ export function PluginSettingsOverview({
                       onToggleLogs={onToggleLogs}
                       onRollbackRequest={onRollbackRequest}
                       onRemoveRequest={onRemoveRequest}
+                      onOpenSettings={onOpenSettings}
                     />
                   ))}
                 </div>

@@ -18,6 +18,8 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'onToggleAdvanced'
 > & {
   advancedLocked?: boolean
+  /** Rendered between the agent picker and Advanced, e.g. a prefilled agent prompt. */
+  agentDraftSection?: React.ReactNode
   visibleQuickAgents: React.ComponentProps<typeof AgentCombobox>['agents']
   defaultTuiAgent: React.ComponentProps<typeof AgentCombobox>['defaultAgent']
   handleSetDefaultAgent: (
@@ -33,6 +35,7 @@ export function NewWorkspaceComposerAgentSection({
   onCreate,
   advancedOpen,
   advancedLocked = false,
+  agentDraftSection,
   onToggleAdvanced,
   visibleQuickAgents,
   defaultTuiAgent,
@@ -80,6 +83,8 @@ export function NewWorkspaceComposerAgentSection({
           onTriggerEnter={createDisabled ? undefined : onCreate}
         />
       </div>
+
+      {agentDraftSection}
 
       <div className="!mb-2">
         <Button

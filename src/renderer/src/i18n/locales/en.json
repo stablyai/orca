@@ -692,6 +692,9 @@
       }
     },
     "lib": {
+      "gitRemoteProjectMatch": {
+        "noProject": "No Git project in Orca has the remote {{remote}}. Add a clone of it as a project, then start again."
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -1125,6 +1128,9 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
+      },
+      "pluginTaskWorkspaceLink": {
+        "saveFailed": "Workspace created, but its link to the plugin task could not be saved."
       },
       "worktreeJumpNavigation": {
         "filteredNotice": "This worktree is hidden by sidebar filters. The workspace was opened, but it is not shown in Spaces."
@@ -1897,12 +1903,20 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "agentDraftLabel": "Agent prompt",
+        "agentDraftHelp": "Typed into the agent as a draft. Review it there before sending.",
+        "agentSessionModelEffort": "Starts with model {{model}}, effort {{effort}}.",
+        "agentSessionModel": "Starts with model {{model}}.",
+        "agentSessionEffort": "Starts with effort {{effort}}.",
+        "agentSessionOtherAgent": "The task's model and effort are for {{agent}}, so this agent starts with its own."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
         "createWorkspace": "Create workspace",
-        "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace."
+        "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace.",
+        "agentDraftFolderGroup": "Folder workspaces do not take an agent prompt, so this one will not be sent.",
+        "agentDraftNoAgent": "Pick an agent to send this prompt."
       },
       "PullRequestPage": {
         "2560588245": "Failed to request reviewer",
@@ -2494,7 +2508,25 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "pluginTaskDetailDescription": "Preview and start work from the selected task.",
+        "pluginTaskOpenLink": "Open link",
+        "pluginTaskCloseDetail": "Close",
+        "pluginTaskNoBody": "No description provided.",
+        "pluginTaskRefresh": "Refresh {{value0}}",
+        "pluginTaskSearch": "Search {{value0}}",
+        "pluginTaskNotStartable": "This task cannot start a workspace",
+        "pluginTaskSourceContext": "{{value0}} · plugin",
+        "pluginTaskEmpty": "No tasks found",
+        "pluginTaskEmptyHint": "Try different search terms or filters.",
+        "pluginTaskProjectMissing": "No Orca project is at {{path}}. Add it as a project, then start again.",
+        "pluginTaskOpenWorkspaceAction": "Open workspace",
+        "pluginTaskStartAnotherShort": "Start another",
+        "pluginTaskWorkspacesLabel": "Workspaces",
+        "pluginTaskOpenWorkspace": "Open workspace {{value0}}",
+        "pluginTaskWorkspaces": "Workspaces: {{value0}}",
+        "pluginTaskStartAnother": "Start another workspace",
+        "pluginTaskWorkspaceOpenFailed": "Unable to open that workspace."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -5864,7 +5896,8 @@
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "openPluginTask": "Open in {{value0}}"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -11847,7 +11880,8 @@
             "storage": "Store data in the plugin's own storage folder",
             "secrets": "Store and read secrets in the plugin's own encrypted vault",
             "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
-            "settingsOwn": "Read and change the plugin's own settings"
+            "settingsOwn": "Read and change the plugin's own settings",
+            "tasksProvide": "Add task lists to the Tasks page; starting a task opens Create workspace with the plugin's suggested name, base and agent prompt for you to review"
           },
           "decisionFailed": "Could not save the permission decision. Try again."
         },
@@ -12036,7 +12070,8 @@
           "remove": "Remove",
           "disableLabel": "Disable {{value0}}",
           "enableLabel": "Enable {{value0}}",
-          "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh."
+          "invalidPluginError": "The plugin manifest or installed files are invalid. Fix the plugin, then refresh.",
+          "settings": "Settings"
         },
         "PluginVmRecipeConsentPreview": {
           "create": "Create",
@@ -12692,6 +12727,13 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "PluginSettingsDialog": {
+          "default": "Default: {{value0}}",
+          "title": "{{value0}} settings",
+          "description": "Each change saves on its own. The plugin uses it the next time it reads its settings.",
+          "loading": "Loading…",
+          "done": "Done"
         }
       },
       "right": {

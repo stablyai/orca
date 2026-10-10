@@ -8,6 +8,7 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
+import type { LinkedPluginTask } from '../plugins/plugin-task-link'
 
 export type WorkspaceAttachmentOrigin = {
   kind: 'observed'
@@ -134,6 +135,8 @@ export type Worktree = {
   linkedWorkItem?: WorkspaceLinkedItem | null
   /** All attachments; singular fields select the active review/task for older readers. */
   linkedItems?: WorkspaceAttachment[]
+  /** Plugin task this workspace was started from (Tasks page plugin sources). */
+  linkedPluginTask?: LinkedPluginTask | null
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean

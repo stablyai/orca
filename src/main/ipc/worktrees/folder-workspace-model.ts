@@ -56,6 +56,7 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedWorkItem: meta.linkedWorkItem ?? null,
     ...(meta.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
+    linkedPluginTask: meta.linkedPluginTask ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,
     isPinned: meta.isPinned ?? false,

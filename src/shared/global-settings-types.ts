@@ -373,6 +373,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   defaultTaskViewPreset: TaskViewPresetId
   /** Persisted last-used task source so Tasks reopens to the same provider instead of defaulting to GitHub. */
   defaultTaskSource: TaskProvider
+  /** Last plugin task source picked on Tasks (`<pluginKey>/<sourceId>`); null when a built-in source was picked last. */
+  defaultPluginTaskSource?: string | null
   /** Persisted visible task providers; hides unused providers from Tasks chrome and sidebar shortcuts. */
   visibleTaskProviders: TaskProvider[]
   /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */

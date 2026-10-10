@@ -39,8 +39,35 @@ import { useTaskPageLinearCollectionEffects } from '../use-task-page-linear-coll
 import { useTaskPageJiraListEffects } from '../use-task-page-jira-list-effects'
 import { useTaskPageComposerActions } from '../use-task-page-composer-actions'
 import { TaskPageSurface } from './Surface'
+import { LoaderCircle } from 'lucide-react'
+import { PluginTaskSourcePage } from './plugin/PluginTaskSourcePage'
+import { useTaskPageSourceView } from './plugin/use-active-plugin-task-source'
+import { useAppStore } from '@/store'
 
 export default function TaskPage(): React.JSX.Element {
+  const view = useTaskPageSourceView()
+  const openPluginTaskItem = useAppStore((state) => state.taskPageData.openPluginTaskItem)
+  if (view.kind === 'plugin') {
+    return (
+      <PluginTaskSourcePage
+        key={`${view.source.key}#${openPluginTaskItem?.id ?? ''}`}
+        source={view.source}
+        initialItem={openPluginTaskItem}
+      />
+    )
+  }
+  if (view.kind === 'pending') {
+    return (
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-background">
+        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+  return <BuiltinTaskPage />
+}
+
+// Why separate: plugin sources must not mount the built-in pipeline and its provider fetches.
+function BuiltinTaskPage(): React.JSX.Element {
   const stage1 = useTaskPageStoreBindings()
   const stage2 = useTaskPageRepoSelection(stage1)
   const stage3 = useTaskPageRuntimeHosts(stage2)

@@ -67,6 +67,7 @@ describe('PluginSettingsRow', () => {
           onToggleLogs={vi.fn()}
           onRollbackRequest={vi.fn()}
           onRemoveRequest={vi.fn()}
+          onOpenSettings={vi.fn()}
         />
       )
     })

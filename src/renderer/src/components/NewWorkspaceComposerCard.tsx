@@ -25,6 +25,7 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
+import { NewWorkspaceComposerAgentDraftSection } from './new-workspace/NewWorkspaceComposerAgentDraftSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './new-workspace/NewWorkspaceComposerNameSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/NewWorkspaceComposerProjectSection'
@@ -337,6 +338,16 @@ export default function NewWorkspaceComposerCard(
           visibleQuickAgents={visibleQuickAgents}
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
+          agentDraftSection={
+            props.agentDraft != null && props.onAgentDraftChange ? (
+              <NewWorkspaceComposerAgentDraftSection
+                value={props.agentDraft}
+                onChange={props.onAgentDraftChange}
+                unavailableReason={props.agentDraftUnavailableReason ?? null}
+                sessionNote={props.agentSessionNote}
+              />
+            ) : null
+          }
         />
         <NewWorkspaceComposerAdvancedSection
           {...props}

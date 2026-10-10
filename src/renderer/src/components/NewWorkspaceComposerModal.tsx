@@ -24,6 +24,12 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { LinkedPluginTask } from '../../../shared/plugins/plugin-task-link'
+import {
+  describePluginTaskSessionOptions,
+  sessionOptionsForAgent,
+  type PluginTaskSessionOptions
+} from '@/lib/plugin-task-session-options'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
@@ -43,6 +49,12 @@ type ComposerModalData = {
   initialGitHubWorkItem?: GitHubWorkItem | null
   taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
+  /** Editable draft typed into the agent after launch (e.g. a plugin task's prompt). */
+  initialAgentDraft?: string
+  /** Per-launch agent session options (e.g. model, effort) from the opener. */
+  initialAgentSessionOptions?: PluginTaskSessionOptions
+  /** Plugin task the new workspace links back to. */
+  linkedPluginTask?: LinkedPluginTask
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
   /** Telemetry surface that opened the composer. Set by each
@@ -188,10 +200,20 @@ function QuickTabBody({
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
   }, [])
+  const [agentDraft, setAgentDraft] = useState<string | null>(modalData.initialAgentDraft ?? null)
 
+  const { initialAgentSessionOptions, linkedPluginTask } = modalData
+  const launchSessionOptions = useMemo(
+    () => sessionOptionsForAgent(initialAgentSessionOptions, quickAgent),
+    [initialAgentSessionOptions, quickAgent]
+  )
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+    await submitQuick(quickAgent, {
+      ...(agentDraft?.trim() ? { agentDraft } : {}),
+      ...(launchSessionOptions ? { sessionOptions: launchSessionOptions } : {}),
+      ...(linkedPluginTask ? { linkedPluginTask } : {})
+    })
+  }, [agentDraft, launchSessionOptions, linkedPluginTask, quickAgent, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -240,6 +262,17 @@ function QuickTabBody({
     : cardProps.selectedRepoIsGit
       ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+  const agentDraftUnavailableReason = isFolderWorkspaceTarget
+    ? translate(
+        'auto.components.NewWorkspaceComposerModal.agentDraftFolderGroup',
+        'Folder workspaces do not take an agent prompt, so this one will not be sent.'
+      )
+    : quickAgent === null
+      ? translate(
+          'auto.components.NewWorkspaceComposerModal.agentDraftNoAgent',
+          'Pick an agent to send this prompt.'
+        )
+      : null
 
   // Cmd/Ctrl+Enter submits. Escape belongs to the dialog's dismissable layer:
   // the page-style "blur the focused field first" rule assumes the user chose
@@ -305,6 +338,10 @@ function QuickTabBody({
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        agentDraft={agentDraft}
+        onAgentDraftChange={setAgentDraft}
+        agentDraftUnavailableReason={agentDraftUnavailableReason}
+        agentSessionNote={describePluginTaskSessionOptions(initialAgentSessionOptions, quickAgent)}
         {...cardProps}
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}

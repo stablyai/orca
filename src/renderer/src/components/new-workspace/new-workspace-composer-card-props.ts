@@ -38,6 +38,12 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
+  /** Present only when the opener prefilled an agent prompt. */
+  agentDraft?: string | null
+  onAgentDraftChange?: (value: string) => void
+  agentDraftUnavailableReason?: string | null
+  /** Shown under the agent prompt when the opener pinned session options. */
+  agentSessionNote?: string | null
   eligibleRepos: readonly RepoOption[]
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]

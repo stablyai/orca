@@ -1,0 +1,39 @@
+{
+  "manifestVersion": 1,
+  "id": "hello-tasks",
+  "publisher": "orca-samples",
+  "name": "Hello Tasks",
+  "version": "1.0.0",
+  "description": "Sample plugin that adds a task list to the Tasks page and starts workspaces from it.",
+  "engines": {
+    "orca": ">=1.4.214"
+  },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "taskSources": [
+      {
+        "id": "samples",
+        "title": "Hello Tasks",
+        "icon": "flag"
+      }
+    ],
+    "settings": [
+      {
+        "key": "showBlocked",
+        "title": "Show blocked tasks",
+        "description": "List tasks that cannot start a workspace yet.",
+        "type": "boolean",
+        "default": true
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "tasks:provide"
+    },
+    {
+      "kind": "settings:own"
+    }
+  ]
+}

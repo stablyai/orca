@@ -9,6 +9,7 @@ import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+import { WorktreeCardPluginTaskLink } from './WorktreeCardPluginTaskLink'
 
 export function WorktreeCardSecondaryRows({
   card,
@@ -74,6 +75,10 @@ export function WorktreeCardSecondaryRows({
             {worktree.removalError}
           </TooltipContent>
         </Tooltip>
+      ) : null}
+
+      {worktree.linkedPluginTask ? (
+        <WorktreeCardPluginTaskLink link={worktree.linkedPluginTask} />
       ) : null}
 
       {isActive && worktree.linkedLinearIssue ? (

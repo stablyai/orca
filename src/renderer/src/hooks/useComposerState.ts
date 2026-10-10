@@ -23,6 +23,7 @@ import { useComposerExternalSync } from './composer-state/composer-external-sync
 import { useComposerSourceState } from './composer-state/composer-source-state'
 import { useComposerSubmitOrchestration } from './composer-state/composer-submit-orchestration'
 import { assembleComposerModel } from './composer-state/assemble-composer-model'
+import type { QuickSubmitOptions } from './composer-state/composer-submit-model'
 import type {
   ComposerCardActionProps,
   ComposerCardSourceProps
@@ -68,7 +69,7 @@ export type UseComposerStateResult = {
   onComposerNodeChange: (node: HTMLDivElement | null) => void
   promptTextareaRef: RefObject<HTMLTextAreaElement | null>
   nameInputRef: RefObject<HTMLInputElement | null>
-  submitQuick: (agent: TuiAgent | null) => Promise<void>
+  submitQuick: (agent: TuiAgent | null, options?: QuickSubmitOptions) => Promise<void>
   createDisabled: boolean
   selectAddedProjectRepo: (repoId: string) => void
 }

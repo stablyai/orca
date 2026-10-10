@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 
 import type { ComposerModel } from './composer-model'
+import type { QuickSubmitOptions } from './composer-submit-model'
 
 type QuickSubmitActionInput = Pick<
   ComposerModel,
@@ -66,7 +67,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   } = input
 
   const submitQuick = useCallback(
-    async (requestedAgent: TuiAgent | null): Promise<void> => {
+    async (requestedAgent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> => {
       if (isProjectGroupTarget) {
         await submitFolderTarget(requestedAgent)
         return
@@ -143,7 +144,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           requestedAgent,
           workspaceNameSeed,
           workspaceRunContext,
-          repoId
+          repoId,
+          options
         )
       } catch (error) {
         if (isSubmissionCancelled()) {
