@@ -43,6 +43,8 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
     const applied = clampNormalScrollLines(scope, lines)
     if (applied !== 0) {
       scope.term.scrollLines(applied)
+      // Why: a touch that scrolled a row is a scroll, even inside TAP_SLOP.
+      scope.tapCandidate = null
       // Why: xterm's renderer is row-based. Buffer touch pixels and only
       // commit whole rows so TUI canvas layers do not shimmer between
       // fractional transforms and xterm repaints.
@@ -87,6 +89,15 @@ export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, del
     }
   })
   return true
+}
+
+/** Whether the deltas queued for the next frame, with the remainder already held, move a row. */
+export function queuedNormalBufferScrollReachesRow(scope: TerminalDocumentScope) {
+  const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
+  return (
+    effectiveCellH > 0 &&
+    Math.abs(scope.smoothScrollOffsetY - scope.pendingNormalScrollDeltaY) >= effectiveCellH
+  )
 }
 
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
