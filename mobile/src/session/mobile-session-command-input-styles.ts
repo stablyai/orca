@@ -194,6 +194,12 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     height: 1,
     color: colors.textPrimary
   },
+  // Why: the Android key-capture wrapper takes the hidden field's place so it adds no row space.
+  liveInputKeyCapture: {
+    position: 'absolute',
+    width: 1,
+    height: 1
+  },
   sendButton: {
     backgroundColor: colors.bgRaised,
     width: 34,
