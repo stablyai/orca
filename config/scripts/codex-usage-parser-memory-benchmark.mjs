@@ -4,7 +4,7 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from
 import { availableParallelism, cpus, release, tmpdir, totalmem } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = resolve(import.meta.dirname, '../..')
 const digest = (value) => createHash('sha256').update(value).digest('hex')
@@ -134,7 +134,8 @@ function writeFixture(filePath, eventCount) {
 
 async function runComparison() {
   const { build, version: esbuildVersion } = await import('esbuild')
-  const { runProcessSync, describeProcessFailure } = await import('./script-child-process.mjs')
+  const { runProcessSync } = await import('@orca/process-host')
+  const { describeProcessFailure } = await import('./process-failure-message.mjs')
   const { buildCounterbalancedSchedule } = await import('./counterbalanced-benchmark-schedule.mjs')
   const eventCount = positiveInteger(argument('--events', '100000'), 'events')
   const pairCount = positiveInteger(argument('--pairs', '2'), 'pairs')
@@ -275,7 +276,8 @@ async function runComparison() {
       instrumentationSha256: Object.fromEntries(
         [
           import.meta.filename,
-          join(import.meta.dirname, 'script-child-process.mjs'),
+          fileURLToPath(import.meta.resolve('@orca/process-host')),
+          join(import.meta.dirname, 'process-failure-message.mjs'),
           join(import.meta.dirname, 'counterbalanced-benchmark-schedule.mjs')
         ].map((path) => [relative(root, path).split(sep).join('/'), digest(readFileSync(path))])
       ),

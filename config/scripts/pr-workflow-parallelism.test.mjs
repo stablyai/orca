@@ -11,7 +11,16 @@ describe('PR workflow parallelism', () => {
     const guard = workflow.jobs.preflight.steps.find((step) =>
       step.run?.includes('pnpm run check:process-host-imports')
     )
-    expect(guard?.if).toBe("needs.code_paths.outputs.static_analysis == 'true'")
+    expect(guard?.if).toBe('!cancelled()')
+    expect(guard?.env.PREFLIGHT_PHASE_SELECTED).toBe(
+      "${{ needs.code_paths.outputs.static_analysis == 'true' }}"
+    )
+    expect(guard?.background).toBe(true)
+    const typecheckIndex = workflow.jobs.preflight.steps.findIndex(
+      (step) => step.run === 'pnpm run typecheck'
+    )
+    const waitIndex = workflow.jobs.preflight.steps.findIndex((step) => step.wait === guard.id)
+    expect(waitIndex).toBeGreaterThan(typecheckIndex)
     expect(guard?.['continue-on-error']).toBeUndefined()
   })
 
