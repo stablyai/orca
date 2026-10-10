@@ -57,6 +57,17 @@ describe('implicit worktree selection is scoped to the caller host (#21210)', ()
     expect(selectEnclosingWorktreeOnHost(TWINS, PATH, 'local')).toBe(`id:repo-l::${PATH}`)
   })
 
+  // A runtime-stamped row in this runtime's own catalog is a checkout it holds locally.
+  it('keeps a runtime-stamped local checkout for a local caller', () => {
+    const rows = [
+      TWINS[0]!,
+      { id: `repo-r::${PATH}`, path: PATH, hostId: 'runtime:env-1' as const }
+    ]
+
+    expect(selectEnclosingWorktreeOnHost(rows, `${PATH}/src`, 'local')).toBe(`id:repo-r::${PATH}`)
+    expect(selectEnclosingWorktreeOnHost(rows, PATH, 'ssh:host%20d')).toBeUndefined()
+  })
+
   it('never adopts another host or an unstamped row for an SSH caller', () => {
     expect(
       selectEnclosingWorktreeOnHost([TWINS[0]!, row(undefined, 'repo-u::x')], PATH, 'ssh:host-z')

@@ -2,6 +2,7 @@ import { resolve as resolvePath } from 'node:path'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../shared/execution-host'
@@ -21,10 +22,14 @@ export function getCallerExecutionHostId(
   return host?.kind === 'ssh' ? toSshExecutionHostId(host.targetId) : LOCAL_EXECUTION_HOST_ID
 }
 
-// Why: the catalog lists every host's worktrees and two hosts can hold the same path, so only the
-// caller's own host may answer. A row without a host predates stamping and was local.
-function isOnHost(row: CatalogRow, hostId: ExecutionHostId): boolean {
-  return (row.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
+// Why: the catalog lists SSH hosts' worktrees too and two hosts can hold the same path, so an SSH
+// caller may only take its own host's rows and a local caller none of an SSH host's. `runtime:*`
+// rows in this runtime's catalog are checkouts it holds itself, and unstamped rows predate stamping.
+function isOnCallerHost(row: CatalogRow, callerHostId: ExecutionHostId): boolean {
+  const rowHostId = row.hostId ?? LOCAL_EXECUTION_HOST_ID
+  return parseExecutionHostId(callerHostId)?.kind === 'ssh'
+    ? rowHostId === callerHostId
+    : parseExecutionHostId(rowHostId)?.kind !== 'ssh'
 }
 
 // Why: `id:` keeps repo inference and the runtime's scoped fast path; only a bare id that another
@@ -44,7 +49,7 @@ export function selectEnclosingWorktreeOnHost(
   let enclosing: CatalogRow | undefined
   let enclosingPathLength = -1
   for (const row of catalog) {
-    if (!isOnHost(row, hostId)) {
+    if (!isOnCallerHost(row, hostId)) {
       continue
     }
     const rowPath = resolvePath(row.path)
@@ -63,7 +68,7 @@ export function selectWorktreeIdOnHost(
   worktreeId: string,
   hostId: ExecutionHostId
 ): string | undefined {
-  const match = catalog.find((row) => row.id === worktreeId && isOnHost(row, hostId))
+  const match = catalog.find((row) => row.id === worktreeId && isOnCallerHost(row, hostId))
   return match ? toHostScopedSelector(match, catalog) : undefined
 }
 
