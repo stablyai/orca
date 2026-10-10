@@ -154,6 +154,30 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(stalledLines).toHaveLength(Math.floor(stalls / REREGISTER_STALL_LOG_EVERY))
   }, 60_000)
 
+  it('retries a lease insert that lost a race (23505) instead of counting it as a refusal', async () => {
+    let now = Date.now()
+    const reserve = await cell(() => now)
+    const host = await reserve.bookedHost(5)
+    const real = reserve.relay.assignments.activateControlDeferringCell.bind(reserve.relay.assignments)
+    let races = 0
+    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockImplementation(async (...args) => {
+      if (races < 2 * REREGISTER_MAX_ATTEMPTS) {
+        races += 1
+        throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' })
+      }
+      return await real(...args)
+    })
+    reserve.setAdmitMode('db')
+    for (let step = 0; step < 5 * REREGISTER_MAX_ATTEMPTS && (await reserve.controlLeases()).length === 0; step += 1) {
+      now += 6_000
+      if (host.socket.readyState === WebSocket.OPEN) host.socket.send(JSON.stringify({ type: 'pong', t: now }))
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    }
+    expect(races).toBe(2 * REREGISTER_MAX_ATTEMPTS)
+    expect(await reserve.controlLeases()).toHaveLength(1)
+    expect(host.socket.readyState).toBe(WebSocket.OPEN)
+  }, 60_000)
+
   it('never lets the switch file take the connections hellos and renewals need', () => {
     expect(reregisterInFlightLimit(undefined, 10)).toBe(3)
     expect(reregisterInFlightLimit(undefined, 16)).toBe(5)
