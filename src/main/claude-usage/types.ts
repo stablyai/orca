@@ -56,6 +56,7 @@ export type ClaudeUsageDailyAggregate = {
 
 export type ClaudeUsagePersistedState = {
   schemaVersion: number
+  usageIntegrity?: string
   worktreeFingerprint: string | null
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
@@ -109,11 +110,6 @@ export type ClaudeUsageTokenTotals = Pick<
   ClaudeUsageParsedTurn,
   'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens' | 'cacheWrite1hTokens'
 >
-
-export type ClaudeUsageOwnedTurn = ClaudeUsageTokenTotals & {
-  dedupeKey: string
-  projection: ClaudeUsageTurnProjection | null
-}
 
 export type ClaudeUsageTurnProjection = {
   sessionId: string

@@ -1,139 +1,68 @@
-import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { appendFile, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { projectClaudeUsageScanFile } from './transcript-usage-projection'
 import { readClaudeUsageScanFile } from './transcript-record-parser'
-import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
+import {
+  createPersistedUsageTestFixture,
+  type PersistedUsageTestFixture
+} from './persisted-usage-test-fixture'
 
-const { getPath } = vi.hoisted(() => ({ getPath: vi.fn<() => string>() }))
-vi.mock('electron', () => ({ app: { getPath } }))
-vi.mock('../usage/usage-scan-worker-spawn', () => ({ scanClaudeUsageFilesViaWorker: vi.fn() }))
-
-import { ClaudeUsageStore, initClaudeUsagePath } from './store'
-import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
-
-let directory: string
-let transcript: string
+let fixture: PersistedUsageTestFixture
 const KEY_COUNT = 1024
-const backingStore = { getRepos: () => [], getAllWorktreeMeta: () => ({}) }
-
-function assistantRow(index: number, duplicate = false): string {
-  return `${JSON.stringify({
-    type: 'assistant',
-    sessionId: duplicate ? 'later-session' : 'original-session',
-    timestamp: duplicate ? '2026-10-10T12:00:00.000Z' : '2026-10-09T12:00:00.000Z',
-    cwd: duplicate ? join(directory, 'later-location') : directory,
-    requestId: `request-${index}`,
-    message: {
-      id: `message-${index}`,
-      model: duplicate ? 'later-model' : 'claude-sonnet-4-6',
-      usage: {
-        input_tokens: duplicate ? 2000 : 1000 + index,
-        output_tokens: duplicate ? 55 : 10 + (index % 7),
-        cache_read_input_tokens: duplicate ? 5 : index % 11,
-        cache_creation_input_tokens: duplicate ? 15 : 10 + (index % 17),
-        cache_creation: { ephemeral_1h_input_tokens: duplicate ? 3 : index % 3 }
-      }
-    }
-  })}\n`
-}
-
-async function project(previous?: ClaudeUsagePersistedFile): Promise<ClaudeUsagePersistedFile> {
-  const read = await readClaudeUsageScanFile(transcript, previous?.parseResumeState)
-  return projectClaudeUsageScanFile(read, new Map(), () => true, previous)
-}
-
-function persistedState(files: ClaudeUsagePersistedFile[]): ClaudeUsagePersistedState {
-  return {
-    schemaVersion: 6,
-    worktreeFingerprint: '[]',
-    processedFiles: files,
-    sessions: structuredClone(files.flatMap((file) => file.sessions)),
-    dailyAggregates: structuredClone(files.flatMap((file) => file.dailyAggregates)),
-    scanState: {
-      enabled: true,
-      lastScanStartedAt: Date.now(),
-      lastScanCompletedAt: Date.now(),
-      lastScanError: null
-    }
-  }
-}
-
-async function writeResumableFixture(): Promise<ClaudeUsagePersistedFile> {
-  await writeFile(
-    transcript,
-    `${JSON.stringify({ type: 'user', text: 'x'.repeat(20_000) })}\n${assistantRow(0)}`
-  )
-  return project()
-}
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'orca-claude-checkpoint-persistence-'))
-  transcript = join(directory, 'session.jsonl')
-  getPath.mockReturnValue(directory)
-  initClaudeUsagePath()
-  vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
+  fixture = await createPersistedUsageTestFixture()
 })
 
 afterEach(async () => {
-  await rm(directory, { recursive: true, force: true })
+  await fixture.cleanup()
 })
 
-it('persists every distinct maximum within the cache byte budget and resumes an older indented cache', async () => {
+it('persists every distinct maximum within the sidecar byte budget and resumes an older indented cache', async () => {
   await writeFile(
-    transcript,
-    Array.from({ length: KEY_COUNT }, (_, index) => assistantRow(index)).join('')
+    fixture.transcript,
+    Array.from({ length: KEY_COUNT }, (_, index) => fixture.row(index)).join('')
   )
-  const initial = await project()
-  vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-    processedFiles: [initial],
-    sessions: initial.sessions,
-    dailyAggregates: initial.dailyAggregates
-  })
-  const store = new ClaudeUsageStore(backingStore)
+  const initial = await fixture.project()
+  const store = fixture.createStore()
   await store.setEnabled(true)
   await store.refresh(true)
   await store.flush()
 
-  const cachePath = join(directory, 'orca-claude-usage.json')
-  const persisted = await readFile(cachePath, 'utf8')
-  const parsed = JSON.parse(persisted)
-  expect(Buffer.byteLength(persisted)).toBeLessThan(100_000)
-  expect(parsed).toMatchObject({
-    processedFiles: [initial],
-    sessions: initial.sessions,
-    dailyAggregates: initial.dailyAggregates,
-    scanState: { enabled: true, lastScanError: null }
-  })
+  const report = JSON.parse(await readFile(fixture.reportPath, 'utf8'))
+  const sourceText = await readFile(fixture.sourceRef.path, 'utf8')
+  const sidecar = JSON.parse(sourceText)
+  expect(report.schemaVersion).toBe(7)
+  expect(report).not.toHaveProperty('processedFiles')
+  expect(report.sessions).toEqual(initial.sessions)
+  expect(Buffer.byteLength(sourceText)).toBeLessThan(100_000)
+  expect(sidecar.schemaVersion).toBe(7)
+  expect(sidecar.sources[0]?.parseResumeState).not.toHaveProperty('ownedTokenMaxima')
+  expect(sidecar.sources[0]?.parseResumeState.tokenCodecVersion).toBe(1)
+  expect(await fixture.decodedSources()).toEqual([initial])
   expect(initial.ownedDedupeKeys).toHaveLength(KEY_COUNT)
   expect(initial.parseResumeState?.ownedTokenMaxima).toHaveLength(KEY_COUNT)
 
-  await writeFile(cachePath, JSON.stringify(parsed, null, 2))
-  await appendFile(transcript, assistantRow(0, true))
-  vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementationOnce(
-    async (_worktrees, previous = []) => {
-      expect(previous).toEqual([initial])
-      const extended = await project(previous[0])
-      return {
-        processedFiles: [extended],
-        sessions: extended.sessions,
-        dailyAggregates: extended.dailyAggregates
-      }
-    }
-  )
-  const restarted = new ClaudeUsageStore(backingStore)
+  await rm(fixture.sourceRef.path)
+  await writeFile(fixture.reportPath, JSON.stringify(fixture.state([initial]), null, 2))
+  await appendFile(fixture.transcript, fixture.row(0, true))
+  const restarted = fixture.createStore()
+  await restarted.whenLoaded()
+  const migrated = JSON.parse(await readFile(fixture.sourceRef.path, 'utf8'))
+  expect(migrated.schemaVersion).toBe(7)
+  expect(migrated.sources[0]?.parseResumeState.tokenCodecVersion).toBe(1)
+  expect(await fixture.decodedSources()).toEqual([initial])
   await restarted.refresh(true)
   await restarted.flush()
 
-  const afterRestart = JSON.parse(await readFile(cachePath, 'utf8'))
-  const cold = await project()
-  expect(afterRestart).toMatchObject({
-    processedFiles: [cold],
-    sessions: cold.sessions,
-    dailyAggregates: cold.dailyAggregates,
-    scanState: { enabled: true, lastScanError: null }
-  })
+  const afterRestart = JSON.parse(await readFile(fixture.reportPath, 'utf8'))
+  const cold = await fixture.project()
+  expect(afterRestart.schemaVersion).toBe(7)
+  expect(afterRestart).not.toHaveProperty('processedFiles')
+  expect(afterRestart.sessions).toEqual(cold.sessions)
+  expect(afterRestart.dailyAggregates).toEqual(cold.dailyAggregates)
+  expect(await fixture.decodedSources()).toEqual([cold])
   expect(cold.ownedDedupeKeys).toHaveLength(KEY_COUNT)
   expect(cold.sessions[0]?.sessionId).toBe('original-session')
   expect(cold.sessions[0]?.turnCount).toBe(KEY_COUNT)
@@ -141,24 +70,27 @@ it('persists every distinct maximum within the cache byte budget and resumes an 
 })
 
 it('hides invalid saved totals until a refresh rebuilds the owner and its deferred fork', async () => {
-  const initial = await writeResumableFixture()
-  const forkPath = join(directory, 'fork.jsonl')
-  await writeFile(forkPath, await readFile(transcript, 'utf8'))
+  const initial = await fixture.writeResumable()
+  const forkPath = join(fixture.directory, 'fork.jsonl')
+  await writeFile(forkPath, await readFile(fixture.transcript, 'utf8'))
+  fixture.transcripts.push(forkPath)
   const fork = await projectClaudeUsageScanFile(
     await readClaudeUsageScanFile(forkPath),
     new Map(),
     () => false
   )
   expect(fork.hasDeferredClaims).toBe(true)
-  const state = persistedState([initial, fork])
+  const state = fixture.state([initial, fork])
   const maxima = initial.parseResumeState?.ownedTokenMaxima[0]
   if (!maxima) {
     throw new Error('Expected a resumable owner fixture.')
   }
   maxima[0]--
-  await writeFile(join(directory, 'orca-claude-usage.json'), JSON.stringify(state))
+  await writeFile(fixture.reportPath, JSON.stringify(state))
 
-  const store = new ClaudeUsageStore(backingStore)
+  const store = fixture.createStore()
+  await store.whenLoaded()
+  expect(await fixture.decodedSources()).toEqual([])
   expect(store.getSnapshot('all', 'all')).toMatchObject({
     summary: { sessions: 0, turns: 0, inputTokens: 0 },
     daily: [],
@@ -170,28 +102,21 @@ it('hides invalid saved totals until a refresh rebuilds the owner and its deferr
       lastScanError: 'Saved usage totals could not be validated. Refresh to rebuild them.'
     }
   })
-  vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementationOnce(
-    async (_worktrees, previous = []) => {
-      expect(previous).toEqual([])
-      const cold = await project()
-      return {
-        processedFiles: [cold],
-        sessions: cold.sessions,
-        dailyAggregates: cold.dailyAggregates
-      }
-    }
-  )
   await store.refresh(false)
   await store.flush()
   expect(store.getSnapshot('all', 'all')).toMatchObject({
     summary: { sessions: 1, turns: 1, inputTokens: 1000 },
     scanState: { enabled: true, hasAnyClaudeData: true, lastScanError: null }
   })
+  const rebuilt = await fixture.decodedSources()
+  expect(rebuilt).toHaveLength(2)
+  expect(rebuilt.flatMap((file) => file.ownedDedupeKeys)).toHaveLength(1)
+  expect(rebuilt.some((file) => file.hasDeferredClaims)).toBe(true)
 })
 
 it('reconstructs duplicated global totals from validated file projections on load', async () => {
-  const initial = await writeResumableFixture()
-  const state = persistedState([initial])
+  const initial = await fixture.writeResumable()
+  const state = fixture.state([initial])
   const session = state.sessions[0]
   const daily = state.dailyAggregates[0]
   if (!session || !daily) {
@@ -199,46 +124,49 @@ it('reconstructs duplicated global totals from validated file projections on loa
   }
   session.totalInputTokens++
   daily.inputTokens++
-  await writeFile(join(directory, 'orca-claude-usage.json'), JSON.stringify(state))
+  await writeFile(fixture.reportPath, JSON.stringify(state))
 
-  const store = new ClaudeUsageStore(backingStore)
+  const store = fixture.createStore()
+  await store.whenLoaded()
   expect(store.getSnapshot('all', 'all')).toMatchObject({
     summary: { sessions: 1, turns: 1, inputTokens: 1000 },
     daily: [{ inputTokens: 1000 }],
     scanState: { enabled: true, lastScanCompletedAt: state.scanState.lastScanCompletedAt }
   })
   await store.refresh(false)
-  expect(scanClaudeUsageFilesViaWorker).not.toHaveBeenCalled()
+  expect(fixture.scanWorker).not.toHaveBeenCalled()
 })
 
 it('retains both signed and older aggregate-only file totals when loading a fresh cache', async () => {
-  const initial = await writeResumableFixture()
-  const legacyPath = join(directory, 'legacy.jsonl')
-  await writeFile(legacyPath, assistantRow(1))
+  const initial = await fixture.writeResumable()
+  const legacyPath = join(fixture.directory, 'legacy.jsonl')
+  await writeFile(legacyPath, fixture.row(1))
   const legacy = await projectClaudeUsageScanFile(
     await readClaudeUsageScanFile(legacyPath),
     new Map(),
     () => true
   )
   delete legacy.parseResumeState
-  const state = persistedState([initial, legacy])
-  await writeFile(join(directory, 'orca-claude-usage.json'), JSON.stringify(state))
+  const state = fixture.state([initial, legacy])
+  await writeFile(fixture.reportPath, JSON.stringify(state))
 
-  const store = new ClaudeUsageStore(backingStore)
+  const store = fixture.createStore()
+  await store.whenLoaded()
   expect(store.getSnapshot('all', 'all')).toMatchObject({
     summary: { sessions: 1, turns: 2, inputTokens: 2001 },
     daily: [{ inputTokens: 2001 }],
     scanState: { enabled: true, lastScanCompletedAt: state.scanState.lastScanCompletedAt }
   })
+  expect(await fixture.decodedSources()).toEqual([initial, legacy])
   await store.refresh(false)
-  expect(scanClaudeUsageFilesViaWorker).not.toHaveBeenCalled()
+  expect(fixture.scanWorker).not.toHaveBeenCalled()
 })
 
 it.each(['nonArray', 'nullEntry', 'unsignedRollup'] as const)(
   'preserves tracking when malformed %s cache records cannot be validated',
   async (malformation) => {
-    const initial = await writeResumableFixture()
-    const state = persistedState([initial])
+    const initial = await fixture.writeResumable()
+    const state = fixture.state([initial])
     const malformedFiles =
       malformation === 'nonArray'
         ? null
@@ -253,11 +181,12 @@ it.each(['nonArray', 'nullEntry', 'unsignedRollup'] as const)(
               }
             ]
     await writeFile(
-      join(directory, 'orca-claude-usage.json'),
+      fixture.reportPath,
       JSON.stringify({ ...state, processedFiles: malformedFiles })
     )
 
-    const store = new ClaudeUsageStore(backingStore)
+    const store = fixture.createStore()
+    await store.whenLoaded()
     expect(store.getSnapshot('all', 'all')).toMatchObject({
       summary: { sessions: 0, turns: 0 },
       daily: [],

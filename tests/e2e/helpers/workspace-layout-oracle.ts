@@ -27,6 +27,7 @@ import {
 import { compareClientToRuntime, compareDrawnToRuntime } from './workspace-layout-oracle-compare'
 import { readClientView, readDrawnLayout, type ClientView } from './workspace-layout-oracle-views'
 import { expectedDifferences, type ExpectedLayout } from './workspace-layout-oracle-expected'
+import { checkLayoutRoundTrip } from '../../../src/shared/workspace-layout/workspace-layout-round-trip-check'
 import { checkPaneMarkers } from './workspace-layout-oracle-markers'
 import {
   installRemountCounter,
@@ -42,6 +43,7 @@ export type OracleCheck =
   | 'restart'
   | 'marker'
   | 'remount'
+  | 'roundTrip'
 export type OracleFinding = {
   check: OracleCheck
   step: string
@@ -190,6 +192,16 @@ export class LayoutOracle {
       checkWorkspaceLayoutRules(partitions, this.previous ?? undefined)
     )
     this.record('rules', label, settled)
+    // The shadow self-check: each partition loads and saves to a fixed point (Loader, Serializer).
+    this.record(
+      'roundTrip',
+      label,
+      partitions.flatMap(({ hostId, session }) =>
+        checkLayoutRoundTrip(hostId, session).findings.map(
+          (finding) => `${hostId} ${JSON.stringify(finding)}`
+        )
+      )
+    )
     const between = this.sampler.take(this.sampler.label)
     this.record(
       'rules',

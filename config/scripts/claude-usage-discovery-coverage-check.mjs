@@ -53,7 +53,7 @@ if (process.platform === 'win32' || process.getuid?.() === 0) {
     )
     const baseline = await readClaudeUsageBenchmarkBaselineSources()
     const loaded = await Promise.all([
-      loadClaudeUsageBenchmarkScanner(home, baseline.sources),
+      loadClaudeUsageBenchmarkScanner(home, baseline.sources, new Map(), baseline.baselineCommit),
       loadClaudeUsageBenchmarkScanner(home)
     ])
     const arms = {}

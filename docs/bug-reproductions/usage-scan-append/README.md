@@ -16,11 +16,13 @@ ORCA_BACKGROUND_LAUNCH=1 ORCA_CLAUDE_USAGE_APPEND_BENCH_ROUNDS=8 ORCA_CLAUDE_USA
 
 Run the timing benchmark while builds, test suites and other benchmarks are idle. It uses temporary transcript directories and loads the actual scanner through an esbuild bundle. Account/profile discovery is isolated; transcript reads remain real. The I/O wrapper records stream bytes and descriptor window reads without counting descriptor stream internals twice. Its accounting smoke check verifies one complete file read plus an eleven-byte descriptor read. Unaccounted `readFile` and `readv` APIs fail the benchmark.
 
-The comparison pins one baseline commit and overlays named Claude source modules from that commit. Both arms use frozen shared source and identical fixture shapes. Arm order alternates across rounds; each round records scanner-cache-cold, unchanged, append and fresh-after-append phases. “Cold” describes the scanner cache: newly written fixtures can already be in the operating system page cache. Raw samples include read counts, bytes, scanner duration, cache serialization duration, serialized state bytes, source hashes and environment. Separate scanner and serialization values prevent a cursor from merely moving work into persistence.
+The current comparison loader pins every project dependency to its named baseline commit and freezes the current source graph. The historical comparison below overlaid named Claude modules; the original scanner's five-module graph came entirely from the original commit. Fixtures are identical across arms. Arm order alternates across rounds; each round records scanner-cache-cold, unchanged, append and fresh-after-append phases. “Cold” describes the scanner cache: newly written fixtures can already be in the operating system page cache. Raw samples include read counts, bytes, scanner duration, cache serialization duration, serialized state bytes, source hashes and environment. Separate scanner and serialization values prevent a cursor from merely moving work into persistence.
 
 The fixture set includes one thousand small transcripts; two and thirty-two MiB of UTF-8 user/tool output with the same 256 usage keys; and thirty-two MiB with 4,096 and 16,384 usage keys. Every appended result must match a fresh scan of the same bytes. Across baseline/current arms, additive checkpoint and generation metadata are excluded from behavioral comparisons; sessions, daily aggregates, per-file aggregates, line counts and owned keys are compared.
 
-## Controlled results
+## Initial controlled results
+
+This comparison records the original append fix before the later protected source-sidecar and column-storage refinement. Its source hashes and raw samples remain unchanged; the later persistence measurements below use their own complete source graphs.
 
 The final [comparison.jsonl](./comparison.jsonl) contains eight counterbalanced rounds per scenario on Node v24.20.0, macOS arm64, Apple M4 Max. Baseline is commit `51e7181850b022bae2d41091fe1229accef4bd50`. Each arm ran first four times. No builds, tests, app or competing benchmark ran during the measurement. All eleven recorded current runtime-source hashes and four tool hashes were checked against the frozen worktree after the run. Exact within-arm cold parity, cross-arm behavioral parity and byte budgets passed.
 
@@ -65,7 +67,7 @@ The persisted encounter order preserves cold-scan sorting when a token update cr
 
 Cached cross-file ownership is retained while a changed owner is being read. Once that read validates, actual deleted or dropped keys are released and deferred forks reclaim them. A small owner's ordinary append therefore does not force every unchanged deferred fork to reread its history. Deletion, truncation and replacement that actually lose an owned key still recover that history from a surviving fork.
 
-Generation metadata is stored independently of a resumable checkpoint, including for small files and parseable partial tails. Same-size replacement with a restored modification time is invalidated by physical identity; same-size in-place change with a restored modification time is invalidated by change time where available. Old cache entries lacking this metadata are cold-scanned once, then use unchanged zero-read reuse. Optional fields preserve the persisted schema: missing or unrecognized incremental state falls back to a full parse without discarding tracking preferences.
+Generation metadata is stored independently of a resumable checkpoint, including for small files and parseable partial tails. Same-size replacement with a restored modification time is invalidated by physical identity; same-size in-place change with a restored modification time is invalidated by change time where available. Old cache entries lacking this metadata are cold-scanned once, then use unchanged zero-read reuse. Missing or unrecognized incremental state falls back to a full parse without discarding tracking preferences.
 
 Resume state is validated at the boundary. It checks key coverage, compact tuple shape, finite token values, projection indexes and routing, and full session/location encounter-order coverage. Malformed state falls back to a cold scan instead of losing rows, double counting repeated keys or throwing during a correction.
 
@@ -73,11 +75,57 @@ Resume state is validated at the boundary. It checks key coverage, compact tuple
 
 The first implementation repeated each key and its full routing metadata in an owned-turn map. The isolated pre-normalization run measured 6,203,025 serialized bytes at 16,384 usage keys, with 4.306 ms spent serializing one appended scan. That exposed a second cost before finalizing the fix.
 
-The normalized state reuses the existing ordered `ownedDedupeKeys` array. Parallel tuples store five maxima and a routing index; session/day/model/location routes are interned once. Tuple order comes from the same insertion-ordered map as the key array. Existing-key updates retain their positions; new keys append. Tests include reversed suffix key order and JSON persistence between updates. Named objects remain inside the implementation; the compact positional format is confined to its checked persistence codec.
+The normalized state reuses the existing ordered `ownedDedupeKeys` array. Parallel tuples store five maxima and a routing index; session/day/model/location routes are interned once. Existing-key updates retain their positions; new keys append. Tests include reversed suffix key order and JSON persistence between updates. Appends now use the tuples directly, replacing only corrected rows and sharing unchanged rows without mutating prior state. This removes the historical owned-turn object hydration and full tuple re-encoding pass.
 
 Transcript-payload growth no longer determines append reads. Hydration, key validation, aggregate cloning and serialization still scale with the number of owned usage keys and rollups. The benchmark reports these costs rather than claiming constant total time or constant retained state. It also reports the small-file verification overhead rather than hiding it in a large-file average.
 
 `pre-normalization.jsonl` retains the earlier same-source measurement that motivated the compact codec. It is not the final baseline/current timing comparison; source and method changes prevent treating those separate runs as controlled timing evidence.
+
+## Protected worker cache and visible report
+
+The final implementation reuses upstream's worker-owned source sidecar and `whenLoaded` barrier. Per-file ownership, token maxima and checkpoint routes stay on the usage worker; main retains the session/day report. The disk codec packs each of six token columns as one scalar when all values match, or an exact dense column otherwise. It changes no worker or public usage-report shape, keeps every key and maximum, and serializes one file's columns at a time.
+
+Unchanged refreshes retain the sidecar only after verified schema 7, clean normalization and identical file count, order and references. Any change, repair or legacy upgrade writes a new source generation. Report completion and report persistence still run.
+
+Schema 7 source files and reports have separate SHA-256 guards over their exact JSON bytes. The source guard includes small files that have no resumable checkpoint. The worker verifies its source bytes before granting a request-local reuse proof; direct scanner callers and genuine older signed files still pass the coupled key/maxima/route/rollup validation. A malformed owner also invalidates deferred forks so the next scan can reclaim copied history. The checksum detects accidental drift; it does not authenticate a cache deliberately changed and re-sealed by another writer.
+
+The report is authoritative for startup independently of the sidecar. A failed source write may leave an older sidecar, and a crash before report commit may leave a newer sidecar. Neither case replaces displayed report totals with another generation's totals. Legacy inline migration verifies protected files and reconstructs its report before splitting; invalid projections clear all visible totals and completion rather than presenting a partial history. An existing compatible newer sidecar survives a repeated migration after a failed report write.
+
+Genuine unsigned schema 6 reports remain readable with their existing cache-trust policy until a successful source scan creates schema 7. Older signed tuple checkpoints migrate through their original coupled guard. Schema 7 requires valid integrity framing, including when a digest is removed. Downgrading to a schema 6 app causes a one-time cold rebuild while preserving tracking preferences.
+
+Small reports keep upstream's synchronous load. Reports above its eight-MiB threshold use the existing worker operation; the verification fact is attached to the exact returned report text, so main does not hash those bytes again. Main still parses and serializes its visible rollups. If the worker is unavailable, `whenLoaded` covers the exceptional inline validation on main, including disabled cached history. Preference writes preserve that original inline source generation until a successful scan, and shutdown still drains writes after a failed preference write. This fallback can be slower, but does not retain the historical source graph in main.
+
+Source-cache parsing, column decoding, key indexing, rollup cloning and durable sidecar writes still scale with cached history. The refinement moves this work off main and removes redundant representations; it does not claim constant total refresh time, bounded history, or universal detection of transcript rewrites.
+
+## Final Claude persistence measurements
+
+The [final evidence receipt](./claude-resource-evidence-receipt.json) verifies every captured production dependency, tool and artifact. [Detailed costs and limits](./hardening-summary.md) distinguish the original commit, published PR, merged upstream main and final worktree. The final timing drivers use six counterbalanced rounds with complete pinned source graphs and actual source-cache read/verification/decoding, scanning and durable source/report writes. Worker startup, IPC transport/queueing, telemetry, worktree discovery and rendering are excluded.
+
+| Owned keys / phase          | Published PR | Upstream main |      Final |
+| --------------------------- | -----------: | ------------: | ---------: |
+| 16,384 repeated / cold      |    72.455 ms |     61.117 ms |  83.160 ms |
+| 16,384 repeated / unchanged |    13.106 ms |     21.844 ms |  12.290 ms |
+| 16,384 repeated / append    |    28.000 ms |     61.131 ms |  28.876 ms |
+| 100,000 unique / cold       |   385.203 ms |    265.264 ms | 390.682 ms |
+| 100,000 unique / unchanged  |    34.915 ms |     36.950 ms |  30.662 ms |
+| 100,000 unique / append     |   128.631 ms |    267.204 ms |  84.152 ms |
+
+The [16k](./claude-persistence-cost-final-16k.json) and [100k](./claude-persistence-cost-final-100k.json) measurements retain every sample. Each unchanged final scan writes zero source-cache bytes, while still reading 471,838 or 6,126,038 source bytes and persisting a small report. At 100k, appended transcript reads fall from 47,323,259 to 25,030 bytes; including the source sidecar, total logical payload reads fall from approximately 50,303,147 to 6,151,068 bytes. These are measured operation costs, rather than whole-app latency or physical device I/O.
+
+The [four-arm byte check](./claude-persisted-bytes-final.json) uses actual production layouts and indentation. At 16k repeated maxima, final report plus sources take 538,876 bytes: 29.8% below the published PR, 14.1% above main and 13.2% below original source. At 100k unique maxima, final state takes 6,128,046 bytes: 3.2% below the published PR, 105.5% above main and 57.8% above original source. One ownership-key list and the six dense token/routing columns dominate that adverse case; no duplicate key list remains. Dense cold rebuilding also remains slower than main, and the 16k complete append is slightly slower than the published PR despite a faster scanner.
+
+The [readiness diagnostic](./claude-readiness-cost-final.json) retains disabled history with zero per-source records on main. Upstream's report-only startup already removes the large source graph from main, so that improvement is inherited. First legacy migration becomes ready in 94.434 ms versus main's 63.060 ms. Exceptional validation yields 293 times, but its initial legacy parse still occupies main. A separate 13.87 MB report still requires a 16.512 ms observed main parse segment, and final serialization/checksum costs 20.628 ms versus main's 16.183 ms. These observations do not establish universal latency bounds.
+
+Reproduce final evidence while other builds, tests, apps and benchmarks are idle:
+
+```sh
+ORCA_BACKGROUND_LAUNCH=1 node config/scripts/claude-usage-persistence-cost-benchmark.mjs --usage-keys 16384 --maxima-pattern repeated --rounds 6
+ORCA_BACKGROUND_LAUNCH=1 node config/scripts/claude-usage-persistence-cost-benchmark.mjs --usage-keys 100000 --maxima-pattern unique --rounds 6
+ORCA_BACKGROUND_LAUNCH=1 node config/scripts/claude-usage-readiness-cost-benchmark.mjs --usage-keys 100000 --large-report-mib 13 --rounds 6
+ORCA_BACKGROUND_LAUNCH=1 node config/scripts/claude-usage-persisted-bytes-check.mjs
+```
+
+Each tool accepts `--output`; the timing tools also accept `--published-ref` and `--main-ref`. Default immutable refs and complete provenance appear in the artifacts. Equivalent environment-variable launchers work on Windows. These macOS measurements make no Windows or SSH latency claim.
 
 ## Codex parser retained memory
 

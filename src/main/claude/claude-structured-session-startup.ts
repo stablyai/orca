@@ -25,6 +25,7 @@ import {
 } from './claude-structured-session-acquisition-options'
 import { claudeRetiredOptions } from './claude-structured-retired-model'
 import {
+  claudeResolvedCatalogListing,
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
   readClaudeFastModeFacts,
@@ -301,6 +302,8 @@ async function settleClaudeStartupSettings(
     // `started` already carried this listing to the host.
     reportedOptions: claudeStartedReportedOptions(session, readClaudeModels(facts.initialization))
       .reportedOptions,
+    // The one report of what the config resolved: the readback just applied it.
+    ...claudeResolvedCatalogListing(session, readClaudeModels(facts.initialization)),
     restoreSkippedOptions: [...session.restoreSkippedOptions],
     ...claudeRetiredOptions(session),
     optionRevision

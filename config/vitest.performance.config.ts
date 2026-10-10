@@ -9,6 +9,7 @@ const contracts = [
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts',
+  'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/jsonl-file-reader.test.ts',
   'src/main/usage/jsonl-file-snapshot.test.ts',

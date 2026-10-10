@@ -15,7 +15,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanClaudeUsageFilesViaWorker: vi.fn()
+  scanClaudeUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
@@ -94,7 +95,6 @@ describe('ClaudeUsageStore', () => {
     initClaudeUsagePath()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-      processedFiles: [],
       sessions: [],
       dailyAggregates: []
     })
@@ -693,7 +693,7 @@ describe('ClaudeUsageStore', () => {
     expect(usage.unavailableReason).toBe('scan_failed')
   })
 
-  it('adapts Claude scans to durable cache persistence', async () => {
+  it('hands Claude scans the worker-owned source cache and persists a compact report', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -705,16 +705,17 @@ describe('ClaudeUsageStore', () => {
     })
 
     await store.refresh(true)
+    await store.flush()
 
-    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [])
-    expect(
-      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8'))
-    ).toMatchObject({
-      processedFiles: [],
-      sessions: [],
-      dailyAggregates: [],
-      scanState: { enabled: true, lastScanError: null }
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], {
+      path: join(tempUserData, 'orca-claude-usage-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: false
     })
+    const persisted = readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
+    expect(persisted).not.toContain('\n')
+    expect(JSON.parse(persisted)).not.toHaveProperty('processedFiles')
   })
 
   it('joins a scan that is already in flight when the run finished before it started', async () => {
@@ -729,7 +730,6 @@ describe('ClaudeUsageStore', () => {
     })
     // Prime the worktree fingerprint so an unforced refresh can return early.
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
-      processedFiles: [],
       sessions: [],
       dailyAggregates: []
     })
@@ -750,7 +750,6 @@ describe('ClaudeUsageStore', () => {
       startScan()
       await scanFinished
       return {
-        processedFiles: [],
         sessions: [createWorktreeUsageSession(worktreeId)],
         dailyAggregates: []
       }

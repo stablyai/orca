@@ -51,8 +51,6 @@ import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
-  registerSshPtyProvider,
-  unregisterSshPtyProvider,
   getSshPtyProvider,
   getPtyIdsForConnection,
   clearPtyOwnershipForConnection,
@@ -74,12 +72,7 @@ import {
   installSshPtySourceAckPublisher,
   installSshPtySourceCancellationPublisher
 } from '../ipc/ssh-pty-output-intake-registry'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { registerSshHostProviders, retireSshHostProviders } from './ssh-host-provider-set'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
@@ -1277,9 +1270,6 @@ export class SshRelaySession {
       )
     }
     this.activePtyProviderGeneration = providerGeneration
-    registerSshPtyProvider(this.targetId, ptyProvider)
-    this.installPtyRecoveryNotifications(mux)
-
     const connection = this.requireReadyConnection()
     const createSftp =
       connection.usesSystemSshTransport?.() === true
@@ -1309,14 +1299,14 @@ export class SshRelaySession {
       },
       hostPlatform
     )
-    registerSshFilesystemProvider(this.targetId, fsProvider)
-
     const gitProvider = new SshGitProvider(
       this.targetId,
       mux,
       this.remoteCliBridgeEnv?.hostPlatform ?? null
     )
-    registerSshGitProvider(this.targetId, gitProvider)
+    // Why built first: a throw while building one must not leave the host half-registered.
+    registerSshHostProviders(this.targetId, { pty: ptyProvider, fs: fsProvider, git: gitProvider })
+    this.installPtyRecoveryNotifications(mux)
 
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
@@ -1899,18 +1889,7 @@ export class SshRelaySession {
     // Connection loss makes remote status unverifiable, not exited. Keep the last observation;
     // replay or certified process teardown will update or remove it on the execution host.
 
-    const ptyProvider = getSshPtyProvider(this.targetId)
-    if (ptyProvider && 'dispose' in ptyProvider) {
-      ;(ptyProvider as { dispose: () => void }).dispose()
-    }
-    const fsProvider = getSshFilesystemProvider(this.targetId)
-    if (fsProvider && 'dispose' in fsProvider) {
-      ;(fsProvider as { dispose: () => void }).dispose()
-    }
-
-    unregisterSshPtyProvider(this.targetId)
-    unregisterSshFilesystemProvider(this.targetId)
-    unregisterSshGitProvider(this.targetId)
+    retireSshHostProviders(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()
     this.rejectedPtyRecoveryAttempts.clear()
@@ -2806,7 +2785,7 @@ export class SshRelaySession {
           return
         }
       } else {
-        setPtyOwnership(appPtyId, this.targetId)
+        setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       }
       attachedLeaseIds.add(ptyId)
       pendingReattach.activated = true
@@ -3056,7 +3035,7 @@ export class SshRelaySession {
         this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
         return 'missing-surface'
       }
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       restorePtyIncarnation(appPtyId, incarnationId)
       this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
         tabId,
@@ -3065,7 +3044,7 @@ export class SshRelaySession {
       })
       return 'restored'
     }
-    setPtyOwnership(appPtyId, this.targetId)
+    setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     restorePtyIncarnation(appPtyId, incarnationId)
     this.runtime?.onPtySpawned(appPtyId, incarnationId, { awaitsRegistration: false })
     return 'restored'
@@ -3109,7 +3088,7 @@ export class SshRelaySession {
         return true
       }
     } else {
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     }
     args.attachedLeaseIds.add(args.ptyId)
     this.forwardReattachReplay(appPtyId, result.replay ?? '')

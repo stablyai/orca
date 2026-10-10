@@ -164,7 +164,7 @@ try {
   const currentStore = await readFile(join(ROOT, 'src/main/claude-usage/store.ts'), 'utf8')
   const frozenSources = new Map()
   const [oldScanner, currentScanner] = await Promise.all([
-    loadClaudeUsageBenchmarkScanner(home, baseline.sources),
+    loadClaudeUsageBenchmarkScanner(home, baseline.sources, new Map(), baseline.baselineCommit),
     loadClaudeUsageBenchmarkScanner(home, new Map(), frozenSources)
   ])
   const validation = await loadValidation(frozenSources)

@@ -13,6 +13,14 @@ import type {
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { NativeChatQueueSendConfirmDialog } from './NativeChatQueueSendConfirmDialog'
+import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
+
+const NO_EDIT: QueuedEditTransport = {
+  target: { kind: 'local' },
+  sessionId: 'session',
+  capable: false,
+  write: async () => ({ kind: 'dropped' })
+}
 
 const STOPPED = { reason: 'stopped' } as const
 
@@ -51,7 +59,8 @@ function renderController(
       isWorking: options.isWorking === true,
       composerScopeKey: undefined,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller only awaits mutate; the stub answers Delete's shape.
-      mutate: mutate as unknown as StructuredAgentSessionMutate
+      mutate: mutate as unknown as StructuredAgentSessionMutate,
+      editTransport: NO_EDIT
     })
   )
   return { ...view, mutate }

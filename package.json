@@ -318,6 +318,7 @@
     "remark-rehype": "11.1.2",
     "remend": "1.4.0",
     "shadcn": "^4.13.1",
+    "shiki": "4.5.0",
     "sonner": "2.0.7",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.2.4",

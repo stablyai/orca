@@ -301,7 +301,8 @@ try {
         await loadClaudeUsageBenchmarkScanner(
           home,
           name === 'baseline' ? baseline.sources : new Map(),
-          worktreeSources
+          worktreeSources,
+          name === 'baseline' ? baseline.baselineCommit : null
         )
       ])
     )

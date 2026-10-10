@@ -99,10 +99,7 @@ const mainWindow = {
 }
 
 function captureController(): {
-  listProcesses: (
-    connectionId?: string | null,
-    opts?: { deadlineMs?: number }
-  ) => Promise<PtyProcessInfo[]>
+  listProcesses: (hostId?: string, opts?: { deadlineMs?: number }) => Promise<PtyProcessInfo[]>
 } {
   handleMock.mockReset()
   onMock.mockReset()
@@ -177,7 +174,7 @@ describe('aggregate PTY process inventory', () => {
     const controller = captureController()
     const deadlineMs = Date.now() + 1200
 
-    await controller.listProcesses('conn-a', { deadlineMs })
+    await controller.listProcesses('ssh:conn-a', { deadlineMs })
 
     expect(remote.calls).toEqual([{ opts: { deadlineMs } }])
   })

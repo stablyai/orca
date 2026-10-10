@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, relative, sep } from 'node:path'
+import { dirname, extname, join, relative, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { build, version } from 'esbuild'
@@ -67,9 +67,11 @@ export async function readClaudeUsageBenchmarkBaselineSources() {
 export async function loadClaudeUsageBenchmarkScanner(
   home,
   baselineSources = new Map(),
-  worktreeSources = new Map()
+  worktreeSources = new Map(),
+  baselineCommit = null
 ) {
   const sourceFingerprints = {}
+  const { runProcessSync } = await import('./script-child-process.mjs')
   const result = await build({
     stdin: {
       contents: `export { scanClaudeUsageFiles } from './src/main/claude-usage/scanner';
@@ -87,22 +89,44 @@ export async function loadClaudeUsageBenchmarkScanner(
       {
         name: 'isolated-transcript-filesystem',
         setup(bundler) {
-          bundler.onLoad(
-            { filter: /[/\\]src[/\\]main[/\\](?:claude-usage|usage)[/\\].*\.ts$/ },
-            async (args) => {
-              if (!baselineSources.has(args.path) && !worktreeSources.has(args.path)) {
-                worktreeSources.set(args.path, readFile(args.path, 'utf8'))
-              }
-              const contents =
-                baselineSources.get(args.path) ?? (await worktreeSources.get(args.path))
-              const modulePath = relative(ROOT, args.path).split(sep).join('/')
-              sourceFingerprints[modulePath] = {
-                source: baselineSources.has(args.path) ? 'HEAD' : 'worktree',
-                sha256: createHash('sha256').update(contents).digest('hex')
-              }
-              return { contents, loader: 'ts', resolveDir: dirname(args.path) }
+          bundler.onLoad({ filter: /[/\\]src[/\\].*\.[cm]?[jt]sx?$/ }, async (args) => {
+            const modulePath = relative(ROOT, args.path).split(sep).join('/')
+            if (!modulePath.startsWith('src/')) {
+              return undefined
             }
-          )
+            if (typeof baselineCommit === 'string' && !baselineSources.has(args.path)) {
+              const pinned = runProcessSync({
+                program: 'git',
+                args: ['show', `${String(baselineCommit)}:${modulePath}`],
+                cwd: ROOT,
+                timeoutMs: 10_000,
+                maxOutputBytes: MIB,
+                env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+              })
+              assert.equal(pinned.code, 0, `Pinned source read failed: ${pinned.stderr}`)
+              assert.equal(pinned.outputTruncated, false, `Pinned source truncated: ${modulePath}`)
+              baselineSources.set(args.path, pinned.stdout)
+            }
+            if (!baselineSources.has(args.path) && !worktreeSources.has(args.path)) {
+              worktreeSources.set(args.path, readFile(args.path, 'utf8'))
+            }
+            const contents =
+              baselineSources.get(args.path) ?? (await worktreeSources.get(args.path))
+            sourceFingerprints[modulePath] = {
+              source: baselineSources.has(args.path)
+                ? (baselineCommit ?? 'baseline-map')
+                : 'worktree',
+              sha256: createHash('sha256').update(contents).digest('hex')
+            }
+            const extension = extname(args.path).slice(1)
+            const loader =
+              extension === 'tsx' || extension === 'jsx'
+                ? extension
+                : extension.endsWith('ts')
+                  ? 'ts'
+                  : 'js'
+            return { contents, loader, resolveDir: dirname(args.path) }
+          })
           bundler.onResolve(
             { filter: /^node:(fs(?:\/promises)?|os)$|^orca-benchmark-fs$/ },
             (args) => {

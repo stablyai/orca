@@ -1,73 +1,40 @@
-import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
-import type { Store } from '../persistence'
-import type { RateLimitService } from '../rate-limits/service'
+import type {
+  ClaudeAccountSignIn,
+  ClaudeRateLimitAccountsState,
+  ClaudeSignInRequest
+} from '../../shared/managed-account-types'
 import { ClaudeAccountRegistration } from './claude-account-registration'
-import { ClaudeAccountSelection } from './claude-account-selection'
 import {
-  captureClaudeAuthFromConfigDir,
-  captureClaudeAuthFromExistingConfigDir,
-  readCapturedClaudeCredentials,
-  type CapturedClaudeAuth
-} from './claude-auth-capture'
-import {
-  runClaudeCommandProcess,
-  type ClaudeCommandConfig,
-  type ClaudeCommandOptions
-} from './claude-command-process'
+  ClaudeAccountSelection,
+  type ClaudeAccountRuntime,
+  type ClaudeAccountStore,
+  type ClaudeAccountUsage
+} from './claude-account-selection'
+import { runClaudeCommandProcess } from './claude-command-process'
 import { runClaudeLoginSession } from './claude-login-session'
-import {
-  ClaudeManagedAuthStorage,
-  type ClaudeManagedAuthLocation
-} from './claude-managed-auth-storage'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
-
-export type ClaudeAccountAddTarget = {
-  runtime?: 'host' | 'wsl'
-  wslDistro?: string | null
-}
-
-export type ClaudeAccountImportOptions = ClaudeAccountAddTarget & {
-  previousLegacyCredentialsSha256?: string | null
-}
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
-  private readonly storage = new ClaudeManagedAuthStorage()
+  private pendingSignInLink: Promise<string | null> | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    store: Store,
-    rateLimits: RateLimitService,
-    private readonly runtimeAuth: ClaudeRuntimeAuthService
+    store: ClaudeAccountStore,
+    rateLimits: ClaudeAccountUsage,
+    private readonly runtimeAuth: ClaudeAccountRuntime &
+      Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
+    private readonly runLoginCommand = runClaudeCommandProcess
   ) {
-    this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth, (accountId, path) =>
-      this.safeRemoveManagedAuth(accountId, path)
-    )
+    this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth)
     this.registration = new ClaudeAccountRegistration({
       store,
       rateLimits,
       runtimeAuth,
-      selection: this.selection,
-      createManagedAuth: (accountId, target) => this.storage.create(accountId, target),
-      assertManagedAuth: (path, accountId) => this.storage.assertOwned(path, accountId),
-      removeManagedAuth: (accountId, path) => this.safeRemoveManagedAuth(accountId, path),
-      writeManagedAuth: (accountId, path, captured) =>
-        this.writeManagedAuth(accountId, path, captured),
-      writeCredentials: (accountId, path, value) =>
-        this.storage.writeCredentials(accountId, path, value),
-      writeOauth: (accountId, path, value) =>
-        this.storage.writeOauthAccount(accountId, path, value),
-      readSnapshot: (accountId, path) => this.storage.readSnapshot(accountId, path),
-      restoreCredentials: (accountId, path, snapshot) =>
-        this.storage.restoreCredentials(accountId, path, snapshot),
-      restoreOauth: (accountId, path, snapshot) =>
-        this.storage.restoreOauth(accountId, path, snapshot),
-      login: (location) => this.runClaudeLoginAndCapture(location),
-      captureExisting: (configDir, previousDigest) =>
-        this.captureFromExistingConfigDir(configDir, previousDigest)
+      selection: this.selection
     })
   }
 
@@ -75,34 +42,56 @@ export class ClaudeAccountService {
     return this.selection.list()
   }
 
-  async addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState> {
-    this.supersedePendingLogin()
-    return this.serializeMutation(() => this.registration.add(target))
-  }
-
-  async addAccountFromConfigDir(
-    configDir: string,
-    options?: ClaudeAccountImportOptions
+  /** A hidden `claude auth login` opens the browser and writes into the new account's folder. */
+  addAccount(
+    target: ClaudeAccountSelectionTarget = {},
+    copyLink = false
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.registration.addFromConfigDir(configDir, options))
+    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro }, copyLink)
   }
 
-  async reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    this.supersedePendingLogin()
-    return this.serializeMutation(() => this.registration.reauthenticate(accountId))
+  reauthenticateAccount(
+    accountId: string,
+    copyLink = false
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.signInHidden({ accountId }, copyLink)
   }
 
-  async removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+  /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */
+  waitForSignInLink(): Promise<string | null> {
+    return this.pendingSignInLink ?? Promise.resolve(null)
+  }
+
+  cancelPendingLogin(): boolean {
+    return this.cancelPendingClaudeLogin?.() ?? false
+  }
+
+  beginSignIn(request: ClaudeSignInRequest = {}): Promise<ClaudeAccountSignIn> {
+    return this.serializeMutation(() => this.registration.begin(request))
+  }
+
+  finishSignIn(
+    signIn: Omit<ClaudeAccountSignIn, 'configDir'>
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.serializeMutation(() => this.registration.finish(signIn))
+  }
+
+  /** Deletes the folder of a sign-in that never became an account; a saved account's is kept. */
+  cancelSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
+    return this.serializeMutation(() => this.registration.cancel(signIn))
+  }
+
+  removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.remove(accountId))
   }
 
-  async selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
+  selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId))
   }
 
-  async selectAccountForTarget(
+  selectAccountForTarget(
     accountId: string | null,
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
@@ -110,13 +99,43 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.selection.select(accountId, target))
   }
 
-  cancelPendingLogin(): boolean {
-    return this.cancelPendingClaudeLogin?.() ?? false
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
-  // Why before the queue, not inside it: the abandoned login owns the queue slot
-  // every later account action waits for. Called from the four the user drives,
-  // never from serializeMutation, which background work also uses.
+  private signInHidden(
+    request: ClaudeSignInRequest,
+    copyLink: boolean
+  ): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    // Why set before queueing: the renderer asks for the link right after starting the sign-in.
+    const signInLink = copyLink ? Promise.withResolvers<string | null>() : null
+    this.pendingSignInLink = signInLink?.promise ?? null
+    return this.serializeMutation(async () => {
+      try {
+        return await this.registration.signIn(request, (folder) =>
+          runClaudeLoginSession(
+            folder,
+            {
+              runCommand: this.runLoginCommand,
+              setCancel: (cancel) => {
+                this.cancelPendingClaudeLogin = cancel
+              }
+            },
+            signInLink?.resolve
+          )
+        )
+      } finally {
+        signInLink?.resolve(null)
+        if (signInLink && this.pendingSignInLink === signInLink.promise) {
+          this.pendingSignInLink = null
+        }
+      }
+    })
+  }
+
+  // Why before the queue, not inside it: the abandoned login owns the queue slot every later
+  // account action waits for. Only user-driven actions supersede it.
   private supersedePendingLogin(): void {
     if (this.cancelPendingLogin()) {
       console.info(
@@ -125,91 +144,9 @@ export class ClaudeAccountService {
     }
   }
 
-  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
-    return this.runtimeAuth.getRuntimeConfigDir(target)
-  }
-
   private serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(operation, operation)
     this.mutationQueue = next.catch(() => {})
     return next
-  }
-
-  private runClaudeLoginAndCapture(
-    location: ClaudeManagedAuthLocation = {
-      managedAuthPath: '',
-      managedAuthRuntime: 'host',
-      wslDistro: null,
-      wslLinuxAuthPath: null
-    }
-  ): Promise<CapturedClaudeAuth> {
-    return runClaudeLoginSession(location, {
-      runCommand: (args, config, timeoutMs, options) =>
-        this.runClaudeCommand(args, config, timeoutMs, options),
-      capture: (configDir, status, previousLegacy) =>
-        this.captureAuthFromConfigDir(configDir, status, previousLegacy),
-      setCancel: (cancel) => {
-        this.cancelPendingClaudeLogin = cancel
-      }
-    })
-  }
-
-  private runClaudeCommand(
-    args: string[],
-    configDir: ClaudeCommandConfig,
-    timeoutMs: number,
-    options?: ClaudeCommandOptions
-  ): Promise<string> {
-    return runClaudeCommandProcess(args, configDir, timeoutMs, options)
-  }
-
-  private captureFromExistingConfigDir(
-    configDir: string,
-    previousLegacyCredentialsSha256?: string | null
-  ): Promise<CapturedClaudeAuth> {
-    return captureClaudeAuthFromExistingConfigDir(
-      configDir,
-      previousLegacyCredentialsSha256,
-      (args, config, timeoutMs, options) => this.runClaudeCommand(args, config, timeoutMs, options)
-    )
-  }
-
-  private captureAuthFromConfigDir(
-    configDir: string,
-    statusOutput: string,
-    previousLegacyKeychain: string | null,
-    previousLegacyCredentialsSha256?: string | null
-  ): Promise<CapturedClaudeAuth> {
-    return captureClaudeAuthFromConfigDir(
-      configDir,
-      statusOutput,
-      previousLegacyKeychain,
-      previousLegacyCredentialsSha256,
-      (path, previous, digest) => this.readCapturedCredentials(path, previous, digest)
-    )
-  }
-
-  private readCapturedCredentials(
-    configDir: string,
-    previousLegacyKeychain: string | null,
-    previousLegacyCredentialsSha256?: string | null
-  ): Promise<string | null> {
-    return readCapturedClaudeCredentials(
-      configDir,
-      previousLegacyKeychain,
-      previousLegacyCredentialsSha256
-    )
-  }
-
-  private writeManagedAuth(
-    accountId: string,
-    managedAuthPath: string,
-    captured: CapturedClaudeAuth
-  ): Promise<void> {
-    return this.storage.writeAuth(accountId, managedAuthPath, captured)
-  }
-
-  private safeRemoveManagedAuth(accountId: string, path: string): Promise<void> {
-    return this.storage.remove(accountId, path)
   }
 }

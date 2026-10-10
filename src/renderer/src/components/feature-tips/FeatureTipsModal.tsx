@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat-upgrade-tip-audience'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -34,7 +35,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const inNativeChatUpgradeTipAudience = useAppStore((s) => s.inNativeChatUpgradeTipAudience)
+  const nativeChatUpgradeTipVariant = useAppStore((s) => s.nativeChatUpgradeTipVariant)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
@@ -49,7 +50,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     modalData,
     seenTipIds,
     featureInteractions,
-    inNativeChatUpgradeTipAudience,
+    inNativeChatUpgradeTipAudience: isInNativeChatUpgradeTipAudience(nativeChatUpgradeTipVariant),
     settings,
     webClient: isWebClientLocation()
   })
@@ -300,8 +301,11 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         primaryBusy={primaryBusy}
+        variant={nativeChatUpgradeTipVariant ?? 'none'}
+        chatModeOn={settings?.experimentalNativeChat === true}
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
+        onChatModeChange={(on) => void updateSettings({ experimentalNativeChat: on })}
         onSettingsClick={openNativeChatSettings}
       />
     )

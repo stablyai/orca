@@ -17,7 +17,10 @@ import {
   mergeClaudeSessions
 } from './usage-aggregation'
 import { projectClaudeUsageScanFile } from './transcript-usage-projection'
-import { hasClaudeUsageResumeProjection } from './transcript-resume-projection'
+import {
+  normalizeClaudeUsageSourceFiles,
+  type ClaudeUsageVerifiedSources
+} from './persisted-projection-validation'
 
 const FILE_SCAN_BATCH_SIZE = 4
 
@@ -29,7 +32,8 @@ type ClaudeUsageFilePlan = {
 
 async function planClaudeUsageFile(
   filePath: string,
-  previous: ClaudeUsagePersistedFile | undefined
+  previous: ClaudeUsagePersistedFile | undefined,
+  resumable: ReadonlySet<ClaudeUsagePersistedFile>
 ): Promise<ClaudeUsageFilePlan> {
   const fileInfo = await getClaudeUsageProcessedFileStat(filePath)
   const validProjection =
@@ -49,10 +53,7 @@ async function planClaudeUsageFile(
     (!previousId || !fileInfo.physicalFileId || previousId === fileInfo.physicalFileId)
   )
   const resume =
-    !reusable &&
-    validProjection &&
-    fileInfo.size > previous.size &&
-    hasClaudeUsageResumeProjection(previous)
+    !reusable && validProjection && fileInfo.size > previous.size && resumable.has(previous)
       ? previous.parseResumeState
       : null
   return {
@@ -70,20 +71,23 @@ export async function scanClaudeUsageFiles(
   worktrees: ClaudeUsageWorktreeRef[],
   previousProcessedFiles: ClaudeUsagePersistedFile[] = [],
   onFilesScanned?: (count: number) => void,
-  profileDirs?: string[]
+  profileDirs?: string[],
+  verifiedSources?: ClaudeUsageVerifiedSources
 ): Promise<{
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
 }> {
   const files = await listClaudeTranscriptFiles(profileDirs)
+  const normalized = normalizeClaudeUsageSourceFiles(previousProcessedFiles, verifiedSources)
+  previousProcessedFiles = normalized.processedFiles
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const worktreeLookup = await buildWorktreeLookup(worktrees)
   const plans = new Map<string, ClaudeUsageFilePlan>()
   for (let index = 0; index < files.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = files.slice(index, index + FILE_SCAN_BATCH_SIZE)
     const batchPlans = await Promise.all(
-      batch.map((path) => planClaudeUsageFile(path, previousByPath.get(path)))
+      batch.map((path) => planClaudeUsageFile(path, previousByPath.get(path), normalized.resumable))
     )
     for (const [offset, plan] of batchPlans.entries()) {
       plans.set(batch[offset], plan)

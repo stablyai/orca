@@ -2,8 +2,11 @@ import { createHash } from 'node:crypto'
 import type { ClaudeUsagePersistedFile } from './types'
 
 const HASH_CHUNK_CHARACTERS = 16_384
+export const CLAUDE_USAGE_VALIDATION_BATCH_ROWS = 1024
 
-export function buildClaudeUsageProjectionIntegrity(file: ClaudeUsagePersistedFile): string {
+export function* iterateClaudeUsageProjectionIntegrity(
+  file: ClaudeUsagePersistedFile
+): Generator<void, string> {
   const state = file.parseResumeState
   if (!state) {
     throw new Error('Claude usage projection integrity requires a resume checkpoint.')
@@ -50,7 +53,11 @@ export function buildClaudeUsageProjectionIntegrity(file: ClaudeUsagePersistedFi
   ])
   for (let index = 0; index < file.ownedDedupeKeys.length; index++) {
     append([file.ownedDedupeKeys[index], state.ownedTokenMaxima[index]])
+    if ((index + 1) % CLAUDE_USAGE_VALIDATION_BATCH_ROWS === 0) {
+      yield
+    }
   }
+  let checkedRecords = 0
   for (const records of [
     state.projections,
     state.encounterOrder,
@@ -60,8 +67,21 @@ export function buildClaudeUsageProjectionIntegrity(file: ClaudeUsagePersistedFi
     append(records.length)
     for (const record of records) {
       append(record)
+      if (++checkedRecords % CLAUDE_USAGE_VALIDATION_BATCH_ROWS === 0) {
+        yield
+      }
     }
   }
   flush()
   return hash.digest('hex')
+}
+
+export function buildClaudeUsageProjectionIntegrity(file: ClaudeUsagePersistedFile): string {
+  const iterator = iterateClaudeUsageProjectionIntegrity(file)
+  while (true) {
+    const next = iterator.next()
+    if (next.done) {
+      return next.value
+    }
+  }
 }

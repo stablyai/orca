@@ -1,13 +1,10 @@
 import type {
   ClaudeUsageAttributedTurn,
   ClaudeUsageDailyAggregate,
-  ClaudeUsageOwnedTurn,
   ClaudeUsagePersistedFile,
-  ClaudeUsageSession,
-  ClaudeUsageTokenTotals
+  ClaudeUsageSession
 } from './types'
 import type { ClaudeUsageParsedSourceTurn, ClaudeUsageScanFile } from './transcript-record-parser'
-import { stripClaudeSourceMetadata } from './transcript-record-parser'
 import {
   aggregateClaudeUsage,
   finalizeClaudeSessions,
@@ -16,46 +13,21 @@ import {
 } from './usage-aggregation'
 import { attributeClaudeUsageTurns, type ClaudeUsageWorktreeRef } from './worktree-attribution'
 import {
-  encodeClaudeUsageTokenCheckpoint,
-  hydrateClaudeUsageOwnedTurns
+  createClaudeUsageTokenCheckpoint,
+  type ClaudeUsageTokenCorrection
 } from './transcript-token-checkpoint'
 import { buildClaudeUsageProjectionIntegrity } from './transcript-projection-integrity'
-
-function tokenTotals(turn: ClaudeUsageTokenTotals): ClaudeUsageTokenTotals {
-  return {
-    inputTokens: turn.inputTokens,
-    outputTokens: turn.outputTokens,
-    cacheReadTokens: turn.cacheReadTokens,
-    cacheWriteTokens: turn.cacheWriteTokens,
-    cacheWrite1hTokens: turn.cacheWrite1hTokens
-  }
-}
-
-function increaseTokenMaxima(
-  previous: ClaudeUsageOwnedTurn,
-  turn: ClaudeUsageTokenTotals
-): ClaudeUsageOwnedTurn {
-  return {
-    ...previous,
-    inputTokens: Math.max(previous.inputTokens, turn.inputTokens),
-    outputTokens: Math.max(previous.outputTokens, turn.outputTokens),
-    cacheReadTokens: Math.max(previous.cacheReadTokens, turn.cacheReadTokens),
-    cacheWriteTokens: Math.max(previous.cacheWriteTokens, turn.cacheWriteTokens),
-    cacheWrite1hTokens: Math.max(previous.cacheWrite1hTokens, turn.cacheWrite1hTokens)
-  }
-}
 
 function dailyKey(day: string, model: string | null, projectKey: string): string {
   return [day, model ?? 'unknown', projectKey].join('::')
 }
 
 function applyTokenCorrection(
-  previous: ClaudeUsageOwnedTurn,
-  updated: ClaudeUsageOwnedTurn,
+  correction: ClaudeUsageTokenCorrection,
   sessions: Map<string, ClaudeUsageSession>,
   daily: Map<string, ClaudeUsageDailyAggregate>
 ): void {
-  const projection = previous.projection
+  const { previous, updated, projection } = correction
   if (!projection) {
     return
   }
@@ -67,11 +39,11 @@ function applyTokenCorrection(
   if (!session || !location || !aggregate) {
     throw new Error('Claude usage checkpoint does not match its cached projection.')
   }
-  const input = updated.inputTokens - previous.inputTokens
-  const output = updated.outputTokens - previous.outputTokens
-  const read = updated.cacheReadTokens - previous.cacheReadTokens
-  const write = updated.cacheWriteTokens - previous.cacheWriteTokens
-  const write1h = updated.cacheWrite1hTokens - previous.cacheWrite1hTokens
+  const input = updated[0] - previous[0]
+  const output = updated[1] - previous[1]
+  const read = updated[2] - previous[2]
+  const write = updated[3] - previous[3]
+  const write1h = updated[4] - previous[4]
   session.totalInputTokens += input
   session.totalOutputTokens += output
   session.totalCacheReadTokens += read
@@ -84,8 +56,7 @@ function applyTokenCorrection(
     target.cacheWriteTokens += write
     target.cacheWrite1hTokens += write1h
   }
-  aggregate.zeroCacheReadTurnCount +=
-    Number(updated.cacheReadTokens === 0) - Number(previous.cacheReadTokens === 0)
+  aggregate.zeroCacheReadTurnCount += Number(updated[2] === 0) - Number(previous[2] === 0)
 }
 
 function retainEncounterOrder(
@@ -132,7 +103,7 @@ export async function projectClaudeUsageScanFile(
   const daily = new Map<string, ClaudeUsageDailyAggregate>()
   mergeClaudeSessions(sessions, retained?.sessions ?? [])
   mergeClaudeDailyAggregates(daily, retained?.dailyAggregates ?? [])
-  const owned = hydrateClaudeUsageOwnedTurns(retained)
+  const owned = createClaudeUsageTokenCheckpoint(retained)
   const order = new Map(
     retained?.parseResumeState?.encounterOrder.map((entry) => [
       entry.sessionId,
@@ -146,29 +117,26 @@ export async function projectClaudeUsageScanFile(
       hasDeferredClaims = true
       continue
     }
-    const prior = turn.dedupeKey ? owned.get(turn.dedupeKey) : undefined
-    if (prior) {
-      const updated = increaseTokenMaxima(prior, turn)
-      applyTokenCorrection(prior, updated, sessions, daily)
-      owned.set(prior.dedupeKey, updated)
+    if (turn.dedupeKey && owned.find(turn.dedupeKey)) {
+      const correction = owned.increase(turn.dedupeKey, turn)
+      if (correction) {
+        applyTokenCorrection(correction, sessions, daily)
+      }
     } else {
       newTurns.push(turn)
     }
   }
-  const attributed = await attributeClaudeUsageTurns(
-    newTurns.map(stripClaudeSourceMetadata),
-    worktreeLookup
-  )
+  const attributed = await attributeClaudeUsageTurns(newTurns, worktreeLookup)
   let attributedIndex = 0
   for (const turn of newTurns) {
     const attribution = Number.isNaN(new Date(turn.timestamp).getTime())
       ? undefined
       : attributed[attributedIndex++]
     if (turn.dedupeKey) {
-      owned.set(turn.dedupeKey, {
-        dedupeKey: turn.dedupeKey,
-        ...tokenTotals(turn),
-        projection: attribution
+      owned.append(
+        turn.dedupeKey,
+        turn,
+        attribution
           ? {
               sessionId: attribution.sessionId,
               day: attribution.day,
@@ -176,7 +144,7 @@ export async function projectClaudeUsageScanFile(
               projectKey: attribution.projectKey
             }
           : null
-      })
+      )
     }
   }
   const appended = aggregateClaudeUsage(attributed)
@@ -189,13 +157,13 @@ export async function projectClaudeUsageScanFile(
     dailyAggregates: [...daily.values()].sort((a, b) =>
       a.day === b.day ? a.projectLabel.localeCompare(b.projectLabel) : a.day.localeCompare(b.day)
     ),
-    ownedDedupeKeys: [...owned.keys()],
+    ownedDedupeKeys: owned.ownedDedupeKeys,
     hasDeferredClaims,
     parseResumeState: read.checkpoint
       ? {
           ...read.checkpoint,
           lineCount: read.committedLineCount,
-          ...encodeClaudeUsageTokenCheckpoint(owned),
+          ...owned.finish(),
           encounterOrder: [...order].map(([sessionId, projectKeys]) => ({ sessionId, projectKeys }))
         }
       : null
