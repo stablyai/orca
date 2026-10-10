@@ -40,6 +40,10 @@ const RELAY_TEST_IMPORTERS = [
 ]
 
 function importsRelay(file, contents) {
+  // Why: parsing every source file overruns the test timeout on a loaded runner.
+  if (!contents.includes('relay')) {
+    return false
+  }
   return collectModuleSpecifiers(file, contents).some((specifier) => {
     if (!specifier.startsWith('.')) {
       return false
