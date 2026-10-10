@@ -174,6 +174,22 @@ resource "google_cloud_run_v2_service" "relay" {
         value = data.external.relay_serving_regional_placement_version.result.cohort_percent
       }
 
+      # The director deploy owns these (shadow cells are set by hand): an apply keeps whatever the
+      # serving revision has, and adds nothing when it has none.
+      dynamic "env" {
+        for_each = {
+          for name, value in {
+            ORCA_RELAY_RESERVE_PLACEMENT      = data.external.relay_serving_regional_placement_version.result.reserve_placement
+            ORCA_RELAY_SHADOW_SEAT_FEED_CELLS = data.external.relay_serving_regional_placement_version.result.shadow_seat_feed_cells
+          } : name => value if value != ""
+        }
+
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       ports {
         container_port = 8080
       }

@@ -15,18 +15,26 @@ on:
         description: Exact cell id, e.g. production-gce-c26
         required: true
         type: string
-      readiness-local:
-        description: /ready answers from the cell alone (local readiness)
+      break-glass:
+        description: >-
+          Only for a dead or unreachable reserve cell, with set admitMode=default. Typed as
+          BREAK GLASS <cell-id>; records db without the cell's read-back
+        required: false
+        default: ''
+        type: string
+      confirm-reserve:
+        description: Required for admitMode=reserve, typed as RESERVE <cell-id>
+        required: false
+        default: ''
+        type: string
+      set:
+        description: >-
+          Switches to change, e.g. readinessLocal=true,admitMode=reserve (key=default removes a
+          key). Every other switch keeps its current value. Known: readinessLocal, ticketCheck,
+          admitMode, intakePerSec, reserveDryRun, rejectionFence, readTimeoutMarginMs,
+          reregisterInFlight
         required: true
-        default: 'false'
-        type: choice
-        options: ['false', 'true']
-      ticket-check:
-        description: Shadow-check the director's assignment lease on host hellos
-        required: true
-        default: 'off'
-        type: choice
-        options: ['off', 'shadow']
+        type: string
       expected-generation:
         description: Exact current object generation from a dry run, or 0 if none exists
         required: true
@@ -55,15 +63,17 @@ jobs:
   operate:
     if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A flip back waits for the cell to lease every control: 8-50 minutes, scaled to its controls.
+    timeout-minutes: 60
     environment: production
     env:
       MODE: ${{ inputs.mode }}
       CELL_ID: ${{ inputs.cell-id }}
-      READINESS_LOCAL: ${{ inputs.readiness-local }}
-      TICKET_CHECK: ${{ inputs.ticket-check }}
+      FLAG_CHANGES: ${{ inputs.set }}
       EXPECTED_GENERATION: ${{ inputs.expected-generation }}
       CONFIRMATION: ${{ inputs.confirmation }}
+      CONFIRM_RESERVE: ${{ inputs.confirm-reserve }}
+      BREAK_GLASS: ${{ inputs.break-glass }}
       GCP_PROJECT_ID: onorca-cloud
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +105,9 @@ jobs:
             --mode "${MODE}" --cell-id "${CELL_ID}" \
             --cell-origin "https://${CELL_ID#production-gce-}.relay.onorca.dev" \
             --project-id "${GCP_PROJECT_ID}" \
-            --readiness-local "${READINESS_LOCAL}" --ticket-check "${TICKET_CHECK}" \
+            --set "${FLAG_CHANGES}" \
+            --director-origin "https://relay.onorca.dev" --confirm-reserve "${CONFIRM_RESERVE}" \
+            --break-glass "${BREAK_GLASS}" \
             --expected-generation "${EXPECTED_GENERATION}" --confirmation "${CONFIRMATION}" \
             | tee "${RUNNER_TEMP}/relay-cell-flags.jsonl"
 

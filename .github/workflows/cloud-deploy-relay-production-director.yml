@@ -18,6 +18,17 @@ on:
         required: true
         default: preserve
         type: string
+      reserve-placement:
+        description: Preserve step-5 reserve placement, or set it; turning it off is refused while any cell is reserve
+        required: true
+        default: preserve
+        type: choice
+        options: [preserve, 'off', dry-run, 'on']
+      shadow-seat-feed-cells:
+        description: Preserve the step-3 shadow seat-feed cells, or set all or a comma list of cell ids; dropping a reserve cell is refused
+        required: true
+        default: preserve
+        type: string
       prune-incompatible-revisions:
         description: Retain only the newly verified serving and rollback revisions
         required: true
@@ -68,6 +79,8 @@ jobs:
       IMAGE_DIGEST: ${{ inputs.image-digest }}
       REGIONAL_PLACEMENT_MODE: ${{ inputs.regional-placement-mode }}
       REGION_CORRECTION_COHORT_PERCENT: ${{ inputs.region-correction-cohort-percent }}
+      RESERVE_PLACEMENT: ${{ inputs.reserve-placement }}
+      SHADOW_SEAT_FEED_CELLS: ${{ inputs.shadow-seat-feed-cells }}
       PRUNE_INCOMPATIBLE_REVISIONS: ${{ inputs.prune-incompatible-revisions }}
       # Floor the served revision must keep, matching relay_min_instances in
       # environments/production.tfvars. This gate only fails a bad deploy; Terraform
@@ -228,7 +241,9 @@ jobs:
             --prune-revisions "${PRUNE_INCOMPATIBLE_REVISIONS}" \
             --release-id "${RELEASE_ID}" \
             --regional-placement-secret-version "${target_version}" \
-            --region-correction-cohort-percent "${REGION_CORRECTION_COHORT_PERCENT}"
+            --region-correction-cohort-percent "${REGION_CORRECTION_COHORT_PERCENT}" \
+            --reserve-placement "${RESERVE_PLACEMENT}" \
+            --shadow-seat-feed-cells "${SHADOW_SEAT_FEED_CELLS}"
           echo "REGIONAL_PLACEMENT_ENABLED=${desired}" >> "${GITHUB_ENV}"
           echo "REGIONAL_PLACEMENT_VERSION=${target_version}" >> "${GITHUB_ENV}"
 

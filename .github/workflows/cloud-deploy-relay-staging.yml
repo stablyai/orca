@@ -7,6 +7,17 @@ on:
         description: Exact checked-in production Relay sha256 digest to deploy
         required: true
         type: string
+      reserve-placement:
+        description: Preserve step-5 reserve placement, or set it; turning it off is refused while any cell is reserve
+        required: true
+        default: preserve
+        type: choice
+        options: [preserve, 'off', dry-run, 'on']
+      shadow-seat-feed-cells:
+        description: Preserve the step-3 shadow seat-feed cells, or set all or a comma list of cell ids; dropping a reserve cell is refused
+        required: true
+        default: preserve
+        type: string
 
 permissions:
   contents: read
@@ -87,6 +98,11 @@ jobs:
           test "${DIGEST}" = "${EXPECTED_IMAGE_DIGEST}"
 
       - name: Deploy director blue/green
+        env:
+          # An image change reads every cell's admit mode before the traffic move.
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+          RESERVE_PLACEMENT: ${{ inputs.reserve-placement }}
+          SHADOW_SEAT_FEED_CELLS: ${{ inputs.shadow-seat-feed-cells }}
         run: |
           regional_version="$(gcloud secrets versions describe latest \
             --project "${GCP_PROJECT_ID}" --secret "${REGIONAL_PLACEMENT_SECRET}" \
@@ -104,6 +120,9 @@ jobs:
             --asia-proof-service-account "${ASIA_PROOF_SERVICE_ACCOUNT}" \
             --regional-placement-secret-version "${regional_version}" \
             --min-instances 0 \
+            --admin-audience https://relay-staging.onorca.dev/v1/admin/drain \
+            --reserve-placement "${RESERVE_PLACEMENT}" \
+            --shadow-seat-feed-cells "${SHADOW_SEAT_FEED_CELLS}" \
             --release-id "${RELEASE_ID}"
 
       - name: Smoke director health
