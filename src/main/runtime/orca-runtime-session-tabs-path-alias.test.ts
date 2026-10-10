@@ -2,6 +2,7 @@ import './rpc/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { toAppSshPtyId } from '../../shared/ssh-pty-id'
+import { toRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -21,7 +22,11 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const TAB = `tab::${LEAF}`
 
 /** Uses stable tab and leaf IDs so both path spellings must recover the same terminal. */
-function snapshot(worktree = WORKTREE, ptyId = 'pty-existing'): RuntimeMobileSessionTabsSnapshot {
+function snapshot(
+  worktree = WORKTREE,
+  ptyId = 'pty-existing',
+  binding: 'direct' | 'layout' = 'direct'
+): RuntimeMobileSessionTabsSnapshot {
   return {
     worktree,
     publicationEpoch: 'renderer',
@@ -35,7 +40,17 @@ function snapshot(worktree = WORKTREE, ptyId = 'pty-existing'): RuntimeMobileSes
         id: TAB,
         parentTabId: 'tab',
         leafId: LEAF,
-        ptyId,
+        ptyId: binding === 'layout' ? null : ptyId,
+        ...(binding === 'layout'
+          ? {
+              parentLayout: {
+                root: { type: 'leaf' as const, leafId: LEAF },
+                activeLeafId: LEAF,
+                expandedLeafId: null,
+                ptyIdsByLeafId: { [LEAF]: ptyId }
+              }
+            }
+          : {}),
         title: 'Existing conversation',
         isActive: true
       }
@@ -59,7 +74,8 @@ function publishGraph(
   runtime: OrcaRuntimeService,
   worktree = WORKTREE,
   additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = [],
-  ptyId = 'pty-existing'
+  ptyId = 'pty-existing',
+  binding: 'direct' | 'layout' = 'direct'
 ): void {
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -81,7 +97,7 @@ function publishGraph(
         paneTitle: 'Existing conversation'
       }
     ],
-    mobileSessionTabs: [snapshot(worktree, ptyId), ...additionalSnapshots]
+    mobileSessionTabs: [snapshot(worktree, ptyId, binding), ...additionalSnapshots]
   })
 }
 
@@ -93,10 +109,12 @@ describe('session tab workspace path aliases', () => {
       { connectionId: 'ssh-host', ptyConnectionId: 'other-ssh-host', ownsSession: false },
       { connectionId: undefined, ptyConnectionId: undefined, ownsSession: true },
       { connectionId: 'ssh-host', ptyConnectionId: 'ssh-host', ownsSession: true }
-    ].flatMap((entry) => [true, false].map((published) => ({ ...entry, published })))
+    ].flatMap((entry) =>
+      (['direct', 'layout', 'unpublished'] as const).map((binding) => ({ ...entry, binding }))
+    )
   )(
     'keeps live alias adoption within the execution host: %j',
-    async ({ connectionId, ptyConnectionId, ownsSession, published }) => {
+    async ({ connectionId, ptyConnectionId, ownsSession, binding }) => {
       const repo = { id: 'repo', path: 'G:\\git\\example', connectionId }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture only needs the registered repository's execution host.
       const runtime = new OrcaRuntimeService({
@@ -108,8 +126,8 @@ describe('session tab workspace path aliases', () => {
         ? toAppSshPtyId(ptyConnectionId, 'pty-existing')
         : 'pty-existing'
       runtime.registerPty(ptyId, WORKTREE, ptyConnectionId ?? null, { tabId: 'tab', leafId: LEAF })
-      if (published) {
-        publishGraph(runtime, WORKTREE, [], ptyId)
+      if (binding !== 'unpublished') {
+        publishGraph(runtime, WORKTREE, [], ptyId, binding)
       } else {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: model a surviving renderer-owned PTY before its graph has arrived.
         const ownership = runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
@@ -119,7 +137,62 @@ describe('session tab workspace path aliases', () => {
       if (ownsSession) {
         const listed = await runtime.listMobileSessionTabs(`id:${ALIAS}`)
         expect(listed.worktree).toBe(WORKTREE)
-        expect(listed.tabs).toContainEqual(expect.objectContaining({ ptyId }))
+        expect(listed.tabs).toContainEqual(
+          expect.objectContaining({
+            id: TAB,
+            ...(binding === 'layout'
+              ? { parentLayout: expect.objectContaining({ ptyIdsByLeafId: { [LEAF]: ptyId } }) }
+              : { ptyId })
+          })
+        )
+      } else {
+        await expect(runtime.listMobileSessionTabs(`id:${ALIAS}`)).rejects.toThrow(
+          'worktree_execution_host_unresolved'
+        )
+        await expect(runtime.activateMobileSessionTab(`id:${ALIAS}`, TAB)).rejects.toThrow(
+          'worktree_execution_host_unresolved'
+        )
+      }
+    }
+  )
+
+  it.each(
+    [
+      { ptyId: toRemoteRuntimePtyId('term_1', 'env-a'), ownsSession: true },
+      { ptyId: toRemoteRuntimePtyId('term_1', 'env-b'), ownsSession: false },
+      { ptyId: toAppSshPtyId('nested-target', 'pty-1'), ownsSession: false },
+      { ptyId: toAppSshPtyId('other-target', 'pty-1'), ownsSession: false },
+      { ptyId: 'term_1', ownsSession: true }
+    ].flatMap((entry) =>
+      (['direct', 'layout', 'unpublished'] as const).map((binding) => ({ ...entry, binding }))
+    )
+  )(
+    'keeps runtime aliases in the owning environment without trusting nested SSH names: %j',
+    async ({ ptyId, ownsSession, binding }) => {
+      const repo = {
+        id: 'repo',
+        path: 'G:\\git\\example',
+        executionHostId: 'runtime:env-a',
+        connectionId: 'nested-target'
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the runtime-owned repo row; no remote services are called.
+      const runtime = new OrcaRuntimeService({
+        getRepo: () => repo,
+        getRepos: () => [repo]
+      } as never)
+      runtime.attachWindow(1)
+      runtime.registerPty(ptyId, WORKTREE, null, { tabId: 'tab', leafId: LEAF })
+      if (binding !== 'unpublished') {
+        publishGraph(runtime, WORKTREE, [], ptyId, binding)
+      } else {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercise the existing surviving-renderer path before a graph publication.
+        const ownership = runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
+        ownership.pairedRendererSessionOwnedPtyIds.add(ptyId)
+      }
+      if (ownsSession) {
+        const listed = await runtime.listMobileSessionTabs(`id:${ALIAS}`)
+        expect(listed.worktree).toBe(WORKTREE)
+        expect(listed.tabs).toContainEqual(expect.objectContaining({ id: TAB }))
       } else {
         await expect(runtime.listMobileSessionTabs(`id:${ALIAS}`)).rejects.toThrow(
           'worktree_execution_host_unresolved'

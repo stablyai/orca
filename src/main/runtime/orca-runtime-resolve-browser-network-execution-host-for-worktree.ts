@@ -273,11 +273,15 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     if (owner.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
-    if (owner.kind === 'resolved' && parseExecutionHostId(owner.hostId)?.kind !== 'runtime') {
+    if (owner.kind === 'resolved') {
+      const ownerIsRuntime = parseExecutionHostId(owner.hostId)?.kind === 'runtime'
       const ptyIds = new Set<string>()
       for (const tab of this.mobileSessionTabsByWorktree.get(matchedId)?.tabs ?? []) {
-        if (tab.type === 'terminal' && tab.ptyId) {
-          ptyIds.add(tab.ptyId)
+        if (tab.type === 'terminal') {
+          const ptyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]
+          if (ptyId) {
+            ptyIds.add(ptyId)
+          }
         }
       }
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
@@ -290,7 +294,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
         const pty = this.ptysById.get(ptyId)
         const hostId =
           getPtyExecutionHost(ptyId) ??
-          (pty ? getConnectionExecutionHostId(pty.connectionId) : null)
+          (pty && !ownerIsRuntime ? getConnectionExecutionHostId(pty.connectionId) : null)
         // Why: returning the raw alias after a conflict lets PTY rescue adopt the foreign terminal.
         if (hostId && hostId !== 'foreign' && hostId !== owner.hostId) {
           throw new Error('worktree_execution_host_unresolved')
