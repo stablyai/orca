@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
@@ -19,7 +20,6 @@ import {
   installTerminalCapabilityReplyHandlers
 } from '../terminal-capability-replies'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 import { buildPaneTransportOptions } from './pane-transport-options'
 import { buffersInputOnlyForSshReattach } from './ssh-reattach-input-buffering'

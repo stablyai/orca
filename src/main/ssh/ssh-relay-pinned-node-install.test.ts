@@ -117,7 +117,7 @@ describe('ensurePinnedRelayRuntime', () => {
     vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.31')
     await expect(
       planPinnedNodeRelay({ conn, host, baseVersion: '0.1.0+abc', targetId: 'target-1' })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'noexec', remembered: true })
+    ).rejects.toMatchObject({ reason: 'noexec', remembered: true })
   })
 
   it("steps down when NixOS's stub loader refuses the generic Linux runtime", async () => {
@@ -222,14 +222,15 @@ describe('verifyPinnedRelayInstall', () => {
     expect(withRuntimeStoreLock).not.toHaveBeenCalled()
     // A host Node refusal says nothing about Orca's pinned Node on this host.
     vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.31')
-    const next = await planPinnedNodeRelay({
-      conn,
-      host,
-      baseVersion: '0.1.0+abcdef012345',
-      targetId: 'target-1',
-      materializeOrcad: () => Promise.reject(new Error('stop here'))
-    })
-    expect(next).toMatchObject({ fallbackReason: 'artifacts_unavailable' })
+    await expect(
+      planPinnedNodeRelay({
+        conn,
+        host,
+        baseVersion: '0.1.0+abcdef012345',
+        targetId: 'target-1',
+        materializeOrcad: () => Promise.reject(new Error('stop here'))
+      })
+    ).rejects.toMatchObject({ reason: 'artifacts_unavailable', remembered: false })
   })
 
   it('falls back on a refusal', async () => {
@@ -314,7 +315,7 @@ describe('pinned relay on a Windows host', () => {
         baseVersion: '0.1.0+abc',
         targetId: 'target-1'
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'security_software', remembered: true })
+    ).rejects.toMatchObject({ reason: 'security_software', remembered: true })
   })
 
   it('classifies application control blocking node.exe as a refusal', async () => {

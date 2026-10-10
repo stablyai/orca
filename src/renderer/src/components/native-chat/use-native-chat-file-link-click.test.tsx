@@ -59,7 +59,8 @@ function Transcript(props: {
       variant="document"
       onLinkClick={onLinkClick}
       allowFileUriLinks
-      linkifyFilePaths
+      // The click path is under test; which paths get underlined is covered elsewhere.
+      fileLinkExists={() => true}
     />
   )
 }
@@ -263,7 +264,7 @@ describe('tool and edit-card file activation', () => {
 })
 
 describe('useNativeChatFileLinkClick', () => {
-  it('does not underline a bare file name the click could not open', () => {
+  it('does not underline a bare file name the click could not open, even when it exists', () => {
     render(<Transcript markdown="I updated `deck.md` and 'notes.md'." />)
 
     expect(screen.queryByRole('link')).toBeNull()

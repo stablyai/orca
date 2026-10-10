@@ -5,10 +5,8 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
-import {
-  journalLifecycleBatchRowBuilder,
-  type JournalLifecycleMutationInput
-} from '../native-chat/agent-session-journal/journal-row-builders'
+import { JournalLifecycleBatchAppender } from '../native-chat/agent-session-journal/journal-lifecycle-batch-appender'
+import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import {
   journalRowByteLength,
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
@@ -182,13 +180,25 @@ function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch
 }
 
 function expectLifecycleBatchBounds(batches: readonly LifecycleBatch[]): void {
-  for (const [index, batch] of batches.entries()) {
-    expect(batch.mutations.length).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
-    const state = createJournalReducerState(SESSION_ID, 'epoch-test')
-    const row = journalLifecycleBatchRowBuilder(() => state, batch.settlementId, batch.mutations, {
-      fence: 7
-    })(index + 1, index + 1)
-    expect(journalRowByteLength(row)).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
+  const state = createJournalReducerState(SESSION_ID, 'epoch-test')
+  const appender = new JournalLifecycleBatchAppender({
+    state: () => state,
+    cursor: () => ({ epoch: state.epoch, sequence: state.lastSequence }),
+    enqueueRows: async () => []
+  })
+  for (const batch of batches) {
+    const builders = appender.planResolved({
+      settlementId: batch.settlementId,
+      fence: 7,
+      resolve: () => batch.mutations
+    })
+    for (const [index, build] of builders.entries()) {
+      const row = build(index + 1, index + 1)
+      if (row.kind === 'lifecycle-batch') {
+        expect(row.mutations.length).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
+        expect(journalRowByteLength(row)).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
+      }
+    }
   }
 }
 
@@ -410,17 +420,12 @@ describe('codex journal translation', () => {
     expect(JSON.stringify(batches)).toContain('output truncated')
   })
 
-  it('splits many large terminal items before the lifecycle row byte boundary', () => {
+  it('hands many large terminal items to the journal in one settlement', () => {
     const batches = terminalExitBatches(120, 20_000)
     const flattened = batches.flatMap((batch) => batch.mutations)
 
-    expect(batches.length).toBeGreaterThan(1)
-    expect(batches.map((batch) => batch.settlementId)).toEqual(
-      batches.map(
-        (_batch, index) =>
-          `provider-exit:${SESSION_ID}:7:generation-1:${index + 1}/${batches.length}`
-      )
-    )
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.settlementId).toBe(`provider-exit:${SESSION_ID}:7:generation-1`)
     expect(flattened).toHaveLength(121)
     expect(flattened.at(-1)).toMatchObject({
       kind: 'item',
@@ -429,13 +434,10 @@ describe('codex journal translation', () => {
     expectLifecycleBatchBounds(batches)
   })
 
-  it('partitions large terminal settlements by both byte and mutation bounds', () => {
+  it('leaves partitioning by byte and mutation bounds to the journal', () => {
     const batches = terminalExitBatches(240, 20_000)
-    const mutationOnlyChunkCount = Math.ceil(
-      batches.flatMap((batch) => batch.mutations).length / MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
-    )
-
-    expect(batches.length).toBeGreaterThan(mutationOnlyChunkCount)
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.mutations).toHaveLength(241)
     expectLifecycleBatchBounds(batches)
   })
 

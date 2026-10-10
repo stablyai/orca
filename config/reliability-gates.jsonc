@@ -2099,14 +2099,14 @@
       "invariant": "Title-sync publications must not enumerate unchanged session collections, while title identity, provider availability, active pane, stored title and effective execution-host changes retain their previous invalidation decisions.",
       "oracle": "Fifty live heartbeat publications with 500 retained and 500 sleeping records cause zero unchanged-map enumerations and no extra scheduled reconciliations. Provider identity, additions/removals, agent/pane ownership, effective host, active pane and stored title changes still invalidate.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
         "src/renderer/src/store/slices/agent-status-batch.test.ts",
         "src/renderer/src/store/slices/agent-status-provider-session.test.ts",
-        "src/renderer/src/store/slices/agent-status-retained-leak.test.ts",
+        "src/renderer/src/store/slices/agent-status.test.ts",
         "src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
       ],
       "assertionRefs": [
@@ -2122,13 +2122,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-07",
+          "date": "2026-10-09",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts",
           "result": "passed",
-          "durationSeconds": 5.35,
-          "summary": "69 tests passed across six files, including actual subscriber scheduling and producer identity contracts."
+          "durationSeconds": 2.8954373749999998,
+          "summary": "The current retained gate command passed 82 tests across 6 files. Historical pre-consolidation receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-09-07\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts\",\"result\":\"passed\",\"durationSeconds\":5.35,\"summary\":\"69 tests passed across six files, including actual subscriber scheduling and producer identity contracts.\"}] No new E2E or hosted run is claimed."
         }
       ],
       "runtimeBudget": {
@@ -17400,8 +17400,8 @@
         {
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
           "assertions": [
-            "repaints a pushed image exactly and keeps the history the TUI covers",
-            "keeps the pane's history when the host screen has another grid",
+            "repaints a pushed image exactly, normal buffer included",
+            "replaces both buffers when the host screen has another grid",
             "keeps history unduplicated when a pushed image also carries history",
             "paints the whole image when the TUI started while hidden",
             "reads the pane buffer after a queued alt-screen entry parses",
@@ -17414,7 +17414,8 @@
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts",
           "assertions": [
             "keeps the covered history for a live TUI exactly as the host holds it",
-            "repaints from the normal buffer once the host TUI has exited"
+            "repaints from the normal buffer once the host TUI has exited",
+            "replaces the normal history that changed between two alt-screen sessions"
           ]
         },
         {
@@ -21118,12 +21119,12 @@
       "invariant": "Identity-equal pane layout writes avoid local churn but never suppress a remote retry whose prior push failed; reconnecting and repeating the same layout persists it on the host and publishes it to other paired clients.",
       "oracle": "Disconnect a paired client, change a pane title, and observe the failed host push while local state retains the layout. Reconnect without remounting, submit the identical title again, and require the headless host plus a second paired observer to receive it.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/paired-remote-pane-layout-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts",
-        "src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts",
+        "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "tests/e2e/paired-remote-pane-layout-retry.spec.ts"
       ],
       "assertionRefs": [
@@ -21132,7 +21133,7 @@
           "assertions": ["only successfully pushed layouts deduplicate later remote writes"]
         },
         {
-          "file": "src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts",
+          "file": "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
           "assertions": ["identity-equal layout and timer writes avoid redundant local updates"]
         },
         {
@@ -21144,13 +21145,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-23",
+          "date": "2026-10-09",
           "runner": "local",
           "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts --reporter=dot",
           "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts --reporter=dot",
-          "durationSeconds": 5,
-          "summary": "Two focused files passed 20 remote-push and identity-bailout contracts."
+          "durationSeconds": 1.9345390829999998,
+          "summary": "The current retained gate command passed 32 tests across 2 files. Historical pre-consolidation receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-08-23\",\"runner\":\"local\",\"platform\":\"macos\",\"result\":\"passed\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts --reporter=dot\",\"durationSeconds\":5,\"summary\":\"Two focused files passed 20 remote-push and identity-bailout contracts.\"}] No new E2E or hosted run is claimed."
         }
       ],
       "runtimeBudget": {

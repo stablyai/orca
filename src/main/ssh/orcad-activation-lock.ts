@@ -13,16 +13,11 @@ import {
   type OrcadRemoteExecTarget
 } from './orcad-remote-runtime-control'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
-import {
-  acquireInstallLock,
-  RELAY_INSTALL_LOCK_NAME,
-  RemoteInstallLockBusyError
-} from './ssh-relay-install-lock'
+import { acquireInstallLock, RemoteInstallLockBusyError } from './ssh-relay-install-lock'
 import {
   orphanInstallLockCommand,
   probeInstallLockExistsCommand
 } from './ssh-relay-install-lock-commands'
-import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { shellEscape } from './ssh-connection-utils'
 import {
   ORCAD_FENCE_OWNER_FILENAME,
@@ -30,14 +25,19 @@ import {
   runWithOrcadFence,
   type OrcadFence
 } from './orcad-activation-fence-scope'
-import { orcadRemoteBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadRemoteBaseDir, orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { forgetHeldOrcadFence, rememberHeldOrcadFence } from './orcad-held-fence-tokens'
 import { exitedOwnLockProof } from './orcad-exited-own-lock'
-import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import { isWindowsRemoteHost } from './ssh-remote-platform'
 import {
-  ORCAD_ACTIVATION_TRANSACTION_DIRNAME,
-  ORCAD_ACTIVATION_TRANSACTION_FILENAME
+  orcadActivationFenceLockDir,
+  orcadActivationTransactionPath,
+  orcadActivationTransactionRoot
 } from './orcad-activation-transaction'
+import {
+  readOrcadActivationTransaction,
+  writeOrcadActivationTransaction
+} from './orcad-activation-transaction-store'
 
 const ORCAD_ACTIVATION_MAX_READINESS_TIMEOUT_MS = 5 * 60_000
 
@@ -50,13 +50,6 @@ export type OrcadActivationLockControl = {
   retain(): void
   /** The host is proven back on its recorded slot: release even if the run then throws. */
   recovered(): void
-}
-
-export function orcadActivationTransactionRoot(
-  host: RemoteHostPlatform,
-  remoteHome: string
-): string {
-  return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, ORCAD_ACTIVATION_TRANSACTION_DIRNAME)
 }
 
 /** Bounded so a crashed holder's lock goes stale long before a live holder could still be waiting. */
@@ -191,17 +184,14 @@ export async function withStaleOrcadActivationRecoveryLock<T>(
 
 /** Re-stamps a taken-over run's journal with this generation, so this run's release removes it. */
 async function adoptInterruptedJournal(options: OrcadActivationLockOptions): Promise<void> {
-  // Dynamic: the journal store imports this module for the transaction root.
-  const store = await import('./orcad-activation-transaction-store')
-  const journal = await store.readOrcadActivationTransaction(options).catch(() => null)
+  const journal = await readOrcadActivationTransaction(options).catch(() => null)
   if (journal) {
-    await store.writeOrcadActivationTransaction(options, journal)
+    await writeOrcadActivationTransaction(options, journal)
   }
 }
 
 function activationFence(options: OrcadActivationLockOptions, token: string): OrcadFence {
-  const root = orcadActivationTransactionRoot(options.host, options.remoteHome)
-  return { lockDir: joinRemotePath(options.host, root, RELAY_INSTALL_LOCK_NAME), token }
+  return { lockDir: orcadActivationFenceLockDir(options.host, options.remoteHome), token }
 }
 
 /**
@@ -234,11 +224,7 @@ async function orphanRetainedFence(
 export async function orcadActivationFenceExists(
   options: OrcadActivationLockOptions
 ): Promise<boolean> {
-  const lockDir = joinRemotePath(
-    options.host,
-    orcadActivationTransactionRoot(options.host, options.remoteHome),
-    RELAY_INSTALL_LOCK_NAME
-  )
+  const lockDir = orcadActivationFenceLockDir(options.host, options.remoteHome)
   const answer = (
     await execOrcadRemote(options, probeInstallLockExistsCommand(options.host, lockDir))
   ).trim()
@@ -265,16 +251,15 @@ async function releaseActivationFence(
   fence: OrcadFence
 ): Promise<void> {
   const lockRoot = orcadActivationTransactionRoot(options.host, options.remoteHome)
-  const journal = joinRemotePath(options.host, lockRoot, ORCAD_ACTIVATION_TRANSACTION_FILENAME)
+  const journal = orcadActivationTransactionPath(options.host, options.remoteHome)
   // Why no signal: a cancelled run must still be able to drop a fence it proved unnecessary.
   const target = withoutAbortSignal(options)
   const command = isWindowsRemoteHost(options.host)
-    ? orcadWindowsHostOpCommand(
-        options.host,
-        orcadRemoteBaseDir(options.host, options.remoteHome),
-        'fence-release',
-        [fence.lockDir, journal, fence.token]
-      )
+    ? orcadWindowsHomeOpCommand(options.host, options.remoteHome, 'fence-release', [
+        fence.lockDir,
+        journal,
+        fence.token
+      ])
     : posixReleaseFenceCommand(fence, journal, lockRoot)
   const answer = (await execOrcadRemote(target, command)).trim()
   forgetHeldOrcadFence(fence.token)
@@ -305,6 +290,6 @@ function posixReleaseFenceCommand(fence: OrcadFence, journal: string, lockRoot: 
 }
 
 /** How a journal this generation wrote names it (see writeOrcadActivationTransaction). */
-export function journalFenceStamp(token: string): string {
+function journalFenceStamp(token: string): string {
   return `"fenceToken": ${JSON.stringify(token)}`
 }

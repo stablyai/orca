@@ -11,12 +11,21 @@ import type { JournalWriteBody } from './journal-write-queue'
  *  nothing can interleave inside the transaction. */
 export type JournalRowTransactionHook = (db: Database.Database, row: JournalRow) => void
 
-/** An operation's ledger answer, committed with the journal write that makes it true: `write` runs
+/** An operation's receipt, committed with the journal write that makes it true: `write` runs
  *  inside that transaction on the same connection, `committed` synchronously right after its
  *  COMMIT and never after a rollback. */
 export type JournalOperationReceipt = {
-  write: (db: Database.Database) => void
+  write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
+}
+
+export function composeJournalOperationReceipts(
+  ...receipts: JournalOperationReceipt[]
+): JournalOperationReceipt {
+  return {
+    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
+    committed: () => receipts.forEach((receipt) => receipt.committed())
+  }
 }
 
 export type JournalRowWriterDeps = {
@@ -27,7 +36,7 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (row: JournalRow) => void
+  commit: (rows: readonly JournalRow[]) => void
   /** Standing hook run for EVERY appended row — the queued-draft returned
    *  transition rides here so no rejection path can bypass it. Bookkeeping: it
    *  runs in its own savepoint, so its failure is reported and never vetoes the row. */
@@ -55,7 +64,7 @@ export class JournalRowWriter {
         this.deps.database().transaction((db) => {
           insertJournalRow(db, this.deps.sessionId, row)
           hook?.(db, row)
-          receipt?.write(db)
+          receipt?.write(db, row)
           this.runBookkeeping(db, row)
         })
       } catch (error) {
@@ -66,7 +75,7 @@ export class JournalRowWriter {
       // fail. Rejecting here instead would leave the next append reusing a
       // sequence the table already holds. The ledger first: it cannot throw, the fold can.
       receipt?.committed()
-      this.deps.commit(row)
+      this.deps.commit([row])
       return row
     })
   }
@@ -108,9 +117,7 @@ export class JournalRowWriter {
       throw error
     }
     receipt?.committed()
-    for (const row of rows) {
-      this.deps.commit(row)
-    }
+    this.deps.commit(rows)
     return rows
   }
 

@@ -15,6 +15,7 @@ import {
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
+import { useMarkdownDocumentWatchRefresh } from './use-markdown-document-watch-refresh'
 
 type OpenMarkdownDocumentOptions = {
   anchor?: string | null
@@ -75,7 +76,7 @@ export function useMarkdownDocuments(
   const requestRef = useRef(0)
 
   const refreshMarkdownDocuments = useCallback(
-    async (requireFresh = false): Promise<void> => {
+    async (requireFresh = false, freshAfter?: number): Promise<void> => {
       if (!worktreeId || !worktreePath) {
         return
       }
@@ -110,7 +111,7 @@ export function useMarkdownDocuments(
             connectionId: connectionId ?? undefined
           },
           worktreePath,
-          { requireFresh }
+          { requireFresh, ...(freshAfter === undefined ? {} : { freshAfter }) }
         )
         if (requestRef.current !== requestId) {
           return
@@ -118,6 +119,10 @@ export function useMarkdownDocuments(
         setSnapshot({ key: scopeKey, documents })
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
+        // Watcher refreshes are background work: keep the last good list and stay quiet.
+        if (freshAfter !== undefined) {
+          return
+        }
         if (requestRef.current === requestId) {
           toast.error(
             err instanceof Error
@@ -221,6 +226,13 @@ export function useMarkdownDocuments(
       requestRef.current += 1
     }
   }, [activeFile.id, isMarkdown, viewMode, refreshMarkdownDocuments])
+
+  useMarkdownDocumentWatchRefresh({
+    enabled: isMarkdown && !!worktreeId,
+    worktreePath,
+    runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+    refresh: refreshMarkdownDocuments
+  })
 
   const markdownDocuments = useMemo(
     () => (snapshot?.key === scopeKey ? snapshot.documents : []),

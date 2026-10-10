@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
-import { StringDecoder } from 'node:string_decoder'
-import { encodeNdjson } from './ndjson'
+import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
+import { BINARY_STREAM_FRAMING, type DaemonStreamFraming } from './daemon-stream-binary-framing'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION, DaemonProtocolError } from './types'
 import type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
@@ -12,22 +12,36 @@ export type DaemonHelloRequest = {
   timeoutMs: number
   protocolVersion: number
   clientId: string
+  /** Ask a stream socket for binary PTY frames; the daemon's reply decides. */
+  requestBinaryStream?: boolean
 }
 
-export function sendDaemonHello(
-  request: DaemonHelloRequest
-): Promise<DaemonEndpointIdentity | null> {
+// Kill switch: ORCA_DAEMON_BINARY_STREAM=0 keeps every stream socket on NDJSON.
+const REQUEST_BINARY_STREAM_BY_DEFAULT = process.env.ORCA_DAEMON_BINARY_STREAM !== '0'
+
+export type DaemonHelloOutcome = {
+  identity: DaemonEndpointIdentity | null
+  streamFraming: DaemonStreamFraming
+  /** Bytes after the hello line in the same read; the socket's next reader must start with them. */
+  remainder: Buffer
+}
+
+export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHelloOutcome> {
   const { socket, token, role, timeoutMs, protocolVersion, clientId } = request
+  const requestBinaryStream =
+    role === 'stream' && (request.requestBinaryStream ?? REQUEST_BINARY_STREAM_BY_DEFAULT)
   return new Promise((resolve, reject) => {
     const hello: HelloMessage = {
       type: 'hello',
       version: protocolVersion,
       token,
       clientId,
-      role
+      role,
+      ...(requestBinaryStream ? { streamFraming: BINARY_STREAM_FRAMING } : {})
     }
 
-    let buffer = ''
+    const chunks: Buffer[] = []
+    let bufferedBytes = 0
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const cleanup = (): void => {
@@ -39,29 +53,38 @@ export function sendDaemonHello(
       socket.removeListener('error', onError)
       socket.removeListener('close', onClose)
     }
-    const finish = (error?: Error, identity: DaemonEndpointIdentity | null = null): void => {
+    const finish = (error?: Error, outcome?: DaemonHelloOutcome): void => {
       if (settled) {
         return
       }
       settled = true
       cleanup()
-      if (error) {
-        reject(error)
+      if (error || !outcome) {
+        reject(error ?? new DaemonProtocolError('Invalid hello response'))
         return
       }
-      resolve(identity)
+      resolve(outcome)
     }
-    // Why: daemon socket chunks can split emoji/box-drawing UTF-8 bytes.
-    // Decoding each Buffer independently would permanently inject U+FFFD.
-    const decoder = new StringDecoder('utf8')
+    // Binary frame prefixes following hello must remain exact bytes.
     const onData = (chunk: Buffer): void => {
-      buffer += decoder.write(chunk)
-      const newlineIdx = buffer.indexOf('\n')
+      const newlineIdx = chunk.indexOf(0x0a)
+      const lineBytes = bufferedBytes + (newlineIdx === -1 ? chunk.length : newlineIdx)
+      if (lineBytes > NDJSON_MAX_LINE_BYTES) {
+        finish(new DaemonProtocolError('Hello response exceeds maximum line size'))
+        socket.destroy()
+        return
+      }
       if (newlineIdx === -1) {
+        chunks.push(chunk)
+        bufferedBytes = lineBytes
         return
       }
 
-      const line = buffer.slice(0, newlineIdx)
+      // Flowing sockets otherwise drain buffered chunks before the awaiting reader can attach.
+      socket.pause()
+      chunks.push(chunk.subarray(0, newlineIdx))
+      const line = Buffer.concat(chunks, lineBytes).toString('utf8')
+      const remainder = chunk.subarray(newlineIdx + 1)
       try {
         const response = JSON.parse(line) as HelloResponse
         if (response.ok) {
@@ -73,7 +96,11 @@ export function sendDaemonHello(
             finish(new DaemonProtocolError('Invalid daemon identity'))
             return
           }
-          finish(undefined, identity)
+          const streamFraming =
+            requestBinaryStream && response.streamFraming === BINARY_STREAM_FRAMING
+              ? BINARY_STREAM_FRAMING
+              : 'ndjson'
+          finish(undefined, { identity, streamFraming, remainder })
         } else {
           finish(
             new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))

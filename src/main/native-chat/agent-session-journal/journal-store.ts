@@ -123,8 +123,10 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (row) => {
-        applyJournalRow(this.state, row)
+      commit: (rows) => {
+        for (const row of rows) {
+          applyJournalRow(this.state, row)
+        }
         this.onCommitted?.()
       },
       notifyCommitted: () => this.onCommitted?.(),
@@ -179,6 +181,7 @@ export class AgentSessionJournal {
   /** Refuses every later write and resolves once the admitted ones have landed. Holds no
    *  connection, so there is nothing to release and nothing that can fail. */
   close(): Promise<void> {
+    this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()
   }

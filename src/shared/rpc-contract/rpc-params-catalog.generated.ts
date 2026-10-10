@@ -31,7 +31,9 @@ import {
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
   AddDataAccountParams,
+  BeginClaudeSignInParams,
   ConsumeCodexResetCreditParams,
+  FinishClaudeSignInParams,
   ListAccountsParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
@@ -209,6 +211,7 @@ import {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
+  GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
@@ -515,6 +518,10 @@ import {
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import {
+  QueuedMessageEditHoldParams,
+  QueuedMessageUpdateParams
+} from './structured-agent-session-queued-edit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
@@ -550,6 +557,7 @@ import {
   TerminalUpdateViewport
 } from './terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater-params'
+import { LayoutSubscribeParams, LayoutUnsubscribeParams } from './workspace-layout-params'
 import { WorkspacePortKillParams, WorkspacePortScanParams } from './workspace-ports-params'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-params'
 import {
@@ -590,7 +598,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityList': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
   'accounts.antigravitySelect': AntigravityAccountMutationParams,
+  'accounts.beginClaudeSignIn': BeginClaudeSignInParams,
+  'accounts.cancelClaudeSignIn': FinishClaudeSignInParams,
   'accounts.consumeCodexResetCredit': ConsumeCodexResetCreditParams,
+  'accounts.finishClaudeSignIn': FinishClaudeSignInParams,
   'accounts.list': ListAccountsParams,
   'accounts.listData': null,
   'accounts.removeClaude': RemoveAccountParams,
@@ -622,7 +633,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
   'agentSession.queuedMessageDelete': QueuedMessageActionParams,
+  'agentSession.queuedMessageEditHold': QueuedMessageEditHoldParams,
   'agentSession.queuedMessageSend': QueuedMessageActionParams,
+  'agentSession.queuedMessageUpdate': QueuedMessageUpdateParams,
   'agentSession.queuedMessagesResume': QueuedMessagesResumeParams,
   'agentSession.readVisual': ReadVisualParams,
   'agentSession.release': HoldParams,
@@ -839,7 +852,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
-  'git.bulkStage': GitBulkPaths,
+  'git.bulkStage': GitBulkStage,
   'git.bulkUnstage': GitBulkPaths,
   'git.cancelGenerateCommitMessage': WorktreeSelectorOfGitParams,
   'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitParams,
@@ -975,6 +988,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'jira.status': null,
   'jira.testConnection': SiteSelection,
   'jira.updateIssue': IssueUpdate,
+  'layout.subscribe': LayoutSubscribeParams,
+  'layout.unsubscribe': LayoutUnsubscribeParams,
   'linear.addIssueComment': IssueCommentOfLinearParams,
   'linear.agentIssueList': LinearIssueList,
   'linear.agentProjectList': LinearProjectList,
@@ -1017,6 +1032,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
   'managedServer.cancelStop': ManagedServerSelector,
+  'managedServer.forget': ManagedServerSelector,
   'managedServer.recover': ManagedServerRecover,
   'managedServer.rollback': ManagedServerSelector,
   'managedServer.status': ManagedServerSelector,

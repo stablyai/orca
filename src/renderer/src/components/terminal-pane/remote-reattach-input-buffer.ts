@@ -54,10 +54,10 @@ export function withRemoteReattachInputBuffer(transport: PtyTransport): PtyTrans
     // Emulator replies stay on the immediate path; replay must not retain them as user input.
     ...(sendAccepted
       ? {
-          sendInputAccepted: (data, kind) =>
+          sendInputAccepted: (data, kind, options) =>
             kind !== 'query-reply' && pending?.isBuffering()
-              ? pending.enqueueAccepted(data, kind)
-              : sendAccepted(data, kind)
+              ? pending.enqueueAccepted(data, kind, undefined, options)
+              : sendAccepted(data, kind, options)
         }
       : {}),
     attach(options) {

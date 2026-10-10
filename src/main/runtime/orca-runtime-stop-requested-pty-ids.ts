@@ -269,7 +269,13 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getHandleRecord: (handle) => this.handles.get(handle),
     getPtyAgents: (ptyId) => this.ptysById.get(ptyId),
     getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
-    getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId)
+    getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
+    getGeneratedTitlesEnabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
+    getAgentStatusSnapshotForPane: (paneKey) =>
+      this.getAgentStatusSnapshotForPaneFn?.(paneKey) ??
+      this.getAgentStatusSnapshotFn?.().filter((row) => row.paneKey === paneKey) ??
+      [],
+    getTrackedTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId)
   })
 
   protected readonly orchestrationMailboxNotifications =

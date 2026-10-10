@@ -52,7 +52,9 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     if (
       targetConnectionId !== null &&
       this.ptyController.supportsForegroundProcessEvidence &&
-      !(await this.ptyController.supportsForegroundProcessEvidence(targetConnectionId))
+      !(await this.ptyController.supportsForegroundProcessEvidence(
+        parsedTargetHost?.kind === 'ssh' ? parsedTargetHost.id : undefined
+      ))
     ) {
       // A legacy relay ignores the optional projection and would still run its
       // expensive process-table inventory on every mobile cadence tick.

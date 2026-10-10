@@ -186,7 +186,6 @@ describe('registerPtyHandlers', () => {
     let releaseAuth!: (value: {
       configDir: string
       envPatch: Record<string, never>
-      stripAuthEnv: false
       provenance: string
     }) => void
     const prepareClaudeAuth = vi.fn(
@@ -194,7 +193,6 @@ describe('registerPtyHandlers', () => {
         new Promise<{
           configDir: string
           envPatch: Record<string, never>
-          stripAuthEnv: false
           provenance: string
         }>((resolve) => {
           releaseAuth = resolve
@@ -233,7 +231,6 @@ describe('registerPtyHandlers', () => {
     releaseAuth({
       configDir: '/tmp/claude',
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'managed:test'
     })
     await new Promise<void>((resolve) => setImmediate(resolve))

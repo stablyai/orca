@@ -43,7 +43,11 @@ import {
   settleQuietly,
   withEarlyTab
 } from './agent-launch-execution-outcome'
-import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
+import {
+  AgentLaunch,
+  AgentLaunchReplay,
+  type AgentLaunchParams
+} from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import {
   agentLaunchFailureCode,
@@ -54,6 +58,7 @@ import {
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
+import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
 import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 import {
@@ -311,6 +316,7 @@ export const AGENT_LAUNCH_METHODS = [
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_replay_unsupported')
       }
+      assertAgentLaunchTargetAuthorized(params.target, context)
       try {
         return await runReplaySafeAgentLaunch(params, context)
       } catch (error) {
@@ -341,6 +347,7 @@ export const AGENT_LAUNCH_METHODS = [
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_unsupported')
       }
+      assertAgentLaunchTargetAuthorized(params.target, context)
       if (!params.operationId) {
         return runLegacyAgentLaunch(params, context)
       }

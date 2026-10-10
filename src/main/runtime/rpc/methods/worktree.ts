@@ -8,12 +8,16 @@ import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-schemas'
+import {
+  WorktreeCreate,
+  WorktreePrefetchCreateBase
+} from '../../../../shared/rpc-contract/worktree-create-params'
 import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
@@ -24,7 +28,7 @@ import {
   WorktreeSet,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
-} from './worktree-schemas'
+} from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 
@@ -102,7 +106,8 @@ export const WORKTREE_METHODS = [
         // Why: provenance tokens are reserved before creation so retries can recover,
         // but failed create attempts must release the reservation for a safe retry.
         try {
-          const result = await runtime.createManagedWorktree(
+          const result = await createWorktreeWithStartupAgent(
+            runtime,
             buildManagedWorktreeCreateArgs(
               params,
               {

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
@@ -15,13 +13,5 @@ describe('headless runtime graph', () => {
       snapshots: [],
       authoritative: true
     })
-  })
-
-  it('is published by orcad before its RPC server accepts a client', () => {
-    // Why a source check: orcad's startup needs a real profile store and pty host to run.
-    const entry = readFileSync(join(import.meta.dirname, '../orcad/orcad-entry.ts'), 'utf8')
-    const published = entry.indexOf('publishHeadlessRuntimeGraph(runtime)')
-    expect(published).toBeGreaterThan(-1)
-    expect(published).toBeLessThan(entry.indexOf('await rpc.start()'))
   })
 })

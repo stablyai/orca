@@ -35,7 +35,10 @@ it.each(['errors', 'status', 'lifecycle', 'restart-attempt'])(
 it.each([
   'src/renderer/src/lib/ssh-workspace-browser-route-eligibility.ts',
   'src/renderer/src/components/browser-pane/use-ssh-workspace-browser-route.ts',
-  'src/main/browser/local-ssh-browser-route.ts'
+  'src/main/browser/local-ssh-browser-route.ts',
+  'src/renderer/src/store/repos/converted-ssh-browser-pages.ts',
+  'src/renderer/src/store/slices/browser/browser-tab-actions.ts',
+  'src/renderer/src/hooks/ipc-events/ssh-managed-server-state-effects.ts'
 ])('routes the managed browser routing oracle from %s', (path) => {
   expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-browser-routing.spec.ts')
 })
@@ -43,6 +46,25 @@ it.each([
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const prWorkflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const classify = (specs, ssh = 'false') => classifyE2eJobs(JSON.stringify(specs), ssh)
+
+it('runs real browser file-drop ownership in the template-building Docker job', () => {
+  const spec = 'tests/e2e/ssh-orcad-browser-drop-owner.spec.ts'
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(
+    job.steps.some((step) => step.run?.includes(spec) && step.env?.ORCA_E2E_SSH_DOCKER === '1')
+  ).toBe(true)
+  for (const source of [
+    'src/renderer/src/lib/file-preview.ts',
+    'src/renderer/src/lib/workspace-file-drag.ts',
+    'src/renderer/src/components/browser-pane/navigate/use-browser-page-navigation-downloads.ts',
+    'src/renderer/src/components/right-sidebar/FileExplorerRow.tsx',
+    'tests/e2e/helpers/browser-split-guest-probes.ts'
+  ]) {
+    expect(selectPrE2eSpecs([source]), source).toContain(spec)
+  }
+})
 
 it('skips the general consumer only when every requested spec has a dedicated owner', () => {
   for (const spec of DEDICATED_E2E_SPECS) {
@@ -197,6 +219,7 @@ it.each([
 
 const MARKDOWN_CONVERSION_SPEC = 'tests/e2e/ssh-orcad-markdown-conversion.spec.ts'
 const MARKDOWN_LINK_REFRESH_SPEC = 'tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts'
+const MARKDOWN_LIVE_DOCUMENTS_SPEC = 'tests/e2e/ssh-orcad-markdown-live-documents.spec.ts'
 
 it.each([
   ['src/renderer/src/components/editor/useMarkdownDocuments.ts', MARKDOWN_CONVERSION_SPEC],
@@ -212,6 +235,15 @@ it.each([
   [
     'src/renderer/src/components/editor/useRichMarkdownProgrammaticSync.ts',
     MARKDOWN_LINK_REFRESH_SPEC
+  ],
+  ['src/renderer/src/components/editor/useMarkdownDocuments.ts', MARKDOWN_LIVE_DOCUMENTS_SPEC],
+  [
+    'src/renderer/src/components/editor/use-markdown-document-watch-refresh.ts',
+    MARKDOWN_LIVE_DOCUMENTS_SPEC
+  ],
+  [
+    'src/renderer/src/components/editor/markdown-document-list-request.ts',
+    MARKDOWN_LIVE_DOCUMENTS_SPEC
   ]
 ])('routes %s to the template-building Markdown lane %s', (file, spec) => {
   expect(selectPrE2eSpecs([file])).toContain(spec)
@@ -224,4 +256,71 @@ it.each([
   expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
     spec
   )
+})
+
+it.each([
+  'src/renderer/src/hooks/useEditorExternalWatch.ts',
+  'src/renderer/src/hooks/editor-runtime-file-watch.ts'
+])('routes %s to the template-building editor watch recovery lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+it.each([
+  'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts',
+  'src/renderer/src/hooks/worktree-file-change-event.ts'
+])('routes %s to the template-building explorer watch recovery lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+it.each([
+  'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts',
+  'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts',
+  'src/renderer/src/components/right-sidebar/FileExplorer.tsx',
+  'src/renderer/src/hooks/editor-external-watch-targets.ts',
+  'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts',
+  'src/renderer/src/components/right-sidebar/use-file-explorer-tree-load-effects.ts'
+])('routes %s to the template-building selected-host explorer lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+it('runs managed terminal root ownership in the Docker conversion lane', () => {
+  const spec = 'tests/e2e/ssh-orcad-terminal-root-owner.spec.ts'
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const lane = workflow.jobs['orcad-auto-convert-docker']
+  expect(lane.if).toContain(spec)
+  expect(
+    lane.steps.some((step) => step.run?.includes(spec) && step.env?.ORCA_E2E_SSH_DOCKER === '1')
+  ).toBe(true)
+  for (const source of [
+    'src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-link-actions.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-link-hit-testing.ts',
+    'src/renderer/src/components/terminal-pane/terminal-link-handlers.ts',
+    'src/renderer/src/lib/worktree-owner-route.ts',
+    'tests/e2e/helpers/terminal-workspace-root-link.ts'
+  ]) {
+    expect(selectPrE2eSpecs([source]), source).toContain(spec)
+  }
 })

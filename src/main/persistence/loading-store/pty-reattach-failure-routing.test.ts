@@ -85,15 +85,19 @@ describe.each(['ipc', 'runtime'])('%s failed reattach routing', (controller) => 
         await runtime.onPtyExit(binding.ptyId, 0, incarnationId, { providerExitObserved: true })
         if (outcome === 'replaced') {
           runtime.onPtySpawned(binding.ptyId, successorIncarnation)
-          ptyOwnership.set(binding.ptyId, 'successor-host')
+          ptyOwnership.set(binding.ptyId, 'ssh:successor-host')
           ptyIncarnationById.set(binding.ptyId, successorIncarnation)
         }
       }
       gate.finish.reject(new Error('disk full'))
       await pending
-      expect(ownerWhileSaving).toBe(connectionId)
+      expect(ownerWhileSaving).toBe(`ssh:${connectionId}`)
       expect(ptyOwnership.get(binding.ptyId)).toBe(
-        outcome === 'live' ? connectionId : outcome === 'replaced' ? 'successor-host' : undefined
+        outcome === 'live'
+          ? `ssh:${connectionId}`
+          : outcome === 'replaced'
+            ? 'ssh:successor-host'
+            : undefined
       )
       expect(ptyIncarnationById.get(binding.ptyId)).toBe(
         outcome === 'live'

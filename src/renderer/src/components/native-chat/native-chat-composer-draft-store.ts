@@ -53,7 +53,6 @@ export {
 } from './native-chat-composer-draft-persistence'
 export {
   hydrateNativeChatComposerDrafts,
-  isNativeChatComposerDraftLoadPending,
   waitForNativeChatComposerDrafts
 } from './native-chat-composer-draft-load'
 
