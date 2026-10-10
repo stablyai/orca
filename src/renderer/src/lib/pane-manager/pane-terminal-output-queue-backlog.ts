@@ -82,6 +82,8 @@ export function replaceBacklogWithWarning(
   }
   clearForegroundRelease(entry)
   recordQueueDebugPressure()
+  // Why: recovery may queue new bytes, which must be observed after this cancellation.
+  entry.onBacklogReplaced?.()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }

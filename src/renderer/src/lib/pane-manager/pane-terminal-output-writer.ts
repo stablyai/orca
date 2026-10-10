@@ -61,6 +61,13 @@ export function writeTerminalOutputImpl(
     return
   }
 
+  if (options.onBacklogReplaced) {
+    const entry = queuedByTerminal.get(terminal)
+    if (entry) {
+      entry.onBacklogReplaced = options.onBacklogReplaced
+    }
+  }
+
   if (options.foreground) {
     const entry = queuedByTerminal.get(terminal)
     if (entry?.highPriority || options.coalesceForeground || options.holdForeground) {
