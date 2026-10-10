@@ -39,6 +39,9 @@ describe('useDocumentAppearance', () => {
 
   afterEach(() => {
     useAppStore.setState(initialState, true)
+    // The document root is shared between cases, so a write here would leak forward.
+    document.documentElement.style.removeProperty('--pane-single-max-width')
+    document.documentElement.style.removeProperty('--pane-single-edge-width')
   })
 
   it('ignores unrelated settings object replacements', () => {
@@ -73,6 +76,24 @@ describe('useDocumentAppearance', () => {
     expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('publishes the single-pane cap on the document root and clears it when unset', () => {
+    act(() => {
+      const settings = useAppStore.getState().settings!
+      useAppStore.setState({ settings: { ...settings, terminalSinglePaneMaxWidth: 900 } })
+    })
+    const { unmount } = renderHook(() => useDocumentAppearance())
+
+    expect(document.documentElement.style.getPropertyValue('--pane-single-max-width')).toBe('900px')
+
+    act(() => {
+      const { terminalSinglePaneMaxWidth: _dropped, ...rest } = useAppStore.getState().settings!
+      useAppStore.setState({ settings: rest })
+    })
+
+    expect(document.documentElement.style.getPropertyValue('--pane-single-max-width')).toBe('')
     unmount()
   })
 })

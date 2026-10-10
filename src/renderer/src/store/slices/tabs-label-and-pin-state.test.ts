@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, makeOpenFile } from './store-test-helpers'
+import { createTestStore, makeOpenFile, seedThreePaneLayout } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
@@ -138,6 +138,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
       })
 
       it('moves pinned tabs before unpinned siblings', () => {
+        seedThreePaneLayout(store, WT)
         const t1 = store.getState().createUnifiedTab(WT, 'terminal')
         const t2 = store.getState().createUnifiedTab(WT, 'terminal')
         const t3 = store.getState().createUnifiedTab(WT, 'terminal')
@@ -159,6 +160,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
       })
 
       it('keeps remaining pinned tabs before a tab that was unpinned', () => {
+        seedThreePaneLayout(store, WT)
         const t1 = store.getState().createUnifiedTab(WT, 'terminal')
         const t2 = store.getState().createUnifiedTab(WT, 'terminal')
         const t3 = store.getState().createUnifiedTab(WT, 'terminal')

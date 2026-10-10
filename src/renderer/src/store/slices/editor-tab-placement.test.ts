@@ -278,10 +278,23 @@ describe('createEditorSlice split-group editor routing', () => {
     const store = createDrawnEditorTabsStore()
     const { terminalGroupId } = await seedTerminalAndEditorGroups(store)
 
-    openSourceFile(store, '/repo/explicit.ts', { targetGroupId: terminalGroupId })
+    openSourceFile(store, '/repo/explicit.ts', {
+      targetGroupId: terminalGroupId,
+      placementFixed: true
+    })
     await main.settle()
 
     expect(findUnifiedTabByEntity(store, '/repo/explicit.ts')?.groupId).toBe(terminalGroupId)
+  })
+
+  it('opens a file aimed at the focused one of two panes in the other pane', async () => {
+    const store = createDrawnEditorTabsStore()
+    const { terminalGroupId, editorGroupId } = await seedTerminalAndEditorGroups(store)
+
+    openSourceFile(store, '/repo/opposite.ts', { targetGroupId: terminalGroupId })
+    await main.settle()
+
+    expect(findUnifiedTabByEntity(store, '/repo/opposite.ts')?.groupId).toBe(editorGroupId)
   })
 
   it('opens implicit files in a focused browser split group instead of stealing an editor pane (#6891)', async () => {

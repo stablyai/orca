@@ -40,7 +40,8 @@ import {
   makeWorktree,
   makeOpenFile,
   makeTabGroup,
-  makeUnifiedTab
+  makeUnifiedTab,
+  seedThreePaneLayout
 } from './store-test-helpers'
 import {
   pushRecentlyClosedTabKind,
@@ -77,6 +78,9 @@ function makeSeededStore(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WT
   })
+  // Why: these tests are about where a reopened tab lands inside its group, so they start from a
+  // layout the beside-a-lone-pane rule leaves alone.
+  seedThreePaneLayout(store, WT)
   return store
 }
 
@@ -211,6 +215,29 @@ describe('terminal snapshot cwd remapping', () => {
 })
 
 describe('reopenClosedTerminalTab', () => {
+  it('reopens a closed terminal into its recorded group, not a second pane', async () => {
+    // Why: Cmd+Shift+T returns a tab to where it was; it is replay, not a new pane.
+    const store = createTestStore()
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: WT
+    })
+    const first = store.getState().createTab(WT)
+    const groupId = store.getState().unifiedTabsByWorktree[WT]?.[0]?.groupId
+    const second = store.getState().createTab(WT, groupId, undefined, { placementFixed: true })
+    store.getState().closeTab(second.id)
+    await layoutApplyTestTransport.settle()
+    expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    await layoutApplyTestTransport.settle()
+
+    const s = store.getState()
+    expect(s.groupsByWorktree[WT]).toHaveLength(1)
+    expect(s.layoutByWorktree[WT]?.type).toBe('leaf')
+    expect(s.tabsByWorktree[WT]?.map((tab) => tab.id)).toContain(first.id)
+  })
+
   it('restores the tab bar and group position of a closed middle tab', async () => {
     const store = makeSeededStore()
     const first = store.getState().createTab(WT)

@@ -12,7 +12,7 @@ export function createActiveWorkspaceTerminalActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
-    openNewTerminalTabInActiveWorkspace: async (groupId) => {
+    openNewTerminalTabInActiveWorkspace: async (groupId, options) => {
       const state = get()
       const worktreeId =
         findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
@@ -37,14 +37,17 @@ export function createActiveWorkspaceTerminalActions(
           worktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId: groupId,
-          activate: true
+          activate: true,
+          ...(options?.placementFixed ? { placementFixed: true } : {})
         })
         return
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
         return
       }
-      const terminal = get().createTab(worktreeId, groupId)
+      const terminal = get().createTab(worktreeId, groupId, undefined, {
+        placementFixed: options?.placementFixed
+      })
       get().setActiveTab(terminal.id)
       get().setActiveTabType('terminal', worktreeId)
       const latest = get()

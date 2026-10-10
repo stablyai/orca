@@ -4,6 +4,7 @@ import { createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { getReplaceablePreviewFileId } from './editor/tabs/workspace-editor-item'
+import { seedThreePaneLayout } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -49,6 +50,9 @@ function openPreview(store: StoreApi<AppState>, relativePath: string): void {
 
 const previewTabs = (store: StoreApi<AppState>) =>
   (store.getState().unifiedTabsByWorktree['wt-1'] ?? []).filter((tab) => tab.isPreview)
+function previewPaths(store: StoreApi<AppState>): string[] {
+  return store.getState().openFiles.map((file) => file.relativePath)
+}
 
 function storeWithPreviewTabs(enabled: boolean): StoreApi<AppState> {
   const store = createEditorTabsStore()
@@ -60,6 +64,8 @@ describe('editor preview tab setting', () => {
   it('replaces the open preview when preview tabs are enabled', async () => {
     const store = storeWithPreviewTabs(true)
     const main = await drawTabsFromMain(store)
+    // Why: three panes keep automatic placement out of a test about in-group replacement.
+    seedThreePaneLayout(store, 'wt-1')
 
     openPreview(store, 'src/a.ts')
     // A layout-owner build draws a's preview tab with its frame; b's open then replaces it.
@@ -70,8 +76,10 @@ describe('editor preview tab setting', () => {
 
     expect(previewTabs(store)).toEqual([expect.objectContaining({ entityId: '/repo/src/b.ts' })])
 
-    expect(store.getState().openFiles.map((file) => file.relativePath)).toEqual(['src/b.ts'])
-    expect(store.getState().openFiles[0].isPreview).toBe(true)
+    expect(previewPaths(store)).toEqual(['src/b.ts'])
+    expect(
+      store.getState().openFiles.find((file) => file.relativePath === 'src/b.ts')?.isPreview
+    ).toBe(true)
   })
 
   it('keeps both files open when preview tabs are disabled', () => {
@@ -93,6 +101,8 @@ describe('editor preview tab setting', () => {
   it('treats an unset setting as enabled so existing profiles keep preview tabs', async () => {
     const store = createEditorTabsStore()
     const main = await drawTabsFromMain(store)
+    // Why: three panes keep automatic placement out of a test about in-group replacement.
+    seedThreePaneLayout(store, 'wt-1')
 
     openPreview(store, 'src/a.ts')
     // A layout-owner build draws a's preview tab with its frame; b's open then replaces it.
@@ -103,7 +113,7 @@ describe('editor preview tab setting', () => {
 
     expect(previewTabs(store)).toEqual([expect.objectContaining({ entityId: '/repo/src/b.ts' })])
 
-    expect(store.getState().openFiles.map((file) => file.relativePath)).toEqual(['src/b.ts'])
+    expect(previewPaths(store)).toEqual(['src/b.ts'])
   })
 
   it('never evicts a preview restored from before the setting was turned off', () => {
@@ -149,6 +159,8 @@ describe('editor preview tab setting', () => {
 
   it('makes the flag live again when the setting is turned back on', () => {
     const store = storeWithPreviewTabs(true)
+    // Why: three panes keep automatic placement out of a test about in-group replacement.
+    seedThreePaneLayout(store, 'wt-1')
     openPreview(store, 'src/a.ts')
     store.setState({ settings: createGlobalSettingsFixture({ editorPreviewTabsEnabled: false }) })
     store.setState({ settings: createGlobalSettingsFixture({ editorPreviewTabsEnabled: true }) })

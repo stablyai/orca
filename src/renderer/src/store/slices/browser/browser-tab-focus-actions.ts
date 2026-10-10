@@ -53,7 +53,9 @@ export function createBrowserTabFocusActions(
           sessionProfileId,
           sessionPartition,
           ...(snap.docLocation ? { docLocation: snap.docLocation } : {}),
-          targetGroupId: entryToRestore.position?.groupId
+          targetGroupId: entryToRestore.position?.groupId,
+          // Why: replay of a layout that already existed — restoring must not rearrange it.
+          placementFixed: true
         })
         const position = entryToRestore.position
         // A layout-owner build's tab moves once main's frame drew it.
@@ -71,6 +73,8 @@ export function createBrowserTabFocusActions(
         sessionProfileId,
         sessionPartition,
         targetGroupId: entryToRestore.position?.groupId,
+        // Why: replay of a layout that already existed — restoring must not rearrange it.
+        placementFixed: true,
         browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId,
         ...(firstPage.docLocation ? { docLocation: firstPage.docLocation } : {})
       })

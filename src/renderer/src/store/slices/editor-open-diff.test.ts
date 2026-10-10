@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { makeLayout, makeTab } from './store-test-helpers'
+import { makeLayout, makeTab, seedThreePaneLayout } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
 
@@ -525,6 +525,7 @@ describe('createEditorSlice openDiff', () => {
   it('reuses a preview editor tab when opening a preview diff', async () => {
     const store = createEditorTabsStore()
     const main = await drawTabsFromMain(store)
+    seedThreePaneLayout(store, 'wt-1')
 
     store.getState().openFile(
       {
@@ -561,6 +562,7 @@ describe('createEditorSlice openDiff', () => {
   it('keeps an existing preview replaceable when it is opened as preview again', async () => {
     const store = createEditorTabsStore()
     const main = await drawTabsFromMain(store)
+    seedThreePaneLayout(store, 'wt-1')
 
     const openPreviewFile = (): void => {
       store.getState().openFile(
@@ -608,21 +610,21 @@ describe('createEditorSlice openDiff', () => {
     const store = createEditorTabsStore()
     const main = await drawTabsFromMain(store)
 
+    const { leftGroupId: firstGroupId, rightGroupId: secondGroupId } = seedThreePaneLayout(
+      store,
+      'wt-1'
+    )
     store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, { preview: true })
     await main.settle()
-    const firstGroupId = store.getState().groupsByWorktree['wt-1'][0].id
-    const secondGroupId = store.getState().createEmptySplitGroup('wt-1', firstGroupId, 'right')
-
-    expect(secondGroupId).toBeTruthy()
 
     store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, {
       preview: true,
-      targetGroupId: secondGroupId ?? undefined
+      targetGroupId: secondGroupId
     })
     await main.settle()
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, {
       preview: true,
-      targetGroupId: secondGroupId ?? undefined
+      targetGroupId: secondGroupId
     })
     await main.settle()
 

@@ -233,7 +233,9 @@ function applyMove(
             ...(args.sourcePaneCwd?.cwd ? { startupCwd: args.sourcePaneCwd.cwd } : {})
           }
         : { initialLeafId: leafId }),
-      recordInteraction: true
+      recordInteraction: true,
+      // Why: a dropped pane lands where it was dropped, never moved by automatic placement.
+      placementFixed: true
     })
   const afterCreateStore = args.getStore()
   // Main's frame drew the tab where main placed it; the window places it only when it drew it.
