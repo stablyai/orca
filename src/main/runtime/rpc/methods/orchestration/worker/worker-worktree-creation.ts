@@ -12,6 +12,7 @@ import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
@@ -23,6 +24,7 @@ export async function createWorkerWorktree(args: {
     repo?: string
     name?: string
     baseBranch?: string
+    parentWorktree?: string
     displayName?: string
     comment?: string
     setup?: 'run' | 'skip' | 'inherit'
@@ -67,7 +69,15 @@ export async function createWorkerWorktree(args: {
       : {}),
     activate: false,
     lineage: {
-      parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
+      ...(params.parentWorktree
+        ? {
+            parentWorkspace: isWorkspaceKey(params.parentWorktree)
+              ? params.parentWorktree
+              : worktreeWorkspaceKey(params.parentWorktree)
+          }
+        : {
+            parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined
+          }),
       noParent: requestedWorktree === 'new-top-level',
       callerTerminalHandle: params.from
     }

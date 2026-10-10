@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as Selectors from '../selectors'
 
 const callMock = vi.fn()
 const originalExitCode = process.exitCode
@@ -14,14 +15,20 @@ type RecoveryWorkerStartResult = {
 }
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
-vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
+vi.mock('../selectors', async (importOriginal) => ({
+  ...(await importOriginal<typeof Selectors>()),
+  getTerminalHandle: vi.fn()
+}))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
 import { BOOLEAN_FLAGS, parseArgs } from '../args'
 import { formatCommandHelp } from '../help'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../specs/orchestration-worker-specs'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_PARENT_WORKTREE_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
@@ -47,6 +54,53 @@ describe('orchestration worker-start CLI contract', () => {
       cwd: '/tmp/repo',
       json
     } as never)
+
+  it.each([true, false])(
+    'gates explicit parent support before mutation (supported=%s)',
+    async (supported) => {
+      callMock
+        .mockResolvedValueOnce({
+          result: {
+            capabilities: supported ? [ORCHESTRATION_WORKER_PARENT_WORKTREE_RUNTIME_CAPABILITY] : []
+          }
+        })
+        .mockResolvedValueOnce({ result: { state: 'ready', effects: [], residualResources: [] } })
+      const flags = new Map<string, string | boolean>([
+        ['spec', 'implement'],
+        ['agent', 'codex'],
+        ['from', 'term_coord'],
+        ['worktree', 'new-child'],
+        ['name', 'worker'],
+        ['parent-worktree', 'id:integration']
+      ])
+      if (supported) {
+        await invokeWorkerStart(flags)
+        expect(callMock).toHaveBeenNthCalledWith(
+          2,
+          'orchestration.workerStart',
+          expect.objectContaining({ parentWorktree: 'id:integration' })
+        )
+      } else {
+        await expect(invokeWorkerStart(flags)).rejects.toMatchObject({
+          code: 'incompatible_runtime'
+        })
+        expect(callMock).toHaveBeenCalledTimes(1)
+      }
+    }
+  )
+
+  it('rejects a remote parent placement before consulting or mutating a host', async () => {
+    await expect(
+      invokeWorkerStart(
+        new Map([
+          ['worktree', 'new-child'],
+          ['parent-worktree', 'id:integration'],
+          ['on', 'remote']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
 
   it('passes the complete supported creation contract and retry receipt', async () => {
     callMock.mockResolvedValue({

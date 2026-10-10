@@ -22,6 +22,7 @@ export const WorkerStartParams = z
     name: OptionalString,
     repo: OptionalString,
     baseBranch: OptionalString,
+    parentWorktree: z.string().min(1).optional(),
     displayName: OptionalString,
     comment: OptionalString,
     setup: z.enum(['run', 'skip', 'inherit']).optional(),
@@ -34,6 +35,13 @@ export const WorkerStartParams = z
     devMode: z.boolean().optional()
   })
   .superRefine((params, ctx) => {
+    if (params.parentWorktree && (params.worktree !== 'new-child' || params.on)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['parentWorktree'],
+        message: '--parent-worktree requires --worktree new-child on the Run host (without --on)'
+      })
+    }
     if (!params.task && !params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

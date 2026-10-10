@@ -104,6 +104,9 @@ export async function startLocalWorker(args: {
     params.from,
     callerSession
   )
+  const parentWorktree = params.parentWorktree
+    ? await runtime.showManagedTerminalWorkspace(params.parentWorktree)
+    : undefined
   const creationWorktree = createsWorktree
     ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
     : undefined
@@ -139,6 +142,7 @@ export async function startLocalWorker(args: {
     name: params.name ?? null,
     repo: params.repo ?? creationWorktree?.repoId ?? null,
     baseBranch: params.baseBranch ?? null,
+    ...(parentWorktree ? { parentWorktreeId: parentWorktree.id } : {}),
     terminal: params.terminal ?? null,
     agent: agent ?? null,
     launch: launch.receipt,
@@ -188,7 +192,7 @@ export async function startLocalWorker(args: {
       db,
       dispatchId: started.dispatch.id,
       taskId: task.id,
-      params,
+      params: parentWorktree ? { ...params, parentWorktree: parentWorktree.id } : params,
       requestedWorktree,
       creationWorktree,
       resolvedWorktree,

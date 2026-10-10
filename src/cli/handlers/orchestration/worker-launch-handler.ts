@@ -1,9 +1,13 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalStringFlag } from '../../flags'
+import { getRequiredWorktreeSelector } from '../../selectors'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_PARENT_WORKTREE_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
@@ -15,9 +19,28 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
-    if (model || effort) {
+    const hasParentWorktree = flags.has('parent-worktree')
+    if (hasParentWorktree && (flags.get('worktree') !== 'new-child' || flags.has('on'))) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--parent-worktree requires --worktree new-child on the Run host (without --on)'
+      )
+    }
+    if (model || effort || hasParentWorktree) {
       const status = await client.call<RuntimeStatus>('status.get')
       if (
+        hasParentWorktree &&
+        !status.result.capabilities?.includes(
+          ORCHESTRATION_WORKER_PARENT_WORKTREE_RUNTIME_CAPABILITY
+        )
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support an explicit worker parent worktree. Update or restart Orca and try again.'
+        )
+      }
+      if (
+        (model || effort) &&
         !status.result.capabilities?.includes(
           ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
         )
@@ -33,6 +56,9 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
+    const parentWorktree = hasParentWorktree
+      ? await getRequiredWorktreeSelector(flags, 'parent-worktree', cwd, client)
+      : undefined
     const result = await callOrchestrationMutation<{
       runId: string
       taskId: string
@@ -56,6 +82,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       name: getOptionalStringFlag(flags, 'name'),
       repo: getOptionalStringFlag(flags, 'repo'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      ...(parentWorktree !== undefined ? { parentWorktree } : {}),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       comment: getOptionalStringFlag(flags, 'comment'),
       setup: getOptionalStringFlag(flags, 'setup'),
