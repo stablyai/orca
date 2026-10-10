@@ -60,8 +60,8 @@ const automation = (name: string, fields: AutomationCaseFields): AutomationLaunc
   ...fields
 })
 
-// AUTOMATION_WSL_EXE: only a local \\wsl$ workspace sends a shellOverride. Automations quote a
-// folder by its own path (the background launch-host rule), not by the window planner's rule.
+// AUTOMATION_WSL_EXE: only a local \\wsl$ workspace sends a shellOverride. Quoting follows the
+// execution host's OS, the same rule a window tab uses; the shell does not.
 export const AUTOMATION_LAUNCH_CASES: AutomationLaunchCase[] = [
   automation('macOS repo', {
     client: 'darwin',
