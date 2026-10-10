@@ -114,6 +114,18 @@ describe('a launch the host proves ran nothing', () => {
     expect(await launchFailure(runtime)).toMatchObject({ data: AGENT_LAUNCH_NOTHING_RAN_DATA })
   })
 
+  // Why: one spawn failure can reach two launches with different verdicts; the fact is this one's.
+  it('leaves the failure itself unmarked for any other caller it reaches', async () => {
+    const runtime = hostWithWindow()
+    const shared = new Error('spawn claude ENOENT')
+    runtime.createTerminal.mockRejectedValueOnce(shared)
+    await launchFailure(runtime)
+
+    const request = { id: 'req-2', authToken: 'token', method: 'agent.launch' }
+    const response = mapDispatcherError(request, { runtimeId: 'runtime-1' }, shared)
+    expect(response.ok ? null : response.error).not.toHaveProperty('data')
+  })
+
   // Why: a spawn the daemon was asked for may be running; the window must never start a second.
   it('is never said of a spawn that left', async () => {
     const runtime = hostWithWindow()

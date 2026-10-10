@@ -7,7 +7,10 @@ import {
   mapEmulatorError,
   mapRuntimeError
 } from './errors'
-import { withAgentLaunchNothingRan } from './methods/agent-launch-nothing-ran'
+import {
+  AgentLaunchNothingRanError,
+  withAgentLaunchNothingRan
+} from './methods/agent-launch-nothing-ran'
 
 export function invalidArgumentResponse(
   request: RpcRequest,
@@ -28,6 +31,10 @@ export function mapDispatcherError(
   meta: RpcEnvelopeMeta,
   error: unknown
 ): RpcResponse {
+  if (error instanceof AgentLaunchNothingRanError) {
+    const failure = mapDispatcherError(request, meta, error.cause)
+    return failure.ok ? failure : withAgentLaunchNothingRan(failure)
+  }
   if (error instanceof ZodError) {
     return invalidArgumentResponse(request, meta, formatZodError(error))
   }
@@ -40,5 +47,5 @@ export function mapDispatcherError(
   if (request.method.startsWith('emulator.')) {
     return mapEmulatorError(request.id, meta, error)
   }
-  return withAgentLaunchNothingRan(mapRuntimeError(request.id, meta, error), error)
+  return mapRuntimeError(request.id, meta, error)
 }

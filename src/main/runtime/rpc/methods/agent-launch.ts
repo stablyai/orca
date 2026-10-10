@@ -331,7 +331,7 @@ export const AGENT_LAUNCH_METHODS = [
             throw agentLaunchTabClosedAnswer(context)
           }
           if (error.failedWithoutEffects) {
-            throw error.cause
+            throw error.nothingRanAnswer()
           }
           throw new Error('agent_session_operation_unknown', { cause: error.cause })
         }
