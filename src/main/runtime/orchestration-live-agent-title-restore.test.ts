@@ -72,4 +72,77 @@ describe('neutral title while the hook-owned agent process is alive', () => {
     ])
     db.close()
   })
+
+  it('delivers after restore when structured status is idle but no live title was observed', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-live-agent-structured-idle-restore-')
+    const { runtime } = createRuntime(db, { agentType: 'claude' })
+    const write = vi.fn((_ptyId: string, _data: string) => true)
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'claude',
+      hasRendererSerializer: () => true,
+      serializeBuffer: async () => ({
+        data: '\x1b]0;Claude ready\x07',
+        cols: 80,
+        rows: 24,
+        lastTitle: 'Claude ready'
+      })
+    })
+    const run = createBoundRun(db, 'Restored Claude Run')
+    await runtime.listTerminals()
+    const attached = runtime.acceptPtyDataBounded(PTY_ID, 'restored pane attached', 1)
+    await attached.completion
+    insertDirectRunMessage(db, run.id, 'Worker progress')
+
+    await expect(runtime.getTerminalAgentStatus(TERMINAL_HANDLE)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'idle'
+    })
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    db.close()
+  })
+
+  it('keeps a restored recipient ineligible while structured status is working', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-live-agent-structured-working-restore-')
+    const { runtime } = createRuntime(db, { agentType: 'claude' })
+    const write = vi.fn((_ptyId: string, _data: string) => true)
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => 'claude',
+      hasRendererSerializer: () => true,
+      serializeBuffer: async () => ({
+        data: '\x1b]0;\u280b Claude Code\x07',
+        cols: 80,
+        rows: 24,
+        lastTitle: '\u280b Claude Code'
+      })
+    })
+    const run = createBoundRun(db, 'Restored Claude Run')
+    await runtime.listTerminals()
+    const attached = runtime.acceptPtyDataBounded(PTY_ID, 'restored pane attached', 1)
+    await attached.completion
+    insertDirectRunMessage(db, run.id, 'Worker progress')
+
+    await expect(runtime.getTerminalAgentStatus(TERMINAL_HANDLE)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
+    })
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(write).not.toHaveBeenCalled()
+    db.close()
+  })
 })
