@@ -4,7 +4,7 @@ import {
 } from './native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
 import { useNativeChatRowTypography } from './use-native-chat-row-typography'
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -47,6 +47,7 @@ import type {
   NativeChatRailOutlineEntry
 } from './native-chat-message-rail-items'
 import { useNativeChatRailHistoryJump } from './use-native-chat-rail-history-jump'
+import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
 import { useNativeChatReaderScrollInput } from './native-chat-reader-scroll-input'
 import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 
@@ -59,6 +60,8 @@ import { isStructuredAgentSessionThinking } from '../../../../shared/structured-
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
+import { transcriptTailRow } from './native-chat-transcript-tail-row'
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 
 /** The turn is blocked on the reader. `shown`: the pane draws the prompt itself, as a card;
  *  `unshown`: it cannot (the prompt is only in the agent's terminal). */
@@ -185,12 +188,7 @@ export function NativeChatMessageList({
   })
   // The transcript tail: what the running turn is doing, or that it waits on a
   // prompt nothing else on screen shows. A prompt card says so itself.
-  const tailRow =
-    awaitingInput === 'unshown'
-      ? 'awaiting-input'
-      : isWorking && awaitingInput === null
-        ? 'activity'
-        : null
+  const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
   const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
@@ -241,6 +239,7 @@ export function NativeChatMessageList({
       showsTailRow: tailRow !== null,
       isVisible,
       alignToViewportTop: transcriptWindow.alignToViewportTop,
+      isAlignPending: transcriptWindow.isAlignPending,
       scrollToEnd: transcriptWindow.scrollToEnd,
       restoreScrollOffset: transcriptWindow.restoreScrollOffset,
       consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
@@ -257,10 +256,10 @@ export function NativeChatMessageList({
   const rail = useNativeChatMessageRail({
     scrollRef,
     slots,
+    turnRows,
     virtualItems: transcriptWindow.virtualItems,
     outline: railOutline
   })
-  const servicedRailJumpRef = useRef(0)
   const requestRailJump = useCallback((item: NativeChatRailItem) => {
     navigationSequence.current += 1
     setNavigationRequest({
@@ -311,35 +310,24 @@ export function NativeChatMessageList({
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
-  useNativeChatMessageListHandle(ref, jumpToLatest)
   const readerScrollInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll: beginNavigation,
+    onTakeScroll: transcriptWindow.cancelAlign,
     onLeaveEnd: readerLeavesEnd
   })
-  // Pinning the target mounts it in the same commit, so the row exists by the time
-  // layout runs. Routed through `scrollMessageToTop` rather than the virtualizer
-  // because that is what releases the bottom pin — without it the next streamed
-  // token snaps the reader straight back down.
-  //
-  // Serviced once per request, then released. `slots` takes a new identity on
-  // every render, so an effect that merely depended on it would re-scroll to this
-  // row forever; and a request left standing would keep its pin, which outranks
-  // the diff reveal that shares it.
-  useLayoutEffect(() => {
-    if (railJump === null || servicedRailJumpRef.current === railJump.requestId) {
-      return
-    }
-    servicedRailJumpRef.current = railJump.requestId
-    const index = nativeChatSlotIndexOf(slots, railJump.messageId)
-    const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
-    if (row) {
-      scrollMessageToTop(row)
-    }
-    setNavigationRequest(null)
-  }, [railJump, scrollMessageToTop, slots])
+  useNativeChatMessageListHandle(ref, jumpToLatest, readerScrollInput.revealFindMatch)
+  useNativeChatRailJumpLanding({
+    railJump,
+    slots,
+    scrollRef,
+    scrollMessageToTop,
+    onActivate: rail.onActivate,
+    release: setNavigationRequest
+  })
 
   const rowContext = useMemo<NativeChatTranscriptRowContext>(
     () => ({
+      agentName: structuredAgentLabel(session.agent),
       expandSignal,
       revealedDiff,
       taskListPredecessors,
@@ -354,6 +342,7 @@ export function NativeChatMessageList({
       onRevealDiff: revealDiff
     }),
     [
+      session.agent,
       allowFileUriLinks,
       expandSignal,
       expandedTurnIds,

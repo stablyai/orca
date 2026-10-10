@@ -11,14 +11,14 @@ export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
 /**
- * Which runtime executes the SSH relay. `legacy` runs it on the host's Node with native deps
- * installed on the host; `pinned-node` uploads Orca's pinned Node and prebuilt addons (design D5).
+ * Which runtime executes the SSH relay. `pinned-node` runs the D6 ladder on Orca's uploaded Node and
+ * prebuilt addons (design D5); `legacy` is the opt-in host Node with native deps installed by npm.
  */
 export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
 export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
-export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'legacy'
+export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'pinned-node'
 
-/** Where the design D6 fallback ladder landed; `legacy` is the host-npm path outside it. */
+/** Where the design D6 fallback ladder landed; `legacy` is the opt-in host-npm path outside it. */
 export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
 export type SshRemoteRuntimeRung = (typeof SSH_REMOTE_RUNTIME_RUNGS)[number]
 
@@ -30,6 +30,8 @@ export type SshRemoteRuntimeResolution = {
   rung: SshRemoteRuntimeRung
   /** The classified refusal that stepped off Orca's pinned Node, when one did. */
   pinnedRefusal?: string
+  /** Epoch ms the refusal was proved; a refusal the host can lose expires from it. */
+  refusedAt?: number
   glibc: string | null
   runtimeSha256: string
   orcaMajor: number
@@ -70,6 +72,9 @@ export type SshTarget = {
   /** Grace period in seconds before relay shuts down after disconnect.
    *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
+  /** Lets this host's relayed `orca` CLI control this Orca beyond its own terminals (other hosts,
+   *  orchestration, files). Off by default: the host is a guest, not an owner. */
+  allowRemoteCliControl?: boolean
   /** Set to true after a successful connection that triggered a credential
    *  prompt (passphrase or password). Persisted so startup reconnect can
    *  partition targets into eager (no passphrase) vs deferred (passphrase)
@@ -256,6 +261,8 @@ export type SshConnectionState = {
   remotePlatform?: SshRemotePlatform
   /** Set while connected without the Orca remote server (runtime ladder rung D). */
   plainSsh?: SshPlainSshMode
+  /** Set while the relay runs on the opt-in host-Node runtime, an unsupported configuration. */
+  hostNodeRuntime?: boolean
   /** Which server this host runs; optional so older clients simply ignore it. */
   managedServer?: SshManagedServerStatus
 }
@@ -276,7 +283,7 @@ export type SshManagedServerUpdateNote = {
   detail?: string
 }
 
-/** A managed server that is down and could not be started, with why (and orcad.log's tail). */
+/** A managed server that did not answer and was not proven serving, with why (and orcad.log's tail). */
 export type SshManagedServerServingNote = { state: 'unverifiable'; detail: string }
 
 export const SSH_MANAGED_SERVER_RELAY_REASONS = [
@@ -296,7 +303,7 @@ export type SshManagedServerStatus =
       kind: 'managed'
       environmentId: string
       update?: SshManagedServerUpdateNote
-      /** Set when the server was not running and could not be started; never a terminal verdict. */
+      /** Set when the server did not answer and no start brought it up; never a terminal verdict. */
       serving?: SshManagedServerServingNote
     }
   | { kind: 'setting-up'; phase: (typeof SSH_MANAGED_SERVER_PHASES)[number] }
@@ -349,6 +356,15 @@ export type SshRemotePtyLease = {
   /** The host listed this ptyId under a different PTY incarnation, so the id no longer routes to
    *  this lease's shell. Written only by the pending-stop replay's `relay-id-recycled` retirement. */
   relayIdRecycled?: true
+}
+
+/**
+ * A lease that still claims a running terminal: a client holds it (`attached`) or let it run
+ * (`detached`). `expired` lost its owner without an exit record and `terminated` ended; neither is
+ * a claim, though only `terminated` is evidence the terminal exited.
+ */
+export function isLiveSshPtyLease(lease: Pick<SshRemotePtyLease, 'state'>): boolean {
+  return lease.state === 'attached' || lease.state === 'detached'
 }
 
 /**

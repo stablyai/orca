@@ -16,8 +16,10 @@ import {
 import { STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER } from './structured-agent-session-restart-resume-wiring'
 import {
   interruptedRestart,
+  QUIT_CUT_NOTICE,
   startAgent,
   statusNotes,
+  continuationCannotFold,
   supersededRefusal,
   throwAfterContinuationAccepted
 } from './structured-agent-session-restart-interruption-test-harness'
@@ -145,11 +147,11 @@ it('replays the same logical continuation through the durable send ledger', asyn
 })
 
 // A send that throws after Orca may have taken it is not proof it was not delivered.
-it('keeps a continuation unconfirmed when its send throws after acceptance', async () => {
+it('keeps a continuation unconfirmed when its accepted message cannot be read back', async () => {
   const { host, store } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   expect(await host.restartResume.list()).toHaveLength(1)
-  throwAfterContinuationAccepted()
+  continuationCannotFold()
 
   const result = await host.restartResume
     .continueAfterRestart([SESSION], 'modal')
@@ -168,6 +170,27 @@ it('keeps a continuation unconfirmed when its send throws after acceptance', asy
       .listOperationRows()
       .find((row) => row.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER)
   ).toMatchObject({ outcome: { status: 'succeeded' } })
+})
+
+// A throw after the message is in the chat is answered as a resend would be: it was delivered.
+it('reports a continuation delivered when its send throws after its message is in the chat', async () => {
+  const { host, dispatch } = await interruptedRestart()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  expect(await host.restartResume.list()).toHaveLength(1)
+  throwAfterContinuationAccepted()
+
+  const result = await host.restartResume
+    .continueAfterRestart([SESSION], 'modal')
+    .finally(() => vi.restoreAllMocks())
+
+  expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
+  expect(result.failed).toEqual([])
+  expect(dispatch).toHaveBeenCalledOnce()
+  const notes = await statusNotes(host)
+  expect(notes).toContainEqual({ text: AGENT_SESSION_RESTART_CONTINUATION_NOTE, tone: undefined })
+  expect(notes.map((note) => note.text)).not.toContain(
+    AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
+  )
 })
 
 // The continuation is accepted, then its start fails: the message is rejected with the cause and
@@ -325,6 +348,7 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
   expect(await host.restartResume.continueAfterRestart([SESSION], 'modal')).toEqual({
     resumed: [],
     continued: [],
+    skipped: [SESSION],
     sessions: [],
     failed: []
   })
@@ -357,7 +381,8 @@ it("refuses a continuation quietly when the user's own message was accepted firs
     failed: []
   })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-  expect(await statusNotes(host)).toEqual([])
+  // The quit's own row about the cut, and nothing about the refused continuation.
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
   expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
 })

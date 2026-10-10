@@ -24,6 +24,14 @@ describe('nativeChatMessagePlainText', () => {
     ).toBe(AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'])
   })
 
+  it('leaves a visual line out of the copied prose, but not one inside a code fence', () => {
+    const text =
+      'Chart:\n::orca-visual{file="usage.html"}\nDone.\n```\n::orca-visual{file="x.html"}\n```'
+    expect(nativeChatMessagePlainText({ blocks: [{ type: 'text', text }] })).toBe(
+      'Chart:\nDone.\n```\n::orca-visual{file="x.html"}\n```'
+    )
+  })
+
   it('is empty for a message with no prose', () => {
     expect(
       nativeChatMessagePlainText({ blocks: [{ type: 'tool-call', name: 'Read', input: {} }] })

@@ -100,8 +100,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
           agent: effectiveAgent,
           workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
           prompt: args.draftContent,
-          promptDelivery: args.promptDelivery,
-          initialSessionOptions: startupPlan?.sessionOptions
+          promptDelivery: args.promptDelivery
         })
   const structuredLaunch = plan?.route === 'structured-native-chat'
 

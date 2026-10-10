@@ -121,6 +121,8 @@
   --color-status-warning: var(--status-warning);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  --color-callout-note: var(--callout-note);
+  --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -393,6 +395,9 @@
   --status-warning: #ca8a04;
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* GitHub's own hues for the two callout kinds no status token covers. */
+  --callout-note: #0969da;
+  --callout-important: #8250df;
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
@@ -416,6 +421,8 @@
   --status-warning: #eab308;
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  --callout-note: #4493f8;
+  --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;
@@ -1549,12 +1556,20 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 14%, var(--worktree-sidebar));
 }
 
-/* Why: one-shot status-bar callout is portaled fixed above the meters.
-   Opaque popover surface (not glass) so titlebar/terminal chrome cannot
-   bleed through; use design tokens + the documented floating elevation. */
+/* Opaque token-based gradient lifts the callout above surrounding chrome. */
 .status-bar-change-notice-card {
-  border: 1px solid var(--border);
-  background: var(--popover);
+  --status-bar-notice-border: color-mix(in srgb, var(--popover-foreground) 12%, var(--border));
+  --status-bar-notice-surface-bottom: color-mix(
+    in srgb,
+    var(--popover-foreground) 4%,
+    var(--popover)
+  );
+  border: 1px solid var(--status-bar-notice-border);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--popover-foreground) 10%, var(--popover)),
+    var(--status-bar-notice-surface-bottom)
+  );
   color: var(--popover-foreground);
   /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
   box-shadow: var(--shadow-floating);
@@ -1569,9 +1584,9 @@ html.native-shell .app-layout {
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  background: var(--popover);
+  border-right: 1px solid var(--status-bar-notice-border);
+  border-bottom: 1px solid var(--status-bar-notice-border);
+  background: var(--status-bar-notice-surface-bottom);
 }
 
 /* Why: the first-run Mobile Emulator intro sits directly under that menu row;
@@ -3332,4 +3347,59 @@ html.native-shell .app-layout {
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.workspace-reference-stack {
+  isolation: isolate;
+  position: relative;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.workspace-reference-stack-front,
+.workspace-reference-stack-ghost {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-reference-stack-front {
+  z-index: 2;
+}
+
+.workspace-reference-stack-ghost[data-depth='1'] {
+  transform: translate(-1.5px, 2px);
+  opacity: 0.45;
+  z-index: 1;
+}
+
+.workspace-reference-stack-ghost[data-depth='2'] {
+  transform: translate(-3px, 4px);
+  opacity: 0.25;
+}
+
+.workspace-reference-stack svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-reference-stack-count {
+  position: absolute;
+  top: -8px;
+  right: -5px;
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 11px;
+  color: var(--worktree-sidebar-foreground);
+  text-shadow: 0px 1px 1px var(--background);
+}
+
+.workspace-reference-stack-count[data-multiple-digits='true'] {
+  letter-spacing: -0.02em;
 }

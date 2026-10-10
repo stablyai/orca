@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -77,7 +78,7 @@ export class MetadataLineageOperations {
   setWorktreeMetaForHost(
     worktreeId: string,
     executionHostId: ExecutionHostId,
-    meta: Partial<WorktreeMeta>
+    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
   ): WorktreeMeta {
     return setWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,
@@ -108,7 +109,10 @@ export class MetadataLineageOperations {
     )
   }
 
-  setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta {
+  setWorktreeMeta(
+    worktreeId: string,
+    meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+  ): WorktreeMeta {
     const state = this[metadataLineageOperationsContext].runtime.state
     const stored = state.worktreeMeta[worktreeId]
     const executionHostId = meta.hostId ?? stored?.hostId
@@ -318,13 +322,4 @@ export function removeWorkspaceLineageForFolderParent(
       ]
     }
   }
-}
-
-export function installMetadataLineageOperationsContext(
-  target: MetadataLineageOperations,
-  source: MetadataLineageOperations
-): void {
-  Object.defineProperty(target, metadataLineageOperationsContext, {
-    value: source[metadataLineageOperationsContext]
-  })
 }

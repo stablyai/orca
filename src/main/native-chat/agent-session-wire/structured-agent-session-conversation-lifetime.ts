@@ -25,6 +25,8 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { sameProviderChild } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionExpiredStartup } from './structured-agent-session-startup-attempt'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
   typeof createStructuredAgentSessionConversationLifetime
@@ -52,12 +54,12 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   const stopAgent = (sessionId: string, ending: StructuredAgentSessionStopEnding) =>
     stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, ending)
 
-  const closeConversation = async (sessionId: string): Promise<boolean> => {
+  const closeConversation = async (sessionId: string, atRest = false): Promise<boolean> => {
     // The handle carries the proof that releases a lease its child's wind-down could not.
     if (await releaseLeaseOfEndedStructuredAgentSessionChild(host.context(), sessionId)) {
       return false
     }
-    return closeStructuredAgentSessionConversationUnderSerialize(
+    const closed = await closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
         closeStatus: (id) => {
@@ -66,8 +68,13 @@ export function createStructuredAgentSessionConversationLifetime(host: {
           host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
         }
       },
-      sessionId
+      sessionId,
+      atRest
     )
+    if (closed) {
+      host.context().runtimeState.optionRevisions.forget(sessionId)
+    }
+    return closed
   }
 
   const idleSweep = new StructuredAgentSessionIdleSweep({
@@ -91,7 +98,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
         cause: 'host-stop'
       }),
-    closeConversation,
+    closeConversation: (sessionId) => closeConversation(sessionId, true),
     logger: deps().logger,
     ...deps().idleSweep
   })
@@ -99,10 +106,35 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   return {
     idleSweep,
     stopAgent,
+    /** A host stop of the child the expired attempt published, if it is still that one and still
+     *  starting: its end fails what is queued, as the idle sweep's stop of a start does. */
+    expireStartup: ({ sessionId, child: expired }: StructuredAgentSessionExpiredStartup): void => {
+      void serialize(sessionId, async () => {
+        const child = sessions.get(sessionId)?.child
+        if (
+          !expired ||
+          !child ||
+          child.phase !== 'starting' ||
+          !sameProviderChild(child, expired)
+        ) {
+          return
+        }
+        await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
+          cause: 'host-stop'
+        })
+      }).catch((error: unknown) =>
+        deps().logger.warn('stopping an agent past its startup limit failed', {
+          scope: 'startup-limit',
+          sessionId,
+          error
+        })
+      )
+    },
     /** Quit has begun: nothing opens a conversation or sweeps one after this. */
     dispose: (): void => {
       disposed = true
       idleSweep.dispose()
+      host.context().runtimeState.startupAttempts.dispose()
     },
     /**
      * The only way any code reaches a session. An open conversation answers without the lock, so
@@ -140,7 +172,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       })
     },
     /** Ends a chat's resources, not the chat: its record and journal stay on disk, and what is
-     *  still queued will not be sent; a person's message stays as a held card. */
+     *  still queued waits for the chat's next turn; a person's unsent message stays as a card. */
     close: (sessionId: string, cause: StructuredAgentSessionCloseCause): Promise<void> => {
       // Outside the queue: a start the provider never answers must not hold the close behind it.
       host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
@@ -148,8 +180,11 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         readRefusals.forget(sessionId)
         const session = sessions.get(sessionId)
         if (session) {
-          // Settled before the stop, so no start delivers it.
-          await holdClosedStructuredAgentSessionSends(deps(), sessionId, session.journal)
+          // Settled and marked before the stop, so no start delivers it, and nothing it closed with
+          // sends by itself, even if the handle stays open.
+          await holdClosedStructuredAgentSessionSends(deps(), sessionId, session.journal, {
+            mark: 'always'
+          })
         }
         await stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, { cause })
         await closeConversation(sessionId)

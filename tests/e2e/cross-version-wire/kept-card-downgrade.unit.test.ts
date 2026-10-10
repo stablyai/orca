@@ -11,19 +11,17 @@ import { claudeProviderHandle } from '../../../src/shared/agent-session-provider
 import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../src/shared/agent-session-queued-message-wire'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { holdUnsentSends } from '../../../src/main/native-chat/agent-session-journal/journal-unsent-send-hold'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-// A kept send is an ordinary waiting card held by a new value in its existing `hold_reason`
-// column, placed ahead of the queue: no new state or column. A build with the queue but without
-// this change reads an unknown hold as a plain one: it must list the card first and never send it,
-// even after a person's turn ends a restart's pause, and must still settle a send this build's quit
-// left queued. One exception lives in that build's own code: its /clear carries every card over
-// without its hold, so the replacement's next turn sends a carried kept card. The main commit this change branched from, which has the queue; move it to the
-// newest release that has the queue and predates this change. A baseline holding this change tests
-// no downgrade.
+// A kept send is an ordinary waiting card placed ahead of the queue, and the reopen's mark is a
+// tombstone carrier key: no new state, column or row kind. A build with the queue but without
+// either holds a card another host process wrote under its own restart pause, so it must list the
+// kept card first, never send it by itself, send it first once a turn there ends that pause, and
+// still settle a send this build's quit left queued. The main commit the kept send branched from,
+// which has the queue; move it to the newest release that has the queue and predates it. A
+// baseline holding this change tests no downgrade.
 const BASELINE_REF = '5a56636f6679071d6ec68b851ef7932cd3222560'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
 const HOST_RESTARTED = agentSessionFailureWords(agentSessionFailureFact('hostRestarted'), {
@@ -130,7 +128,7 @@ async function acceptPersonSend(
   })
 }
 
-test('an older build lists a kept card first and never sends it, even after a person’s turn', async () => {
+test('an older build lists a kept card first, holds it, and sends it first once a turn there lifts its pause', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-kept-card-downgrade-'))
   const journals = createTrackedJournalOpener()
   try {
@@ -149,6 +147,7 @@ test('an older build lists a kept card first and never sends it, even after a pe
       hostInstance: 'host-b',
       hold: { cause: 'hostRestarted' }
     })
+    await reopened.markQueueReopen(0)
     expect(reopened.queuedMessages.list().map((card) => card.messageId)).toEqual([
       'kept',
       'queued-card'
@@ -165,25 +164,22 @@ test('an older build lists a kept card first and never sends it, even after a pe
           state,
           holdReason
         }))
+      expect(downgraded.repair).toEqual({ malformedRows: 0 })
       expect(cards()).toEqual([
-        { messageId: 'kept', state: 'waiting', holdReason: QUEUED_MESSAGE_PAUSED_KEPT },
+        { messageId: 'kept', state: 'waiting', holdReason: null },
         { messageId: 'queued-card', state: 'waiting', holdReason: null }
       ])
       expect(downgraded.queuedMessages.list()[0]!.position).toBeLessThan(1)
       expect(downgraded.submission('kept')).toMatchObject({ dispatchState: 'rejected' })
-      // A person's turn there adopts every card into its process, which ends the restart's
-      // pause; the kept card's hold survives it, so its drain never picks it. That build skips a
-      // held card as it skips a failed send's, so the card behind it is the one it sends.
+      // Written by another process, so that build's restart pause holds both: nothing sends.
+      const pauses = () => downgraded.queuedMessages.pauses('host-c')
+      expect(pauses().map((pause) => pause.reason)).toEqual(['restarted'])
+      expect(nextSendable(pauses(), downgraded.queuedMessages.list())).toBeNull()
+      // A person's turn there adopts every card into its process, which ends that pause; the
+      // kept card, first in the queue, is the one it sends first.
       expect(await downgraded.queuedMessages.adopt('host-c')).toBe(true)
-      expect(cards()[0]).toMatchObject({
-        messageId: 'kept',
-        holdReason: QUEUED_MESSAGE_PAUSED_KEPT
-      })
-      expect(downgraded.queuedMessages.pauses('host-c')).toEqual([])
-      expect(
-        nextSendable(downgraded.queuedMessages.pauses('host-c'), downgraded.queuedMessages.list())
-          ?.messageId
-      ).toBe('queued-card')
+      expect(pauses()).toEqual([])
+      expect(nextSendable(pauses(), downgraded.queuedMessages.list())?.messageId).toBe('kept')
     } finally {
       await older.closeAll()
     }

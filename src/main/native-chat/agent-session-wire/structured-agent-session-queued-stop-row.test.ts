@@ -242,11 +242,16 @@ describe("a /clear's carried cards", () => {
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     const cleared = await clear()
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    const replacementId = cleared.ok ? HOST_TEST_SESSION : undefined
     if (!replacementId) {
-      throw new Error(`expected a replacement session: ${JSON.stringify(cleared)}`)
+      throw new Error(`expected clear to succeed: ${JSON.stringify(cleared)}`)
     }
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+    // Held there, unshown: nothing runs in the fresh conversation.
+    expect(await rig.queuePause(replacementId)).toBeNull()
+    expect(structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)).toEqual([
+      'stopped',
+      'cleared'
+    ])
     // Idle there, so the person's send goes straight out rather than queueing.
     const text = hostTestMessage('hi')
     const person = rig.host.send(QUEUED_RIG_CALLER, {
@@ -272,7 +277,12 @@ describe("a /clear's carried cards", () => {
     await rig.host.settleLateDispatch({
       sessionId: replacementId,
       clientMessageId: sent.value.clientMessageId,
-      providerIdentity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-hi', ordinal: 0 }
+      providerIdentity: {
+        provider: 'codex',
+        threadId: rig.store.getRecord(replacementId)!.providerHandleChain.at(-1)!.handle.nativeId,
+        turnId: 'turn-hi',
+        ordinal: 0
+      }
     })
     expect(journal(replacementId).queuedMessages.list()[0]?.messageId).toBe(carried)
     expect(structuredQueuePauses(journal(replacementId))).toEqual([])
@@ -298,8 +308,10 @@ describe('no stored pause', () => {
       envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
       ...fields
     })
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    expect(replacementId && (await rig.queuePause(replacementId))).toEqual({ reason: 'cleared' })
+    const replacementId = cleared.ok ? HOST_TEST_SESSION : undefined
+    expect(
+      replacementId && structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)
+    ).toEqual(['stopped', 'cleared'])
     expect(pauseTables()).toBe(0)
   })
 })

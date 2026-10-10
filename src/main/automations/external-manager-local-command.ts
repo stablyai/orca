@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000

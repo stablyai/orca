@@ -1,16 +1,28 @@
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
+import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 
+export function clientReadsOptionsWithoutModel(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY) === true
+  )
+}
+
 /**
  * One rule for every caller: can this client read structured sessions? The host's own
- * `experimentalStructuredNativeChat` is not consulted. It is the host user's launch preference,
+ * The host's Chat UI setting is not consulted. It is the host user's launch preference,
  * and whether a new agent is a chat is decided by whoever launches it, so a paired client's
  * sessions stay reachable whatever the host's setting says. The negotiated capability is a wire
  * term, asked of remote clients only: in-process callers are the host's own build.
@@ -24,9 +36,7 @@ export function supportsStructuredAgentSessions(
   )
 }
 
-/** Whether a remote client renders `agent`'s chat: the one rule for every surface that withholds
- *  an agent's rows (tabs, restart offers). Codex needs structured support; Claude also its own
- *  capability; any other agent a client that renders the host's registered agents. */
+/** One audience rule for tabs and restart offers. Pi also needs dialog-shape support. */
 export function clientRendersStructuredAgent(
   clientCapabilities: readonly RuntimeCapability[] | undefined,
   agent: string
@@ -37,10 +47,25 @@ export function clientRendersStructuredAgent(
   if (agent === 'codex') {
     return true
   }
+  if (agent === 'pi' && !clientCapabilities.includes(PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY)) {
+    return false
+  }
   return clientCapabilities.includes(
     agent === 'claude'
       ? CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       : STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
+}
+
+/** Preserve the existing session audience for every agent except Pi. */
+export function clientReadsStructuredSessionAgent(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    agent !== 'pi' ||
+    context.clientKind === undefined ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
   )
 }
 
@@ -77,7 +102,7 @@ export function isStructuredNativeChatEnabled(
   runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
 ): boolean {
   try {
-    return runtime.getClientSettings().experimentalStructuredNativeChat === true
+    return isNativeChatEnabled(runtime.getClientSettings())
   } catch {
     return false
   }

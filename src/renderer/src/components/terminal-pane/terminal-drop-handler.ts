@@ -1,9 +1,13 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
-import { readWorkspaceFileDragPaths } from '@/lib/workspace-file-drag'
+import {
+  isResolvedWorkspaceFileDragExecutionHost,
+  readWorkspaceFileDragPaths,
+  readWorkspaceFileDragSource
+} from '@/lib/workspace-file-drag'
 import { captureTerminalDropTarget } from './terminal-drop-target'
 import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
@@ -16,11 +20,11 @@ import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
 import {
   handleNativeTerminalFileDrop as handleTerminalFileDrop,
   type NativeTerminalFileDropArgs
-} from './terminal-native-file-drop'
+} from './terminal-native-file-drop-destination'
 
 export { handleTerminalFileDrop }
 
-type InternalArgs = Omit<NativeTerminalFileDropArgs, 'data'> & {
+type InternalArgs = Omit<NativeTerminalFileDropArgs, 'paths' | 'pane'> & {
   dataTransfer: Pick<DataTransfer, 'getData'>
   dropTarget?: EventTarget | null
   paneLeafId?: string
@@ -34,7 +38,7 @@ export type InternalTerminalFileDropResult =
       pathCount: number
     }
   | { status: 'pasted'; pathCount: number }
-  | { status: 'rejected'; reason: 'paths-too-large' | 'too-many-paths' }
+  | { status: 'rejected'; reason: 'paths-too-large' | 'too-many-paths' | 'source-host-mismatch' }
 
 export async function handleInternalTerminalFileDrop({
   manager,
@@ -65,11 +69,30 @@ export async function handleInternalTerminalFileDrop({
   if (!transport) {
     return { status: 'ignored', reason: 'no-transport' }
   }
-  const dropTargetSnapshot = captureTerminalDropTarget(pane, transport)
-
   const host = parseExecutionHostId(transport.getExecutionHostId?.())
   const runtimeEnvironmentId =
     transport.getRuntimeEnvironmentId?.() ?? (host?.kind === 'runtime' ? host.environmentId : null)
+  // A paired host's local terminal belongs to that host, not this desktop.
+  const targetExecutionHostId =
+    host?.kind === 'local' && runtimeEnvironmentId
+      ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+      : host?.id
+  const source = readWorkspaceFileDragSource(dataTransfer)
+  const sourceHost = parseExecutionHostId(source?.executionHostId)
+  const sourceRuntimeEnvironmentId =
+    source?.runtimeEnvironmentId ??
+    (sourceHost?.kind === 'runtime' ? sourceHost.environmentId : null)
+  if (
+    !source ||
+    !isResolvedWorkspaceFileDragExecutionHost(source.executionHostId) ||
+    source.executionHostId !== targetExecutionHostId ||
+    sourceRuntimeEnvironmentId !== runtimeEnvironmentId ||
+    (host?.kind === 'runtime' && runtimeEnvironmentId !== host.environmentId)
+  ) {
+    toast.error(getTerminalInternalFileDropRejectionMessage('source-host-mismatch'))
+    return { status: 'rejected', reason: 'source-host-mismatch' }
+  }
+  const dropTargetSnapshot = captureTerminalDropTarget(pane, transport)
   const worktreePath = resolveTerminalDropWorktreePath(
     worktreeId,
     runtimeEnvironmentId ? undefined : cwd,

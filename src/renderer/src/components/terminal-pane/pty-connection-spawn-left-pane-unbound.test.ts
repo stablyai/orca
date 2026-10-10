@@ -207,6 +207,25 @@ describe('fresh spawn leaves a local pane unbound', () => {
     )
   })
 
+  // #21195: connect() resolves empty while the remote transport still holds an armed retry.
+  it('leaves recovery to a transport that owns its own retry', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = Object.assign(createMockTransport(), { ownsRecovery: vi.fn(() => true) })
+    transport.connect.mockImplementation(async () => undefined)
+    transportFactoryQueue.push(transport)
+
+    const deps = createDeps({ tabId: 'tab-transport-retry' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocks cover every pane, manager, and deps member the connect path reads.
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(40)
+
+    expect(transport.connect).toHaveBeenCalled()
+    expect(transport.ownsRecovery).toHaveBeenCalled()
+    expect(requestTerminalPaneRecovery).not.toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
+    )
+  })
+
   it('does not remount when the spawn bound a PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-bound')

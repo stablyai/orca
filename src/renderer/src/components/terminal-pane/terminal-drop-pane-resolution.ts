@@ -1,12 +1,5 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 
-export function resolveNativeTerminalDropPane(
-  manager: PaneManager,
-  paneLeafId: string | undefined
-): ManagedPane | null {
-  return paneLeafId ? (manager.getPanes().find((pane) => pane.leafId === paneLeafId) ?? null) : null
-}
-
 export function resolveInternalTerminalDropPane(
   manager: PaneManager,
   dropTarget: EventTarget | null | undefined,
@@ -14,7 +7,7 @@ export function resolveInternalTerminalDropPane(
 ): ManagedPane | null {
   const panes = manager.getPanes()
   if (paneLeafId !== undefined) {
-    return resolveNativeTerminalDropPane(manager, paneLeafId)
+    return panes.find((pane) => pane.leafId === paneLeafId) ?? null
   }
   if (dropTarget) {
     const targetedPane = panes.find((pane) => paneContainsDropTarget(pane, dropTarget))

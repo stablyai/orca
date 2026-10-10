@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveWithSshG } from './ssh-config-parser'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -9,8 +9,8 @@ vi.mock('os', () => ({
 // Why mock the chokepoint and not child_process: the point of routing this
 // probe through runProcess is that the spawn shape (windowsHide, timeout,
 // argv quoting) is no longer this module's decision, so the test must not
-// re-assert it here. src/shared/child-process owns that contract.
-vi.mock('../../shared/child-process/run-process', () => ({
+// re-assert it here. @orca/process-host owns that contract.
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn()
 }))
 

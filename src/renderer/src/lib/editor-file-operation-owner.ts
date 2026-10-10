@@ -9,6 +9,7 @@ import {
   type WorktreeOperationGenerationSnapshot
 } from './worktree-operation-generation'
 import {
+  getFloatingWorkspaceOperationRoute,
   resolveExplicitWorktreeOperationRouteResult,
   resolveWorktreeOperationRoute,
   settingsForWorktreeOperationRoute,
@@ -56,20 +57,19 @@ export function captureEditorFileOperationProvenance(
       : 'legacy'
   const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
   const route =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      ? { executionHostId: 'local' as const, runtimeEnvironmentId: null }
-      : explicitResolution.kind === 'resolved'
-        ? explicitResolution.route
-        : explicitResolution.kind === 'ambiguous'
-          ? null
-          : ownerHintProvided && worktreeIsPublished
-            ? {
-                executionHostId: hintedRuntimeEnvironmentId
-                  ? (`runtime:${encodeURIComponent(hintedRuntimeEnvironmentId)}` as const)
-                  : ('local' as const),
-                runtimeEnvironmentId: hintedRuntimeEnvironmentId
-              }
-            : resolveEditorOwnerRoute(state, worktreeId)
+    getFloatingWorkspaceOperationRoute(worktreeId) ??
+    (explicitResolution.kind === 'resolved'
+      ? explicitResolution.route
+      : explicitResolution.kind === 'ambiguous'
+        ? null
+        : ownerHintProvided && worktreeIsPublished
+          ? {
+              executionHostId: hintedRuntimeEnvironmentId
+                ? (`runtime:${encodeURIComponent(hintedRuntimeEnvironmentId)}` as const)
+                : ('local' as const),
+              runtimeEnvironmentId: hintedRuntimeEnvironmentId
+            }
+          : resolveEditorOwnerRoute(state, worktreeId))
   if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
@@ -128,8 +128,9 @@ function resolveCurrentEditorRoute(
   worktreeId: string,
   provenance: EditorFileOperationProvenance
 ): WorktreeOperationRoute | null {
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return { executionHostId: 'local', runtimeEnvironmentId: null }
+  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
+  if (floatingRoute) {
+    return floatingRoute
   }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind === 'resolved') {

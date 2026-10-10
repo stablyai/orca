@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
@@ -14,6 +15,7 @@ describe('structuredAgentSessionHostSupport', () => {
       promptCancel: false,
       questionAnswers: false,
       queuedMessages: false,
+      queuedCommands: false,
       quietRepeatedStop: false,
       statusFeed: false
     }
@@ -27,6 +29,9 @@ describe('structuredAgentSessionHostSupport', () => {
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, queuedMessages: true })
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, queuedCommands: true })
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, quietRepeatedStop: true })

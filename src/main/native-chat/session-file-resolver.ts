@@ -21,6 +21,7 @@ import {
   wslCodexSessionsDirs
 } from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
+import { parseSshTranscriptPath } from './ssh-transcript-path'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
@@ -112,6 +113,10 @@ export async function resolveSessionFilePath(
   // stale/missing paths fall through to the id-based search.
   let unavailable: WslTranscriptFsError | undefined
   const hookPath = options.transcriptPath?.trim()
+  // An SSH host's transcript is read only where its hook said; never search this machine for it.
+  if (hookPath && parseSshTranscriptPath(hookPath)) {
+    return extname(hookPath) === '.jsonl' ? hookPath : null
+  }
   if (hookPath && extname(hookPath) === '.jsonl') {
     try {
       const hostReadable = await toHostReadableTranscriptPath(hookPath, {

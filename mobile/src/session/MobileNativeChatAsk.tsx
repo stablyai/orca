@@ -5,6 +5,7 @@ import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-c
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 
 type Props = {
   prompt: AskPrompt
@@ -22,7 +23,8 @@ const OTHER = -1
 
 /** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
  *  question per step with tabs across the top, a Next button that advances (Send
- *  on the last step), and a Cancel that dismisses the prompt. Neutral styling
+ *  on the last step), and a Cancel that dismisses the prompt. A single-select pick
+ *  moves on by itself, as on desktop. Neutral styling
  *  with a subtle green accent on the active choice to match the rest of the app. */
 export function MobileNativeChatAsk({
   prompt,
@@ -35,18 +37,28 @@ export function MobileNativeChatAsk({
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const autoAdvance = useMobileNativeChatAskAutoAdvance()
 
+  // A single-select option answers the question, so the card moves on after a beat that shows
+  // it chosen; "Other…" still needs its text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
-    setSelections((prev) => {
-      const next = prev.map((s) => [...s])
-      const cur = next[qi] ?? []
-      if (multi) {
-        next[qi] = cur.includes(optIndex) ? cur.filter((i) => i !== optIndex) : [...cur, optIndex]
-      } else {
-        next[qi] = cur.includes(optIndex) ? [] : [optIndex]
-      }
-      return next
-    })
+    // The ref, not `submitting`: a tap can land before the render that disables the rows.
+    if (submittingRef.current) {
+      return
+    }
+    const cur = selections[qi] ?? []
+    const picked = !cur.includes(optIndex)
+    const chosen = !picked
+      ? cur.filter((i) => i !== optIndex)
+      : multi
+        ? [...cur, optIndex]
+        : [optIndex]
+    const next = selections.map((s, i) => (i === qi ? chosen : s))
+    setSelections(next)
+    autoAdvance.cancel()
+    if (picked && !multi && optIndex !== OTHER) {
+      autoAdvance.schedule(() => void advance(next))
+    }
   }
 
   const setOther = (qi: number, value: string): void => {
@@ -57,15 +69,16 @@ export function MobileNativeChatAsk({
     })
   }
 
-  const selectionFor = (qi: number): AskAnswerSelection => {
-    const picked = (selections[qi] ?? []).filter((i) => i !== OTHER)
-    const other = (selections[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
+  // `sel` is an explicit snapshot so a just-made pick isn't lost to the async setState.
+  const selectionFor = (qi: number, sel = selections): AskAnswerSelection => {
+    const picked = (sel[qi] ?? []).filter((i) => i !== OTHER)
+    const other = (sel[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
     return other ? { indices: picked, other } : { indices: picked }
   }
 
-  const isAnswered = (qi: number): boolean => {
-    const sel = selectionFor(qi)
-    return sel.indices.length > 0 || (sel.other ?? '').length > 0
+  const isAnswered = (qi: number, sel = selections): boolean => {
+    const answer = selectionFor(qi, sel)
+    return answer.indices.length > 0 || (answer.other ?? '').length > 0
   }
 
   const total = prompt.questions.length
@@ -82,23 +95,24 @@ export function MobileNativeChatAsk({
   )
   const canAdvance = !submitting && (isLast ? allAnswered : currentAnswered)
 
-  const submit = async (): Promise<void> => {
-    if (!allAnswered || submittingRef.current) {
+  const submit = async (sel: number[][]): Promise<void> => {
+    if (!prompt.questions.every((_, i) => isAnswered(i, sel)) || submittingRef.current) {
       return
     }
     submittingRef.current = true
     setSubmitting(true)
     try {
-      await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
+      await onAnswer(prompt.questions.map((_, i) => selectionFor(i, sel)))
     } finally {
       submittingRef.current = false
       setSubmitting(false)
     }
   }
 
-  const advance = async (): Promise<void> => {
+  const advance = async (sel = selections): Promise<void> => {
+    autoAdvance.cancel()
     if (isLast) {
-      await submit()
+      await submit(sel)
     } else {
       setIndex((i) => Math.min(i + 1, total - 1))
     }
@@ -121,7 +135,11 @@ export function MobileNativeChatAsk({
             <Pressable
               key={i}
               style={[styles.tab, i === index && styles.tabActive]}
-              onPress={() => setIndex(i)}
+              disabled={submitting}
+              onPress={() => {
+                autoAdvance.cancel()
+                setIndex(i)
+              }}
             >
               <Text style={[styles.tabText, i === index && styles.tabTextActive]} numberOfLines={1}>
                 {qq.header || `Step ${i + 1}`}
@@ -137,7 +155,16 @@ export function MobileNativeChatAsk({
       <ScrollView style={styles.scroll} keyboardShouldPersistTaps="always">
         <View style={styles.questionRow}>
           <Text style={styles.questionText}>{q.question}</Text>
-          <MobileNativeChatCardHeaderAction onCollapse={onCollapse} disabled={submitting} />
+          <MobileNativeChatCardHeaderAction
+            onCollapse={
+              onCollapse &&
+              (() => {
+                autoAdvance.cancel()
+                onCollapse()
+              })
+            }
+            disabled={submitting}
+          />
         </View>
         {q.options.map((opt, optIndex) => (
           <OptionRow
@@ -146,6 +173,7 @@ export function MobileNativeChatAsk({
             description={opt.description}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
+            disabled={submitting}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -153,6 +181,7 @@ export function MobileNativeChatAsk({
           label="Other…"
           selected={otherSelected}
           multi={q.multiSelect}
+          disabled={submitting}
           onPress={() => toggle(index, OTHER, q.multiSelect)}
         />
         {otherSelected ? (
@@ -172,6 +201,7 @@ export function MobileNativeChatAsk({
         <Pressable
           style={styles.cancel}
           onPress={async () => {
+            autoAdvance.cancel()
             if (!submittingRef.current && onCancel) {
               submittingRef.current = true
               setSubmitting(true)
@@ -195,7 +225,7 @@ export function MobileNativeChatAsk({
         ) : null}
         <Pressable
           style={[styles.next, !canAdvance && styles.nextDisabled]}
-          onPress={advance}
+          onPress={() => void advance()}
           disabled={!canAdvance}
         >
           <Text style={[styles.nextText, !canAdvance && styles.nextTextDisabled]}>
@@ -212,16 +242,22 @@ function OptionRow({
   description,
   selected,
   multi,
+  disabled,
   onPress
 }: {
   label: string
   description?: string
   selected: boolean
   multi?: boolean
+  disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   return (
-    <Pressable style={[styles.option, selected && styles.optionSelected]} onPress={onPress}>
+    <Pressable
+      style={[styles.option, selected && styles.optionSelected]}
+      disabled={disabled}
+      onPress={onPress}
+    >
       {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
       <View
         style={[

@@ -223,7 +223,7 @@ describe('SshRelaySession reattach while a previous relay is live', () => {
       'ssh:target-1@@pty-old',
       undefined
     )
-    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-old', 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-old', 'ssh:target-1')
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
       id: 'ssh:target-1@@pty-old',
       data: 'old screen'

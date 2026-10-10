@@ -71,7 +71,7 @@ function readAtRest(agents: StructuredAgentRegistry) {
   const resting = {
     child: null,
     params: { provider: RECORD.provider },
-    journal: { threadGoal: () => null, contextUsage: () => null }
+    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
   const context = {

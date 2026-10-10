@@ -43,8 +43,28 @@ const resultOutputSchema = z.object({
   MultiResult: z.object({ results: z.array(taskResultSchema) }).optional()
 })
 type GrokTask = z.infer<typeof taskSchema>
+export type GrokTaskResult = z.infer<typeof taskResultSchema>
 /** Grok's output reads name a monitor only by this command prefix. */
 const MONITOR_COMMAND = /^\[monitor[:\]]/
+/** ...and a subagent by this one; subagents are roster rows, not background tasks. */
+const SUBAGENT_COMMAND = /^\[subagent[:\]]/
+
+export function isGrokSubagentTask(task: Pick<GrokTask, 'command'>): boolean {
+  return SUBAGENT_COMMAND.test(task.command ?? '')
+}
+
+/** The per-task results of a finished output read or kill call. */
+export function grokTaskResults(
+  rawOutput: unknown
+): { type: 'TaskOutput' | 'KillTask'; tasks: GrokTaskResult[] } | undefined {
+  const result = resultOutputSchema.safeParse(rawOutput)
+  return result.success
+    ? {
+        type: result.data.type,
+        tasks: result.data.MultiResult?.results ?? (result.data.Result ? [result.data.Result] : [])
+      }
+    : undefined
+}
 
 function completedState(task: GrokTask): NativeChatBackgroundTaskBlock['state'] {
   return task.explicitly_killed
@@ -119,18 +139,19 @@ export function grokToolBackgroundTasks(
   update: ToolCallUpdate,
   tool: AgentJournalToolCallItem
 ): AcpBackgroundTaskUpdate[] {
-  const result = resultOutputSchema.safeParse(update.rawOutput)
-  if (result.success) {
-    const tasks =
-      result.data.MultiResult?.results ?? (result.data.Result ? [result.data.Result] : [])
-    return tasks.flatMap((task) => {
-      if (result.data.type === 'KillTask') {
+  const result = grokTaskResults(update.rawOutput)
+  if (result) {
+    return result.tasks.flatMap((task) => {
+      if (isGrokSubagentTask(task)) {
+        return []
+      }
+      if (result.type === 'KillTask') {
         return update.status === 'completed' && task.outcome === 'killed'
           ? [snapshot(task, 'idle')]
           : []
       }
       const state = resultState(task)
-      return state && !task.command?.startsWith('[subagent:') ? [snapshot(task, state)] : []
+      return state ? [snapshot(task, state)] : []
     })
   }
   const input = taskInputSchema.safeParse(tool.input)

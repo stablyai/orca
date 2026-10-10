@@ -1,11 +1,7 @@
 import type { Store } from '../persistence'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
-import {
-  getSshGitProvider,
-  getSshGitProviderGeneration,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
+import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRepo,
@@ -13,6 +9,8 @@ import {
 } from './local-worktree-runtime-options'
 import { setWorktreeGitStatusRefWatch } from './worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type GitStatusUpstreamRefWatchRequest = Omit<
   GitStatusRefBindingRequest,
@@ -39,14 +37,11 @@ export function applyGitStatusUpstreamRefWatchRequest(
         return undefined
       }
       const signal = boundedSignal(bindingSignal)
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
         return resolveGitStatusUpstreamRef(
           (gitArgs, cwd, requestSignal) =>
-            provider.exec(gitArgs, cwd, {
+            route.provider.exec(gitArgs, cwd, {
               signal: requestSignal,
               timeoutMs: UPSTREAM_REF_RESOLUTION_TIMEOUT_MS
             }),

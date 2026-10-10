@@ -6,7 +6,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'config/scripts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skill-recipe-shell.test.mjs',
   'src/main/ssh/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
-  'src/shared/child-process/run-process.test.ts',
+  'src/main/ssh/ssh-remote-commands.test.ts',
+  'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'src/main/ai-vault-search/session-search-index-writer.test.ts',
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
@@ -34,6 +35,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/**/*expiry*.test.ts',
   'src/renderer/src/lib/flatten-retained-slice.test.ts',
   'src/shared/own-retained-string.test.ts',
+  // Times V8 string flattening, which is what Electron main runs.
+  'src/main/runtime/terminal-tail-redraw-wall-time.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
   'src/main/plugins/plugin-worker-supervision.integration.test.ts',
   'src/main/usage/usage-scan-worker-event-loop.test.ts',
@@ -70,6 +73,9 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/structured-session-mail-redrive-wiring.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
+  'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
+  // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
+  'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime-client.test.ts',
   'src/shared/remote-runtime-connect-bound.test.ts',
   'src/shared/remote-runtime-subscription-connect-bound.test.ts',
@@ -83,11 +89,13 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/relay/relay-control-client.test.ts',
+  'src/main/ipc/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environment-preference.test.ts',
   'src/main/ipc/runtime-environment-transport-routing-tailscale-hint.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',
+  'config/scripts/process-host-dev-rebuild.test.ts',
   'config/scripts/vitest-node-runtime-boundary.test.ts',
   'config/scripts/vitest-node-runtime-pool.test.ts'
 ]

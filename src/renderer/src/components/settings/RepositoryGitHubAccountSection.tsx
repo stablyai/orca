@@ -59,9 +59,11 @@ export function RepositoryGitHubAccountSection({
       setLoading(true)
       setError(null)
       try {
-        const next = await listRepositoryGhBindableAccounts(runtimeTarget, repo, {
-          refreshCapability
-        })
+        const next = await listRepositoryGhBindableAccounts(
+          runtimeTarget,
+          { id: repo.id, path: repo.path },
+          { refreshCapability }
+        )
         if (generation !== loadGenerationRef.current) {
           return
         }
@@ -78,12 +80,19 @@ export function RepositoryGitHubAccountSection({
         }
       }
     },
-    [repo, runtimeTarget]
+    [repo.id, repo.path, runtimeTarget]
   )
 
   useEffect(() => {
     void loadInventory()
-  }, [loadInventory])
+  }, [
+    loadInventory,
+    repo.executionHostId,
+    repo.connectionId,
+    repo.gitRemoteIdentity?.canonicalKey,
+    repo.ghAccount?.host,
+    repo.ghAccount?.user
+  ])
 
   const capabilityUnsupported = inventory?.capability === 'unsupported'
   const capabilityUnknown = inventory?.capability === 'unknown'

@@ -3,7 +3,7 @@
  * app-side by `src/main/orcad/orcad-local-serve-selection.ts`; the CLI only asks and runs.
  */
 import { dirname, join } from 'node:path'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import {
   ORCAD_LOCAL_SERVE_SELECTION_ENTRY,
   ORCAD_LOCAL_SERVE_SELECTION_FLAGS as FLAGS,
@@ -21,6 +21,7 @@ export type ServeOrcaAppArgs = {
   pairingAddress?: string | null
   noPairing?: boolean
   mobilePairing?: boolean
+  grantDesktopControl?: boolean
   recipeJson?: boolean
   projectRoot?: string | null
 }
@@ -119,17 +120,20 @@ export function serveWithOrcad(
   })
 }
 
-export function orcadServeArgs(args: ServeOrcaAppArgs): string[] {
+export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-'): string[] {
   return [
-    '--bind',
-    '0.0.0.0',
-    ...(args.json ? ['--json'] : []),
-    ...(args.port ? ['--port', args.port] : []),
-    ...(args.pairingAddress ? ['--pairing-address', args.pairingAddress] : []),
-    ...(args.noPairing ? ['--no-pairing'] : []),
-    ...(args.mobilePairing ? ['--mobile-pairing'] : []),
+    ...(args.json ? [`${prefix}json`] : []),
+    ...(args.port ? [`${prefix}port`, args.port] : []),
+    ...(args.pairingAddress ? [`${prefix}pairing-address`, args.pairingAddress] : []),
+    ...(args.noPairing ? [`${prefix}no-pairing`] : []),
+    ...(args.mobilePairing ? [`${prefix}mobile-pairing`] : []),
+    ...(args.grantDesktopControl ? [`${prefix}grant-desktop-control`] : []),
     ...(args.recipeJson && args.projectRoot
-      ? ['--recipe-json', '--project-root', args.projectRoot]
+      ? [`${prefix}recipe-json`, `${prefix}project-root`, args.projectRoot]
       : [])
   ]
+}
+
+export function orcadServeArgs(args: ServeOrcaAppArgs): string[] {
+  return ['--bind', '0.0.0.0', ...serveOptionArgs(args, '--')]
 }

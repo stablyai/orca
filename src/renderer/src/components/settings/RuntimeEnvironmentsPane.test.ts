@@ -17,7 +17,7 @@ import {
   isRuntimeServerTransportConnected,
   isRuntimeEnvironmentRemovalBlocked,
   type RuntimeHostDetails
-} from './RuntimeEnvironmentsPane'
+} from './runtime-environment-host-details'
 
 function details(overrides: Partial<RuntimeHostDetails>): RuntimeHostDetails {
   return {

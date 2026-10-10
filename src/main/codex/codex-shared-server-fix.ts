@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   CODEX_DISABLE_SHARED_SERVER_ARGS,
   CODEX_SHARED_SERVER_FEATURE_KEY,

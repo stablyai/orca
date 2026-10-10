@@ -4,9 +4,9 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type * as PtyControllerContract from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
+  getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  parseExecutionHostId
 } from '../../shared/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
@@ -55,7 +55,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       return null
     }
     const inventoryGeneration = ++this.ptyControllerInventorySequence
-    const providerKey = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+    const providerKey = getConnectionExecutionHostId(connectionId)
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
@@ -76,13 +76,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
         ? this.ptyController.listProcessesWithHostScope(providerListOpts)
-        : this.ptyController.listProcesses(connectionId, providerListOpts).then((processes) => {
-            const hostId: ExecutionHostId =
-              connectionId === undefined || connectionId === null
-                ? LOCAL_EXECUTION_HOST_ID
-                : toSshExecutionHostId(connectionId)
-            return { processes, hostIds: [hostId] }
-          })
+        : this.ptyController
+            .listProcesses(connectionId === undefined ? undefined : providerKey, providerListOpts)
+            .then((processes) => ({ processes, hostIds: [providerKey] }))
     const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
       return null
@@ -150,7 +146,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
       const persistedIndexes = getPersistedIndexes(
-        sessionConnectionId ? toSshExecutionHostId(sessionConnectionId) : LOCAL_EXECUTION_HOST_ID
+        getConnectionExecutionHostId(sessionConnectionId)
       )
       const controllerIdentity = controllerIdentityByPtyId.get(session.id)
       const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
@@ -243,8 +239,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       const ptyHostId =
         encodedHostId === 'foreign'
           ? null
-          : (encodedHostId ??
-            (pty.connectionId ? toSshExecutionHostId(pty.connectionId) : LOCAL_EXECUTION_HOST_ID))
+          : (encodedHostId ?? getConnectionExecutionHostId(pty.connectionId))
       if (!ptyHostId) {
         continue
       }

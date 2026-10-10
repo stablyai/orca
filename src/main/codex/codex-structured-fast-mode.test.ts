@@ -78,11 +78,16 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
       CODEX_STRUCTURED_AGENT,
       '/codex/home'
     )!
-    modelCatalog.recordSuccess(access.fingerprint, 'codex', {
-      models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-      fastModeTierByModel: new Map([['gpt-live', 'priority-live-v2']]),
-      origin: 'live-session'
-    })
+    modelCatalog.recordSuccess(
+      access.fingerprint,
+      'codex',
+      {
+        models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
+        fastModeTierByModel: new Map([['gpt-live', 'priority-live-v2']]),
+        origin: 'live-session'
+      },
+      'discovery'
+    )
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], { modelCatalog })
     await acquire(adapter)
     await send(adapter, 'first')
@@ -343,11 +348,16 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     await vi.waitFor(() =>
       expect(codex.connections[0].calls.some((call) => call.method === 'model/list')).toBe(true)
     )
-    modelCatalog.recordSuccess(access.fingerprint, 'codex', {
-      models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-      fastModeTierByModel: new Map([['gpt-live', 'priority-probe']]),
-      origin: 'probe'
-    })
+    modelCatalog.recordSuccess(
+      access.fingerprint,
+      'codex',
+      {
+        models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
+        fastModeTierByModel: new Map([['gpt-live', 'priority-probe']]),
+        origin: 'probe'
+      },
+      'discovery'
+    )
     pending.reject(new Error('own listing failed'))
     await vi.waitFor(() =>
       expect(
@@ -370,20 +380,31 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
       '/codex/home'
     )!
     const medium = [{ value: 'medium', label: 'Medium' }]
-    modelCatalog.recordSuccess(access.fingerprint, 'codex', {
-      models: [
-        {
-          id: 'gpt-live',
-          label: 'Live',
-          isDefault: true,
-          efforts: medium,
-          supportsFastMode: false
-        },
-        { id: 'gpt-next', label: 'Next', isDefault: false, efforts: medium, supportsFastMode: true }
-      ],
-      fastModeTierByModel: new Map([['gpt-next', 'priority-next']]),
-      origin: 'live-session'
-    })
+    modelCatalog.recordSuccess(
+      access.fingerprint,
+      'codex',
+      {
+        models: [
+          {
+            id: 'gpt-live',
+            label: 'Live',
+            isDefault: true,
+            efforts: medium,
+            supportsFastMode: false
+          },
+          {
+            id: 'gpt-next',
+            label: 'Next',
+            isDefault: false,
+            efforts: medium,
+            supportsFastMode: true
+          }
+        ],
+        fastModeTierByModel: new Map([['gpt-next', 'priority-next']]),
+        origin: 'live-session'
+      },
+      'discovery'
+    )
     const adapter = adapterFor(codex, { codexHome: '/codex/home', resumeThreadId: THREAD_ID }, [], {
       modelCatalog
     })

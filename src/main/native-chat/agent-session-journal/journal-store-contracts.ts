@@ -15,6 +15,9 @@ import type { AgentSessionMessageSource } from '../../../shared/agent-session-me
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
+import type { JournalReducerState } from './journal-reducer'
+import type { JournalAttachmentClaim } from './journal-submission-hook'
+import type { JournalWriteBody } from './journal-write-queue'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
@@ -74,6 +77,8 @@ export type JournalLifecycleBatchInput = {
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
   recovered?: true
+  /** Submission verdicts belonging to this settlement, committed before its item rows. */
+  dispatches?: readonly ResolveDispatchInput[]
   /** Rejects the sends still queued with this first, in the same append: a failed start's row
    *  follows the messages it failed, and no reader meets one without the other. With none still
    *  queued, the batch is not written either. */
@@ -82,7 +87,7 @@ export type JournalLifecycleBatchInput = {
 
 export type JournalResolvedLifecycleBatchInput = Omit<
   JournalLifecycleBatchInput,
-  'mutations' | 'rejectsQueued'
+  'mutations' | 'rejectsQueued' | 'dispatches'
 > & {
   /** Read from the fold with every earlier write landed; may return none. */
   resolve: () => readonly JournalLifecycleMutationInput[]
@@ -112,13 +117,32 @@ export type JournalSubmissionConsume = {
   /** The host process handing it off, stamped on the draft so a hand-off withdrawn back to
    *  waiting belongs to the process that sent it, not the one that first wrote the card. */
   hostInstance?: string
-  /** The queue's own send: refused in the consume's transaction while the queue's pause, as
-   *  this host instance derives it, holds the card. Send-now omits it. */
-  yieldsToPause?: { hostInstance: string }
+  /** The queue's own send: refused in the consume's transaction while the queue's pause holds
+   *  the card. Send-now omits it. */
+  yieldsToPause?: true
 }
 
 export type JournalItemAppendInput = {
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   options: JournalItemAppendOptions
+}
+
+/** What `JournalQueuedMessages` reads from the journal that owns it. */
+export type JournalQueuedMessagesDeps = {
+  sessionId: string
+  now: () => number
+  serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
+  database: () => JournalHostDatabase
+  readOnly: () => boolean
+  state: () => JournalReducerState
+  /** Where the reopen's pause begins when this handle could not mark it (`reopenFloor`). */
+  reopenFloor: () => AgentJournalCursor | null
+  /** The journal's own commit notification. Every standalone draft-table
+   *  transaction that changed rows fires it after COMMIT, so a draft or hold
+   *  change publishes and wakes the drain through the same path a journal row
+   *  does — no call site can forget. In-transaction consume and the returned
+   *  transition already ride their row's own commit. */
+  committed: () => void
+  claimAttachments: JournalAttachmentClaim
 }

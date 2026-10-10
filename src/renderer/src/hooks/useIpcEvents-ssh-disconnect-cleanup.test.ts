@@ -75,8 +75,7 @@ describe('useIpcEvents updater integration', () => {
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
       settings: {
         terminalFontSize: 13,
-        experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        experimentalNativeChat: false
       }
     }
     vi.doMock('react', async () => {

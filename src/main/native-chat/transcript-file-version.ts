@@ -1,4 +1,4 @@
-import { readTranscriptSlice, wslGatedStat } from './wsl-transcript-fs-access'
+import { readTranscriptSlice, transcriptFileStat } from './wsl-transcript-fs-access'
 
 const BOUNDARY_FINGERPRINT_BYTES = 64
 
@@ -22,7 +22,7 @@ export async function readTranscriptFileVersion(
   filePath: string,
   signal?: AbortSignal
 ): Promise<TranscriptFileVersion> {
-  const value = await wslGatedStat(filePath, 'exact', signal)
+  const value = await transcriptFileStat(filePath, 'exact', signal)
   return {
     identity: `${value.dev}:${value.ino}`,
     size: value.size,

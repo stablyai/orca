@@ -3,6 +3,7 @@ import type { ClientChannel } from 'ssh2'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
+import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
 export type RemoteDirEntry = {
   name: string
@@ -100,12 +101,16 @@ async function runBrowseCommand(
   pathFlavor: FilesystemPathFlavor,
   options?: SshExecOptions
 ): Promise<RemoteBrowseResult> {
-  const channel = options ? await conn.exec(command, options) : await conn.exec(command)
+  // Why: login-shell rc output would otherwise be read as the resolved path.
+  const fence = options?.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
+  const remoteCommand = fence?.command ?? command
+  const channel = options ? await conn.exec(remoteCommand, options) : await conn.exec(remoteCommand)
 
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
     let exitCode: number | null = null
+    let exitObserved = false
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
 
@@ -163,12 +168,17 @@ async function runBrowseCommand(
     }
     // `exit` fires before `close`; capture the code to tell a failed `ls` (that still printed `pwd`) from an empty listing.
     const onExit = (code: number | null): void => {
+      exitObserved = true
       exitCode = code
     }
     const onError = (error: Error): void => {
       rejectOnce(error)
     }
-    const onClose = (): void => {
+    const onClose = (code?: number | null): void => {
+      if (!exitObserved && typeof code === 'number') {
+        exitCode = code
+      }
+      stdout = fence?.readStdout(stdout) ?? stdout
       // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
       if (exitCode !== 0) {
         const msg =

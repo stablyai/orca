@@ -11,16 +11,8 @@ import {
   readAgentMessageSource,
   type AgentMessageSource
 } from '../../../../shared/agent-session-message-source'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
-import {
-  structuredAgentSessionEntryAsksToQueue,
-  type StructuredAgentSessionQueueDelivery
-} from '../../../../shared/structured-agent-session-outbox-delivery'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import {
-  admitStructuredAgentSessionOutboxEntry,
-  structuredAgentSessionEntryHeldForRetry
-} from '../../../../shared/structured-agent-session-outbox-admission'
 
 /** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
@@ -32,6 +24,9 @@ export type QueuedMessageCardHold =
   | 'paused'
   | 'behind-returned'
   | 'returned'
+  /** On its way to the host, which holds no card for it yet: it reads as sending, and nothing
+   *  can act on it until the host's card replaces it under the same id. */
+  | 'sending'
 
 export type QueuedMessageCard = {
   messageId: string
@@ -40,6 +35,10 @@ export type QueuedMessageCard = {
   text: string
   state: 'waiting' | 'returned'
   hold: QueuedMessageCardHold
+  /** A conversation command such as /compact: it never steers into a running turn. */
+  command?: true
+  /** A command card while the agent works: it offers no send until the agent is idle. */
+  waitsForAgent?: true
   pausedReason?: string
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
@@ -62,7 +61,7 @@ function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string 
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { hasPendingPrompt: boolean; queuePaused?: boolean }
+  session: { hasPendingPrompt: boolean; queuePaused?: boolean; agentWorking?: boolean }
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
@@ -92,6 +91,12 @@ export function projectQueuedMessageCards(
       text: queuedMessageCardText(message.body),
       state: message.state,
       hold,
+      ...(message.body.command !== undefined
+        ? {
+            command: true as const,
+            ...(session.agentWorking ? { waitsForAgent: true as const } : {})
+          }
+        : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
@@ -100,6 +105,17 @@ export function projectQueuedMessageCards(
       ...(from ? { from } : {})
     }
   })
+}
+
+/** A command card waits in line: a later send goes behind it, even with follow-ups off. A card
+ *  held on its own (kept, couldn't send) is skipped by the queue, so nothing is behind it. */
+export function commandCardWaiting(
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined
+): boolean {
+  return (queuedMessages ?? []).some(
+    (message) =>
+      message.state === 'waiting' && !message.paused && message.body.command !== undefined
+  )
 }
 
 /** The pause the header row names, while it holds a card. A pause over cards Resume would not
@@ -112,44 +128,68 @@ export function queuedMessagesQueuePause(
 }
 
 /** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
- *  returned is not waiting on the turn, so its action is plainly Send. */
+ *  returned is not waiting on the turn, so its action is plainly Send. A command never steers. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned'
+  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 
-/** The card Cmd/Ctrl+Enter steers: the newest one; every shown card takes Send-now. */
+/** The card Cmd/Ctrl+Enter steers: the newest one, unless it is a command, which never steers. */
 export function newestSteerableQueuedMessageCard(
   cards: readonly QueuedMessageCard[]
 ): QueuedMessageCard | null {
-  return cards.at(-1) ?? null
+  const newest = cards.at(-1)
+  return newest && !newest.command && newest.hold !== 'sending' ? newest : null
+}
+
+/** A queue send still on its way, as the card it is about to become. */
+export function sendingQueuedMessageCards(
+  entries: readonly StructuredAgentSessionPendingSend[]
+): QueuedMessageCard[] {
+  return entries.map((entry, index) => ({
+    messageId: entry.clientMessageId,
+    // After every card the host holds, in send order.
+    position: Number.MAX_SAFE_INTEGER - entries.length + index,
+    text: queuedMessageCardText(entry.body),
+    state: 'waiting',
+    hold: 'sending'
+  }))
 }
 
 /**
- * The outbox entries the transcript may show as pending bubbles. A send the host holds
- * as a draft (same id) is a card, and so is a send on its way out asking to be queued —
- * read from what its request carries — otherwise it paints
- * in the transcript until the queued answer retires it. A plain send stays a bubble. From
- * the entry the drain is stopped on (read through the drain's own rule), nothing is on its
- * way, nor is one held for its Retry: those stay bubbles so their text is visible beside the
- * Retry row.
+ * The sends the transcript draws as pending bubbles. One the host holds as a card (same id) is a
+ * card, and so is one asking to be queued while the agent works, which would otherwise paint in the
+ * transcript until its card appears. A recorded one stays drawn until its row arrives.
  */
-export function outboxOutsideQueuedCards(
-  outbox: readonly StructuredAgentSessionOutboxEntry[],
+export function pendingSendsOutsideQueuedCards<
+  Send extends { clientMessageId: string; delivery?: 'queue-if-active' }
+>(pending: readonly Send[], heldIds: readonly string[], isWorking: boolean): readonly Send[] {
+  const held = new Set(heldIds)
+  const next = pending.filter(
+    (entry) =>
+      !held.has(entry.clientMessageId) && !(isWorking && entry.delivery === 'queue-if-active')
+  )
+  return next.length === pending.length ? pending : next
+}
+
+/** Queue sends without a host card or submission yet, drawn as sending cards. */
+export function pendingQueueSendsOnTheirWay(
+  pending: readonly StructuredAgentSessionPendingSend[],
   heldIds: readonly string[],
   isWorking: boolean,
-  host: StructuredAgentSessionQueueDelivery
-): readonly StructuredAgentSessionOutboxEntry[] {
-  const held = new Set(heldIds)
-  const admission = admitStructuredAgentSessionOutboxEntry(outbox)
-  const stalledFrom = admission.state === 'blocked' ? outbox.indexOf(admission.entry) : -1
-  const next = outbox.filter((entry, index) => {
-    const onItsWay =
-      isWorking &&
-      (stalledFrom === -1 || index < stalledFrom) &&
-      (entry.state === 'queued' || entry.state === 'dispatching') &&
-      !structuredAgentSessionEntryHeldForRetry(entry) &&
-      structuredAgentSessionEntryAsksToQueue(entry, host)
-    return !held.has(entry.clientMessageId) && !onItsWay
-  })
-  return next.length === outbox.length ? outbox : next
+  submissions: readonly AgentJournalSubmission[]
+): StructuredAgentSessionPendingSend[] {
+  if (!isWorking) {
+    return []
+  }
+  const recorded = new Set([
+    ...heldIds,
+    ...handedOffQueuedMessageIds(submissions),
+    ...submissions.map((submission) => submission.clientMessageId)
+  ])
+  return pending.filter(
+    (entry) =>
+      entry.phase === 'sending' &&
+      entry.delivery === 'queue-if-active' &&
+      !recorded.has(entry.clientMessageId)
+  )
 }

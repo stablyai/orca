@@ -1,7 +1,11 @@
 import { EventEmitter } from 'node:events'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handoffToBundledOrcad, resolveBundledOrcadSlot } from './orcad-bundled-runtime'
+import {
+  assertOrcadServerRuntime,
+  handoffToBundledOrcad,
+  resolveBundledOrcadSlot
+} from './orcad-bundled-runtime'
 import {
   NODE_RUNTIME_ASSETS,
   NODE_RUNTIME_COMPAT_ASSETS,
@@ -26,7 +30,7 @@ vi.mock('node:fs', () => ({
   readFileSync: fixture.read,
   realpathSync: fixture.realpath
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: fixture.spawn }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: fixture.spawn }))
 
 class RuntimeChild extends EventEmitter {
   kill = vi.fn()
@@ -236,5 +240,38 @@ describe('bundled Orca runtime handoff', () => {
     expect(() => child.emit('exit', null, 'SIGTERM')).toThrow('test process exit')
     expect(process.exit).toHaveBeenCalledWith(143)
     expect(process.kill).not.toHaveBeenCalled()
+  })
+})
+
+describe('server runtime admission', () => {
+  it.each(['14.21.3', '16.20.2'])('refuses host Node %s before loading profile state', (node) => {
+    fixture.exists.mockReturnValue(false)
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
+    expect(() => assertOrcadServerRuntime()).toThrow('requires Node.js 18')
+  })
+
+  it.each(['18.20.8', '20.19.0', '22.14.0', '23.0.0', '24.0.0', '26.0.0'])(
+    'accepts unpackaged host Node %s',
+    (node) => {
+      fixture.exists.mockReturnValue(false)
+      vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
+      expect(() => assertOrcadServerRuntime()).not.toThrow()
+    }
+  )
+
+  it('refuses host Node 24 for a packaged slot that owns a bundled runtime', () => {
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node: '24.0.0' })
+    expect(() => assertOrcadServerRuntime()).toThrow('Start the Orca server with its bundled')
+  })
+
+  it('accepts the packaged runtime only at its pinned version', () => {
+    fixture.realpath.mockImplementation((path) =>
+      path === '/slot/orcad.js' ? path : '/real/runtime'
+    )
+    const versions = vi.spyOn(process, 'versions', 'get')
+    versions.mockReturnValue({ ...process.versions, node: '24.0.0' })
+    expect(() => assertOrcadServerRuntime()).toThrow(`must be Node ${NODE_RUNTIME_PIN.version}`)
+    versions.mockReturnValue({ ...process.versions, node: NODE_RUNTIME_PIN.version })
+    expect(() => assertOrcadServerRuntime()).not.toThrow()
   })
 })

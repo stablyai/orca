@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   toastLoading: vi.fn(() => 'toast-1'),
   toastDismiss: vi.fn(),
   toastError: vi.fn(),
   toastMessage: vi.fn(),
-  resolveDroppedPathsForAgent: vi.fn()
+  resolveDroppedPathsForAgent: vi.fn(),
+  callRuntimeRpc: vi.fn()
 }))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 vi.mock('sonner', () => ({
   toast: {
@@ -20,14 +25,21 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))
 
 import {
+  nativeChatAttachFailedNotice,
+  prepareNativeChatSessionAttachmentUpload,
   resolveNativeChatAttachmentOwner,
   resolveNativeChatAttachmentOwnerForWorktree,
+  resolveNativeChatRuntimeSessionAttachmentOwner,
   uploadNativeChatAttachmentPaths
 } from './native-chat-attachment-upload'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { repoFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -43,23 +55,33 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-function state(overrides: Partial<AppState> = {}): AppState {
+type OwnerState = Parameters<typeof resolveNativeChatAttachmentOwner>[0]
+
+function state(overrides: Partial<OwnerState> = {}): OwnerState {
   return {
+    detectedWorktreesByRepo: {},
     folderWorkspaces: [],
-    getKnownWorktreeById: (worktreeId: string) =>
-      worktreeId === 'wt-1' ? ({ id: 'wt-1', path: '/repo/worktree' } as never) : undefined,
+    floatingWorkspacePath: null,
     projectGroups: [],
-    repos: [{ id: 'repo', connectionId: null }],
-    settings: { activeRuntimeEnvironmentId: null },
+    repos: [repoFixture({ connectionId: null })],
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: null },
     sshConnectionStates: new Map(),
     tabsByWorktree: {
       'wt-1': [terminalTab()]
     },
+    unifiedTabsByWorktree: {},
     worktreesByRepo: {
-      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo/worktree' } as never]
+      repo: [
+        worktreeFixture('wt-1', '/repo/worktree', {
+          hostId:
+            overrides.repos?.length === 0
+              ? undefined
+              : getRepoExecutionHostId(overrides.repos?.[0] ?? { connectionId: null })
+        })
+      ]
     },
     ...overrides
-  } as AppState
+  }
 }
 
 describe('resolveNativeChatAttachmentOwner', () => {
@@ -119,13 +141,13 @@ describe('resolveNativeChatAttachmentOwner', () => {
     ).toEqual({ kind: 'runtime' })
   })
 
-  it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
+  it('keeps a recorded local workspace local when a runtime is focused', () => {
     expect(
       resolveNativeChatAttachmentOwner(
         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({ kind: 'local' })
   })
 
   it('reports not-ready when the tab has no worktree owner', () => {
@@ -157,7 +179,6 @@ describe('resolveNativeChatAttachmentOwner', () => {
       resolveNativeChatAttachmentOwner(
         state({
           repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          getKnownWorktreeById: () => undefined,
           worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' } as never] },
           tabsByWorktree: { 'wt-1': [terminalTab()] }
         }),
@@ -223,5 +244,80 @@ describe('uploadNativeChatAttachmentPaths', () => {
     await expect(uploadNativeChatAttachmentPaths(['/local/a.txt'], owner)).resolves.toBeNull()
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
+  })
+})
+
+describe('a structured chat on a paired server', () => {
+  const owner = {
+    kind: 'runtime-session' as const,
+    environmentId: 'env-1',
+    pairingRevision: 7,
+    sessionId: 'session-1'
+  }
+
+  beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
+    mocks.callRuntimeRpc.mockReset()
+  })
+
+  it('owns its attachments by the server it runs on and that pairing', () => {
+    expect(
+      resolveNativeChatRuntimeSessionAttachmentOwner({
+        sessionId: 'session-1',
+        runtimeEnvironmentId: 'env-1'
+      })
+    ).toEqual(owner)
+    expect(
+      resolveNativeChatRuntimeSessionAttachmentOwner({
+        sessionId: 'session-1',
+        runtimeEnvironmentId: 'env-gone'
+      })
+    ).toEqual({ kind: 'not-ready' })
+  })
+
+  it('asks the server, pinned to the pairing, and uploads only where it keeps a store', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({
+      runtimeId: 'runtime-a',
+      capabilities: [AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY]
+    })
+    await expect(prepareNativeChatSessionAttachmentUpload(owner)).resolves.toEqual({
+      ok: true,
+      target: {
+        environmentId: 'env-1',
+        sessionId: 'session-1',
+        expectedEnvironmentPairingRevision: 7,
+        expectedEnvironmentRuntimeId: 'runtime-a'
+      }
+    })
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'status.get',
+      undefined,
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 7 })
+    )
+  })
+
+  it('tells the user to update an older server instead of uploading', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({ runtimeId: 'runtime-a', capabilities: [] })
+    await expect(prepareNativeChatSessionAttachmentUpload(owner)).resolves.toEqual({
+      ok: false,
+      notice:
+        'This needs a newer Orca on the computer running this chat. Update Orca there, then try again.'
+    })
+  })
+})
+
+describe('nativeChatAttachFailedNotice', () => {
+  it('ends the shared cause with one full stop, whatever script it is written in', () => {
+    expect(nativeChatAttachFailedNotice(['a.mov'], 'over the 50 MB limit')).toBe(
+      "Couldn't attach a.mov. over the 50 MB limit."
+    )
+    expect(nativeChatAttachFailedNotice(['a'], 'サポートされていないファイル形式です。')).toBe(
+      "Couldn't attach a. サポートされていないファイル形式です。"
+    )
+    expect(nativeChatAttachFailedNotice(['a'], '不支持的文件类型！')).toBe(
+      "Couldn't attach a. 不支持的文件类型！"
+    )
+    expect(nativeChatAttachFailedNotice(['a', 'b'])).toBe("Couldn't attach a, b.")
   })
 })

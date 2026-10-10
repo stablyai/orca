@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessSpec } from '../shared/child-process/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { GitAdmissionScheduler } from '../shared/git-admission-scheduler'
 
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }))
-vi.mock('../shared/child-process/run-process', () => ({ runProcess: capture }))
+vi.mock('@orca/process-host', () => ({ runProcess: capture }))
 
 import {
   _resetRelayGitAdmissionForTests,

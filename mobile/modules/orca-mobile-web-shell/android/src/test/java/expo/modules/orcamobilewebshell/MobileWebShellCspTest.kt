@@ -23,7 +23,7 @@ class MobileWebShellCspTest {
     assertTrue(directives.contains("frame-src 'none'"))
     assertTrue(directives.contains("child-src 'none'"))
     assertTrue(directives.contains("object-src 'none'"))
-    assertTrue(directives.contains("base-uri 'none'"))
+    assertTrue(directives.contains("base-uri about:"))
     assertTrue(directives.contains("form-action 'none'"))
     assertTrue(directives.contains("frame-ancestors 'none'"))
   }
@@ -45,7 +45,10 @@ class MobileWebShellCspTest {
       listOf("img-src 'self' data: https:"),
       directives.filter { it.contains("data:") }
     )
-    assertFalse(MOBILE_WEB_SHELL_CSP.contains("blob:"))
+    assertEquals(
+      listOf("media-src blob:"),
+      directives.filter { it.contains("blob:") }
+    )
     // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
     // this still refuses a cleartext source anywhere in the header.
     assertEquals(

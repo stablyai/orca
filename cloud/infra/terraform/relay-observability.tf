@@ -57,6 +57,23 @@ locals {
       description = "Cells whose reserved_requests disagreed with their lease units when reconciliation corrected them; should trend to zero."
       filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_reservation_drift\""
     }
+    # Why the cell's line and not the load balancer's: the LB writes a WebSocket's log entry at
+    # close but stamps it with the stream's start, and a log-based metric counts by that stamp. Of
+    # the 1,046 `internal_error` streams on 2026-10-06 18:34Z, 42 were stamped within 10 minutes of
+    # the drop; the median was 2.4 h earlier, so an LB-log rate never shows the pulse.
+    # Both lines come from the unhandledRejection fence (relay-database-rejection-fence.ts).
+    database_rejection_fenced = {
+      description = "Database faults that reached unhandledRejection and were survived: a caller forgot to await a database promise. Should be zero; each one is a bug to find."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_database_rejection_fenced\""
+    }
+    process_fatal = {
+      description = "Unhandled rejections the fence kept fatal (not a database fault); each is followed by a process exit."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_process_fatal\""
+    }
+    cell_control_abnormal_closes = {
+      description = "Desktop control sockets a GCE cell saw end with no close frame (1006), counted when they closed. Hundreds on one cell in a minute is the load balancer ending streams."
+      filter      = "resource.type=\"gce_instance\" AND logName=\"projects/${var.project_id}/logs/cos_containers\" AND jsonPayload.message:\"[orca-relay] control closed \" AND jsonPayload.message:\" code=1006 \""
+    }
   }
 
   relay_runtime_metrics = {
@@ -107,6 +124,7 @@ locals {
     db_waiters_max                     = { field = "databasePoolWaitersMax", description = "Maximum requests queued for a PostgreSQL connection during the interval." }
     db_oldest_wait_ms                  = { field = "databasePoolOldestWaitMs", description = "Current oldest PostgreSQL pool waiter age." }
     db_wait_ms_max                     = { field = "databasePoolWaitMsMax", description = "Maximum PostgreSQL pool wait during the interval." }
+    host_hellos_shed                   = { field = "hostHellosShedDelta", description = "Desktop control connections refused with a retryable 503 because the PostgreSQL pool queue was full." }
     cell_inventory_hold_ms_max         = { field = "cellInventoryHoldMsMax", description = "Longest cell-inventory lock hold in the interval." }
     cell_inventory_hold_ms_p95         = { field = "cellInventoryHoldMsP95", description = "Cell-inventory lock hold p95 in the interval; the bound is tuned against this." }
     cell_inventory_holds               = { field = "cellInventoryHolds", description = "Cell-inventory locks acquired in the interval; the percentiles above summarise these." }
@@ -928,6 +946,98 @@ resource "google_monitoring_alert_policy" "relay_director_cell_inventory_hold" {
   }
 }
 
+# The bar lives in the filter, as for the long-hold metric: an exponential bucket's percentile
+# interpolation would put any value from 128 to 255 above 200. Why 200: a healthy cell peaks at
+# 2 waiters (p99), but single-cell stalls of 50-196 recur several times a day and already time
+# out. 200 keeps those for the SQL-failure alerts and pages on herds. Since 2026-10-03 a bar of 50
+# was crossed in 84 episodes, 150 in 29, and 200 in 10, among them every known herd (10-03 17:50,
+# 10-05 06:26 and 18:22, 10-06 01:33 and 18:34, 10-07 20:00).
+resource "google_logging_metric" "relay_cell_pool_herd" {
+  project     = var.project_id
+  name        = "orca_relay_cell_pool_herd"
+  description = "Cell runtime samples in which more than 200 requests queued at once for a PostgreSQL connection."
+  filter      = "${local.relay_runtime_log_filter} AND jsonPayload.role=\"cell\" AND jsonPayload.databasePoolWaitersMax>200"
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_control_close_burst" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell desktop disconnect burst"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Over 120 abnormal desktop control closes on one cell in a minute"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cell_control_abnormal_closes\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 120
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"instance_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "Over 120 desktop control sockets on one relay cell ended without a close frame (code 1006) in one minute. On 2026-10-06 at 18:34 UTC the asia-east2 cells logged 213-247 each in the minute Google's load balancer ended 1,046 of their streams, against a baseline of 6-49 per minute (US cells: 17 or fewer, all codes). Smaller pulses of about 60 per cell (01:33 and 20:40 UTC that day) stay under the bar. First response: read the load balancer logs for the same minute by `receiveTimestamp`, not `timestamp` (the LB stamps a WebSocket with its start), and bucket `jsonPayload.statusDetails`. If they show `internal_error` across several cells at once, the proxy ended the streams: record the timestamps for the Google support case, and do not drain, restart or resize the cell. If `Orca Relay: cell database pool herd` fired in the same minute, the reconnecting desktops overran the cell's database pool. Otherwise look at the cell itself: a crash or restart, the event loop, or memory."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_pool_herd" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell database pool herd"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Over 200 requests queued for a PostgreSQL connection on one cell"
+
+    condition_threshold {
+      # The metric filter already drops samples at or under 200, so any value present is a breach.
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_cell_pool_herd.name}\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"instance_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "More than 200 requests on one relay cell queued at once for a PostgreSQL connection, and requests that wait 2 s fail. A healthy cell peaks at 2 waiters (p99 on 2026-10-07). Single-cell stalls of 50-196 waiters recur several times a day, mostly on the asia-east2 cells, whose every query crosses the Pacific. Each is about 30 seconds long and already timing requests out (96-367 SQL failures per 30-second sample at 184-196 on 2026-10-07). This bar leaves those to the SQL-failure alerts. Reconnect herds go well past 200 on several cells at once (2026-10-06 18:34 UTC: 233-527 on all five asia-east2 cells). Since 2026-10-03 this bar was crossed in 10 episodes. Six were herds across several cells, and four were a single cell at 201-228. This uses the interval maximum (`databasePoolWaitersMax`), so a herd shorter than the 30-second sample still shows. First response: check `Orca Relay: cell desktop disconnect burst` for the same minute. If it fired too, a mass disconnect caused this, so follow that policy and leave the database alone. If it did not, check Cloud SQL health and lock contention (`Orca Relay: lock timeout burst`) before touching the cell."
+    mime_type = "text/markdown"
+  }
+}
+
 resource "google_monitoring_alert_policy" "relay_lock_timeout_burst" {
   project               = var.project_id
   display_name          = "Orca Relay: lock timeout burst"
@@ -1283,4 +1393,149 @@ resource "google_monitoring_dashboard" "relay_incident" {
   })
 
   depends_on = [google_logging_metric.relay_incident, google_logging_metric.relay_snapshot]
+}
+
+# ticketCheck=shadow (assignment-lease-shadow.ts): one line per cell per minute with traffic.
+# The lease never decides an admission, so these observe only.
+locals {
+  relay_assignment_lease_shadow_metrics = {
+    agree         = { field = "classes.agree", description = "Host hellos whose echoed lease was valid and the database admitted." }
+    disagree      = { field = "classes.disagree", description = "Host hellos whose echoed lease was valid but the database refused; step 5 must explain each before a lease alone admits." }
+    absent        = { field = "classes.absent", description = "Host hellos with no echoed lease (desktops that predate the header)." }
+    expired       = { field = "classes.expired", description = "Host hellos whose echoed lease had expired." }
+    bad_signature = { field = "classes.badSignature", description = "Host hellos whose echoed lease failed signature, key id, or shape checks." }
+    wrong_host    = { field = "classes.wrongHost", description = "Host hellos whose echoed lease named another user or host." }
+    wrong_cell    = { field = "classes.wrongCell", description = "Host hellos whose echoed lease named another cell; expected during drains." }
+    epoch_behind  = { field = "classes.epochBehind", description = "Host hellos whose echoed lease was older than the hello's assignment epoch." }
+    epoch_ahead   = { field = "classes.epochAhead", description = "Host hellos whose echoed lease was newer than the hello's assignment epoch." }
+    db_refused    = { field = "dbRefused", description = "Host hellos the database refused, whatever the echoed lease said." }
+    db_read_ms    = { field = "dbReadMs.p99", description = "p99 of the hello's assignment database read, the read a lease-admitted hello would skip." }
+  }
+}
+
+resource "google_logging_metric" "relay_assignment_lease_shadow" {
+  for_each = local.relay_assignment_lease_shadow_metrics
+
+  project         = var.project_id
+  name            = "orca_relay_assignment_lease_shadow_${each.key}"
+  description     = each.value.description
+  filter          = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_assignment_lease_shadow\""
+  value_extractor = "EXTRACT(jsonPayload.${each.value.field})"
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = each.key == "db_read_ms" ? "ms" : "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 24
+      growth_factor      = 2
+      scale              = 1
+    }
+  }
+}
+
+# Directors only: a cell's fatal rejection ends in a container exit, which
+# relay_cell_process_exit already pages on, so paging here too would double every cell incident.
+# The counter still includes cells, for diagnosis.
+resource "google_monitoring_alert_policy" "relay_process_fatal" {
+  project               = var.project_id
+  display_name          = "Orca Relay: fatal unhandled rejection on a director"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Fatal unhandled rejection (Cloud Run)"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/orca_relay_process_fatal\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"service_name\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A director logged `orca_relay_process_fatal` and its instance exited: an unhandled rejection that is not a database fault (a programming error, a schema error, or a bare socket errno). Read the line's `code` and `message`, then the instance stderr stack. Cells log the same line before exiting; the `cell process exits` alert pages for them."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+# Summed across every process: one database fault reaches every cell and director at once, and
+# per-instance series would open ~30 incidents for one cause.
+resource "google_monitoring_alert_policy" "relay_database_rejection_fenced" {
+  project               = var.project_id
+  display_name          = "Orca Relay: database rejection survived without a handler"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Fenced database rejections, fleet-wide"
+
+    # One series across directors and cells, which a single threshold filter cannot span.
+    condition_prometheus_query_language {
+      query    = "sum(increase(logging_googleapis_com:user_orca_relay_database_rejection_fenced[5m])) > 0"
+      duration = "0s"
+    }
+  }
+
+  documentation {
+    content   = "A database fault reached `unhandledRejection` and the process survived it (`orca_relay_database_rejection_fenced`). Nothing crashed, but some caller started a database promise without awaiting it. Group the lines by `code`, `message` and instance to find it, and fix it. Before the fence, this was a process exit."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+# Console only: a single desktop sending a damaged lease can hold this up, so it is a lead to
+# check, never a page. A fleet-wide key or key-id mismatch reads as every cell at once.
+resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature" {
+  project               = var.project_id
+  display_name          = "Orca Relay: assignment lease shadow sees bad signatures"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = []
+
+  conditions {
+    display_name = "Bad lease signatures on a cell for 15 minutes"
+
+    # The class totals are distributions (a value extractor needs one), so the sum is the count.
+    condition_prometheus_query_language {
+      query    = "sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_assignment_lease_shadow_bad_signature_sum{monitored_resource=\"gce_instance\"}[15m])) > 0"
+      duration = "900s"
+    }
+  }
+
+  documentation {
+    content   = "A cell with `ticketCheck: shadow` kept seeing assignment leases that fail verification for 15 minutes. The database still decides every admission, so no desktop is affected. One misbehaving client can cause this on one cell; many cells at once points to a key or key-id mismatch between directors and cells, which would block `ticketCheck: enforce`. Compare the `kid` the directors issue with `k1-<sha256(key)[0:8]>` on the cell."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_assignment_lease_shadow]
 }

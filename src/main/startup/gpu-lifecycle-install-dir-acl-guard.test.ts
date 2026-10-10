@@ -32,7 +32,7 @@ vi.mock('@electron-toolkit/utils', () => ({
   electronApp: { setAppUserModelId: vi.fn() }
 }))
 
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,

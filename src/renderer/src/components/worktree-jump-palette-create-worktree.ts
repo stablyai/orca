@@ -1,3 +1,6 @@
+import { worktreeMatchesGitHubNumber } from '@/lib/github-work-item-workspace-attachment'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import {
   getLinkedWorkItemSuggestedName,
@@ -211,7 +214,14 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       const matches = allWorktrees.filter(
         (worktree) =>
           !worktree.isArchived &&
-          (worktree.linkedIssue === ghNumber || worktree.linkedPR === ghNumber)
+          worktreeMatchesGitHubNumber(
+            worktree,
+            ghNumber,
+            findRepoForHost(state.repos, worktree.repoId, {
+              hostId: getPaletteWorktreeExecutionHostId(worktree),
+              settings: state.settings
+            }) ?? undefined
+          )
       )
       const activeMatch =
         matches.find((worktree) => worktree.repoId === state.activeRepoId) ?? matches[0]

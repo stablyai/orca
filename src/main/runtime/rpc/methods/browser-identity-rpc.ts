@@ -10,11 +10,13 @@ import {
 export const BROWSER_IDENTITY_METHODS = [
   defineMethod({
     name: 'browser.identity.get',
+    permission: 'workspace',
     params: null,
     handler: () => getBrowserIdentityModeStatus()
   }),
   defineMethod({
     name: 'browser.identity.set',
+    permission: 'workspace',
     params: BrowserIdentitySet,
     handler: async ({ mode, reset }) => setBrowserIdentityMode(mode, { reset })
   })

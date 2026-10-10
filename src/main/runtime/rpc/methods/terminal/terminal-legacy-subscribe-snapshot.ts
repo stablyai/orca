@@ -62,7 +62,6 @@ export async function publishLegacyBinaryInitialSnapshot(
   let serialized = await serializeBudgetedMobileSnapshot(
     runtime,
     ptyId,
-    isMobile,
     mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, scrollbackFrame)
   )
   if (state.closed) {
@@ -167,7 +166,6 @@ export async function publishLegacyBinaryInitialSnapshot(
     serialized = await serializeBudgetedMobileSnapshot(
       runtime,
       ptyId,
-      isMobile,
       mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
         kind: 'scrollback',
         displayMode: state.displayMode
@@ -237,7 +235,6 @@ export async function publishLegacyBinaryInitialSnapshot(
     const recovery = await serializeBudgetedMobileSnapshot(
       runtime,
       ptyId,
-      isMobile,
       mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame)
     )
     if (state.closed) {

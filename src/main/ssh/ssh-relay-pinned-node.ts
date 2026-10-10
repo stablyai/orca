@@ -2,9 +2,9 @@
  * Plan a relay launch on Orca's pinned Node with the orcad slot's prebuilt addons, instead
  * of the host's Node plus a host-side npm install (design D5, D6 rung A, D8.1).
  *
- * Opt-in per host (`SshTarget.remoteRuntime`), and on by default where managed orcad can't run.
+ * The default for every relay connect; a host opts out with `SshTarget.remoteRuntime: 'legacy'`.
  * Anything this module cannot establish on the client, and every classified refusal from the
- * host, falls back to the legacy host-Node path with a logged reason.
+ * host, steps down the ladder with a logged reason.
  */
 import { createHash } from 'node:crypto'
 import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -42,6 +42,10 @@ import { remoteNodeRuntimeDir } from './orcad-remote-node-runtime'
 import { fileSha256, materializeNodeRuntimeArchive } from './pinned-runtime-materializer'
 import type { SshConnection } from './ssh-connection'
 import { PINNED_RUNTIME_REFUSALS, type PinnedRuntimeRefusal } from './ssh-relay-runtime-self-test'
+import {
+  recordPinnedRuntimeRefusal,
+  rememberedPinnedRuntimeRefusal
+} from './ssh-relay-pinned-refusal-cache'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
 /** Content-keyed like ripgrep's refs, so runtime GC can find holders without a new concept (D5). */
@@ -52,25 +56,14 @@ export const PINNED_NODE_GLIBC_FLOOR: GlibcVersion = { major: 2, minor: 28 }
 export const SSH_REMOTE_RUNTIME_ENV = 'ORCA_SSH_REMOTE_RUNTIME'
 
 export function resolveSshRemoteRuntime(
-  target: Pick<SshTarget, 'remoteRuntime' | 'managedServerUnavailable'> | undefined,
+  target: Pick<SshTarget, 'remoteRuntime'> | undefined,
   env: NodeJS.ProcessEnv = process.env
 ): SshRemoteRuntime {
   if (target?.remoteRuntime) {
     return target.remoteRuntime
   }
   const fromEnv = SSH_REMOTE_RUNTIMES.find((runtime) => runtime === env[SSH_REMOTE_RUNTIME_ENV])
-  // Why: where managed orcad can't run the relay is the host's server; the ladder still ends at legacy.
-  return fromEnv ?? (target?.managedServerUnavailable ? 'pinned-node' : DEFAULT_SSH_REMOTE_RUNTIME)
-}
-
-/** Why `recorded`: this connect's host-server decision may have just recorded orcad unavailable. */
-export function resolveConnectRemoteRuntime(
-  target: SshTarget | undefined,
-  recorded: SshTarget | undefined
-): SshRemoteRuntime {
-  const managedServerUnavailable =
-    recorded?.managedServerUnavailable ?? target?.managedServerUnavailable
-  return resolveSshRemoteRuntime(target && { ...target, managedServerUnavailable })
+  return fromEnv ?? DEFAULT_SSH_REMOTE_RUNTIME
 }
 
 export function isGlibcBelow(version: GlibcVersion, floor: GlibcVersion): boolean {
@@ -192,13 +185,8 @@ export type RelayRuntimeFallbackReason =
   | 'runtime_unavailable'
   /** Rung C found no host Node >= 18 with the addons' N-API level. */
   | 'host_node_missing'
-
-export type HostNodeRelayPlan = {
-  kind: 'host-node'
-  fallbackReason?: RelayRuntimeFallbackReason
-  /** Replayed from a cache rather than proved on this connect. */
-  remembered?: boolean
-}
+  /** The host answered a rung's install, self-test or launch with an unclassified failure. */
+  | 'install_failed'
 
 /** The pinned path cannot run on this host or client; the deploy retries on the host's Node. */
 export class PinnedRelayFallbackError extends Error {
@@ -217,38 +205,6 @@ export function isPinnedRuntimeRefusal(reason: string): reason is PinnedRuntimeR
   return PINNED_RUNTIME_REFUSALS.some((refusal) => refusal === reason)
 }
 
-// Why also in memory: the persisted decision is written only once the ladder settles.
-const refusals = new Map<string, PinnedRuntimeRefusal>()
-
-function refusalKey(targetId: string, target: NodeRuntimeTarget): string {
-  return `${targetId}\0${pinnedNodeRuntimeAsset(target).executableSha256}`
-}
-
-export function recordPinnedRuntimeRefusal(
-  targetId: string,
-  target: NodeRuntimeTarget,
-  refusal: PinnedRuntimeRefusal
-): void {
-  refusals.set(refusalKey(targetId, target), refusal)
-}
-
-/** Forgets a refusal a later rung has disproved, so the next connect retries rung A. */
-export function forgetPinnedRuntimeRefusal(targetId: string, target: NodeRuntimeTarget): void {
-  refusals.delete(refusalKey(targetId, target))
-}
-
-export function resetPinnedRuntimeRefusalsForTests(): void {
-  refusals.clear()
-}
-
-export function logPinnedRelayFallback(
-  reason: RelayRuntimeFallbackReason,
-  detail: string
-): HostNodeRelayPlan {
-  console.warn(`[ssh-relay] Pinned Node relay unavailable (${reason}): ${detail}; using host Node`)
-  return { kind: 'host-node', fallbackReason: reason }
-}
-
 /**
  * The host's server target, or a fallback when the libc probe answered with nothing known.
  * Why only an answered probe falls back: a lost channel says nothing about the host, and
@@ -258,14 +214,14 @@ export async function resolvePinnedRelayTargetFacts(options: {
   conn: SshConnection
   host: RemoteHostPlatform
   signal?: AbortSignal
-}): Promise<OrcadDeploymentTargetFacts | HostNodeRelayPlan> {
+}): Promise<OrcadDeploymentTargetFacts> {
   try {
     return await resolveOrcadDeploymentTargetFacts(options)
   } catch (error) {
     if (!(error instanceof UnidentifiedHostLibcError)) {
       throw error
     }
-    return logPinnedRelayFallback('target_unresolved', error.message)
+    throw new PinnedRelayFallbackError('target_unresolved', error.message)
   }
 }
 
@@ -283,32 +239,36 @@ export async function planPinnedNodeRelay(options: {
   compat?: { target: CompatServerTarget; glibcFloor: GlibcVersion | null }
   materializeOrcad?: (target: NodeRuntimeTarget, signal?: AbortSignal) => Promise<string>
   runtimeCacheRoot?: () => string
-}): Promise<PinnedRelayPlan | HostNodeRelayPlan> {
+}): Promise<PinnedRelayPlan> {
   const { host, signal } = options
   const facts =
     options.facts ?? (await resolvePinnedRelayTargetFacts({ conn: options.conn, host, signal }))
-  if ('kind' in facts) {
-    return facts
-  }
   const { glibc } = facts
   const { compat } = options
   const target: NodeRuntimeTarget = compat?.target ?? facts.target
-  const cached = refusals.get(refusalKey(options.targetId, target))
+  const refuse = (
+    reason: RelayRuntimeFallbackReason,
+    detail: string,
+    remembered = false
+  ): PinnedRelayFallbackError =>
+    new PinnedRelayFallbackError(
+      reason,
+      compat ? `compat runtime ${target}: ${detail}` : detail,
+      remembered
+    )
+  const cached = rememberedPinnedRuntimeRefusal(options.targetId, target)
   if (cached) {
-    return { ...logPinnedRelayFallback(cached, 'refused earlier this session'), remembered: true }
+    throw refuse(cached, 'refused earlier this session', true)
   }
   // Why rung A only: the persisted decision is keyed by the default runtime's hash.
   const persisted = compat ? null : options.persistedRefusal?.(facts)
   if (persisted) {
-    return {
-      ...logPinnedRelayFallback(persisted, 'refused on an earlier connect'),
-      remembered: true
-    }
+    throw refuse(persisted, 'refused on an earlier connect', true)
   }
   const floor = compat ? compat.glibcFloor : PINNED_NODE_GLIBC_FLOOR
   if (glibc && floor && isGlibcBelow(glibc, floor)) {
     recordPinnedRuntimeRefusal(options.targetId, target, 'libc_floor')
-    return logPinnedRelayFallback(
+    throw refuse(
       'libc_floor',
       `host glibc ${glibc.major}.${glibc.minor} is below ${floor.major}.${floor.minor}`
     )
@@ -320,10 +280,7 @@ export async function planPinnedNodeRelay(options: {
     addons = await stagePinnedRelayAddons(await materialize(target, signal), target)
   } catch (error) {
     signal?.throwIfAborted()
-    return logPinnedRelayFallback(
-      'artifacts_unavailable',
-      error instanceof Error ? error.message : String(error)
-    )
+    throw refuse('artifacts_unavailable', error instanceof Error ? error.message : String(error))
   }
   const cacheRoot =
     options.runtimeCacheRoot ??

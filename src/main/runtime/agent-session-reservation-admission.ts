@@ -47,6 +47,7 @@ import {
 } from './agent-session-lease-transitions'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
+import { agentSessionAccountHomesEqual } from '../../shared/agent-session-account-home'
 
 export type AgentSessionReserveRequest = {
   /** Host-resolved floating directory committed with the first owner reservation. */
@@ -142,14 +143,7 @@ export function admitPendingAgentSessionReservationReplay(
   return record
 }
 
-export function applyAgentSessionReservation(
-  state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest,
-  leaseTtlMs: number
-): {
-  record: AgentSessionRecord
-  disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
-} {
+export function validateAgentSessionReservationInput(request: AgentSessionReserveRequest): void {
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
@@ -159,6 +153,17 @@ export function applyAgentSessionReservation(
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
+}
+
+export function applyAgentSessionReservation(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  leaseTtlMs: number
+): {
+  record: AgentSessionRecord
+  disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
+} {
+  validateAgentSessionReservationInput(request)
   const reservation: AgentSessionReservation = {
     spawnToken:
       typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken,
@@ -186,8 +191,7 @@ export function applyAgentSessionReservation(
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
-    existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    !agentSessionAccountHomesEqual(existing.accountHome, request.accountHome)
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'identityMismatch' })
@@ -228,7 +232,7 @@ export function applyAgentSessionReservation(
  * compare-and-swap never collides and both would pass. Codex permits two app-servers on one thread
  * silently, so the cost of missing this is a corrupted conversation rather than an error.
  */
-function assertAdoptedConversationUnowned(
+export function assertAdoptedConversationUnowned(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
 ): void {
@@ -257,7 +261,7 @@ function assertAdoptedConversationUnowned(
  * Checked, not claimed: the id is taken when the chat's tab is published, so a create that never
  * gets that far leaves nothing in the table to restore or release.
  */
-function assertReservedTabUnheld(
+export function assertReservedTabUnheld(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
 ): void {

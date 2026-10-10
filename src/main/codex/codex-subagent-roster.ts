@@ -36,9 +36,9 @@ import {
 } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'
 import { readCodexTurnId } from './codex-structured-thread-facts'
-import { codexSubagentGroupBody } from './codex-subagent-group-body'
+import { subagentGroupJournalBody } from '../native-chat/agent-session-journal/journal-subagent-group-body'
 import { CodexSubagentLinkage } from './codex-subagent-linkage'
-export { codexSubagentGroupBody } from './codex-subagent-group-body'
+export { subagentGroupJournalBody as codexSubagentGroupBody } from '../native-chat/agent-session-journal/journal-subagent-group-body'
 export { codexSubagentGroupId, codexSubagentGroupIdentity } from './codex-subagent-roster-state'
 import {
   codexSubagentGroupId,
@@ -330,7 +330,7 @@ export class CodexSubagentRoster {
       group.entries.set(id, merged)
       return merged
     })
-    const body = codexSubagentGroupBody(group.groupId, agents)
+    const body = subagentGroupJournalBody(group.groupId, agents)
     const serialized = JSON.stringify(body)
     if (serialized === group.lastSerialized) {
       // Nothing changed — a duplicate delivery must not burn a revision.

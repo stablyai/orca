@@ -13,7 +13,8 @@ vi.mock('@/lib/agent-launch-route-input', () => ({
 }))
 vi.mock('@/lib/agent-launch-routing', () => ({
   resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute,
-  structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported
+  structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported,
+  structuredAgentLaunchDowngrade: () => null
 }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   beginStructuredAgentLaunchSettlement: mocks.beginStructuredAgentLaunchSettlement
@@ -129,7 +130,7 @@ describe('planAgentSessionLaunch', () => {
   })
 
   it('opens nothing structured on a route that is not', async () => {
-    mocks.resolveAgentLaunchRoute.mockReturnValue('legacy-native-chat')
+    mocks.resolveAgentLaunchRoute.mockReturnValue('terminal-tui')
     const plan = planAgentSessionLaunch(store, {
       requestId: 'request-4b',
       agent: 'grok',
@@ -185,7 +186,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
 
   it.each([true, false])('answers from feasibility alone (supported=%s)', (supported) => {
     mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
-    const settings = { experimentalStructuredNativeChat: true } as never
+    const settings = { experimentalNativeChat: true }
 
     expect(
       structuredAgentSessionLaunchFeasible(store, {
@@ -199,7 +200,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
   })
 
   it('builds the input from the named settings, not the store copy', () => {
-    const settings = { experimentalStructuredNativeChat: true } as never
+    const settings = { experimentalNativeChat: true }
     structuredAgentSessionLaunchFeasible(store, {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },

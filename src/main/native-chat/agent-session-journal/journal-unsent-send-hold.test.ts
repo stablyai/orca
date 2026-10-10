@@ -17,7 +17,6 @@ import {
 } from '../../../shared/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionCompactBody } from '../agent-session-wire/structured-agent-session-command-turn'
@@ -180,7 +179,7 @@ describe('which sends an earlier host process left unsent are kept', () => {
       })
       expect(reopened.queuedMessages.get(id)).toMatchObject({
         state: 'waiting',
-        holdReason: QUEUED_MESSAGE_PAUSED_KEPT,
+        holdReason: null,
         hostInstance: HOST,
         body: message(`text of ${id}`),
         fingerprint: fingerprint(message(`text of ${id}`)),
@@ -229,14 +228,13 @@ describe('which sends an earlier host process left unsent are kept', () => {
     }
   })
 
-  // Only a Send the person asked for comes back kept; the queue's own hand-off waits under the
-  // restart's pause, where it stood.
+  // Whoever sent it, the card comes back with no hold of its own, to wait under the reopen's pause.
   it.each([
-    { by: 'Send now', origin: 'client' as const, holdReason: QUEUED_MESSAGE_PAUSED_KEPT },
-    { by: 'the queue', origin: 'host' as const, holdReason: null }
+    { by: 'Send now', origin: 'client' as const },
+    { by: 'the queue', origin: 'host' as const }
   ])(
     'a card’s own hand-off by $by returns its card, and makes no second one',
-    async ({ origin, holdReason }) => {
+    async ({ origin }) => {
       const journal = await afterRestart(async (earlier) => {
         await earlier.queuedMessages.insert({
           messageId: 'card',
@@ -262,7 +260,7 @@ describe('which sends an earlier host process left unsent are kept', () => {
       expect(journal.queuedMessages.get('card')).toMatchObject({
         state: 'waiting',
         consumedAs: null,
-        holdReason
+        holdReason: null
       })
       expect(journal.queuedMessages.get('handoff')).toBeNull()
     }
@@ -383,7 +381,14 @@ describe('where kept sends go in the queue', () => {
     })
     // That run kept A, at a stale place behind C, then died before B.
     await interrupted.resolveDispatch(
-      { clientMessageId: 'A', state: 'rejected', ...HOST_RESTARTED, fence: 0, recovered: true },
+      {
+        clientMessageId: 'A',
+        state: 'rejected',
+        ...HOST_RESTARTED,
+        fence: 0,
+        recovered: true,
+        keptAsQueuedMessageId: 'A'
+      },
       (db) => {
         interrupted.queuedMessages.holdInTransaction(db, {
           card: {
@@ -391,7 +396,6 @@ describe('where kept sends go in the queue', () => {
             body: message('text of A'),
             fingerprint: fingerprint(message('text of A')),
             hostInstance: HOST,
-            holdReason: QUEUED_MESSAGE_PAUSED_KEPT,
             queuedAt: {
               epoch: 'epoch-1',
               sequence: interrupted.submission('A')!.acceptedSequence!
@@ -419,7 +423,7 @@ describe('a close of the chat', () => {
 
     expect(cardOrder(journal)).toEqual(['person'])
     expect(journal.queuedMessages.get('person')).toMatchObject({
-      holdReason: QUEUED_MESSAGE_PAUSED_KEPT,
+      holdReason: null,
       hostInstance: HOST
     })
     for (const id of ['person', 'mail']) {

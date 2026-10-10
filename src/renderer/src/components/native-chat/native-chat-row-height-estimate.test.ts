@@ -21,6 +21,18 @@ function message(text: string, role: NativeChatMessage['role'] = 'assistant'): N
 }
 
 describe('transcript row height estimate', () => {
+  it('estimates a long prompt at its folded height, however long it runs', () => {
+    const height = (lines: number, role: NativeChatMessage['role']): number =>
+      estimateNativeChatRowHeight(
+        nativeChatRowContentMetrics(message(Array(lines).fill('line').join('\n'), role)),
+        NO_CHROME
+      )
+    expect(height(40, 'user')).toBe(height(400, 'user'))
+    expect(height(40, 'user')).toBeLessThan(height(40, 'assistant'))
+    expect(height(8, 'user')).toBeGreaterThan(height(7, 'user'))
+    expect(height(400, 'user')).toBe(height(9, 'user'))
+  })
+
   it('reuses row metrics across a one-pixel resize and refreshes after a substantial resize', () => {
     const prose = message('x'.repeat(900))
     const metricsAtWidth = (width: number) => {

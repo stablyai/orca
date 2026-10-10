@@ -146,6 +146,7 @@ function startOptionalBillingFetch(openCodeSession: Session, workspaceId: string
         signal: abortController.signal
       })
       if (!response.ok) {
+        abortController.abort()
         return makeOpenCodeGoZenBalance(null, 'refresh-failed')
       }
       const balance = parseOpenCodeGoBillingStatusPayload(await response.text())

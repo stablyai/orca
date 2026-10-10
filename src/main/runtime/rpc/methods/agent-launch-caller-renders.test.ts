@@ -91,7 +91,7 @@ describe('a launch the caller cannot show as a chat', () => {
 
 describe('Grok with the structured-chat setting off', () => {
   it('opens as a terminal for every caller, as Claude and Codex do', async () => {
-    const off = { ...STRUCTURED_PREFERENCE, experimentalStructuredNativeChat: false }
+    const off = { ...STRUCTURED_PREFERENCE, experimentalNativeChat: false }
     for (const agent of ['grok', 'claude']) {
       const { result, runtime } = await launchInto(agent, {}, off)
       expect(result.outcome).toMatchObject({ kind: 'terminal' })

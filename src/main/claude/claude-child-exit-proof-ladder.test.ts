@@ -1,7 +1,6 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import {
   createClaudeChildTreeReaper,
@@ -22,7 +21,7 @@ function fakeTree(): ClaudeChildTreeReaper & { reap: ReturnType<typeof vi.fn> } 
 }
 
 function rootStoppedBySigterm(stopMs: number, platform: NodeJS.Platform) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 4321,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
@@ -35,8 +34,7 @@ function rootStoppedBySigterm(stopMs: number, platform: NodeJS.Platform) {
     })
   })
   const spawner = createClaudeCodeProcessSpawn(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every event, stream and process field used by the spawner and close.
-    return child as unknown as ReturnType<typeof spawnProcess>
+    return child
   }, platform)
   spawner.spawn({
     command: 'fixture-provider',
@@ -58,7 +56,7 @@ function fixtureRoot(
   leavesOnStdinEnd: boolean,
   leavesOnKill = true
 ) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: 4321,
     stdin: new PassThrough(),
     stdout: new PassThrough(),

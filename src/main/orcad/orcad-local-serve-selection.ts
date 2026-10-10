@@ -11,9 +11,13 @@
  */
 import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
-import { ORCAD_VERSION_FILENAME, orcadNodeRuntimeRelativePath } from '../../shared/orcad-artifacts'
+import {
+  ORCAD_SERVER_ENTRY_FILENAME,
+  ORCAD_VERSION_FILENAME,
+  orcadNodeRuntimeRelativePath
+} from '../../shared/orcad-artifacts'
 import {
   ORCAD_NATIVE_PREFLIGHT_FLAG,
   parseOrcadNativePreflightReport
@@ -27,6 +31,7 @@ import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
 import { detectNativeHostAbi, nativeSlotName } from './native-host-abi'
 import { materializeOrcadArtifact } from '../ssh/orcad-artifact-materializer'
 import { materializeCachedNodeRuntime } from '../ssh/pinned-runtime-materializer'
+import { serveProfileHasSshTargets } from './serve-profile-ssh-targets'
 
 const NATIVE_PREFLIGHT_TIMEOUT_MS = 30_000
 
@@ -39,6 +44,7 @@ export type ServeRuntimeSelectionInput = {
   materializeSlot?: typeof materializeOrcadArtifact
   materializeRuntime?: typeof materializeCachedNodeRuntime
   nativePreflight?: (runtime: string, entry: string) => Promise<string>
+  profileHasSshTargets?: (userDataPath: string) => boolean
 }
 
 function isServerTarget(value: string): value is ServerTarget {
@@ -58,6 +64,12 @@ export async function selectServeRuntime(
   }
   if (requested && requested !== 'orcad') {
     return electron(`${SERVE_RUNTIME_ENV}=${requested} is neither orcad nor electron`)
+  }
+  // Why: orcad has no SSH connection stack yet, so a default serve on it would list no targets
+  // and fail every connect (#25886, #8489). An explicit ORCA_SERVE_RUNTIME=orcad keeps orcad.
+  const sshReason = requested ? null : profileSshReason(input)
+  if (sshReason) {
+    return electron(sshReason)
   }
   const target = (input.hostTarget ?? (() => nativeSlotName(detectNativeHostAbi())))()
   if (!isServerTarget(target)) {
@@ -87,7 +99,7 @@ export async function selectServeRuntime(
   if (!runtime) {
     return electron('the orcad slot names no pinned runtime')
   }
-  const entry = join(slotDir, 'orcad.js')
+  const entry = join(slotDir, ORCAD_SERVER_ENTRY_FILENAME)
   const report = parseOrcadNativePreflightReport(
     await (input.nativePreflight ?? runNativePreflight)(runtime, entry).catch(() => '')
   )
@@ -104,6 +116,19 @@ export async function selectServeRuntime(
     runtime,
     entry,
     version: readFileSync(join(slotDir, ORCAD_VERSION_FILENAME), 'utf8').trim()
+  }
+}
+
+/** Why this profile must serve on Electron for SSH, or null when it provably has no targets. */
+function profileSshReason(input: ServeRuntimeSelectionInput): string | null {
+  try {
+    return (input.profileHasSshTargets ?? serveProfileHasSshTargets)(input.userDataPath)
+      ? 'this profile has SSH targets, which orcad cannot serve yet'
+      : null
+  } catch (error) {
+    // Why: fail closed. The read-only probe rejects profiles the serve host would still migrate
+    // (an older schema), and guessing "no SSH" there leaves saved targets unreachable.
+    return `could not tell whether this profile has SSH targets, which orcad cannot serve yet (${errorText(error)})`
   }
 }
 

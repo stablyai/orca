@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type {
   AgentJournalMessageItem,
@@ -53,6 +54,7 @@ export function isCodexTurnOptionKey(key: string): boolean {
 
 /** The session state one turn needs. */
 export type CodexTurnHost = {
+  account?: AgentSessionAccountKind
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
   options: Map<string, string>
@@ -230,7 +232,7 @@ export async function dispatchCodexTurn(
         answer.via
       )
     : null
-  const rejection = endedFirst ? codexTurnEndRejection(endedFirst) : null
+  const rejection = endedFirst ? codexTurnEndRejection(endedFirst, session.account) : null
   return rejection && answer.turnId
     ? {
         state: 'rejected',

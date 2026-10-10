@@ -31,6 +31,7 @@ export type AgentLaunchFingerprintInput = {
   target:
     | { kind: 'existing'; worktree: string }
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
+    | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }

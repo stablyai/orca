@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { SshTarget } from '../../shared/ssh-types'
 import { shellEscape } from './ssh-connection-utils'
 import {
@@ -300,7 +300,7 @@ export function hostileHostSshTarget(target: HostileHostTarget): SshTarget {
     port: target.port,
     username: target.username,
     identityFile: target.identityFile,
-    identitiesOnly: true,
-    remoteRuntime: 'pinned-node'
+    // No remoteRuntime: the matrix proves the ladder a host gets by default.
+    identitiesOnly: true
   }
 }

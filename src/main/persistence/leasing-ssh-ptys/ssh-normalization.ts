@@ -150,6 +150,7 @@ const SshRemoteRuntimeResolutionSchema = z
   .object({
     rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
     pinnedRefusal: z.string().max(64).optional(),
+    refusedAt: z.number().int().nonnegative().optional(),
     glibc: z
       .string()
       .regex(/^\d+\.\d+$/)

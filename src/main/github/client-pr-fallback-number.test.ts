@@ -26,7 +26,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRForBranchOutcome, getPRForBranch } from './client'
+import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const {

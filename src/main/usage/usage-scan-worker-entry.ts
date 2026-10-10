@@ -3,12 +3,25 @@ import { scanClaudeUsageFiles } from '../claude-usage/scanner'
 import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import { scanMuseUsageFiles } from '../muse-usage/scanner'
+import { normalizeMuseUsagePersistedFiles } from '../muse-usage/persisted-file-normalization'
+import { normalizeOpenCodeUsagePersistedDatabases } from '../opencode-usage/persisted-database-normalization'
+import type { ClaudeUsagePersistedFile } from '../claude-usage/types'
+import type { CodexUsagePersistedFile } from '../codex-usage/types'
+import type { OpenCodeUsagePersistedDatabase } from '../opencode-usage/types'
+import type { MuseUsagePersistedFile } from '../muse-usage/types'
 import type {
   UsageScanWorkerProgress,
   UsageScanWorkerRequest,
   UsageScanWorkerResponse,
+  UsageScanWorkerScanBody,
   UsageScanWorkerValue
 } from './usage-scan-worker-protocol'
+import {
+  readUsageSourceCache,
+  splitUsageCacheFile,
+  writeUsageSourceCache,
+  type UsageSourceCacheRef
+} from './usage-source-cache-file'
 
 // Why (#20940): the Claude/Codex/OpenCode/Muse usage scans parse whole history
 // corpora and read SQLite synchronously. Running them on this worker thread
@@ -55,32 +68,48 @@ function createProgressReporter(id: number): (count: number) => void {
   }
 }
 
-async function runScan(
+async function runRequest(
   request: UsageScanWorkerRequest,
   onFilesScanned: (count: number) => void
 ): Promise<UsageScanWorkerValue> {
-  // Switched, not table-driven: each branch narrows `previous` to that
+  if (request.operation === 'splitCacheFile') {
+    return { operation: 'splitCacheFile', ...(await splitUsageCacheFile(request)) }
+  }
+  return runScan(request, onFilesScanned)
+}
+
+async function runScan(
+  request: UsageScanWorkerScanBody,
+  onFilesScanned: (count: number) => void
+): Promise<UsageScanWorkerValue> {
+  // Switched, not table-driven: each branch narrows the cache to that
   // provider's own record type, so nothing here needs a type assertion.
   switch (request.providerId) {
     case 'claude': {
       const result = await scanClaudeUsageFiles(
         request.worktrees,
-        request.previous,
+        await readUsageSourceCache<ClaudeUsagePersistedFile>(request.sourceCache),
         onFilesScanned,
         request.profileDirs
       )
+      await persistSourceCache(request.sourceCache, result.processedFiles)
       return {
+        operation: 'scan',
         providerId: 'claude',
-        source: result.processedFiles,
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }
     }
     case 'codex': {
-      const result = await scanCodexUsageFiles(request.worktrees, request.previous, onFilesScanned)
+      const result = await scanCodexUsageFiles(
+        request.worktrees,
+        await readUsageSourceCache<CodexUsagePersistedFile>(request.sourceCache),
+        onFilesScanned
+      )
+      await persistSourceCache(request.sourceCache, result.processedFiles)
       return {
+        operation: 'scan',
         providerId: 'codex',
-        source: result.processedFiles,
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }
@@ -88,25 +117,48 @@ async function runScan(
     case 'opencode': {
       const result = await scanOpenCodeUsageDatabases(
         request.worktrees,
-        request.previous,
+        normalizeOpenCodeUsagePersistedDatabases(
+          await readUsageSourceCache<OpenCodeUsagePersistedDatabase>(request.sourceCache)
+        ),
         onFilesScanned
       )
+      await persistSourceCache(request.sourceCache, result.processedDatabases)
       return {
+        operation: 'scan',
         providerId: 'opencode',
-        source: result.processedDatabases,
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }
     }
     case 'muse': {
-      const result = await scanMuseUsageFiles(request.worktrees, request.previous, onFilesScanned)
+      const result = await scanMuseUsageFiles(
+        request.worktrees,
+        normalizeMuseUsagePersistedFiles(
+          await readUsageSourceCache<MuseUsagePersistedFile>(request.sourceCache)
+        ),
+        onFilesScanned
+      )
+      await persistSourceCache(request.sourceCache, result.processedFiles)
       return {
+        operation: 'scan',
         providerId: 'muse',
-        source: result.processedFiles,
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }
     }
+  }
+}
+
+// Why: like the main-thread report, a cache that cannot be written must not
+// turn a successful scan into a failed one; the next scan just starts colder.
+async function persistSourceCache(
+  sourceCache: UsageSourceCacheRef,
+  sources: readonly unknown[]
+): Promise<void> {
+  try {
+    await writeUsageSourceCache(sourceCache, sources)
+  } catch (error) {
+    console.warn('[usage-scan] Could not persist the per-source usage cache:', error)
   }
 }
 
@@ -115,7 +167,7 @@ async function handleRequest(request: UsageScanWorkerRequest): Promise<UsageScan
     return {
       id: request.id,
       ok: true,
-      value: await runScan(request, createProgressReporter(request.id))
+      value: await runRequest(request, createProgressReporter(request.id))
     }
   } catch (err) {
     return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }

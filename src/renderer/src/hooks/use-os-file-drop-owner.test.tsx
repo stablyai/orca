@@ -33,12 +33,14 @@ function Owner<Destination = undefined>({
   canAccept,
   sequence,
   captureDestination,
+  isDestinationLive,
   children
 }: {
   onDrop: DropHandler<Destination>
   canAccept?: boolean
   sequence?: OsFileDropSequence
   captureDestination?: (event: DragEvent) => Destination
+  isDestinationLive?: (context: { destination?: Destination }) => boolean
   children?: React.ReactNode
 }): React.JSX.Element {
   const ownerElementRef = useRef<HTMLElement | null>(null)
@@ -48,7 +50,8 @@ function Owner<Destination = undefined>({
     onDrop,
     canAccept,
     sequence: sequence ?? ownSequence,
-    captureDestination
+    captureDestination,
+    isDestinationLive
   }
   const ownerRef = useOsFileDropOwner(ownerElementRef, options)
   return (
@@ -102,6 +105,15 @@ afterEach(() => {
 })
 
 describe('useOsFileDropOwner', () => {
+  it('claims a trusted refused drop without reading file paths', () => {
+    const onDrop = vi.fn()
+    const view = render(<Owner onDrop={onDrop} canAccept={false} />)
+    drag(view.getByTestId('owner'), 'drop')
+    expect(getPathForFile).not.toHaveBeenCalled()
+    expect(onDrop).not.toHaveBeenCalled()
+    drag(view.getByTestId('owner'), 'drop', undefined, { trusted: false })
+    expect(onDrop).not.toHaveBeenCalled()
+  })
   it('registers the root with a callback ref and delivers one prepared drop to the nearest owner', async () => {
     const outerDrop = vi.fn<DropHandler>()
     const innerDrop = vi.fn<DropHandler>()
@@ -353,6 +365,50 @@ describe('useOsFileDropOwner', () => {
     })
     expect(onDrop).not.toHaveBeenCalled()
   })
+
+  it.each([true, false])(
+    'uses destination liveness (%s) after the root detaches and keeps failures',
+    async (live) => {
+      const onDrop = vi.fn<DropHandler<string>>()
+      let finish: ((prepared: PreparedDroppedPaths) => void) | undefined
+      prepareDroppedPaths.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          })
+      )
+      const isDestinationLive = vi.fn(() => live)
+      const view = render(
+        <Owner
+          onDrop={onDrop}
+          captureDestination={() => 'group-b'}
+          isDestinationLive={isDestinationLive}
+        />
+      )
+      drag(view.getByTestId('owner'), 'drop')
+      view.unmount()
+      await act(async () => {
+        finish?.({
+          paths: ['/dropped/a.txt'],
+          failures: [
+            { target: 'rejected', reason: 'unresolved-paths', pathCount: 1, byteLength: 0 }
+          ]
+        })
+      })
+      expect(isDestinationLive).toHaveBeenCalledWith(
+        expect.objectContaining({ destination: 'group-b' })
+      )
+      expect(onDrop).toHaveBeenCalledExactlyOnceWith(
+        {
+          paths: live ? ['/dropped/a.txt'] : [],
+          failures: [
+            { target: 'rejected', reason: 'unresolved-paths', pathCount: 1, byteLength: 0 }
+          ]
+        },
+        expect.objectContaining({ destination: 'group-b' })
+      )
+    }
+  )
 
   it('orders sibling roots through preparation and asynchronous application while independent owners progress', async () => {
     let finishPreparation: ((prepared: PreparedDroppedPaths) => void) | undefined

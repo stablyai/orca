@@ -87,10 +87,35 @@ describe('structured composer image input', () => {
     expect(result.pendingChip).not.toBeNull()
   })
 
-  it('references an image by path, with no chip, when the agent takes none', async () => {
+  it('references an image by path, with a removable pending operation, when the agent takes none', async () => {
     const result = await attach(false, '/tmp/shot.png')
-    expect(result.chips).toEqual([])
-    expect(result.pendingChip).toBeNull()
+    expect(result.chips).toEqual([''])
+    expect(result.pendingChip).not.toBeNull()
     expect(result.draft).toContain('/tmp/shot.png')
+  })
+
+  it('still shows a named upload chip when the agent takes no images', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    let api: AttachmentApi | null = null
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(Probe, {
+          acceptsImages: false,
+          onReady: (next) => {
+            api = next
+          }
+        })
+      )
+    })
+    const latest = (): AttachmentApi => {
+      if (!api) {
+        throw new Error('Probe did not render')
+      }
+      return api
+    }
+    expect(latest().beginPendingImageAttachment(undefined, 'notes.txt')).not.toBeNull()
+    act(() => root.unmount())
   })
 })

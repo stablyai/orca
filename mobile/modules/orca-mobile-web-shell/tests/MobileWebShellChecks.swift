@@ -215,7 +215,7 @@ import Foundation
     precondition(directives.contains("connect-src 'self'"))
     precondition(directives.contains("worker-src 'none'"))
     precondition(directives.contains("frame-src 'none'"))
-    precondition(directives.contains("base-uri 'none'"))
+    precondition(directives.contains("base-uri about:"))
     precondition(directives.contains("form-action 'none'"))
     precondition(directives.contains("frame-ancestors 'none'"))
     // 'unsafe-inline' is granted to style-src and to nothing else: the page's code still has to

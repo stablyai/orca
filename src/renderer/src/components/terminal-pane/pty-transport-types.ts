@@ -13,10 +13,11 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
-import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
+import type { AcceptedInputOptions, PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -71,6 +72,8 @@ export type PtyReplayDataMeta = {
   /** An image that starts on the normal buffer and enters alt itself; absent for
    *  raw byte replays such as an SSH relay's ring buffer. */
   carriesNormalBuffer?: boolean
+  /** The image folds host history above its screen; absent for screen-only images. */
+  carriesHistory?: boolean
 }
 
 export type LocalPtySessionMetadata = {
@@ -197,7 +200,11 @@ export type PtyTransport = {
   // this is `sendInput` for them; the remote transport flushes pending input
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string, inputKind: TerminalInputKind) => Promise<boolean>
+  sendInputAccepted?: (
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: AcceptedInputOptions
+  ) => Promise<boolean>
   /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
   abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
@@ -218,6 +225,8 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
+  ownsRecovery?: () => boolean
   /** Lets a wrapper retain input when recovery re-enters connect internally. */
   setConnectForRecovery?: (connect: PtyTransport['connect']) => void
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
@@ -280,6 +289,8 @@ export type IpcPtyTransportOptions = {
   worktreeId?: string
   tabId?: string
   leafId?: string
+  /** Sent on fresh spawns only; a reattach names a PTY whose leaf main already knows. */
+  placement?: TerminalPanePlacement
   activate?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution

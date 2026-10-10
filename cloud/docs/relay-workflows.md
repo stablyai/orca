@@ -530,22 +530,34 @@ drained host re-dials the director as soon as it reads `drain`, so the window se
 arrival rate: hosts / window, about 1.8-2.7 hosts/s for a US cell at the default. The window also
 sets two waits: restart-safe needs an empty runtime for (ceil(window / 5 s) + 1) consecutive
 5-second samples, and the drain step's overall timeout is the 15-minute migration lease plus the
-window (20 minutes at the default).
+window, plus the window's excess over `300000` (20 minutes at the default, 50 at `1200000`).
+Because the quiet starts only once the last host has left, a drain step takes about twice the
+window: about 30 minutes at `900000` and 40 at `1200000`.
 
-- Allowed values are `300000` (the default, and every wave before this input), `60000`, and
-  `30000`. The wave validator refuses anything else, and each cell job checks again.
+- Allowed values are `300000` (the default, and every wave before this input), `60000`,
+  `30000`, `900000`, and `1200000`. The wave validator refuses anything else, and each cell job
+  checks again.
 - Below `300000` is for US general cells only (C7-C10, C13-C16, C19-C26, C32, C33). Asia drains
   are bound by the target cells' own accept rate (about 4-6 hosts/s per Asia cell), not by the
-  window. Migration-only cells hold no hosts. Both stay at `300000`.
+  window. Migration-only cells hold no hosts. Both stay at `300000` or slower.
+- `900000` and `1200000` are for any cell. They exist because c28's 1,901-host drain at `300000`
+  (about 6.3 hosts/s, 2026-10-07) held database lock time above its bar for about 10 minutes.
+  At `1200000` a 2,000-host Asia cell re-places about 1.7 hosts/s.
 - A non-default window must be named at the end of the confirmation, for example
   `ROLL_RELAY_SAME_CAP <target-digest> <cells> drain-pace-window-ms=60000`. A confirmation that
   names no window confirms `300000`, so a form left at another value fails closed.
 - A canary's authority records its window and its pace verdict (below). A batch may use that
   window or a slower one, never a faster one. A batch below `300000` also needs the canary's pace
-  verdict to be PASS. Stepping back to `300000` mid-ladder needs no new canary.
+  verdict to be PASS. Stepping back to `300000` or slower mid-ladder needs no new canary.
 - A cell on an image without paced drains rejects the window, and the job falls back to an
   unpaced drain. The job records what the cell accepted, and a canary that did not drain at its own
   window seals `UNVERIFIED`.
+- A window above `300000` needs the cell being drained to already run an image that accepts it
+  (the cap rose with this ladder's slow rungs). Before the isolate, the job reads the cap the cell
+  advertises on `/health` (`drainPaceWindowMaxMs`; an image without it has `300000`) and stops
+  with the cell untouched if the window is above it. Re-dispatch at `300000`, or after the cell's
+  next roll. If a cell still rejects the window at the drain, the job fails rather than drain
+  unpaced, and the cell stays isolated for an operator, as any failed cell does.
 
 **What judges a paced drain.** The shadow health gate (report only, after each cell) judges two
 checks the pace can move. Together they are the report's `paceVerdict`, which the canary seals:

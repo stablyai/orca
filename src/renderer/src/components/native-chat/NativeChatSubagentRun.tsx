@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
 import { useNow } from '@/hooks/use-now'
 import {
-  normalizeSubagentState,
-  summarizeSubagentGroup
-} from '../../../../shared/native-chat-subagent-summary'
+  formatSubagentTokens,
+  nativeChatSubagentGroupHeader,
+  subagentStateLabel
+} from '../../../../shared/native-chat-subagent-group-header'
+import { normalizeSubagentState } from '../../../../shared/native-chat-subagent-summary'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock,
@@ -14,79 +15,7 @@ import type {
 } from '../../../../shared/native-chat-types'
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
-
-/** Compact token counts: the row shows scale, not an exact ledger. */
-function formatSubagentTokens(tokens: number): string {
-  if (tokens < 1_000) {
-    return String(Math.round(tokens))
-  }
-  const scaled = tokens < 1_000_000 ? tokens / 1_000 : tokens / 1_000_000
-  const suffix = tokens < 1_000_000 ? 'k' : 'M'
-  return `${scaled.toFixed(1).replace(/\.0$/, '')}${suffix}`
-}
-
-/** The group's one-line verdict. A single-child group reads as a bare word; any
- *  larger group always carries the count, because "working" alone would not say
- *  how many of the children it covers. `completed` never takes one: every child
- *  finishing is the whole group finishing. */
-function subagentStateLabel(
-  state: NativeChatSubagentState,
-  count: number,
-  groupTotal: number
-): string {
-  if (state === 'completed') {
-    return translate('components.native-chat.subagents.state.completed', 'completed')
-  }
-  if (groupTotal <= 1) {
-    switch (state) {
-      case 'working':
-        return translate('components.native-chat.subagents.state.working', 'working')
-      case 'idle':
-        return translate('components.native-chat.subagents.state.idle', 'idle')
-      case 'failed':
-        return translate('components.native-chat.subagents.state.failed', 'failed')
-      case 'stopped':
-        return translate('components.native-chat.subagents.state.stopped', 'stopped')
-      case 'unverifiable':
-        return translate(
-          'components.native-chat.subagents.state.unverifiable',
-          'status unavailable'
-        )
-    }
-  }
-  switch (state) {
-    case 'working':
-      return translate(
-        'components.native-chat.subagents.state.workingCount',
-        '{{value0}} working',
-        {
-          value0: count
-        }
-      )
-    case 'idle':
-      return translate('components.native-chat.subagents.state.idleCount', '{{value0}} idle', {
-        value0: count
-      })
-    case 'failed':
-      return translate('components.native-chat.subagents.state.failedCount', '{{value0}} failed', {
-        value0: count
-      })
-    case 'stopped':
-      return translate(
-        'components.native-chat.subagents.state.stoppedCount',
-        '{{value0}} stopped',
-        {
-          value0: count
-        }
-      )
-    case 'unverifiable':
-      return translate(
-        'components.native-chat.subagents.state.unverifiableCount',
-        '{{value0}} with status unavailable',
-        { value0: count }
-      )
-  }
-}
+import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
 
 const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
   working: 'bg-foreground/70',
@@ -180,7 +109,7 @@ export function NativeChatSubagentEntries({
               {agent.label}
             </span>
             <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
-              {subagentStateLabel(state, 1, 1)}
+              {subagentStateLabel(state, 1, 1, say)}
               {typeof agent.tokens === 'number' ? ` · ${formatSubagentTokens(agent.tokens)}` : null}
             </span>
           </>
@@ -248,45 +177,12 @@ export function NativeChatSubagentRun({
   const open = heldOpen ?? localOpen
   const setOpen = onSetOpen ?? setLocalOpen
   const agents = block.agents
-  const summary = useMemo(() => summarizeSubagentGroup(agents), [agents])
-  if (summary.total === 0) {
+  // Not memoized: its words follow the reader's language, which can change under the same roster.
+  const header = nativeChatSubagentGroupHeader(agents, say)
+  if (header.total === 0) {
     return null
   }
-
-  const working = summary.working > 0
-  const headline = working
-    ? summary.total === 1
-      ? translate('components.native-chat.subagents.startedOne', 'Kicked off 1 subagent')
-      : translate('components.native-chat.subagents.startedN', 'Kicked off {{value0}} subagents', {
-          value0: summary.total
-        })
-    : summary.total === 1
-      ? translate('components.native-chat.subagents.ranOne', 'Ran 1 subagent')
-      : translate('components.native-chat.subagents.ranN', 'Ran {{value0}} subagents', {
-          value0: summary.total
-        })
-  const verdictState: NativeChatSubagentState = working
-    ? 'working'
-    : (summary.settledState ?? 'idle')
-  const verdict = working
-    ? subagentStateLabel('working', summary.working, summary.total)
-    : subagentStateLabel(verdictState, summary.settledCount, summary.total)
-  // A child that already failed must not wait for its siblings to be readable.
-  const alertState = working ? summary.adverseState : null
-  const alert =
-    alertState === null ? null : subagentStateLabel(alertState, summary.adverseCount, summary.total)
-  // A child settled with no terminal stamp — swept by the reopen, or given the
-  // provider's verdict after that — stopped being observable at an unknown
-  // moment. Measuring to `now` would report the time since the host died as how
-  // long the child ran, on a row that is not even counting. A sibling's stamp is
-  // no better: in a mixed group it would present that sibling's duration as the
-  // group's while a child's run length is still unknown.
-  const runLengthUnknown = agents.some(
-    (agent) =>
-      normalizeSubagentState(agent.state) !== 'working' && typeof agent.settledAt !== 'number'
-  )
-  const clockStartedAt =
-    !runLengthUnknown && (working || summary.settledAt !== null) ? summary.clockStartedAt : null
+  const { working, headline, verdictState, verdict, alertState, alert, clockStartedAt } = header
 
   return (
     <div>
@@ -313,16 +209,12 @@ export function NativeChatSubagentRun({
               {' · '}
               <SubagentElapsed
                 startedAt={clockStartedAt}
-                settledAt={summary.settledAt}
+                settledAt={header.settledAt}
                 counting={working}
               />
             </span>
           ) : null}
-          {summary.tokens !== null
-            ? ` · ${translate('components.native-chat.subagents.tokens', '{{value0}} tokens', {
-                value0: formatSubagentTokens(summary.tokens)
-              })}`
-            : null}
+          {header.tokens !== null ? ` · ${header.tokens}` : null}
         </span>
         <ChevronRight
           className={cn(

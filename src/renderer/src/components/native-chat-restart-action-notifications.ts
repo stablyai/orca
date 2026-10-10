@@ -75,18 +75,25 @@ function descriptionFrom(lines: readonly string[]): ReactNode {
       )
 }
 
-/** One toast per resume. No names: the dialog behind Show has the list. Unconfirmed chats get their
- *  own count because the agent may well be working; "couldn't be resumed" would invite a second
- *  send. Without a failure list there is nothing for Show to open. */
+/** One toast per resume; Show opens the run summary. Unconfirmed chats may already be working. */
 function announceResume(
   continued: number,
   refused: number,
   unconfirmed: number,
   show: (() => Promise<void>) | undefined
 ): void {
+  const action =
+    show === undefined
+      ? {}
+      : {
+          action: {
+            label: translate('auto.components.NativeChatResumeOnRestartModal.show', 'Show'),
+            onClick: () => void show()
+          }
+        }
   if (refused === 0 && unconfirmed === 0) {
     if (continued > 0) {
-      toast(continuedCountText(continued))
+      toast(continuedCountText(continued), action)
     }
     return
   }
@@ -97,14 +104,7 @@ function announceResume(
   ]
   toast(title, {
     ...(lines.length === 0 ? {} : { description: descriptionFrom(lines) }),
-    ...(show === undefined
-      ? {}
-      : {
-          action: {
-            label: translate('auto.components.NativeChatResumeOnRestartModal.show', 'Show'),
-            onClick: () => void show()
-          }
-        })
+    ...action
   })
 }
 
@@ -118,6 +118,25 @@ export function restartChatsNotContinued(
   return [...new Set(requested)].filter((sessionId) => bySession.get(sessionId) !== 'continued')
 }
 
+/** Reconcile once with the action's confirmed list; later dismissals are not successes. */
+export function restartContinuationHistory(
+  requested: readonly string[],
+  reported: readonly RestartContinuationOutcome[] | undefined,
+  failed: readonly Pick<ResumeFailure, 'sessionId'>[] | undefined
+): readonly RestartContinuationOutcome[] {
+  const results = Array.isArray(reported)
+    ? reported
+    : requested.map((sessionId) => ({ sessionId, outcome: 'unknown' as const }))
+  const failedIds = new Set(failed?.map((entry) => entry.sessionId))
+  return results.map((entry) =>
+    failed !== undefined &&
+    !failedIds.has(entry.sessionId) &&
+    (entry.outcome === 'unknown' || entry.outcome === 'pending')
+      ? { ...entry, outcome: 'continued' as const }
+      : entry
+  )
+}
+
 export function announceRestartResults(
   requested: readonly string[],
   /** Undefined for an answer without outcomes, which may still have sent the message. */
@@ -127,9 +146,7 @@ export function announceRestartResults(
   /** Opens the dialog over a fresh read; never rejects. */
   show: () => Promise<void>
 ): void {
-  const results = Array.isArray(reportedResults)
-    ? reportedResults
-    : requested.map((sessionId) => ({ sessionId, outcome: 'unknown' as const }))
+  const results = restartContinuationHistory(requested, reportedResults, hostFailed)
   const notContinued = restartChatsNotContinued(requested, results)
   const failed = new Map(hostFailed?.map((failure) => [failure.sessionId, failure.outcome]))
   // A host that lists failures has already dropped chats that moved on by themselves or that the
@@ -141,20 +158,16 @@ export function announceRestartResults(
   const outcomes = new Map(results.map((result) => [result.sessionId, result.outcome]))
   const sentUnconfirmed = (sessionId: string): boolean =>
     outcomes.get(sessionId) === 'pending' || outcomes.get(sessionId) === 'unknown'
-  // An unconfirmed send the host no longer lists was seen carrying on (or answered by the user), so
-  // it was resumed and asked to continue; left out of both counts, the resume would say nothing.
-  const seenCarryingOn = notContinued.filter(
-    (sessionId) => hostFailed !== undefined && !failed.has(sessionId) && sentUnconfirmed(sessionId)
-  )
   // The filed outcome is what the list shows, so the toast uses it too.
   const unconfirmed = (sessionId: string): boolean =>
     (failed.get(sessionId) ?? (sentUnconfirmed(sessionId) ? 'unconfirmed' : 'refused')) ===
     'unconfirmed'
   const unconfirmedCount = reported.filter(unconfirmed).length
+  const continuedCount = new Set(requested).size - notContinued.length
   announceResume(
-    new Set(requested).size - notContinued.length + seenCarryingOn.length,
+    continuedCount,
     reported.length - unconfirmedCount,
     unconfirmedCount,
-    hostFailed === undefined ? undefined : show
+    hostFailed === undefined && continuedCount === 0 ? undefined : show
   )
 }

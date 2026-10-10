@@ -25,6 +25,45 @@ afterEach(() => {
 })
 
 describe('ACP JSON-RPC peer', () => {
+  it('drains only notifications across stdin end while calls and incoming hooks are closed', async () => {
+    const entered = deferred<AbortSignal>()
+    const answer = deferred<string>()
+    const onRequest = vi.fn<NonNullable<AcpPeerHandlers['onRequest']>>(
+      (_method, _params, context) => {
+        entered.resolve(context.signal)
+        return answer.promise
+      }
+    )
+    const onNotification = vi.fn()
+    const onClose = vi.fn()
+    const { peer, agent } = fixture({ onRequest, onNotification, onClose })
+    const rejected = expect(peer.request('pending', {})).rejects.toBeInstanceOf(
+      AcpConnectionClosedError
+    )
+    void agent.request('before-close', '_question', {})
+    const signal = await entered.promise
+    agent.stdout.write('{"jsonrpc":"2.0","method":"final-outcome",')
+    peer.drainNotifications()
+    expect(peer.closed).toBe(true)
+    expect(signal.aborted).toBe(true)
+    await rejected
+    await expect(peer.notify('session/cancel', {})).rejects.toBeInstanceOf(AcpConnectionClosedError)
+    await expect(peer.request('new', {})).rejects.toBeInstanceOf(AcpConnectionClosedError)
+    agent.stdin.end()
+    agent.stdout.write('"params":{"status":"cancelled"}}\n')
+    agent.send({ jsonrpc: '2.0', id: 'after-close', method: '_question', params: {} })
+    answer.resolve('too late')
+    await tick()
+    expect(onNotification).toHaveBeenCalledExactlyOnceWith('final-outcome', { status: 'cancelled' })
+    expect(onRequest).toHaveBeenCalledOnce()
+    expect(onClose).toHaveBeenCalledOnce()
+    peer.close()
+    agent.notify('final-outcome', { status: 'cancelled' })
+    expect(onNotification).toHaveBeenCalledOnce()
+    expect(agent.stdout.listenerCount('data')).toBe(0)
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('routes interleaved requests in both directions without conflating id types', async () => {
     const { peer, agent } = fixture({ onRequest: (method, params) => ({ method, params }) })
     const first = peer.request('first', {})
@@ -291,6 +330,22 @@ describe('ACP JSON-RPC peer', () => {
     peer.close()
     input.destroy()
     output.destroy()
+  })
+
+  it('closes when a request times out mid-write, so a cancel never waits behind it', async () => {
+    vi.useFakeTimers()
+    const input = new PassThrough()
+    const output = new Writable({ write() {} })
+    const peer = new AcpJsonRpcPeer(input, output, {}, { requestTimeoutMs: 20 })
+    peers.push(peer)
+    const timedOut = expect(peer.request('stuck', {})).rejects.toBeInstanceOf(
+      AcpRequestTimeoutError
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await timedOut
+    expect(peer.closed).toBe(true)
+    await expect(peer.notify('session/cancel', {})).rejects.toBeInstanceOf(AcpRequestTimeoutError)
+    input.destroy()
   })
 
   it('fails pending requests on an output stream error', async () => {

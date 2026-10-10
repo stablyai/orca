@@ -1,8 +1,9 @@
+import { agentSessionCurrentContextRows } from '../../../../shared/agent-session-context-clear'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
 import { projectStructuredAgentSessionMessages as projectMessages } from '../../../../shared/structured-agent-session-message-projection'
 import { projectStructuredQuestionMessages } from './structured-agent-question-projection'
 
@@ -10,12 +11,12 @@ import { projectStructuredQuestionMessages } from './structured-agent-question-p
  *  sent, as not sent, unless the queue holds it as a card. */
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
-  outbox: readonly StructuredAgentSessionOutboxEntry[],
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[]
 ) {
   return projectMessages(
     items,
-    outbox,
+    optimistic,
     submissions,
     { rejectedInPlace: true },
     projectStructuredQuestionMessages
@@ -29,7 +30,7 @@ export type StructuredPromptItem = AgentJournalRenderItem & {
 export function pendingStructuredSessionPrompts(
   items: AgentJournalRenderItem[]
 ): StructuredPromptItem[] {
-  return items.filter(
+  return agentSessionCurrentContextRows(items).items.filter(
     (item): item is StructuredPromptItem =>
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending'

@@ -10,6 +10,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 let restoreViewport = (): void => {}
 beforeAll(() => {
@@ -180,6 +181,7 @@ describe('live Codex checklist frames', () => {
     }
     render(transcript([frame(1, 'pending'), command]))
     expect(screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })).toBeInTheDocument()
+    openToolRunMembers()
     expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(
       'text-destructive'
     )

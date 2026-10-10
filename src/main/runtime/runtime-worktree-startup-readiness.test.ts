@@ -3,9 +3,56 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../shared/opencode-agent-row-scanner'
 import {
+  deliverWorktreeStartupFollowup,
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
+
+describe('startup follow-up delivery', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function followupHost(foreground: string) {
+    const write = vi.fn()
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      getForegroundProcess: async () => foreground,
+      hasChildProcesses: async () => false,
+      subscribeToData: () => () => {},
+      readRecentOutput: () => undefined,
+      write
+    }
+    return { host, write }
+  }
+
+  it('types the prompt once the agent is in front and reports it written', async () => {
+    const { host, write } = followupHost('aider')
+
+    await expect(
+      deliverWorktreeStartupFollowup(host, 'term-1', {
+        expectedProcess: 'aider',
+        prompt: 'fix the flaky test'
+      })
+    ).resolves.toBe(true)
+    expect(write).toHaveBeenCalledOnce()
+    expect(write).toHaveBeenCalledWith('pty-1', 'fix the flaky test\r', 'launch')
+  })
+
+  it('writes nothing and reports false when the agent never comes to the front', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { host, write } = followupHost('zsh')
+
+    const delivered = deliverWorktreeStartupFollowup(host, 'term-1', {
+      expectedProcess: 'aider',
+      prompt: 'fix the flaky test'
+    })
+    await vi.advanceTimersByTimeAsync(30 * 150)
+
+    await expect(delivered).resolves.toBe(false)
+    expect(write).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
 
 describe('fresh worker composer readiness', () => {
   afterEach(() => vi.useRealTimers())

@@ -21,7 +21,7 @@ import {
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
@@ -37,12 +37,19 @@ const IDS = Object.keys(AGENT_SESSION_FAILURE_COPY).filter(
 const NOTICE_PIECES: readonly AgentSessionFailureCopyId[] = [
   'terminalAgentHoldsChat',
   'quitTerminalAgent',
-  'startNewChat'
+  'startNewChat',
+  'backgroundTasksRunning',
+  'waitForBackgroundTasks',
+  'agentStarting',
+  'waitForStart',
+  'agentStillWorking'
 ]
 // Kana, and kanji whose simplified Chinese form differs (続 is 续, 読 is 读, ...).
 const JAPANESE_ONLY = /[\u3040-\u30ff続読変済図気帰戻検択転権単圧応対発処実証覧関専]/u
 const VALUES = {
   agent: 'Claude',
+  loginCommand: 'agent login',
+  slashCommand: '/login',
   command: 'compact',
   detail: 'Image type .bmp',
   limit: '20',
@@ -82,6 +89,27 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it.each([
+    ['en', 'Then send your message again.'],
+    ['es', 'Después, envía tu mensaje de nuevo.'],
+    ['fr', 'Puis envoyez à nouveau votre message.'],
+    ['ja', 'その後、メッセージをもう一度送信してください。'],
+    ['ko', '그런 다음 메시지를 다시 보내세요.'],
+    ['zh', '然后再次发送消息。']
+  ])('keeps %s copy while separating an unpunctuated provider detail', async (locale, retry) => {
+    await i18n.changeLanguage(locale)
+    const fact = {
+      kind: 'notSignedIn',
+      detail: { text: 'See {{agent}} docs/models.md', audience: 'person' }
+    } as const
+    const context = { agentName: 'Pi' }
+    const row = agentSessionFailureSentence(fact, 'row', context, sayAgentSessionFailureTranslated)
+    expect(row.endsWith(fact.detail.text)).toBe(true)
+    expect(
+      agentSessionFailureSentence(fact, 'rejection', context, sayAgentSessionFailureTranslated)
+    ).toBe(`${row}. ${retry}`)
+  })
+
   it('has a key for every piece, whose English default is the shared sentence', () => {
     for (const id of IDS) {
       expect([id, sayAgentSessionFailureTranslated(id, VALUES)]).toEqual([
@@ -141,7 +169,7 @@ describe('desktop words for a failure fact', () => {
         agentSessionWriteNoticeParts(refused, 'send', { agentName: 'Claude' })
       )
     ).toBe(
-      "Votre message n'a pas été envoyé. Claude n'est pas connecté avec le compte sélectionné. Connectez-vous, puis renvoyez votre message."
+      "Votre message n'a pas été envoyé. Claude n’est pas connecté. Exécutez `claude auth login`, ou choisissez un compte dans les paramètres des Comptes Claude."
     )
     const detail = 'Uses {{agent}} $t(components.native-chat.failureWords.theAgent) <b>&</b>'
     const rejected = structuredAgentSessionRejectionParts(
@@ -174,7 +202,7 @@ describe('desktop words for a failure fact', () => {
       "Codex n'a pas pu redémarrer. Relancez /compact."
     )
     expect(sentence('notSignedIn', 'clear')).toBe(
-      "Codex n'est pas connecté avec le compte sélectionné. Connectez-vous, puis relancez /clear."
+      'Codex n’est pas connecté. Exécutez `codex login`. Relancez /clear.'
     )
     await i18n.changeLanguage('ja')
     expect(sentence('providerStartFailed', 'compact')).toBe(

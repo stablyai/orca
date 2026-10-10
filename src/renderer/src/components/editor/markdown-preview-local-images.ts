@@ -70,7 +70,7 @@ export function extractMarkdownPreviewLocalImageCandidates(
   options: ExtractLocalImageCandidatesOptions = {}
 ): MarkdownPreviewLocalImageCandidate[] {
   const limit = Math.max(0, options.limit ?? MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT)
-  if (limit === 0) {
+  if (limit === 0 || !markdown.includes('!')) {
     return []
   }
 

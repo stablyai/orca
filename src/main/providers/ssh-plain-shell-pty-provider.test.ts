@@ -133,6 +133,11 @@ describe('SshPlainShellPtyProvider', () => {
     await expect(provider.spawn({ cols: 80, rows: 24 })).rejects.toThrow('not active')
   })
 
+  it('leaves a PTY it never minted unverifiable, since an earlier relay may still run it', async () => {
+    const { provider } = createProvider()
+    await expect(provider.probePtyLiveness('ssh:target-1@@prior-relay-pty')).resolves.toBeNull()
+  })
+
   it('starts a fresh shell for a reattach request and says the session expired', async () => {
     const { provider } = createProvider()
     const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'ssh:target-1@@pty-3' })

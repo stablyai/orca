@@ -1,5 +1,5 @@
 import React from 'react'
-import { Slot } from 'radix-ui'
+import * as Slot from 'radix-ui/slot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Clears the pointer without putting the label under the cursor's own hotspot.

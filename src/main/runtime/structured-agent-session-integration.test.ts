@@ -327,7 +327,7 @@ beforeEach(async () => {
   shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
@@ -347,7 +347,7 @@ beforeEach(async () => {
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
         resolveLaunchArgs: () => [],
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
           return {

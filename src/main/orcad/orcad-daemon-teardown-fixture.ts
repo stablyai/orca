@@ -9,7 +9,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { readDaemonPidRecord } from '../daemon/daemon-endpoint-incarnation'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { spawnProcess } from '@orca/process-host'
 
 const EXIT_WAIT_MS = 10_000
 const POLL_MS = 50

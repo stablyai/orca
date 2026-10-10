@@ -10,12 +10,18 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import {
+  NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
+  nativeChatUserMessageFolds
+} from './native-chat-user-message-fold'
 
 /** What a row contains, reduced to the few numbers that drive its height. */
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']
   /** Wrapped display lines of prose, not source lines. */
   textLines: number
+  /** A user prompt long enough to mount folded behind "Show full message". */
+  userFolds: boolean
   imageCount: number
   toolCount: number
   subagentGroupCount: number
@@ -40,6 +46,7 @@ export type NativeChatRowTypography = {
 const DEFAULT_ROW_TYPOGRAPHY: NativeChatRowTypography = { lineHeightPx: 22, charsPerLine: 96 }
 const PROSE_MIN_LINES = 1
 const USER_BUBBLE_CHROME_PX = 32
+const USER_FOLD_TOGGLE_PX = 24
 const IMAGE_STRIP_PX = 88
 /** Header margin and vertical padding; its summary can occupy two text lines. */
 const TOOL_RUN_CHROME_PX = 16
@@ -103,12 +110,29 @@ export function nativeChatRowContentMetrics(
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
     textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
+    userFolds: message.role === 'user' && nativeChatUserMessageFolds(content.markdown),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
     toolCount: content.tools.length,
     subagentGroupCount: content.subagentGroups.length
   }
   metricsCache.set(message, { charsPerLine: typography.charsPerLine, metrics })
   return metrics
+}
+
+/** A collapsed work run: a lead head's own words over one tool-run header. Its thoughts draw
+ *  only once it opens, which remeasures it. */
+export function nativeChatWorkRunContentMetrics(
+  head: NativeChatRowContentMetrics,
+  headIsLead: boolean
+): NativeChatRowContentMetrics {
+  return {
+    role: 'assistant',
+    textLines: headIsLead ? head.textLines : 0,
+    userFolds: false,
+    imageCount: headIsLead ? head.imageCount : 0,
+    toolCount: 1,
+    subagentGroupCount: 0
+  }
 }
 
 /** The trigger's headline is chat text, so it grows with the chat size above its `min-h-6` floor. */
@@ -138,7 +162,9 @@ export function estimateNativeChatRowHeight(
         ? content.textLines > 0
           ? collapsedReasoningHeight(typography)
           : 0
-        : content.textLines * typography.lineHeightPx
+        : content.userFolds
+          ? NATIVE_CHAT_USER_MESSAGE_FOLDED_PX + USER_FOLD_TOGGLE_PX
+          : content.textLines * typography.lineHeightPx
     if (content.role === 'user' && content.textLines > 0) {
       height += USER_BUBBLE_CHROME_PX
     }

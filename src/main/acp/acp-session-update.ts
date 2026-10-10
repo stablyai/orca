@@ -6,8 +6,20 @@ import {
 import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
+import type { AcpSubagentTimeline } from './acp-subagent-timeline'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import type { SessionNotification } from './generated/acp-protocol.generated'
+import { acpNamedTextKey } from './acp-turn-messages'
+
+/** Updates that open the turn they belong to. */
+export const ACP_SUBSTANTIVE_UPDATES = [
+  'user_message_chunk',
+  'agent_message_chunk',
+  'agent_thought_chunk',
+  'tool_call',
+  'tool_call_update',
+  'plan'
+]
 
 export function acpSessionUpdate(
   notification: SessionNotification,
@@ -17,6 +29,7 @@ export function acpSessionUpdate(
     tools: AcpToolTimeline
     dialect: AcpDialect
     backgroundTasks: AcpBackgroundTaskTimeline
+    subagents: AcpSubagentTimeline
     messageKey?: string
   }
 ): ProviderTimelineEvent[] {
@@ -24,7 +37,8 @@ export function acpSessionUpdate(
   const join = { join: { thread: notification.sessionId, ...(turn === undefined ? {} : { turn }) } }
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
-    case 'agent_thought_chunk':
+    case 'agent_thought_chunk': {
+      const channel = update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant'
       return update.content.type === 'text'
         ? [
             {
@@ -32,27 +46,31 @@ export function acpSessionUpdate(
               item: context.messageKey
                 ? { id: context.messageKey }
                 : update.messageId
-                  ? { id: `message:${update.messageId}` }
+                  ? { id: acpNamedTextKey(update.messageId, channel) }
                   : { stream: update.sessionUpdate },
-              channel: update.sessionUpdate === 'agent_thought_chunk' ? 'reasoning' : 'assistant',
+              channel,
               text: update.content.text,
               ...join
             }
           ]
         : [{ type: 'provider.frame', frameKind: update.sessionUpdate, payload: update, ...join }]
+    }
     case 'user_message_chunk':
       // A live echo of the send is the send's own row.
       return []
     case 'tool_call':
     case 'tool_call_update': {
-      const { tools, dialect, backgroundTasks } = context
+      const { tools, dialect, backgroundTasks, subagents } = context
       const events = tools.translate(update, dialect, join.join)
       const tool = events[0]
-      const tasks =
-        tool && 'body' in tool && tool.body?.kind === 'tool-call'
-          ? (dialect.toolBackgroundTasks?.(update, tool.body) ?? [])
-          : []
-      return [...events, ...backgroundTasks.translate(tasks, join.join)]
+      const body = tool && 'body' in tool && tool.body?.kind === 'tool-call' ? tool.body : null
+      const subagentUpdates = body ? (dialect.toolSubagents?.(update, body) ?? []) : []
+      // Runs first, so a subagent this call reveals is never also taken for a background task.
+      const subagentEvents = subagents.translate(subagentUpdates, join.join, at)
+      const tasks = (body ? (dialect.toolBackgroundTasks?.(update, body) ?? []) : []).filter(
+        (task) => !subagents.has(task.taskId)
+      )
+      return [...events, ...backgroundTasks.translate(tasks, join.join), ...subagentEvents]
     }
     case 'plan':
       return [

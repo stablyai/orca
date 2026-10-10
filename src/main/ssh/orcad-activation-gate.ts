@@ -14,7 +14,7 @@
  */
 import type { ServeReadiness } from '../server/serve-readiness'
 
-export type OrcadActivationRejectCode =
+type OrcadActivationRejectCode =
   | 'orcad_activation_no_readiness'
   | 'orcad_activation_no_health'
   | 'orcad_activation_build_mismatch'
@@ -39,7 +39,7 @@ export type OrcadActivationVerdict =
   | { decision: 'reject'; code: OrcadActivationRejectCode; reason: string }
 
 export type OrcadActivationExpectation = {
-  /** sha256(orcad.js).slice(0,16) computed from the bytes this client just uploaded. */
+  /** Entry-file content hash computed from the bytes this client just uploaded. */
   buildHash: string
   /** The full content-hashed version this deploy installed. */
   fullVersion: string

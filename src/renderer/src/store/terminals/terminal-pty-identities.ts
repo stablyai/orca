@@ -2,12 +2,7 @@ import type { AppState } from '../types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { resolveDirectSshTerminalWorkspaceKeys } from '../slices/direct-ssh-terminal-workspace-scope'
-
-export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
-  return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
-}
 
 export function isCurrentDirectSshAuthority(
   state: AppState,

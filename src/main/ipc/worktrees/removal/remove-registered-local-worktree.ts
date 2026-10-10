@@ -22,7 +22,7 @@ import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../../worktree-symlinks'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../filesystem-auth'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
@@ -276,7 +276,7 @@ async function finishLocalWorktreeRemoval({
             hostId: removalHostId
           })
         )
-        invalidateAuthorizedRootsCache()
+        invalidateAuthorizedRootsCacheForRepo(store, repoId)
         removalCompleted = true
         return {}
       } else {
@@ -315,7 +315,7 @@ async function finishLocalWorktreeRemoval({
     )
   })
   await withWorktreeRemoveStageSpan('cache_invalidation', 'local', async () => {
-    invalidateAuthorizedRootsCache()
+    invalidateAuthorizedRootsCacheForRepo(store, repoId)
   })
   return removalResult ?? {}
 }

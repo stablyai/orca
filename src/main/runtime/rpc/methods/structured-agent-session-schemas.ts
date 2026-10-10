@@ -33,3 +33,8 @@ export {
   ThreadGoalParams,
   UnsubscribeParams
 } from '../../../../shared/rpc-contract/structured-agent-session-params'
+export { ContinueInterruptedParams } from '../../../../shared/rpc-contract/structured-agent-session-continue-params'
+export {
+  QueuedMessageUpdateParams,
+  QueuedMessageEditHoldParams
+} from '../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'

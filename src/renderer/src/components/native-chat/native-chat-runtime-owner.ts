@@ -3,7 +3,10 @@ import {
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import {
+  createNativeChatTabOwnerSelector,
+  findTerminalTabWorktreeId
+} from './native-chat-file-link'
 
 export type NativeChatRuntimeOwnerState = Pick<AppState, 'tabsByWorktree'> &
   WorktreeRuntimeOwnerState
@@ -27,4 +30,12 @@ export function selectNativeChatRuntimeEnvironmentId(
 ): string | null {
   const worktreeId = findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
   return worktreeId ? getRuntimeEnvironmentIdForWorktree(state, worktreeId) : null
+}
+
+export function createNativeChatRuntimeSelector(terminalTabId: string) {
+  const selectOwner = createNativeChatTabOwnerSelector(terminalTabId)
+  return (state: NativeChatRuntimeOwnerState): string | null => {
+    const worktreeId = selectOwner({ tabsByWorktree: state.tabsByWorktree })
+    return worktreeId ? getRuntimeEnvironmentIdForWorktree(state, worktreeId) : null
+  }
 }

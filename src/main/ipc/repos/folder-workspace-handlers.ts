@@ -23,7 +23,7 @@ import { visibleFolderWorkspaces } from '../../ssh/orcad-retained-source'
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace'>
 ): void {
   ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
 

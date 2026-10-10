@@ -8,6 +8,7 @@ let clientEventSubscriptionSeq = 0
 export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
       await new Promise<void>((resolve) => {
@@ -51,6 +52,7 @@ export const CLIENT_EVENT_METHODS = [
   }),
   defineMethod({
     name: 'runtime.clientEvents.unsubscribe',
+    permission: 'workspace',
     params: ClientEventsUnsubscribeParams,
     handler: async (params, { runtime, connectionId }) => {
       const expectedPrefix = `runtime-client-events-${connectionId ?? 'inproc'}-`
