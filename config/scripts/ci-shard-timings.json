@@ -2910,7 +2910,6 @@
       "src/main/plugins/plugin-dev-watcher.test.ts": 165,
       "src/main/plugins/plugin-discovery.test.ts": 193,
       "src/main/plugins/plugin-enablement.test.ts": 194,
-      "src/main/plugins/plugin-host-conformance.test.ts": 202,
       "src/main/plugins/plugin-host-methods.test.ts": 173,
       "src/main/plugins/plugin-host-process.test.ts": 208,
       "src/main/plugins/plugin-host-runtime.test.ts": 193,

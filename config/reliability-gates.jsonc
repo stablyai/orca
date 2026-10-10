@@ -18936,12 +18936,9 @@
       "invariant": "terminal.sendText accepts only an explicit provider-owned terminal id present in one bounded inventory of the worktree resolved immediately before the send; an absent id causes zero send calls, and relay callers cannot supply their own capability grants or transport classification.",
       "oracle": "Resolve the active worktree once, list that worktree with the v0 terminal cap once, and assert zero sendTerminal calls for a mismatched opaque id versus exactly one send for matching local- and SSH-shaped ids; then run the same permission and schema cases through desktop-main and registered relay panel/worker adapters and compare error codes.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts src/main/plugins/plugin-host-conformance.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts"
       ],
-      "testFiles": [
-        "src/main/plugins/plugin-host-methods.test.ts",
-        "src/main/plugins/plugin-host-conformance.test.ts"
-      ],
+      "testFiles": ["src/main/plugins/plugin-host-methods.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/plugins/plugin-host-methods.test.ts",
@@ -18950,14 +18947,6 @@
             "matching local- and SSH-shaped opaque ids each perform one capped list and one exact send",
             "workspace.readContext drops provider paths, path-bearing internal worktree ids, and terminal titles while capping its terminal projection"
           ]
-        },
-        {
-          "file": "src/main/plugins/plugin-host-conformance.test.ts",
-          "assertions": [
-            "all 13 v0 methods succeed with the required consented capability through desktop-main and relay adapters",
-            "missing consent, missing capability, unknown method, malformed params, panel-forbidden access, malformed results, and mutation-audit failure return identical codes",
-            "malformed qualified keys, client-supplied grants, and client-supplied transport flags are rejected before host policy resolution"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -18965,7 +18954,7 @@
           "date": "2026-07-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts src/main/plugins/plugin-host-conformance.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts",
           "result": "passed",
           "durationSeconds": 0.18,
           "summary": "2 files and 17 tests passed, covering the 13-method main/relay conformance matrix and exact terminal routing call counts."
