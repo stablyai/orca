@@ -114,7 +114,15 @@ export class RelayControlOrigin {
       previousGeneration: this.generation,
       controlResumeSecret: this.controlResumeSecret
     })
-    this.activate(control, ack)
+    try {
+      this.activate(control, ack)
+    } catch (error) {
+      // Why: openControl cleans up its own connect failure, but an activation
+      // failure left this control open and registered. The rotation retry has
+      // no fresh-generation fallback, so it leaked one live control per attempt.
+      this.closeRetiredControl(control)
+      throw error
+    }
     this.updateAssignment(assignment)
     // Why: the resumed control owns the same server generation and splices;
     // the predecessor remains only long enough for any idempotent reply in flight.
