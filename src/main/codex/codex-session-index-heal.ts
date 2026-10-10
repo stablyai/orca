@@ -2,6 +2,8 @@ import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
 import {
@@ -58,7 +60,11 @@ export type CodexSessionIndexHealOptions = {
   readsPerServerSession?: number
   readConcurrency?: number
   interBatchDelayMs?: number
+  /** Runs after each batch with the reads it settled; a failure is logged, not fatal. */
+  afterBatch?: (settled: readonly CodexSettledThreadRead[]) => Promise<void>
 }
+
+export type CodexSettledThreadRead = { threadId: string; outcome: HealLedgerOutcome }
 
 export type CodexThreadReadOutcome = HealLedgerOutcome
 
@@ -211,6 +217,7 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
     }
     const batch = threads.slice(offset, offset + readsPerServerSession)
     const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
+    const settled: CodexSettledThreadRead[] = []
     try {
       await runSession(buildInvocation(codexHomePath, timeoutMs), async (rpc) => {
         let nextIndex = 0
@@ -218,12 +225,15 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
           while (nextIndex < batch.length && !shouldStop()) {
             const thread = batch[nextIndex]
             nextIndex += 1
-            onOutcome(thread, await readOneThread(rpc, thread.threadId))
+            const outcome = await readOneThread(rpc, thread.threadId)
+            settled.push({ threadId: thread.threadId, outcome })
+            onOutcome(thread, outcome)
           }
         }
         await Promise.all(Array.from({ length: readConcurrency }, () => worker()))
       })
     } catch (error) {
+      await runAfterBatch(options.afterBatch, settled)
       if (shouldStop()) {
         return 'stopped'
       }
@@ -235,8 +245,23 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
       console.warn('[codex-session-index-heal] Heal batch aborted:', error)
       return 'aborted'
     }
+    await runAfterBatch(options.afterBatch, settled)
   }
   return 'completed'
+}
+
+async function runAfterBatch(
+  afterBatch: CodexSessionIndexHealOptions['afterBatch'],
+  settled: readonly CodexSettledThreadRead[]
+): Promise<void> {
+  if (!afterBatch || settled.length === 0) {
+    return
+  }
+  try {
+    await afterBatch(settled)
+  } catch (error) {
+    console.warn('[codex-session-index-heal] Post-batch bookkeeping failed:', error)
+  }
 }
 
 async function readOneThread(
@@ -299,6 +324,23 @@ export function buildNativeHealInvocation(
     // Why: pin the home explicitly — nested Orca launches can inherit a managed
     // CODEX_HOME from the daemon environment, which would index the wrong sqlite DB.
     env: { CODEX_HOME: codexHomePath },
+    timeoutMs
+  }
+}
+
+/** Runs the distro's own codex against a guest home; Windows cannot open its sqlite over 9p. */
+export function buildWslHealInvocation(
+  distro: string,
+  linuxCodexHomePath: string,
+  timeoutMs: number
+): CodexAppServerInvocation {
+  return {
+    command: resolveWslExecutablePath(),
+    args: buildWslCodexAppServerArgs(distro, linuxCodexHomePath, [
+      ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+    ]),
+    // Why null: the guest resolves `codex` inside the distro, so a host path pairs nothing.
+    cliPath: null,
     timeoutMs
   }
 }
