@@ -11,6 +11,35 @@ import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { addRemoteRepoFromPath } from './remote-repo-registration'
 import { resolveRemoteHomePath } from './remote-home-path'
+import { isENOENT } from '../filesystem-auth'
+
+// Why: a trailing space is a legal POSIX name on the remote host too (Google Drive
+// exports them), so a picker-returned parent that exists exactly as requested wins;
+// the trim stays only for typed typos. Only a genuinely absent raw spelling may fall
+// back to the trim — other probe failures must surface instead of silently creating
+// the project under a path the user did not pick. isENOENT also covers remote relays,
+// whose errors cross as canonical ENOENT messages with the transport's code.
+async function preferRawRemoteParentWhenItExists(args: {
+  connectionId: string
+  requestedPath: string
+  trimmedResolution: string
+  statPath: (path: string) => Promise<unknown>
+}): Promise<string> {
+  const trimmed = args.requestedPath.trim()
+  if (!trimmed || trimmed === args.requestedPath) {
+    return args.trimmedResolution
+  }
+  const rawExpanded = await resolveRemoteHomePath(args.connectionId, args.requestedPath)
+  try {
+    await args.statPath(rawExpanded)
+    return rawExpanded
+  } catch (error) {
+    if (!isENOENT(error)) {
+      throw error
+    }
+    return args.trimmedResolution
+  }
+}
 
 export async function createRemoteRepo(
   store: Store,
@@ -22,7 +51,8 @@ export async function createRemoteRepo(
   }
 ): Promise<{ repo: Repo } | { error: string }> {
   const name = args.name?.trim() ?? ''
-  const parentPath = await resolveRemoteHomePath(args.connectionId, args.parentPath?.trim() ?? '')
+  const requestedParentPath = args.parentPath ?? ''
+  let parentPath = await resolveRemoteHomePath(args.connectionId, requestedParentPath.trim())
   const repoKind: 'git' | 'folder' = args.kind === 'folder' ? 'folder' : 'git'
   if (!name) {
     return { error: 'Name cannot be empty' }
@@ -41,6 +71,17 @@ export async function createRemoteRepo(
   const host = gitProvider.getHostPlatform?.()
   if (!host) {
     return { error: 'SSH host platform is unavailable. Reconnect the SSH target before creating.' }
+  }
+  try {
+    parentPath = await preferRawRemoteParentWhenItExists({
+      connectionId: args.connectionId,
+      requestedPath: requestedParentPath,
+      trimmedResolution: parentPath,
+      statPath: (path) => fsProvider.stat(path)
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { error: `Cannot access parent directory: ${message}` }
   }
   if (!isRuntimePathAbsolute(parentPath, host.pathFlavor)) {
     return { error: 'Parent directory must be an absolute path on the SSH host' }

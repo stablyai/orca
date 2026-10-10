@@ -165,6 +165,32 @@ describe('floating workspace directory', () => {
     ).resolves.toBe(path.join(userDataDir, 'floating-workspace'))
   })
 
+  // A trailing space is a legal POSIX directory name (Google Drive exports them), so a
+  // picker-verified path must survive trust, settings sanitization and cwd resolution.
+  // On Windows this passes before and after the fix: NTFS strips trailing spaces at
+  // creation, and Win32 path APIs normalize the spellings back together.
+  it('keeps a directory whose name ends in a space through trust and resolution', async () => {
+    const store = createStore()
+    const selectedDir = path.join(tempRoot, 'gdrive notes ')
+    await mkdir(selectedDir)
+    const canonicalSelectedDir = await realpath(selectedDir)
+
+    await trustFloatingWorkspaceDirectory(store, selectedDir)
+
+    expect(store.settings.floatingTerminalTrustedCwds).toEqual([canonicalSelectedDir])
+
+    await expect(
+      resolveFloatingTerminalCwd(store as never, {
+        path: selectedDir,
+        requireTrusted: true
+      })
+    ).resolves.toBe(canonicalSelectedDir)
+    await expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sanitizer only reads the settings members createStore() stubs.
+      sanitizeFloatingWorkspaceDirectorySetting(store as never, selectedDir)
+    ).resolves.toBe(canonicalSelectedDir)
+  })
+
   it('still resolves accessible ad hoc terminal directories when trust is not required', async () => {
     const store = createStore()
     const arbitraryDir = path.join(tempRoot, 'terminal-only')

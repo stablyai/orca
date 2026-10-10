@@ -24,6 +24,26 @@ type RuntimeRepositoryRegistrationDependencies = {
   notifyReposChanged: () => void
 }
 
+// Why: a trailing space is a legal directory name (Google Drive exports them), so a
+// picker-returned parent that exists exactly as requested wins; the trim stays only
+// for typed typos. Only a genuinely absent raw spelling may fall back to the trim —
+// other probe failures must surface instead of silently relocating the project.
+async function resolveCreateParentPathRawFirst(requestedPath: string): Promise<string> {
+  const trimmed = requestedPath.trim()
+  if (!trimmed || trimmed === requestedPath) {
+    return trimmed
+  }
+  try {
+    await stat(requestedPath)
+    return requestedPath
+  } catch (error) {
+    if (!isENOENT(error)) {
+      throw error
+    }
+    return trimmed
+  }
+}
+
 export class RuntimeRepositoryRegistrationController {
   constructor(private readonly deps: RuntimeRepositoryRegistrationDependencies) {}
 
@@ -93,7 +113,15 @@ export class RuntimeRepositoryRegistrationController {
   ): Promise<{ repo: Repo } | { error: string }> {
     const store = this.requireStore()
     const trimmedName = name.trim()
-    const trimmedParentPath = parentPath.trim()
+    let parentDir: string
+    try {
+      parentDir = await resolveCreateParentPathRawFirst(parentPath)
+    } catch (error) {
+      // Why: an unexpected probe failure (EACCES...) must not fall back to the trimmed
+      // spelling and create the project in a directory the user did not pick.
+      const message = error instanceof Error ? error.message : String(error)
+      return { error: `Cannot access parent directory: ${message}` }
+    }
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
     if (!trimmedName) {
       return { error: 'Name cannot be empty' }
@@ -101,13 +129,13 @@ export class RuntimeRepositoryRegistrationController {
     if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
       return { error: 'Name cannot contain slashes or be "." / ".."' }
     }
-    if (!trimmedParentPath) {
+    if (!parentDir) {
       return { error: 'Parent directory is required' }
     }
-    if (!isAbsolute(trimmedParentPath)) {
+    if (!isAbsolute(parentDir)) {
       return { error: 'Parent directory must be an absolute path' }
     }
-    const targetPath = join(trimmedParentPath, trimmedName)
+    const targetPath = join(parentDir, trimmedName)
     const existing = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
     if (existing) {
       return { repo: existing }
@@ -115,7 +143,7 @@ export class RuntimeRepositoryRegistrationController {
 
     let createdDir = false
     try {
-      await mkdir(trimmedParentPath, { recursive: true })
+      await mkdir(parentDir, { recursive: true })
       const existingStat = await stat(targetPath).catch((error: unknown) => {
         if (isENOENT(error)) {
           return null

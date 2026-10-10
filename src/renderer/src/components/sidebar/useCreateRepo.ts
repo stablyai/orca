@@ -85,12 +85,14 @@ export function useCreateRepo(
 
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
-    const parentPath = createParent.trim()
     // Why: null means the chosen host is unresolved (e.g. its server is coming up); without a
     // host id the request below would run on this computer.
-    if (!name || !parentPath || options.hostId === null) {
+    if (!name || !createParent.trim() || options.hostId === null) {
       return
     }
+    // Why untrimmed: the picker returns a verified path and a trailing space can be the
+    // real directory name; main resolves raw-first and only trims typed typos.
+    const parentPath = createParent
     const requestHostToken = hostTokenRef.current
     const gen = ++createGenRef.current
     const isCurrent = (): boolean =>
