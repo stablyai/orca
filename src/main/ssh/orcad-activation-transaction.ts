@@ -17,17 +17,50 @@ import {
   OrcadActivationTransactionSchema
 } from './orcad-activation-transaction-schema'
 import {
+  orcadDecommissionJournal,
   orcadDecommissionTransactionDefect,
   planOrcadDecommissionRecovery,
   type OrcadDecommissionRecoveryPlan,
   type OrcadDecommissionTransaction
 } from './orcad-decommission-transaction'
 import { errorMessage } from '../../shared/error-message'
+import { RELAY_INSTALL_LOCK_NAME } from '../../shared/relay-install-lock-name'
+import { RELAY_REMOTE_DIR } from './relay-protocol'
+import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
 export const ORCAD_ACTIVATION_TRANSACTION_FILENAME = 'transaction.json'
 export const ORCAD_ACTIVATION_TRANSACTION_DIRNAME = '.orcad-activation-transaction'
 
-export type OrcadSnapshotVerdict = { dirName: string; state: 'pending' | 'captured' | 'empty' }
+export function orcadActivationTransactionRoot(
+  host: RemoteHostPlatform,
+  remoteHome: string
+): string {
+  return joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR, ORCAD_ACTIVATION_TRANSACTION_DIRNAME)
+}
+
+export function orcadActivationFenceLockDir(host: RemoteHostPlatform, remoteHome: string): string {
+  return joinRemotePath(
+    host,
+    orcadActivationTransactionRoot(host, remoteHome),
+    RELAY_INSTALL_LOCK_NAME
+  )
+}
+
+export function orcadActivationTransactionPath(
+  host: RemoteHostPlatform,
+  remoteHome: string
+): string {
+  return joinRemotePath(
+    host,
+    orcadActivationTransactionRoot(host, remoteHome),
+    ORCAD_ACTIVATION_TRANSACTION_FILENAME
+  )
+}
+
+export type OrcadSnapshotVerdict = {
+  dirName: string
+  state: 'pending' | 'captured' | 'empty'
+}
 
 export type OrcadActivateTransaction = {
   schemaVersion: typeof ORCAD_ACTIVATION_TRANSACTION_SCHEMA_VERSION
@@ -37,6 +70,8 @@ export type OrcadActivateTransaction = {
   startedAt: string
   updatedAt: string
   candidateVersion: string
+  /** The app that started this activation, which a resumed commit stamps as activeAppVersion. */
+  candidateAppVersion?: string | null
   recordBefore: OrcadActivationRecord
   recordAfter: OrcadActivationRecord | null
   snapshot: OrcadSnapshotVerdict
@@ -114,8 +149,10 @@ export function parseOrcadActivationTransaction(
     if (after.state === 'unreadable') {
       return after
     }
+    const { dispatched, ...journal } = parsed.data
     const transaction = {
-      ...parsed.data,
+      ...journal,
+      ...dispatched,
       recordBefore: recordBefore.record,
       recordAfter: after.record
     }
@@ -172,7 +209,10 @@ export function parseOrcadActivationTransaction(
 export function serializeOrcadActivationTransaction(
   transaction: OrcadActivationTransaction & { fenceToken?: string }
 ): string {
-  return `${JSON.stringify(transaction, null, 2)}\n`
+  // The decommission form keeps any fenceToken: it spreads the rest of the entry.
+  const journal =
+    transaction.operation === 'decommission' ? orcadDecommissionJournal(transaction) : transaction
+  return `${JSON.stringify(journal, null, 2)}\n`
 }
 
 export function planOrcadTransactionRecovery(
@@ -189,13 +229,19 @@ export function planOrcadTransactionRecovery(
     transaction.recordAfter &&
     sameOrcadActivationRecord(currentRecord, transaction.recordAfter)
   ) {
-    return { action: 'stabilize-committed', activeVersion: transaction.recordAfter.active }
+    return {
+      action: 'stabilize-committed',
+      activeVersion: transaction.recordAfter.active
+    }
   }
   if (!sameOrcadActivationRecord(currentRecord, transaction.recordBefore)) {
     return recordChangedRefusal(transaction)
   }
   if (transaction.phase === 'candidate-ready' || transaction.phase === 'target-ready') {
-    return { action: 'finish-commit', record: transaction.recordAfter ?? neverRecord() }
+    return {
+      action: 'finish-commit',
+      record: transaction.recordAfter ?? neverRecord()
+    }
   }
   if (transaction.operation === 'activate') {
     // The candidate launches only after the snapshot verdict is durable.

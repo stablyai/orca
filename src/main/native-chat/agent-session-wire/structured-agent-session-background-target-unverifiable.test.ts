@@ -237,7 +237,10 @@ it('reports a provider Stop write failure without silently claiming the task end
   })
   rig.host.deps.adapter.stopBackgroundTasks = stopBackgroundTasks
   const params = stopParams(rig)
-  await expect(rig.host.cancel(QUEUED_RIG_CALLER, params)).rejects.toThrow('provider Stop failed')
+  expect(await rig.host.cancel(QUEUED_RIG_CALLER, params)).toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_unknown' }
+  })
   expect(stopBackgroundTasks).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ taskIds: ['task-1'] })
   )

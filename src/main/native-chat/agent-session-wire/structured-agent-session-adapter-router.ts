@@ -135,6 +135,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
 
+  startUnavailable: NonNullable<StructuredAgentSessionAdapter['startUnavailable']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.startUnavailable?.(sessionId)
+
   stopEndsSession = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
 

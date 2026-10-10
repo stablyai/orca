@@ -16,7 +16,10 @@ import {
   type CommentMarkdownLinkClickHandler,
   type DocumentCodeBlockRenderer
 } from './comment-markdown-element-renderers'
-import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-links'
+import {
+  remarkNativeChatFileLinks,
+  type FileLinkExists
+} from './comment-markdown-native-chat-file-links'
 import { rehypeWordFade } from './comment-markdown-word-fade'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
@@ -226,7 +229,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
-  linkifyFilePaths?: boolean
+  /** Turns detected file paths into links, keeping only those this confirms exist. */
+  fileLinkExists?: FileLinkExists
   expandImages?: boolean
   renderCodeBlock?: DocumentCodeBlockRenderer
   renderMermaid?: boolean
@@ -270,7 +274,7 @@ const CommentMarkdown = React.memo(
       githubRepo,
       onLinkClick,
       allowFileUriLinks = false,
-      linkifyFilePaths = false,
+      fileLinkExists,
       expandImages = false,
       renderCodeBlock,
       renderMermaid = true,
@@ -305,12 +309,12 @@ const CommentMarkdown = React.memo(
       [extension]
     )
     const activeRemarkPlugins = React.useMemo(() => {
-      const plugins = linkifyFilePaths
-        ? [...remarkPlugins, remarkNativeChatFileLinks]
+      const plugins = fileLinkExists
+        ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : remarkPlugins
       const withExtension = extension ? [...plugins, ...extension.remarkPlugins] : plugins
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, githubRepo, linkifyFilePaths])
+    }, [extension, fileLinkExists, githubRepo])
     const blocks = useMarkdownBlocks(content, growing)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {

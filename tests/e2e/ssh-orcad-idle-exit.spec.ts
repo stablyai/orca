@@ -65,23 +65,7 @@ test('a managed orcad stops after idling and starts again on the next connect', 
     app = first.app
     await waitForSessionReady(first.page)
     // A managed host is reached through its server, not a relay, so no relay repo is added.
-    const remote = await first.page.evaluate(
-      async (input) => {
-        const { target: created } = await window.api.ssh.addTarget({ target: input })
-        const state = await window.api.ssh.connect({ targetId: created.id })
-        return { targetId: created.id, managedServer: state?.managedServer ?? null }
-      },
-      {
-        label: `orcad idle E2E ${Date.now()}`,
-        host: target.host,
-        port: target.port,
-        username: 'root',
-        identityFile: target.identityFile,
-        identitiesOnly: true,
-        relayGracePeriodSeconds: 1
-      }
-    )
-    expect(remote.managedServer).toMatchObject({ kind: 'managed' })
+    const remote = await connectManagedHost(first.page, target)
     expect(runningOrcadPids(target)).toHaveLength(1)
 
     // While the client is connected the server stays up past its quiet period.
@@ -112,6 +96,13 @@ test('a managed orcad stops after idling and starts again on the next connect', 
     // A start inherited from the launch-time connect this reconnect dropped would report `serving`.
     expect(JSON.parse(connected)).toMatchObject({ kind: 'managed' })
     expect(JSON.parse(connected)).not.toHaveProperty('serving')
+    await expect
+      .poll(
+        async () =>
+          (await callEnvironment(second.page, remote.environmentId, 'terminal.list', {})).ok,
+        { timeout: 60_000 }
+      )
+      .toBe(true)
     expect(runningOrcadPids(target)).toHaveLength(1)
     // The restarted server read the record, so a later crash cannot be mistaken for an idle stop.
     expect(readIdleStopRecord(target)).toBeNull()
@@ -173,6 +164,66 @@ function processAlive(target: DockerSshRelayTarget, marker: string): boolean {
   )
   return found.trim() === 'yes'
 }
+
+test('a live managed process that does not answer remains unverifiable', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its isolated app and host.
+{}, testInfo) => {
+  test.skip(
+    HOST !== 'docker' || !TEMPLATE_SOURCE,
+    'Requires the owned Docker SSH host and template'
+  )
+  test.setTimeout(5 * 60_000)
+  const target = startDockerSshRelayTarget(testInfo)
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  let app: ElectronApplication | null = null
+  let pausedPid: string | null = null
+  try {
+    const launched = await session.launch()
+    app = launched.app
+    const page = launched.page
+    await waitForSessionReady(page)
+    const { targetId, environmentId } = await connectManagedHost(page, target)
+    await page.evaluate((targetId) => window.api.ssh.disconnect({ targetId }), targetId)
+    const pids = runningOrcadPids(target)
+    expect(pids).toHaveLength(1)
+    const pid = pids[0]
+    expect(pid).toMatch(/^\d+$/)
+    execDockerSshRelayTargetCommand(target, `kill -STOP ${pid}`)
+    pausedPid = pid
+    const held = await page.evaluate((targetId) => window.api.ssh.connect({ targetId }), targetId)
+    console.log(
+      '[managed-live-process] held',
+      JSON.stringify({ held, pids: runningOrcadPids(target) })
+    )
+    expect(runningOrcadPids(target)).toEqual([pid])
+    expect(held?.managedServer).toMatchObject({
+      kind: 'managed',
+      environmentId,
+      serving: { state: 'unverifiable' }
+    })
+    execDockerSshRelayTargetCommand(target, `kill -CONT ${pid}`)
+    pausedPid = null
+    const recovered = JSON.parse(await reconnect(page, targetId))
+    console.log(
+      '[managed-live-process] recovered',
+      JSON.stringify({ recovered, pids: runningOrcadPids(target) })
+    )
+    expect(recovered).toMatchObject({ kind: 'managed', environmentId })
+    expect(recovered).not.toHaveProperty('serving')
+    expect(await callEnvironment(page, environmentId, 'terminal.list', {})).toMatchObject({
+      ok: true
+    })
+    expect(runningOrcadPids(target)).toEqual([pid])
+  } finally {
+    if (pausedPid) {
+      execDockerSshRelayTargetCommand(target, `kill -CONT ${pausedPid}`)
+    }
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+    cleanupDockerSshRelayTarget(target)
+  }
+})
 
 test('a killed managed orcad comes back with its terminal, and starts fresh after a reboot', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {

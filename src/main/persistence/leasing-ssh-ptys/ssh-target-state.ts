@@ -2,7 +2,6 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
-import { MAX_CLAUDE_LIVE_PTY_SESSION_IDS } from '../restoring-sessions/pane-alias-normalization'
 import {
   MAX_REMOVED_SSH_TARGET_TOMBSTONES,
   capRemovedSshTargetTombstones,
@@ -19,7 +18,6 @@ export type SshTargetStateOperations = {
   state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
   scheduleSave: () => void
-  flush: () => void
 }
 
 export function getSshTargets(state: PersistedState): SshTarget[] {
@@ -89,41 +87,6 @@ export function removeSshTarget(operations: SshTargetStateOperations, id: string
   operations.state.sshTargets = nextTargets
   operations.state.sshPtyConsumerRecoveries = nextRecoveries
   operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
-  operations.scheduleSave()
-}
-
-export function getClaudeLivePtySessionIds(state: PersistedState): string[] {
-  return [...(state.claudeLivePtySessionIds ?? [])]
-}
-
-export function addClaudeLivePtySessionId(
-  operations: SshTargetStateOperations,
-  sessionId: string
-): void {
-  if (sessionId.length === 0 || sessionId.length > 512) {
-    return
-  }
-  const ids = operations.state.claudeLivePtySessionIds ?? []
-  if (ids.includes(sessionId)) {
-    return
-  }
-  // Why: drop oldest at the cap — stale ids get pruned against the daemon at startup, so only recency matters.
-  operations.state.claudeLivePtySessionIds = [...ids, sessionId].slice(
-    -MAX_CLAUDE_LIVE_PTY_SESSION_IDS
-  )
-  // Why: flush sync so a force-quit right after a Claude spawn still seeds the live-PTY gate next launch.
-  operations.flush()
-}
-
-export function removeClaudeLivePtySessionId(
-  operations: SshTargetStateOperations,
-  sessionId: string
-): void {
-  const ids = operations.state.claudeLivePtySessionIds ?? []
-  if (!ids.includes(sessionId)) {
-    return
-  }
-  operations.state.claudeLivePtySessionIds = ids.filter((id) => id !== sessionId)
   operations.scheduleSave()
 }
 

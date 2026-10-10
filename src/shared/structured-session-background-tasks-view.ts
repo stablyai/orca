@@ -76,3 +76,23 @@ export function structuredSessionBackgroundTasksView(
     supportsStopAll: backgroundTasks?.supportsStopAll !== false
   }
 }
+
+/** Whether the strip still lists the task a Stop named, live or settled. */
+function listsTask(view: StructuredSessionBackgroundTasksView, providerId: string): boolean {
+  return (
+    view.show &&
+    (view.children
+      ? view.children.some((child) => child.providerId === providerId)
+      : view.tasks.some((task) => task.id === providerId))
+  )
+}
+
+/** The host-confirmed Stops whose rows the strip still lists, each holding its row's button; the
+ *  same set when none has left, so a caller can tell when to drop the rest. */
+export function structuredSessionConfirmedStopsStillListed(
+  view: StructuredSessionBackgroundTasksView,
+  confirmed: ReadonlySet<string>
+): ReadonlySet<string> {
+  const listed = [...confirmed].filter((providerId) => listsTask(view, providerId))
+  return listed.length === confirmed.size ? confirmed : new Set(listed)
+}

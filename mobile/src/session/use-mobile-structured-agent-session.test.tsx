@@ -7,6 +7,7 @@ import type {
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
@@ -21,6 +22,11 @@ const asyncStorage = vi.hoisted(() => ({
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
+function listedModelIds(snapshot: readonly SessionOptionDescriptor[]): string[] {
+  const model = snapshot.find((descriptor) => descriptor.id === 'model')
+  return model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
+}
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -412,7 +418,8 @@ describe('useMobileStructuredAgentSession', () => {
 
     await vi.waitFor(() => expect(hook.permission).not.toBeNull())
     await vi.waitFor(() => expect(hook.question).not.toBeNull())
-    await vi.waitFor(() => expect(hook.optionSnapshot.length).toBeGreaterThan(0))
+    // The seed paints first; the session's own list is what a pick is checked against.
+    await vi.waitFor(() => expect(listedModelIds(hook.optionSnapshot)).toContain('gpt-slow'))
 
     expect(hook.permission).toMatchObject({
       title: 'Allow Bash?',
@@ -706,7 +713,7 @@ describe('useMobileStructuredAgentSession', () => {
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent(3)))
-    await vi.waitFor(() => expect(hook!.optionSnapshot.length).toBeGreaterThan(0))
+    await vi.waitFor(() => expect(listedModelIds(hook!.optionSnapshot)).toContain('gpt-slow'))
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))

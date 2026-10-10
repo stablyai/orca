@@ -72,11 +72,17 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
       return
     }
     if (fingerprint && store) {
-      store.recordSuccess(fingerprint, 'codex', {
-        models: listing.models,
-        fastModeTierByModel: listing.fastModeTierByModel,
-        origin: 'live-session'
-      })
+      // `model/list` is Codex's account-level listing, the one its probe also runs.
+      store.recordSuccess(
+        fingerprint,
+        'codex',
+        {
+          models: listing.models,
+          fastModeTierByModel: listing.fastModeTierByModel,
+          origin: 'live-session'
+        },
+        'discovery'
+      )
     }
     applyListing(session, listing)
   } catch (error) {

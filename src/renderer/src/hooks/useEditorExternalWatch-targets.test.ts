@@ -104,6 +104,20 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
+  it.each(['chat-visual', 'check-details'] as const)(
+    'starts no watcher for a %s tab, which has no workspace file',
+    (mode) => {
+      const repo = makeRepo('repo-virtual')
+      const worktree = makeWorktree(repo.id, 'wt-virtual')
+      const virtualFile = { ...makeOpenFile(worktree.id), mode }
+
+      expect(
+        getEditorExternalWatchTargets(makeState({ repo, worktree, openFiles: [virtualFile] }))
+          .targets
+      ).toEqual([])
+    }
+  )
+
   it('enables WSL aliases for a proven-local Windows drive watcher', () => {
     const repo = makeRepo('repo-local-drive', null, 'local')
     const worktree = makeWorktree(repo.id, 'wt-local-drive')

@@ -239,7 +239,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       fence: 7
     })
 
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+    const { catalogListing, ...options } = await adapter.readOptions({
+      sessionId: 'session-1',
+      fence: 7
+    })
+    // The listing the host saves for the account: the CLI's rows, none of this session's state.
+    expect(catalogListing?.models.map((model) => model.id)).toEqual(['opus', 'sonnet'])
+    expect(options).toEqual({
       models: [
         {
           id: 'opus',

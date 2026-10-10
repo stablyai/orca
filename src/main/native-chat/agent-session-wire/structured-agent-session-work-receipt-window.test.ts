@@ -49,7 +49,7 @@ it('allows a fresh Send after 600 settled operations over a day', async () => {
   expect(rig.store.listOperationRows().length).toBeGreaterThan(600)
 })
 
-it('replays a lost Send reply through its retained lifetime and rejects its expired retry without dispatch', async () => {
+it('replays a lost Send reply from its receipt, past the former operation age, without dispatching again', async () => {
   let now = NOW
   rig = await createQueuedMessageTestRig({ now: () => now })
   const id = await rig.workingSend()
@@ -65,10 +65,11 @@ it('replays a lost Send reply through its retained lifetime and rejects its expi
     ok: true,
     replayed: true
   })
+  // A send's receipt, not operation age, answers its retry.
   now += 1
   expect(await rig.host.send(QUEUED_RIG_CALLER, args)).toMatchObject({
-    ok: false,
-    refusal: { code: 'agent_session_operation_expired' }
+    ok: true,
+    replayed: true
   })
   expect(rig.dispatch).toHaveBeenCalledOnce()
   const history = await rig.host.history({ sessionId: SESSION, direction: 'tail' })

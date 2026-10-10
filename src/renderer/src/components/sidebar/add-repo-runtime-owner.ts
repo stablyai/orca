@@ -4,6 +4,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
 export type CapturedRuntimeOwner = string | null | undefined
 
@@ -32,4 +33,14 @@ export function worktreeRefreshOptions(
     requireAuthoritative: true,
     ...(executionHostId ? { executionHostId } : {})
   }
+}
+
+export function resolveAddRepoRuntimeTarget(
+  runtimeEnvironmentId: string | null | undefined,
+  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+): RuntimeClientTarget {
+  const environmentId = runtimeEnvironmentId?.trim()
+  return environmentId
+    ? { kind: 'environment', environmentId }
+    : getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: null })
 }

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('./linux-terminal-orca-cli-shim', () => shim)
@@ -11,11 +12,40 @@ const RESOURCES = '/app/Resources'
 const SHIM_DIR = join(USER_DATA, 'linux-orca-cli-shim')
 
 beforeEach(() => {
+  installFakeAppEnvironment()
   shim.ensureLinuxTerminalOrcaCliShimDir.mockReset()
   shim.ensureLinuxTerminalOrcaCliShimDir.mockReturnValue(SHIM_DIR)
 })
 
+afterEach(() => installFakeAppEnvironment())
+
 describe('prependOrcaCliDirToChildPath', () => {
+  it.each(['linux', 'darwin'] as const)(
+    'uses the %s execution host CLI and profile over inherited values',
+    (platform) => {
+      const launcher = join(USER_DATA, 'cli', 'bin', 'orca')
+      installFakeAppEnvironment({ getCliLauncherPath: () => launcher })
+      const env: Record<string, string> = {
+        PATH: `/usr/bin:${join(USER_DATA, 'cli', 'bin')}::/bin`,
+        ORCA_USER_DATA_PATH: '/parent/profile',
+        ORCA_CLI_COMMAND: '/parent/orca',
+        ORCA_CLI_BIN_DIR: '/parent/bin'
+      }
+      expect(
+        prependOrcaCliDirToChildPath(env, {
+          isPackaged: true,
+          userDataPath: USER_DATA,
+          resourcesPath: null,
+          platform
+        })
+      ).toBe(launcher)
+      expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin:/bin`)
+      expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+      expect(env.ORCA_CLI_COMMAND).toBe(launcher)
+      expect(env.ORCA_CLI_BIN_DIR).toBe(join(USER_DATA, 'cli', 'bin'))
+      expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
+    }
+  )
   it('leads packaged Linux PATH with the bare-orca shim dir', () => {
     // Why this matters at all: the Linux CLI installs as `orca-ide` so it never claims GNOME
     // Orca's /usr/bin/orca screen reader, so bare `orca` only works through this shim.

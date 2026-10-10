@@ -23,6 +23,7 @@ import { NativeChatFindBar } from './NativeChatFindBar'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
@@ -57,6 +58,11 @@ import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-not
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import {
+  isClaudeSignInFailureKind,
+  NativeChatClaudeSignInContext,
+  useNativeChatClaudeSignIn
+} from './native-chat-claude-sign-in'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -84,10 +90,12 @@ export function NativeChatStructuredSession(
     queueFollowUps,
     hostStopping: hostExecution.stopping,
     providerStarting: hostExecution.phase === 'starting',
+    providerRunning: hostExecution.phase !== null,
     rewind: rewindHost,
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
+  useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
   const stopControls = nativeChatStructuredStopControls(controller, hostExecution.stopping)
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId: props.tabId,
@@ -143,7 +151,7 @@ export function NativeChatStructuredSession(
     )
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    needsFailureFacts
+    needsFailureFacts || props.agent === 'claude'
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,
@@ -225,13 +233,22 @@ export function NativeChatStructuredSession(
     agent: props.agent,
     agentLabel,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
-    journalItems: controller.journalItems
+    journalItems: controller.journalItems,
+    submissions: controller.submissions,
+    deliveryNotices
+  })
+  const claudeSignIn = useNativeChatClaudeSignIn({
+    agent: props.agent,
+    target: props.target,
+    failure: provisionalLaunch.failure,
+    failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
   })
   const notices = structuredSessionNotices({
     launch,
     agentLabel,
     sessionError,
     composerError: composerError ?? continuation.continueError,
+    claudeSignIn,
     availability
   })
   if (hostNotice) {
@@ -271,29 +288,31 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
             <NativeChatOrcaStopContext.Provider value={continuation.view}>
-              <NativeChatMessageList
-                // A rewind replaces the conversation; nothing the old transcript held carries over.
-                key={controller.epoch ?? undefined}
-                ref={submits.messageListRef}
-                session={session}
-                journalItems={controller.journalItems}
-                journalSubmissions={controller.submissions}
-                journalLatestTurn={controller.latestTurn}
-                subagentRoster={controller.subagentRoster}
-                railOutline={controller.railOutline}
-                isVisible={props.isVisible}
-                isWorking={controller.isWorking}
-                expandSignal={false}
-                workingStartedAt={controller.workingStartedAt}
-                settledTurns={controller.settledTurns}
-                awaitingInput={prompt === null ? null : 'shown'}
-                turnActivity={controller.turnActivity}
-                stopping={stopControls.stopping}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={onLinkClick !== undefined}
-                runtimeContext={imageRuntimeContext}
-                deliveryNotices={deliveryNotices}
-              />
+              <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+                <NativeChatMessageList
+                  // A rewind replaces the conversation; nothing the old transcript held carries over.
+                  key={controller.epoch ?? undefined}
+                  ref={submits.messageListRef}
+                  session={session}
+                  journalItems={controller.journalItems}
+                  journalSubmissions={controller.submissions}
+                  journalLatestTurn={controller.latestTurn}
+                  subagentRoster={controller.subagentRoster}
+                  railOutline={controller.railOutline}
+                  isVisible={props.isVisible}
+                  isWorking={controller.isWorking}
+                  expandSignal={false}
+                  workingStartedAt={controller.workingStartedAt}
+                  settledTurns={controller.settledTurns}
+                  awaitingInput={prompt === null ? null : 'shown'}
+                  turnActivity={controller.turnActivity}
+                  stopping={stopControls.stopping}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={onLinkClick !== undefined}
+                  runtimeContext={imageRuntimeContext}
+                  deliveryNotices={deliveryNotices}
+                />
+              </NativeChatClaudeSignInContext.Provider>
             </NativeChatOrcaStopContext.Provider>
           </NativeChatRewindContext.Provider>
         )}
@@ -304,6 +323,7 @@ export function NativeChatStructuredSession(
           {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
+            chatWorktreeId={ownerWorktreeId ?? null}
             agentName={agentLabel}
             statedFailures={startFailures}
             steerHeld={stopControls.stopping}

@@ -35,7 +35,12 @@ function harness() {
           },
           deliverTerminalPrompt: deliverPrompt
         },
-        workspaces: { createWorktree }
+        workspaces: {
+          createWorktree,
+          createFolderWorkspace: async () => {
+            throw new Error('folder_create_not_expected')
+          }
+        }
       })
   }
 }

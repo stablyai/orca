@@ -3,6 +3,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../shared/native-chat-visual-directive'
 import { useNativeChatVisualMarkdownExtension } from './native-chat-visual-markdown-extension'
+import { useNativeChatFileLinkExists } from './use-native-chat-file-link-existence'
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
@@ -19,13 +20,16 @@ function useWordFadeArmed(fadeWords: boolean): boolean {
   return armed && fadeWords
 }
 
-type NativeChatMarkdownProps = ComponentProps<typeof CommentMarkdown> & {
+type NativeChatMarkdownProps = Omit<ComponentProps<typeof CommentMarkdown>, 'fileLinkExists'> & {
+  /** Underline file paths in the text that exist in the chat's workspace. */
+  linkifyFilePaths?: boolean
   visualMessageId?: string
   streaming?: boolean
 }
 
 export function NativeChatMarkdown({
   className,
+  linkifyFilePaths = false,
   fadeWords = false,
   visualMessageId,
   streaming = false,
@@ -34,6 +38,7 @@ export function NativeChatMarkdown({
 }: NativeChatMarkdownProps): React.JSX.Element {
   const wordFadeArmed = useWordFadeArmed(fadeWords)
   const extension = useNativeChatVisualMarkdownExtension(visualMessageId)
+  const fileLinkExists = useNativeChatFileLinkExists(linkifyFilePaths, streaming)
   return (
     <CommentMarkdown
       {...props}
@@ -41,6 +46,7 @@ export function NativeChatMarkdown({
         extension && streaming ? withoutPendingNativeChatVisualDirectiveTail(content) : content
       }
       extension={extension}
+      fileLinkExists={fileLinkExists}
       fadeWords={fadeWords}
       renderMermaid={!streaming}
       keepMermaidSourceWhilePending

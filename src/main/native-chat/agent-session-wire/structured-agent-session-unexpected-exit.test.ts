@@ -99,9 +99,9 @@ describe('provider-exit settlement', () => {
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
         itemFence: () => 7,
+        lastProviderActivityAt: () => undefined,
         stopMarks: { latest: () => null, personStopDecides: () => false },
-        appendLifecycleBatch,
-        markPendingSubmissionsUnknown: vi.fn(async () => [])
+        appendLifecycleBatch
       }
     } as unknown as StructuredAgentSessionHostSession
 
@@ -173,8 +173,7 @@ describe('provider-exit settlement', () => {
         itemBody: () => null,
         itemFence: () => undefined,
         snapshot: () => ({ items }),
-        appendLifecycleBatch,
-        markPendingSubmissionsUnknown: vi.fn(async () => [])
+        appendLifecycleBatch
       }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
@@ -210,16 +209,13 @@ describe('provider-exit settlement', () => {
       }
     )
 
-    expect(session.journal.markPendingSubmissionsUnknown).toHaveBeenCalledWith(
-      7,
-      'provider_exited_before_acknowledgement'
-    )
     expect(session.child).toBeNull()
     // The running row is revised to interrupted at exit receipt, never tombstoned.
     expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
       settlementId: `dead-generation:provider-exit:${SESSION}:7:${GENERATION}`,
       fence: 7,
       recovered: true,
+      dispatches: [],
       mutations: [
         {
           kind: 'item',
@@ -246,7 +242,7 @@ describe('provider-exit settlement', () => {
         },
         {
           kind: 'item',
-          identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-2', ordinal: 0 },
+          itemId: 'codex:thread-1:turn-2:0',
           body: {
             kind: 'turn',
             turnId: 'turn-2',
@@ -293,9 +289,7 @@ describe('provider-exit settlement', () => {
           itemBody: () => null,
           itemFence: () => undefined,
           snapshot: () => ({ items }),
-          appendLifecycleBatch,
-          markPendingSubmissionsUnknown: vi.fn(async () => []),
-          rejectPendingSubmissions: vi.fn(async () => [])
+          appendLifecycleBatch
         }
       }
 
@@ -345,7 +339,6 @@ describe('provider-exit settlement', () => {
   )
 
   it('settles a submission the dead child never acknowledged', async () => {
-    const markPendingSubmissionsUnknown = vi.fn(async () => ['client-1'])
     const session: StructuredAgentSessionChildExitSession = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
@@ -354,8 +347,6 @@ describe('provider-exit settlement', () => {
         itemFence: () => undefined,
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
-        markPendingSubmissionsUnknown,
-        rejectPendingSubmissions: vi.fn(async () => []),
         submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
       }
     }
@@ -379,12 +370,17 @@ describe('provider-exit settlement', () => {
       acquisitionGeneration: GENERATION
     })
 
-    expect(markPendingSubmissionsUnknown).toHaveBeenCalledWith(
-      7,
-      'provider_exited_before_acknowledgement'
-    )
     expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
+        dispatches: [
+          {
+            clientMessageId: 'client-1',
+            state: 'unknown',
+            reason: 'provider_exited_before_acknowledgement',
+            fence: 7,
+            recovered: true
+          }
+        ],
         mutations: [
           expect.objectContaining({
             body: {
@@ -406,8 +402,6 @@ describe('provider-exit settlement', () => {
         cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         itemBody: () => null,
         itemFence: () => undefined,
-        markPendingSubmissionsUnknown: vi.fn(async () => []),
-        rejectPendingSubmissions: vi.fn(async () => []),
         snapshot: () => ({
           items: [lifecycleItem('turn-failing', 1, { state: 'running', startedAt: 1 })]
         }),

@@ -22,3 +22,10 @@ export function observeCodexSubmissionTurn(
     ? { verdict: 'exited' }
     : { verdict: 'live', turnId: turn.turnId }
 }
+
+/** The adapter's observer over its own sessions. */
+export function codexSubmissionTurnObserver(
+  sessions: ReadonlyMap<string, CodexSession>
+): SubmissionTurnObserver {
+  return (input) => observeCodexSubmissionTurn(sessions.get(input.sessionId), input)
+}

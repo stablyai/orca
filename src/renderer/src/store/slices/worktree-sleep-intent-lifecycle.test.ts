@@ -3,6 +3,11 @@ import * as intent from '@/lib/worktree-sleep-intent'
 import { buildWorktreePurgeState } from './worktrees/teardown/worktree-purge-state'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
+import {
+  getStructuredAgentSessionReadOwner,
+  findStructuredAgentSessionReadOwner,
+  resetStructuredAgentSessionReadOwnersForTests
+} from '@/components/native-chat/structured-agent-session-read-owner'
 
 const { clearWorktreeSleepIntent, hasWorktreeSleepIntent, markWorktreeSleepIntent } = intent
 const WORKTREE_ID = 'repo1::/path/wt1'
@@ -27,6 +32,7 @@ describe('worktree sleep intent lifecycle', () => {
   beforeEach(() => {
     clearWorktreeSleepIntent(WORKTREE_ID)
     clearWorktreeSleepIntent(FOLDER_KEY)
+    resetStructuredAgentSessionReadOwnersForTests()
   })
 
   it('is released by activating the worktree', () => {
@@ -164,4 +170,25 @@ describe('worktree sleep intent lifecycle', () => {
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
     expect(woke).not.toHaveBeenCalled()
   })
+
+  it.each([WORKTREE_ID, FOLDER_KEY])(
+    'retires created chat readers when %s is purged',
+    (workspaceId) => {
+      const store = createTestStore()
+      seedWorktree(store)
+      const target = { kind: 'environment', environmentId: 'server-1' } as const
+      const owner = getStructuredAgentSessionReadOwner('created-chat', target)
+      const local = getStructuredAgentSessionReadOwner('created-chat', { kind: 'local' })
+      store.getState().createUnifiedTab(workspaceId, 'agent-session', {
+        entityId: 'created-chat',
+        executionHostId: 'runtime:server-1',
+        activate: false
+      })
+      const dispose = vi.spyOn(owner, 'dispose')
+      store.setState(buildWorktreePurgeState(store.getState(), [workspaceId]))
+      expect(findStructuredAgentSessionReadOwner('created-chat', target)).toBeUndefined()
+      expect(findStructuredAgentSessionReadOwner('created-chat', { kind: 'local' })).toBe(local)
+      expect(dispose).toHaveBeenCalledOnce()
+    }
+  )
 })

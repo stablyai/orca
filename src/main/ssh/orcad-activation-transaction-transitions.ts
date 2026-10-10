@@ -8,6 +8,7 @@ import type {
 export function createOrcadActivationTransaction(options: {
   transactionId: string
   candidateVersion: string
+  appVersion?: string
   recordBefore: OrcadActivationRecord
   snapshotDirName: string
   now: Date
@@ -21,6 +22,7 @@ export function createOrcadActivationTransaction(options: {
     startedAt: timestamp,
     updatedAt: timestamp,
     candidateVersion: options.candidateVersion,
+    candidateAppVersion: options.appVersion ?? null,
     recordBefore: options.recordBefore,
     recordAfter: null,
     snapshot: { dirName: options.snapshotDirName, state: 'pending' }
@@ -31,7 +33,11 @@ export function withOrcadActivationIncumbentStopped(
   transaction: OrcadActivateTransaction,
   now: Date
 ): OrcadActivateTransaction {
-  return { ...transaction, phase: 'incumbent-stopped', updatedAt: now.toISOString() }
+  return {
+    ...transaction,
+    phase: 'incumbent-stopped',
+    updatedAt: now.toISOString()
+  }
 }
 
 export function withOrcadActivationSnapshot(
@@ -52,7 +58,12 @@ export function withOrcadActivationCandidateReady(
   recordAfter: OrcadActivationRecord,
   now: Date
 ): OrcadActivateTransaction {
-  return { ...transaction, phase: 'candidate-ready', updatedAt: now.toISOString(), recordAfter }
+  return {
+    ...transaction,
+    phase: 'candidate-ready',
+    updatedAt: now.toISOString(),
+    recordAfter
+  }
 }
 
 export function createOrcadRollbackTransaction(options: {

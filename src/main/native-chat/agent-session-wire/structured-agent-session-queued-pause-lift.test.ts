@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,
@@ -168,18 +169,16 @@ describe("a Stop's queue pause", () => {
     await expectPaused(heldId)
   })
 
-  it('an old send answered again after its ledger row is gone lifts nothing from a later Stop', async () => {
+  it('an old send answered again after its receipt is gone lifts nothing from a later Stop', async () => {
     const working = await rig.workingSend()
     const draftId = await queuedDraft('paused by stop')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    // The ledger forgot the id, so the send runs again and answers with its accepted submission.
-    const operations = rig.store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === working) {
-        operations.delete(key)
-      }
-    }
+    // As an older build accepted it, with no receipt: the send runs again and answers with its
+    // accepted submission.
+    openTestJournalHostDatabase(rig.root)
+      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
+      .run(working)
     const body = hostTestMessage('work on this')
     const replayed = await rig.host.send(QUEUED_RIG_CALLER, {
       envelope: rig.envelope({ body }, 'agentSession.send', working),

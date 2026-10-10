@@ -202,6 +202,14 @@ describe('command receipt identity', () => {
 })
 
 describe('command receipt outcomes and lifetime', () => {
+  it('round trips a queued-draft pointer without retaining its body', () => {
+    const receipt = commandReceiptFixture({
+      result: { kind: 'queued-draft', messageId: 'draft-1' }
+    })
+    insert(receipt)
+    expect(read(receipt)).toEqual({ verdict: 'readable', receipt })
+  })
+
   it.each([
     { kind: 'cancel', cancelled: false, turnId: 'turn-1' },
     { kind: 'cancel', cancelled: false },
@@ -242,6 +250,7 @@ describe('unreadable command receipts', () => {
     ['result_json', '{'],
     ['result_json', '{"kind":"journal-row","epoch":"e1","sequence":0}'],
     ['result_json', '{"kind":"future-result"}'],
+    ['result_json', '{"kind":"queued-draft","messageId":""}'],
     ['result_json', null],
     ['status', 'pending'],
     ['method', ''],

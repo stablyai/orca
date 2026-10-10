@@ -150,7 +150,10 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   override close(error?: Error): Promise<boolean> {
     this.lifecycle.closing ||= this.managed.rootVerdict !== 'exited'
-    super.close(error)
-    return this.managed.close().then((result) => result.root === 'exited')
+    this.drainNotifications(error)
+    return this.managed
+      .close()
+      .then((result) => result.root === 'exited')
+      .finally(() => super.close(error))
   }
 }

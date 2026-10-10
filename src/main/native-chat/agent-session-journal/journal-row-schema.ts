@@ -360,7 +360,7 @@ const ROW_CONTENT_CHECK_BY_KIND: Record<
           mutations.length <= MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS &&
           Buffer.byteLength(JSON.stringify(record), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
       ),
-      ...mutations.map(lifecycleMutationContent)
+      ...mutations.map((mutation) => lifecycleMutationContent(mutation))
     )
   }
 }

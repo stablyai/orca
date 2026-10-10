@@ -10,6 +10,7 @@
  * never take the answer from a caller, so it derives it here from the id it resolved itself.
  */
 
+import type { AgentLaunchTarget } from './agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import { parseWorkspaceKey } from './workspace-scope'
 
@@ -20,4 +21,16 @@ export function workspaceKindForWorktreeId(worktreeId: string): WorkspaceLaunchK
     return 'floating'
   }
   return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
+}
+
+/**
+ * Read from the id rather than carried alongside it, so the kind cannot disagree with the workspace
+ * it describes. An existing target's `worktree` is already resolved to an id, never a caller's
+ * selector; a create's kind is what it creates.
+ */
+export function workspaceKindForLaunchTarget(target: AgentLaunchTarget): WorkspaceLaunchKind {
+  if (target.kind === 'existing') {
+    return workspaceKindForWorktreeId(target.worktree)
+  }
+  return target.kind === 'create-folder-workspace' ? 'folder' : 'git-worktree'
 }

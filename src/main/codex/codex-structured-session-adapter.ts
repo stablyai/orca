@@ -11,7 +11,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
-import { observeCodexSubmissionTurn } from './codex-structured-submission-turn'
+import { codexSubmissionTurnObserver } from './codex-structured-submission-turn'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
@@ -41,6 +41,11 @@ import {
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
+import {
+  codexBackgroundTaskStops,
+  startCodexTerminalStopProbe,
+  stopCodexBackgroundCommands
+} from './codex-background-terminals'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
@@ -143,6 +148,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       session.backgroundTasks.observe(event, session.prompts.takeAbandonedCommands())
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
+      startCodexTerminalStopProbe(this.sessions, event.sessionId, session, this.deps)
     }
     this.deps.onEvent?.(event)
     return admission
@@ -183,11 +189,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  // Codex exposes no honest stop for a child thread or a persistent command.
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
     sessionId
-  ) =>
-    this.sessions.has(sessionId) ? { supportsTaskStop: false, supportsStopAll: false } : undefined
+  ) => codexBackgroundTaskStops(this.sessions.get(sessionId))
+
+  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
+    input
+  ) => stopCodexBackgroundCommands(this.sessions, input, this.deps.requestTimeoutMs)
 
   bindPromptItemId = (
     sessionId: string,
@@ -230,9 +238,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       requestTimeoutMs: this.deps.requestTimeoutMs
     })
 
-  observeSubmissionTurn: NonNullable<StructuredAgentSessionAdapter['observeSubmissionTurn']> = (
-    input
-  ) => observeCodexSubmissionTurn(this.sessions.get(input.sessionId), input)
+  observeSubmissionTurn = codexSubmissionTurnObserver(this.sessions)
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'

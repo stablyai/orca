@@ -28,7 +28,9 @@ import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
+import type { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
+import { CellSeatLog, type CellSeatChange, type CellSeatFeedPage } from './cell-seat-log.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
 import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
 import { HostCloseReasonMemory } from './host-close-reason-memory.js'
@@ -216,6 +218,7 @@ export class HostSessionRegistry {
   // Hosts whose drain has been sent. Paced sends land minutes apart, so "this cell is
   // draining" is not the same question as "this host has been told to leave".
   private readonly drainSentHosts = new Set<string>()
+  private readonly seatLog = new CellSeatLog()
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -341,7 +344,8 @@ export class HostSessionRegistry {
     private readonly observer: RelayRuntimeObserver,
     private readonly now: () => number = Date.now,
     private readonly random: () => number = Math.random,
-    private readonly cellIncarnation?: string
+    private readonly cellIncarnation?: string,
+    private readonly assignmentLeaseShadow?: AssignmentLeaseShadow
   ) {}
 
   // Renewals leave the heartbeat as an enqueue: one statement per cell per
@@ -811,7 +815,8 @@ export class HostSessionRegistry {
     socket: WebSocket,
     identity: RelayTokenClaims,
     connectionInclusionWatermark?: number,
-    hostCapabilities?: ReadonlySet<string>
+    hostCapabilities?: ReadonlySet<string>,
+    assignmentLease?: string
   ): void {
     if (this.idleAttempts.has(identity.relayHostId)) {
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
@@ -835,7 +840,8 @@ export class HostSessionRegistry {
             socket,
             identity,
             payload(raw, 'host-hello'),
-            connectionInclusionWatermark
+            connectionInclusionWatermark,
+            assignmentLease
           ),
         socket,
         'host hello proof'
@@ -925,7 +931,7 @@ export class HostSessionRegistry {
   private sendDrain(session: HostSession, graceMs: number): void {
     if (session.state === 'closed') return
     session.authorityRevision += 1
-    session.state = 'drain-only'
+    this.markSeatDrainOnly(session)
     this.drainSentHosts.add(session.relayHostId)
     if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
     this.scheduleDrainTimer(graceMs, () => this.closeDrainedSession(session))
@@ -977,7 +983,8 @@ export class HostSessionRegistry {
     socket: WebSocket,
     identity: RelayTokenClaims,
     candidate: unknown,
-    connectionInclusionWatermark?: number
+    connectionInclusionWatermark?: number,
+    assignmentLease?: string
   ): Promise<void> {
     const hello = HostHelloSchema.safeParse(candidate)
     const hostPublicKey = hello.success
@@ -1001,6 +1008,15 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host key binding mismatch')
       return
     }
+    const leaseShadow = this.config.role === 'cell' ? this.assignmentLeaseShadow : undefined
+    const leaseCheck =
+      leaseShadow?.check({
+        lease: assignmentLease,
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        helloEpoch: hello.data.assignmentEpoch
+      }) ?? null
+    const assignmentReadStartedAt = performance.now()
     // Combined is staging-only compatibility; stamped cells require the durable director epoch.
     const assignmentValid =
       this.config.role === 'combined'
@@ -1011,6 +1027,14 @@ export class HostSessionRegistry {
             cellId: this.config.cellId,
             assignmentEpoch: hello.data.assignmentEpoch
           })
+    // The database answer decides; the lease is only compared with it.
+    if (leaseShadow && leaseCheck) {
+      leaseShadow.record(
+        leaseCheck,
+        assignmentValid,
+        performance.now() - assignmentReadStartedAt
+      )
+    }
     if (!assignmentValid) {
       this.observer.recordAuth(false)
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')
@@ -1221,6 +1245,7 @@ export class HostSessionRegistry {
       existing.activityRenewalDueAt = this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
       this.wireActiveControl(existing)
       this.sendHelloAck(existing)
+      this.appendSeatChange(existing, 'join')
       if (existing.regionalDrainAttemptId) this.reassertRegionalDrain(existing)
       previousSocket?.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'control rebound')
       return
@@ -1292,6 +1317,44 @@ export class HostSessionRegistry {
     this.sessions.set(sessionKey, session)
     this.wireActiveControl(session)
     this.sendHelloAck(session)
+    this.appendSeatChange(session, 'join')
+  }
+
+  seatFeed(sinceSeq: number | null): CellSeatFeedPage {
+    return { ...this.seatLog.read(sinceSeq), seats: this.seatLog.seatCount() }
+  }
+
+  private appendSeatChange(
+    session: HostSession,
+    kind: CellSeatChange['kind'],
+    closeCode?: number
+  ): void {
+    this.seatLog.append({
+      kind,
+      userId: session.identity.sub,
+      relayHostId: session.relayHostId,
+      epoch: session.assignmentEpoch,
+      generation: session.generation,
+      ...(kind === 'join' && (session.state === 'active' || session.state === 'drain-only')
+        ? { state: session.state }
+        : {}),
+      ...(closeCode === undefined ? {} : { closeCode }),
+      at: this.now()
+    })
+  }
+
+  // Only a seated host's transition is a feed change; an orphaned one already left.
+  private markSeatDrainOnly(session: HostSession): void {
+    const changed = session.state !== 'drain-only'
+    session.state = 'drain-only'
+    if (changed && session.socket) this.appendSeatChange(session, 'drain-only')
+  }
+
+  // A refreshed token lifts an auth-expiry drain-only; a regional drain is never lifted here.
+  private markSeatActive(session: HostSession): void {
+    const changed = session.state !== 'active'
+    session.state = 'active'
+    if (changed && session.socket) this.appendSeatChange(session, 'active')
   }
 
   private wireActiveControl(session: HostSession): void {
@@ -1314,6 +1377,7 @@ export class HostSessionRegistry {
       // cause onto the live session that replaced it.
       if (session.socket === socket) {
         this.hostCloseReasons.record(this.key(session.identity.sub, session.relayHostId), reason)
+        this.appendSeatChange(session, 'leave', code)
       }
       // One line per control close makes reconnect churners attributable by
       // host digest without exposing the raw relay host id.
@@ -1402,7 +1466,7 @@ export class HostSessionRegistry {
       return
     }
     session.identity = refreshed
-    if (!session.regionalDrainAttemptId) session.state = 'active'
+    if (!session.regionalDrainAttemptId) this.markSeatActive(session)
   }
 
   private heartbeat(session: HostSession): void {
@@ -1524,7 +1588,7 @@ export class HostSessionRegistry {
       session.socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'relay authorization expired')
       return
     }
-    if (now > expiresAt) session.state = 'drain-only'
+    if (now > expiresAt) this.markSeatDrainOnly(session)
     if (now > session.leaseExpiresAt) {
       send(session.socket, 'drain', { graceMs: 0, recovery: 'resolve-director' })
       session.socket.close(RELAY_CLOSE_CODE.DRAINING, 'control lease expired')
@@ -1618,7 +1682,7 @@ export class HostSessionRegistry {
   }
 
   private reassertRegionalDrain(session: HostSession): void {
-    session.state = 'drain-only'
+    this.markSeatDrainOnly(session)
     if (!session.socket) return
     send(session.socket, 'drain', {
       graceMs: Math.max(0, (session.regionalDrainExpiresAt ?? this.now()) - this.now()),

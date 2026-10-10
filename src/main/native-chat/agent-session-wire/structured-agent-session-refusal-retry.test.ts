@@ -170,7 +170,11 @@ async function assertHostAgreement(
   }
   const outcome = operationState(harness, spec.operationId)
   let oracle: AgentSessionRefusalOperationState
-  if (outcome?.status === 'failed') {
+  if (
+    harness.store.readCommandReceipt({ kind: 'global' }, spec.operationId).verdict === 'unreadable'
+  ) {
+    oracle = 'unknown'
+  } else if (outcome?.status === 'failed') {
     oracle = 'settled-rejected'
   } else if (outcome?.status === 'unknown') {
     oracle = 'unknown'
@@ -211,8 +215,6 @@ const UNREACHABLE = new Set<Pair>([
   'agentSession.send:agent_session_identity_required',
   // Only a send opens the conversation it writes to.
   'agentSession.setOption:agent_session_journal_unreadable',
-  // Send reconstructs doubt from its global tombstone instead of refusing it.
-  'agentSession.send:agent_session_operation_unknown',
   // Only a send restarts a lost owner.
   'agentSession.setOption:agent_session_owner_restart_failed',
   // A write names its target, not an owner generation; only an attach compares fences.
@@ -223,6 +225,8 @@ const UNREACHABLE = new Set<Pair>([
   'agentSession.send:agent_session_conflict',
   'agentSession.send:execution_owner_reconciling',
   'agentSession.send:agent_session_owner_restart_failed',
+  // Send admits through its receipt, which has no age budget.
+  'agentSession.send:agent_session_operation_expired',
   // The ledger has no count limit; only an older host still refuses with it.
   'agentSession.setOption:agent_session_operation_capacity',
   'agentSession.send:agent_session_operation_capacity'
@@ -285,11 +289,15 @@ describe('agentSessionRefusalOperationState host oracle', () => {
       )
     }
     const ledgerRefusals = await createHarness()
-    for (const [code, timestamp] of [
-      ['agent_session_operation_expired', NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1],
-      ['agent_session_operation_invalid', null]
+    for (const [code, timestamp, methods] of [
+      [
+        'agent_session_operation_expired',
+        NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1,
+        ['agentSession.setOption']
+      ],
+      ['agent_session_operation_invalid', null, METHODS]
     ] as const) {
-      for (const method of METHODS) {
+      for (const method of methods) {
         record(
           await assertHostAgreement(
             ledgerRefusals,
@@ -308,6 +316,14 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     const optionUnknown = { method: 'agentSession.setOption' as const, operationId: operationId() }
     await expect(invoke(unknown, optionUnknown)).rejects.toThrow('reply lost')
     record(await assertHostAgreement(unknown, optionUnknown, 'agent_session_operation_unknown'))
+    const sendUnknown = { method: 'agentSession.send' as const, operationId: operationId() }
+    await expect(invoke(unknown, sendUnknown)).resolves.toMatchObject({ ok: true })
+    openTestJournalHostDatabase(unknown.root)
+      .db.prepare(
+        "UPDATE agent_session_command_receipts SET result_json = '{' WHERE operation_id = ?"
+      )
+      .run(sendUnknown.operationId)
+    record(await assertHostAgreement(unknown, sendUnknown, 'agent_session_operation_unknown'))
 
     const reconciling = await createHarness()
     for (const method of ['agentSession.setOption'] as const) {

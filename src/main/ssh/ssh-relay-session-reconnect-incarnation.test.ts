@@ -782,7 +782,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       leafId: INCARNATION_LEAF_ID,
       incarnationId: currentIncarnationId
     })
-    expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
+    expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'ssh:target-1')
     expect(recordedPtyBindings(mockStore)).toContainEqual(
       expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
     )

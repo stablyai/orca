@@ -188,13 +188,6 @@ export type RelayRuntimeFallbackReason =
   /** The host answered a rung's install, self-test or launch with an unclassified failure. */
   | 'install_failed'
 
-export type HostNodeRelayPlan = {
-  kind: 'host-node'
-  fallbackReason?: RelayRuntimeFallbackReason
-  /** Replayed from a cache rather than proved on this connect. */
-  remembered?: boolean
-}
-
 /** The pinned path cannot run on this host or client; the deploy retries on the host's Node. */
 export class PinnedRelayFallbackError extends Error {
   constructor(
@@ -212,14 +205,6 @@ export function isPinnedRuntimeRefusal(reason: string): reason is PinnedRuntimeR
   return PINNED_RUNTIME_REFUSALS.some((refusal) => refusal === reason)
 }
 
-export function logPinnedRelayFallback(
-  reason: RelayRuntimeFallbackReason,
-  detail: string
-): HostNodeRelayPlan {
-  console.warn(`[ssh-relay] Pinned Node relay unavailable (${reason}): ${detail}`)
-  return { kind: 'host-node', fallbackReason: reason }
-}
-
 /**
  * The host's server target, or a fallback when the libc probe answered with nothing known.
  * Why only an answered probe falls back: a lost channel says nothing about the host, and
@@ -229,14 +214,14 @@ export async function resolvePinnedRelayTargetFacts(options: {
   conn: SshConnection
   host: RemoteHostPlatform
   signal?: AbortSignal
-}): Promise<OrcadDeploymentTargetFacts | HostNodeRelayPlan> {
+}): Promise<OrcadDeploymentTargetFacts> {
   try {
     return await resolveOrcadDeploymentTargetFacts(options)
   } catch (error) {
     if (!(error instanceof UnidentifiedHostLibcError)) {
       throw error
     }
-    return logPinnedRelayFallback('target_unresolved', error.message)
+    throw new PinnedRelayFallbackError('target_unresolved', error.message)
   }
 }
 
@@ -254,32 +239,36 @@ export async function planPinnedNodeRelay(options: {
   compat?: { target: CompatServerTarget; glibcFloor: GlibcVersion | null }
   materializeOrcad?: (target: NodeRuntimeTarget, signal?: AbortSignal) => Promise<string>
   runtimeCacheRoot?: () => string
-}): Promise<PinnedRelayPlan | HostNodeRelayPlan> {
+}): Promise<PinnedRelayPlan> {
   const { host, signal } = options
   const facts =
     options.facts ?? (await resolvePinnedRelayTargetFacts({ conn: options.conn, host, signal }))
-  if ('kind' in facts) {
-    return facts
-  }
   const { glibc } = facts
   const { compat } = options
   const target: NodeRuntimeTarget = compat?.target ?? facts.target
+  const refuse = (
+    reason: RelayRuntimeFallbackReason,
+    detail: string,
+    remembered = false
+  ): PinnedRelayFallbackError =>
+    new PinnedRelayFallbackError(
+      reason,
+      compat ? `compat runtime ${target}: ${detail}` : detail,
+      remembered
+    )
   const cached = rememberedPinnedRuntimeRefusal(options.targetId, target)
   if (cached) {
-    return { ...logPinnedRelayFallback(cached, 'refused earlier this session'), remembered: true }
+    throw refuse(cached, 'refused earlier this session', true)
   }
   // Why rung A only: the persisted decision is keyed by the default runtime's hash.
   const persisted = compat ? null : options.persistedRefusal?.(facts)
   if (persisted) {
-    return {
-      ...logPinnedRelayFallback(persisted, 'refused on an earlier connect'),
-      remembered: true
-    }
+    throw refuse(persisted, 'refused on an earlier connect', true)
   }
   const floor = compat ? compat.glibcFloor : PINNED_NODE_GLIBC_FLOOR
   if (glibc && floor && isGlibcBelow(glibc, floor)) {
     recordPinnedRuntimeRefusal(options.targetId, target, 'libc_floor')
-    return logPinnedRelayFallback(
+    throw refuse(
       'libc_floor',
       `host glibc ${glibc.major}.${glibc.minor} is below ${floor.major}.${floor.minor}`
     )
@@ -291,10 +280,7 @@ export async function planPinnedNodeRelay(options: {
     addons = await stagePinnedRelayAddons(await materialize(target, signal), target)
   } catch (error) {
     signal?.throwIfAborted()
-    return logPinnedRelayFallback(
-      'artifacts_unavailable',
-      error instanceof Error ? error.message : String(error)
-    )
+    throw refuse('artifacts_unavailable', error instanceof Error ? error.message : String(error))
   }
   const cacheRoot =
     options.runtimeCacheRoot ??

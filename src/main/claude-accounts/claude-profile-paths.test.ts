@@ -12,7 +12,6 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 import {
-  assertOutsideDefaultClaudeHomes,
   describeClaudeProfile,
   prepareClaudeProfileDirectory,
   readClaudeProfileObject,
@@ -57,10 +56,16 @@ describe('Claude profile namespace', () => {
         target,
         home: join(dir, 'claude-profiles/account-a/home')
       })
-      prepareClaudeProfileDirectory(dir, profile, userHome)
-      expect(
-        JSON.parse(readFileSync(join(dir, 'claude-profiles/account-a/profile.json'), 'utf8'))
-      ).toEqual({ version: 1, accountId: 'account-a', runtime: 'wsl', distro: 'Ubuntu' })
+      const markSetUp = prepareClaudeProfileDirectory(dir, profile, userHome)
+      const marker = join(dir, 'claude-profiles/account-a/profile.json')
+      expect(existsSync(marker)).toBe(false)
+      markSetUp()
+      expect(JSON.parse(readFileSync(marker, 'utf8'))).toEqual({
+        version: 1,
+        accountId: 'account-a',
+        runtime: 'wsl',
+        distro: 'Ubuntu'
+      })
       // The host id is the caller's view of the host, so another caller's spelling is the same profile.
       prepareClaudeProfileDirectory(
         dir,
@@ -121,11 +126,9 @@ describe('Claude profile namespace', () => {
   it.runIf(caseInsensitive)('refuses a case-only alias of the default home', () => {
     const userHome = root()
     mkdirSync(join(userHome, '.claude'))
-    expect(() => assertOutsideDefaultClaudeHomes(join(userHome, '.CLAUDE'), userHome)).toThrow(
-      'separate directories'
-    )
+    const dataRoot = join(userHome, '.CLAUDE', 'orca')
     expect(() =>
-      assertOutsideDefaultClaudeHomes(join(userHome, '.CLAUDE', 'nested'), userHome)
+      prepareClaudeProfileDirectory(dataRoot, describeClaudeProfile(dataRoot, 'a', local), userHome)
     ).toThrow('separate directories')
   })
   it("reads the user's own CLAUDE_CONFIG_DIR but never Orca's injected one", () => {

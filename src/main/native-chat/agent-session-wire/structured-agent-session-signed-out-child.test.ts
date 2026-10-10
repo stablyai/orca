@@ -23,6 +23,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionChildWorkReads } from './structured-agent-session-idle-sweep'
 
@@ -60,6 +61,17 @@ describe('a send after the agent said it is not signed in', () => {
     // The earlier child's report does not follow the new one.
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
+  })
+
+  // A Pi that started with no model keeps a placeholder: a sign-in made since reaches a new Pi only.
+  it('goes to a new agent when the running one started signed out', async () => {
+    await foundRestTestChat(rig)
+    rig.adapter.startUnavailable.mockReturnValueOnce({ reason: 'notSignedIn' })
+    rig.adapter.closeSession.mockClear()
+    expect((await rig.host.send(CALLER, restTestSend('signed in since', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   })
 
@@ -162,6 +174,14 @@ describe('structuredAgentSessionChildReportedSignedOut', () => {
     const items = [statusRow(2, 'notSignedIn')]
     expect(reported({ items, child: childAt({ phase: 'starting' }) })).toBe(false)
     expect(reported({ items, child: null })).toBe(false)
+  })
+
+  it("reads the running child's own start, and only a signed-out one", () => {
+    const fromStart = (startUnavailable: AgentSessionUnavailable, child = childAt({})) =>
+      structuredAgentSessionChildReportedSignedOut(conversation({ child }), startUnavailable)
+    expect(fromStart({ reason: 'notSignedIn' })).toBe(true)
+    expect(fromStart({ reason: 'cliMissing' })).toBe(false)
+    expect(fromStart({ reason: 'notSignedIn' }, childAt({ phase: 'starting' }))).toBe(false)
   })
 })
 

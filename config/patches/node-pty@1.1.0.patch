@@ -1216,45 +1216,10 @@ index 7b286d3d64..5239ba4e40 100644
  };
  
 diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb177357e177661033c1b092f9c9d0e5f5a..26c2a4c58799ce649f5113131e4c52f7ed2d87ad 100644
 --- a/lib/windowsPtyAgent.js
 +++ b/lib/windowsPtyAgent.js
-@@ -13,6 +13,7 @@
- var net_1 = require("net");
- var windowsConoutConnection_1 = require("./windowsConoutConnection");
- var utils_1 = require("./utils");
-+var eventEmitter2_1 = require("./eventEmitter2");
- var conptyNative;
- var winptyNative;
- /**
-@@ -34,6 +35,7 @@
-         this._useConptyDll = _useConptyDll;
-         this._pid = 0;
-         this._innerPid = 0;
-+        this._onProcessExit = new eventEmitter2_1.EventEmitter2();
-         if (this._useConpty === undefined || this._useConpty === true) {
-             this._useConpty = this._getWindowsBuildNumber() >= 18309;
-         }
-@@ -130,12 +132,29 @@
-             this._ptyNative.clear(this._pty, this._useConptyDll);
-         }
-     };
-+    Object.defineProperty(WindowsPtyAgent.prototype, "onProcessExit", {
-+        get: function () { return this._onProcessExit.event; },
-+        enumerable: false,
-+        configurable: true
-+    });
-+    Object.defineProperty(WindowsPtyAgent.prototype, "isConpty", {
-+        get: function () { return this._useConpty === true; },
-+        enumerable: false,
-+        configurable: true
-+    });
-+    WindowsPtyAgent.prototype.killAfterOutputClosed = function () {
-+        var _this = this;
-+        return this._conoutSocketWorker.disposeImmediately().then(function () { return _this.kill(); });
-+    };
-     WindowsPtyAgent.prototype.kill = function () {
-         var _this = this;
-         // Tell the agent to kill the pty, this releases handles to the process
+@@ -136,6 +136,9 @@ var WindowsPtyAgent = /** @class */ (function () {
          if (this._useConpty) {
              if (!this._useConptyDll) {
                  this._inSocket.readable = false;
@@ -1264,7 +1229,7 @@ diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
                  this._outSocket.readable = false;
                  this._getConsoleProcessList().then(function (consoleProcessList) {
                      consoleProcessList.forEach(function (pid) {
-@@ -154,9 +173,10 @@
+@@ -154,9 +157,10 @@ var WindowsPtyAgent = /** @class */ (function () {
                  // Close the input write handle to signal the end of session.
                  this._inSocket.destroy();
                  this._ptyNative.kill(this._pty, this._useConptyDll);
@@ -1278,28 +1243,11 @@ diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
              }
          }
          else {
-@@ -225,6 +245,7 @@
-             this._flushDataAndCleanUp();
-             this._outSocket.on('data', function () { return _this._flushDataAndCleanUp(); });
-         }
-+        this._onProcessExit.fire(exitCode);
-     };
-     WindowsPtyAgent.prototype._flushDataAndCleanUp = function () {
-         var _this = this;
 diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
+index 3c38f89..e20b3e6 100644
 --- a/lib/windowsTerminal.js
 +++ b/lib/windowsTerminal.js
-@@ -45,22 +45,61 @@
-         var parsedEnv = _this._parseEnv(env);
-         // If the terminal is ready
-         _this._isReady = false;
-+        _this._killRequested = false;
-+        _this._killComplete = false;
-+        _this._isPipeReady = false;
-+        _this._exitEmitted = false;
-+        _this._preconnectCleanupRequested = false;
-         // Functions that need to run after `ready` event is emitted.
-         _this._deferreds = [];
+@@ -50,6 +50,27 @@ var WindowsTerminal = /** @class */ (function (_super) {
          // Create new termal.
          _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
          _this._socket = _this._agent.outSocket;
@@ -1327,32 +1275,7 @@ diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
          // Not available until `ready` event emitted.
          _this._pid = _this._agent.innerPid;
          _this._fd = _this._agent.fd;
-         _this._pty = _this._agent.pty;
-+        _this._agent.onProcessExit(function () {
-+            if (_this._killRequested) _this._emitExit();
-+        });
-+        _this._socket.once('close', function () {
-+            if (_this._isPipeReady && !_this._preconnectCleanupRequested && (!_this._killRequested || !_this._agent.isConpty || _this._agent.exitCode !== undefined)) _this._emitExit();
-+            _this._close();
-+            if (_this._killRequested && !_this._isPipeReady) _this._killAfterOutputClosed();
-+        });
-         // The forked windows terminal is not available until `ready` event is
-         // emitted.
-         _this._socket.on('ready_datapipe', function () {
-+            _this._isPipeReady = true;
-+            if (_this._killRequested) {
-+                _this.kill();
-+                return;
-+            }
-             // Run deferreds and set ready state once the first data event is received.
-             _this._socket.once('data', function () {
-                 // Wait until the first data event is fired then we can run deferreds.
--                if (!_this._isReady) {
-+                if (!_this._isReady && !_this._killRequested) {
-                     // Terminal is now ready and we can avoid having to defer method
-                     // calls.
-                     _this._isReady = true;
-@@ -76,33 +115,25 @@
+@@ -76,23 +99,6 @@ var WindowsTerminal = /** @class */ (function (_super) {
                      _this._deferreds = [];
                  }
              });
@@ -1373,13 +1296,10 @@ diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
 -                    throw err;
 -                }
 -            });
--            // Cleanup after the socket is closed.
--            _this._socket.on('close', function () {
--                _this.emit('exit', _this._agent.exitCode);
--                _this._close();
--            });
-         });
-         _this._file = file;
+             // Cleanup after the socket is closed.
+             _this._socket.on('close', function () {
+                 _this.emit('exit', _this._agent.exitCode);
+@@ -103,6 +109,20 @@ var WindowsTerminal = /** @class */ (function (_super) {
          _this._name = name;
          _this._readable = true;
          _this._writable = true;
@@ -1400,79 +1320,7 @@ diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
          _this._forwardEvents();
          return _this;
      }
-@@ -139,22 +170,49 @@
-         });
-     };
-     WindowsTerminal.prototype.destroy = function () {
--        var _this = this;
--        this._deferNoArgs(function () {
--            _this.kill();
--        });
-+        this.kill();
-     };
-     WindowsTerminal.prototype.kill = function (signal) {
--        var _this = this;
--        this._deferNoArgs(function () {
--            if (signal) {
--                throw new Error('Signals not supported on windows.');
--            }
--            _this._close();
--            _this._agent.kill();
--        });
-+        if (signal) {
-+            throw new Error('Signals not supported on windows.');
-+        }
-+        // Retire input now; native close requires the forwarding pipe, not first output.
-+        this._killRequested = true;
-+        this._deferreds = [];
-+        this._close();
-+        if (this._killComplete || this._preconnectCleanup) return;
-+        if (this._preconnectCleanupRequested || (!this._isPipeReady && this._socket.destroyed)) {
-+            this._killAfterOutputClosed();
-+            return;
-+        }
-+        if (!this._isPipeReady) return;
-+        this._agent.kill();
-+        this._killComplete = true;
-+    };
-+    WindowsTerminal.prototype._emitExit = function () {
-+        if (this._exitEmitted) return;
-+        this._exitEmitted = true;
-+        this.emit('exit', this._agent.exitCode);
-+    };
-+    WindowsTerminal.prototype._killAfterOutputClosed = function () {
-+        var _this = this;
-+        if (!this._agent.isConpty || this._killComplete || this._preconnectCleanup) return;
-+        this._preconnectCleanupRequested = true;
-+        this._preconnectCleanup = this._agent.killAfterOutputClosed().then(function () {
-+            _this._killComplete = true;
-+            if (_this._agent.exitCode !== undefined) _this._emitExit();
-+        }, function (error) {
-+            _this._preconnectCleanup = undefined;
-+            if (_this.listeners('error').length > 1) {
-+                _this.emit('error', error);
-+            }
-+        });
-+        if (this._agent.exitCode !== undefined) this._emitExit();
-     };
-     WindowsTerminal.prototype._deferNoArgs = function (deferredFn) {
-+        if (this._killRequested) {
-+            return;
-+        }
-         var _this = this;
-         // If the terminal is ready, execute.
-         if (this._isReady) {
-@@ -167,6 +225,9 @@
-         });
-     };
-     WindowsTerminal.prototype._defer = function (deferredFn, arg) {
-+        if (this._killRequested) {
-+            return;
-+        }
-         var _this = this;
-         // If the terminal is ready, execute.
-         if (this._isReady) {
-@@ -196,4 +257,4 @@
+@@ -196,4 +216,4 @@ var WindowsTerminal = /** @class */ (function (_super) {
      return WindowsTerminal;
  }(terminal_1.Terminal));
  exports.WindowsTerminal = WindowsTerminal;
@@ -1480,36 +1328,10 @@ diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
 \ No newline at end of file
 +//# sourceMappingURL=windowsTerminal.js.map
 diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d7054449516f0c9a62af351c2caa17331206d530..0c28a32e2e1db2b3f208ddde8443cd4e67bb1ad6 100644
 --- a/src/windowsPtyAgent.ts
 +++ b/src/windowsPtyAgent.ts
-@@ -12,6 +12,7 @@
- import { ArgvOrCommandLine } from './types';
- import { ConoutConnection } from './windowsConoutConnection';
- import { loadNativeModule } from './utils';
-+import { EventEmitter2, IEvent } from './eventEmitter2';
- 
- let conptyNative: IConptyNative;
- let winptyNative: IWinptyNative;
-@@ -34,6 +35,9 @@
-   private _innerPid: number = 0;
-   private _closeTimeout: NodeJS.Timer | undefined;
-   private _exitCode: number | undefined;
-+  private _onProcessExit = new EventEmitter2<number>();
-+  public get onProcessExit(): IEvent<number> { return this._onProcessExit.event; }
-+  public get isConpty(): boolean { return this._useConpty === true; }
-   private _conoutSocketWorker: ConoutConnection;
- 
-   private _fd: any;
-@@ -138,11 +142,18 @@
-     }
-   }
- 
-+  public killAfterOutputClosed(): Promise<void> {
-+    return this._conoutSocketWorker.disposeImmediately().then(() => this.kill());
-+  }
-+
-   public kill(): void {
-     // Tell the agent to kill the pty, this releases handles to the process
+@@ -143,6 +143,9 @@ export class WindowsPtyAgent {
      if (this._useConpty) {
        if (!this._useConptyDll) {
          this._inSocket.readable = false;
@@ -1519,7 +1341,7 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
          this._outSocket.readable = false;
          this._getConsoleProcessList().then(consoleProcessList => {
            consoleProcessList.forEach((pid: number) => {
-@@ -159,9 +170,10 @@
+@@ -159,9 +162,10 @@ export class WindowsPtyAgent {
          // Close the input write handle to signal the end of session.
          this._inSocket.destroy();
          (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);
@@ -1533,44 +1355,14 @@ diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
        }
      } else {
        // Because pty.kill closes the handle, it will kill most processes by itself.
-@@ -227,6 +239,7 @@
-       this._flushDataAndCleanUp();
-       this._outSocket.on('data', () => this._flushDataAndCleanUp());
-     }
-+    this._onProcessExit.fire(exitCode);
-   }
- 
-   private _flushDataAndCleanUp(): void {
 diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
+index 13f6c6d..eda63c8 100644
 --- a/src/windowsTerminal.ts
 +++ b/src/windowsTerminal.ts
-@@ -16,6 +16,12 @@
- 
- export class WindowsTerminal extends Terminal {
-   private _isReady: boolean;
-+  private _killRequested: boolean;
-+  private _killComplete: boolean;
-+  private _isPipeReady: boolean;
-+  private _exitEmitted = false;
-+  private _preconnectCleanupRequested = false;
-+  private _preconnectCleanup: Promise<void> | undefined;
-   private _deferreds: { run: () => void }[];
-   private _agent: WindowsPtyAgent;
- 
-@@ -43,6 +49,9 @@
- 
-     // If the terminal is ready
-     this._isReady = false;
-+    this._killRequested = false;
-+    this._killComplete = false;
-+    this._isPipeReady = false;
- 
-     // Functions that need to run after `ready` event is emitted.
-     this._deferreds = [];
-@@ -50,20 +59,58 @@
-     // Create new termal.
+@@ -51,6 +51,30 @@ export class WindowsTerminal extends Terminal {
      this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
      this._socket = this._agent.outSocket;
+-
 +
 +    // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
 +    this._socket.on('error', err => {
@@ -1595,42 +1387,15 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
 +        throw err;
 +      }
 +    });
- 
++
      // Not available until `ready` event emitted.
      this._pid = this._agent.innerPid;
      this._fd = this._agent.fd;
-     this._pty = this._agent.pty;
- 
-+    this._agent.onProcessExit(() => {
-+      if (this._killRequested) this._emitExit();
-+    });
-+    this._socket.once('close', () => {
-+      if (this._isPipeReady && !this._preconnectCleanupRequested && (!this._killRequested || !this._agent.isConpty || this._agent.exitCode !== undefined)) this._emitExit();
-+      this._close();
-+      if (this._killRequested && !this._isPipeReady) this._killAfterOutputClosed();
-+    });
-+
-     // The forked windows terminal is not available until `ready` event is
-     // emitted.
-     this._socket.on('ready_datapipe', () => {
-+      this._isPipeReady = true;
-+      if (this._killRequested) {
-+        this.kill();
-+        return;
-+      }
- 
-       // Run deferreds and set ready state once the first data event is received.
-       this._socket.once('data', () => {
-         // Wait until the first data event is fired then we can run deferreds.
--        if (!this._isReady) {
-+        if (!this._isReady && !this._killRequested) {
-           // Terminal is now ready and we can avoid having to defer method
-           // calls.
-           this._isReady = true;
-@@ -82,30 +129,6 @@
+@@ -82,25 +108,6 @@ export class WindowsTerminal extends Terminal {
          }
        });
- 
+-
++
 -      // Shutdown if `error` event is emitted.
 -      this._socket.on('error', err => {
 -        // Close terminal session.
@@ -1650,16 +1415,12 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
 -        }
 -      });
 -
--      // Cleanup after the socket is closed.
--      this._socket.on('close', () => {
--        this.emit('exit', this._agent.exitCode);
--        this._close();
--      });
- 
-     });
- 
-@@ -114,6 +137,19 @@
- 
+       // Cleanup after the socket is closed.
+       this._socket.on('close', () => {
+         this.emit('exit', this._agent.exitCode);
+@@ -114,6 +121,19 @@ export class WindowsTerminal extends Terminal {
+-
++
      this._readable = true;
      this._writable = true;
 +    // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
@@ -1675,174 +1436,7 @@ diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
 +        // The failing pipe may have raced process exit; the terminal is already unwritable.
 +      }
 +    });
- 
+-
++
      this._forwardEvents();
    }
-@@ -156,22 +192,52 @@
-   }
- 
-   public destroy(): void {
--    this._deferNoArgs(() => {
--      this.kill();
--    });
-+    this.kill();
-   }
- 
-   public kill(signal?: string): void {
--    this._deferNoArgs(() => {
--      if (signal) {
--        throw new Error('Signals not supported on windows.');
--      }
--      this._close();
--      this._agent.kill();
--    });
-+    if (signal) {
-+      throw new Error('Signals not supported on windows.');
-+    }
-+    // Retire input now; native close requires the forwarding pipe, not first output.
-+    this._killRequested = true;
-+    this._deferreds = [];
-+    this._close();
-+    if (this._killComplete || this._preconnectCleanup) return;
-+    if (this._preconnectCleanupRequested || (!this._isPipeReady && this._socket.destroyed)) {
-+      this._killAfterOutputClosed();
-+      return;
-+    }
-+    if (!this._isPipeReady) return;
-+    this._agent.kill();
-+    this._killComplete = true;
-+  }
-+
-+  private _emitExit(): void {
-+    if (this._exitEmitted) return;
-+    this._exitEmitted = true;
-+    this.emit('exit', this._agent.exitCode);
-+  }
-+
-+  private _killAfterOutputClosed(): void {
-+    if (!this._agent.isConpty || this._killComplete || this._preconnectCleanup) return;
-+    this._preconnectCleanupRequested = true;
-+    this._preconnectCleanup = this._agent.killAfterOutputClosed().then(() => {
-+      this._killComplete = true;
-+      if (this._agent.exitCode !== undefined) this._emitExit();
-+    }, error => {
-+      this._preconnectCleanup = undefined;
-+      if (this.listeners('error').length > 1) {
-+        this.emit('error', error);
-+      }
-+    });
-+    if (this._agent.exitCode !== undefined) this._emitExit();
-   }
- 
-   private _deferNoArgs<A>(deferredFn: () => void): void {
-+    if (this._killRequested) {
-+      return;
-+    }
-     // If the terminal is ready, execute.
-     if (this._isReady) {
-       deferredFn.call(this);
-@@ -185,6 +251,9 @@
-   }
- 
-   private _defer<A>(deferredFn: (arg: A) => void, arg: A): void {
-+    if (this._killRequested) {
-+      return;
-+    }
-     // If the terminal is ready, execute.
-     if (this._isReady) {
-       deferredFn.call(this, arg);
-
-diff --git a/src/windowsConoutConnection.ts b/src/windowsConoutConnection.ts
---- a/src/windowsConoutConnection.ts
-+++ b/src/windowsConoutConnection.ts
-@@ -32,6 +32,7 @@
-   private _worker: Worker;
-   private _drainTimeout: NodeJS.Timeout | undefined;
-   private _isDisposed: boolean = false;
-+  private _termination: Promise<void> | undefined;
- 
-   private _onReady = new EventEmitter2<void>();
-   public get onReady(): IEvent<void> { return this._onReady.event; }
-@@ -48,6 +49,7 @@
-     this._worker.on('message', (message: ConoutWorkerMessage) => {
-       switch (message) {
-         case ConoutWorkerMessage.READY:
-+          if (this._termination) return;
-           this._onReady.fire();
-           return;
-         default:
-@@ -65,7 +67,14 @@
-     this._drainDataAndClose();
-   }
- 
-+  disposeImmediately(): Promise<void> {
-+    this._isDisposed = true;
-+    if (this._drainTimeout) clearTimeout(this._drainTimeout);
-+    return this._destroySocket();
-+  }
-+
-   connectSocket(socket: Socket): void {
-+    if (this._termination) return;
-     socket.connect(getWorkerPipeName(this._conoutPipeName));
-   }
- 
-@@ -76,7 +85,10 @@
-     this._drainTimeout = setTimeout(() => this._destroySocket(), FLUSH_DATA_INTERVAL);
-   }
- 
--  private async _destroySocket(): Promise<void> {
--    await this._worker.terminate();
-+  private _destroySocket(): Promise<void> {
-+    if (!this._termination) {
-+      this._termination = this._worker.terminate().then(() => undefined);
-+    }
-+    return this._termination;
-   }
- }
-
-diff --git a/lib/windowsConoutConnection.js b/lib/windowsConoutConnection.js
---- a/lib/windowsConoutConnection.js
-+++ b/lib/windowsConoutConnection.js
-@@ -77,6 +77,7 @@
-         this._worker.on('message', function (message) {
-             switch (message) {
-                 case 1 /* READY */:
-+                    if (_this._termination) return;
-                     _this._onReady.fire();
-                     return;
-                 default:
-@@ -97,7 +98,13 @@
-         // Drain all data from the socket before closing
-         this._drainDataAndClose();
-     };
-+    ConoutConnection.prototype.disposeImmediately = function () {
-+        this._isDisposed = true;
-+        if (this._drainTimeout) clearTimeout(this._drainTimeout);
-+        return this._destroySocket();
-+    };
-     ConoutConnection.prototype.connectSocket = function (socket) {
-+        if (this._termination) return;
-         socket.connect(conout_1.getWorkerPipeName(this._conoutPipeName));
-     };
-     ConoutConnection.prototype._drainDataAndClose = function () {
-@@ -108,16 +115,10 @@
-         this._drainTimeout = setTimeout(function () { return _this._destroySocket(); }, FLUSH_DATA_INTERVAL);
-     };
-     ConoutConnection.prototype._destroySocket = function () {
--        return __awaiter(this, void 0, void 0, function () {
--            return __generator(this, function (_a) {
--                switch (_a.label) {
--                    case 0: return [4 /*yield*/, this._worker.terminate()];
--                    case 1:
--                        _a.sent();
--                        return [2 /*return*/];
--                }
--            });
--        });
-+        if (!this._termination) {
-+            this._termination = this._worker.terminate().then(function () { return undefined; });
-+        }
-+        return this._termination;
-     };
-     return ConoutConnection;
- }());
