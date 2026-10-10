@@ -5,6 +5,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
 import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
+import type { AgentDashboardTerminalEscape } from '../../../../shared/ui-chrome-types'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
@@ -28,10 +29,11 @@ const terminalHarness = vi.hoisted(() => ({
 }))
 
 const platformState = vi.hoisted(() => ({ value: 'linux' }))
-const storeState = vi.hoisted(() => ({
-  settings: null,
-  keybindings: {} as Record<string, string[]>
-}))
+type PreviewStoreState = {
+  settings: { experimentalAgentDashboardTerminalEscape?: AgentDashboardTerminalEscape } | null
+  keybindings: Record<string, string[]>
+}
+const storeState = vi.hoisted((): PreviewStoreState => ({ settings: null, keybindings: {} }))
 
 const imeHarness = vi.hoisted(() => ({
   forwarders: [] as {
@@ -157,6 +159,7 @@ describe('AgentTerminalPreview', () => {
     terminalHarness.instances.length = 0
     terminalHarness.userInputListener = null
     platformState.value = 'linux'
+    storeState.settings = null
     storeState.keybindings = {}
     imeHarness.forwarders.length = 0
     imeHarness.trackers.length = 0
@@ -464,6 +467,78 @@ describe('AgentTerminalPreview', () => {
     expect(keydown.defaultPrevented).toBe(true)
     expect(terminal.input).not.toHaveBeenCalled()
     expect(input).not.toHaveBeenCalled()
+  })
+
+  it('swallows Esc press, keypress and release in close-dialog mode', async () => {
+    storeState.settings = { experimentalAgentDashboardTerminalEscape: 'close-dialog' }
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+    const esc = (type: string): KeyboardEvent =>
+      new KeyboardEvent(type, { key: 'Escape', code: 'Escape', cancelable: true })
+
+    const keydown = esc('keydown')
+    expect(terminal.customKeyHandler!(keydown)).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(terminal.customKeyHandler!(esc('keypress'))).toBe(false)
+    expect(terminal.customKeyHandler!(esc('keyup'))).toBe(false)
+    expect(terminal.input).not.toHaveBeenCalled()
+  })
+
+  it('leaves typing, Enter and arrows to xterm in close-dialog mode', async () => {
+    storeState.settings = { experimentalAgentDashboardTerminalEscape: 'close-dialog' }
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    for (const key of ['y', 'Enter', 'ArrowUp']) {
+      expect(terminal.customKeyHandler!(new KeyboardEvent('keydown', { key }))).toBe(true)
+      expect(terminal.customKeyHandler!(new KeyboardEvent('keyup', { key }))).toBe(true)
+    }
+    expect(terminal.customKeyHandler!(new KeyboardEvent('keypress', { key: 'y' }))).toBe(true)
+  })
+
+  it('leaves Esc to xterm by default', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    expect(terminal.customKeyHandler!(new KeyboardEvent('keydown', { key: 'Escape' }))).toBe(true)
+    expect(terminal.customKeyHandler!(new KeyboardEvent('keyup', { key: 'Escape' }))).toBe(true)
+  })
+
+  it('leaves only an IME-owned Esc keydown to xterm in close-dialog mode', async () => {
+    storeState.settings = { experimentalAgentDashboardTerminalEscape: 'close-dialog' }
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const composing = new KeyboardEvent('keydown', { key: 'Escape', isComposing: true })
+    expect(terminal.customKeyHandler!(composing)).toBe(true)
+    // Why: xterm's _keyUp has no composition check, so it would encode a kitty release.
+    const composingRelease = new KeyboardEvent('keyup', { key: 'Escape', isComposing: true })
+    expect(terminal.customKeyHandler!(composingRelease)).toBe(false)
+  })
+
+  it('reads the Esc setting on every key, without reinstalling the handler', async () => {
+    storeState.settings = { experimentalAgentDashboardTerminalEscape: 'close-dialog' }
+    render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+    const handler = terminal.customKeyHandler!
+    const esc = (): KeyboardEvent => new KeyboardEvent('keydown', { key: 'Escape' })
+
+    expect(handler(esc())).toBe(false)
+    storeState.settings = null
+    expect(handler(esc())).toBe(true)
+    storeState.settings = { experimentalAgentDashboardTerminalEscape: 'close-dialog' }
+    expect(handler(esc())).toBe(false)
+    expect(terminal.customKeyHandler).toBe(handler)
   })
 
   it('keeps a native input-source chord from inserting text into the preview', async () => {

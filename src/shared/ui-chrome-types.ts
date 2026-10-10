@@ -25,6 +25,9 @@ export type FloatingTerminalCwdRequest = {
 /** Presentation mode for the experimental Agent Dashboard. */
 export type AgentDashboardMode = 'in-window' | 'popout'
 
+/** What Esc pressed inside the Agent Dashboard terminal dialog does. Absent means 'send-to-agent'. */
+export type AgentDashboardTerminalEscape = 'send-to-agent' | 'close-dialog'
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'

@@ -139,7 +139,8 @@ export function AgentDashboardDrawer({
       return
     }
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
+      // Why: a held Esc that just closed the terminal dialog must not repeat into closing the board.
+      if (event.key !== 'Escape' || event.repeat) {
         return
       }
       if (document.querySelector(AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR)) {

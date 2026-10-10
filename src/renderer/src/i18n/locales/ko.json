@@ -18934,7 +18934,9 @@
     "settingsLabel": "에이전트 대시보드 설정",
     "settings": {
       "showIdle": "유휴 에이전트 표시",
-      "showIdleCopy": "완료를 보고하지 않은 채 30분 동안 조용한 에이전트를 포함합니다. 기본적으로 숨겨집니다."
+      "showIdleCopy": "완료를 보고하지 않은 채 30분 동안 조용한 에이전트를 포함합니다. 기본적으로 숨겨집니다.",
+      "escapeClosesTerminal": "Esc로 터미널 보기 닫기",
+      "escapeClosesTerminalCopy": "Esc를 에이전트에 보내는 대신 에이전트의 터미널 보기를 닫습니다. 입력을 포함한 다른 키는 계속 에이전트로 전달됩니다. 기본적으로 꺼져 있습니다."
     },
     "host": {
       "sshNamed": "SSH 호스트 · {{host}}",

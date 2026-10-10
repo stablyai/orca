@@ -19101,7 +19101,9 @@
     "close": "Close dashboard",
     "settings": {
       "showIdle": "Show idle agents",
-      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default."
+      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default.",
+      "escapeClosesTerminal": "Close terminal view with Esc",
+      "escapeClosesTerminalCopy": "Esc closes an agent's terminal view instead of being sent to the agent. Other keys, including typing, still reach the agent. Off by default."
     },
     "settingsTooltip": "Board settings",
     "card": {

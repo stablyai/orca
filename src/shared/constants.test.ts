@@ -113,6 +113,7 @@ describe('getDefaultSettings', () => {
   it('keeps the agent dashboard popout disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardTerminalEscape).toBeUndefined()
   })
 
   it('defaults local Windows projects to the host runtime', () => {

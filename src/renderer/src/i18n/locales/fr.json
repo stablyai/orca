@@ -18987,7 +18987,9 @@
     "close": "Fermer le tableau de bord",
     "settings": {
       "showIdle": "Afficher les agents inactifs",
-      "showIdleCopy": "Inclure les agents restés silencieux pendant 30 minutes sans signaler leur achèvement. Masqués par défaut."
+      "showIdleCopy": "Inclure les agents restés silencieux pendant 30 minutes sans signaler leur achèvement. Masqués par défaut.",
+      "escapeClosesTerminal": "Fermer la vue du terminal avec Esc",
+      "escapeClosesTerminalCopy": "Esc ferme la vue du terminal d'un agent au lieu d'être envoyé à l'agent. Les autres touches, y compris la saisie, parviennent toujours à l'agent. Désactivé par défaut."
     },
     "settingsTooltip": "Paramètres du tableau",
     "card": {

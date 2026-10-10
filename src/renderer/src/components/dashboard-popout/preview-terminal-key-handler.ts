@@ -15,13 +15,15 @@ import {
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
 import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 /**
  * Installs the preview terminal's ONE custom key handler (xterm allows a single
  * attachCustomKeyEventHandler) covering copy/paste chords, the IME native-text
- * bypass, and the full pane shortcut policy. On macOS plain Cmd+V is left to
- * the Edit-menu accelerator, which reaches this window as an app-menu paste —
- * matching it here too would paste twice.
+ * bypass, the dashboard's close-dialog Esc swallow, and the full pane shortcut
+ * policy. On macOS plain Cmd+V is left to the Edit-menu accelerator, which
+ * reaches this window as an app-menu paste — matching it here too would paste
+ * twice.
  *
  * Returns a disposer for the Option-key location listeners the policy needs to
  * tell left Option from right.
@@ -94,6 +96,15 @@ export function installPreviewTerminalKeyHandler(args: {
     if (args.claimImeKeyEvent(event)) {
       // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
       return false
+    }
+    if (
+      event.key === 'Escape' &&
+      !(event.type === 'keydown' && isImeOwnedKeyboardEvent(event)) &&
+      useAppStore.getState().settings?.experimentalAgentDashboardTerminalEscape === 'close-dialog'
+    ) {
+      // Why: the dialog owns Esc in this mode; never encode a press, repeat or kitty release, even if another layer took the keydown.
+      // Only an IME-owned keydown passes (xterm cancels the composition after this handler); _keyUp has no composition check.
+      return consumeEvent(event)
     }
     if (event.type !== 'keydown') {
       if (event.type === 'keyup' && optionKittyReleases.settle(event)) {

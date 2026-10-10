@@ -93,6 +93,17 @@ describe('AgentDashboardDrawer', () => {
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
   })
 
+  it('ignores a held Esc so a repeat cannot close the board after the terminal dialog closed', () => {
+    render(<AgentDashboardDrawer statusBarVisible />)
+
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    fireEvent.keyDown(document.body, { key: 'Escape', repeat: true })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true)
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+  })
+
   type RevealAgent = (args: {
     repoId: string
     worktreeId: string

@@ -2,8 +2,12 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentDashboardTerminalEscape } from '../../../../shared/ui-chrome-types'
 
 const updateSettings = vi.fn()
+const menuState = vi.hoisted((): { terminalEscape: AgentDashboardTerminalEscape | undefined } => ({
+  terminalEscape: undefined
+}))
 
 vi.mock('@/store', () => ({
   useAppStore: (
@@ -11,6 +15,7 @@ vi.mock('@/store', () => ({
       settings: {
         experimentalAgentDashboardMode: 'in-window'
         experimentalAgentDashboardShowIdle: boolean
+        experimentalAgentDashboardTerminalEscape: AgentDashboardTerminalEscape | undefined
       }
       updateSettings: typeof updateSettings
     }) => unknown
@@ -18,7 +23,8 @@ vi.mock('@/store', () => ({
     selector({
       settings: {
         experimentalAgentDashboardMode: 'in-window',
-        experimentalAgentDashboardShowIdle: false
+        experimentalAgentDashboardShowIdle: false,
+        experimentalAgentDashboardTerminalEscape: menuState.terminalEscape
       },
       updateSettings
     })
@@ -48,18 +54,27 @@ afterEach(() => {
   container?.remove()
   container = null
   updateSettings.mockReset()
+  menuState.terminalEscape = undefined
 })
+
+function renderMenu(): HTMLDivElement {
+  const host = document.createElement('div')
+  container = host
+  document.body.appendChild(host)
+  root = createRoot(host)
+  act(() => {
+    root?.render(<AgentDashboardSettingsMenu onSwitchToPopout={vi.fn()} onOpenChange={vi.fn()} />)
+  })
+  return host
+}
+
+const ESCAPE_SWITCH = 'button[role="switch"][aria-label="Close terminal view with Esc"]'
 
 describe('AgentDashboardSettingsMenu', () => {
   it('owns the idle-agent visibility setting', () => {
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    act(() => {
-      root?.render(<AgentDashboardSettingsMenu onSwitchToPopout={vi.fn()} onOpenChange={vi.fn()} />)
-    })
+    const host = renderMenu()
 
-    const toggle = container.querySelector<HTMLButtonElement>(
+    const toggle = host.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Show idle agents"]'
     )
     expect(toggle).not.toBeNull()
@@ -67,5 +82,29 @@ describe('AgentDashboardSettingsMenu', () => {
     act(() => toggle?.click())
 
     expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardShowIdle: true })
+  })
+
+  it('turns on Esc-closes-terminal from the gear', () => {
+    const toggle = renderMenu().querySelector<HTMLButtonElement>(ESCAPE_SWITCH)
+    expect(toggle).not.toBeNull()
+    expect(toggle?.getAttribute('aria-checked')).toBe('false')
+
+    act(() => toggle?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      experimentalAgentDashboardTerminalEscape: 'close-dialog'
+    })
+  })
+
+  it('turns Esc-closes-terminal back off', () => {
+    menuState.terminalEscape = 'close-dialog'
+    const toggle = renderMenu().querySelector<HTMLButtonElement>(ESCAPE_SWITCH)
+    expect(toggle?.getAttribute('aria-checked')).toBe('true')
+
+    act(() => toggle?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      experimentalAgentDashboardTerminalEscape: 'send-to-agent'
+    })
   })
 })

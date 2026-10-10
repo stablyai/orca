@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -13,6 +13,8 @@ import {
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 
 /** Routing payload for focusing an agent's pane in the main window. */
@@ -98,14 +100,20 @@ function AgentTerminalFrame({
  * The near-fullscreen live-terminal dialog for one agent. Hosted by the BOARD,
  * not the card: sending a message flips the agent's bucket, which remounts its
  * card in another column — a card-owned dialog would close mid-conversation.
- * Only an explicit close (button, click-outside, Esc outside the terminal)
- * dismisses it.
+ * Only an explicit close (button, click-outside, Esc outside the terminal, or
+ * Esc inside it when the board's Esc setting is 'close-dialog') dismisses it.
  */
 export function AgentTerminalDialog({
   card,
   onOpenChange,
   onReveal
 }: AgentTerminalDialogProps): React.JSX.Element {
+  const terminalEscape = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboardTerminalEscape ?? 'send-to-agent'
+  )
+  // Why: an IME's cancelling Esc can redispatch as an unmarked Escape with the same code and
+  // timeStamp after compositionend; xterm drops it (_canceledKey), so it must not close either.
+  const imeEscapeRef = useRef<Pick<KeyboardEvent, 'code' | 'timeStamp'> | null>(null)
   return (
     <Dialog open={card !== null} onOpenChange={onOpenChange}>
       {card ? (
@@ -118,12 +126,27 @@ export function AgentTerminalDialog({
           // dialogs), which misaligns against this p-0 compact header; render
           // it inside the header row instead so it centers with the title.
           showCloseButton={false}
-          // Why: Esc must reach the agent (interrupt) when typing in the
-          // terminal, not dismiss the dialog; xterm has already consumed the
-          // keystroke by the time Radix sees it. Click-outside still closes.
+          onKeyDownCapture={({ nativeEvent: e }) => {
+            if (isImeOwnedKeyboardEvent(e) && (e.key === 'Escape' || e.code === 'Escape')) {
+              imeEscapeRef.current = { code: e.code, timeStamp: e.timeStamp }
+            }
+          }}
+          // Why: Radix hears Esc in document capture, BEFORE xterm's textarea listener,
+          // and xterm ignores defaultPrevented — preventDefault only keeps the dialog open.
           onEscapeKeyDown={(e) => {
-            if (e.target instanceof HTMLElement && e.target.closest('.xterm')) {
-              e.preventDefault()
+            if (!(e.target instanceof HTMLElement && e.target.closest('.xterm'))) {
+              return
+            }
+            e.preventDefault()
+            const imeEscape = imeEscapeRef.current
+            if (imeEscape?.code === e.code && imeEscape.timeStamp === e.timeStamp) {
+              imeEscapeRef.current = null
+              return
+            }
+            if (terminalEscape === 'close-dialog') {
+              // Why: stopping here keeps Esc from xterm; closing directly survives an earlier listener's preventDefault.
+              e.stopPropagation()
+              onOpenChange(false)
             }
           }}
           // Why: the preview focuses its terminal once the snapshot paints;
