@@ -26,7 +26,11 @@ describe('ModelManager download failures', () => {
   it('rejects failed model downloads so the caller can surface the error', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
-      const manifest = SPEECH_MODEL_CATALOG[0]
+      // Not index 0: the catalog also carries models the system downloads for us.
+      const manifest = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
+      if (!manifest) {
+        throw new Error('catalog has no downloadable local model')
+      }
       const errorHandlers: ((err: Error) => void)[] = []
       const request = {
         abort: vi.fn(() => request),
