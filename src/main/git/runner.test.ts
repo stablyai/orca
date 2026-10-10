@@ -237,11 +237,13 @@ describe('mergeGitConfigEnvProtocol', () => {
 describe('promptGuardGitEnv credential-interactivity disable (STA-1292)', () => {
   it('disables the GCM GUI prompt without nuking the credential helper', () => {
     const env = promptGuardGitEnv({ PATH: '/usr/bin' })
-    // GCM: never show the GUI, but still serve cached credentials.
+    // GCM: never show the GUI, but still serve cached credentials. The scalar
+    // GCM_INTERACTIVE 'never' covers credential.interactive/guiPrompt without
+    // emitting the indexed GIT_CONFIG_* protocol (#26594).
     expect(env.GCM_INTERACTIVE).toBe('never')
     const config = readGitConfigEnv(env)
-    expect(config['credential.interactive']).toBe('false')
-    expect(config['credential.guiPrompt']).toBe('false')
+    expect(config['credential.interactive']).toBeUndefined()
+    expect(config['credential.guiPrompt']).toBeUndefined()
     // Regression guard: we must NOT clear the helper — that would break
     // cached-credential auth for private repos.
     expect(config['credential.helper']).toBeUndefined()
@@ -255,8 +257,8 @@ describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () 
     const env = nonInteractiveGitEnv({ PATH: '/usr/bin' })
     expect(env.GCM_INTERACTIVE).toBe('never')
     const config = readGitConfigEnv(env)
-    expect(config['credential.interactive']).toBe('false')
-    expect(config['credential.guiPrompt']).toBe('false')
+    expect(config['credential.interactive']).toBeUndefined()
+    expect(config['credential.guiPrompt']).toBeUndefined()
     expect(config['credential.helper']).toBeUndefined()
     // Its own BatchMode SSH guard is still applied and unaffected.
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
@@ -269,11 +271,9 @@ describe('guard-env WSLENV forwarding (#7652)', () => {
     const keys = (env.WSLENV ?? '').split(':')
     expect(keys).toContain('GIT_TERMINAL_PROMPT')
     expect(keys).toContain('GCM_INTERACTIVE')
-    expect(keys).toContain('GIT_CONFIG_COUNT')
-    expect(keys).toContain('GIT_CONFIG_KEY_0')
-    expect(keys).toContain('GIT_CONFIG_VALUE_0')
-    expect(keys).toContain('GIT_CONFIG_KEY_1')
-    expect(keys).toContain('GIT_CONFIG_VALUE_1')
+    // The guard is scalar-only (#26594), so no indexed GIT_CONFIG_* keys exist
+    // to forward.
+    expect(keys).not.toContain('GIT_CONFIG_COUNT')
     // Windows askpass paths are meaningless inside a distro.
     expect(keys).not.toContain('GIT_ASKPASS')
     expect(keys).not.toContain('SSH_ASKPASS')

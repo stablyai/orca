@@ -225,8 +225,9 @@ describe('PtyHandler', () => {
     const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
     expect(revivedEnv.GIT_TERMINAL_PROMPT).toBe('0')
     expect(revivedEnv.GCM_INTERACTIVE).toBe('never')
-    expect(Object.values(revivedEnv)).toContain('credential.interactive')
-    expect(Object.values(revivedEnv)).toContain('credential.guiPrompt')
+    // Scalar-only guard (#26594): no indexed GIT_CONFIG_* values are emitted.
+    expect(Object.values(revivedEnv)).not.toContain('credential.interactive')
+    expect(Object.values(revivedEnv)).not.toContain('credential.guiPrompt')
   })
 
   it('revive treats legacy relay state as an ordinary unguarded terminal', async () => {

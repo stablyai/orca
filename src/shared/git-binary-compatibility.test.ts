@@ -716,19 +716,21 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await runGit(['-C', worktree, 'update-ref', '-d', backupRef, backupOid])
   })
 
-  it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
+  it('degrades credential config safely at the Git 2.31 boundary and survives credential-shaped scrubs', async () => {
     const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
     await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()
 
-    try {
-      const result = await runGit(['config', '--get', 'credential.interactive'], guardEnv)
-      expect(supports(2, 31)).toBe(true)
-      expect(result.stdout.trim()).toBe('false')
-    } catch {
-      // Git 2.25 ignores the indexed variables rather than rejecting commands;
-      // the scalar prompt guards still provide the baseline fail-fast behavior.
-      expect(supports(2, 31)).toBe(false)
+    // Why: downstream agents scrub credential-shaped env names before spawning
+    // shells (DSH's bare-substring KEY|PASSWORD|SECRET|TOKEN filter, #26594).
+    // A GIT_CONFIG_COUNT left behind without its indexed pairs is fatal on
+    // Git >= 2.31; the guard is scalar-only so the scrubbed env still runs.
+    const scrubbed: NodeJS.ProcessEnv = {}
+    for (const [key, value] of Object.entries(guardEnv)) {
+      if (!/KEY|PASSWORD|SECRET|TOKEN/i.test(key)) {
+        scrubbed[key] = value
+      }
     }
+    await expect(runGit(['status', '--short'], scrubbed)).resolves.toBeDefined()
   })
 
   // Why pin this: --verify swallows --end-of-options but --symbolic-full-name echoes

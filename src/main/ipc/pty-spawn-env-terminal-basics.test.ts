@@ -396,12 +396,13 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv()
       expect(env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
     })
-    it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
+    it('keeps the scalar Git prompt guards in a local agent terminal env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
       expect(env.GIT_TERMINAL_PROMPT).toBe('0')
       expect(env.GCM_INTERACTIVE).toBe('never')
-      expect(Object.values(env)).toContain('credential.interactive')
-      expect(Object.values(env)).toContain('credential.guiPrompt')
+      // Scalar-only guard (#26594): no indexed GIT_CONFIG_* values are emitted.
+      expect(Object.values(env)).not.toContain('credential.interactive')
+      expect(Object.values(env)).not.toContain('credential.guiPrompt')
     })
     it('guards a trusted local agent when its command uses a custom wrapper', async () => {
       const env = await spawnAndGetEnv(

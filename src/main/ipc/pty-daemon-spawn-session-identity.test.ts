@@ -88,9 +88,10 @@ describe('registerPtyHandlers', () => {
 
         expect(env.GIT_TERMINAL_PROMPT).toBe('0')
         expect(env.GCM_INTERACTIVE).toBe('never')
-        expect(env.GIT_CONFIG_COUNT).toBe('3')
-        expect(env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
-        expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+        // Scalar-only guard (#26594): the caller's indexed config survives
+        // untouched and no guard entries are appended.
+        expect(env.GIT_CONFIG_COUNT).toBe('1')
+        expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
       })
       it('passes the minted sessionId through to provider.spawn and host env setup', async () => {
         const daemonSpawn = setupDaemonAdapter()

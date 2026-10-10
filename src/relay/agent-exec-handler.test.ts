@@ -199,8 +199,10 @@ describe('AgentExecHandler', () => {
     expect(env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]).toBeUndefined()
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
     expect(env.GCM_INTERACTIVE).toBe('never')
-    expect(Object.values(env)).toContain('credential.interactive')
-    expect(Object.values(env)).toContain('credential.guiPrompt')
+    // Why scalar-only: the guard must not emit the indexed GIT_CONFIG_*
+    // protocol (issue #26594); GCM_INTERACTIVE 'never' covers both entries.
+    expect(Object.values(env)).not.toContain('credential.interactive')
+    expect(Object.values(env)).not.toContain('credential.guiPrompt')
   })
 
   it('guards wrapped agents after atomically replacing inherited indexed config', async () => {
@@ -241,10 +243,10 @@ describe('AgentExecHandler', () => {
       await expect(pending).resolves.toMatchObject({ exitCode: 0 })
       const env = spawnMock.mock.calls[0]?.[2]?.env as Record<string, string>
       expect(env.GIT_TERMINAL_PROMPT).toBe('0')
-      expect(env.GIT_CONFIG_COUNT).toBe('3')
+      expect(env.GCM_INTERACTIVE).toBe('never')
+      expect(env.GIT_CONFIG_COUNT).toBe('1')
       expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
-      expect(env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
-      expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
       expect(Object.values(env)).not.toContain('base.two')
     } finally {
       for (const key of keys) {

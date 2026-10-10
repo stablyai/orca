@@ -122,13 +122,15 @@ describe('createPtySubprocess', () => {
       const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
       expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
       expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
-      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('3')
+      // The guard is scalar-only (#26594): the daemon's inherited indexed
+      // config passes through untouched and no guard entries are appended.
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('1')
       expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
       expect(spawnEnv.GIT_CONFIG_VALUE_0).toBe('false')
-      expect(spawnEnv.GIT_CONFIG_KEY_1).toBe('credential.interactive')
-      expect(spawnEnv.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBeUndefined()
       expect((spawnEnv.WSLENV ?? '').split(':')).toContain('DAEMON_ONLY/p')
-      expect((spawnEnv.WSLENV ?? '').split(':')).toContain('GIT_CONFIG_KEY_2')
+      expect((spawnEnv.WSLENV ?? '').split(':')).toContain('GIT_CONFIG_KEY_0')
+      expect((spawnEnv.WSLENV ?? '').split(':')).not.toContain('GIT_CONFIG_KEY_2')
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
@@ -219,7 +221,8 @@ describe('createPtySubprocess', () => {
     const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
     expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
     expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
-    expect(Object.values(spawnEnv)).toContain('credential.interactive')
-    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
+    // Scalar-only guard (#26594): no indexed GIT_CONFIG_* values are emitted.
+    expect(Object.values(spawnEnv)).not.toContain('credential.interactive')
+    expect(Object.values(spawnEnv)).not.toContain('credential.guiPrompt')
   })
 })

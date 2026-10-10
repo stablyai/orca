@@ -7,8 +7,10 @@ import {
 function expectGuarded(env: Record<string, string>): void {
   expect(env.GIT_TERMINAL_PROMPT).toBe('0')
   expect(env.GCM_INTERACTIVE).toBe('never')
-  expect(Object.values(env)).toContain('credential.interactive')
-  expect(Object.values(env)).toContain('credential.guiPrompt')
+  // Why scalar-only assertions: the guard must not emit the indexed
+  // GIT_CONFIG_* protocol (issue #26594); GCM_INTERACTIVE 'never' covers it.
+  expect(Object.values(env)).not.toContain('credential.interactive')
+  expect(Object.values(env)).not.toContain('credential.guiPrompt')
   expect(Object.values(env)).not.toContain('credential.helper')
 }
 
@@ -100,7 +102,7 @@ describe('applyTerminalGitCredentialPromptGuard', () => {
     expect(env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]).toBeUndefined()
   })
 
-  it('preserves caller askpass and indexed config when appending the guard', () => {
+  it('preserves caller askpass and indexed config when applying the guard', () => {
     const env: Record<string, string> = {
       GIT_ASKPASS: '/usr/local/bin/user-askpass',
       GIT_CONFIG_COUNT: '1',
@@ -114,11 +116,11 @@ describe('applyTerminalGitCredentialPromptGuard', () => {
     })
 
     expect(env.GIT_ASKPASS).toBe('/usr/local/bin/user-askpass')
-    expect(env.GIT_CONFIG_COUNT).toBe('3')
+    expect(env.GIT_CONFIG_COUNT).toBe('1')
     expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
     expect(env.GIT_CONFIG_VALUE_0).toBe('http://proxy.invalid')
-    expect(env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
-    expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+    expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
+    expect(env.GCM_INTERACTIVE).toBe('never')
   })
 
   it('registers a guarded Windows agent environment for WSL forwarding', () => {
@@ -132,9 +134,7 @@ describe('applyTerminalGitCredentialPromptGuard', () => {
     const wslenvKeys = (env.WSLENV ?? '').split(':')
     expect(wslenvKeys).toContain('GIT_TERMINAL_PROMPT')
     expect(wslenvKeys).toContain('GCM_INTERACTIVE')
-    expect(wslenvKeys).toContain('GIT_CONFIG_COUNT')
-    expect(wslenvKeys).toContain('GIT_CONFIG_KEY_0')
-    expect(wslenvKeys).toContain('GIT_CONFIG_VALUE_0')
+    expect(wslenvKeys).not.toContain('GIT_CONFIG_COUNT')
     expect(wslenvKeys).not.toContain('GIT_ASKPASS')
     expect(wslenvKeys).not.toContain('SSH_ASKPASS')
   })

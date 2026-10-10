@@ -492,11 +492,12 @@ describe('PtyHandler', () => {
       const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
       expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
       expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
-      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('3')
+      // Scalar-only guard (#26594): the request's indexed config survives the
+      // merge untouched and no guard entries are appended.
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('1')
       expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('http.proxy')
-      expect(spawnEnv.GIT_CONFIG_KEY_1).toBe('credential.interactive')
-      expect(spawnEnv.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
-      expect(spawnEnv.GIT_CONFIG_KEY_3).toBeUndefined()
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+      expect(Object.values(spawnEnv)).not.toContain('base.two')
     } finally {
       for (const key of gitConfigKeys) {
         if (saved[key] === undefined) {
@@ -517,8 +518,9 @@ describe('PtyHandler', () => {
     const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
     expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
     expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
-    expect(Object.values(spawnEnv)).toContain('credential.interactive')
-    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
+    // Scalar-only guard (#26594): no indexed GIT_CONFIG_* values are emitted.
+    expect(Object.values(spawnEnv)).not.toContain('credential.interactive')
+    expect(Object.values(spawnEnv)).not.toContain('credential.guiPrompt')
   })
 
   it('leaves an ordinary Windows SSH user terminal unchanged', async () => {
