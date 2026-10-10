@@ -310,6 +310,39 @@ describe('unknown command surfaces a suggestion', () => {
     expect(stderr).toContain('orca worktree')
   })
 
+  it.each([
+    ['orchestration resume', 'orchestration reset'],
+    ['artifacts deset', 'artifacts delete'],
+    ['emulator ball', 'emulator kill'],
+    ['emulator showdown', 'emulator shutdown'],
+    ['orchestration worker-showw', 'orchestration worker-stop'],
+    ['orchestration worker-relay', 'orchestration worker-release'],
+    ['tab clues', 'tab close'],
+    ['environment rollbook', 'environment rollback'],
+    ['linear relation move', 'linear relation remove']
+  ])('keeps %s recovery away from %s before runtime lookup', async (input, forbidden) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    runtimeClientConstructorMock.mockClear()
+    try {
+      await main([...input.split(' '), '--json'], '/tmp/repo')
+      expect(process.exitCode).toBe(1)
+      const output = logSpy.mock.calls.flat().join('\n')
+      expect(output).toContain('invalid_argument')
+      expect(output).toContain('"runtimeId": null')
+      expect(output).not.toContain(`orca ${forbidden}`)
+      expect(output).not.toContain(`"${forbidden}"`)
+      expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    } finally {
+      logSpy.mockRestore()
+    }
+
+    await main(input.split(' '), '/tmp/repo')
+    expect(errorSpy.mock.calls.flat().join('\n')).not.toContain(`orca ${forbidden}`)
+    expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('reports a mistyped pre-command flag without swallowing the command', async () => {
     await main(['--jso', 'worktree', 'list'], '/tmp/repo')
 

@@ -15,26 +15,24 @@ function finalToken(path: string[]): string {
   return path.at(-1) ?? ''
 }
 
-// Why: destructiveness is declared on the spec (single source of truth); the
-// intent verbs are the final tokens of every destructive path/alias so the guard
-// tracks the registry instead of a hand-maintained list.
-function destructiveVerbs(specs: CommandSpec[]): Set<string> {
-  const verbs = new Set<string>()
+// Why: declared aliases connect equivalent destructive verbs without unlocking unrelated actions.
+function destructiveVerbFamilies(specs: CommandSpec[]): Map<string, Set<string>> {
+  const families = new Map<string, Set<string>>()
   for (const spec of specs) {
-    if (spec.destructive) {
-      for (const path of specPaths(spec)) {
-        verbs.add(finalToken(path))
-      }
+    if (!spec.destructive) {
+      continue
+    }
+    const verbs = specPaths(spec).map(finalToken)
+    const family = new Set(verbs.flatMap((verb) => [...(families.get(verb) ?? [verb])]))
+    for (const verb of family) {
+      families.set(verb, family)
     }
   }
-  return verbs
+  return families
 }
 
-// Why: deletion is irreversible and suggestions flow into agents' recovery
-// channel (--json nextSteps), so only unlock destructive candidates when the
-// input token is itself a near-miss of a destructive verb. #6303
-function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
-  for (const verb of verbs) {
+function intendsDestruction(inputToken: string, verbs: Set<string> | undefined): boolean {
+  for (const verb of verbs ?? []) {
     if (
       Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
       levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
@@ -62,16 +60,17 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
 // Why: same-depth matching avoids suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
-  // Why: only surface destructive commands when the user actually reached for one;
-  // otherwise a benign typo could recover into an irreversible action. #6303
-  const allowDestructive = intendsDestruction(finalToken(commandPath), destructiveVerbs(specs))
+  const families = destructiveVerbFamilies(specs)
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
     if (spec.hidden) {
       continue
     }
-    if (spec.destructive && !allowDestructive) {
+    if (
+      spec.destructive &&
+      !intendsDestruction(finalToken(commandPath), families.get(finalToken(spec.path)))
+    ) {
       continue
     }
     const candidates = specPaths(spec).map((path) =>

@@ -29,6 +29,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['environment', 'rollback'],
+    destructive: true,
     summary: 'Roll a managed Orca server back to its previous version',
     usage: 'orca environment rollback --environment <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
