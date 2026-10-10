@@ -43,11 +43,14 @@ type RichMarkdownImageStorage = {
   }
 }
 
+/** The image node view's storage; its context is validated on read. */
+export type RichMarkdownImageNodeStorage = { runtimeContext?: unknown }
+
 /** The stored image context; `null` (unresolved owner) is kept so readers refuse instead of going local. */
 export function readRichMarkdownImageRuntimeContext(
-  storage: object
+  storage: RichMarkdownImageNodeStorage
 ): RichMarkdownImageRuntimeContext | null | undefined {
-  const value: unknown = 'runtimeContext' in storage ? storage.runtimeContext : undefined
+  const value = storage.runtimeContext
   if (value === null) {
     return null
   }
