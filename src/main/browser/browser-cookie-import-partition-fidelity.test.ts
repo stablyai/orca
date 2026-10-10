@@ -220,7 +220,11 @@ describe('validated import partition fidelity', () => {
     expect(result.ok && result.summary).toMatchObject({
       importedCookies: 0,
       skippedCookies: 2,
-      partitionSkippedCookies: 2
+      partitionSkippedCookies: 2,
+      partitionSkipBreakdown: {
+        unreadableCookies: 1,
+        preservedRelatedCookies: 1
+      }
     })
     expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
     expect(remove).not.toHaveBeenCalled()

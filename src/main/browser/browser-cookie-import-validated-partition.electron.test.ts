@@ -32,6 +32,12 @@ type FixtureResult = {
       importedCookies: number
       skippedCookies: number
       partitionSkippedCookies?: number
+      partitionSkipBreakdown?: {
+        unreadableCookies: number
+        preservedRelatedCookies: number
+        domains: string[]
+        reasons: { reason: string; count: number }[]
+      }
       domains: string[]
     }
   }
@@ -225,6 +231,14 @@ describe('STA-4300: partitioned cookies on the validated (file/paste) import suc
     // The incompletely-described partition was skipped, not downgraded to an unpartitioned cookie.
     expect(result.afterUnreadable).toEqual([])
     expect(result.importResult.summary?.partitionSkippedCookies).toBe(1)
+    expect(result.importResult.summary?.partitionSkipBreakdown).toEqual({
+      unreadableCookies: 1,
+      preservedRelatedCookies: 0,
+      domains: ['partial.example'],
+      reasons: [
+        { reason: 'partitionKey.hasCrossSiteAncestor was missing or not a boolean', count: 1 }
+      ]
+    })
     expect(result.importResult.summary?.importedCookies).toBe(3)
     expect(result.importResult.summary?.domains).not.toContain('partial.example')
   }, 120_000)

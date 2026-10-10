@@ -1,3 +1,4 @@
+import { summarizePartitionSkips } from './browser-cookie-partition-summary'
 import { dialog, session, type BrowserWindow } from 'electron'
 import type {
   BrowserCookieImportResult,
@@ -63,6 +64,7 @@ export function cookieImportTarget(targetPartition: string): CookieImportTarget 
   }
 }
 
+/** Imports validated rows through the safe family write plan and summarizes its outcomes. */
 export async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
@@ -212,7 +214,12 @@ export async function importValidatedCookies(
     importedCookies: phase.importedCount,
     skippedCookies: skipped,
     ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
-    ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
+    ...(partitionSkipped > 0
+      ? {
+          partitionSkippedCookies: partitionSkipped,
+          partitionSkipBreakdown: summarizePartitionSkips(plan.skips)
+        }
+      : {}),
     domains: [...phase.domains].sort()
   }
 

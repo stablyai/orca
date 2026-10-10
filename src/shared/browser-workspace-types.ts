@@ -187,6 +187,13 @@ export type BrowserCookieImportSummary = {
   // Why (STA-4300): cookies whose source partition identity could not be read faithfully are
   // skipped rather than written unpartitioned, and a skip is only honest if it is reported.
   partitionSkippedCookies?: number
+  // Why: older hosts report one combined count; newer clients must retain that fallback.
+  partitionSkipBreakdown?: {
+    unreadableCookies: number
+    preservedRelatedCookies: number
+    domains: string[]
+    reasons: { reason: string; count: number }[]
+  }
   domains: string[]
   warning?:
     | {
