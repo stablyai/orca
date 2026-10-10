@@ -7,7 +7,8 @@ import {
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markKimiWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
 import {
@@ -43,8 +44,8 @@ export function launchedAgentHome(
  * Whether trust on a home or a disk root would also trust the folders below it, per each agent's
  * own lookup; such trust is never pre-written. Claude walks up parent folders (to the repo root,
  * else the disk root); Copilot and Qoder accept any trusted ancestor. Codex matches its start
- * folder or that folder's repo root, Antigravity the exact folder, and Cursor never inherits from
- * a home, a folder above one or a shallow path.
+ * folder or that folder's repo root, Antigravity and Kimi the exact folder, and Cursor never
+ * inherits from a home, a folder above one or a shallow path.
  */
 export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean> = {
   claude: true,
@@ -53,7 +54,8 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   copilot: true,
   qoder: true,
   'qoder-cn': true,
-  antigravity: false
+  antigravity: false,
+  kimi: false
 }
 
 /**
@@ -68,7 +70,8 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   copilot: false,
   qoder: false,
   'qoder-cn': false,
-  antigravity: false
+  antigravity: false,
+  kimi: false
 }
 
 // Why resolve() too: Claude stores it, and it collapses `..` even where realpath fails.
@@ -114,6 +117,8 @@ async function writePreset(
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
     case 'antigravity':
       return markAntigravityWorkspaceTrusted(storedPath, host.agentHome)
+    case 'kimi':
+      return markKimiWorkspaceTrusted(storedPath, host.agentHome)
   }
 }
 

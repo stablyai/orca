@@ -33,14 +33,16 @@ const PRESETS: readonly AgentTrustPreset[] = [
   'cursor',
   'copilot',
   'qoder',
-  'antigravity'
+  'antigravity',
+  'kimi'
 ]
 // Why these three: each accepts trust from any ancestor folder, so trust on a home covers it all.
 const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
 const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
   'codex',
   'cursor',
-  'antigravity'
+  'antigravity',
+  'kimi'
 ]
 
 let root: string
