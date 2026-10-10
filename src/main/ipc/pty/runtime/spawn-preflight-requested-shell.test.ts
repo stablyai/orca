@@ -20,7 +20,11 @@ vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcessModule>()
   return {
     ...actual,
-    spawnSync: (file: string, args: readonly string[], options: object) =>
+    spawnSync: (
+      file: string,
+      args: readonly string[],
+      options: ChildProcessModule.SpawnSyncOptions
+    ) =>
       /reg\.exe$/i.test(file) && args.includes('DefaultShell')
         ? {
             pid: 0,
