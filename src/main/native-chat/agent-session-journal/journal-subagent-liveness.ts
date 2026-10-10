@@ -68,12 +68,16 @@ export function staleSubagentRosterRevisions(
 }
 
 /** The row once the host lost the session running its live work: every working child and
- *  in-flight background task `unverifiable`, plain-text twins restated. Null when none is live. */
-export function lostLiveWorkJournalBody(body: AgentJournalItemBody): AgentJournalItemBody | null {
+ *  in-flight background task `unverifiable`, plain-text twins restated. Null when none is live.
+ *  `lostAt` is when a live host saw the session end; a reopened journal cannot know it. */
+export function lostLiveWorkJournalBody(
+  body: AgentJournalItemBody,
+  lostAt?: number
+): AgentJournalItemBody | null {
   if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
     return null
   }
-  return { ...body, blocks: settleBlocks(body.blocks) }
+  return { ...body, blocks: settleBlocks(body.blocks, lostAt) }
 }
 
 function hasStaleLiveWork(block: NativeChatBlock): boolean {
@@ -94,15 +98,15 @@ function hasLiveBackgroundTask(block: NativeChatBlock): block is NativeChatBackg
   )
 }
 
-/** No `settledAt`: the child stopped being observable at an unknown moment, and
- *  stamping the reopen would report the time the app was down as how long it
- *  ran. Readers already draw an unverifiable child with no stamp as having no
- *  known run length. */
-function settleBlocks(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
+/** Without `lostAt`, no `settledAt`: the child stopped being observable at an
+ *  unknown moment, and stamping the reopen would report the time the app was
+ *  down as how long it ran. Readers already draw an unverifiable child with no
+ *  stamp as having no known run length. */
+function settleBlocks(blocks: readonly NativeChatBlock[], lostAt?: number): NativeChatBlock[] {
   const backgroundTaskTwinText = new Map<string, string>()
   const settled = blocks.map((block) => {
     if (hasWorkingChild(block)) {
-      return settleGroup(block)
+      return settleGroup(block, lostAt)
     }
     if (hasLiveBackgroundTask(block)) {
       const next = settleBackgroundTask(block)
@@ -134,12 +138,19 @@ function settleBlocks(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
   )
 }
 
-function settleGroup(block: NativeChatSubagentGroupBlock): NativeChatSubagentGroupBlock {
+function settleGroup(
+  block: NativeChatSubagentGroupBlock,
+  lostAt?: number
+): NativeChatSubagentGroupBlock {
   return {
     ...block,
     agents: block.agents.map((agent) =>
       normalizeSubagentState(agent.state) === 'working'
-        ? { ...agent, state: 'unverifiable' as const }
+        ? {
+            ...agent,
+            state: 'unverifiable' as const,
+            ...(lostAt !== undefined ? { settledAt: lostAt } : {})
+          }
         : agent
     )
   }

@@ -1,5 +1,8 @@
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
+import {
+  MAX_SUBAGENT_FIELD_CHARS,
+  canReplaceSubagentState
+} from '../../shared/native-chat-subagent-summary'
 
 const MAX_CHILDREN = 128
 const MAX_SETTLED_TURNS = 256
@@ -87,7 +90,11 @@ export class CodexSubagentExecutions {
     ) {
       return null
     }
-    const execution = { turnId, state: settled ?? state }
+    // A turn's first outcome latches, except lost contact: a later verdict still says how it ended.
+    const execution = {
+      turnId,
+      state: settled !== undefined && !canReplaceSubagentState(settled, state) ? settled : state
+    }
     if (state !== 'working') {
       this.settledTurns.set(key, execution.state)
       while (this.settledTurns.size > MAX_SETTLED_TURNS) {

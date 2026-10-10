@@ -1,0 +1,538 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ACP subagent timeline rows (characterization) > a group past 64 children drops the rest 1`] = `
+{
+  "events": 1,
+  "has": [
+    true,
+    false,
+  ],
+  "lastLabels": "l":"X 60","state":"working","startedAt":1010},{"id":"c60","label":"X 61","state":"working","startedAt":1010},{"id":"c61","label":"X 62","state":"working","startedAt":1010},{"id":"c62","label":"X 63","state":"working","startedAt":1010},{"id":"c63","label":"X 64","state":"working","startedAt":1010}]}]",
+}
+`;
+
+exports[`ACP subagent timeline rows (characterization) > children sharing a label, a provider-named ordinal, and outcomes in one batch 1`] = `
+[
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 4 subagents",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Audit",
+                "startedAt": 1010,
+                "state": "working",
+              },
+              {
+                "id": "a2",
+                "label": "Audit 2",
+                "startedAt": 1010,
+                "state": "working",
+              },
+              {
+                "id": "a3",
+                "label": "Audit 2 2",
+                "startedAt": 1010,
+                "state": "working",
+              },
+              {
+                "id": "a4",
+                "label": "subagent",
+                "startedAt": 1010,
+                "state": "working",
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+      ],
+      "type": "item.update",
+    },
+  ],
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 4 subagents (1 failed)",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Audit",
+                "settledAt": 1020,
+                "startedAt": 1010,
+                "state": "stopped",
+              },
+              {
+                "id": "a2",
+                "label": "Audit 2",
+                "settledAt": 1020,
+                "startedAt": 1010,
+                "state": "completed",
+              },
+              {
+                "id": "a3",
+                "label": "Audit 2 2",
+                "settledAt": 1020,
+                "startedAt": 1010,
+                "state": "failed",
+              },
+              {
+                "id": "a4",
+                "label": "subagent",
+                "startedAt": 1010,
+                "state": "working",
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+      ],
+      "type": "item.update",
+    },
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "late",
+            "type": "text",
+          },
+        ],
+        "kind": "message",
+        "role": "assistant",
+      },
+      "item": "subagent-result:a2",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "producer": {
+        "agentId": "a2",
+        "producerKind": "agent",
+      },
+      "type": "item.update",
+    },
+  ],
+]
+`;
+
+exports[`ACP subagent timeline rows (characterization) > knownOnly updates, turn from the update, and the no-turn group 1`] = `
+{
+  "has": [
+    false,
+    true,
+    true,
+  ],
+  "log": [
+    [],
+    [
+      {
+        "body": {
+          "blocks": [
+            {
+              "text": "Kicked off 1 subagent",
+              "type": "text",
+            },
+            {
+              "agents": [
+                {
+                  "id": "a1",
+                  "label": "Spawned",
+                  "startedAt": 1020,
+                  "state": "working",
+                },
+              ],
+              "groupId": "turn-0",
+              "type": "subagent-group",
+            },
+          ],
+          "kind": "message",
+          "role": "system",
+        },
+        "item": "subagents:turn-0",
+        "join": {
+          "thread": "parent",
+          "turn": "turn-0",
+        },
+        "subagentIdentities": [
+          "a1",
+        ],
+        "type": "item.update",
+      },
+    ],
+    [
+      {
+        "body": {
+          "blocks": [
+            {
+              "text": "Kicked off 1 subagent",
+              "type": "text",
+            },
+            {
+              "agents": [
+                {
+                  "id": "a2",
+                  "label": "Loose",
+                  "startedAt": 1030,
+                  "state": "working",
+                },
+              ],
+              "groupId": "thread",
+              "type": "subagent-group",
+            },
+          ],
+          "kind": "message",
+          "role": "system",
+        },
+        "item": "subagents:thread",
+        "join": {
+          "thread": "parent",
+        },
+        "subagentIdentities": [
+          "a2",
+        ],
+        "type": "item.update",
+      },
+    ],
+    [
+      {
+        "body": {
+          "blocks": [
+            {
+              "text": "Ran 1 subagent (1 stopped)",
+              "type": "text",
+            },
+            {
+              "agents": [
+                {
+                  "id": "a1",
+                  "label": "Spawned",
+                  "settledAt": 1040,
+                  "startedAt": 1020,
+                  "state": "stopped",
+                },
+              ],
+              "groupId": "turn-0",
+              "type": "subagent-group",
+            },
+          ],
+          "kind": "message",
+          "role": "system",
+        },
+        "item": "subagents:turn-0",
+        "join": {
+          "thread": "parent",
+          "turn": "turn-0",
+        },
+        "subagentIdentities": [
+          "a1",
+        ],
+        "type": "item.update",
+      },
+    ],
+  ],
+}
+`;
+
+exports[`ACP subagent timeline rows (characterization) > more than 32 settled groups, then a late update for an evicted child 1`] = `
+{
+  "has": [
+    true,
+    true,
+    true,
+  ],
+  "tail": [
+    [
+      {
+        "body": {
+          "blocks": [
+            {
+              "text": "Kicked off 1 subagent",
+              "type": "text",
+            },
+            {
+              "agents": [
+                {
+                  "id": "live",
+                  "label": "Live",
+                  "startedAt": 1350,
+                  "state": "working",
+                },
+              ],
+              "groupId": "turn-live",
+              "type": "subagent-group",
+            },
+          ],
+          "kind": "message",
+          "role": "system",
+        },
+        "item": "subagents:turn-live",
+        "join": {
+          "thread": "parent",
+          "turn": "turn-live",
+        },
+        "subagentIdentities": [
+          "live",
+        ],
+        "type": "item.update",
+      },
+    ],
+    [],
+    [],
+  ],
+}
+`;
+
+exports[`ACP subagent timeline rows (characterization) > one child: working, tokens, completed with its reply, replayed 1`] = `
+[
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Explore",
+                "startedAt": 1010,
+                "state": "working",
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+      ],
+      "type": "item.update",
+    },
+  ],
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Explore",
+                "startedAt": 1010,
+                "state": "working",
+                "tokens": 0,
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+      ],
+      "type": "item.update",
+    },
+  ],
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Explore",
+                "startedAt": 1010,
+                "state": "working",
+                "tokens": 200,
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+      ],
+      "type": "item.update",
+    },
+  ],
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Ran 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Explore",
+                "settledAt": 1040,
+                "startedAt": 1010,
+                "state": "completed",
+                "tokens": 200,
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+      ],
+      "type": "item.update",
+    },
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Found it",
+            "type": "text",
+          },
+        ],
+        "kind": "message",
+        "role": "assistant",
+      },
+      "item": "subagent-result:a1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "producer": {
+        "agentId": "a1",
+        "producerKind": "agent",
+      },
+      "type": "item.update",
+    },
+  ],
+  [],
+  [],
+]
+`;
+
+exports[`ACP subagent timeline rows (characterization) > writes nothing after dispose 1`] = `
+{
+  "has": false,
+  "log": [
+    [
+      {
+        "body": {
+          "blocks": [
+            {
+              "text": "Kicked off 1 subagent",
+              "type": "text",
+            },
+            {
+              "agents": [
+                {
+                  "id": "a1",
+                  "label": "A",
+                  "startedAt": 1010,
+                  "state": "working",
+                },
+              ],
+              "groupId": "turn-1",
+              "type": "subagent-group",
+            },
+          ],
+          "kind": "message",
+          "role": "system",
+        },
+        "item": "subagents:turn-1",
+        "join": {
+          "thread": "parent",
+          "turn": "turn-1",
+        },
+        "subagentIdentities": [
+          "a1",
+        ],
+        "type": "item.update",
+      },
+    ],
+    [],
+  ],
+}
+`;

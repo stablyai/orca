@@ -157,8 +157,9 @@ describe('Grok child outcome during a full host Stop', () => {
     const [unavailable] = await fixture.rosters()
     expect(fixture.childWork.views()).toMatchObject([{ membership: 'settled', outcome: 'unknown' }])
     expect(unavailable.row.itemId).toBe(fixture.original.row.itemId)
+    // Contact was lost when the session ended, a moment the host observed.
     expect(unavailable.group.agents).toEqual([
-      { ...fixture.original.group.agents[0], state: 'unverifiable' }
+      { ...fixture.original.group.agents[0], state: 'unverifiable', settledAt: expect.any(Number) }
     ])
     fixture.agent.notify(fixture.finished.method, fixture.finished.params)
     expect((await fixture.rosters())[0].group).toEqual(unavailable.group)

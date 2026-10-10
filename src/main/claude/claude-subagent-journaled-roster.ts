@@ -1,120 +1,60 @@
 // What earlier runs of this session left of the Claude subagent roster, re-derived
 // from the rows they journaled.
 //
-// The roster lives in one provider process, but everything it writes outlives that
-// process: a group row keeps a restart-stable identity, and every agent row names its
-// canonical id beside the call its frames arrived under. A run that started from
-// nothing re-rostered a resumed child in a second row, restarted its attempts, lost
-// the alias its resumed frames still carry, and rewrote the one group row no turn
-// owns from empty. So a run reads what earlier runs left instead: derived, never
-// stored, so it cannot disagree with the rows it came from.
+// Beyond the group rows every agent's tracker inherits, a Claude run needs two more
+// facts earlier runs recorded on their child rows: the canonical task id each spawn
+// call resolved to (a resumed child's frames still carry the old call), and the
+// latest run of each child. Both come from the same read of the journal.
 
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalProducerLinkage
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalProducerLinkage,
+  AgentJournalTurnScope
 } from '../../shared/agent-session-journal-types'
-import { isSubagentGroupBlock } from '../../shared/native-chat-types'
 import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { JournaledSubagentGroups } from '../native-chat/subagent-tracker/journaled-subagent-groups'
+import type { JournaledSubagentSource } from '../native-chat/subagent-tracker/subagent-tracker-types'
 import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
-import {
-  claudeSubagentGroupIdentity,
-  type JournaledClaudeSubagentGroup
-} from './claude-subagent-group-row'
+
+/** Durable journal identity for a group's row — stable across revisions and
+ *  across a restart, so replay finds the same row instead of appending a new one. */
+export function claudeSubagentGroupIdentity(groupId: string): AgentJournalItemIdentity {
+  return { provider: 'orca', clientMessageId: `claude-subagents:${groupId}` }
+}
 
 /** What the roster asks of earlier runs. */
-export type ClaudeJournaledRosterSource = {
+export type ClaudeJournaledRosterSource = JournaledSubagentSource<AgentJournalTurnScope> & {
   /** The task id an earlier run resolved this spawn call to. */
   canonical: (toolUseId: string) => string | null
-  /** The group row an earlier run last listed this child in. */
-  groupOf: (entryId: string) => string | null
-  /** An earlier run's row for one group, handed over once: after that the
-   *  roster's own copy is the newer one. */
-  claimGroup: (groupId: string) => JournaledClaudeSubagentGroup | null
-  /** The latest run of this child any row records; 1 when none says more. */
-  attempt: (agentId: string) => number
 }
 
-type JournaledRosterReading = {
+type ClaudeAgentRows = {
   canonicalByToolUse: Map<string, string>
   attemptByAgent: Map<string, number>
-  rowsByGroup: Map<string, JournaledClaudeSubagentGroup>
-  groupByEntry: Map<string, string>
 }
 
-/**
- * Read once per bound journal epoch. Before the journal is bound nothing is read and
- * nothing is kept, so the first read after bind still sees every row.
- */
 export class ClaudeJournaledRoster implements ClaudeJournaledRosterSource {
-  private journal: StructuredAgentSessionLinkageJournal | null = null
-  private epoch: string | null = null
-  private reading: JournaledRosterReading | null = null
+  private readonly rows: JournaledSubagentGroups<ClaudeAgentRows>
 
-  constructor(private readonly bound: () => StructuredAgentSessionLinkageJournal | null) {}
+  constructor(bound: () => StructuredAgentSessionLinkageJournal | null) {
+    this.rows = new JournaledSubagentGroups(bound, claudeSubagentGroupIdentity, {
+      create: () => ({ canonicalByToolUse: new Map(), attemptByAgent: new Map() }),
+      visit: readAgentRow
+    })
+  }
 
   canonical = (toolUseId: string): string | null =>
-    this.current()?.canonicalByToolUse.get(toolUseId) ?? null
+    this.rows.extra()?.canonicalByToolUse.get(toolUseId) ?? null
 
-  groupOf = (entryId: string): string | null => this.current()?.groupByEntry.get(entryId) ?? null
+  groupOf = (entryId: string): string | null => this.rows.groupOf(entryId)
 
-  claimGroup = (groupId: string): JournaledClaudeSubagentGroup | null => {
-    const reading = this.current()
-    const row = reading?.rowsByGroup.get(groupId) ?? null
-    reading?.rowsByGroup.delete(groupId)
-    return row
-  }
+  claimGroup = (groupId: string) => this.rows.claimGroup(groupId)
 
-  attempt = (agentId: string): number => this.current()?.attemptByAgent.get(agentId) ?? 1
-
-  private current(): JournaledRosterReading | null {
-    const journal = this.bound()
-    if (!journal) {
-      return null
-    }
-    if (!this.reading || journal !== this.journal || journal.epoch !== this.epoch) {
-      this.journal = journal
-      this.epoch = journal.epoch
-      this.reading = readJournaledRoster(journal)
-    }
-    return this.reading
-  }
-}
-
-function readJournaledRoster(
-  journal: StructuredAgentSessionLinkageJournal
-): JournaledRosterReading {
-  const reading: JournaledRosterReading = {
-    canonicalByToolUse: new Map(),
-    attemptByAgent: new Map(),
-    rowsByGroup: new Map(),
-    groupByEntry: new Map()
-  }
-  // A child two rows list (only an older build wrote that) is the later-created row's: a turn's
-  // row is created with its turn, so that is where it last ran.
-  const listedAt = new Map<string, number>()
-  journal.visitItemsWithLinkage((itemId, sequence, body, attribution) => {
-    readAgentRow(reading, attribution)
-    const group = body.kind === 'message' ? body.blocks.find(isSubagentGroupBlock) : undefined
-    if (!group || itemId !== agentJournalItemKey(claudeSubagentGroupIdentity(group.groupId))) {
-      return
-    }
-    reading.rowsByGroup.set(group.groupId, {
-      entries: group.agents,
-      turnScope: attribution.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
-    })
-    for (const entry of group.agents) {
-      if ((listedAt.get(entry.id) ?? -1) < sequence) {
-        listedAt.set(entry.id, sequence)
-        reading.groupByEntry.set(entry.id, group.groupId)
-      }
-    }
-  })
-  return reading
+  attempt = (agentId: string): number => this.rows.extra()?.attemptByAgent.get(agentId) ?? 1
 }
 
 function readAgentRow(
-  reading: JournaledRosterReading,
+  reading: ClaudeAgentRows,
   { agentId, providerParentRef, producerKind, attempt }: AgentJournalProducerLinkage
 ): void {
   if (producerKind !== 'agent' || agentId === undefined) {

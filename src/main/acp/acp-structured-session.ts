@@ -88,7 +88,8 @@ export function asReattachHistory(params: unknown): unknown {
 export function closeAcpSessionJournal(
   session: AcpStructuredSession,
   reason: string,
-  verdict: StructuredAgentSessionTurnVerdict = UNVERIFIABLE_TURN_VERDICT
+  verdict: StructuredAgentSessionTurnVerdict = UNVERIFIABLE_TURN_VERDICT,
+  endedAt: number = Date.now()
 ): void {
   if (session.journalClosed !== null) {
     return
@@ -96,7 +97,7 @@ export function closeAcpSessionJournal(
   session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason)
-  session.lane.apply([{ type: 'session.ended', verdict }])
+  session.lane.apply([{ type: 'session.ended', verdict, endedAt }])
   session.lane.flush()
   session.lane.dispose()
   session.unbindReadingControl?.()
@@ -129,7 +130,8 @@ export function endAcpStructuredSession(
     reason,
     session.closeRequested
       ? UNVERIFIABLE_TURN_VERDICT
-      : { state: 'interrupted', completedAt: observedAt }
+      : { state: 'interrupted', completedAt: observedAt },
+    observedAt
   )
   const detail = stderr ? providerDiagnostic(stderr, 'person') : undefined
   onEvent?.({

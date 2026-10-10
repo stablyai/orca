@@ -159,7 +159,7 @@ describe('Claude shared settled-only roster retention', () => {
             startedAt: 1,
             settledAt: 2
           })),
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          placement: AGENT_JOURNAL_THREAD_SCOPE
         }
       },
       attempt: () => 4

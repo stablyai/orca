@@ -15,7 +15,8 @@ import type { AgentSessionJournal } from '../native-chat/agent-session-journal/j
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { claudeSubagentGroupBody, claudeSubagentGroupIdentity } from './claude-subagent-group-row'
+import { subagentGroupJournalBody } from '../native-chat/agent-session-journal/journal-subagent-group-body'
+import { claudeSubagentGroupIdentity } from './claude-subagent-journaled-roster'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -210,7 +211,7 @@ async function journalAnOlderBuildListedTwice(): Promise<AgentSessionJournal> {
   ] as const) {
     older.sink.appendItem(
       claudeSubagentGroupIdentity(groupId),
-      claudeSubagentGroupBody(groupId, agents),
+      subagentGroupJournalBody(groupId, agents),
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }

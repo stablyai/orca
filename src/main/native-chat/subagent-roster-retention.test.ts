@@ -133,7 +133,7 @@ it('keeps only the accessed inherited row during a trim and re-derives it on the
   for (let index = 0; index < 70; index++) {
     const inherited = group(`inherited-${index}`, 'completed', 1)
     groups.set(inherited.groupId, inherited)
-    retention.trim([inherited], inherited.groupId)
+    retention.trim([inherited], (groupId) => groupId === inherited.groupId)
     expect(groups.size).toBe(33)
     expect(groups.has(inherited.groupId)).toBe(true)
   }
@@ -142,7 +142,7 @@ it('keeps only the accessed inherited row during a trim and re-derives it on the
   expect(retention.hasSettled('inherited-69:0')).toBe(true)
   const resumed = group('resumed', 'completed', 1)
   groups.set(resumed.groupId, resumed)
-  retention.trim([resumed], resumed.groupId)
+  retention.trim([resumed], (groupId) => groupId === resumed.groupId)
   resumed.entries.set('resumed:0', { id: 'resumed:0', label: 'resumed', state: 'working' })
   retention.trim([resumed])
   expect(groups.has(resumed.groupId)).toBe(true)
