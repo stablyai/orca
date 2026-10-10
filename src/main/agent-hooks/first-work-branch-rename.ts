@@ -177,7 +177,7 @@ async function runAutoRename(
   }
   const worktreePath = parsed.worktreePath
 
-  // Why: a runtime row's connectionId names the server's own SSH target; that server owns its hooks and renames.
+  // Why: a runtime row's connectionId names the server's own SSH target; that host owns the branch, never this client.
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
   if (route.kind === 'runtime') {
     return stop(`branch is owned by ${route.hostId}`)
