@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
-  SEAT_FEED_DB_ADMIT_FRESH_MS,
   SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
   ShadowSeatDirectory,
   startShadowSeatPoller,
@@ -530,8 +529,10 @@ describe('RelayAssignmentStore.seatFeedCells', () => {
   })
 })
 
-describe('ShadowSeatDirectory.admitsDatabaseNow', () => {
-  const response = (admitModeEffective?: 'db' | 'reserve'): SeatFeedResponse => ({
+describe('ShadowSeatDirectory.placementModeOf', () => {
+  const response = (
+    modes: { admitModeEffective?: 'db' | 'reserve'; admitModeRaw?: 'db' | 'reserve' } = {}
+  ): SeatFeedResponse => ({
     v: 1,
     cellId: 'cell-a',
     incarnation: INCARNATION,
@@ -541,23 +542,17 @@ describe('ShadowSeatDirectory.admitsDatabaseNow', () => {
     intake: { perSec: 100, burst: 20, tokens: 20 },
     flagsApplied: { generation: 3, flags: { admitMode: 'reserve' } },
     full: [],
-    ...(admitModeEffective ? { admitModeEffective } : {})
+    ...modes
   })
 
-  // A tripped dead-man answers db under a reserve switch; only a fresh answer saying so counts.
-  it('is true only for a fresh live answer whose effective mode is db', () => {
+  // A tripped cell re-registering still reports reserve as effective; placement reads raw db.
+  it('reads the raw mode when the cell sends it, and the effective mode otherwise', () => {
     const directory = new ShadowSeatDirectory()
     directory.setCells(['cell-a'])
-    expect(directory.admitsDatabaseNow('cell-a', 1_000)).toBe(false)
-    directory.apply('cell-a', response('db'), 1_000, 1_000)
-    expect(directory.admitsDatabaseNow('cell-a', 1_000)).toBe(true)
-    expect(directory.admitsDatabaseNow('cell-a', 1_000 + SEAT_FEED_DB_ADMIT_FRESH_MS + 1)).toBe(false)
-    directory.apply('cell-a', response('reserve'), 2_000, 2_000)
-    expect(directory.admitsDatabaseNow('cell-a', 2_000)).toBe(false)
-    directory.apply('cell-a', response(), 3_000, 3_000)
-    expect(directory.admitsDatabaseNow('cell-a', 3_000)).toBe(false)
-    directory.apply('cell-a', response('db'), 4_000, 4_000)
-    directory.fail('cell-a', 'timeout')
-    expect(directory.admitsDatabaseNow('cell-a', 4_000)).toBe(false)
+    directory.apply('cell-a', response({ admitModeEffective: 'reserve', admitModeRaw: 'db' }), 1_000, 1_000)
+    expect(directory.placementModeOf('cell-a')).toBe('db')
+    expect(directory.admitModeOf('cell-a')).toBe('reserve')
+    directory.apply('cell-a', response({ admitModeEffective: 'reserve' }), 2_000, 2_000)
+    expect(directory.placementModeOf('cell-a')).toBe('reserve')
   })
 })

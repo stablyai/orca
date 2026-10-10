@@ -115,7 +115,7 @@ export class ReserveAssignment {
     return this.input.cells().flatMap((cell) => {
       const state = directory.cellState(cell.cellId)
       if (!state) return []
-      const reserve = directory.admitModeOf(cell.cellId) === 'reserve'
+      const reserve = directory.placementModeOf(cell.cellId) === 'reserve'
       return [
         {
           cellId: cell.cellId,
@@ -136,7 +136,7 @@ export class ReserveAssignment {
   }
 
   private hasReserveCells(): boolean {
-    return this.input.directory.cellIds().some((cellId) => this.input.directory.admitModeOf(cellId) === 'reserve')
+    return this.input.directory.cellIds().some((cellId) => this.input.directory.placementModeOf(cellId) === 'reserve')
   }
 
   async plan(identity: Identity, request: { reconnect: boolean; region: RelayRegion }): Promise<ReservePlan> {
@@ -209,7 +209,7 @@ export class ReserveAssignment {
       await this.placeFresh(identity, request.region, epochFloor, seats)
     // Where the host was last seen decides who owns it: a database-mode cell keeps today's
     // path, sticky included; only a fresh placement may be booked on a reserve-mode cell.
-    const lastOnReserve = lastCellId !== undefined && directory.admitModeOf(lastCellId) === 'reserve'
+    const lastOnReserve = lastCellId !== undefined && directory.placementModeOf(lastCellId) === 'reserve'
     if (!lastOnReserve && (seats.length > 0 || left !== undefined || row !== null)) {
       return { kind: 'database', epochFloor, placeFresh }
     }

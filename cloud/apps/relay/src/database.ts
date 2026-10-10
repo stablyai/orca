@@ -366,6 +366,15 @@ CREATE TABLE IF NOT EXISTS relay_cell_admit_modes (
   updated_at BIGINT NOT NULL
 );
 
+-- Step 5: written by each cell, its raw mode (switch file and dead-man latch). The database
+-- path places on a reserve cell only while this row, from its current process, says db.
+CREATE TABLE IF NOT EXISTS relay_cell_admit_effective (
+  cell_id TEXT PRIMARY KEY,
+  cell_incarnation TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('db', 'reserve')),
+  updated_at BIGINT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS relay_admission_selectors (
   selector_id TEXT PRIMARY KEY,
   generation BIGINT NOT NULL,

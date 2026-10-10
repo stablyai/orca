@@ -152,6 +152,8 @@ export class RelayCellInReserveModeError extends Error {
 // and reader skips reserve cells, and does nothing while the set is unknown.
 const RESERVE_MODE_CACHE_MS = 5_000
 const RESERVE_MODE_STALE_MS = 60_000
+// A cell refreshes its admit-effective row every 15 s; three missed refreshes and it counts for nothing.
+export const CELL_ADMIT_EFFECTIVE_FRESH_MS = 45_000
 const RESERVE_MODE_FAILURE_LOG_MS = 60_000
 
 type ControlActivationInput = {
@@ -612,9 +614,12 @@ export class RelayAssignmentStore {
     { failures: number; until: number }
   >()
   private readonly recordControlRenewal?: RelayAssignmentStoreOptions['recordControlRenewal']
-  private reserveModeRead: { cells: ReadonlySet<string>; readAt: number } | null = null
+  private reserveModeRead: {
+    cells: ReadonlySet<string>
+    admitsDatabase: ReadonlySet<string>
+    readAt: number
+  } | null = null
   private reserveModeFailureLoggedAt = Number.NEGATIVE_INFINITY
-  private reserveCellAdmitsDatabase: (cellId: string) => boolean = () => false
   private readonly placementLoadBand?: PlacementLoadBand
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
@@ -660,10 +665,25 @@ export class RelayAssignmentStore {
       return cached && at - cached.readAt <= RESERVE_MODE_STALE_MS ? cached.cells : null
     }
     try {
+      // With each reserve cell, whether its own current process says it admits through the
+      // database (a tripped dead-man): the one read the database path may place on it by.
       const rows = await database.query(
-        `SELECT cell_id FROM relay_cell_admit_modes WHERE admit_mode <> 'db'`
+        `SELECT m.cell_id, e.cell_id AS admits_database
+         FROM relay_cell_admit_modes m
+         LEFT JOIN relay_cell_admit_effective e
+           ON e.cell_id = m.cell_id
+          AND e.mode = 'db'
+          AND e.updated_at > ?
+          AND e.cell_incarnation =
+            (SELECT r.cell_incarnation FROM relay_cell_runtime r WHERE r.cell_id = m.cell_id)
+         WHERE m.admit_mode <> 'db'`,
+        [this.now() - CELL_ADMIT_EFFECTIVE_FRESH_MS]
       )
-      this.reserveModeRead = { cells: new Set(rows.map((row) => text(row, 'cell_id'))), readAt: at }
+      this.reserveModeRead = {
+        cells: new Set(rows.map((row) => text(row, 'cell_id'))),
+        admitsDatabase: new Set(rows.filter((row) => row.admits_database != null).map((row) => text(row, 'cell_id'))),
+        readAt: at
+      }
     } catch (error) {
       // Keep the last read until it is stale. Logged at most once a minute: while it fails,
       // sweeps soon stop and admin operations are refused, so the cause must be on the record.
@@ -682,9 +702,27 @@ export class RelayAssignmentStore {
     return read && at - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
   }
 
-  // The director's seat map: a reserve cell whose current feed reports admitModeEffective=db.
-  setReserveCellAdmitsDatabase(check: (cellId: string) => boolean): void {
-    this.reserveCellAdmitsDatabase = check
+  // Only from a recent read: a cell re-armed since may be booking from memory again.
+  private reserveCellAdmitsDatabase(cellId: string): boolean {
+    const read = this.reserveModeRead
+    return read !== null && performance.now() - read.readAt <= 2 * RESERVE_MODE_CACHE_MS && read.admitsDatabase.has(cellId)
+  }
+
+  // Written by the cell itself, best-effort, on every change of its raw mode and every 15 s.
+  async recordCellAdmitEffective(input: {
+    cellId: string
+    cellIncarnation: string
+    mode: 'db' | 'reserve'
+  }): Promise<void> {
+    await this.database.query(
+      `INSERT INTO relay_cell_admit_effective (cell_id, cell_incarnation, mode, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (cell_id) DO UPDATE SET
+         cell_incarnation = excluded.cell_incarnation,
+         mode = excluded.mode,
+         updated_at = excluded.updated_at`,
+      [input.cellId, input.cellIncarnation, input.mode, this.now()]
+    )
   }
 
   // Break glass flips only a cell that has stopped heartbeating, ready or not.

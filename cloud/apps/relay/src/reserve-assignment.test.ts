@@ -121,6 +121,17 @@ describe('reserve assignment on a director', () => {
     expect(await tripped.assignment.plan(HOST, { reconnect: false, region: US })).toEqual({ kind: 'database' })
     const leasing = setup({ feeds: [feed('c1', { admitMode: 'db', admitModeEffective: 'reserve' }), feed('c2')] })
     expect(leasing.directory.admitModeOf('c1')).toBe('reserve')
+    // A tripped cell still re-registering reports reserve as effective but db as raw: placement
+    // treats it as a database cell at once, books nothing there and paces nobody for it.
+    const reregistering = setup({
+      feeds: [
+        feed('c1', { admitModeEffective: 'reserve', admitModeRaw: 'db' }),
+        feed('c2', { admitModeEffective: 'reserve', admitModeRaw: 'db' })
+      ]
+    })
+    expect(await reregistering.assignment.plan(HOST, { reconnect: false, region: US })).toEqual({ kind: 'database' })
+    expect(reregistering.reserved).toEqual([])
+    expect(reregistering.directory.admitModeOf('c1')).toBe('reserve')
   })
 
   it('before every live cell has answered, holds back only hosts that may be on an unheard cell', async () => {
