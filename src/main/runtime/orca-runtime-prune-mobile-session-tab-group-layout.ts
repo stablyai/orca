@@ -24,6 +24,8 @@ import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-bui
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { structuredAgentSessionProviderSessionMetadata } from '../native-chat/agent-session-wire/structured-agent-session-history-result'
+import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import { structuredWorkerHandleAgentStatus } from './orchestration/structured-worker-group-addressing'
 import {
   retitleStructuredConversationTab,
@@ -80,6 +82,9 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
+    for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
+      snapshot = replaceConversationInSnapshot(snapshot, replacement)
+    }
     const host = getStructuredAgentSessionHost()
     snapshot = titleStructuredConversationTabs(snapshot, (sessionId) => {
       const record = host?.deps?.store?.getRecord(sessionId)
@@ -109,6 +114,10 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getLiveBrowserTabs: (worktreeId) => this.getLiveBrowserTabsByPageId(worktreeId),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+      resolveProviderSessionId: (sessionId) =>
+        structuredAgentSessionProviderSessionMetadata(
+          getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId) ?? null
+        )?.id,
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>

@@ -4,19 +4,23 @@ import {
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
-import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
+import { indexPaneKeysByProviderSessionId } from '../agent-hooks/agent-status-pane-index'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
+import {
+  createProviderSessionRowsReader,
+  createStatusRowsReader
+} from './runtime-mobile-session-projection-status-rows'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
   getLatestAgentCandidateTitle,
@@ -33,61 +37,22 @@ export function projectRuntimeMobileSessionTabs(
   const liveBrowserTabsByPageId = host.getLiveBrowserTabs(snapshot.worktree)
   // Production reads hook rows by pane; the snapshot fallback remains for tests
   // and embedders that have not adopted the narrow getter.
-  let hookRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  const hookRowsForPane = new Map<string, AgentStatusIpcPayload[]>()
-  const getHookRowsForPane = (paneKey: string): AgentStatusIpcPayload[] => {
-    const cached = hookRowsForPane.get(paneKey)
-    if (cached) {
-      return cached
-    }
-    const direct = host.getProviderSessionRows(paneKey)
-    if (direct) {
-      hookRowsForPane.set(paneKey, direct)
-      return direct
-    }
-    hookRowsByPaneKey ??= indexAgentStatusRowsByPaneKey(host.getProviderSessionSnapshot())
-    const rows = hookRowsByPaneKey.get(paneKey) ?? []
-    hookRowsForPane.set(paneKey, rows)
-    return rows
-  }
-  let statusRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
-  let statusRowsByTerminalHandle: Map<string, AgentStatusIpcPayload[]> | null = null
-  const getStatusRows = (
-    paneKey: string,
-    terminalHandle: string | null
-  ): AgentStatusIpcPayload[] => {
-    if (!statusRowsByPaneKey || !statusRowsByTerminalHandle) {
-      statusRowsByPaneKey = new Map()
-      statusRowsByTerminalHandle = new Map()
-      for (const row of host.getStatusSnapshot()) {
-        const paneRows = statusRowsByPaneKey.get(row.paneKey)
-        if (paneRows) {
-          paneRows.push(row)
-        } else {
-          statusRowsByPaneKey.set(row.paneKey, [row])
-        }
-        if (row.terminalHandle) {
-          const handleRows = statusRowsByTerminalHandle.get(row.terminalHandle)
-          if (handleRows) {
-            handleRows.push(row)
-          } else {
-            statusRowsByTerminalHandle.set(row.terminalHandle, [row])
-          }
-        }
-      }
-    }
-    const paneRows = statusRowsByPaneKey.get(paneKey) ?? []
-    if (!terminalHandle) {
-      return paneRows
-    }
-    const handleRows = statusRowsByTerminalHandle.get(terminalHandle) ?? []
-    if (paneRows.length === 0) {
-      return handleRows
-    }
-    return [...paneRows, ...handleRows.filter((row) => !paneRows.includes(row))]
-  }
+  const getHookRowsForPane = createProviderSessionRowsReader(host)
+  const getStatusRows = createStatusRowsReader(host)
   // Why: a live PTY backs one surface; claim each once so two leaves resolving to it can't emit duplicate React keys and crash the client.
   const claimedLivePtyIds = new Set<string>()
+  // Why: a chat tab's id (`agent-session:<sessionId>`) is not a pane key, so a tap carrying only a
+  // pane key — the agents roster, a notification — has nothing on the tab to match. The agent's
+  // hook row is the one record naming both that pane and the provider's session (never Orca's, so
+  // the record store translates), so invert that snapshot, once, on first need.
+  let paneKeyByProviderSessionId: Map<string, string> | null = null
+  const paneKeyForStructuredSession = (sessionId: string): string | undefined => {
+    paneKeyByProviderSessionId ??= indexPaneKeysByProviderSessionId(
+      host.getProviderSessionSnapshot()
+    )
+    const providerSessionId = host.resolveProviderSessionId(sessionId)
+    return providerSessionId ? paneKeyByProviderSessionId.get(providerSessionId) : undefined
+  }
   for (const tab of snapshot.tabs) {
     if (tab.type === 'browser') {
       const liveTab = tab.browserPageId ? liveBrowserTabsByPageId.get(tab.browserPageId) : undefined
@@ -109,7 +74,8 @@ export function projectRuntimeMobileSessionTabs(
       continue
     }
     if (tab.type === 'agent-session') {
-      tabs.push(tab)
+      const paneKey = paneKeyForStructuredSession(tab.sessionId)
+      tabs.push(paneKey ? { ...tab, paneKey } : tab)
       continue
     }
     const syncedTab = host.tabs.get(tab.parentTabId)

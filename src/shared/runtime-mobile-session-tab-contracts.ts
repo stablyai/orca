@@ -97,6 +97,10 @@ export type RuntimeMobileSessionAgentTab = {
   id: string
   title: string
   sessionId: string
+  /** The pane this chat runs in, so a tap that carries only a pane key — the agents roster, a
+   *  notification — resolves to this tab. Optional: the host omits it when no status row names
+   *  both, and a client that predates it ignores it. */
+  paneKey?: string
   replacesSessionId?: string
   /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
    *  the registered-agents capability. */
