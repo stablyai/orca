@@ -5,8 +5,7 @@ import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-enve
 import {
   isDurableMutation,
   isOrchestrationMutation,
-  isTerminalPromptMutation,
-  orchestrationMigrationData
+  isTerminalPromptMutation
 } from '../../shared/orchestration-rpc-contract'
 import type { PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
@@ -22,10 +21,7 @@ import {
 } from './terminal-prompt-mutation-recovery'
 import { markEnvironmentUsed } from './environments'
 import { resolveRemotePairing } from './runtime-remote-pairing'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
 import { createOrchestrationCompatibilityEnvelope } from './orchestration-compatibility-envelope'
 import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
@@ -35,6 +31,8 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { assertOrchestrationContractCompatible } from './orchestration-contract-admission'
+import { callWithLocalWorkerReportRecovery } from './worker-report-custody'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -84,6 +82,22 @@ export class RuntimeClient {
   async call<TResult>(
     method: string,
     params?: unknown,
+    options?: Parameters<RuntimeClient['callOnce']>[2]
+  ): Promise<RuntimeRpcSuccess<TResult>> {
+    return callWithLocalWorkerReportRecovery({
+      method,
+      params,
+      userDataPath: this.userDataPath,
+      remote: this.remotePairing !== null,
+      compatibility: this.orchestrationCompatibility,
+      options,
+      send: (envelope) => this.callOnce<TResult>(method, params, { ...options, ...envelope })
+    })
+  }
+
+  private async callOnce<TResult>(
+    method: string,
+    params?: unknown,
     options?: {
       timeoutMs?: number
       legacyTerminalPrompt?: true
@@ -124,6 +138,9 @@ export class RuntimeClient {
     const compatibilityEnvelope = method.startsWith('orchestration.')
       ? {
           ...this.orchestrationCompatibility,
+          orchestrationCompatibilityEvidence:
+            options?.orchestrationCompatibilityEvidence ??
+            this.orchestrationCompatibility.orchestrationCompatibilityEvidence,
           compatibilityInvocationId:
             orchestrationRequestId ?? this.orchestrationCompatibility.compatibilityInvocationId
         }
@@ -261,13 +278,7 @@ export class RuntimeClient {
     if (this.remotePairing) {
       this.remoteCompat.noteVerifiedStatus(response.result)
     }
-    if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
-      throw new RuntimeClientError(
-        'orchestration_migration_required',
-        'The connected Orca runtime does not support the current orchestration contract. No effects were applied.',
-        orchestrationMigrationData('runtime_capability_missing')
-      )
-    }
+    assertOrchestrationContractCompatible(response.result)
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {

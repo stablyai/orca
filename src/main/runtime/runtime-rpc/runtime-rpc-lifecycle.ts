@@ -1,5 +1,7 @@
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
+import { WorkerReportRecoveryService } from '../../../shared/worker-report-recovery-service'
+import { canReplayLocalWorkerReport, replayWorkerReport } from '../worker-report-replay'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
@@ -130,6 +132,24 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
       throw error
     }
+
+    this.workerReportRecovery = new WorkerReportRecoveryService(
+      this.userDataPath,
+      async (input) => {
+        if (!canReplayLocalWorkerReport(this.runtime, input)) {
+          return {
+            id: input.requestId,
+            ok: false,
+            error: {
+              code: 'worker_report_identity_unavailable',
+              message: 'Waiting for the original worker identity to be restored'
+            }
+          }
+        }
+        return replayWorkerReport(input, (request) => this.handleMessage(request), this.authToken)
+      }
+    )
+    this.workerReportRecovery.start()
 
     this.metadataOwnershipWatch = watchRuntimeMetadataOwnership({
       userDataPath: this.userDataPath,
