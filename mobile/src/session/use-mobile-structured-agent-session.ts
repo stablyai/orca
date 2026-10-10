@@ -237,8 +237,6 @@ export function useMobileStructuredAgentSession(args: {
     submissions: state.submissions,
     pendingPrompt: approvalPrompt !== null || questionPrompt !== null,
     agentWorking: isWorking,
-    // The host's own answer, as desktop reads it: an older host gives none, and its cards steer.
-    hostIdle: state.working === false && (state.nextQueuedMessageId ?? null) === null,
     mutate,
     appendComposerText,
     onSendError,

@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionQueuePause } from '../../../src/shared/agent-session-wire'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
-import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
+import {
+  mobileQueuedMessageCards,
+  type MobileQueuedMessageCard
+} from './mobile-structured-queued-message-cards'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -209,13 +212,21 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
   })
 
-  it('reads Send, not Steer, on a waiting card while the host says nothing runs', async () => {
-    const mounted = await mount({
-      cards: [card({ messageId: 'waiting', agentIdle: true })],
-      onSend: vi.fn(async () => true)
-    })
-    expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Send'])
-    expect(mounted.root.findByProps({ accessibilityLabel: 'Send this message' })).toBeTruthy()
+  it('a waiting card still reads Steer while nothing runs, as when its agent died and its cleanup waits', async () => {
+    const [waiting] = mobileQueuedMessageCards(
+      [
+        {
+          messageId: 'waiting',
+          position: 1,
+          state: 'waiting',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next' }] }
+        }
+      ],
+      [],
+      { pendingPrompt: false, agentWorking: false }
+    )
+    const mounted = await mount({ cards: [waiting!], onSend: vi.fn(async () => true) })
+    expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Steer'])
   })
 
   it('a command card never steers: Send only while the agent is idle, and no menu', async () => {

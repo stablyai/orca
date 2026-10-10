@@ -123,19 +123,6 @@ describe('mobileQueuedMessageCards', () => {
     )
   })
 
-  it("marks every card idle only on the host's own word that nothing runs", () => {
-    const idle = mobileQueuedMessageCards([draft({ messageId: 'waiting' })], [], {
-      pendingPrompt: false,
-      hostIdle: true
-    })
-    expect(idle.map((card) => card.agentIdle)).toEqual([true])
-    // An older host says nothing: its cards read as before.
-    const older = mobileQueuedMessageCards([draft({ messageId: 'waiting' })], [], {
-      pendingPrompt: false
-    })
-    expect(older.map((card) => card.agentIdle)).toEqual([undefined])
-  })
-
   it('renders nothing without a published list', () => {
     expect(mobileQueuedMessageCards(null, [], { pendingPrompt: false })).toEqual([])
     expect(mobileQueuedMessageCards([], [], { pendingPrompt: false })).toEqual([])

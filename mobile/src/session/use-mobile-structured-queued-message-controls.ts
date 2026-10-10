@@ -58,8 +58,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
   pendingPrompt: boolean
   /** The chat shows the agent working: a command card offers no send then. */
   agentWorking?: boolean
-  /** The host said nothing runs, so no card steers; absent from an older host. */
-  hostIdle?: boolean
   mutate: MobileStructuredAgentMutate
   /** The active pane's live composer, Edit's copy target; absent = Edit refuses. False when
    *  nothing was copied. */
@@ -80,13 +78,11 @@ export function useMobileStructuredQueuedMessageControls(args: {
     submissions
   } = args
   const agentWorking = args.agentWorking === true
-  const hostIdle = args.hostIdle === true
   const cards = useMemo(
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
         pendingPrompt,
         agentWorking,
-        hostIdle,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
@@ -95,7 +91,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
       }),
     [
       agentWorking,
-      hostIdle,
       args.agentName,
       args.journalItems,
       pendingPrompt,

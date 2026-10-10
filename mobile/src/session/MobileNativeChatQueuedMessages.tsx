@@ -109,8 +109,8 @@ export function MobileNativeChatQueuedMessages({
           const busy = busyIds.has(card.messageId)
           const returned = card.state === 'returned'
           // "Steer" submits beside the running turn, the paused queue's cards too; a card whose
-          // own send failed, or a returned one, is sent again, as is any while nothing runs.
-          const steers = !returned && !card.paused && !card.command && !card.agentIdle
+          // own send failed, or a returned one, is sent again.
+          const steers = !returned && !card.paused && !card.command
           return (
             <View
               key={card.messageId}

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session-wire'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
+import { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import {
@@ -108,13 +109,33 @@ describe('under another connection’s write lock', () => {
     await current.workingSend()
     await leaveUnfinishedWork(current, { prompt: true })
 
+    // Every write that runs while the lock is held: none may be one that waits it out.
+    const waiting: unknown[] = []
+    let held = false
+    const transaction = JournalHostDatabase.prototype.transaction
+    vi.spyOn(JournalHostDatabase.prototype, 'transaction').mockImplementation(function (
+      this: JournalHostDatabase,
+      run,
+      options
+    ) {
+      if (held && !options?.background) {
+        waiting.push(new Error('a write that waits for the lock'))
+      }
+      return transaction.call(this, run, options)
+    })
+
     // Another process holds the lock from before this one starts: the restart reconcile, the
     // restore's reconcile and recovery, and the startup scan all meet it.
-    expect(
-      await longestStall(() =>
-        current.crashRestartHostProcess(() => holdWriteLock(current.root, LOCK_MS))
-      )
-    ).toBeLessThan(60)
+    const stall = await longestStall(() =>
+      current.crashRestartHostProcess(async () => {
+        const { released } = await holdWriteLock(current.root, LOCK_MS)
+        held = true
+        void released.then(() => (held = false))
+      })
+    )
+    expect(waiting).toEqual([])
+    // The bar QA holds the app to; the property above is what keeps it there under load.
+    expect(stall).toBeLessThan(100)
     // Once it lifts, the retry reconciles, resolves the recovery the restore could not, and settles
     // the turn as an unlocked startup does: the rig's probe proves nothing, so unverifiable.
     await vi.waitFor(() => expect(turnState(current)).toBe('unverifiable'), { timeout: 8_000 })
