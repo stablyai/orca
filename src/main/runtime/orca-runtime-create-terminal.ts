@@ -164,8 +164,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(launchOpts.agentSessionCreateOperationId
               ? { agentSessionCreateOperationId: launchOpts.agentSessionCreateOperationId }
               : {}),
-            ...(launchOpts.signal ? { signal: launchOpts.signal } : {}),
-            ...(launchOpts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
+            ...dependencies.callerSpawnGuards(launchOpts),
             ...(launchOpts.onPtySpawnCommitted
               ? { onPtySpawnCommitted: reportPtySpawnCommitted }
               : {}),
