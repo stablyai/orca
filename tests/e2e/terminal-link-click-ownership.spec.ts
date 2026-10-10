@@ -97,9 +97,12 @@ async function expectChildMouseReports(mouseLogPath: string): Promise<void> {
     .toBeGreaterThan(0)
 }
 
-async function expectOrcaOwnedMouseOutcome(mouseLogPath: string): Promise<void> {
+async function expectOrcaOwnedMouseOutcome(
+  mouseLogPath: string,
+  reportsBeforeClick = 0
+): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 1_000))
-  expect(childMouseReportCount(mouseLogPath)).toBe(0)
+  expect(childMouseReportCount(mouseLogPath)).toBe(reportsBeforeClick)
 }
 
 async function openLegacyDisabledLinkSettings(orcaPage: Page): Promise<void> {
@@ -192,6 +195,7 @@ test.describe('terminal link click ownership', () => {
     await expectChildMouseReports(mouseLogPath)
     expect((await readPanelNavigationObserver(electronApp)).externalUrls).toEqual([LINK])
 
+    const reportsBeforeModifiedClick = childMouseReportCount(mouseLogPath)
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
     await orcaPage.keyboard.down(modifier)
     await orcaPage.mouse.click(target.x, target.y)
@@ -199,6 +203,7 @@ test.describe('terminal link click ownership', () => {
     await expect
       .poll(async () => (await readPanelNavigationObserver(electronApp)).externalUrls)
       .toEqual([LINK, LINK])
+    await expectOrcaOwnedMouseOutcome(mouseLogPath, reportsBeforeModifiedClick)
     await expect(orcaPage.locator('[data-terminal-link-action-popover]')).toHaveCount(0)
     await sendToTerminal(orcaPage, ptyId, 'q')
   })

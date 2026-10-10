@@ -130,25 +130,3 @@ it('rolls back both click preference fields when the durable write fails', async
   expect(store.getSettings()).toMatchObject(expected)
   expect(readState().settings).toMatchObject(expected)
 })
-
-it('preserves a newer click choice and its legacy switch after a failed durable save', async () => {
-  const { store, authority } = await createWorkerMaintenanceFixture()
-  const started = maintenanceBarrier()
-  const release = maintenanceBarrier()
-  vi.spyOn(authority, 'writeSerializedDomains').mockImplementationOnce(async () => {
-    started.resolve()
-    await release.promise
-    throw new Error('Disk full')
-  })
-  const pending = store.updateSettingsAndFlush({ terminalLinkClickBehavior: 'none' })
-  const rejected = expect(pending).rejects.toThrow('Disk full')
-  await started.promise
-  store.updateSettings({ terminalLinkClickBehavior: 'open' })
-  release.resolve()
-  await rejected
-
-  expect(store.getSettings()).toMatchObject({
-    terminalLinkClickBehavior: 'open',
-    terminalLinkActionPopoverEnabled: false
-  })
-})

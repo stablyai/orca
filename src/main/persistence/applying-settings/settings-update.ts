@@ -49,6 +49,7 @@ export type SettingsMutationOperations = {
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void
   scheduleSave: () => void
+  recordSettingsWrite?: (keys: readonly string[]) => void
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
 }
 
@@ -268,6 +269,7 @@ export function updateSettings(
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
   }
+  operations.recordSettingsWrite?.(Object.keys(sanitizedUpdates))
   if (
     !Object.is(
       previousSettings.localWindowsRuntimeDefault,
