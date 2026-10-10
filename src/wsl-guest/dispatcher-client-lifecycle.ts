@@ -246,7 +246,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
       }
       // Why keepaliveObserved gates this: not every client speaks the keepalive protocol. The
       // remote `orca` CLI sends one `orca.cli` request and waits for a result budgeted in minutes
-      // (src/relay/remote-cli-timeout.ts), so judging it on inbound silence would kill
+      // so judging it on inbound silence would kill
       // `terminal wait`, `--wait` and `orchestration ask` after 20s.
       if (!client.keepaliveObserved || now - client.lastReceivedAt <= TIMEOUT_MS) {
         continue

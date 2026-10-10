@@ -36,7 +36,6 @@ const RELEASE_SKELETON: Record<string, string> = Object.fromEntries(
     'src/main/placeholder.ts',
     'src/shared/placeholder.ts',
     'src/preload/placeholder.ts',
-    'src/relay/placeholder.ts',
     'src/renderer/src/placeholder.ts',
     'src/types/placeholder.ts',
     'mobile/src/worktree/agent-row-display.ts'

@@ -87,10 +87,7 @@ describe('WSL SQLite runtime preparation', () => {
         args: ['-e', expect.stringMatching(/require\('node:sqlite'\).*backup/)]
       })
     )
-    expect(mocks.bundles.mock.calls.map(([platform]) => platform)).toEqual([
-      'linux-x64',
-      'linux-arm64'
-    ])
+    expect(mocks.bundles.mock.calls.map(([platform]) => platform)).toEqual(['wsl'])
     expect(mocks.download).not.toHaveBeenCalled()
   })
 

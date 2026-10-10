@@ -17,11 +17,8 @@ const key = (seconds) =>
     .replace('T', '_')
     .slice(0, 15)
 try {
-  for (const host of ['native', 'relay']) {
-    const entry =
-      host === 'native'
-        ? 'src/main/automations/hermes-cron-run-content.ts'
-        : 'src/relay/hermes-run-correlation.ts'
+  for (const host of ['native']) {
+    const entry = 'src/main/automations/hermes-cron-run-content.ts'
     const readers = []
     for (const mode of baselineDirectory ? ['baseline', 'current'] : ['current']) {
       const bundle = join(fixture, `${host}-${mode}.cjs`)

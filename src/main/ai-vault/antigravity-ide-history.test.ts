@@ -2,13 +2,10 @@ import { runProcess } from '@orca/process-host'
 import { mkdtemp, mkdir, rm, writeFile, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, writeAntigravityTranscript } from './session-scanner-test-fixtures'
-import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-fixtures'
-import { scanRemoteAiVaultSessions } from './remote-session-scanner'
-import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { dedupeScannedSessions } from './session-root-dedup'
+import { jsonLines } from './remote-session-scanner-test-fixtures'
 import { antigravitySessionOrigin } from '../../shared/antigravity-session-origin'
 import { readLocalAntigravityHistory } from './session-scanner-antigravity-history'
 import { ANTIGRAVITY_INDEX_MAX_BYTES } from './session-scanner-antigravity-metadata'
@@ -190,39 +187,4 @@ describe('Antigravity IDE history discovery', () => {
     expect(await readLocalAntigravityHistory(file)).toBeNull()
   })
 
-  it('reads only the execution host and never collapses equal origin IDs from different remote hosts', async () => {
-    const provider = new MemoryRemoteProvider()
-    const remoteHome = '/remote/home'
-    for (const origin of origins) {
-      const logs = `${remoteHome}/.gemini/${origin}/brain/${conversationId}/.system_generated/logs`
-      provider.addFile(`${logs}/transcript_full.jsonl`, jsonLines(records(origin)), 10)
-      provider.addFile(`${logs}/transcript.jsonl`, jsonLines(records(origin)), 11)
-    }
-    const read = vi.spyOn(provider, 'readFile')
-    const options = {
-      provider,
-      remoteHome,
-      hostPlatform: getRemoteHostPlatform('linux-x64'),
-      includeAntigravityIdeSessions: true
-    }
-    const first = await scanRemoteAiVaultSessions({ ...options, executionHostId: 'ssh:first-host' })
-    const second = await scanRemoteAiVaultSessions({
-      ...options,
-      executionHostId: 'ssh:second-host'
-    })
-    expect(first.sessions).toHaveLength(3)
-    expect(second.sessions).toHaveLength(3)
-    expect(dedupeScannedSessions([...first.sessions, ...second.sessions])).toHaveLength(6)
-    expect(read.mock.calls.every(([path]) => path.startsWith(remoteHome))).toBe(true)
-    expect(provider.readDirPaths.every((path) => path.startsWith(remoteHome))).toBe(true)
-    expect(
-      first.sessions.every((session) => session.filePath.endsWith('transcript_full.jsonl'))
-    ).toBe(true)
-    const legacy = await scanRemoteAiVaultSessions({
-      ...options,
-      executionHostId: 'ssh:first-host',
-      includeAntigravityIdeSessions: false
-    })
-    expect(legacy.sessions).toHaveLength(1)
-  })
 })

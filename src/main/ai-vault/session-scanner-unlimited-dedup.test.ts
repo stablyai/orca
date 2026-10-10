@@ -1,6 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type * as SessionDedup from './session-root-dedup'
-import type * as RemoteSessionParseCache from './remote-session-parse-cache'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 
 const fixture = vi.hoisted((): { sessions: AiVaultSession[]; visits: number } => ({
@@ -28,16 +27,6 @@ vi.mock('./session-scanner-parse-cache', () => ({
   }),
   parseAgentSessionFileCached: async (candidate: { session: AiVaultSession }) => candidate.session
 }))
-vi.mock('./remote-session-scanner-sources', () => ({ remoteSessionSources: () => [{}] }))
-vi.mock('./remote-session-scanner-discovery', () => ({
-  discoverRemoteSourceCandidates: async () => candidates()
-}))
-vi.mock('./remote-session-parse-cache', async (original) => ({
-  ...(await original<typeof RemoteSessionParseCache>()),
-  remoteSessionParseHostKey: () => 'fixture',
-  parseRemoteSessionFileCached: async ({ candidate }: { candidate: { session: AiVaultSession } }) =>
-    candidate.session
-}))
 vi.mock('./session-root-dedup', async (original) => {
   const actual = await original<typeof SessionDedup>()
   return {
@@ -50,7 +39,6 @@ vi.mock('./session-root-dedup', async (original) => {
 })
 
 import { scanAiVaultSessions } from './session-scanner'
-import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { ScannedSessionCollection, dedupeScannedSessions } from './session-root-dedup'
 
 function candidates() {
@@ -93,62 +81,42 @@ beforeEach(() => {
   fixture.visits = 0
 })
 
-for (const host of ['local', 'remote'] as const) {
-  const scan = (unlimited: boolean, limit?: number) =>
-    host === 'local'
-      ? scanAiVaultSessions({ unlimited, limit })
-      : scanRemoteAiVaultSessions({
-          unlimited,
-          limit,
-          provider: { readDir: vi.fn(), readFile: vi.fn(), stat: vi.fn() },
-          executionHostId: 'local',
-          remoteHome: '/fixture',
-          hostPlatform: {
-            relayPlatform: 'linux-x64',
-            os: 'linux',
-            arch: 'x64',
-            pathFlavor: 'posix',
-            commandDialect: 'posix',
-            pathSeparator: '/',
-            pathDelimiter: ':'
-          }
-        })
+const scan = (unlimited: boolean, limit?: number) => scanAiVaultSessions({ unlimited, limit })
 
-  it(`${host}: load-all processes deduplication linearly and retains late canonical aliases`, async () => {
-    fixture.sessions = Array.from({ length: 10000 }, (_, i) => session(i))
-    fixture.sessions[0] = {
-      ...fixture.sessions[0]!,
-      codexHome: '/custom',
-      filePath: '/custom/rollout-0.jsonl'
-    }
-    fixture.sessions.push(session(0))
-    const expected = dedupeScannedSessions(fixture.sessions)
-    fixture.visits = 0
-    const started = performance.now()
-    const result = await scan(true)
-    process.stdout.write(
-      `${JSON.stringify({ host, candidates: fixture.sessions.length, scanMs: performance.now() - started, dedupVisits: fixture.visits })}\n`
-    )
-    expect(result.issues).toEqual([])
-    expect(result.sessions).toEqual(expected)
-    expect(fixture.visits).toBeLessThanOrEqual(fixture.sessions.length * 2)
-  }, 30000)
+it('load-all processes deduplication linearly and retains late canonical aliases', async () => {
+  fixture.sessions = Array.from({ length: 10000 }, (_, i) => session(i))
+  fixture.sessions[0] = {
+    ...fixture.sessions[0]!,
+    codexHome: '/custom',
+    filePath: '/custom/rollout-0.jsonl'
+  }
+  fixture.sessions.push(session(0))
+  const expected = dedupeScannedSessions(fixture.sessions)
+  fixture.visits = 0
+  const started = performance.now()
+  const result = await scan(true)
+  process.stdout.write(
+    `${JSON.stringify({ candidates: fixture.sessions.length, scanMs: performance.now() - started, dedupVisits: fixture.visits })}\n`
+  )
+  expect(result.issues).toEqual([])
+  expect(result.sessions).toEqual(expected)
+  expect(fixture.visits).toBeLessThanOrEqual(fixture.sessions.length * 2)
+}, 30000)
 
-  it(`${host}: capped scans still fill the unique-session budget`, async () => {
-    fixture.sessions = [
-      session(0),
-      ...Array.from({ length: 8 }, () => ({
-        ...session(0),
-        filePath: '/custom/rollout-0.jsonl',
-        codexHome: '/custom'
-      })),
-      ...Array.from({ length: 10 }, (_, i) => session(i + 1))
-    ]
-    const result = await scan(false, 10)
-    expect(result.sessions).toHaveLength(10)
-    expect(new Set(result.sessions.map((row) => row.sessionId)).size).toBe(10)
-  })
-}
+it('capped scans still fill the unique-session budget', async () => {
+  fixture.sessions = [
+    session(0),
+    ...Array.from({ length: 8 }, () => ({
+      ...session(0),
+      filePath: '/custom/rollout-0.jsonl',
+      codexHome: '/custom'
+    })),
+    ...Array.from({ length: 10 }, (_, i) => session(i + 1))
+  ]
+  const result = await scan(false, 10)
+  expect(result.sessions).toHaveLength(10)
+  expect(new Set(result.sessions.map((row) => row.sessionId)).size).toBe(10)
+})
 
 it('incremental canonical selection preserves winner occurrence order, ties and repeated references', () => {
   const collection = new ScannedSessionCollection()

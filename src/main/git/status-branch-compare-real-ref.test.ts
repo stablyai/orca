@@ -4,8 +4,6 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getBranchCompare } from './status'
-import { branchCompare } from '../../relay/git-handler-ops'
-import { gitChangeListArgs, parseGitChangeList } from '../../shared/git-change-list'
 
 const tempRoots: string[] = []
 
@@ -17,22 +15,12 @@ function git(repo: string, args: string[]): string {
   }).trim()
 }
 
-function relayCompare(repo: string, baseRef: string) {
-  return branchCompare(
-    async (args, cwd) => ({ stdout: git(cwd, args), stderr: '' }),
-    repo,
-    baseRef,
-    async (mergeBase, headOid) =>
-      parseGitChangeList(git(repo, gitChangeListArgs(mergeBase, headOid)))
-  )
-}
-
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
 describe('getBranchCompare real refs', () => {
-  it('reports equal commits as empty on native and relay despite staged and unstaged changes', async () => {
+  it('reports equal commits as empty despite staged and unstaged changes', async () => {
     const repo = await mkdtemp(path.join(tmpdir(), 'orca-equal-branch-compare-'))
     tempRoots.push(repo)
     git(repo, ['init', '-q'])
@@ -46,37 +34,18 @@ describe('getBranchCompare real refs', () => {
     git(repo, ['add', 'changes.txt'])
     await writeFile(path.join(repo, 'changes.txt'), 'unstaged\n')
 
-    for (const result of await Promise.all([
-      getBranchCompare(repo, 'base'),
-      relayCompare(repo, 'base')
-    ])) {
-      expect(result).toEqual({
-        summary: {
-          baseRef: 'base',
-          baseOid: oid,
-          compareRef: 'feature',
-          headOid: oid,
-          mergeBase: oid,
-          changedFiles: 0,
-          commitsAhead: 0,
-          commitsBehind: 0,
-          status: 'ready'
-        },
-        entries: []
-      })
-    }
-  })
-
-  it('keeps the merge-base failure for identical blob tips on the relay', async () => {
-    const repo = await mkdtemp(path.join(tmpdir(), 'orca-blob-branch-compare-'))
-    tempRoots.push(repo)
-    git(repo, ['init', '-q'])
-    await writeFile(path.join(repo, 'blob.txt'), 'not a commit\n')
-    const oid = git(repo, ['hash-object', '-w', 'blob.txt'])
-    await writeFile(path.join(repo, '.git', 'HEAD'), `${oid}\n`)
-
-    await expect(relayCompare(repo, oid)).resolves.toMatchObject({
-      summary: { headOid: oid, baseOid: oid, status: 'no-merge-base', mergeBase: null },
+    expect(await getBranchCompare(repo, 'base')).toEqual({
+      summary: {
+        baseRef: 'base',
+        baseOid: oid,
+        compareRef: 'feature',
+        headOid: oid,
+        mergeBase: oid,
+        changedFiles: 0,
+        commitsAhead: 0,
+        commitsBehind: 0,
+        status: 'ready'
+      },
       entries: []
     })
   })
@@ -109,19 +78,14 @@ describe('getBranchCompare real refs', () => {
     ])
     expect(rawOid).not.toBe(peeledOid)
 
-    for (const result of await Promise.all([
-      getBranchCompare(client, 'origin/tagbase'),
-      relayCompare(client, 'origin/tagbase')
-    ])) {
-      expect(result.summary).toMatchObject({
-        baseOid: rawOid,
-        headOid: peeledOid,
-        mergeBase: peeledOid,
-        changedFiles: 0,
-        commitsAhead: 0,
-        commitsBehind: 0,
-        status: 'ready'
-      })
-    }
+    expect((await getBranchCompare(client, 'origin/tagbase')).summary).toMatchObject({
+      baseOid: rawOid,
+      headOid: peeledOid,
+      mergeBase: peeledOid,
+      changedFiles: 0,
+      commitsAhead: 0,
+      commitsBehind: 0,
+      status: 'ready'
+    })
   })
 })

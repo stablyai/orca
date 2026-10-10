@@ -18,8 +18,7 @@ function finish<T>(callback: Callback<T>, error: NodeJS.ErrnoException | null, v
   callback(null, value)
 }
 
-/** The managed installers only need this small callback-style SFTP surface.
- *  On the remote host it turns hundreds of WAN round trips into local fs calls. */
+/** Runs the managed installers' callback-style SFTP surface against the local disk in tests. */
 export function createManagedHookLocalFilesystem(): SFTPWrapper {
   const adapter = {
     readFile(path: string, _encoding: string, callback: Callback<string | Buffer>): void {

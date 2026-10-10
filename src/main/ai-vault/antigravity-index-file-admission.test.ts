@@ -1,6 +1,6 @@
 import type * as NodeFsPromises from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -23,7 +23,6 @@ vi.mock('node:fs/promises', async (original) => {
 })
 import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { readLocalAntigravityHistory } from './session-scanner-antigravity-history'
-import { readRelayTranscriptBytes } from '../../relay/ai-vault-transcript-stream'
 
 const roots: string[] = []
 async function filePath() {
@@ -43,25 +42,6 @@ afterEach(async () => {
 })
 
 describe('bounded regular metadata reads', () => {
-  it.skipIf(process.platform === 'win32')(
-    'rejects real FIFO paths and symlinks without waiting for a writer',
-    async () => {
-      const file = await filePath()
-      await fifo(file)
-      const alias = `${file}.link`
-      await symlink(file, alias)
-      for (const path of [file, alias]) {
-        expect(await readLocalAntigravityHistory(path)).toBeNull()
-        await expect(readNodeFileWithinLimit(path, 64, { regularFileOnly: true })).rejects.toThrow(
-          'regular file'
-        )
-        await expect(
-          readRelayTranscriptBytes(path, undefined, { regularFileOnly: true, maxBytes: 64 }).next()
-        ).rejects.toThrow('regular file')
-      }
-    },
-    2000
-  )
 
   it.skipIf(process.platform === 'win32')(
     'rejects a regular path replaced by a FIFO between stat and open',

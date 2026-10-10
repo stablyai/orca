@@ -13,7 +13,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { AgentHookServer } from './server'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
-import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
+import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem.test-fixture'
 import { codexHookService } from '../codex/hook-service'
 
 const BUNDLE_DIR = join(process.cwd(), 'out', 'relay', 'wsl')

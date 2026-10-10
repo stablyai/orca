@@ -1,38 +1,36 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { gitCommit, gitInit, type MockDispatcher } from '../../../relay/git-handler-test-setup'
-import {
-  createGitHandlerRelay,
-  createGitTempDir,
-  removeGitTempDir
-} from '../../../relay/git-handler-test-harness'
-import type { GitHandler } from '../../../relay/git-handler'
 import { bulkUnstageFiles, unstageFile } from './staging'
 import { bulkDiscardChanges, discardChanges } from './discard-changes'
 
-const modes = [
-  { host: 'native', bulk: false },
-  { host: 'native', bulk: true },
-  { host: 'relay', bulk: false },
-  { host: 'relay', bulk: true }
-] as const
+function gitInit(dir: string): void {
+  execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: dir, stdio: 'pipe' })
+}
+
+function gitCommit(dir: string, message: string): void {
+  execFileSync('git', ['add', '.'], { cwd: dir, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-m', message, '--allow-empty'], { cwd: dir, stdio: 'pipe' })
+}
+
+const modes = [{ bulk: false }, { bulk: true }] as const
 
 describe('staging and discard preserve index authority', () => {
   let repo: string
-  let dispatcher: MockDispatcher
-  let handler: GitHandler
 
   beforeEach(() => {
-    repo = createGitTempDir()
-    ;({ dispatcher, handler } = createGitHandlerRelay())
+    repo = mkdtempSync(path.join(tmpdir(), 'orca-real-git-'))
     gitInit(repo)
   })
 
   afterEach(async () => {
-    handler.dispose()
-    await removeGitTempDir(repo)
+    await rm(repo, { recursive: true, force: true })
   })
 
   async function git(args: string[], input?: string): Promise<string> {
@@ -46,19 +44,13 @@ describe('staging and discard preserve index authority', () => {
     action: 'unstage' | 'discard',
     filePaths: string[]
   ): Promise<unknown> {
-    if (mode.host === 'relay') {
-      return dispatcher.callRequest(
-        `git.${mode.bulk ? (action === 'unstage' ? 'bulkUnstage' : 'bulkDiscard') : action}`,
-        { worktreePath: repo, ...(mode.bulk ? { filePaths } : { filePath: filePaths[0] }) }
-      )
-    }
     if (mode.bulk) {
       return (action === 'unstage' ? bulkUnstageFiles : bulkDiscardChanges)(repo, filePaths)
     }
     return (action === 'unstage' ? unstageFile : discardChanges)(repo, filePaths[0])
   }
 
-  it.each(modes)('preserves staged MM content during $host bulk=$bulk discard', async (mode) => {
+  it.each(modes)('preserves staged MM content during bulk=$bulk discard', async (mode) => {
     await writeFile(path.join(repo, 'file.txt'), 'committed\n')
     gitCommit(repo, 'initial')
     await writeFile(path.join(repo, 'file.txt'), 'staged\n')
@@ -73,7 +65,7 @@ describe('staging and discard preserve index authority', () => {
     expect(await git(['diff', '--cached', '--name-only'])).toBe('file.txt\n')
   })
 
-  it.each(modes)('restores staged additions during $host bulk=$bulk AM discard', async (mode) => {
+  it.each(modes)('restores staged additions during bulk=$bulk AM discard', async (mode) => {
     await writeFile(path.join(repo, 'initial.txt'), 'committed\n')
     gitCommit(repo, 'initial')
     await writeFile(path.join(repo, 'new.txt'), 'staged addition\n')
@@ -87,7 +79,7 @@ describe('staging and discard preserve index authority', () => {
     expect(await git(['diff', '--name-only'])).toBe('')
   })
 
-  it.each(modes)('unstages selected unborn paths on $host bulk=$bulk', async (mode) => {
+  it.each(modes)('unstages selected unborn paths on bulk=$bulk', async (mode) => {
     await writeFile(path.join(repo, 'selected.txt'), 'selected\n')
     await writeFile(path.join(repo, 'keep.txt'), 'keep\n')
     await git(['add', '.'])
@@ -98,7 +90,7 @@ describe('staging and discard preserve index authority', () => {
     expect(await readFile(path.join(repo, 'selected.txt'), 'utf8')).toBe('selected\n')
   })
 
-  it.each(['native', 'relay'] as const)('unstages both rename paths on %s', async (host) => {
+  it('unstages both rename paths', async () => {
     await writeFile(path.join(repo, 'old.txt'), 'rename content\n')
     await writeFile(path.join(repo, 'keep.txt'), 'keep\n')
     gitCommit(repo, 'initial')
@@ -106,32 +98,29 @@ describe('staging and discard preserve index authority', () => {
     await writeFile(path.join(repo, 'keep.txt'), 'keep staged\n')
     await git(['add', 'keep.txt'])
 
-    await mutate({ host, bulk: true }, 'unstage', ['new.txt', 'old.txt'])
+    await mutate({ bulk: true }, 'unstage', ['new.txt', 'old.txt'])
 
     expect(await git(['diff', '--cached', '--name-only'])).toBe('keep.txt\n')
     expect(await git(['ls-files', '-z'])).toBe('keep.txt\0old.txt\0')
     expect(await readFile(path.join(repo, 'new.txt'), 'utf8')).toBe('rename content\n')
   })
 
-  it.each(['native', 'relay'] as const)(
-    'discards a staged rename after unstaging both paths on %s',
-    async (host) => {
-      await writeFile(path.join(repo, 'old.txt'), 'rename content\n')
-      gitCommit(repo, 'initial')
-      await git(['mv', 'old.txt', 'new.txt'])
+  it('discards a staged rename after unstaging both paths', async () => {
+    await writeFile(path.join(repo, 'old.txt'), 'rename content\n')
+    gitCommit(repo, 'initial')
+    await git(['mv', 'old.txt', 'new.txt'])
 
-      await mutate({ host, bulk: true }, 'unstage', ['new.txt', 'old.txt'])
-      await mutate({ host, bulk: true }, 'discard', ['new.txt', 'old.txt'])
+    await mutate({ bulk: true }, 'unstage', ['new.txt', 'old.txt'])
+    await mutate({ bulk: true }, 'discard', ['new.txt', 'old.txt'])
 
-      expect(await git(['status', '--porcelain'])).toBe('')
-      expect(await readFile(path.join(repo, 'old.txt'), 'utf8')).toBe('rename content\n')
-      await expect(readFile(path.join(repo, 'new.txt'), 'utf8')).rejects.toMatchObject({
-        code: 'ENOENT'
-      })
-    }
-  )
+    expect(await git(['status', '--porcelain'])).toBe('')
+    expect(await readFile(path.join(repo, 'old.txt'), 'utf8')).toBe('rename content\n')
+    await expect(readFile(path.join(repo, 'new.txt'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
 
-  it.each(modes)('rejects an unresolved conflict on $host bulk=$bulk', async (mode) => {
+  it.each(modes)('rejects an unresolved conflict on bulk=$bulk', async (mode) => {
     await writeFile(path.join(repo, 'file.txt'), 'base\n')
     gitCommit(repo, 'initial')
     const blobs = await Promise.all(

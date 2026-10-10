@@ -854,16 +854,13 @@
       "invariant": "A fresh PTY launch of an agent with a trust preset pre-trusts its workspace root (for Codex, whose lookup keys on its start folder, the folder it starts in, including a floating terminal's) before the provider spawn, in both spawn builders, on the host that runs the agent: main for local and WSL launches, the SSH relay on its own disk for SSH launches. It never waits past the preset's deadline: 20 s for local Codex, the short budget for every other write, local or on the relay. A failed or abandoned write lets the launch proceed untrusted, so the agent asks. Restored or reattached panes, spawns with no launch command and the setting turned off are never trusted; for an agent whose trust on a home covers the folders below it (Claude, Copilot, Qoder), no writer stores a path that is a root, a home or a folder above one, and an unknown home writes nothing; Codex, Cursor and Antigravity, whose trust on a home covers only the home, trust it as they did before; and a WSL launch never writes the Windows home. A structured Codex chat, which has no PTY, pre-trusts its folder the same way when it is created, under the same setting.",
       "oracle": "A trust write held pending keeps each builder from returning until it settles. A never-settling local Codex write resolves the dispatcher only after the long deadline; a never-settling local Claude write resolves after the short budget with a named warning. Rejected and throwing writes, and a throwing guard, resolve with a warning. Restored panes, spawns without a command and the setting off make no dispatcher call; Codex in a floating terminal or a workspace subfolder is trusted at that folder, and every other preset at the workspace root. Creating a structured Codex chat trusts its folder before launch preparation, and nothing with the setting off. An SSH launch returns the relay field for every preset and calls no writer, and the relay's pty.spawn starts no process until that launch's trust call settles. A home, a folder above one, a root, a symlink to a home and a missing path that climbs back to the home through `..` write no Claude, Copilot or Qoder trust file, on this machine and on the relay, and the home writes Codex, Cursor and Antigravity trust.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/relay/agent-workspace-trust-spawn.test.ts src/relay/agent-workspace-trust-spawn-guard-failure.test.ts src/relay/pty-handler-agent-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts",
         "src/main/agent-workspace-trust-spawn.test.ts",
         "src/main/agent-workspace-trust.test.ts",
         "src/main/execution-host-workspace-trust.test.ts",
-        "src/relay/agent-workspace-trust-spawn.test.ts",
-        "src/relay/agent-workspace-trust-spawn-guard-failure.test.ts",
-        "src/relay/pty-handler-agent-workspace-trust.test.ts",
         "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "assertionRefs": [
@@ -905,24 +902,6 @@
           ]
         },
         {
-          "file": "src/relay/agent-workspace-trust-spawn.test.ts",
-          "assertions": [
-            "writes %s trust on the relay host's own disk",
-            "trusts the relay home for %s, whose trust there covers only the home",
-            "leaves Antigravity to ask, since its writer is unverified on SSH hosts"
-          ]
-        },
-        {
-          "file": "src/relay/agent-workspace-trust-spawn-guard-failure.test.ts",
-          "assertions": ["skips %s trust and never fails the spawn"]
-        },
-        {
-          "file": "src/relay/pty-handler-agent-workspace-trust.test.ts",
-          "assertions": [
-            "writes the launch's trust with its final env before the agent's process starts"
-          ]
-        },
-        {
           "file": "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "assertions": [
             "pre-trusts the chat folder before launch preparation, as a Codex terminal launch does",
@@ -935,7 +914,7 @@
           "date": "2026-09-29",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/relay/agent-workspace-trust-spawn.test.ts src/relay/agent-workspace-trust-spawn-guard-failure.test.ts src/relay/pty-handler-agent-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "result": "passed",
           "durationSeconds": 4.16,
           "summary": "201 tests across eight suites pass, run through node_modules/.bin/vitest with a throwaway HOME. No native launch, PTY or live SSH host."
@@ -1212,81 +1191,6 @@
       ],
       "promotionCriteria": ["Retain red/green heap and value assertions and complete CI soak."],
       "demotionRule": "Keep experimental until cross-platform and soak evidence; investigate failures without weakening content or memory assertions."
-    },
-    {
-      "id": "relay-performance.ai-vault-ready-ownership",
-      "title": "AI Vault readiness releases canceled request owners",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "desktop-runtime",
-      "layer": "relay-service-client-contract",
-      "surfaces": ["AI Vault sidecar startup", "SSH title lookup cancellation"],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["ssh"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["ssh"],
-      "coverageNotes": "Production relay client with synthetic child events and real forced GC. Native remote process execution and live SSH remain untested. Local/daemon PTY, WSL shell selection and mobile terminal stream are unaffected.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23024"],
-      "invariant": "Canceled unsent calls release request payloads before sidecar readiness, disposal releases all pending readiness owners, and live calls still start exactly once through cancellation and startup failures.",
-      "oracle": "Hold ready and cancel 1,000 title calls; require zero retained request arrays after GC and one child. Dispose before ready and require uncanceled payload collection and zero timers. Race ready with abort and spawn failure with a second lane; require only live calls delivered and successful results. Preserve existing restart and cancel-ack behavior.",
-      "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/ai-vault-service-ready-retention.test.ts src/relay/ai-vault-service-client.test.ts src/relay/ai-vault-service-restart-policy.test.ts src/relay/ai-vault-service-spawn.test.ts src/relay/ai-vault-handler.test.ts src/shared/promise-settlement-waiters.test.ts"
-      ],
-      "testFiles": [
-        "src/relay/ai-vault-service-ready-retention.test.ts",
-        "src/relay/ai-vault-service-client.test.ts",
-        "src/relay/ai-vault-service-restart-policy.test.ts",
-        "src/relay/ai-vault-service-spawn.test.ts",
-        "src/relay/ai-vault-handler.test.ts",
-        "src/shared/promise-settlement-waiters.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/relay/ai-vault-service-ready-retention.test.ts",
-          "assertions": [
-            "releases canceled request payloads while readiness remains pending",
-            "releases uncanceled readiness payloads when the client is disposed",
-            "does not send a call canceled in the turn that readiness arrives",
-            "retries an unsent lane after spawn fails while the other lane starts a child"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-25",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/ai-vault-service-ready-retention.test.ts src/relay/ai-vault-service-client.test.ts src/relay/ai-vault-service-restart-policy.test.ts src/relay/ai-vault-service-spawn.test.ts src/relay/ai-vault-handler.test.ts src/shared/promise-settlement-waiters.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.616,
-          "summary": "38 tests across six suites passed, including real forced-GC retention and startup/cancel races."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 10,
-        "scope": "focused Node contract tests with forced GC"
-      },
-      "flakeHistory": {
-        "status": "unknown",
-        "evidence": "Local runs passed; CI/soak history not collected."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "Baseline retains all 1,000 canceled arrays and the disposed uncanceled payload; both permanent regressions fail there and pass after the fix. Independent spawn-failure race failed on the initial prototype, passed on baseline and passes after correction."
-      },
-      "performanceBudget": {
-        "required": true,
-        "evidence": "Synthetic cold-start churn retains 1,000 to zero canceled arrays; incremental heap 34,771,464 to 492,504 bytes. One shared startup reaction, no new polling, timers, process starts, timeout changes or wire fields."
-      },
-      "promotionCriteria": [
-        "Collect 100 consecutive CI passes or 14 days of soak history.",
-        "Exercise real SSH sidecar cancellation and restart on Linux and Windows."
-      ],
-      "knownGaps": [
-        "Synthetic churn does not measure typical user frequency or UI latency.",
-        "Physical sidecar/native Windows/Linux and live SSH paths were not exercised."
-      ],
-      "demotionRule": "Keep experimental or demote if canceled payloads survive GC, disposal retains startup owners, or live lanes stall/duplicate after startup failure."
     },
     {
       "id": "runtime.connection-owned-host-status",
@@ -3283,8 +3187,8 @@
       "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Bash scalar and supported array PROMPT_COMMAND values preserve user bytes, hook order, and foreground exit status while emitting exactly one OSC 133 A/C/D lifecycle without syntax errors. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
       "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Exercise Bash scalar and array PROMPT_COMMAND values with empty, repeated, escaped, whitespace, control-byte, odd-backslash, status-mutating, DEBUG-trap, zoxide, and RHEL-style hooks; require exact A,C,D:0,A,C,D:1,A,C ordering and byte preservation. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headless --project electron-headful --workers=1"
       ],
@@ -3303,8 +3207,6 @@
         "src/main/providers/local-pty-shell-ready-startup-command.test.ts",
         "src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts",
         "src/main/providers/local-pty-provider-shell-readiness.test.ts",
-        "src/relay/pty-shell-launch.test.ts",
-        "src/relay/pty-handler-startup-command-delivery.test.ts",
         "tests/e2e/paired-startup-exec-readiness.spec.ts"
       ],
       "assertionRefs": [
@@ -3349,14 +3251,6 @@
           ]
         },
         {
-          "file": "src/relay/pty-handler-startup-command-delivery.test.ts",
-          "assertions": [
-            "the SSH relay owner strips startup identity and releases provider-delivered input through prompt readiness",
-            "renderer-owned SSH delivery receives the existing ready marker after authoritative relay prompt readiness",
-            "normal renderer-owned ready markers pass through unchanged and retain no readiness state"
-          ]
-        },
-        {
           "file": "tests/e2e/paired-startup-exec-readiness.spec.ts",
           "assertions": [
             "a headed desktop owner and paired client recover startup exec on one stable owning PTY",
@@ -3378,7 +3272,7 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts",
           "result": "passed",
           "durationSeconds": 6,
           "summary": "473 tests passed with one local Fish skip, including every-boundary scanner composition, real exec, silent-read, line-init-hook, renamed-image, disabled-bracketed-paste, and relay-owner oracles."
@@ -3387,7 +3281,7 @@
           "date": "2026-08-15",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts",
           "result": "passed",
           "durationSeconds": 6,
           "summary": "233 tests passed with one local Fish skip, including exact Bash PROMPT_COMMAND byte/status/lifecycle composition across daemon, local, and relay owners."
@@ -10077,15 +9971,14 @@
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-orphan-owner.test.ts src/main/runtime/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler-spawn-admission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler-spawn-admission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts src/renderer/src/components/terminal-pane/pty-connection-task-complete-dispatch.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts src/renderer/src/components/terminal-pane/pty-connection-task-complete-dispatch.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
       ],
       "testFiles": [
         "src/main/providers/pty-process-inspection.test.ts",
         "src/main/daemon/terminal-host.test.ts",
         "src/main/daemon/daemon-pty-router.test.ts",
         "src/main/daemon/degraded-daemon-pty-provider.test.ts",
-        "src/relay/pty-handler-spawn-admission.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "tests/e2e/remote-agent-completion-authority.unit.test.ts",
         "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
@@ -10141,10 +10034,6 @@
           "assertions": [
             "completion inspection rejects an unmapped session instead of borrowing the local fallback"
           ]
-        },
-        {
-          "file": "src/relay/pty-handler-spawn-admission.test.ts",
-          "assertions": ["strict relay inspection rejects a missing PTY"]
         },
         {
           "file": "tests/e2e/remote-agent-completion-authority.unit.test.ts",
@@ -10327,7 +10216,7 @@
           "date": "2026-07-23",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler-spawn-admission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts src/renderer/src/components/terminal-pane/pty-connection-task-complete-dispatch.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts src/renderer/src/components/terminal-pane/pty-connection-task-complete-dispatch.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
           "result": "passed",
           "durationSeconds": 11.96,
           "summary": "Eleven focused files and 870 tests passed on the current-main candidate. The cross-boundary harness fails with the implementation reverted by dispatching process-exit from unavailable remote evidence. Direct SSH uses strict main-process inspection, daemon and relay inspection reject missing or unmapped sessions, the terminal lifecycle suite uses the atomic inspection boundary, and one stale pane cannot suppress restart notices for a separately confirmed Codex pane."
@@ -10776,7 +10665,7 @@
       "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
       "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. It asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, visibility resume reasserts real drift without hot listSessions, one settled wake produces one geometry-only readback, and SSH relay readback is authoritative with bounded fallback. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler-output-streaming.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
@@ -10785,8 +10674,7 @@
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/main/ipc/pty-applied-size-reporting.test.ts",
         "src/main/providers/ssh-pty-provider.test.ts",
-        "src/main/runtime/orca-runtime.test.ts",
-        "src/relay/pty-handler-output-streaming.test.ts"
+        "src/main/runtime/orca-runtime.test.ts"
       ],
       "assertionRefs": [
         {
@@ -10840,13 +10728,6 @@
             "the headless mirror resizes after an accepted desktop PTY resize (#7192)",
             "headless mirror resizes are ordered behind queued PTY writes (#7192)"
           ]
-        },
-        {
-          "file": "src/relay/pty-handler-output-streaming.test.ts",
-          "assertions": [
-            "relay readback reports the grid actually applied by node-pty",
-            "missing relay PTYs return an unverified null size"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -10854,7 +10735,7 @@
           "date": "2026-07-21",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler-output-streaming.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts",
           "result": "passed",
           "durationSeconds": 18.54,
           "summary": "8 test files passed, 1,272 tests passed on the PR branch."
@@ -12302,7 +12183,7 @@
       "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, per-pane liveness, and tab-title synchronization must not call global pty:listSessions or aiVault.listSessions; they must use targeted APIs or cached provider-owned state.",
       "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, bounds scanner-service calls at sixteen, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
@@ -12314,8 +12195,7 @@
         "src/main/ai-vault/session-title-file-reader.test.ts",
         "src/main/ai-vault/session-parse-cache-persistence.test.ts",
         "src/main/ipc/ai-vault.test.ts",
-        "src/main/runtime/rpc/methods/ai-vault.test.ts",
-        "src/relay/ai-vault-handler.test.ts"
+        "src/main/runtime/rpc/methods/ai-vault.test.ts"
       ],
       "assertionRefs": [
         {
@@ -12381,7 +12261,7 @@
           "date": "2026-10-02",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts src/relay/ai-vault-handler.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
           "result": "passed",
           "durationSeconds": 5.3,
           "summary": "The focused run passed 138 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, per-lane scanner-service lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback."
@@ -12541,20 +12421,18 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-pending-projection-admissions.test.ts src/main/ipc/ssh-pty-legacy-projection.test.ts src/main/ipc/ssh-pty-model-admission.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/wsl-guest/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/wsl-guest/protocol-backpressure.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-model-admission.test.ts src/main/ipc/ssh-pty-output-model-migration.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/git-response-stream-ownership.test.ts src/relay/pty-handler-output-streaming.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/relay/relay-pty-source-recovery-completion.test.ts src/relay/relay-pty-source-restore-retry.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/dispatcher.test.ts src/relay/pty-handler-source-publication.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/dispatcher.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-legacy-projection.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-generation-guard.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-restore-retry.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
         "pnpm exec vitest run src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/ssh-pty-consumer-session-adapter.test.ts src/main/persistence-ssh-targets-and-pane-keys.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/persistence-ssh-targets-and-pane-keys.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts --reporter=dot"
         // Historical evidence commands; the override is ignored after the always-on transition.
       ],
@@ -12575,17 +12453,7 @@
         "src/main/providers/ssh-pty-provider-exit-race.test.ts",
         "src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts",
         "src/wsl-guest/protocol-backpressure.test.ts",
-        "src/relay/git-response-stream-ownership.test.ts",
-        "src/relay/pty-handler-output-streaming.test.ts",
-        "src/relay/pty-source-credit-ledger.test.ts",
-        "src/relay/pty-source-credit-scheduler.test.ts",
-        "src/relay/relay-pty-source-publication.test.ts",
-        "src/relay/relay-pty-source-recovery-interleavings.test.ts",
-        "src/relay/relay-pty-source-recovery-completion.test.ts",
-        "src/relay/relay-pty-source-restore-retry.test.ts",
         "src/wsl-guest/dispatcher.test.ts",
-        "src/relay/pty-handler-source-publication.test.ts",
-        "src/relay/ssh-pty-source-credit-adapter.test.ts",
         "src/shared/pty-consumer-session.test.ts",
         "src/main/ipc/ssh-pty-model-admission.test.ts",
         "src/main/ipc/ssh-pty-output-intake.test.ts",
@@ -12702,63 +12570,9 @@
           ]
         },
         {
-          "file": "src/relay/pty-source-credit-ledger.test.ts",
-          "assertions": [
-            "an exact early cumulative ACK reserves eligibility without advancing credit before send settlement and survives only an exact same-token retry",
-            "source retention charges max UTF-8 or UTF-16 storage plus one record",
-            "fragmented multi-PTY source, charged-byte, and frame caps bind independently"
-          ]
-        },
-        {
-          "file": "src/relay/pty-source-credit-scheduler.test.ts",
-          "assertions": [
-            "one rejecting delivery is removed after one reservation attempt while prior and later peer reservations remain committed without head-of-line blocking"
-          ]
-        },
-        {
-          "file": "src/relay/git-response-stream-ownership.test.ts",
-          "assertions": [
-            "an 8-byte encoded producer capacity emits exactly two 6-byte payload chunks and one end call while the first bulk write is saturated"
-          ]
-        },
-        {
-          "file": "src/relay/pty-handler-output-streaming.test.ts",
-          "assertions": [
-            "a fresh plain pending entry after transformed source-only output omits inherited rawLength and completes in exactly three admission calls"
-          ]
-        },
-        {
           "file": "src/wsl-guest/dispatcher.test.ts",
           "assertions": [
             "a saturated legacy primary remains required backpressure and is never detached as an additional subscriber"
-          ]
-        },
-        {
-          "file": "src/relay/pty-handler-source-publication.test.ts",
-          "assertions": [
-            "immutable spawn and attach activation identity settles before the first source frame in the response/data interleaving",
-            "one saturated additional subscriber is bounded and detached without pausing the native PTY or negotiated owner"
-          ]
-        },
-        {
-          "file": "src/relay/relay-pty-source-recovery-interleavings.test.ts",
-          "assertions": [
-            "failed exit publication retains sealed delivery for late cumulative ACK and exact token recovery",
-            "exact owner recovery republishes exit without reopening source admission",
-            "a failed recovery-completion frame rolls back its fence and the next exact owner republishes it before live admission",
-            "failed activation response retains private retry authority, and exact retry clears activation only after successful settlement"
-          ]
-        },
-        {
-          "file": "src/relay/relay-pty-source-recovery-completion.test.ts",
-          "assertions": [
-            "unadmitted recovery completion retries once writer capacity returns, stays single-flight, and releases its bounded capacity listener"
-          ]
-        },
-        {
-          "file": "src/relay/relay-pty-source-restore-retry.test.ts",
-          "assertions": [
-            "invalid-checkpoint cancellation retains the exact delivery until restore response settlement, then retry mints a fresh activation and emits one live source frame"
           ]
         },
         {
@@ -12916,19 +12730,10 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/wsl-guest/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/wsl-guest/protocol-backpressure.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2.24,
           "summary": "Sixteen deterministic SSH relay/session/source/decoder files passed 192 tests, including exit-sealed private recovery, retained stale-transfer cancellation authority, exact private-frame proof watermarks, one retirement record across 10,000 same-PTY token rotations, stale-owner fallback, and scheduler rejection isolation; no live topology was exercised."
-        },
-        {
-          "date": "2026-07-29",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/git-response-stream-ownership.test.ts src/relay/pty-handler-output-streaming.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 11.81,
-          "summary": "Two deterministic relay stream and PTY batching files passed 120 tests, including exact encoded chunk capacity and transformed-to-plain metadata isolation."
         },
         {
           "date": "2026-07-28",
@@ -12943,7 +12748,7 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-restore-retry.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 6.89,
           "summary": "Thirteen current-head deterministic files passed 150 tests across exit-sealed private recovery, stale-transfer cancellation authority, bounded latest-token retirement, restore retirement, fail-closed recovery cancellation, partial ACK and token rotation, reclaimed-span replacement, mux lane fairness, provisional activation, and exit-proof ordering; no live topology was exercised."
@@ -12961,7 +12766,7 @@
           "date": "2026-07-28",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 1.63,
           "summary": "Five deterministic provider, relay, deploy, and session files passed 70 tests after red seams proved that source frames mutated legacy incarnation state and generic restore-required reattach returned an outputless live PTY. The candidate keeps exact source identity side-effect free, fails generic restore-required reattach as expired, offers V1 through reconnect, and proves a failed recovery activation stays private and exact-retryable until successful response settlement; no live topology was exercised."
@@ -18418,24 +18223,20 @@
       "oracle": "Fill the global watcher-child reservation, require native desktop, paired-runtime, and WSL setup to retain typed transient capacity and retry after one serialized release, then cancel pending desktop and paired-client watches and require no retry. Hold one live anchor while aborting 10,000 callers at the capacity, quarantine-assignment, runtime-root, relay-setup, and SSH-registration layers; require exactly one explicit waiter and one base-promise reaction to remain, then zero after settlement. Hold an old relay unsubscribe, queue one same-root setup leader and one anchor, then abort 10,000 joiners; require every cancellation to settle before teardown releases, exactly one anchor waiter, and only one later physical install. Advance the former paired-web callback deadline while capacity remains full, require cancellation ownership to stay live, publish the server token before ready, and require files.unwatch to abort setup before a later slot release can install a native root. Reject the first ready-watch unwatch with a physical-exit promise, resolve that exit later, and require a fresh physical unwatch attempt, registry release, and exactly one stream end. Fill one healthy shared child with multiple roots, map a standard SSH repository's base, Git common directory, and worktree roots to one relay supervisor, then inject IPC disconnect-before-exit, queued and active cancellation, operations during termination, kill-without-exit, repeated unkillable generations, initial and recovery timeouts, and shard failure. During local and SSH deletion, attempt a late terminal spawn whose worktree identity and cwd name different roots, enumerate a non-prefix remote PTY by authoritative worktree ownership, withhold daemon/relay exit callbacks, make attach positively prove a concurrent-shutdown PID dead, and make the provider unavailable; require every acquired admission to roll back on rejection, dead-PID proof to settle physical exit before reaping, timeout to retain ownership, and Git/filesystem deletion never to start. Require bounded watcher process count, physical-exit settlement, healthy-root recovery, stale-generation rejection, overflow plus later events, and fail-closed destructive cleanup. Verify relay build hashes and remote install probes require both relay.js and relay-watcher.js. Launch the built relay with a real PTY and Parcel watch, kill only the watcher child, and require the same relay PID and PTY to answer before a replacement child delivers overflow and a post-crash event.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/files-watch-cleanup.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-pending-setup-waiters.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-parent-removal.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-unsubscribe-timeout.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-pending-assignment.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/shared/promise-settlement-waiters.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-pending-assignment.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/shared/promise-settlement-waiters.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts",
         "pnpm run build:electron-vite",
         "node config/scripts/runtime-file-watcher-resource-probe.mjs",
         "node config/scripts/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm run build:relay",
-        "node config/scripts/relay-watcher-fault-harness.mjs"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -18482,21 +18283,8 @@
         "src/shared/promise-settlement-waiters.test.ts",
         "config/scripts/runtime-file-watcher-fault-harness.mjs",
         "config/scripts/runtime-file-watcher-resource-probe.mjs",
-        "src/relay/relay-filesystem-watch-registry.test.ts",
-        "src/relay/relay-watcher-pending-setup-waiters.test.ts",
-        "src/relay/relay-watcher-parent-removal.test.ts",
-        "src/relay/relay-watcher-setup-wait.test.ts",
-        "src/relay/fs-handler.test.ts",
-        "src/relay/pty-handler-dispose-lifecycle.test.ts",
-        "src/relay/pty-handler-shutdown-signals.test.ts",
-        "src/relay/pty-handler-spawn-admission.test.ts",
-        "src/relay/pty-handler-attach-replay.test.ts",
-        "src/relay/pty-handler-revive.test.ts",
-        "src/relay/git-handler.test.ts",
-        "src/relay/subprocess.test.ts",
         "src/main/ssh/ssh-relay-versioned-install.test.ts",
-        "config/scripts/package-electron-runtime-contract.test.mjs",
-        "config/scripts/relay-watcher-fault-harness.mjs"
+        "config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "assertionRefs": [
         {
@@ -18816,89 +18604,10 @@
           ]
         },
         {
-          "file": "src/relay/relay-watcher-parent-removal.test.ts",
-          "assertions": [
-            "POSIX and Windows parent deletion closes and terminally notifies descendant watches before removal while preserving path siblings",
-            "parent deletion waits for descendant setup publication and already-retiring descendant teardown before removal"
-          ]
-        },
-        {
-          "file": "src/relay/relay-watcher-pending-setup-waiters.test.ts",
-          "assertions": [
-            "10,000 aborted relay setup callers detach while one same-root teardown anchor remains and only one replacement installs"
-          ]
-        },
-        {
-          "file": "src/relay/relay-watcher-setup-wait.test.ts",
-          "assertions": [
-            "10,000 cancelled relay setup callers leave exactly one explicit anchor and one base-promise reaction"
-          ]
-        },
-        {
-          "file": "src/relay/relay-filesystem-watch-registry.test.ts",
-          "assertions": [
-            "each SSH host keeps its own healthy watcher supervisor while a standard repository's three distinct roots share that one child",
-            "shared-child failure moves those roots into separate quarantine supervisors with overflow and resumed events",
-            "replacement emits overflow before later ordered events",
-            "terminal shard failure preserves same-root clients through recovery",
-            "pending setup aborts only after the last same-root client leaves",
-            "relay-side removal sends every client a terminal failure, closes every watch, and fences new same-root watcher or PTY setup even when deletion fails",
-            "a missing child fails closed even if the relay inherits a VITEST environment"
-          ]
-        },
-        {
-          "file": "src/relay/fs-handler.test.ts",
-          "assertions": [
-            "shared watches retain the twenty-root budget and release after every client leaves",
-            "recursive relay deletion closes and terminally notifies same-root watches before removing the directory"
-          ]
-        },
-        {
-          "file": "src/relay/pty-handler-dispose-lifecycle.test.ts",
-          "assertions": [
-            "immediate relay shutdown stays pending with the PTY map entry retained until onExit",
-            "a missing exit rejects at the bounded deadline, preserves the physical owner, and a retry joins without duplicate SIGKILL",
-            "worktree removal waits explicit and default-cwd PTY creation, rejects later creation, and physically stops only authoritative matching PTYs before deletion"
-          ]
-        },
-        {
-          "file": "src/relay/pty-handler-shutdown-signals.test.ts",
-          "assertions": [
-            "Windows relay graceful, fallback, immediate, stale-spawn, exit-dispose, and handler-dispose paths issue at most one ConPTY kill"
-          ]
-        },
-        {
-          "file": "src/relay/pty-handler-spawn-admission.test.ts",
-          "assertions": [
-            "relay PTY admission succeeds when post-Node-18 array copy methods are unavailable",
-            "concurrent spawn and revive admission is atomic, capped at fifty physical PTYs, and same-id revive is deduplicated",
-            "relay spawn and revive fence distinct worktree-ID and cwd roots, rolling back earlier admissions in reverse when either root is removing"
-          ]
-        },
-        {
-          "file": "src/relay/pty-handler-attach-replay.test.ts",
-          "assertions": [
-            "attach dead-PID proof settles a concurrent immediate shutdown before the stale PTY entry is reaped"
-          ]
-        },
-        {
           "file": "src/renderer/src/web/web-runtime-client.test.ts",
           "assertions": [
             "a stopped pre-ready paired-web watch retains its callback beyond the former deadline and uses the early server token to unwatch",
             "transient shared-socket loss replays an active file watch under a new transport id while preserving its logical handle and never revives a stopped watch"
-          ]
-        },
-        {
-          "file": "src/relay/git-handler.test.ts",
-          "assertions": [
-            "remote Git worktree removal executes inside the relay filesystem watcher fence"
-          ]
-        },
-        {
-          "file": "src/relay/subprocess.test.ts",
-          "assertions": [
-            "the real relay bundle serves PTY, filesystem, and Git requests with its adjacent watcher child",
-            "the Node-18-targeted relay bundle contains no unsupported array copy methods"
           ]
         },
         {
@@ -18927,13 +18636,6 @@
             "the harness parent survives watcher-child SIGSEGV",
             "the real supervisor automatically replaces the child, resubscribes, and delivers a post-crash event"
           ]
-        },
-        {
-          "file": "config/scripts/relay-watcher-fault-harness.mjs",
-          "assertions": [
-            "the built relay and existing PTY survive watcher-child fault injection",
-            "replacement emits overflow and a precise post-crash event"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -18941,7 +18643,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-pending-assignment.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/shared/promise-settlement-waiters.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-pending-assignment.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/shared/promise-settlement-waiters.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 11.98,
           "summary": "Thirty-nine watcher, cancellation, desktop/serve, paired-web, WSL, SSH/relay, removal, and PTY physical-exit files passed with 2,008 tests. Capacity, quarantine, runtime-root, relay, and SSH setup layers each prove that 10,000 aborted callers detach while one anchor remains and zero waiters remain after settlement."
@@ -18950,7 +18652,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 11.59,
           "summary": "Thirty-four watcher, cancellation, desktop/serve, paired-web, WSL, removal, PTY physical-exit, provider, renderer, and path files passed with 1,999 tests; paired-web cancellation now owns a server token before ready and aborts pending setup without a late native install."
@@ -18968,7 +18670,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 10.01,
           "summary": "Twenty-seven watcher, WSL, desktop/serve removal, local/daemon/SSH PTY physical-exit, provider ownership, RPC, renderer, relay PTY admission, and cross-platform path files passed with 1,886 tests. The suite includes nested removal fencing, renderer/runtime cwd-only admission, legacy provider rows, rejected kill retries, transient WSL capacity, and synchronous-startup reservation cleanup."
@@ -18986,7 +18688,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 10.01,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests."
@@ -19022,25 +18724,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm run build:relay",
-          "result": "passed",
-          "durationSeconds": 0.38,
-          "summary": "Relay and adjacent watcher artifacts built for Linux, macOS, and Windows on x64 and arm64, plus the WSL hook relay."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
-          "result": "passed",
-          "durationSeconds": 0.12,
-          "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
           "result": "passed",
           "durationSeconds": 9.12,
           "summary": "Twenty-five watcher, WSL, desktop/serve removal, local/daemon/SSH PTY physical-exit, provider ownership, RPC, renderer, relay PTY admission, and cross-platform path files passed with 1,762 tests. The suite covers operations joining in-flight termination, kill failures retaining ownership, bounded timeouts, atomic relay spawn/revive caps, and PTY-removal admission."
@@ -19058,7 +18742,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 10.69,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests, including watcher/PTY removal fencing and recursive deletion failure behavior."
@@ -19094,25 +18778,7 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm run build:relay",
-          "result": "passed",
-          "durationSeconds": 0.39,
-          "summary": "Relay and adjacent watcher artifacts built for Linux, macOS, and Windows on x64 and arm64, plus the WSL hook relay."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
-          "result": "passed",
-          "durationSeconds": 0.12,
-          "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler-dispose-lifecycle.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-handler-attach-replay.test.ts src/relay/pty-handler-revive.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
           "result": "passed",
           "durationSeconds": 9.03,
           "summary": "Twenty-three watcher, desktop/serve removal, terminal-spawn gate, daemon/SSH physical PTY exit, provider ownership, RPC, renderer, and cross-platform path files passed with 1,630 tests. The suite includes same-turn watcher replacement, authoritative SSH teardown before Git, bounded kill-without-exit failures that retain ownership, and local/SSH deletion fail-closed behavior."
@@ -19130,19 +18796,10 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
           "result": "passed",
           "durationSeconds": 9.79,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 225 tests, including terminal removal notification and recursive deletion fencing."
-        },
-        {
-          "date": "2026-07-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
-          "result": "passed",
-          "durationSeconds": 0.61,
-          "summary": "The relay PID and existing PTY survived watcher-child SIGSEGV; overflow and precise events resumed from a replacement child."
         },
         {
           "date": "2026-07-13",
@@ -19232,12 +18889,9 @@
       "invariant": "terminal.sendText accepts only an explicit provider-owned terminal id present in one bounded inventory of the worktree resolved immediately before the send; an absent id causes zero send calls, and relay callers cannot supply their own capability grants or transport classification.",
       "oracle": "Resolve the active worktree once, list that worktree with the v0 terminal cap once, and assert zero sendTerminal calls for a mismatched opaque id versus exactly one send for matching local- and SSH-shaped ids; then run the same permission and schema cases through desktop-main and registered relay panel/worker adapters and compare error codes.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts src/main/plugins/plugin-host-conformance.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts"
       ],
-      "testFiles": [
-        "src/main/plugins/plugin-host-methods.test.ts",
-        "src/main/plugins/plugin-host-conformance.test.ts"
-      ],
+      "testFiles": ["src/main/plugins/plugin-host-methods.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/plugins/plugin-host-methods.test.ts",
@@ -19246,14 +18900,6 @@
             "matching local- and SSH-shaped opaque ids each perform one capped list and one exact send",
             "workspace.readContext drops provider paths, path-bearing internal worktree ids, and terminal titles while capping its terminal projection"
           ]
-        },
-        {
-          "file": "src/main/plugins/plugin-host-conformance.test.ts",
-          "assertions": [
-            "all 13 v0 methods succeed with the required consented capability through desktop-main and relay adapters",
-            "missing consent, missing capability, unknown method, malformed params, panel-forbidden access, malformed results, and mutation-audit failure return identical codes",
-            "malformed qualified keys, client-supplied grants, and client-supplied transport flags are rejected before host policy resolution"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -19261,7 +18907,7 @@
           "date": "2026-07-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts src/main/plugins/plugin-host-conformance.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/plugins/plugin-host-methods.test.ts",
           "result": "passed",
           "durationSeconds": 0.18,
           "summary": "2 files and 17 tests passed, covering the 13-method main/relay conformance matrix and exact terminal routing call counts."
@@ -19795,88 +19441,6 @@
       "demotionRule": "Keep experimental or demote if any case terminates on a signal, the preconditions stop holding on the CI runner, or an assertion can be satisfied by anything other than the command's own output."
     },
     {
-      "id": "ssh-managed-hooks.node18-runtime-compatibility",
-      "title": "SSH managed-hook companions load and install hooks on Node 18",
-      "maturity": "experimental",
-      "protection": "partial",
-      "owner": "agent-hooks",
-      "layer": "ssh-relay-companion-runtime",
-      "surfaces": [
-        "SSH managed-hook companion startup",
-        "remote Codex hook installation",
-        "remote Claude hook installation"
-      ],
-      "platforms": ["macos", "linux", "windows"],
-      "providers": ["ssh"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["ssh"],
-      "coverageNotes": "A real Node 18 process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/12617"],
-      "invariant": "Every managed-hook companion shipped for Node 18 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
-      "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
-      "commands": [
-        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
-      ],
-      "testFiles": [
-        "config/scripts/smoke-managed-hook-runtime-node18.mjs",
-        "config/scripts/pr-workflow-parallelism.test.mjs"
-      ],
-      "assertionRefs": [
-        {
-          "file": "config/scripts/smoke-managed-hook-runtime-node18.mjs",
-          "assertions": [
-            "all six built companions load and export installManagedHooks under Node 18",
-            "Codex and Claude installations both succeed in an isolated home",
-            "both generated configs reference executable managed hook scripts"
-          ]
-        },
-        {
-          "file": "config/scripts/pr-workflow-parallelism.test.mjs",
-          "assertions": [
-            "PR CI builds the companions before switching to Node 18 and running the smoke oracle"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-08-08",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
-          "durationSeconds": 4,
-          "summary": "All six companions loaded under Node 18.20.8; Codex and Claude produced two successful results, executable hook scripts, and managed configs in a temporary home."
-        }
-      ],
-      "runtimeBudget": {
-        "p95Seconds": 30,
-        "scope": "six built-companion loads plus two isolated local-filesystem installer executions"
-      },
-      "flakeHistory": {
-        "status": "not-started",
-        "evidence": "New deterministic artifact smoke with no timing oracle; CI history is not yet available."
-      },
-      "redGreenEvidence": {
-        "status": "complete",
-        "evidence": "On main de4f272b31, the same Node 18 require exited 1 before exports with ERR_UNKNOWN_BUILTIN_MODULE for node:sqlite. The candidate passes all six loads and both installers; restoring the eager node:sqlite value import reproduces the original exit."
-      },
-      "performanceBudget": {
-        "required": false,
-        "evidence": "The product change replaces one eager built-in import with a constructor-time built-in lookup. It adds no polling, IPC, filesystem scan, subprocess, listener, or recurring work."
-      },
-      "promotionCriteria": [
-        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
-        "Collect one live SSH install on Linux and one on Windows OpenSSH.",
-        "Keep all-platform load, selected installer, isolated-home, and workflow-order assertions green."
-      ],
-      "knownGaps": [
-        "The artifact journey uses local filesystem calls rather than a live SSH transport.",
-        "Platform-named bundles are loaded on macOS locally; physical Linux and Windows evidence is not yet recorded."
-      ],
-      "demotionRule": "Demote if any shipped companion stops loading on Node 18, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with Node 18."
-    },
-    {
       "id": "terminal-history.daemon-checkpoint-session-isolation",
       "title": "Daemon history checkpoints isolate stalled terminal sessions",
       "maturity": "experimental",
@@ -20002,17 +19566,12 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts --reporter=verbose",
         "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-        "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-        "ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY=<fa9b20cb4163-relay.js> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-        "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<fa9b20cb4163-relay.js;sha256=4db8609c4e1772f1efa9b0c0cf6affa8f64ff9ebc8e2b6f9e71678992ccdcf1a> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-        "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<012e9f410c-fix-reverted-relay.js;sha256=ca03bf47d93828ec30473391b542d945df887b7881cce3df17e95d90226e34fb> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose"
+        "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose"
       ],
       "testFiles": [
         "src/main/skills/skill-upload-session-service.test.ts",
         "src/main/skills/skill-upload-process-restart.integration.test.ts",
-        "src/main/skills/skill-upload-process-restart-child.test.ts",
-        "src/relay/skill-upload-multi-relay.integration.test.ts"
+        "src/main/skills/skill-upload-process-restart-child.test.ts"
       ],
       "assertionRefs": [
         {
@@ -20035,14 +19594,6 @@
             "begun, partial, uploaded, and committed crash residue is reclaimed",
             "the replacement transfer completes and leaves no owner directory"
           ]
-        },
-        {
-          "file": "src/relay/skill-upload-multi-relay.integration.test.ts",
-          "assertions": [
-            "two bundled relay PIDs retain separate archives under one account home",
-            "current and originating relay bundles retain separate archives in both launch orders",
-            "relay cancellation and live-upload graceful shutdown clean only the exact owner"
-          ]
         }
       ],
       "evidenceRuns": [
@@ -20051,36 +19602,9 @@
           "runner": "local",
           "platform": "macos",
           "result": "passed",
-          "command": "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "command": "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
           "durationSeconds": 5.95,
           "summary": "Fifteen service tests, four crash-boundary cases, and one two-current-relay topology passed; the child fixture and two explicitly separate mixed-version cases skipped."
-        },
-        {
-          "date": "2026-08-20",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY=<fa9b20cb4163-relay.js> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-          "durationSeconds": 0.9,
-          "summary": "The current/current case and both originating/current mixed-version launch orders passed with exact per-root archive bytes."
-        },
-        {
-          "date": "2026-08-20",
-          "runner": "local",
-          "platform": "macos",
-          "result": "failed",
-          "command": "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<fa9b20cb4163-relay.js;sha256=4db8609c4e1772f1efa9b0c0cf6affa8f64ff9ebc8e2b6f9e71678992ccdcf1a> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-          "durationSeconds": 0.4,
-          "summary": "Expected red: zero PID/UUID owner directories and one archive were observed where two each were required; relay A's exact first five bytes were missing."
-        },
-        {
-          "date": "2026-08-20",
-          "runner": "local",
-          "platform": "macos",
-          "result": "failed",
-          "command": "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<012e9f410c-fix-reverted-relay.js;sha256=ca03bf47d93828ec30473391b542d945df887b7881cce3df17e95d90226e34fb> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
-          "durationSeconds": 0.4,
-          "summary": "Expected red: zero PID/UUID owner directories and one archive were observed where two each were required; relay A's exact first five bytes were missing."
         }
       ],
       "runtimeBudget": {

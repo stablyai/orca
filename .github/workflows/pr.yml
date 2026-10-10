@@ -503,8 +503,7 @@ jobs:
               pnpm exec vitest run --config config/vitest.config.ts \
               src/shared/git-binary-compatibility.test.ts \
               src/main/git/worktree-safety-real-git.test.ts \
-              src/main/git/worktree-rebase-update-refs-real-git.test.ts \
-              src/relay/git-review-draft-binary-compatibility.test.ts
+              src/main/git/worktree-rebase-update-refs-real-git.test.ts
           ) &
           pids+=("$!")
 
@@ -516,8 +515,7 @@ jobs:
                 pnpm exec vitest run --config config/vitest.config.ts \
                 src/shared/git-binary-compatibility.test.ts \
                 src/main/git/worktree-safety-real-git.test.ts \
-                src/main/git/worktree-rebase-update-refs-real-git.test.ts \
-                src/relay/git-review-draft-binary-compatibility.test.ts
+                src/main/git/worktree-rebase-update-refs-real-git.test.ts
             ) &
             pids+=("$!")
           done
@@ -792,7 +790,6 @@ jobs:
             src/main/terminal-history-fish-session.node-pty.test.ts \
             src/main/zsh-scoped-histfile.live-shell.test.ts \
             src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
-            src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
@@ -969,16 +966,10 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      - name: Build relay companions
-        run: pnpm run build:relay
-
       - name: Setup Node 18 runtime
         uses: actions/setup-node@v6
         with:
           node-version: '18'
-
-      - name: Smoke managed-hook companions
-        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
       # The process-host package declares engines >=18; load its staged public output on Node 18.
       - name: Smoke process-host package
@@ -1268,9 +1259,7 @@ jobs:
           src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
           src/main/ipc/preflight-provider-command-selection.test.ts
           src/main/ipc/preflight-runnable-local-cli.test.ts
-          src/relay/windows-port-scan.win32.test.ts
           src/main/ssh/remote-node-runtime-store-windows.test.ts
-          config/scripts/node-pty-windows-pty-teardown-patch.test.mjs
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package

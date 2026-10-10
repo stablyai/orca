@@ -12,7 +12,7 @@ const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
 const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
-// the shared codec, plus the relay an app update leaves running. Skipping cli keeps a cold CI
+// the shared codec, plus a release's relay that an app update leaves running. Skipping cli keeps a cold CI
 // extraction a few seconds.
 // The phone's `worktree ps` row reader is one self-contained file, so it rides along alone.
 // Workspace packages the release declares are added per release (releaseWorkspaceArchivePaths).
@@ -20,13 +20,12 @@ const ARCHIVE_PATHS = [
   'src/main',
   'src/shared',
   'src/preload',
-  'src/relay',
   'src/renderer',
   'src/types',
   'mobile/src/worktree/agent-row-display.ts'
 ]
-// Why optional: only releases from the move onward have it, and `git archive` refuses a missing pathspec.
-const OPTIONAL_ARCHIVE_PATHS = ['src/wsl-guest']
+// Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
+const OPTIONAL_ARCHIVE_PATHS = ['src/relay', 'src/wsl-guest']
 
 const WORKSPACE_POLICY = 'pnpm-workspace.yaml'
 

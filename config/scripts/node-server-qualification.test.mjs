@@ -39,7 +39,6 @@ it.each([
   'src/main/sqlite/database.ts',
   'src/main/orcad/entry.ts',
   'src/main/daemon/entry.ts',
-  'src/relay/index.ts',
   'config/scripts/build-orcad-prebuilds.mjs',
   'config/scripts/orcad-prebuild-slot-contents.mjs',
   'src/shared/node-runtime-pin.ts'
@@ -124,7 +123,6 @@ it.each([
   'src/main/ssh/orcad-remote-node-runtime-windows.ts',
   'src/main/ssh/ssh-posix-command-wrapper.test.ts',
   'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
-  'src/relay/windows-port-scan.ts',
   'src/main/runtime/windows-firewall-remote-scope.ts',
   'src/shared/remote-windows-path.ts'
 ])('qualifies every client platform for a remote execution input: %s', (file) => {

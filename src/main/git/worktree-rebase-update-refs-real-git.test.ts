@@ -10,7 +10,6 @@ vi.mock('./local-repo-ref-maintenance', () => ({
 }))
 
 import { forceDeleteLocalBranch } from './worktree-branch-removal'
-import { forceDeletePreservedRelayBranch } from '../../relay/git-handler-branch-cleanup'
 
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
 const binary = process.env.ORCA_GIT_COMPAT_BINARY ?? 'git'
@@ -82,10 +81,10 @@ afterEach(async () => {
 })
 
 describe('rebase branch reservations with real Git', () => {
-  it.for(['native', 'relay'] as const)(
+  it.for(['native'] as const)(
     '%s retains auxiliary branches reserved by a paused real rebase --update-refs',
     { timeout: 120_000 },
-    async (host, context) => {
+    async (_host, context) => {
       await git(['worktree', 'add', '-q', '-b', 'feature', checkout])
       await writeFile(join(checkout, 'first'), 'first\n')
       await git(['add', 'first'], checkout)
@@ -117,10 +116,7 @@ describe('rebase branch reservations with real Git', () => {
         /checked out|used by worktree/
       )
       const cleanupGit = vi.fn((args: string[], cwd: string) => git(args, cwd))
-      const remove = () =>
-        host === 'native'
-          ? forceDeleteLocalBranch(repo, 'auxiliary', expected, cleanupGit)
-          : forceDeletePreservedRelayBranch(cleanupGit, repo, 'auxiliary', expected)
+      const remove = () => forceDeleteLocalBranch(repo, 'auxiliary', expected, cleanupGit)
       await expect(remove()).rejects.toThrow('checked out in another worktree')
       expect(cleanupGit.mock.calls.map(([args]) => args)).toEqual([
         ['worktree', 'list', '--porcelain']

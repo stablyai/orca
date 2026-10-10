@@ -2,22 +2,17 @@ import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises'
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import type { Store } from '../persistence'
 import { listQuickOpenFiles } from './filesystem-list-files'
-import { listFilesWithRg } from '../../relay/fs-handler-list-files'
 import { searchQuickOpenFilePaths } from './filesystem-search-file-paths'
-import { bundledRipgrepCommand } from '../ripgrep/bundled-ripgrep-path'
-import { configureRelayBundledRipgrep } from '../../relay/relay-bundled-ripgrep'
 
 const fixtures: string[] = []
-beforeEach(() => configureRelayBundledRipgrep(bundledRipgrepCommand()))
 afterEach(async () => {
-  configureRelayBundledRipgrep(undefined)
   await Promise.all(fixtures.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
-it('honors inherited ignores, opt-in links, cycles, retargets and relay parity in real processes', async () => {
+it('honors inherited ignores, opt-in links, cycles, and retargets in real processes', async () => {
   const parent = await mkdtemp(join(tmpdir(), 'orca-quick-open-options-'))
   fixtures.push(parent)
   await mkdir(join(parent, '.git'))
@@ -53,8 +48,6 @@ it('honors inherited ignores, opt-in links, cycles, retargets and relay parity i
       undefined,
       options
     )
-    const relay = await listFilesWithRg(root, [], options)
-    expect(local.sort()).toEqual(relay.sort())
     expect(local.includes('ignored.txt')).toBe(options.includeIgnored)
     expect(local.includes('linked/linked.md')).toBe(options.followSymlinks)
     expect(local).not.toContain('cycle/apps/api/.env')
@@ -122,13 +115,6 @@ it('validates recent membership independently of top32, ignores, exclusions and 
     getSettings: () => ({}),
     getFolderWorkspaces: () => []
   } as unknown as Store
-  const top = await listFilesWithRg(root, [], {
-    searchQuery: 'file',
-    maxResults: 32,
-    includeIgnored: false
-  })
-  expect(top).toHaveLength(32)
-  expect(top).not.toContain('src/file059.ts')
   const candidates = [
     'src/file059.ts',
     'deleted.ts',
@@ -148,17 +134,17 @@ it('validates recent membership independently of top32, ignores, exclusions and 
     undefined,
     options
   )
-  const relay = await listFilesWithRg(root, ['excluded'], {
-    ...options,
-    maxResults: candidates.length
-  })
   expect(local).toEqual(['src/file059.ts'])
-  expect(relay).toEqual(local)
-  const broad = await listFilesWithRg(root, ['excluded'], {
-    ...options,
-    includeIgnored: true,
-    maxResults: candidates.length
-  })
+  const broad = await listQuickOpenFiles(
+    root,
+    store,
+    [join(root, 'excluded')],
+    undefined,
+    candidates.length,
+    undefined,
+    undefined,
+    { ...options, includeIgnored: true }
+  )
   expect(broad.sort()).toEqual(['ignored.ts', 'src/file059.ts'])
   await mkdir(join(root, 'large'))
   for (let index = 0; index < 20_020; index += 1) {
@@ -178,13 +164,6 @@ it('validates recent membership independently of top32, ignores, exclusions and 
     await listQuickOpenFiles(root, store, undefined, undefined, 1, undefined, undefined, {
       candidatePaths: [missing],
       includeIgnored: false
-    })
-  ).toEqual([missing])
-  expect(
-    await listFilesWithRg(root, [], {
-      candidatePaths: [missing],
-      includeIgnored: false,
-      maxResults: 1
     })
   ).toEqual([missing])
 }, 60_000)
