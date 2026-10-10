@@ -180,8 +180,8 @@ export function SessionRowTrailingActions({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={translate(
-                  'components.agentSessionContinuation.continueInNewSession',
-                  'Continue in New Session…'
+                  'components.agentSessionContinuation.handOffToAnotherAgent',
+                  'Hand Off to Another Agent'
                 )}
                 draggable={false}
                 onClick={(event) => {
@@ -196,8 +196,8 @@ export function SessionRowTrailingActions({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
               {translate(
-                'components.agentSessionContinuation.continueInNewSession',
-                'Continue in New Session…'
+                'components.agentSessionContinuation.handOffToAnotherAgent',
+                'Hand Off to Another Agent'
               )}
             </TooltipContent>
           </Tooltip>

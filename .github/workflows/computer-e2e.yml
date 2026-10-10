@@ -29,6 +29,7 @@ on:
       - 'electron.vite.config.ts'
       - 'config/build-plugins/**'
       - 'src/main/daemon/**'
+      - '!src/main/daemon/**/*.test.ts'
       - 'src/main/providers/local-pty-provider.ts'
       - 'src/main/providers/windows-shell-args.ts'
       - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'

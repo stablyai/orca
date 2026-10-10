@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
@@ -17,12 +16,9 @@ import {
   projectStructuredPermission,
   projectStructuredQuestion
 } from './mobile-structured-agent-prompts'
-import type { RpcClient } from '../transport/rpc-client'
+import type { StructuredMobileSession } from './mobile-structured-agent-session-contract'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
-import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
+import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press'
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
@@ -38,44 +34,11 @@ import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mu
 import { agentStopDisplayStatus } from '../../../src/shared/agent-stop-display-status'
 import {
   mobileStructuredSendQueues,
-  useMobileStructuredSendWithOutcome,
-  type StructuredMobileSendAttachment
+  useMobileStructuredSendWithOutcome
 } from './use-mobile-structured-send-with-outcome'
-import {
-  useMobileStructuredQueuedMessageControls,
-  type MobileStructuredQueuedMessageControls
-} from './use-mobile-structured-queued-message-controls'
-import {
-  useMobileStructuredBackgroundTasks,
-  type MobileStructuredBackgroundTasks
-} from './use-mobile-structured-background-tasks'
-
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
-  ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
-    session: MobileNativeChatSession
-    isWorking: boolean
-    turnId: string | null
-    /** What labels the live turn's one indicator row. */
-    turnIndicator: NativeChatLiveTurnIndicator
-    sendWithOutcome: (
-      text: string,
-      images?: string[],
-      deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
-    ) => Promise<MobileNativeChatSendOutcome>
-    cancel: () => void
-    permission: MobileChatPermission | null
-    question: MobileChatQuestion | null
-    respondPermission: (optionId: string) => Promise<boolean>
-    respondQuestion: (answer: string) => Promise<boolean>
-    cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
-    /** The queued-draft cards and their actions, from any host that publishes them. */
-    queued: MobileStructuredQueuedMessageControls
-    /** Running child work for the strip above the composer, as desktop shows it. */
-    backgroundTasks: MobileStructuredBackgroundTasks
-    /** Where this chat's `::orca-visual` lines read their HTML from; null without a client. */
-    visualSource: MobileNativeChatVisualSource | null
-  }
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
+import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -90,7 +53,7 @@ export function useMobileStructuredAgentSession(args: {
   agent: string | null
   /** The active pane's live composer; Edit copies a card's text through it. */
   appendComposerText?: (text: string) => boolean
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
   /** Called on any accepted queued-card action; retires the route's failure banner. */
   onActionResolved?: () => void
 }): StructuredMobileSession {
@@ -108,6 +71,8 @@ export function useMobileStructuredAgentSession(args: {
   } = args
   // Only a host that queues sends gets the delivery field; any host's published cards show.
   const queueCapable = hostSupport?.queuedMessages === true
+  // A /compact waits in line only where its card renders.
+  const commandsWait = queueCapable && hostSupport?.queuedCommands === true
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
@@ -153,6 +118,7 @@ export function useMobileStructuredAgentSession(args: {
     sessionId,
     enabled,
     queueCapable,
+    commandsWait,
     stateRef,
     commandPending: commandPendingRef,
     controller: sendController,
@@ -171,7 +137,7 @@ export function useMobileStructuredAgentSession(args: {
   const transcriptItems = useMemo(
     () =>
       withNativeChatCutTurnNotices(state.items, {
-        agentName: TUI_AGENT_DISPLAY_NAMES[agent === 'codex' ? 'codex' : 'claude']
+        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined
       }),
     [agent, state.items]
   )
@@ -238,12 +204,22 @@ export function useMobileStructuredAgentSession(args: {
     () => state.items.find(pendingStructuredQuestion) ?? null,
     [state.items]
   )
+  // What a refused command's line on the phone stands on.
+  const commandRefusalCauses = useMemo(
+    () => ({
+      working: turnId !== null,
+      prompt: approvalPrompt !== null || questionPrompt !== null
+    }),
+    [approvalPrompt, questionPrompt, turnId]
+  )
   const queued = useMobileStructuredQueuedMessageControls({
     sessionKey,
+    agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
+    journalItems: state.items,
     queuedMessages,
     queuePause,
     submissions: state.submissions,
-    pendingPrompt: approvalPrompt !== null || questionPrompt !== null,
+    agentWorking: isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence),
     mutate,
     appendComposerText,
     onSendError,
@@ -308,6 +284,7 @@ export function useMobileStructuredAgentSession(args: {
     respondPermission,
     respondQuestion,
     queued,
+    commandRefusalCauses,
     backgroundTasks
   }
 }

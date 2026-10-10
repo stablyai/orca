@@ -4,6 +4,7 @@ import type { ConnectionState } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 /** Mounts both transcript sources and hands back the one this tab's lane owns.
  *  Both hooks always run (hook order is fixed); the inactive lane is starved of
@@ -38,7 +39,7 @@ export function useMobileNativeChatSessionLane({
   appendComposerTextRef: { readonly current: (text: string) => boolean }
   enabled: boolean
   connState: ConnectionState
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
   /** Called on any accepted queued-card action; retires the route's failure banner. */
   onActionResolved?: () => void
 }): {

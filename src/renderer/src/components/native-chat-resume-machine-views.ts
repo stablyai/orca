@@ -6,10 +6,25 @@ import { LOCAL_RESTART_MACHINE, type RestartMachineKey } from './native-chat-res
 import { restartMachineNameFromState } from './native-chat-restart-machine-name'
 import { resumeCandidateOwnership } from './native-chat-resume-ownership'
 import { restartListingIdentity, type ResumeSelectionMachine } from './native-chat-resume-selection'
+import { getNativeChatRestartRuns, type NativeChatRestartRuns } from './native-chat-restart-runs'
 
 export type MachineView = ResumeSelectionMachine & {
   offer: NativeChatRestartMachineOffer
   name: string
+}
+
+/** Every machine with offers, plus one whose run outlived its offers, listed as it was then. */
+function listedOffers(
+  offers: ReadonlyMap<RestartMachineKey, NativeChatRestartMachineOffer>,
+  runs: NativeChatRestartRuns
+): ReadonlyMap<RestartMachineKey, NativeChatRestartMachineOffer> {
+  const listed = new Map(offers)
+  for (const [machine, entry] of runs) {
+    if (!listed.has(machine)) {
+      listed.set(machine, { ...entry.listing, candidates: [], failed: [] })
+    }
+  }
+  return listed
 }
 
 /** This computer first, then each paired server by name. */
@@ -30,8 +45,15 @@ function orderedOffers(
  *  Names are selected as one joined string so the selector returns a PRIMITIVE and the dialog
  *  re-renders only when a name actually changes. */
 export function useMachineViews(
-  offers: ReadonlyMap<RestartMachineKey, NativeChatRestartMachineOffer>
+  currentOffers: ReadonlyMap<RestartMachineKey, NativeChatRestartMachineOffer>,
+  runs: NativeChatRestartRuns
 ): MachineView[] {
+  // Keyed on which machines have a run, not on each progress frame of one.
+  const runMachines = [...runs.keys()].join('\u0000')
+  const offers = useMemo(
+    () => (runMachines ? listedOffers(currentOffers, getNativeChatRestartRuns()) : currentOffers),
+    [currentOffers, runMachines]
+  )
   const joined = useAppStore((state) =>
     [...offers.keys()]
       .map((machine) => `${machine}\u0001${restartMachineNameFromState(state, machine)}`)

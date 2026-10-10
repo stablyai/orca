@@ -307,4 +307,49 @@ describe('WorktreeOpenInMenu', () => {
       }
     )
   })
+  it.each(['file-manager', 'external-editor'] as const)(
+    'blocks a %s click for an owner other than the focused desktop',
+    async (target) => {
+      await openWorktreePath({
+        target,
+        worktreePath: '/same/path',
+        command: 'zed',
+        runtimeEnvironmentId: 'managed-owner'
+      })
+      expect(openInFileManagerMock).not.toHaveBeenCalled()
+      expect(openInExternalEditorMock).not.toHaveBeenCalled()
+      expect(toastErrorMock).toHaveBeenCalled()
+    }
+  )
+
+  it('marks a managed owner local-only in the menu with a locally focused desktop', () => {
+    const entry = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
+    expect(getOpenInEntryAvailability(entry, mockState.settings, null, 'managed-owner')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+  })
+
+  it('marks an unresolved owner local-only and never launches the desktop copy', async () => {
+    const editor = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
+    const fileManager = { id: 'file-manager', label: 'Finder', target: 'file-manager' } as const
+    for (const entry of [editor, fileManager]) {
+      expect(getOpenInEntryAvailability(entry, mockState.settings, null, null, true)).toEqual({
+        disabled: true,
+        metadata: 'Local only'
+      })
+    }
+    for (const target of ['external-editor', 'file-manager'] as const) {
+      await openWorktreePath({
+        target,
+        worktreePath: '/srv/worktree',
+        connectionId: 'ssh-1',
+        runtimeEnvironmentId: null,
+        ownerUnresolved: true,
+        command: 'code'
+      })
+    }
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
+    expect(openInFileManagerMock).not.toHaveBeenCalled()
+  })
 })

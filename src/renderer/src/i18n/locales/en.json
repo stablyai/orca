@@ -44,6 +44,10 @@
     }
   },
   "app": {
+    "saving": {
+      "delayedTitle": "Profile storage is taking longer than usual",
+      "delayedDescription": "Further saves may be delayed while this operation finishes."
+    },
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
       "rootDescription": "The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.",
@@ -2160,7 +2164,8 @@
         "collapseNode": "Collapse {{value0}}",
         "expandNode": "Expand {{value0}}",
         "selectMachine": "Select all chats on {{value0}}",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "Done"
       },
       "StarNagCard": {
         "92b0f9d921": "is authenticated and try again.",
@@ -3510,6 +3515,7 @@
                 "ce8248b835": "Worktree path not available.",
                 "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
                 "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "internalHostMismatch": "Drop files from the same host as this terminal.",
                 "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
                 "writeRejected": "File drop cancelled: terminal could not accept the path."
@@ -3566,7 +3572,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
-            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
           },
@@ -4241,7 +4247,8 @@
           },
           "usagePercentageLabel": {
             "used": "{{value0}}% used",
-            "remaining": "{{value0}}% left"
+            "remaining": "{{value0}}% left",
+            "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",
@@ -4335,15 +4342,21 @@
             "checkAriaOne": "1 chat to check after resuming. Click for details.",
             "checkAria": "{{value0}} chats to check after resuming. Click for details.",
             "checkTooltip": "Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.",
-            "resumingLabelOne": "Resuming 1 chat",
-            "resumingLabel": "Resuming {{value0}} chats",
-            "resumingAriaOne": "Resuming 1 chat. Click to open details.",
-            "resumingAria": "Resuming {{value0}} chats. Click to open details.",
             "resumingTooltip": "Restoring interrupted chats and asking them to carry on…",
+            "resumingProgressLabel": "Resuming chats {{value0}}/{{value1}}",
+            "resumingProgressAria": "Resuming chats, {{value0}} of {{value1}} done. Click to open details.",
             "labelOneOnMachine": "1 chat to resume on {{value0}}",
             "labelOnMachine": "{{value0}} chats to resume on {{value1}}",
             "tooltipByMachine": "{{value0}} chats to resume: {{value1}}. Click to choose.",
             "tooltipMachinePart": "{{value0}} on {{value1}}"
+          },
+          "StatusBarUsageChangeNotices": {
+            "compactTitle": "Usage display is now compact",
+            "compactBody": "One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits."
+          },
+          "usageUnitLabel": {
+            "used": "Used",
+            "remaining": "Remaining"
           }
         }
       },
@@ -7448,18 +7461,9 @@
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
             "title": "Chat UI",
-            "description": "Preview the desktop chat surface for supported agent terminal sessions.",
-            "copy": "Enables the experimental Chat UI for newly created supported local sessions. Existing terminal sessions keep the terminal chat path while we tune transcript fidelity, streaming, and parity.",
+            "description": "Open supported new agents in Chat UI.",
+            "copy": "Supported new agents open in structured chat. Other agents open in the terminal; existing chats stay available.",
             "toggleLabel": "Toggle Chat UI",
-            "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new supported agent terminal tabs open.",
-            "defaultViewLabel": "Default Chat UI view",
-            "defaultViewTerminal": "Terminal chat",
-            "defaultViewNative": "Chat UI",
-            "structuredTitle": "Use updated structured native chat",
-            "structuredCopy": "Open new agents as structured chats where supported. Off opens them in the terminal-backed chat. Chats that already exist stay as they are.",
-            "structuredScope": "Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat.",
-            "structuredToggleLabel": "Toggle updated structured native chat",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
             "resumeToggleLabel": "Toggle automatic resume after a restart",
@@ -9968,7 +9972,7 @@
             "87d99e634b": "Pet",
             "nativeChat": {
               "title": "Chat UI",
-              "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+              "description": "Open supported new agents in Chat UI.",
               "grok": "grok",
               "native": "native",
               "chat": "chat",
@@ -12527,7 +12531,11 @@
             "confirmRestore": "Restore snapshot and restart",
             "keepState": "Keep state",
             "statusUnknown": "Status unknown",
-            "checking": "Checking…"
+            "checking": "Checking…",
+            "forget": "Forget…",
+            "confirmForget": "Forget on this desktop",
+            "keepLinked": "Keep linked",
+            "forgetDescription": "Unlinks this server here without contacting its host. If the host comes back, the server may still be running there."
           },
           "title": "Managed servers",
           "description": "Orca installs and runs a server on an empty SSH host and keeps it up to date.",
@@ -12595,6 +12603,7 @@
           },
           "loadFailed": "Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.",
           "outcome": {
+            "activeServer": "Not done: choose another Active Server in Advanced before stopping this server.",
             "live": "Not done: terminals on this server are still running. Close them and try again.",
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
@@ -12611,7 +12620,7 @@
           "connecting": "Connecting to the managed Orca server…",
           "updating": "Updating managed server…",
           "starting": "Starting managed server…",
-          "notServing": "The managed Orca server isn’t running and couldn’t be started.",
+          "notServing": "Orca couldn’t confirm that the managed server is answering.",
           "hostNewer": "Runs a managed Orca server from a newer Orca; it keeps that version.",
           "terminalsLive": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server.",
           "terminalsLive_one": "Runs the relay until its {{count}} open terminal is closed, then moves to a managed server.",
@@ -16417,7 +16426,6 @@
             "deb5293610": "Browser annotations unavailable in remote runtime",
             "90d021f2ad": "Add",
             "0cb3bd6221": "Annotation intent",
-            "8f87e6c2e5": "Intent",
             "532bac48c5": "Describe what the agent should change here...",
             "d2a7092e6e": "Annotation comment",
             "b472c5fe03": "Add browser annotation",
@@ -17116,6 +17124,16 @@
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Automations breadcrumb",
           "runDetails": "Run details"
+        },
+        "extraAgentArgs": {
+          "advanced": "Advanced",
+          "clear": "Clear arguments",
+          "unsupported": "Extra arguments aren't supported for this agent yet.",
+          "label": "Extra agent arguments",
+          "needsFreshSession": "Extra arguments require a fresh session for every run.",
+          "useFreshSessions": "Use fresh sessions",
+          "helper": "Added to this host's default arguments for each fresh session.",
+          "detailLabel": "Extra arguments"
         }
       },
       "agent": {
@@ -17677,6 +17695,7 @@
       "BrowserPane": {
         "streamConnectionLost": "Lost connection to the remote server.",
         "streamConnectionUnreachable": "Cannot reach the remote server.",
+        "streamBrowserUnavailable": "The remote browser is unavailable. Check its setup on the server.",
         "streamRestartFailed": "Failed to restart remote browser stream.",
         "streamCapabilityUnsupported": "The selected runtime does not support remote browser streaming."
       },
@@ -17867,6 +17886,32 @@
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "Resumed {{value0}} of {{value1}} chats",
+        "resumingTitleOne": "Resuming 1 chat",
+        "resumingTitle": "Resuming {{value0}} chats",
+        "description": "Each chat is restored with its full context and asked to check where it stopped. You can close this; the status bar keeps track.",
+        "resumedTitleOne": "Resumed {{value0}} of 1 chat"
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "Waiting for a reply",
+        "starting": "Starting",
+        "waitingToStart": "Waiting to start",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "Resumed"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value0}} of {{value1}} done",
+        "starting": "{{value0}} starting",
+        "waitingForReply": "{{value0}} waiting for a reply",
+        "waitingToStart": "{{value0}} waiting to start",
+        "all": "All",
+        "inProgress": "In progress",
+        "resumed": "Resumed",
+        "attention": "Need you",
+        "running": "Running {{value0}}",
+        "filter": "Show chats"
       }
     },
     "i18n": {
@@ -18011,10 +18056,10 @@
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "couldNotStart": "{{agent}} couldn't start.",
         "couldNotRestart": "{{agent}} couldn't restart.",
-        "notSignedIn": "{{agent}} is not signed in for the selected account.",
-        "claudeSystemNotSignedIn": "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings.",
+        "notSignedIn": "{{agent}} is not signed in.",
+        "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
-        "codexSystemNotSignedIn": "Codex isn't signed in. Run `codex login`.",
+        "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "signInFirst": "Sign in first.",
@@ -18081,7 +18126,13 @@
         "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
         "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
         "argumentsPositionalPrompt": "Saved Arguments include a prompt.",
-        "editSavedArguments": "Edit them in Settings > Agents > Arguments."
+        "editSavedArguments": "Edit them in Settings > Agents > Arguments.",
+        "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
+        "interactiveAgentNotSignedIn": "Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.",
+        "agentNotSignedIn": "Sign in to {{agent}}.",
+        "thenSendAgain": "Then send your message again.",
+        "runCommandWhenDone": "Run /{{command}} when it's done.",
+        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -18096,7 +18147,7 @@
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
         "restartFailed": "The agent couldn't restart.",
-        "capacity": "Orca has received too many requests in the last day.",
+        "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "questionChanged": "This question was already answered or has changed.",
@@ -18129,6 +18180,8 @@
         "waitForBackgroundTasks": "Wait for the background tasks to finish.",
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "queueTooLarge": "Too much text is waiting in the queue.",
+        "shrinkQueue": "Delete a queued message, or wait for one to go through, then try again.",
         "optionRejected": "The agent didn't accept this setting.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "agentRefused": "The agent turned this down.",
@@ -18141,7 +18194,16 @@
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "chatNotFound": "Orca can't find this chat.",
         "startNewChat": "Start a new chat to continue.",
-        "tryAgain": "Try again."
+        "tryAgain": "Try again.",
+        "agentStillWorking": "The agent is still working.",
+        "runClearWhenDone": "Run /clear when it's done.",
+        "clearAfterAnswer": "Answer the agent's question or approval, then run /clear.",
+        "runCompactWhenDone": "Run /compact when it's done.",
+        "compactAfterAnswer": "Answer the agent's question or approval, then run /compact.",
+        "clearAfterRetry": "Retry your earlier message, then run /clear.",
+        "compactAfterRetry": "Retry your earlier message, then run /compact.",
+        "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
+        "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone."
       },
       "taskList": {
         "title": "Tasks",
@@ -18174,6 +18236,7 @@
         "cancelledBy": "Cancelled on {{device}}"
       },
       "notices": {
+        "contextCleared": "Context cleared",
         "compaction": "Context compacted",
         "details": "Details",
         "plan": "Plan",
@@ -18185,6 +18248,7 @@
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
+        "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation."
       },
       "composer": {
@@ -18206,6 +18270,7 @@
         "skills": "Skills",
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
+        "clearDescription": "Clear conversation context",
         "skillsUnavailableHost": "Skills can't be listed in SSH chats",
         "skillsLoadFailed": "Couldn't load skills",
         "retrySkills": "Retry",
@@ -18430,6 +18495,13 @@
         "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
+      "find": {
+        "label": "Find in chat",
+        "noResults": "No results",
+        "previousMatch": "Previous match",
+        "nextMatch": "Next match",
+        "close": "Close"
+      },
       "transcriptLabel": "Conversation",
       "toggle": {
         "showTerminal": "Show terminal",
@@ -18603,11 +18675,9 @@
       },
       "visualUnavailable": "Visualization unavailable",
       "visualLoading": "Loading visualization",
-      "visualOpenInSidebar": "Open in sidebar",
-      "visualClose": "Close visualization",
+      "visualOpenInNewTab": "Open in new tab",
       "queuedMessages": {
         "behindReturnedHold": "Waiting — a message ahead needs attention",
-        "awaitingAnswerHold": "Waiting for your answer",
         "steer": "Steer",
         "send": "Send",
         "steerHint": "Submit without interrupting the model",
@@ -18615,10 +18685,11 @@
         "delete": "Delete",
         "moreActions": "More actions",
         "editMessage": "Edit message",
+        "showFullMessage": "Show full message",
+        "showLess": "Show less",
         "turnOffQueueing": "Turn off queueing",
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
-        "editAlreadySent": "Already sent — your text is still in the composer.",
         "withdrawnHold": "Stopped before it was sent",
         "pausedSendFailed": "Couldn't send — press Send to retry.",
         "paused": "Paused",
@@ -18631,7 +18702,16 @@
         "sendConfirmBody_other": "You are about to send a message. Do you want to clear the {{count}} messages previously queued?",
         "sendConfirmClear": "Clear queue",
         "sendConfirmSend": "Send message",
-        "from": "From {{names}}"
+        "fromSender": "From",
+        "pausedSendFailedWaiting": "Couldn't send — press Send to retry once the agent finishes.",
+        "save": "Save",
+        "editingMessage": "Editing message",
+        "cancelEditing": "Cancel editing",
+        "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
+        "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
+        "editFailed": "This message can't be edited.",
+        "editGone": "This message was already sent or removed. Your edit is in the chat box.",
+        "editGonePrompt": "This message was already sent or removed. Your edit will be in the chat box after you answer the agent."
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
@@ -18924,8 +19004,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "Continue in New Session…",
-      "dialogTitle": "Continue in New Session",
+      "handOffToAnotherAgent": "Hand Off to Another Agent",
+      "dialogTitle": "Hand Off to Another Agent",
       "dialogDescription": "Start a fresh Agent session from this stopping point. The original session stays unchanged.",
       "untitledSession": "Current session",
       "originalAgent": "Original Agent: {{agent}}",
@@ -19116,6 +19196,19 @@
     }
   },
   "featureTips": {
+    "nativeChatUpgrade": {
+      "eyebrow": "New",
+      "title": "Native chat got an upgrade",
+      "chatModeNote": "New agent tabs still open in the terminal, as before.",
+      "chatModeLabel": "Turn on chat mode",
+      "chatModeHint": "New agent tabs open as chat instead.",
+      "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
+      "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
+      "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
+      "settingsInstruction": "Manage Chat UI in",
+      "settingsLink": "Settings → Experimental",
+      "gotIt": "Got it"
+    },
     "voice": {
       "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
       "startDictation": "Start dictation",
@@ -19492,11 +19585,10 @@
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
       "signIn": "Sign in",
-      "signInNotice": {
-        "title": "Finish setting up your Claude accounts",
-        "description": "Sign in to each saved account once and you're ready to switch anytime.",
-        "action": "Sign in to {{value0}}"
-      }
+      "moreSignInOptions": "More sign-in options",
+      "copySignInLink": "Copy sign-in link instead",
+      "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
+      "signInLinkCopyFailed": "Could not copy the link."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
@@ -19638,5 +19730,10 @@
       "updateRuntime": "Update the remote runtime to change workspace links",
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
     }
+  },
+  "tabHoverCard": {
+    "browser": "Browser",
+    "editor": "Editor",
+    "terminal": "Terminal"
   }
 }

@@ -11,18 +11,22 @@ import {
   readAgentMessageSource,
   type AgentMessageSource
 } from '../../../../shared/agent-session-message-source'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
 
 /** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
+  /** Plainly queued, also behind an open question: the question already says the agent waits. */
   | 'turn'
   /** The whole queue is paused: the header row says why and offers Resume, so the card makes
    *  no promise about when it sends — not even after an answer, which does not drain it. */
   | 'queue-paused'
-  | 'awaiting-answer'
   | 'paused'
   | 'behind-returned'
   | 'returned'
+  /** On its way to the host, which holds no card for it yet: it reads as sending, and nothing
+   *  can act on it until the host's card replaces it under the same id. */
+  | 'sending'
 
 export type QueuedMessageCard = {
   messageId: string
@@ -31,6 +35,10 @@ export type QueuedMessageCard = {
   text: string
   state: 'waiting' | 'returned'
   hold: QueuedMessageCardHold
+  /** A conversation command such as /compact: it never steers into a running turn. */
+  command?: true
+  /** A command card while the agent works: it offers no send until the agent is idle. */
+  waitsForAgent?: true
   pausedReason?: string
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
@@ -53,7 +61,7 @@ function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string 
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { hasPendingPrompt: boolean; queuePaused?: boolean }
+  session: { queuePaused?: boolean; agentWorking?: boolean }
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
@@ -72,9 +80,7 @@ export function projectQueuedMessageCards(
             ? 'behind-returned'
             : session.queuePaused
               ? 'queue-paused'
-              : session.hasPendingPrompt
-                ? 'awaiting-answer'
-                : 'turn'
+              : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
     const from = readAgentMessageSource(message.body.from)
     return {
@@ -83,6 +89,12 @@ export function projectQueuedMessageCards(
       text: queuedMessageCardText(message.body),
       state: message.state,
       hold,
+      ...(message.body.command !== undefined
+        ? {
+            command: true as const,
+            ...(session.agentWorking ? { waitsForAgent: true as const } : {})
+          }
+        : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
@@ -91,6 +103,17 @@ export function projectQueuedMessageCards(
       ...(from ? { from } : {})
     }
   })
+}
+
+/** A command card waits in line: a later send goes behind it, even with follow-ups off. A card
+ *  held on its own (kept, couldn't send) is skipped by the queue, so nothing is behind it. */
+export function commandCardWaiting(
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined
+): boolean {
+  return (queuedMessages ?? []).some(
+    (message) =>
+      message.state === 'waiting' && !message.paused && message.body.command !== undefined
+  )
 }
 
 /** The pause the header row names, while it holds a card. A pause over cards Resume would not
@@ -103,16 +126,31 @@ export function queuedMessagesQueuePause(
 }
 
 /** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
- *  returned is not waiting on the turn, so its action is plainly Send. */
+ *  returned is not waiting on the turn, so its action is plainly Send. A command never steers. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned'
+  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 
-/** The card Cmd/Ctrl+Enter steers: the newest one; every shown card takes Send-now. */
+/** The card Cmd/Ctrl+Enter steers: the newest one, unless it is a command, which never steers. */
 export function newestSteerableQueuedMessageCard(
   cards: readonly QueuedMessageCard[]
 ): QueuedMessageCard | null {
-  return cards.at(-1) ?? null
+  const newest = cards.at(-1)
+  return newest && !newest.command && newest.hold !== 'sending' ? newest : null
+}
+
+/** A queue send still on its way, as the card it is about to become. */
+export function sendingQueuedMessageCards(
+  entries: readonly StructuredAgentSessionPendingSend[]
+): QueuedMessageCard[] {
+  return entries.map((entry, index) => ({
+    messageId: entry.clientMessageId,
+    // After every card the host holds, in send order.
+    position: Number.MAX_SAFE_INTEGER - entries.length + index,
+    text: queuedMessageCardText(entry.body),
+    state: 'waiting',
+    hold: 'sending'
+  }))
 }
 
 /**
@@ -129,4 +167,27 @@ export function pendingSendsOutsideQueuedCards<
       !held.has(entry.clientMessageId) && !(isWorking && entry.delivery === 'queue-if-active')
   )
   return next.length === pending.length ? pending : next
+}
+
+/** Queue sends without a host card or submission yet, drawn as sending cards. */
+export function pendingQueueSendsOnTheirWay(
+  pending: readonly StructuredAgentSessionPendingSend[],
+  heldIds: readonly string[],
+  isWorking: boolean,
+  submissions: readonly AgentJournalSubmission[]
+): StructuredAgentSessionPendingSend[] {
+  if (!isWorking) {
+    return []
+  }
+  const recorded = new Set([
+    ...heldIds,
+    ...handedOffQueuedMessageIds(submissions),
+    ...submissions.map((submission) => submission.clientMessageId)
+  ])
+  return pending.filter(
+    (entry) =>
+      entry.phase === 'sending' &&
+      entry.delivery === 'queue-if-active' &&
+      !recorded.has(entry.clientMessageId)
+  )
 }

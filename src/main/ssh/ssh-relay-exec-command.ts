@@ -7,6 +7,7 @@ import {
   redactRelayInstallMarkerTokens
 } from './ssh-relay-install-marker'
 import type { SystemSshCommandChannel } from './system-ssh-command'
+import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
 const EXEC_TIMEOUT_MS = 30_000
 const COMMAND_CLOSE_GRACE_MS = 5_000
@@ -85,9 +86,13 @@ export async function execCommand(
   // Why: reconnect/disconnect can flip the connection back to ssh2 before a
   // killed local OpenSSH child emits close; the channel's transport is immutable.
   const openedWithSystemSsh = conn.usesSystemSshTransport?.() === true
+  // Why: sshd runs the user's login shell before our /bin/sh wrapper, so rc-file stdout
+  // (an `echo`, a title escape) would otherwise be read as the command's answer.
+  const fence = execOptions.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
+  const readPayload = (stdout: string): string => fence?.readStdout(stdout) ?? stdout
   let channel: ClientChannel
   try {
-    channel = await conn.exec(command, execOptions)
+    channel = await conn.exec(fence?.command ?? command, execOptions)
   } catch (error) {
     // Preserve identity/classifier fields while removing install-owner tokens.
     redactRelayInstallMarkerError(error)
@@ -190,13 +195,14 @@ export async function execCommand(
       } else if (code !== 0) {
         // Why: on the system-ssh transport channel.stderr carries local OpenSSH
         // client noise; preferring it masks the real failure in stdout (2>&1).
-        const output = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
-        settle(reject, sshCommandExitError(command, code, stdout, output))
+        const payload = readPayload(stdout)
+        const output = [stderr.trim(), payload.trim()].filter(Boolean).join('\n')
+        settle(reject, sshCommandExitError(command, code, payload, output))
       } else {
         if (stderr && onStderr) {
           onStderr(redactRelayInstallMarkerTokens(stderr))
         }
-        settle(resolve, stdout)
+        settle(resolve, readPayload(stdout))
       }
     }
     const timeout = setTimeout(() => {

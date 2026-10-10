@@ -5,30 +5,19 @@ import { translate } from '@/i18n/i18n'
 
 export type SegmentText = { label: string; ariaLabel: string; tooltip: string }
 
-export function resumingText(count: number): SegmentText {
+/** Chats answered out of the chats asked, each counted as its own answer arrives. */
+export function resumingText(done: number, total: number): SegmentText {
   return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingLabelOne',
-            'Resuming 1 chat'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingLabel',
-            'Resuming {{value0}} chats',
-            { value0: count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingAriaOne',
-            'Resuming 1 chat. Click to open details.'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingAria',
-            'Resuming {{value0}} chats. Click to open details.',
-            { value0: count }
-          ),
+    label: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumingProgressLabel',
+      'Resuming chats {{value0}}/{{value1}}',
+      { value0: done, value1: total }
+    ),
+    ariaLabel: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumingProgressAria',
+      'Resuming chats, {{value0}} of {{value1}} done. Click to open details.',
+      { value0: done, value1: total }
+    ),
     tooltip: translate(
       'auto.components.status.bar.NativeChatResumeStatusSegment.resumingTooltip',
       'Restoring interrupted chats and asking them to carry on…'

@@ -20,6 +20,7 @@ import {
 } from './structured-agent-session-failed-create-refusal'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import { providerDiagnostic, withProviderDiagnostic } from '../../../shared/agent-session-failure'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 
 const CLAUDE_CREATE = {
@@ -36,6 +37,22 @@ function replay(outcome: Parameters<typeof resolveAgentSessionReplayOutcome>[0][
 }
 
 describe('a ledger replay names the details its first answer did', () => {
+  it('keeps ACP startup detail and direct-create guidance in the first reply and replay', () => {
+    const error = withProviderDiagnostic(
+      new AgentSessionAcquisitionRefusal('signed out', 'notSignedIn'),
+      providerDiagnostic('Grok needs its API key.', 'person')
+    )
+    const wording = {
+      record: { ...agentSessionRecordFixture(), provider: 'grok' as const },
+      newSession: true
+    }
+    const first = failedAcquisitionRefusal(error, wording)
+    const replayed = replay(failedAcquisitionSettlement(error, wording).outcome)
+    expect(first?.refusal.message).toBe(
+      'Sign in to Grok with `grok login` on the computer running this chat. Grok needs its API key.'
+    )
+    expect(replayed).toMatchObject({ refusal: { message: first?.refusal.message } })
+  })
   it.each([
     [new AgentSessionAcquisitionRefusal('not signed in', 'notSignedIn'), 'notSignedIn'],
     [
@@ -77,7 +94,9 @@ describe('a ledger replay names the details its first answer did', () => {
         refusal: { details: first?.refusal.details, message: first?.refusal.message }
       })
       expect(first?.refusal.message).toContain(
-        account === 'system' ? 'Run `claude`' : 'Sign in again in Claude Accounts settings.'
+        account === 'system'
+          ? 'Run `claude auth login`'
+          : 'Sign in again in Claude Accounts settings.'
       )
     }
   )
@@ -110,7 +129,7 @@ describe('a ledger replay names the details its first answer did', () => {
         'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.',
         'notSignedIn'
       ),
-      "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings."
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
     ],
     [
       AgentSessionAcquisitionRefusal.historyTooLarge(

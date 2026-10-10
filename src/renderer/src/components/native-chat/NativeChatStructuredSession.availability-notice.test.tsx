@@ -7,6 +7,16 @@ import type { AgentSessionFailureFact } from '../../../../shared/agent-session-f
 import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session-visible-failures'
+import type * as AgentSessionVisibleFailures from '../../../../shared/agent-session-visible-failures'
+
+vi.mock('../../../../shared/agent-session-visible-failures', async (importOriginal) => {
+  const original = await importOriginal<typeof AgentSessionVisibleFailures>()
+  return {
+    ...original,
+    agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+  }
+})
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -28,6 +38,7 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 // The host's verdict is a notice that never holds Send: it can be wrong while a send would work.
 
@@ -39,18 +50,22 @@ afterEach(() => {
   cleanup()
   localStorage.clear()
   resetStructuredSessionMocks()
+  mocks.queuedCards = []
+  vi.mocked(agentSessionVisibleFailureFacts).mockClear()
 })
 
 function pane(agent: 'claude' | 'codex' = 'codex'): React.JSX.Element {
   return (
-    <NativeChatStructuredSession
-      isVisible
-      isFocusedGroup
-      tabId="availability-tab"
-      sessionId="availability-session"
-      target={{ kind: 'local' }}
-      agent={agent}
-    />
+    <TooltipProvider>
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="availability-tab"
+        sessionId="availability-session"
+        target={{ kind: 'local' }}
+        agent={agent}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -83,6 +98,44 @@ function turnRow(): AgentJournalRenderItem {
   }
 }
 
+it('does no failure-fact scans while a non-Claude chat streams without rejected sends or returned cards', () => {
+  const { rerender } = render(pane())
+  mocks.journalItems = [turnRow()]
+  rerender(pane())
+  expect(agentSessionVisibleFailureFacts).not.toHaveBeenCalled()
+})
+
+it('shares one failure-fact scan between returned cards and rejected-send notices', () => {
+  const fact = { kind: 'notSignedIn' } as const
+  mocks.journalItems = [startFailureRow(fact)]
+  mocks.queuedCards = [
+    {
+      messageId: 'returned',
+      position: 1,
+      text: 'Retry me',
+      state: 'returned',
+      hold: 'returned',
+      returnedRejection: fact
+    }
+  ]
+  mocks.submissions = [
+    {
+      clientMessageId: 'send-1',
+      fence: 1,
+      payloadFingerprint: 'fp',
+      dispatchState: 'rejected',
+      providerItemId: null,
+      reason: CODEX_SIGNED_OUT,
+      rejection: fact,
+      submittedAt: 1,
+      resolvedAt: 2
+    }
+  ]
+  render(pane())
+  expect(agentSessionVisibleFailureFacts).toHaveBeenCalledTimes(1)
+  expect(screen.getAllByText('Your message was not sent.')).toHaveLength(2)
+})
+
 it('says a signed-out Codex above the composer and still sends', () => {
   mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
   render(pane())
@@ -100,6 +153,15 @@ it('says a signed-out Codex above the composer and still sends', () => {
   })
   expect(admitted).toBe(true)
   expect(mocks.send).toHaveBeenCalledWith('hello', [])
+})
+
+it('leaves an auth turn row as the explanation when the catalog also says signed out', () => {
+  mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
+  const row = startFailureRow({ kind: 'notSignedIn', account: 'system' })
+  mocks.journalItems = [turnRow(), { ...row, itemId: 'codex-unauthorized-error', sequence: 3 }]
+  render(pane())
+  expect(screen.queryByText(CODEX_SIGNED_OUT)).toBeNull()
+  expect(mocks.composerProps?.structuredTransport).not.toHaveProperty('unavailable')
 })
 
 it('stays dismissed for the same verdict, and shows again when it changes or comes back', () => {

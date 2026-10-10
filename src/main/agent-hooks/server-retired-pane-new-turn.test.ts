@@ -48,7 +48,8 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   muse: 'UserPromptSubmit',
   zcode: 'SessionStart',
   dsh: 'SessionStart',
-  jcode: 'turn_start'
+  jcode: 'turn_start',
+  kiro: 'agentSpawn'
 }
 
 function reviveRetiredPane(source: unknown, hookEventName: string): boolean {

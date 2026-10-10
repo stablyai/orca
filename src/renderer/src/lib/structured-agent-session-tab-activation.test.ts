@@ -158,7 +158,7 @@ describe('activateStructuredAgentSessionTab', () => {
       activateStructuredAgentSessionById({
         worktreeId: 'wt-1',
         sessionId: 'session-1',
-        executionHostId: 'runtime:studio'
+        target: { kind: 'environment', environmentId: 'studio' }
       })
     ).toBe(false)
     mocks.state = {
@@ -174,7 +174,7 @@ describe('activateStructuredAgentSessionTab', () => {
       activateStructuredAgentSessionById({
         worktreeId: 'wt-1',
         sessionId: 'session-1',
-        executionHostId: 'runtime:studio',
+        target: { kind: 'environment', environmentId: 'studio' },
         pairingRevision: 4
       })
     ).toBe(true)

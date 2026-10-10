@@ -1,5 +1,9 @@
 {
   "app": {
+    "saving": {
+      "delayedTitle": "프로필 저장소 작업에 평소보다 오래 걸리고 있습니다",
+      "delayedDescription": "이 작업이 완료될 때까지 이후 저장이 지연될 수 있습니다."
+    },
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
       "rootDescription": "앱 셸에서 렌더링을 완료할 수 없습니다. 다시 마운트해 보거나 오류가 지속되면 Orca를 다시 시작하세요.",
@@ -3259,6 +3263,7 @@
                 "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
                 "internalTooManyPaths": "터미널에 안전하게 붙여넣기에는 드롭된 경로가 너무 많습니다.",
                 "internalPathsTooLarge": "터미널에 안전하게 붙여넣기에는 경로 목록이 너무 큽니다.",
+                "internalHostMismatch": "이 터미널과 같은 호스트의 파일을 드롭하세요.",
                 "b4cf68e889": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
                 "writeTimeout": "파일 드롭이 취소되었습니다. 안전 시간 제한 전에 터미널이 경로를 받지 않았습니다.",
                 "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다."
@@ -3973,6 +3978,14 @@
             "used": "{{value0}}% 사용",
             "remaining": "{{value0}}% 남음"
           },
+          "StatusBarUsageChangeNotices": {
+            "compactTitle": "사용량이 이제 간략하게 표시됩니다",
+            "compactBody": "공급자별로 주요 지표 하나를 표시합니다. 더 많은 한도를 보려면 사용량 메뉴에서 <detailed>상세</detailed>를 선택하세요."
+          },
+          "usageUnitLabel": {
+            "used": "사용",
+            "remaining": "남음"
+          },
           "UsagePercentageDisplayChangeNotice": {
             "title": "사용량이 이제 사용된 %로 표시됩니다",
             "body": "남은 양 표시를 원하시나요? 설정에서 변경할 수 있습니다.",
@@ -4073,11 +4086,9 @@
             "checkAriaOne": "재개한 후 확인할 채팅 1개. 자세히 보려면 클릭하세요.",
             "checkAria": "재개한 후 확인할 채팅 {{value0}}개. 자세히 보려면 클릭하세요.",
             "checkTooltip": "다시 시작한 후 Orca가 재개하지 못했거나 재개했는지 확인하지 못한 채팅. 자세히 보려면 클릭하세요.",
-            "resumingLabelOne": "채팅 1개 재개 중",
-            "resumingLabel": "채팅 {{value0}}개 재개 중",
-            "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
-            "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
             "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…",
+            "resumingProgressLabel": "채팅 재개 중 {{value0}}/{{value1}}",
+            "resumingProgressAria": "채팅 재개 중, {{value1}}개 중 {{value0}}개 완료. 자세히 보려면 클릭하세요.",
             "labelOneOnMachine": "{{value0}}에서 재개할 채팅 1개",
             "labelOnMachine": "{{value1}}에서 재개할 채팅 {{value0}}개",
             "tooltipByMachine": "재개할 채팅 {{value0}}개: {{value1}}. 클릭하여 선택하세요.",
@@ -7180,14 +7191,7 @@
           },
           "nativeChat": {
             "title": "Chat UI",
-            "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
-            "copy": "지원되는 에이전트 터미널 창에서 전환할 수 있는 Chat UI 보기를 추가합니다. 대화 기록 충실도, 스트리밍, 터미널 동작 일치를 조정하는 동안 실험적으로 제공됩니다.",
             "toggleLabel": "Chat UI 전환",
-            "defaultTitle": "기본 보기",
-            "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
-            "defaultViewLabel": "기본 Chat UI 보기",
-            "defaultViewTerminal": "Terminal 채팅",
-            "defaultViewNative": "Chat UI",
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
             "shellEnvNameAdd": "추가",
@@ -7197,10 +7201,6 @@
             "shellEnvTitle": "셸 환경 사용",
             "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
             "shellEnvToggleLabel": "셸 환경 사용 전환",
-            "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
-            "structuredCopy": "지원되는 경우 새 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 기반 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
-            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용합니다.",
-            "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
             "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
@@ -9649,7 +9649,6 @@
             },
             "nativeChat": {
               "title": "Chat UI",
-              "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
               "grok": "grok",
               "native": "네이티브",
               "chat": "채팅",
@@ -12317,7 +12316,11 @@
             "confirmRestore": "스냅샷 복원 및 다시 시작",
             "keepState": "상태 유지",
             "statusUnknown": "상태 알 수 없음",
-            "checking": "확인 중…"
+            "checking": "확인 중…",
+            "forget": "잊기…",
+            "confirmForget": "이 데스크톱에서 잊기",
+            "keepLinked": "연결 유지",
+            "forgetDescription": "호스트에 연결하지 않고 여기서 이 서버의 연결을 해제합니다. 호스트가 다시 살아나면 서버가 그곳에서 계속 실행 중일 수 있습니다."
           },
           "title": "관리형 서버",
           "description": "Orca는 빈 SSH 호스트에 서버를 설치하고 실행하며 최신 상태로 유지합니다.",
@@ -12385,6 +12388,7 @@
           },
           "loadFailed": "Orca가 SSH 호스트와 미완료 이동을 불러오지 못했습니다. 설정을 다시 열어 시도하세요.",
           "outcome": {
+            "activeServer": "완료되지 않음: 이 서버를 중지하기 전에 고급에서 다른 활성 서버를 선택하세요.",
             "live": "완료되지 않음: 이 서버의 터미널이 아직 실행 중입니다. 닫고 다시 시도하세요.",
             "unverifiable": "완료되지 않음: Orca가 이 서버에서 무엇이 실행 중인지 확인하지 못했습니다. 호스트에 연결할 수 있을 때 다시 시도하세요.",
             "migration": "완료되지 않음: 이 서버로의 이동이 끝나지 않았습니다. 먼저 재개하세요.",
@@ -12401,7 +12405,7 @@
           "connecting": "관리형 Orca 서버에 연결 중…",
           "updating": "관리형 서버 업데이트 중…",
           "starting": "관리형 서버 시작 중…",
-          "notServing": "관리형 Orca 서버가 실행 중이 아니며 시작할 수도 없었습니다.",
+          "notServing": "Orca가 관리형 서버의 응답 여부를 확인하지 못했습니다.",
           "hostNewer": "더 새로운 Orca의 관리형 Orca 서버를 실행합니다. 해당 버전을 유지합니다.",
           "terminalsLive": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
           "terminalsLive_one": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
@@ -16159,7 +16163,6 @@
             "deb5293610": "원격 런타임에서는 브라우저 주석을 사용할 수 없습니다.",
             "90d021f2ad": "추가",
             "0cb3bd6221": "주석 의도",
-            "8f87e6c2e5": "의도",
             "532bac48c5": "여기에서 agent가 무엇을 변경해야 하는지 설명하세요...",
             "d2a7092e6e": "주석 코멘트",
             "b472c5fe03": "브라우저 주석 추가",
@@ -16858,6 +16861,16 @@
         "runHistory": {
           "occurrencesWithLatest": "{{times}}회, 가장 최근에는 {{date}}",
           "occurrences": "{{times}}회"
+        },
+        "extraAgentArgs": {
+          "advanced": "고급",
+          "clear": "인수 지우기",
+          "unsupported": "이 에이전트는 아직 추가 인수를 지원하지 않습니다.",
+          "label": "추가 에이전트 인수",
+          "needsFreshSession": "추가 인수를 사용하려면 실행할 때마다 새 세션이 필요합니다.",
+          "useFreshSessions": "새 세션 사용",
+          "helper": "새 세션마다 이 호스트의 기본 인수 뒤에 추가됩니다.",
+          "detailLabel": "추가 인수"
         }
       },
       "agent": {
@@ -17577,7 +17590,8 @@
         "collapseNode": "{{value0}} 접기",
         "expandNode": "{{value0}} 확장",
         "selectMachine": "{{value0}}의 채팅 모두 선택",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "완료"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "{{value1}} 팀 상태 중 {{value0}} 필터링 중 - 나머지 팀의 문제는 포함되지 않습니다.",
@@ -17673,6 +17687,32 @@
             "hostOnly": "Cursor 로그인 정보는 Orca가 실행 중인 컴퓨터에서만 읽을 수 있습니다."
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "채팅 {{value1}}개 중 {{value0}}개를 재개했습니다",
+        "resumedTitleOne": "채팅 1개 중 {{value0}}개를 재개했습니다",
+        "resumingTitleOne": "채팅 1개 재개 중",
+        "resumingTitle": "채팅 {{value0}}개 재개 중",
+        "description": "각 채팅은 전체 컨텍스트와 함께 복원되며, 멈춘 지점을 확인하도록 요청됩니다. 이 창을 닫아도 상태 표시줄에서 진행 상황을 계속 볼 수 있습니다."
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "응답 대기 중",
+        "starting": "시작 중",
+        "waitingToStart": "시작 대기 중",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "재개됨"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value1}}개 중 {{value0}}개 완료",
+        "starting": "{{value0}}개 시작 중",
+        "waitingForReply": "{{value0}}개 응답 대기 중",
+        "waitingToStart": "{{value0}}개 시작 대기 중",
+        "all": "전체",
+        "inProgress": "진행 중",
+        "resumed": "재개됨",
+        "attention": "확인 필요",
+        "running": "경과 {{value0}}",
+        "filter": "표시할 채팅"
       }
     },
     "i18n": {
@@ -17814,10 +17854,10 @@
         "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
         "editSavedArguments": "설정 > 에이전트 > 인수에서 수정하세요.",
         "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
-        "notSignedIn": "{{agent}}이(가) 선택한 계정으로 로그인되어 있지 않습니다.",
-        "claudeSystemNotSignedIn": "Claude에 로그인하지 않았습니다. `claude`를 실행하고 /login으로 로그인하거나 Claude 계정 설정에서 계정을 선택하세요.",
+        "notSignedIn": "{{agent}}에 로그인되어 있지 않습니다.",
+        "claudeSystemNotSignedIn": "Claude에 로그인되어 있지 않습니다. `{{loginCommand}}`을 실행하거나 Claude 계정 설정에서 계정을 선택하세요.",
         "claudeManagedNotSignedIn": "이 Claude 계정에 로그인하지 않았습니다. Claude 계정 설정에서 다시 로그인하세요.",
-        "codexSystemNotSignedIn": "Codex에 로그인하지 않았습니다. `codex login`을 실행하세요.",
+        "codexSystemNotSignedIn": "Codex에 로그인하지 않았습니다. `{{loginCommand}}`을 실행하세요.",
         "codexManagedNotSignedIn": "이 Codex 계정에 로그인하지 않았습니다. Codex 계정 설정에서 다시 로그인하세요.",
         "cliMissing": "이 채팅을 실행하는 컴퓨터에서 {{agent}}를 찾을 수 없습니다. 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
         "signInFirst": "먼저 로그인하세요.",
@@ -17883,6 +17923,13 @@
         "providerRetryNumberOf": "{{maxRetries}}회 중 {{attempt}}번째 재시도입니다.",
         "providerRetryLastError": "마지막 오류: {{detail}}.",
         "previousExitUnverifiable": "이전에 실행된 {{agent}}을(를) 중지하지 못했습니다.",
+        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다.",
+        "agentCommandNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`으로 {{agent}}에 로그인하세요.",
+        "interactiveAgentNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`을 실행하고 `{{slashCommand}}`을 사용해 {{agent}}에 로그인하세요.",
+        "agentNotSignedIn": "{{agent}}에 로그인하세요.",
+        "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
+        "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
         "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
       },
       "writeNotice": {
@@ -17898,7 +17945,7 @@
         "notDoneCommand": "명령이 실행되지 않았습니다.",
         "notDoneGoal": "목표가 변경되지 않았습니다.",
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
-        "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
+        "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",
         "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
         "sendOutcomeLost": "Orca가 메시지가 에이전트에 전달되었는지 확인하지 못했습니다. 채팅을 확인하고 필요하면 다시 보내세요.",
         "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
@@ -17931,6 +17978,8 @@
         "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
         "messagesUnsettled": "앞서 보낸 메시지가 아직 확인되지 않았습니다.",
         "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리거나 다시 시도하세요.",
+        "queueTooLarge": "대기열에 기다리는 텍스트가 너무 많습니다.",
+        "shrinkQueue": "대기 중인 메시지를 삭제하거나 전달될 때까지 기다린 후 다시 시도하세요.",
         "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
         "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
         "agentRefused": "에이전트가 이를 거부했습니다.",
@@ -17943,7 +17992,16 @@
         "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
         "chatNotFound": "Orca에서 이 채팅을 찾을 수 없습니다.",
         "startNewChat": "계속하려면 새 채팅을 시작하세요.",
-        "tryAgain": "다시 시도하세요."
+        "tryAgain": "다시 시도하세요.",
+        "agentStillWorking": "에이전트가 아직 작업 중입니다.",
+        "runClearWhenDone": "작업이 끝나면 /clear를 실행하세요.",
+        "clearAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /clear를 실행하세요.",
+        "runCompactWhenDone": "작업이 끝나면 /compact를 실행하세요.",
+        "compactAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /compact를 실행하세요.",
+        "clearAfterRetry": "이전 메시지를 다시 시도한 다음 /clear를 실행하세요.",
+        "compactAfterRetry": "이전 메시지를 다시 시도한 다음 /compact를 실행하세요.",
+        "clearAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /clear를 실행하세요.",
+        "compactAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /compact를 실행하세요."
       },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
@@ -18004,6 +18062,7 @@
         "commands": "명령어",
         "skills": "스킬",
         "loadingSkills": "스킬 로딩 중…",
+        "clearDescription": "대화 컨텍스트 지우기",
         "skillsUnavailableHost": "SSH 채팅에서는 스킬 목록을 표시할 수 없습니다",
         "skillsLoadFailed": "스킬을 불러올 수 없습니다",
         "retrySkills": "재시도",
@@ -18139,6 +18198,13 @@
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
+      "find": {
+        "label": "채팅에서 찾기",
+        "noResults": "결과 없음",
+        "previousMatch": "이전 일치 항목",
+        "nextMatch": "다음 일치 항목",
+        "close": "닫기"
+      },
       "transcriptLabel": "대화",
       "toggle": {
         "showTerminal": "terminal 표시",
@@ -18231,6 +18297,7 @@
         "cancelledBy": "{{device}}에 취소됨"
       },
       "notices": {
+        "contextCleared": "컨텍스트 지워짐",
         "compaction": "컨텍스트가 압축됨",
         "details": "세부",
         "plan": "계획",
@@ -18242,6 +18309,7 @@
         "orcaStopUpdate": "이 응답이 진행되는 동안 {{machine}}의 Orca가 업데이트를 위해 다시 시작되었습니다.",
         "orcaStopQuit": "이 응답이 진행되는 동안 {{machine}}의 Orca가 종료되었습니다.",
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
+        "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다."
       },
       "providerFrame": {
@@ -18378,10 +18446,8 @@
       },
       "queuedMessages": {
         "alreadySent": "이 메시지는 이미 전송되었습니다.",
-        "editAlreadySent": "이미 전송되었습니다 — 텍스트는 입력창에 남아 있습니다.",
         "listLabel": "대기 중인 메시지",
         "behindReturnedHold": "대기 중 — 앞의 메시지에 확인이 필요합니다",
-        "awaitingAnswerHold": "답변을 기다리는 중",
         "steer": "지금 보내기",
         "send": "보내기",
         "steerHint": "모델을 중단하지 않고 보냅니다",
@@ -18389,6 +18455,8 @@
         "delete": "삭제",
         "moreActions": "추가 작업",
         "editMessage": "메시지 편집",
+        "showFullMessage": "전체 메시지 보기",
+        "showLess": "접기",
         "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
@@ -18402,7 +18470,16 @@
         "sendConfirmBody_other": "메시지를 보내려고 합니다. 대기열에 있는 메시지 {{count}}개를 지울까요?",
         "sendConfirmClear": "대기열 지우기",
         "sendConfirmSend": "메시지 보내기",
-        "from": "보낸 사람: {{names}}"
+        "fromSender": "보낸 사람:",
+        "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요.",
+        "save": "저장",
+        "editingMessage": "메시지 편집 중",
+        "cancelEditing": "편집 취소",
+        "editChanged": "편집하는 동안 이 메시지가 변경되었습니다. 편집한 내용은 채팅 입력란에 있습니다.",
+        "editChangedPrompt": "편집하는 동안 이 메시지가 변경되었습니다. 에이전트에 답하면 편집한 내용이 채팅 입력란에 표시됩니다.",
+        "editFailed": "이 메시지는 편집할 수 없습니다.",
+        "editGone": "이 메시지는 이미 전송되었거나 삭제되었습니다. 편집한 내용은 채팅 입력란에 있습니다.",
+        "editGonePrompt": "이 메시지는 이미 전송되었거나 삭제되었습니다. 에이전트에 답하면 편집한 내용이 채팅 입력란에 표시됩니다."
       },
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",
@@ -18443,8 +18520,7 @@
       },
       "visualUnavailable": "시각화를 사용할 수 없습니다",
       "visualLoading": "시각화 로드 중",
-      "visualOpenInSidebar": "사이드바에서 열기",
-      "visualClose": "시각화 닫기"
+      "visualOpenInNewTab": "새 탭에서 열기"
     },
     "tab": {
       "bar": {
@@ -18717,8 +18793,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "새 세션에서 계속…",
-      "dialogTitle": "새 세션에서 계속",
+      "handOffToAnotherAgent": "다른 에이전트에게 인계",
+      "dialogTitle": "다른 에이전트에게 인계",
       "dialogDescription": "이 지점부터 새 에이전트 세션을 시작합니다. 원래 세션은 변경되지 않습니다.",
       "untitledSession": "현재 세션",
       "originalAgent": "원래 에이전트: {{agent}}",
@@ -19069,6 +19145,19 @@
     }
   },
   "featureTips": {
+    "nativeChatUpgrade": {
+      "eyebrow": "새 기능",
+      "title": "기본 채팅이 업그레이드되었습니다",
+      "chatModeNote": "새 Agent 탭은 이전처럼 터미널에서 열립니다.",
+      "chatModeLabel": "채팅 모드 켜기",
+      "chatModeHint": "새 Agent 탭을 채팅으로 엽니다.",
+      "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
+      "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
+      "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",
+      "settingsInstruction": "Chat UI 관리 위치:",
+      "settingsLink": "설정 → 실험적",
+      "gotIt": "확인"
+    },
     "voice": {
       "demoPrompt": "극단적인 경우에 대해 이 차이점을 검토하고 찾은 항목에 대한 테스트를 추가하세요.",
       "startDictation": "받아쓰기 시작",

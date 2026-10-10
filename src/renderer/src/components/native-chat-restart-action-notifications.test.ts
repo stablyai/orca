@@ -43,7 +43,8 @@ beforeEach(() => {
   show.mockClear()
 })
 
-it('says how many chats were resumed', () => {
+// Show opens the run's summary, so a resume that only succeeded offers it too.
+it.each([true, false])('offers Show for successful chats with a failure list: %s', (listed) => {
   announceRestartResults(
     [
       answered(
@@ -52,12 +53,13 @@ it('says how many chats were resumed', () => {
           { sessionId: 'a', outcome: 'continued' },
           { sessionId: 'b', outcome: 'continued' }
         ],
-        []
+        listed ? [] : undefined
       )
     ],
     show
   )
-  expect(vi.mocked(toast).mock.calls).toEqual([['Resumed 2 chats']])
+  expect(titles()).toEqual(['Resumed 2 chats'])
+  expect(lastToastShow()).toBeDefined()
 })
 
 it('offers Show for chats a resume could not carry on', () => {

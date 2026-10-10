@@ -196,8 +196,8 @@ export function SessionInlineDetails({
             >
               <MessageSquarePlus className="size-3.5" />
               {translate(
-                'components.agentSessionContinuation.continueInNewSession',
-                'Continue in New Session…'
+                'components.agentSessionContinuation.handOffToAnotherAgent',
+                'Hand Off to Another Agent'
               )}
             </Button>
           ) : null}

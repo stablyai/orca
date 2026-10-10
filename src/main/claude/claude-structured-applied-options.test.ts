@@ -125,8 +125,9 @@ describe('Claude model before the first turn', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     await acquired(startedWithoutATurn(SETTINGS.settingsHaiku), {}, events)
 
-    const started = events.find((event) => event.type === 'started')
-    expect(started).toMatchObject({ reportedOptions: { model: 'haiku' } })
+    // The settings read follows `started`; what it shows is persisted as the later report.
+    const reported = events.find((event) => event.type === 'options-reported')
+    expect(reported).toMatchObject({ reportedOptions: { model: 'haiku' } })
   })
 
   it('shows the applied effort but never persists it as the session options', async () => {
@@ -139,6 +140,10 @@ describe('Claude model before the first turn', () => {
     expect(started?.type === 'started' ? started.reportedOptions : null).not.toHaveProperty(
       'effort'
     )
+    const reported = events.find((event) => event.type === 'options-reported')
+    expect(
+      reported?.type === 'options-reported' ? reported.reportedOptions : null
+    ).not.toHaveProperty('effort')
     const { current } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(current.effort).toBe('medium')
   })

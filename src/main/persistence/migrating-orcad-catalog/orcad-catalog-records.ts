@@ -23,7 +23,7 @@ import {
   prepareOrcadMigrationDormantState,
   type PreparedOrcadMigrationDormantState
 } from './orcad-dormant-state-records'
-import { selectNewRows } from './orcad-catalog-row-identity'
+import { sameOrcadRepositoryConfiguration, selectNewRows } from './orcad-catalog-row-identity'
 
 export type PreparedOrcadMigrationCatalog = {
   repositories: Repo[]
@@ -53,7 +53,12 @@ export function prepareOrcadMigrationCatalog(
   const repositories = manifest.payload.repositories.map(toOrcadDestinationRepository)
   const projectGroups = manifest.payload.projectGroups.map(toOrcadDestinationProjectGroup)
   const folderWorkspaces = manifest.payload.folderWorkspaces.map(toOrcadDestinationFolderWorkspace)
-  const newRepositories = selectNewRows(repositories, state.repos, catalogConflict('repository'))
+  const newRepositories = selectNewRows(
+    repositories,
+    state.repos,
+    catalogConflict('repository'),
+    sameOrcadRepositoryConfiguration
+  )
   const newProjectGroups = selectNewRows(
     projectGroups,
     state.projectGroups,

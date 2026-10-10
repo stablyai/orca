@@ -111,7 +111,8 @@ describe('failures the desktop host used to drop', () => {
       fence: 1,
       acquisitionGeneration: 'generation-1',
       reportedOptions: { model: 'gpt-5' },
-      restoreSkippedOptions: []
+      restoreSkippedOptions: [],
+      optionRevision: 0
     })
     lifecycle.deliver({
       type: 'ended',
@@ -308,7 +309,7 @@ describe('installing the runtime', () => {
           claimKeyId: 'key-1',
           resolveWorkspacePath: async () => root,
           resolveLaunchArgs: () => [],
-          resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
+          resolveClaudeAuthPolicy: () => ({ account: 'managed' })
         } as unknown as Parameters<typeof ensureStructuredAgentSessionHost>[0]
       )
     ).rejects.toThrow(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)
@@ -325,7 +326,7 @@ describe('installing the runtime', () => {
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       logger: {
         warn: () => {
           throw new Error('logger broke')

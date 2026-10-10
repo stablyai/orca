@@ -19,6 +19,7 @@ const storeState = vi.hoisted(
 )
 const ownerRuntime = vi.hoisted((): { environmentId: string | null } => ({ environmentId: null }))
 const revealInFileManager = vi.hoisted(() => vi.fn())
+const openWorktreePath = vi.hoisted(() => vi.fn())
 
 vi.mock('@/components/ui/context-menu', async () => {
   const React_ = await import('react')
@@ -62,11 +63,25 @@ vi.mock('@/lib/open-in-app-catalog', () => ({
   OpenInApplicationIcon: () => null
 }))
 
-vi.mock('@/components/sidebar/WorktreeOpenInMenu', () => ({
-  getOpenInEntryAvailability: () => ({ disabled: false }),
-  openOpenInAppsSettings: vi.fn(),
-  openWorktreePath: vi.fn()
-}))
+vi.mock('@/components/sidebar/WorktreeOpenInMenu', async () => {
+  const { getExternalEditorOpenCapability } = await import('@/lib/external-editor-open-capability')
+  return {
+    getOpenInEntryAvailability: (
+      entry: { command?: string },
+      settings: typeof storeState.settings,
+      connectionId?: string | null,
+      runtimeEnvironmentId?: string | null
+    ) => ({
+      disabled: !getExternalEditorOpenCapability(settings, {
+        command: entry.command,
+        connectionId,
+        runtimeEnvironmentId
+      }).allowed
+    }),
+    openOpenInAppsSettings: vi.fn(),
+    openWorktreePath
+  }
+})
 
 function childrenText(children: React.ReactNode): string {
   return React.Children.toArray(children)
@@ -114,6 +129,7 @@ describe('SourceControlEntryContextMenu', () => {
     storeState.settings.openInApplications = []
     ownerRuntime.environmentId = null
     revealInFileManager.mockReset()
+    openWorktreePath.mockReset()
     writeClipboardText.mockReset()
     vi.stubGlobal('window', {
       api: { ui: { writeClipboardText } }
@@ -154,6 +170,23 @@ describe('SourceControlEntryContextMenu', () => {
     expect(labels).toContain('Zed')
     expect(labels).not.toContain('Finder')
     expect(labels.filter((label) => label === 'Reveal in Finder')).toHaveLength(1)
+  })
+
+  it('uses the target owner for editor availability and click dispatch while focus is local', () => {
+    ownerRuntime.environmentId = 'env-2'
+    storeState.settings.openInApplications = [{ id: 'zed', label: 'Zed', command: 'zed' }]
+    renderMenu()
+
+    const editorItem = items.list.find((item) => childrenText(item.children) === 'Zed')
+    expect(editorItem?.disabled).toBe(true)
+    editorItem?.onSelect?.()
+    expect(openWorktreePath).toHaveBeenCalledWith({
+      target: 'external-editor',
+      worktreePath: '/repo/src/example.ts',
+      connectionId: undefined,
+      runtimeEnvironmentId: 'env-2',
+      command: 'zed'
+    })
   })
 
   it('disables reveal, with no reason, for a deleted file', () => {

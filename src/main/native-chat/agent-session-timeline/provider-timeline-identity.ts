@@ -81,16 +81,7 @@ export function isProviderTimelineTurnInNamespace(turnId: string, namespace: str
   return turnId.startsWith(`p:${providerTimelineKeyPart(namespace)}:`)
 }
 
-/** The spelled key of a provider-keyed item's record id, whichever session and thread wrote it;
- *  null for any other row. Compare it with `providerTimelineKeyPart(key)`. */
-export function spelledProviderTimelineItemKey(recordId: string): string | null {
-  if (!recordId.startsWith('item:p:')) {
-    return null
-  }
-  // Every part is URI-encoded, so `:` and `/` only ever separate parts.
-  const scoped = recordId.slice(recordId.lastIndexOf(':') + 1)
-  return scoped.slice(scoped.lastIndexOf('/') + 1)
-}
+export { spelledProviderTimelineItemKey } from '../../../shared/provider-timeline-item-key'
 
 /** The existing `legacy` arm. Turn rows keep the `turn-lifecycle:` record prefix the other lanes
  *  write; provider keys are spelled inside their namespace, and apart from minted ones. */

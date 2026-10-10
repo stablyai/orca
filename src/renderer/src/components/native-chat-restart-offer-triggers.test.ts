@@ -150,7 +150,7 @@ beforeEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: false }
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
   })
   serveOffers([row('a', 'own'), row('b', 'other-device')])
 })

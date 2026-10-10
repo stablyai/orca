@@ -477,13 +477,14 @@ describe('useNativeChatComposerAttachments', () => {
   it('keeps an upload that finishes while the composer is unmounted, for when it returns', async () => {
     const probe = await renderProbe('pty-gone')
     const chips = probe.latest().pendingChips
-    const begun: { image?: string | null; removed?: string | null } = {}
+    const begun: { image?: string | null; removed?: string | null; reference?: string | null } = {}
     act(() => {
       begun.image = chips.begin(undefined, 'shot.png')
       begun.removed = chips.begin(undefined, 'old.png')
+      begun.reference = chips.begin(undefined, 'notes.pdf')
     })
-    const { image, removed } = begun
-    if (!image || !removed) {
+    const { image, removed, reference } = begun
+    if (!image || !removed || !reference) {
       throw new Error('expected pending chips')
     }
     act(() => probe.latest().removeImageAttachment(removed))
@@ -492,7 +493,7 @@ describe('useNativeChatComposerAttachments', () => {
 
     chips.resolve(image, '/srv/agent-session-attachments/u1/shot.png')
     chips.resolve(removed, '/srv/agent-session-attachments/u2/old.png')
-    chips.attachReferences(['/srv/agent-session-attachments/u3/notes.pdf'])
+    chips.attachReferences([{ id: reference, path: '/srv/agent-session-attachments/u3/notes.pdf' }])
 
     expect(readNativeChatAttachmentCache('pty-gone')).toEqual([
       { id: image, path: '/srv/agent-session-attachments/u1/shot.png' }
@@ -531,11 +532,33 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => back.root.unmount())
   })
 
+  it('gives uploads unique IDs across composers remounted in the same clock tick', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    try {
+      const first = await renderProbe('pty-ids', true)
+      const ids: (string | null)[] = []
+      act(() => ids.push(first.latest().pendingChips.begin(undefined, 'first.pdf')))
+      act(() => first.root.unmount())
+      const next = await renderProbe('pty-ids', true)
+      act(() => ids.push(next.latest().pendingChips.begin(undefined, 'second.pdf')))
+      expect(new Set(ids).size).toBe(2)
+      expect(nativeChatPendingAttachmentSnapshot('pty-ids')).toHaveLength(2)
+      act(() => next.root.unmount())
+    } finally {
+      now.mockRestore()
+    }
+  })
+
   it('inserts a stored file at the caret while the composer is showing and not composing', async () => {
     const probe = await renderProbe('pty-caret', true)
-    act(() =>
-      probe.latest().pendingChips.attachReferences(['/srv/agent-session-attachments/u6/a.pdf'])
-    )
+    act(() => {
+      const chips = probe.latest().pendingChips
+      const id = chips.begin(undefined, 'a.pdf')
+      if (!id) {
+        throw new Error('expected pending chip')
+      }
+      chips.attachReferences([{ id, path: '/srv/agent-session-attachments/u6/a.pdf' }])
+    })
     expect(probe.draft()).toBe('@/srv/agent-session-attachments/u6/a.pdf ')
     expect(readNativeChatDraftCache('pty-caret')).toBe('')
     act(() => probe.root.unmount())
@@ -555,8 +578,7 @@ describe('useNativeChatComposerAttachments', () => {
     const id: string = chipId
     // The upload finishes mid-composition: the reference waits for the composition to settle.
     act(() => {
-      expect(chips.drop(id)).toBe(true)
-      chips.attachReferences(['/srv/agent-session-attachments/u4/notes.pdf'])
+      chips.attachReferences([{ id, path: '/srv/agent-session-attachments/u4/notes.pdf' }])
     })
     // A prompt card takes the composer's place before the composition settles.
     act(() => probe.root.unmount())

@@ -46,6 +46,7 @@ type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
   child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
+  restartResume?: AgentSessionStatusSummary['restartResume']
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -164,6 +165,7 @@ export class StructuredAgentSessionStatusFeed {
       hostExecutionOwned: _hostExecutionOwned,
       hostExecutionPhase: _hostExecutionPhase,
       stopping: _stopping,
+      restartResume: _restartResume,
       ...retained
     } = previous
     this.published.set(sessionId, {

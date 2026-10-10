@@ -144,41 +144,6 @@ export function createPurgeStaleRuntimeHostState(
         seenRemovedWorktreeTargets.add(identity)
         removedWorktreeTargets.push(hostId ? { id: worktreeId, hostId } : { id: worktreeId })
       }
-      const recordRemovedRowTargets = (
-        rowsByRepo: Record<
-          string,
-          readonly {
-            id: string
-            hostId?: ExecutionHostId
-            runtimeOwnerEnvironmentId?: string
-          }[]
-        >
-      ): void => {
-        for (const [repoId, rows] of Object.entries(rowsByRepo)) {
-          for (const row of rows) {
-            const removedOwner =
-              (row.runtimeOwnerEnvironmentId !== undefined &&
-                removed.has(row.runtimeOwnerEnvironmentId)) ||
-              isRemovedRuntimeHostId(row.hostId, removed) ||
-              (row.hostId === undefined && repoIdsWithoutSurvivingOwners.has(repoId))
-            if (!removedOwner) {
-              continue
-            }
-            // A row's execution host is the recency owner. Runtime ownership
-            // is the only host evidence available for legacy rows without it.
-            addRemovedWorktreeTarget(
-              row.id,
-              row.hostId ??
-                (row.runtimeOwnerEnvironmentId
-                  ? toRuntimeExecutionHostId(row.runtimeOwnerEnvironmentId)
-                  : undefined)
-            )
-          }
-        }
-      }
-      recordRemovedRowTargets(s.worktreesByRepo)
-      recordRemovedRowTargets(detectedRows)
-
       const worktreeDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
         s.worktreesByRepo,
         removed,
@@ -193,9 +158,20 @@ export function createPurgeStaleRuntimeHostState(
       const worktreesChanged = worktreeDrop.rowsByRepo !== s.worktreesByRepo
       const detectedChanged = detectedDrop.rowsByRepo !== detectedRows
 
+      const removedRows = [...worktreeDrop.removedRows, ...detectedDrop.removedRows]
+      for (const row of removedRows) {
+        // A row's execution host is the recency owner. Runtime ownership
+        // is the only host evidence available for legacy rows without it.
+        addRemovedWorktreeTarget(
+          row.id,
+          row.hostId ??
+            (row.runtimeOwnerEnvironmentId
+              ? toRuntimeExecutionHostId(row.runtimeOwnerEnvironmentId)
+              : undefined)
+        )
+      }
       const removedWorktreeIds = new Set([
-        ...worktreeDrop.removedWorktreeIds,
-        ...detectedDrop.removedWorktreeIds,
+        ...removedRows.map((row) => row.id),
         ...sessionWorktreeIdsOwnedByRemovedHosts
       ])
       // Why: terminal tabs hydrate before worktree metadata, so session-only ids for owner-less repos still need purging.
@@ -212,14 +188,10 @@ export function createPurgeStaleRuntimeHostState(
         }
       }
       // Why: bare-id state follows an exact survivor unless the restored-session partition proves it belonged to the removed host.
-      for (const rows of Object.values(worktreeDrop.rowsByRepo)) {
-        for (const row of rows) {
-          if (!sessionWorktreeIdsOwnedByRemovedHosts.has(row.id)) {
-            removedWorktreeIds.delete(row.id)
-          }
-        }
-      }
-      for (const rows of Object.values(detectedDrop.rowsByRepo)) {
+      for (const rows of [
+        ...Object.values(worktreeDrop.rowsByRepo),
+        ...Object.values(detectedDrop.rowsByRepo)
+      ]) {
         for (const row of rows) {
           if (!sessionWorktreeIdsOwnedByRemovedHosts.has(row.id)) {
             removedWorktreeIds.delete(row.id)

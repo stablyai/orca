@@ -16,8 +16,6 @@ type PlacementSettings = {
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
   experimentalNativeChat?: boolean
-  experimentalStructuredNativeChat?: boolean
-  openAgentTabsInChatByDefault?: boolean
   nativeChatSessionOptions?: Record<
     string,
     { model?: string; valuesByModel?: Record<string, Record<string, string>> }
@@ -108,11 +106,9 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     }
   )
 
-  it('honours the chat default in a floating launch and scopes its surface to the floating workspace', async () => {
+  it('scopes a floating terminal fallback to the floating workspace with Chat UI on', async () => {
     store.settings = placementSettings({
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
-      openAgentTabsInChatByDefault: true,
       nativeChatSessionOptions: {
         codex: {
           model: 'gpt-5.2-codex',
@@ -134,18 +130,14 @@ describe('launchAgentInNewTab terminal tab activation', () => {
       undefined,
       {
         launchAgent: 'codex',
-        viewMode: 'chat'
+        quickCommandLabel: undefined
       }
     )
     expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith(
       'terminal',
       FLOATING_TERMINAL_WORKTREE_ID
     )
-    // Why: the panel hosts the chat pane itself, so the launch carries the user's model/effort
-    // preferences the same way a main-window launch does.
-    expect(mockSeedNativeChatAppliedSessionOptions).toHaveBeenCalledWith('tab-1', 'codex', {
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
+    // Chat UI model preferences belong to structured chats, not a terminal fallback.
+    expect(mockQueueTabStartupCommand.mock.calls[0]?.[1]).not.toHaveProperty('sessionOptions')
   })
 })

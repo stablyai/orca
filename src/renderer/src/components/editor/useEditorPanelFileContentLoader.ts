@@ -23,6 +23,7 @@ import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-o
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { editorTabFileAccess } from '@/lib/local-file-access'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
 
@@ -167,7 +168,10 @@ export function useEditorPanelFileContentLoader({
               : runtimeEnvironmentId
                 ? toRuntimeExecutionHostId(runtimeEnvironmentId)
                 : LOCAL_EXECUTION_HOST_ID
-            const route = findWorkspaceFileRoute(currentState, executionHostId, filePath)
+            // Floating files stay in their panel even when a project also contains the path.
+            const route = isFloatingWorkspaceId(worktreeId)
+              ? null
+              : findWorkspaceFileRoute(currentState, executionHostId, filePath)
             if (route && route.worktreeId !== worktreeId) {
               await reownRestoredFile(route, runtimeEnvironmentId ?? null)
               return

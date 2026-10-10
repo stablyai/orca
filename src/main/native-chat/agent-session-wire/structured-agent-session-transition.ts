@@ -45,6 +45,7 @@ export type StructuredAgentSessionTransitionStep =
       kind: 'settlement'
       /** Unique per settlement: the journal applies one id once. */
       settlementId: string
+      recovered?: true
       /** Paces the queue only; the mutations are the journal's to choose. */
       reservedBytes: number
       /** Read at execution; none writes nothing. */
@@ -61,6 +62,8 @@ export type StructuredAgentSessionTransition = {
   finalTail?: true
   /** Announce the writes once they land, when any step wrote. */
   publish: boolean
+  /** Host-internal delivery after these writes and their parent publication, in queue order. */
+  onPublished?: () => void
 }
 
 const STEP_OVERFLOW = 'structured agent-session transition step exceeded its reserved size'
@@ -116,6 +119,7 @@ function transitionAppend(
                   batch: {
                     settlementId: step.settlementId,
                     fence,
+                    recovered: step.recovered,
                     resolve: () => step.resolve(journal)
                   }
                 }
@@ -124,6 +128,7 @@ function transitionAppend(
         if (transition.publish && wrote.includes(true)) {
           bound.publish()
         }
+        transition.onPublished?.()
       }
     })
 }

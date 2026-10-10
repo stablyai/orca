@@ -24,6 +24,13 @@ type DeliveryDeps = {
 }
 
 /** Idless prompt acknowledgements are FIFO and may wait indefinitely on extension dialogs. */
+export function piRpcFailureFact(error: string) {
+  return agentSessionFailureFact(
+    error.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
+    { detail: providerDiagnostic(error, 'person') }
+  )
+}
+
 export class PiRpcPromptDelivery {
   private readonly acknowledgements: Submission[] = []
   private readonly waiting: Submission[] = []
@@ -91,11 +98,8 @@ export class PiRpcPromptDelivery {
       throw new Error('Pi prompt reply has no request')
     }
     if (!reply.success) {
-      if (
-        !submission.accepted &&
-        reply.error?.startsWith('No API key found for ') &&
-        submission.retries++ < 8
-      ) {
+      const fact = piRpcFailureFact(reply.error ?? 'Pi rejected the prompt')
+      if (!submission.accepted && fact.kind === 'notSignedIn' && submission.retries++ < 8) {
         this.removeWaiting(submission)
         const timer = setTimeout(() => {
           this.retries.delete(timer)
@@ -120,10 +124,6 @@ export class PiRpcPromptDelivery {
         return
       }
       this.remove(submission)
-      const fact = agentSessionFailureFact(
-        reply.error?.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
-        { detail: providerDiagnostic(reply.error ?? 'Pi rejected the prompt', 'person') }
-      )
       this.deps.settled(submission.id, {
         state: 'rejected',
         ...agentSessionFailureWords(fact, { agentName: 'Pi', surface: 'rejection' })

@@ -10,6 +10,11 @@ import {
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
 export const QUIT_TERMINAL_AGENT = 'Quit that agent to continue the chat here.'
 export const START_NEW_CHAT = 'Start a new chat to continue.'
+export const BACKGROUND_TASKS_RUNNING = 'Background tasks are still running.'
+export const WAIT_FOR_BACKGROUND_TASKS = 'Wait for the background tasks to finish.'
+export const AGENT_STARTING = 'The agent is still starting.'
+export const WAIT_FOR_START = 'Wait for the agent to finish starting.'
+export const AGENT_STILL_WORKING = 'The agent is still working.'
 
 /** Every piece a failure sentence is made of, whole so desktop can translate each on its own.
  *  `{{agent}}` is the agent's name or `theAgent`, `{{command}}` a conversation command's name; the
@@ -30,19 +35,25 @@ export const AGENT_SESSION_FAILURE_COPY = {
   terminalAgentHoldsChat: TERMINAL_AGENT_HOLDS_CHAT,
   quitTerminalAgent: QUIT_TERMINAL_AGENT,
   startNewChat: START_NEW_CHAT,
-  notSignedIn: '{{agent}} is not signed in for the selected account.',
+  notSignedIn: '{{agent}} is not signed in.',
   claudeSystemNotSignedIn:
-    "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings.",
+    "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
   claudeManagedNotSignedIn:
     "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
-  codexSystemNotSignedIn: "Codex isn't signed in. Run `codex login`.",
+  codexSystemNotSignedIn: "Codex isn't signed in. Run `{{loginCommand}}`.",
   codexManagedNotSignedIn:
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+  agentCommandNotSignedIn:
+    'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
+  interactiveAgentNotSignedIn:
+    'Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.',
+  agentNotSignedIn: 'Sign in to {{agent}}.',
   cliMissing:
     "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
   signInFirst: 'Sign in first.',
   signInThenRunCommand: 'Sign in, then run /{{command}} again.',
   signInThenSend: 'Sign in, then send your message again.',
+  thenSendAgain: 'Then send your message again.',
   historyTooLarge: "This conversation's history is too large to restore here.",
   managedAccountEnvOverride:
     'This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.',
@@ -95,6 +106,14 @@ export const AGENT_SESSION_FAILURE_COPY = {
   notDeliveredSendAgain: 'This message was not delivered. Send it again to continue.',
   commandRefused: "This command didn't run.",
   commandRefusedTryAgain: "This command didn't run. Try it again.",
+  // What kept a command from running, in the words its refusal has everywhere.
+  backgroundTasksRunning: BACKGROUND_TASKS_RUNNING,
+  waitForBackgroundTasks: WAIT_FOR_BACKGROUND_TASKS,
+  agentStarting: AGENT_STARTING,
+  waitForStart: WAIT_FOR_START,
+  agentStillWorking: AGENT_STILL_WORKING,
+  runCommandWhenDone: "Run /{{command}} when it's done.",
+  commandAfterAnswer: "Answer the agent's question or approval, then run /{{command}}.",
   compactionFailed: 'Compaction failed.',
   compactionFailedQuoted: 'Compaction failed: {{detail}}.',
   compactionUnconfirmed: 'Compaction completion is unconfirmed.',
@@ -123,6 +142,8 @@ export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY
 export type AgentSessionFailureCopyValues = {
   agent?: string
   command?: string
+  loginCommand?: string
+  slashCommand?: string
   detail?: string
   option?: string
   limit?: string

@@ -52,6 +52,7 @@ it('neither continues nor reserves an offer the caller cannot show, named or not
     expect(await host.restartResume.continueAfterRestart(named, 'modal', cannotShowCodex)).toEqual({
       resumed: [],
       continued: [],
+      ...(named ? { skipped: [SESSION] } : {}),
       sessions: [],
       failed: []
     })

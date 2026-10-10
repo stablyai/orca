@@ -6,6 +6,8 @@ import {
   dismissNativeChatRestartOffer
 } from './native-chat-restart-offer-actions'
 import type { MachineView } from './native-chat-resume-machine-views'
+import { releaseFinishedNativeChatRestartRuns } from './native-chat-restart-runs'
+import { restartMachineTarget } from './native-chat-restart-machines'
 
 /** A dialog row's own action on one chat. Row actions act on their row and leave the dialog open,
  *  except Open, which gets out of the way of the chat it opens. */
@@ -30,16 +32,15 @@ export async function actOnResumeRow(
   }
   // Opening is read-only and keeps the record: the user's own send in that chat settles it.
   consumeNativeChatResumeOnRestartDialogRequest()
-  await activateAiVaultStructuredSession({
-    structuredSession: {
-      workspaceId: failure.workspaceId,
-      sessionId,
-      // The machine that listed it and the pairing it listed under, never re-derived from
-      // whichever workspace shares its id.
-      executionHostId: failure.executionHostId,
-      ...(machine.offer.fence.pairingRevision === undefined
-        ? {}
-        : { pairingRevision: machine.offer.fence.pairingRevision })
-    }
-  })
+  releaseFinishedNativeChatRestartRuns()
+  // A paired server's chat opens on that server under the pairing it was listed under, never on
+  // whichever machine holds a workspace with the same id. This computer's chats resolve from their
+  // workspace as any other open does.
+  const target = restartMachineTarget(machine.machine)
+  await activateAiVaultStructuredSession(
+    { structuredSession: { workspaceId: failure.workspaceId, sessionId } },
+    undefined,
+    target.kind === 'local' ? undefined : target,
+    machine.offer.fence
+  )
 }

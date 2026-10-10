@@ -5,8 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 
@@ -32,7 +33,9 @@ const ACCOUNT: ClaudeManagedAccount = {
 }
 let paneElement: HTMLDivElement
 let root: Root
-let openedBeforeClaudeAccounts: ReturnType<typeof vi.fn<(id: string) => Promise<boolean>>>
+let openedBeforeClaudeAccounts: ReturnType<
+  typeof vi.fn<(id: string, target: { runtime: string }) => Promise<boolean>>
+>
 let nextPtyId = 0
 let ptyId: string
 
@@ -41,10 +44,25 @@ class ResizeObserverStub {
   disconnect(): void {}
 }
 
+const FLOATING_TAB = {
+  id: 'unified-floating',
+  entityId: TAB_ID,
+  groupId: 'group-1',
+  worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+  contentType: 'terminal' as const,
+  label: 'Terminal',
+  customLabel: null,
+  color: null,
+  sortOrder: 0,
+  createdAt: 0
+}
+
 function setState(settings: Partial<GlobalSettings>, agent: 'claude' | 'codex' = 'claude'): void {
   useAppStore.setState({
     settings: { ...getDefaultSettings('/home/me'), ...settings },
-    paneForegroundAgentByPaneKey: { [PANE_KEY]: { agent, shellForeground: false } }
+    paneForegroundAgentByPaneKey: { [PANE_KEY]: { agent, shellForeground: false } },
+    // A floating terminal runs on the host.
+    unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [FLOATING_TAB] }
   })
 }
 
@@ -91,7 +109,7 @@ describe('ClaudeOldTerminalBanner', () => {
   it('says Claude in an older terminal uses System default, with a new terminal and Learn more', async () => {
     setState(SELECTED)
     await renderBanner()
-    expect(openedBeforeClaudeAccounts).toHaveBeenCalledWith(ptyId)
+    expect(openedBeforeClaudeAccounts).toHaveBeenCalledWith(ptyId, { runtime: 'host' })
     expect(paneElement.textContent).toContain(TITLE)
     expect(paneElement.textContent).toContain("so claude here uses System default's login.")
     button('Open new terminal')
@@ -121,6 +139,8 @@ describe('ClaudeOldTerminalBanner', () => {
           }
         ]
       },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the banner reads only a worktree's id and path.
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', path: '/repos/wt-1' } as Worktree] },
       openNewTerminalTabInActiveWorkspace
     })
     await renderBanner()
@@ -147,6 +167,10 @@ describe('ClaudeOldTerminalBanner', () => {
     setState({ claudeManagedAccounts: [ACCOUNT], activeClaudeManagedAccountId: null })
     await renderBanner()
     setState({ claudeManagedAccounts: [], activeClaudeManagedAccountId: 'a' })
+    await renderBanner()
+    // A pane whose tab is unknown has no runtime to judge it by.
+    setState(SELECTED)
+    useAppStore.setState({ unifiedTabsByWorktree: {} })
     await renderBanner()
     expect(openedBeforeClaudeAccounts).not.toHaveBeenCalled()
     expect(paneElement.textContent).toBe('')

@@ -1,9 +1,12 @@
 import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
-import { remoteFileContentBudget } from './files-remote-content-budget'
+import {
+  assertDirListingWithinRemoteBudget,
+  remoteFileContentBudget
+} from './files-remote-content-budget'
 import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
-import { FileOpen, WorktreeSelector } from './files-target-schemas'
+import { FileOpen, WorktreeSelector } from '../../../../shared/rpc-contract/files-target-params'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 import {
   FilePathsExist,
@@ -141,12 +144,15 @@ export const FILE_METHODS = [
     name: 'files.readDir',
     permission: 'workspace',
     params: FileTreePath,
-    handler: async (params, { runtime }) =>
-      params.followSymlinks === undefined
-        ? runtime.readFileExplorerDir(params.worktree, params.relativePath)
-        : runtime.readFileExplorerDir(params.worktree, params.relativePath, {
-            followSymlinks: params.followSymlinks
-          })
+    handler: async (params, { runtime, clientKind, requestId }) =>
+      assertDirListingWithinRemoteBudget(
+        params.followSymlinks === undefined
+          ? await runtime.readFileExplorerDir(params.worktree, params.relativePath)
+          : await runtime.readFileExplorerDir(params.worktree, params.relativePath, {
+              followSymlinks: params.followSymlinks
+            }),
+        remoteFileContentBudget(clientKind, requestId)
+      )
   }),
   defineMethod({
     name: 'files.browseServerDir',

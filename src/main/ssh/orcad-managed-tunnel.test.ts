@@ -234,6 +234,37 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       expect(state.addForward).toHaveBeenCalledTimes(2)
     })
 
+    it.each([
+      ['a fallback port to the preferred one', 6_770, 6_768],
+      ['the preferred port to a fallback one', 6_768, 6_770]
+    ])('rebuilds a reused forward after a redeploy moves %s', async (_name, before, after) => {
+      let bound = before
+      const state = setup(
+        {},
+        {
+          resolveRemotePort: async () => bound,
+          verifyIdentity: async () => ({ verdict: 'verified' })
+        }
+      )
+      await state.manager.ensure(environment())
+      bound = after
+      // A plain ensure keeps the forward: nothing it compares names the bound port.
+      await state.manager.ensure(environment())
+      expect(state.addForward).toHaveBeenCalledOnce()
+
+      await state.manager.rebuild(environment())
+
+      expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+      expect(state.addForward).toHaveBeenLastCalledWith(
+        'ssh-1',
+        expect.anything(),
+        46_768,
+        '127.0.0.1',
+        after,
+        'Managed Orca server: Managed server'
+      )
+    })
+
     it.each(['ensure', 'resume'] as const)(
       'discards a forward when SSH reconnects during %s binding',
       async (operation) => {
@@ -363,6 +394,39 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       expect(state.connect).toHaveBeenCalledTimes(2)
       expect(state.addForward).toHaveBeenCalledOnce()
     })
+
+    it.each(['serving', 'unverifiable'] as const)(
+      'rebuilds a joined tunnel when its %s server check completes on a retired transport',
+      async (verdict) => {
+        const state = setup()
+        let finishCheck!: () => void
+        state.ensureServing.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishCheck = () =>
+                resolve(
+                  verdict === 'serving'
+                    ? { state: verdict }
+                    : { state: verdict, detail: 'SSH operation was cancelled' }
+                )
+            })
+        )
+        const first = state.manager.ensure(environment())
+        const firstOutcome = first.then(
+          () => 'resolved',
+          (error: unknown) => String(error)
+        )
+        await vi.waitFor(() => expect(state.ensureServing).toHaveBeenCalledOnce())
+        state.setTransportGeneration(4)
+        const joined = state.manager.ensure(environment())
+        finishCheck()
+        await joined
+        expect(state.addForward).toHaveBeenCalledTimes(2)
+        expect(state.ensureServing).toHaveBeenCalledTimes(2)
+        expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+        expect(await firstOutcome).toContain('superseded')
+      }
+    )
 
     it('hands a joiner the joined run’s auth failure instead of prompting again', async () => {
       const state = setup()

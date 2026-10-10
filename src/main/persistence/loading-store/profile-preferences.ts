@@ -4,6 +4,11 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
+  nativeChatUpgradeTipVariant,
+  parseNativeChatUpgradeTipAudience,
+  type NativeChatUpgradeTipVariant
+} from '../../../shared/native-chat-upgrade-tip-audience'
+import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
 } from '../applying-settings/settings-update'
@@ -166,6 +171,15 @@ export class ProfilePreferences {
     return this.getOnboarding()
   }
 
+  /** Fails closed: a missing or damaged record reads as no tip. */
+  getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
+    return nativeChatUpgradeTipVariant(
+      parseNativeChatUpgradeTipAudience(
+        this[profilePreferencesContext].runtime.state.nativeChatUpgradeTipAudience
+      )
+    )
+  }
+
   getGitHubCache(): PersistedState['githubCache'] {
     return this[profilePreferencesContext].runtime.state.githubCache
   }
@@ -234,13 +248,4 @@ export function getFeatureInteractionOperations(
     notifyUIChanged: () => notifyUIChanged(owner),
     getUI: () => owner.getUI()
   }
-}
-
-export function installProfilePreferencesContext(
-  target: ProfilePreferences,
-  source: ProfilePreferences
-): void {
-  Object.defineProperty(target, profilePreferencesContext, {
-    value: source[profilePreferencesContext]
-  })
 }

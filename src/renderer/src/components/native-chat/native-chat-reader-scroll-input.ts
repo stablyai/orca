@@ -6,6 +6,7 @@ import {
   readerGestureLeavesEnd,
   type ReaderGesture
 } from './native-chat-autoscroll'
+import { nativeChatFindGeometry, nativeChatFindScrollDelta } from './native-chat-find-visibility'
 
 const READER_SCROLL_KEYS = new Set([
   'ArrowUp',
@@ -134,11 +135,16 @@ export function nativeChatReaderScrollInputHandlers({
   }
 }
 
-/** The transcript scroller's input props, and the wheel the rail overlaying it forwards. */
+/** The transcript scroller's input props, the wheel the rail overlaying it forwards, and find steps. */
 export function useNativeChatReaderScrollInput(
   scrollRef: React.RefObject<HTMLElement | null>,
   { onReaderScroll: onScrollInput, onTakeScroll, onLeaveEnd }: ReaderScrollCallbacks
-): { scrollerProps: NativeChatReaderScrollInputHandlers; railWheel: (deltaY: number) => void } {
+): {
+  scrollerProps: NativeChatReaderScrollInputHandlers
+  railWheel: (deltaY: number) => void
+  /** A find step moves the transcript for the reader, so it ends following like a gesture. */
+  revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
+} {
   const onReaderScroll = useCallback(() => {
     onScrollInput()
     onTakeScroll?.()
@@ -161,5 +167,33 @@ export function useNativeChatReaderScrollInput(
     },
     [onLeaveEnd, onReaderScroll, scrollRef]
   )
-  return { scrollerProps, railWheel }
+  const revealFindMatch = useCallback(
+    (match: Range, bar: DOMRectReadOnly | null) => {
+      const transcript = scrollRef.current
+      if (!transcript) {
+        return
+      }
+      const geometry = nativeChatFindGeometry(transcript)
+      geometry.scrollIntoBoxes(match)
+      if (geometry.inView(match, bar)) {
+        return
+      }
+      const delta = nativeChatFindScrollDelta(
+        match.getBoundingClientRect(),
+        transcript.getBoundingClientRect(),
+        bar
+      )
+      const maxScrollTop = transcript.scrollHeight - transcript.clientHeight
+      const target = Math.min(Math.max(transcript.scrollTop + delta, 0), maxScrollTop)
+      // A scroll that cannot move fires no scroll event, so nothing would re-arm following.
+      if (Math.abs(target - transcript.scrollTop) < 1) {
+        return
+      }
+      onReaderScroll()
+      onLeaveEnd()
+      transcript.scrollTop = target
+    },
+    [onLeaveEnd, onReaderScroll, scrollRef]
+  )
+  return { scrollerProps, railWheel, revealFindMatch }
 }

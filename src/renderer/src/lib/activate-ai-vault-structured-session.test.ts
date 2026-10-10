@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
 
 const structuredSession = {
   structuredSession: { sessionId: 'session-1', workspaceId: 'workspace-1' }
-} as AiVaultSession
+}
 
 function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSession>[1]> = {}) {
   return {
@@ -19,40 +18,27 @@ function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSess
 }
 
 describe('activateAiVaultStructuredSession', () => {
-  // The resume dialog knows which machine listed the chat; it is asked, not whichever machine
-  // owns a workspace that happens to share the id.
-  it('asks the machine the caller names for both the refresh and the reveal', async () => {
+  // The resume dialog knows which machine listed the chat and under which pairing; every step asks
+  // that machine under it, not whichever machine owns a workspace that happens to share the id.
+  it('asks the named machine under its pairing for the refresh, the reveal and the tab', async () => {
     const parts = deps({
       activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
     })
-    const onServer = {
-      structuredSession: {
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
-        executionHostId: 'runtime:studio' as const,
-        pairingRevision: 3
-      }
+    const studio = { kind: 'environment', environmentId: 'studio' } as const
+
+    await expect(
+      activateAiVaultStructuredSession(structuredSession, parts, studio, { pairingRevision: 3 })
+    ).resolves.toBe(true)
+
+    expect(parts.refresh).toHaveBeenCalledWith('workspace-1', studio, { pairingRevision: 3 })
+    const named = {
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target: studio,
+      pairingRevision: 3
     }
-
-    await expect(activateAiVaultStructuredSession(onServer, parts)).resolves.toBe(true)
-
-    expect(parts.refresh).toHaveBeenCalledWith('workspace-1', {
-      executionHostId: 'runtime:studio',
-      pairingRevision: 3
-    })
-    expect(parts.reveal).toHaveBeenCalledWith({
-      worktreeId: 'workspace-1',
-      sessionId: 'session-1',
-      executionHostId: 'runtime:studio',
-      pairingRevision: 3
-    })
-    // The tab is looked up, and focused, on that machine too.
-    expect(parts.activate).toHaveBeenLastCalledWith({
-      worktreeId: 'workspace-1',
-      sessionId: 'session-1',
-      executionHostId: 'runtime:studio',
-      pairingRevision: 3
-    })
+    expect(parts.reveal).toHaveBeenCalledWith(named)
+    expect(parts.activate).toHaveBeenLastCalledWith(named)
   })
 
   it('treats the same session id on two machines as two activations, not one in flight', async () => {
@@ -62,20 +48,11 @@ describe('activateAiVaultStructuredSession', () => {
       refresh: vi.fn(() => pending.promise),
       reveal: vi.fn(async () => 'gone' as const)
     })
-    const here = activateAiVaultStructuredSession(
-      { structuredSession: { sessionId: 'session-1', workspaceId: 'workspace-1' } },
-      parts
-    )
-    const there = activateAiVaultStructuredSession(
-      {
-        structuredSession: {
-          sessionId: 'session-1',
-          workspaceId: 'workspace-1',
-          executionHostId: 'runtime:studio'
-        }
-      },
-      parts
-    )
+    const here = activateAiVaultStructuredSession(structuredSession, parts, { kind: 'local' })
+    const there = activateAiVaultStructuredSession(structuredSession, parts, {
+      kind: 'environment',
+      environmentId: 'studio'
+    })
     // Settled before asserting, so a failure here never strands an activation for later cases.
     pending.resolve()
     await Promise.all([here, there])
@@ -222,8 +199,45 @@ describe('activateAiVaultStructuredSession', () => {
   it('ignores a row that is not a structured chat', async () => {
     const parts = deps()
 
-    await expect(activateAiVaultStructuredSession({} as AiVaultSession, parts)).resolves.toBe(false)
+    await expect(activateAiVaultStructuredSession({}, parts)).resolves.toBe(false)
 
     expect(parts.reveal).not.toHaveBeenCalled()
+  })
+
+  it('carries an explicit recipient host through refresh, reveal and activation', async () => {
+    const target = { kind: 'environment', environmentId: 'remote-2' } as const
+    const parts = deps({
+      activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
+    })
+    await expect(activateAiVaultStructuredSession(structuredSession, parts, target)).resolves.toBe(
+      true
+    )
+    expect(parts.refresh).toHaveBeenCalledWith('workspace-1', target)
+    expect(parts.reveal).toHaveBeenCalledWith({
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target
+    })
+    expect(parts.activate).toHaveBeenLastCalledWith({
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target
+    })
+  })
+
+  it('does not coalesce equal session IDs from two hosts while each activation is pending', async () => {
+    let release!: (outcome: 'gone') => void
+    const pending = new Promise<'gone'>((resolve) => {
+      release = resolve
+    })
+    const parts = deps({ activate: vi.fn(() => false), reveal: vi.fn(() => pending) })
+    const local = activateAiVaultStructuredSession(structuredSession, parts, { kind: 'local' })
+    const remote = activateAiVaultStructuredSession(structuredSession, parts, {
+      kind: 'environment',
+      environmentId: 'remote-2'
+    })
+    await vi.waitFor(() => expect(parts.reveal).toHaveBeenCalledTimes(2))
+    release('gone')
+    await Promise.all([local, remote])
   })
 })

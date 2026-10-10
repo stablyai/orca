@@ -4,9 +4,9 @@ import { requestNativeChatResumeOnRestartDialog } from './native-chat-resume-on-
 import { restartMachineTarget, type RestartMachineKey } from './native-chat-restart-machines'
 import {
   getNativeChatRestartOffers,
-  getNativeChatRestartResuming,
   readNativeChatRestartMachine
 } from './native-chat-resume-on-restart-store'
+import { getNativeChatRestartResuming, getNativeChatRestartRuns } from './native-chat-restart-runs'
 
 /** The machine to open the dialog on: the only one named, or none in particular. */
 function focusOf(machines: readonly RestartMachineKey[]): RestartMachineKey | null {
@@ -60,9 +60,9 @@ export async function reopenNativeChatRestartOffer(
   if (getNativeChatRestartResuming().size === 0) {
     await Promise.all(machines.filter(readableNow).map(readForClick))
   }
-  // Only over rows: a dialog with nothing to list draws nothing, and a request nothing draws would
-  // stay open unseen. A resume still running keeps its machine's rows listed until it answers.
-  if (getNativeChatRestartOffers().size > 0) {
+  // Only over rows or a run to follow: a dialog with neither draws nothing, and a request nothing
+  // draws would stay open unseen.
+  if (getNativeChatRestartOffers().size > 0 || getNativeChatRestartRuns().size > 0) {
     requestNativeChatResumeOnRestartDialog(focusOf(machines))
   }
 }

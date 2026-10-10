@@ -50,6 +50,25 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe('Please $review $review typed manually')
   })
 
+  it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
+    const { input, container, onChange } = setup('See  please')
+    act(() => input.setSelectionRange(4, 4))
+    await act(async () =>
+      input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
+    )
+    const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
+    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
+    const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
+    expect(input.value).toBe(`See ${references} please`)
+    expect(input.selectionStart).toBe(4 + references.length)
+    expect(onChange).toHaveBeenCalled()
+    act(() => {
+      input.value = input.value.replace('letter.pdf', 'letter.pd')
+    })
+    expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
+  })
+
   it('keeps typed and restored invocations plain', () => {
     const { container, input } = setup('$review /review')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()

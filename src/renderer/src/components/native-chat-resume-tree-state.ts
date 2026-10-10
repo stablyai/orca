@@ -63,6 +63,9 @@ export const ResumeTreeDepthContext = createContext(0)
 export type FailureProps = {
   failureFor?: (sessionId: string) => ResumeFailure | undefined
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
+  renderStatus?: (sessionId: string, title: string) => React.ReactNode
+  /** Current offer membership excludes completed run history from group selection. */
+  selectableIds?: ReadonlySet<string>
 }
 
 /** What a caller listing several machines adds: chats are keyed by `rowKey` (two machines may
@@ -115,13 +118,17 @@ export function chatState(candidate: ResumeCandidate, tree: TreeProps) {
     checked: tree.selected.has(key),
     onCheckedChange: (checked: boolean) => tree.onToggle(key, checked),
     failure,
-    // The row's own actions and where it came from, named by the same key.
+    // The row's own actions, where it came from and its run status, named by the same key.
     onFailureAction:
       tree.onFailureAction &&
       ((action: ResumeFailureAction) => tree.onFailureAction?.(action, key)),
     originLabel: tree.originLabelFor?.(key),
+    renderStatus: tree.renderStatus
+      ? (_sessionId: string, title: string) => tree.renderStatus?.(key, title)
+      : undefined,
     // A group checkbox never ticks a failure a retry cannot fix.
-    selectable: !failure || resumeFailureSelectable(failure)
+    selectable:
+      (tree.selectableIds?.has(key) ?? true) && (!failure || resumeFailureSelectable(failure))
   }
 }
 

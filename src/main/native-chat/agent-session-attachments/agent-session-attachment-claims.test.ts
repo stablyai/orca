@@ -209,7 +209,7 @@ describe('claims written with the message', () => {
     ).toEqual([UPLOAD_A, UPLOAD_B].sort())
   })
 
-  it("refuses a client's draft naming a gone upload, and the /clear carry claims for its new chat", async () => {
+  it("refuses a gone upload and keeps a waiting card's attachment claim across clear", async () => {
     const journal = await open()
     const missing = message({ type: 'text', text: `@${join(storeRoot, UPLOAD_B, 'a.txt')}` })
     const refused = await journal.queuedMessages
@@ -233,18 +233,15 @@ describe('claims written with the message', () => {
       hostInstance: 'p',
       requireAttachments: true
     })
-    const replacement = await open('session-d')
-    await replacement.queuedMessages.insert({
-      messageId: 'draft-1',
-      body,
-      fingerprint: 'fp-d',
-      hostInstance: 'p',
-      carriedFrom: IDENTITY.sessionId
-    })
-    expect(claims()).toEqual([
-      { upload_id: UPLOAD_A, session_id: IDENTITY.sessionId },
-      { upload_id: UPLOAD_A, session_id: 'session-d' }
-    ])
+    await journal.context.clear(
+      { operationId: 'clear', afterFence: 0, clearedAt: 1000 },
+      { write: () => {}, committed: () => {} },
+      'caller-clear'
+    )
+    await journals.closeAll()
+    const reopened = await open()
+    expect(reopened.queuedMessages.get('draft-1')).toMatchObject({ body, carriedFrom: null })
+    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 
   it("does not refuse a draft's conversion: the draft claimed its uploads when it was written", async () => {

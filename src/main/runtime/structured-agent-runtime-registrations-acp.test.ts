@@ -16,7 +16,7 @@ describe('ACP agents in the runtime registrations', () => {
       accountHomeVariable: 'GROK_HOME',
       capabilities: {
         rewind: false,
-        compact: false,
+        compact: true,
         threadGoal: false,
         contextUsage: true,
         imagePrompts: false,
@@ -55,19 +55,17 @@ describe('ACP agents in the runtime registrations', () => {
     expect(registration?.supportsLaunch).toBeTypeOf('function')
   })
 
-  it('opens OMP as a structured chat only with the updated structured chat setting on', () => {
+  it('opens OMP as a structured chat with Chat UI on', () => {
     const settings = {
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      experimentalStructuredNativeChat: true
+      experimentalNativeChat: true
     }
     const placement = { agent: 'omp', workspaceKind: 'git-worktree' } as const
     expect(decideAgentLaunchMode({ placement, settings }).mode).toBe('structured')
-    // Off: OMP keeps the terminal-backed chat it has always had.
+    // Off: new OMP launches use the terminal.
     expect(
       decideAgentLaunchMode({
         placement,
-        settings: { ...settings, experimentalStructuredNativeChat: false }
+        settings: { experimentalNativeChat: false }
       })
     ).toMatchObject({ mode: 'terminal', reason: 'user_default' })
   })

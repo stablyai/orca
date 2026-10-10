@@ -89,7 +89,7 @@ beforeEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: false },
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: false },
     runtimeEnvironments: [
       pairedEnvironment('studio', 'studio-mac'),
       pairedEnvironment('build', 'build-box')
@@ -332,7 +332,7 @@ it('counts one Select all across machines, others’ chats included, unfixable f
   expect(button('Resume 0 chats').disabled).toBe(true)
 })
 
-// A machine mid-resume is locked; its ticks show the run, not a choice Select all can change.
+// A machine mid-resume is locked; its chats show the run, not a choice Select all can change.
 it('leaves a machine whose resume is running out of Select all', async () => {
   await stage({ sessions: [row('l1', 'own')] }, { studio: { sessions: SERVER_ROWS } })
   await open('environment:studio')
@@ -342,7 +342,10 @@ it('leaves a machine whose resume is running out of Select all', async () => {
   expect(selectAllCount()).toBe('1 of 1 selected')
   await act(async () => namedBox('Select all chats').click())
   expect(selectAllCount()).toBe('0 of 1 selected')
-  expect(chatBox('s1').getAttribute('aria-checked')).toBe('true')
+  // The running chat shows where it stands in its checkbox's place.
+  expect(
+    document.querySelector('[role="img"][aria-label="Prompt s1: Waiting to start · 0s"]')
+  ).not.toBeNull()
   expect(button('Resuming…').disabled).toBe(true)
 })
 
@@ -378,7 +381,7 @@ it('names each machine as the sidebar does, a rename included, and an SSH host w
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: false,
+      experimentalNativeChat: false,
       hostSettingOverrides: {
         local: { displayLabel: 'Desk' },
         'runtime:studio': { displayLabel: 'Studio' }

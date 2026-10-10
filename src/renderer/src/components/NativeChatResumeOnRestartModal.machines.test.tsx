@@ -106,7 +106,7 @@ beforeEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: false },
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: false },
     runtimeEnvironments: [
       pairedEnvironment('studio', 'studio-mac'),
       pairedEnvironment('build', 'build-box')
@@ -411,9 +411,9 @@ it('announces a server restart that lands in the same tick the dialog loses its 
   ])
 })
 
-// A "Resuming" click while a concurrent read lists nothing opens nothing and leaves nothing behind:
-// once that resume's answer is lost, a later server's restart still gets its toast and does not
-// open the dialog by itself.
+// A "Resuming" click while a concurrent read lists nothing opens the run it follows, and closing it
+// leaves nothing behind: once that resume's answer is lost, a later server's restart still gets its
+// toast and does not open the dialog by itself.
 it('leaves no unseen request behind a Resuming click with nothing listed', async () => {
   window.localStorage.clear()
   localRows = []
@@ -449,8 +449,10 @@ it('leaves no unseen request behind a Resuming click with nothing listed', async
     ])
   })
   await act(async () => void (await readNativeChatRestartMachine(studio)))
-  // 3. The status entry's "Resuming" click: nothing to list, so nothing opens.
+  // 3. The status entry's "Resuming" click: nothing listed, but the run is shown, then closed.
   await act(async () => reopenNativeChatRestartOffer())
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resuming 1 chat')
+  await act(async () => button('Close').click())
   expect(getNativeChatResumeOnRestartDialogRequest()).toBeNull()
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   // 4. The answer is lost and its re-read fails.
@@ -532,5 +534,9 @@ it('reports a chat a server could not carry on once, opens it on that server, an
     { kind: 'environment', environmentId: 'studio' },
     { sessionIds: ['s1'] }
   ])
-  expect(vi.mocked(toast).mock.calls[1]).toEqual(['Resumed 1 chat on studio-mac'])
+  // Show opens the retry's own summary.
+  expect(vi.mocked(toast).mock.calls[1]).toEqual([
+    'Resumed 1 chat on studio-mac',
+    { action: { label: 'Show', onClick: expect.any(Function) } }
+  ])
 })

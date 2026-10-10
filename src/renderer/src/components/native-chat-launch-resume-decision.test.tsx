@@ -56,7 +56,6 @@ function settings(autoResume: boolean | undefined): void {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
       ...(autoResume === undefined ? {} : { nativeChatResumeWorkOnRestart: autoResume })
     }
   })

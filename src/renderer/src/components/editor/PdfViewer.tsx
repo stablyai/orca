@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PDF loading drives pdf.js document/viewer instances and decode errors through an external worker lifecycle. */
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import type {
@@ -9,10 +9,9 @@ import type {
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import PdfFind from './PdfFind'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { translate } from '@/i18n/i18n'
@@ -24,6 +23,8 @@ import {
   type PdfScalePreference
 } from './pdf-scale-preference'
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
+import { EditorCommandOwnerContext } from './editor-command-owner-context'
+import { listenForPdfZoomRequests } from './pdf-zoom-request'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -58,6 +59,7 @@ function PdfDocumentViewer({
   preferenceKey = null,
   scrollCacheKey = null
 }: PdfViewerProps): JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
   const loaderRef = useRef<PdfDocumentLoader | null>(null)
@@ -66,6 +68,7 @@ function PdfDocumentViewer({
   const [scale, setScale] = useState(1)
   const keybindings = useAppStore((state) => state.keybindings)
   const findShortcutLabel = useShortcutLabel('editor.find')
+  const isCommandOwner = useContext(EditorCommandOwnerContext)
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
@@ -75,6 +78,18 @@ function PdfDocumentViewer({
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
+
+  // Why: every zoom entry point (toolbar, app zoom command, wheel/pinch) must record the
+  // scale preference so the next content reload restores it (see scalePreferenceRef).
+  const recordScalePreference = useCallback(
+    (preference: PdfScalePreference) => {
+      scalePreferenceRef.current = preference
+      if (preferenceKey) {
+        writePdfScalePreference(preferenceKey, preference)
+      }
+    },
+    [preferenceKey]
+  )
 
   useEffect(() => {
     const container = containerRef.current
@@ -97,7 +112,8 @@ function PdfDocumentViewer({
           scrollCacheKey,
           scalePreference: scalePreferenceRef.current,
           scaleBounds: SCALE_BOUNDS,
-          onScaleChanging: setScale
+          onScaleChanging: setScale,
+          onWheelZoom: recordScalePreference
         })
         eventBusRef.current = session.eventBus
         findControllerRef.current = session.findController
@@ -119,7 +135,7 @@ function PdfDocumentViewer({
       loaderRef.current = null
       loader.dispose()
     }
-  }, [filePath, preferenceKey, scrollCacheKey])
+  }, [filePath, preferenceKey, recordScalePreference, scrollCacheKey])
 
   useEffect(() => {
     loaderRef.current?.load(cleanedContent)
@@ -134,8 +150,6 @@ function PdfDocumentViewer({
     setFindOpen(false)
   }, [])
 
-  // Why: every zoom entry point (toolbar + keyboard) must record the scale
-  // preference so the next content reload restores it (see scalePreferenceRef).
   const stepZoom = useCallback(
     (direction: 'in' | 'out') => {
       const viewer = pdfViewerRef.current
@@ -144,12 +158,9 @@ function PdfDocumentViewer({
       }
       const next = stepPdfScalePreference(viewer.currentScale, direction, SCALE_BOUNDS)
       viewer.currentScale = next.scale
-      scalePreferenceRef.current = next.preference
-      if (preferenceKey) {
-        writePdfScalePreference(preferenceKey, next.preference)
-      }
+      recordScalePreference(next.preference)
     },
-    [preferenceKey]
+    [recordScalePreference]
   )
 
   const zoomIn = useCallback(() => stepZoom('in'), [stepZoom])
@@ -160,41 +171,26 @@ function PdfDocumentViewer({
     if (!viewer) {
       return
     }
-    scalePreferenceRef.current = 'page-width'
     applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
-    if (preferenceKey) {
-      writePdfScalePreference(preferenceKey, 'page-width')
-    }
-  }, [preferenceKey])
+    recordScalePreference('page-width')
+  }, [recordScalePreference])
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      const platform = getShortcutPlatform()
-      if (keybindingMatchesAction('editor.find', e, platform, keybindings)) {
-        e.preventDefault()
-        e.stopPropagation()
-        setFindOpen(true)
-        return
-      }
-      if (keybindingMatchesAction('zoom.in', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomIn()
-      } else if (keybindingMatchesAction('zoom.out', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomOut()
-      } else if (keybindingMatchesAction('zoom.reset', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomReset()
-      }
+    if (!isCommandOwner) {
+      return
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [keybindings, zoomIn, zoomOut, zoomReset])
+    return listenForPdfZoomRequests((direction) =>
+      direction === 'reset' ? zoomReset() : stepZoom(direction)
+    )
+  }, [isCommandOwner, stepZoom, zoomReset])
+
+  const openFind = useCallback(() => setFindOpen(true), [])
+  usePdfViewerFindShortcut({ rootRef, ownsCommands: isCommandOwner, keybindings, openFind })
 
   const zoomPercent = Math.round(scale * 100)
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col">
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
         {/* Why: PDFViewer requires its container to be position:absolute.

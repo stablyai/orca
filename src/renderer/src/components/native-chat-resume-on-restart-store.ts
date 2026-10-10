@@ -32,6 +32,18 @@ import {
   forgetUnsentResumes,
   withUnsentResumes
 } from './native-chat-resume-unsent-requests'
+import {
+  _resetNativeChatRestartRuns,
+  beginNativeChatRestartRun,
+  forgetNativeChatRestartRun,
+  getNativeChatRestartRuns,
+  type RestartRunAnswer
+} from './native-chat-restart-runs'
+
+export {
+  getNativeChatRestartResuming,
+  useNativeChatRestartResuming
+} from './native-chat-restart-runs'
 
 /**
  * Which interrupted chats each machine is still offering to resume, and every action that moves
@@ -89,11 +101,6 @@ const ticketsIssued = new Map<RestartMachineKey, number>()
 const ticketsPublished = new Map<RestartMachineKey, number>()
 /** Continue and dismiss calls in flight per machine; a chat-activity re-read waits for them. */
 const actionsInFlight = new Map<RestartMachineKey, number>()
-/** The chats each in-flight continue call names, per machine, so the status bar can report the
- *  resume after the dialog that started it has closed. Held only for the call's lifetime. */
-const resumeBatches = new Set<{ machine: RestartMachineKey; sessionIds: readonly string[] }>()
-const NOTHING_RESUMING: ReadonlyMap<RestartMachineKey, readonly string[]> = new Map()
-let resuming = NOTHING_RESUMING
 const listeners = new Set<() => void>()
 let readListener:
   | ((target: RuntimeClientTarget, candidates: readonly ResumeCandidate[]) => void)
@@ -122,8 +129,8 @@ function publish(machine: RestartMachineKey, next: NativeChatRestartMachineOffer
   offers = updated.size === 0 ? NO_OFFERS : updated
   syncOfferedChatWatch(machine, offers.get(machine), refreshAfterOfferedChatActivity)
   emit()
-  if (offers.size === 0) {
-    // With nothing left on any machine, an open request for the dialog has nothing to show.
+  if (offers.size === 0 && getNativeChatRestartRuns().size === 0) {
+    // With nothing left on any machine and no run to follow, an open request has nothing to show.
     consumeNativeChatResumeOnRestartDialogRequest()
   }
 }
@@ -179,16 +186,6 @@ export function publishNativeChatRestartAnswer(
   return publishUnder(ticket, { candidates, failed })
 }
 
-function syncResuming(): void {
-  const byMachine = new Map<RestartMachineKey, string[]>()
-  for (const batch of resumeBatches) {
-    const ids = byMachine.get(batch.machine) ?? []
-    byMachine.set(batch.machine, [...new Set([...ids, ...batch.sessionIds])])
-  }
-  resuming = byMachine.size === 0 ? NOTHING_RESUMING : byMachine
-  emit()
-}
-
 function refreshAfterOfferedChatActivity(machine: RestartMachineKey): void {
   // An action in flight ends with the host's answer, or a read of its own if a later one won.
   if ((actionsInFlight.get(machine) ?? 0) === 0) {
@@ -198,10 +195,6 @@ function refreshAfterOfferedChatActivity(machine: RestartMachineKey): void {
 
 export function getNativeChatRestartOffers(): NativeChatRestartOffers {
   return offers
-}
-
-export function getNativeChatRestartResuming(): ReadonlyMap<RestartMachineKey, readonly string[]> {
-  return resuming
 }
 
 export function subscribeNativeChatRestartOffers(listener: () => void): () => void {
@@ -295,32 +288,26 @@ export function forgetNativeChatRestartMachine(machine: RestartMachineKey): void
   const ticket = issueNativeChatRestartTicket(restartMachineTarget(machine))
   ticketsPublished.set(machine, ticket.ticket)
   forgetUnsentResumes(machine, undefined)
+  forgetNativeChatRestartRun(machine)
   if (offers.has(machine)) {
     publish(machine, null)
   }
 }
 
-/** Bookkeeping for an action (continue or dismiss) on one machine: its ticket, and a resume's chats
- *  shown as in flight until the host answers. Used by the action module. */
+/** Bookkeeping for an action (continue or dismiss) on one machine: its ticket, and for a resume, the
+ *  run that follows its chats until the host answers. Used by the action module. */
 export function beginNativeChatRestartAction(
   target: RuntimeClientTarget,
-  resumingIds?: readonly string[]
-): { ticket: RestartMachineTicket; settle: () => void } {
+  resume?: { listing: NativeChatRestartMachineOffer; sessionIds: readonly string[] }
+): { ticket: RestartMachineTicket; settle: (answer?: RestartRunAnswer) => void } {
   const ticket = issueNativeChatRestartTicket(target)
   actionsInFlight.set(ticket.machine, (actionsInFlight.get(ticket.machine) ?? 0) + 1)
-  const batch = resumingIds ? { machine: ticket.machine, sessionIds: [...resumingIds] } : null
-  if (batch) {
-    resumeBatches.add(batch)
-    syncResuming()
-  }
+  const finishRun = resume && beginNativeChatRestartRun(resume.listing, resume.sessionIds)
   return {
     ticket,
-    settle: () => {
+    settle: (answer) => {
       actionsInFlight.set(ticket.machine, (actionsInFlight.get(ticket.machine) ?? 1) - 1)
-      if (batch) {
-        resumeBatches.delete(batch)
-        syncResuming()
-      }
+      finishRun?.(answer)
     }
   }
 }
@@ -333,22 +320,12 @@ export function useNativeChatRestartOffers(): NativeChatRestartOffers {
   )
 }
 
-/** The chats a resume is carrying on right now, per machine, whichever surface started it. */
-export function useNativeChatRestartResuming(): ReadonlyMap<RestartMachineKey, readonly string[]> {
-  return useSyncExternalStore(
-    subscribeNativeChatRestartOffers,
-    getNativeChatRestartResuming,
-    getNativeChatRestartResuming
-  )
-}
-
 /** @internal - tests need a clean module between cases. */
 export function _resetNativeChatRestartOfferState(): void {
   releaseOfferedChatWatches()
   offers = NO_OFFERS
   _resetUnsentResumes()
-  resumeBatches.clear()
-  resuming = NOTHING_RESUMING
+  _resetNativeChatRestartRuns()
   actionsInFlight.clear()
   ticketsIssued.clear()
   ticketsPublished.clear()

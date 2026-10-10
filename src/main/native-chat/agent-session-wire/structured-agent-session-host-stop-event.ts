@@ -42,7 +42,13 @@ export async function stopEndsWork(
   ending: StructuredAgentSessionStopEnding
 ): Promise<boolean> {
   const { child, journal } = session
-  if ('recorded' in ending || ending.quit || ending.resting || !child) {
+  if (
+    'recorded' in ending ||
+    ending.quit ||
+    ending.resting ||
+    ending.cause === 'context-clear' ||
+    !child
+  ) {
     return false
   }
   // A failed drain has nothing more to deliver, so the journal's read as it stands holds. One

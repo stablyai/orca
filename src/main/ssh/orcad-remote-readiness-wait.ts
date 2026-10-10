@@ -16,8 +16,7 @@ import {
   type OrcadReadinessParse
 } from './orcad-remote-launch'
 import {
-  orcadWindowsBaseDir,
-  orcadWindowsHostOpCommand,
+  orcadWindowsSlotOpCommand,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_READINESS_MARKER } from './orcad-windows-host-script'
@@ -58,16 +57,11 @@ export function orcadReadinessWaitCommand(
   if (!isWindowsRemoteHost(host)) {
     return posixReadinessWaitCommand(host, remoteInstallDir, seconds)
   }
-  return orcadWindowsHostOpCommand(
-    host,
-    orcadWindowsBaseDir(host, remoteInstallDir),
-    'readiness-wait',
-    [
-      joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME),
-      String(ORCAD_READINESS_MAX_BYTES),
-      String(seconds)
-    ]
-  )
+  return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'readiness-wait', [
+    joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME),
+    String(ORCAD_READINESS_MAX_BYTES),
+    String(seconds)
+  ])
 }
 
 /** What the readiness file held when the host stopped waiting; `pending` if still unfinished. */

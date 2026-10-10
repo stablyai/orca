@@ -1,9 +1,8 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
   panels: { hostId: string; worktreeId: string; name?: string }[]
   previews: unknown[]
@@ -14,7 +13,6 @@ type RouteDependencies = {
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   routes: [],
   panels: [],
   previews: [],
@@ -23,16 +21,10 @@ const dependencies = vi.hoisted((): RouteDependencies => ({
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
@@ -93,14 +85,16 @@ async function renderPreview(): Promise<void> {
 }
 
 beforeEach(() => {
-  dependencies.storage.clear()
   dependencies.routes.length = 0
   dependencies.panels.length = 0
   dependencies.previews.length = 0
   dependencies.lifecycle.length = 0
   dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
-  Object.assign(globalThis, { __DEV__: true })
-  dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('the native file explorer route that hands off to the shell', () => {
@@ -109,17 +103,6 @@ describe('the native file explorer route that hands off to the shell', () => {
     expect(dependencies.routes).toEqual([
       { pathname: '/h/host-1/files/wt-1', params: { name: 'my worktree' } }
     ])
-  })
-
-  it('renders neither panel nor shell while the flag read is still settling', async () => {
-    // No `await` inside `act`, which leaves the read's promise pending: the native panel used to
-    // mount in this window and be replaced by the page the moment a flag-on read landed.
-    act(() => {
-      create(createElement(MobileFileExplorerScreen))
-    })
-    expect(dependencies.panels).toEqual([])
-    expect(dependencies.routes).toEqual([])
-    await act(async () => {})
   })
 
   /**
@@ -167,8 +150,8 @@ describe('the native file explorer route that hands off to the shell', () => {
     }
   })
 
-  it('renders the native panel with the flag off, which is every store build', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'false')
+  it('renders the native panel in a build without the shell, which is every store build', async () => {
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
     await renderExplorer()
     expect(dependencies.routes).toEqual([])
   })

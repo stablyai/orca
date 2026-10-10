@@ -259,7 +259,7 @@ function assertNoIndependentSshAccess(environment: KnownRuntimeEnvironment): voi
   if (environment.orcadDeployment) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
-      'This server is managed by Orca over SSH; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Managed servers.'
+      'This server is managed by Orca over SSH; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Managed servers; for a host that is gone, run `orca environment forget --environment <name> --yes`.'
     )
   }
   if (environment.sshAccess || environment.pendingSshAccessOperation) {

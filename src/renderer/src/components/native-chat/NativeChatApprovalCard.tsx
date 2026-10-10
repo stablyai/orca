@@ -64,6 +64,7 @@ export function NativeChatApprovalCard({
       <div className="mx-auto flex h-full min-h-0 max-h-full w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
         <div
           ref={cardRef}
+          data-native-chat-prompt-card-focus={shouldFocus || undefined}
           data-native-chat-approval-card="true"
           role="group"
           aria-label={approval.title}

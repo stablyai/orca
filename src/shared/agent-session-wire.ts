@@ -240,6 +240,11 @@ export type AgentSessionStatusSummary = {
   /** With `hostExecutionOwned`: whether that child has proven its start. `starting` is a
    *  published session whose provider has not yet answered startup; absent on older hosts. */
   hostExecutionPhase?: 'starting' | 'ready'
+  /** This restart action's progress, derived by the live host and never persisted.
+   *  Cleared when the action returns; absent on older hosts. */
+  restartResume?: {
+    phase: 'queued' | 'starting' | 'continued' | 'refused' | 'unconfirmed' | 'skipped'
+  }
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
@@ -321,6 +326,8 @@ export type AgentSessionMutationResult<TValue> =
 // ─── Per-method payloads ────────────────────────────────────────────────────
 
 export type AgentSessionAttachResult = {
+  /** Create's committed opening message, even when its row is outside the returned history page. */
+  firstMessage?: AgentJournalSubmission
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
@@ -422,6 +429,12 @@ export type AgentSessionModelCatalogResult = {
       models: AgentSessionModelOption[]
       fastModeSupport?: AgentSessionFastModeSupport
       fetchedAt: number
+      /** The listed default is the model a new chat here launches with: the agent's listing names
+       *  its configured model and no workspace config can replace it. Absent from an older host. */
+      listingNamesConfiguredModel?: boolean
+      /** The named default holds in every workspace: the agent reads no project config for its
+       *  model, so an answer naming no workspace serves any new chat. Absent from an older host. */
+      defaultHoldsInEveryWorkspace?: true
     }
 )
 
@@ -469,16 +482,16 @@ export type AgentSessionOptionsResult = {
    *  `agentSession.threadGoal` never offers the controls. `current` is the
    *  latest goal the whole journal records, for a client whose loaded page
    *  starts after it. */
-  threadGoal?: { current: AgentJournalThreadGoal | null }
+  threadGoal?: { current: AgentJournalThreadGoal | null; contextFloor?: AgentJournalCursor }
   /** Present only where this session writes context facts to its turn rows.
    *  `current` is the newest of each part the whole journal records, for a
    *  client whose loaded page starts after the row that carries it. */
-  contextUsage?: { current: AgentSessionContextUsage }
+  contextUsage?: { current: AgentSessionContextUsage; contextFloor?: AgentJournalCursor }
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
   current: {
-    model: string
+    model?: string
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean

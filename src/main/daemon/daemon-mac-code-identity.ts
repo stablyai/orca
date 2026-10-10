@@ -1,7 +1,7 @@
 // Adapted from David Bebawy's PR #21826: `codesign --display +<pid>` is the probe that answers
 // where a running pid's executable lives now. Measurement only; nothing reads the verdict.
 
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { DaemonCodeIdentity } from '../../shared/daemon-adoption-telemetry'
 
 const CODESIGN_TIMEOUT_MS = 3_000

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
 import { restoreLocalStructuredSessionTabsOnce } from './local-structured-session-tabs-sync/inventory-refresh'
@@ -70,17 +71,17 @@ export function useLocalStructuredAgentSessionsHeld(): boolean {
   )
 }
 
-type StructuredChatSettings = Pick<GlobalSettings, 'experimentalStructuredNativeChat'> | null
+type StructuredChatSettings = Pick<GlobalSettings, 'experimentalNativeChat'> | null
 
 function chatsInUse(settings: StructuredChatSettings | undefined, holds: boolean): boolean {
-  return !isWebClientLocation() && (settings?.experimentalStructuredNativeChat === true || holds)
+  return !isWebClientLocation() && (isNativeChatEnabled(settings) || holds)
 }
 
 /** Structured chats can exist on this machine: the setting launches them, or the runtime holds some. */
 export function useLocalStructuredChatsInUse(): boolean {
   const holds = useLocalStructuredAgentSessionsHeld()
-  const setting = useAppStore((state) => state.settings?.experimentalStructuredNativeChat === true)
-  return chatsInUse({ experimentalStructuredNativeChat: setting }, holds)
+  const setting = useAppStore((state) => isNativeChatEnabled(state.settings))
+  return chatsInUse({ experimentalNativeChat: setting }, holds)
 }
 
 /** The same answer for one-shot startup work, asked of the host rather than read from the renderer. */

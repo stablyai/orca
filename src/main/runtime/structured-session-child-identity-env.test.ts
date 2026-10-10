@@ -100,6 +100,22 @@ describe('structuredSessionChildIdentityEnv', () => {
   })
 
   describe.each(['chat', 'worker'] as const)("reaches this app's CLI as a %s", (kind) => {
+    it('reaches a headless host CLI without Electron resources', () => {
+      const launcher = join(USER_DATA, 'cli', 'bin', 'orca')
+      installFakeAppEnvironment({
+        isPackaged: () => true,
+        getPath: () => USER_DATA,
+        getCliLauncherPath: () => launcher
+      })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, {
+        PATH: '/usr/bin',
+        ORCA_USER_DATA_PATH: '/other/profile'
+      })
+      expect(env.ORCA_CLI_COMMAND).toBe(launcher)
+      expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+      expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
+      expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
+    })
     beforeEach(() => {
       if (kind === 'worker') {
         registerWorker()

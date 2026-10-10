@@ -30,28 +30,32 @@ export type ResumeTreeMachines = {
 }
 
 /** Why a machine's chats stopped and how long ago, beside its name. */
-function machineSubtitleFor(machine: MachineView): string {
-  const cause = machine.rows.some((row) => row.trigger === 'update')
+function machineSubtitleFor(machine: MachineView, rows: readonly ResumeCandidate[]): string {
+  const cause = rows.some((row) => row.trigger === 'update')
     ? translate(
         'auto.components.NativeChatResumeOnRestartModal.machineCauseUpdate',
         'Installed an update'
       )
     : translate('auto.components.NativeChatResumeOnRestartModal.machineCauseQuit', 'Was quit')
-  const latest = Math.max(...machine.rows.map((row) => row.recordedAt))
+  const latest = Math.max(...rows.map((row) => row.recordedAt))
   return `${cause} · ${formatShortTimeAgo(latest, machine.offer.listedAt)}`
 }
 
+/** `rowsOf` is what each machine shows: by default its listed rows, or a run's rows while the
+ *  dialog follows one, which keep a chat the host no longer lists. */
 export function resumeTreeMachines(
   machines: readonly MachineView[],
   resuming: ReadonlyMap<RestartMachineKey, readonly string[]>,
-  focus: RestartMachineKey | null
+  focus: RestartMachineKey | null,
+  rowsOf: (machine: MachineView) => readonly ResumeCandidate[] = (machine) => machine.rows
 ): ResumeTreeMachines {
   const machineOfRow = new Map<ResumeCandidate, MachineView>()
   // Keyed by plain string: the tree names a machine node by its host id inside a string key.
   const machineByHost = new Map<string, MachineView>()
   const rowByKey = new Map<string, { machine: MachineView; sessionId: string }>()
-  for (const machine of machines) {
-    for (const row of machine.rows) {
+  const shown = new Map(machines.map((machine) => [machine, rowsOf(machine)]))
+  for (const [machine, rows] of shown) {
+    for (const row of rows) {
       machineOfRow.set(row, machine)
       machineByHost.set(row.executionHostId ?? LOCAL_EXECUTION_HOST_ID, machine)
       rowByKey.set(resumeRowKey(machine.identity, row.sessionId), {
@@ -65,7 +69,7 @@ export function resumeTreeMachines(
     return row ? read(row.machine, row.sessionId) : undefined
   }
   return {
-    rows: machines.flatMap((machine) => machine.rows),
+    rows: [...shown.values()].flat(),
     listedAt: Math.max(...machines.map((machine) => machine.offer.listedAt)),
     rowKey: (candidate) => {
       const machine = machineOfRow.get(candidate)
@@ -99,7 +103,7 @@ export function resumeTreeMachines(
     },
     machineSubtitle: (hostId) => {
       const machine = machineByHost.get(hostId)
-      return machine ? machineSubtitleFor(machine) : undefined
+      return machine ? machineSubtitleFor(machine, shown.get(machine) ?? []) : undefined
     },
     listingOf: (hostId) => machineByHost.get(hostId)?.identity ?? hostId,
     rowOf: (key) => rowByKey.get(key)

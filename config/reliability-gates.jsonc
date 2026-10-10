@@ -760,12 +760,12 @@
       "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
       "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "testFiles": [
         "src/shared/ephemeral-vm-recipe-process.test.ts",
         "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
-        "src/shared/growing-byte-buffer.test.ts",
+        "src/packages/process-host/src/growing-byte-buffer.test.ts",
         "src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "assertionRefs": [
@@ -782,7 +782,7 @@
           ]
         },
         {
-          "file": "src/shared/growing-byte-buffer.test.ts",
+          "file": "src/packages/process-host/src/growing-byte-buffer.test.ts",
           "assertions": [
             "reads and writes correctly after the head offset has advanced",
             "keeps a bounded suffix stable across many small appends without unbounded growth"
@@ -794,7 +794,7 @@
           "date": "2026-09-26",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
           "result": "passed",
           "durationSeconds": 0.48,
           "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."
@@ -2099,14 +2099,14 @@
       "invariant": "Title-sync publications must not enumerate unchanged session collections, while title identity, provider availability, active pane, stored title and effective execution-host changes retain their previous invalidation decisions.",
       "oracle": "Fifty live heartbeat publications with 500 retained and 500 sleeping records cause zero unchanged-map enumerations and no extra scheduled reconciliations. Provider identity, additions/removals, agent/pane ownership, effective host, active pane and stored title changes still invalidate.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
         "src/renderer/src/store/slices/agent-status-batch.test.ts",
         "src/renderer/src/store/slices/agent-status-provider-session.test.ts",
-        "src/renderer/src/store/slices/agent-status-retained-leak.test.ts",
+        "src/renderer/src/store/slices/agent-status.test.ts",
         "src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts"
       ],
       "assertionRefs": [
@@ -2122,13 +2122,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-07",
+          "date": "2026-10-09",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts",
           "result": "passed",
-          "durationSeconds": 5.35,
-          "summary": "69 tests passed across six files, including actual subscriber scheduling and producer identity contracts."
+          "durationSeconds": 2.8954373749999998,
+          "summary": "The current retained gate command passed 82 tests across 6 files. Historical pre-consolidation receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-09-07\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/ai-vault-tab-title-sync-inputs.test.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/renderer/src/store/slices/agent-status-batch.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-retained-leak.test.ts src/renderer/src/store/slices/agent-status-manual-sleep-capture.test.ts\",\"result\":\"passed\",\"durationSeconds\":5.35,\"summary\":\"69 tests passed across six files, including actual subscriber scheduling and producer identity contracts.\"}] No new E2E or hosted run is claimed."
         }
       ],
       "runtimeBudget": {
@@ -6528,7 +6528,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-reconciliation-protocol.test.ts src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-reconciliation-command-order.test.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
@@ -6544,7 +6544,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host-registry.test.ts src/main/browser/paired-runtime-browser-client-host-runtime.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-session-startup.test.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
@@ -6554,7 +6554,6 @@
         "src/main/runtime/runtime-browser-client-page-recovery.test.ts",
         "src/main/runtime/rpc/methods/session-tab-browser-placement-mutations.test.ts",
         "src/main/runtime/rpc/methods/session-tab-browser-placement-projection.test.ts",
-        "src/shared/browser-network-capabilities.test.ts",
         "src/shared/browser-client-host-protocol.test.ts",
         "src/shared/browser-client-host-reconciliation-protocol.test.ts",
         "src/shared/browser-network-tunnel-protocol.test.ts",
@@ -7255,15 +7254,6 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
-          "result": "passed",
-          "durationSeconds": 2.6,
-          "summary": "Thirteen files passed 142 structural route-key, native-shape, live lease-bound SSH grant, startup cancellation, diagnostic redaction, deferred-socket release, capability negotiation, exact SSH authority and client, ssh2 forwarding, standalone system-SSH dynamic-forward, active-probe cleanup, static-forward option reuse, internal SOCKS domain, and exact release tests."
-        },
-        {
-          "date": "2026-08-14",
-          "runner": "local",
-          "platform": "macos",
           "command": "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
           "result": "passed",
           "durationSeconds": 1.3,
@@ -7295,15 +7285,6 @@
           "result": "passed",
           "durationSeconds": 3.4,
           "summary": "Eleven files passed 67 lease, reserved long-poll and host admission, token-safe placement retirement, authority, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
-        },
-        {
-          "date": "2026-08-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.4,
-          "summary": "Four files passed 25 deterministic capability, codec, credit, generation, half-close, SOCKS routing, remote-DNS, and fail-closed tests."
         },
         {
           "date": "2026-08-14",
@@ -17419,8 +17400,8 @@
         {
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
           "assertions": [
-            "repaints a pushed image exactly and keeps the history the TUI covers",
-            "keeps the pane's history when the host screen has another grid",
+            "repaints a pushed image exactly, normal buffer included",
+            "replaces both buffers when the host screen has another grid",
             "keeps history unduplicated when a pushed image also carries history",
             "paints the whole image when the TUI started while hidden",
             "reads the pane buffer after a queued alt-screen entry parses",
@@ -17433,7 +17414,8 @@
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts",
           "assertions": [
             "keeps the covered history for a live TUI exactly as the host holds it",
-            "repaints from the normal buffer once the host TUI has exited"
+            "repaints from the normal buffer once the host TUI has exited",
+            "replaces the normal history that changed between two alt-screen sessions"
           ]
         },
         {
@@ -21137,12 +21119,12 @@
       "invariant": "Identity-equal pane layout writes avoid local churn but never suppress a remote retry whose prior push failed; reconnecting and repeating the same layout persists it on the host and publishes it to other paired clients.",
       "oracle": "Disconnect a paired client, change a pane title, and observe the failed host push while local state retains the layout. Reconnect without remounting, submit the identical title again, and require the headless host plus a second paired observer to receive it.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/paired-remote-pane-layout-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts",
-        "src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts",
+        "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "tests/e2e/paired-remote-pane-layout-retry.spec.ts"
       ],
       "assertionRefs": [
@@ -21151,7 +21133,7 @@
           "assertions": ["only successfully pushed layouts deduplicate later remote writes"]
         },
         {
-          "file": "src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts",
+          "file": "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
           "assertions": ["identity-equal layout and timer writes avoid redundant local updates"]
         },
         {
@@ -21163,13 +21145,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-23",
+          "date": "2026-10-09",
           "runner": "local",
           "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts --reporter=dot",
           "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts --reporter=dot",
-          "durationSeconds": 5,
-          "summary": "Two focused files passed 20 remote-push and identity-bailout contracts."
+          "durationSeconds": 1.9345390829999998,
+          "summary": "The current retained gate command passed 32 tests across 2 files. Historical pre-consolidation receipts are preserved verbatim with their originally executed commands: [{\"date\":\"2026-08-23\",\"runner\":\"local\",\"platform\":\"macos\",\"result\":\"passed\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-pane-layout-push.test.ts src/renderer/src/store/slices/terminal-write-identity-bailouts.test.ts --reporter=dot\",\"durationSeconds\":5,\"summary\":\"Two focused files passed 20 remote-push and identity-bailout contracts.\"}] No new E2E or hosted run is claimed."
         }
       ],
       "runtimeBudget": {

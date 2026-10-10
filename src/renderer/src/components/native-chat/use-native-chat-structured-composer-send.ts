@@ -92,8 +92,8 @@ export function useNativeChatStructuredComposerSend({
       }
       const submitted = sentFrom ?? readNativeChatComposerDraft(draftScopeKey)
       await dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
-        .then(({ accepted, error, revealsTranscript }) => {
-          structuredTransport.onError(error)
+        .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
+          structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           if (!accepted) {
             return
           }
@@ -129,7 +129,7 @@ export function useNativeChatStructuredComposerSend({
             error,
             agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
           )
-          structuredTransport.onError(notice.text, notice.errorText)
+          structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
     },
     [

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { CLI_BOOLEAN_FLAGS, findCliCommandIndex } from '../../shared/cli-argument-boundary'
 import { CLI_COMMAND_NAMES } from './cli-command-names'
 import { VALUE_TAKING_FLAGS } from './serve-mode-argv'

@@ -73,7 +73,7 @@ beforeEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
   })
   container = document.createElement('div')
   document.body.append(container)
@@ -128,7 +128,7 @@ it('keeps initial focus inside the dialog when reopened during resume', async ()
     </>
   )
   await act(async () => button('Resume 2 chats').click())
-  const opener = button('Resuming 2 chats')
+  const opener = button('Resuming chats 0/2')
   await act(async () => {
     opener.focus()
     opener.click()

@@ -18,9 +18,12 @@ import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestion
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useNativeChatFontSize } from './use-native-chat-font-size'
+import { useNativeChatFind } from './use-native-chat-find'
+import { NativeChatFindBar } from './NativeChatFindBar'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
@@ -49,11 +52,12 @@ import { useNativeChatStructuredComposerTransport } from './use-native-chat-stru
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
+import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import {
   isClaudeSignInFailureKind,
   NativeChatClaudeSignInContext,
@@ -86,10 +90,12 @@ export function NativeChatStructuredSession(
     queueFollowUps,
     hostStopping: hostExecution.stopping,
     providerStarting: hostExecution.phase === 'starting',
+    providerRunning: hostExecution.phase !== null,
     rewind: rewindHost,
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
+  useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
   const stopControls = nativeChatStructuredStopControls(controller, hostExecution.stopping)
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId: props.tabId,
@@ -99,7 +105,9 @@ export function NativeChatStructuredSession(
     // phases, that empty list must not become the draft's turn baseline.
     transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
   })
-  const { composerError, reportComposerError } = useNativeChatComposerError()
+  const { composerError, reportComposerError } = useNativeChatComposerError(
+    controller.commandRefusalCauses
+  )
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -136,14 +144,20 @@ export function NativeChatStructuredSession(
     isWorking: controller.isWorking,
     composer: { clearError: () => reportComposerError(null) }
   })
+  const needsFailureFacts =
+    submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
+    controller.submissions.some(
+      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+    )
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    props.agent === 'claude'
+    needsFailureFacts || props.agent === 'claude'
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,
     submissions: controller.submissions,
     journalItems: controller.journalItems,
+    startFailures,
     agentName: agentLabel
   })
   // Nothing reads an unread history, so its pane stays blank beside the Retry line.
@@ -160,6 +174,12 @@ export function NativeChatStructuredSession(
   useNativeChatFontSize(
     viewState.kind === 'ready' && props.isVisible && props.isFocusedGroup,
     rootRef
+  )
+  const find = useNativeChatFind(
+    props.isVisible && props.isFocusedGroup,
+    rootRef,
+    composerRef,
+    submits.messageListRef
   )
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
@@ -213,7 +233,9 @@ export function NativeChatStructuredSession(
     agent: props.agent,
     agentLabel,
     launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
-    journalItems: controller.journalItems
+    journalItems: controller.journalItems,
+    submissions: controller.submissions,
+    deliveryNotices
   })
   const claudeSignIn = useNativeChatClaudeSignIn({
     agent: props.agent,
@@ -239,7 +261,10 @@ export function NativeChatStructuredSession(
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
       tabIndex={-1}
       onPointerDownCapture={paneCommands.onPointerDownCapture}
-      onKeyDownCapture={paneCommands.onKeyDownCapture}
+      onKeyDownCapture={(event) => {
+        find.onKeyDownCapture(event)
+        paneCommands.onKeyDownCapture(event)
+      }}
       onContextMenuCapture={paneCommands.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
@@ -248,7 +273,8 @@ export function NativeChatStructuredSession(
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
         {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
           loadingPane
         ) : viewState.kind === 'error' ? (
@@ -297,6 +323,9 @@ export function NativeChatStructuredSession(
           {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
+            chatWorktreeId={ownerWorktreeId ?? null}
+            agentName={agentLabel}
+            statedFailures={startFailures}
             steerHeld={stopControls.stopping}
             focusComposer={focusComposer}
           />

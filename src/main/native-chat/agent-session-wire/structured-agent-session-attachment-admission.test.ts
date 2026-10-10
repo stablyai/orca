@@ -86,7 +86,7 @@ describe('attachments at send admission', () => {
     expect(await rig.drafts()).toHaveLength(0)
   })
 
-  it('claims a stored upload, and the /clear carry claims it for the replacement chat', async () => {
+  it('keeps a stored upload claimed by the same conversation after clear', async () => {
     const working = await rig.workingSend()
     const path = await storeUpload('notes.txt')
     expect(await clientSend(textWith(path), 'queue-if-active')).toMatchObject({
@@ -101,9 +101,8 @@ describe('attachments at send admission', () => {
       envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
       ...fields
     })
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    expect(replacementId).toBeTruthy()
-    expect(claimedSessions()).toEqual([SESSION, replacementId].sort())
+    expect(cleared).toMatchObject({ ok: true })
+    expect(claimedSessions()).toEqual([SESSION])
   })
 
   it('sends text that only mentions another store path, claiming nothing', async () => {
@@ -143,3 +142,30 @@ describe('attachments at send admission', () => {
     expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
   })
 })
+
+it.each([undefined, 'queue-if-active'] as const)(
+  're-evaluates an unaccepted attachment refusal after the file returns (%s)',
+  async (delivery) => {
+    if (delivery) {
+      await rig.workingSend()
+    }
+    const body = textWith(storedPath('notes.txt'))
+    const clientOperationId = hostTestOperationId()
+    const fields = { body, ...(delivery ? { delivery } : {}) }
+    const params = {
+      envelope: rig.envelope(fields, 'agentSession.send', clientOperationId),
+      ...fields,
+      userSend: true as const
+    }
+    expect(await rig.host.send(CALLER, params)).toMatchObject(EXPIRED)
+    expect(rig.store.readCommandReceipt({ kind: 'global' }, clientOperationId)).toEqual({
+      verdict: 'absent'
+    })
+    expect(
+      rig.store.listOperationRows().find((row) => row.operationId === clientOperationId)
+    ).toBeUndefined()
+    await storeUpload('notes.txt')
+    expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: false })
+    expect(await clientSend(body, delivery)).toMatchObject({ ok: true, replayed: false })
+  }
+)

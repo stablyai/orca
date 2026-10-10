@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { constants } from 'node:os'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { resolveOrcadInstallRoot } from './orcad-app-paths'
 import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,

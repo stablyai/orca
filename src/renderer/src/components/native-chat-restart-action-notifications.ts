@@ -151,6 +151,25 @@ export function restartChatsNotContinued(
   return [...new Set(requested)].filter((sessionId) => bySession.get(sessionId) !== 'continued')
 }
 
+/** Reconcile once with the action's confirmed list; later dismissals are not successes. */
+export function restartContinuationHistory(
+  requested: readonly string[],
+  reported: readonly RestartContinuationOutcome[] | undefined,
+  failed: readonly Pick<ResumeFailure, 'sessionId'>[] | undefined
+): readonly RestartContinuationOutcome[] {
+  const results = Array.isArray(reported)
+    ? reported
+    : requested.map((sessionId) => ({ sessionId, outcome: 'unknown' as const }))
+  const failedIds = new Set(failed?.map((entry) => entry.sessionId))
+  return results.map((entry) =>
+    failed !== undefined &&
+    !failedIds.has(entry.sessionId) &&
+    (entry.outcome === 'unknown' || entry.outcome === 'pending')
+      ? { ...entry, outcome: 'continued' as const }
+      : entry
+  )
+}
+
 type MachineTally = {
   machine: RestartMachineKey
   machineName: string | undefined
@@ -166,9 +185,7 @@ function tallyAnswer(
   reportedResults: readonly RestartContinuationOutcome[] | undefined,
   hostFailed: readonly Pick<ResumeFailure, 'sessionId' | 'outcome'>[] | undefined
 ): Omit<MachineTally, 'machine' | 'machineName'> {
-  const results = Array.isArray(reportedResults)
-    ? reportedResults
-    : requested.map((sessionId) => ({ sessionId, outcome: 'unknown' as const }))
+  const results = restartContinuationHistory(requested, reportedResults, hostFailed)
   const notContinued = restartChatsNotContinued(requested, results)
   const failed = new Map(hostFailed?.map((failure) => [failure.sessionId, failure.outcome]))
   // A host that lists failures has already dropped chats that moved on by themselves or that the
@@ -180,18 +197,13 @@ function tallyAnswer(
   const outcomes = new Map(results.map((result) => [result.sessionId, result.outcome]))
   const sentUnconfirmed = (sessionId: string): boolean =>
     outcomes.get(sessionId) === 'pending' || outcomes.get(sessionId) === 'unknown'
-  // An unconfirmed send the host no longer lists was seen carrying on (or answered by the user), so
-  // it was resumed and asked to continue; left out of both counts, the resume would say nothing.
-  const seenCarryingOn = notContinued.filter(
-    (sessionId) => hostFailed !== undefined && !failed.has(sessionId) && sentUnconfirmed(sessionId)
-  )
   // The filed outcome is what the list shows, so the toast uses it too.
   const unconfirmed = (sessionId: string): boolean =>
     (failed.get(sessionId) ?? (sentUnconfirmed(sessionId) ? 'unconfirmed' : 'refused')) ===
     'unconfirmed'
   const unconfirmedCount = reported.filter(unconfirmed).length
   return {
-    continued: new Set(requested).size - notContinued.length + seenCarryingOn.length,
+    continued: new Set(requested).size - notContinued.length,
     refused: reported.length - unconfirmedCount,
     unconfirmed: unconfirmedCount,
     listed: hostFailed !== undefined
@@ -226,9 +238,10 @@ function sum(tallies: readonly MachineTally[], count: (entry: MachineTally) => n
  * One toast per resume, however many machines it reached: what went wrong leads, and the rest of
  * the outcome rides beneath it. No chat names: the dialog behind Show has the list. Unconfirmed
  * chats get their own count because the agent may well be working; "couldn't be resumed" would
- * invite a second send. Without a failure list there is nothing for Show to open.
+ * invite a second send. Show opens the run's summary, so it is offered whenever there is a result
+ * to look at: a chat resumed, or a failure list read.
  *
- * `show` opens the dialog over a fresh read, on the one failing machine or on none in particular.
+ * `show` opens the dialog over a fresh read, on the one machine it concerns or on none in particular.
  */
 export function announceRestartResults(
   results: readonly RestartContinueResult[],
@@ -240,9 +253,19 @@ export function announceRestartResults(
   const refused = sum(failing, (entry) => entry.refused)
   const unconfirmed = sum(failing, (entry) => entry.unconfirmed)
   const continued = sum(continuing, (entry) => entry.continued)
+  const showable = tallies.filter((entry) => entry.listed || entry.continued > 0)
+  const action =
+    showable.length === 0
+      ? {}
+      : {
+          action: {
+            label: translate('auto.components.NativeChatResumeOnRestartModal.show', 'Show'),
+            onClick: () => show(showable.length === 1 ? showable[0]!.machine : null)
+          }
+        }
   if (failing.length === 0) {
     if (continued > 0) {
-      toast(continuedText(continued, soleMachineName(continuing)))
+      toast(continuedText(continued, soleMachineName(continuing)), action)
     }
     return
   }
@@ -254,16 +277,8 @@ export function announceRestartResults(
     ...(refused > 0 && unconfirmed > 0 ? [otherUnconfirmedCountText(unconfirmed)] : []),
     ...(continued > 0 ? [continuedText(continued, soleMachineName(continuing))] : [])
   ]
-  const showable = failing.filter((entry) => entry.listed)
   toast(title, {
     ...(lines.length === 0 ? {} : { description: descriptionFrom(lines) }),
-    ...(showable.length === 0
-      ? {}
-      : {
-          action: {
-            label: translate('auto.components.NativeChatResumeOnRestartModal.show', 'Show'),
-            onClick: () => show(showable.length === 1 ? showable[0]!.machine : null)
-          }
-        })
+    ...action
   })
 }

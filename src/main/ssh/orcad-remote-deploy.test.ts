@@ -3,7 +3,7 @@ import type * as RecordFile from './orcad-remote-record-file'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
@@ -43,7 +43,13 @@ import {
   finalizeInstall,
   isRemoteInstallComplete
 } from './ssh-relay-versioned-install'
-import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
+import {
+  emptyOrcadActivationRecord,
+  withActivatedVersion,
+  withDeactivatedVersionCommitted,
+  type OrcadActivationRecord
+} from './orcad-activation-record'
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { isReadinessRead } from './orcad-activation-host-test-harness'
 import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
@@ -527,6 +533,86 @@ describe('deployOrcad', () => {
     expect(JSON.parse(String(written?.[2]))).toMatchObject({
       active: NEW_VERSION,
       previous: OLD_VERSION
+    })
+  })
+
+  it.each([
+    ['activates', 'mid-upload', (r: OrcadActivationRecord) => r],
+    ['activates then stops', 'mid-upload', withDeactivatedVersionCommitted],
+    ['activates', 'before the upload', (r: OrcadActivationRecord) => r],
+    ['activates then stops', 'before the upload', withDeactivatedVersionCommitted]
+  ])(
+    'applies the caller policy under the fence when another desktop %s a newer build %s',
+    async (_name, when, settle) => {
+      const newer = withActivatedVersion(
+        emptyOrcadActivationRecord(),
+        '0.3.0+cc01',
+        null,
+        new Date(1),
+        '1.6.0'
+      )
+      const script: HostScript = {
+        activationRecord: when === 'mid-upload' ? ACTIVE_OLD : JSON.stringify(settle(newer)),
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: []
+      }
+      scriptHost(script)
+      vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+        script.activationRecord = JSON.stringify(settle(newer))
+      })
+      const admitRecord = vi.fn((record: OrcadActivationRecord) =>
+        record.activeAppVersion === '1.6.0' ? 'host-newer' : null
+      )
+      expect(await deployOrcad(options({ admitRecord }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code: ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+      })
+      expect(admitRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ activeAppVersion: '1.6.0' }),
+        NEW_VERSION
+      )
+      // Nothing was preflighted, stopped, snapshotted or launched, and the record is untouched.
+      expect(script.log).toEqual([])
+      expect(
+        vi
+          .mocked(writeAtomicOrcadRemoteRecord)
+          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
+      ).toBe(false)
+    }
+  )
+
+  it('treats the census as unverifiable when another incumbent lands mid-upload', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    const counted = JSON.parse(ACTIVE_OLD)
+    // An admitted peer activation: same app line, so only the census binding can catch it.
+    const peer = withActivatedVersion(counted, '0.1.5+dd01', null, new Date(5), '1.4.0')
+    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+      script.activationRecord = JSON.stringify(peer)
+    })
+    expect(
+      await deployOrcad(options({ censusRecord: counted, admitRecord: () => null }))
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_terminal_census_unavailable'
+    })
+    // The peer's server, which may own live terminals, was never stopped.
+    expect(script.log).toEqual([])
+  })
+
+  it('keeps the census when the incumbent under the fence is the one it counted', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: []
+    }
+    scriptHost(script)
+    expect(await deployOrcad(options({ censusRecord: JSON.parse(ACTIVE_OLD) }))).toMatchObject({
+      outcome: 'installed-and-activated'
     })
   })
 

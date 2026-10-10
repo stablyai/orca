@@ -6,8 +6,7 @@ import type { AgentSessionStoreState } from './agent-session-store-state'
  * Which conversation each structured chat tab shows, keyed by the host tab id.
  *
  * Membership is visibility: a session with an entry has a chat tab, and the key is that tab's id.
- * A /clear moves the tab to the replacement conversation rather than copying its id, so an id names
- * one conversation by construction and a session maps back to at most one tab.
+ * An id names one conversation, and a session maps back to at most one tab.
  */
 export class AgentSessionTabTable {
   private readonly sessionByTab = new Map<string, string>()
@@ -38,15 +37,14 @@ export class AgentSessionTabTable {
 
   /**
    * Gives a session a tab unless it already has one. Without a reserved id it gets the id clients
-   * derive for it, unless a cleared conversation's tab kept that id.
+   * derive for it.
    */
   show(sessionId: string, tabId?: string): void {
     if (this.tabBySession.has(sessionId)) {
       return
     }
     const derived = structuredAgentSessionTabId(sessionId)
-    const held = (candidate: string): boolean => this.sessionByTab.has(candidate)
-    this.put(tabId ?? (held(derived) ? reopenedTabId(sessionId, held) : derived), sessionId)
+    this.put(tabId ?? derived, sessionId)
   }
 
   /** Returns the id the session's tab had, if it had one. */
@@ -57,19 +55,6 @@ export class AgentSessionTabTable {
       this.sessionByTab.delete(tabId)
     }
     return tabId
-  }
-
-  /** A /clear: the tab that showed `fromSessionId` shows `toSessionId`, keeping its id and place. */
-  move(fromSessionId: string, toSessionId: string): void {
-    const tabId = this.tabBySession.get(fromSessionId)
-    this.hide(toSessionId)
-    if (tabId === undefined) {
-      this.show(toSessionId)
-      return
-    }
-    this.tabBySession.delete(fromSessionId)
-    this.sessionByTab.set(tabId, toSessionId)
-    this.tabBySession.set(toSessionId, tabId)
   }
 
   clone(): AgentSessionTabTable {
@@ -97,19 +82,6 @@ export class AgentSessionTabTable {
     this.sessionByTab.set(tabId, sessionId)
     this.tabBySession.set(sessionId, tabId)
   }
-}
-
-/**
- * The id a cleared conversation reopened from history takes while the tab now showing its
- * replacement holds its own. Deterministic, so a table seeded again gives it the same id.
- */
-function reopenedTabId(sessionId: string, held: (tabId: string) => boolean): string {
-  const base = `${structuredAgentSessionTabId(sessionId)}-reopened`
-  let tabId = base
-  for (let suffix = 2; held(tabId); suffix++) {
-    tabId = `${base}-${suffix}`
-  }
-  return tabId
 }
 
 /** The sessions whose chat tab is shown, in tab order, skipping any without a record. */

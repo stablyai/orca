@@ -5,7 +5,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 import { TERMINAL_QUERY_METHODS } from './terminal-query-methods'
-import { TerminalHandle, TerminalInspectProcess } from './unary-schemas'
+import {
+  TerminalHandle,
+  TerminalInspectProcess
+} from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { eraseRpcMethods } from '../../core'
 
 /** The method as registered, so a schema swap on the definition cannot pass unseen. */

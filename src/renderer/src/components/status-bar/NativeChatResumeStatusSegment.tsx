@@ -7,10 +7,10 @@ import {
   nativeChatResumePendingText,
   resumingText
 } from './native-chat-resume-status-text'
-import {
-  useNativeChatRestartOffers,
-  useNativeChatRestartResuming
-} from '../native-chat-resume-on-restart-store'
+import { useNativeChatRestartOffers } from '../native-chat-resume-on-restart-store'
+import { useNativeChatRestartRuns } from '../native-chat-restart-runs'
+import { resumeRunInFlight } from '../native-chat-resume-run'
+import { resumeRunView } from '../native-chat-resume-run-view'
 import { reopenNativeChatRestartOffer } from '../native-chat-restart-offer-reopen'
 import { useNativeChatRestartOfferSources } from '../native-chat-restart-offer-triggers'
 import { LOCAL_RESTART_MACHINE, type RestartMachineKey } from '../native-chat-restart-machines'
@@ -74,14 +74,33 @@ export function NativeChatResumeStatusSegment({
   const localEnabled = useNativeChatRestartOfferEnabled()
   useNativeChatRestartOfferSources(localEnabled)
   const offers = useNativeChatRestartOffers()
-  const resumingByMachine = useNativeChatRestartResuming()
+  const runs = useNativeChatRestartRuns()
   const machines = [...offers.keys()]
   // Joined so the selector returns a primitive and re-renders only when a name changes.
   const names = useAppStore((state) =>
     machines.map((machine) => restartMachineNameFromState(state, machine)).join('\u0000')
   ).split('\u0000')
   const nameByMachine = new Map(machines.map((machine, index) => [machine, names[index]]))
-  let resuming = 0
+  // Chats answered out of the chats asked, across every machine resuming right now.
+  let resumingDone = 0
+  let resumingTotal = 0
+  const resumingMachines: RestartMachineKey[] = []
+  for (const [machine, { run }] of runs) {
+    if (!resumeRunInFlight(run)) {
+      continue
+    }
+    const offer = offers.get(machine)
+    const failureById = new Map(offer?.failed.map((failure) => [failure.sessionId, failure]))
+    const { counts } = resumeRunView(
+      run,
+      offer?.candidates ?? [],
+      (sessionId) => failureById.get(sessionId),
+      'all'
+    )
+    resumingDone += counts.done
+    resumingTotal += counts.total
+    resumingMachines.push(machine)
+  }
   let pending = 0
   let failures = 0
   let unconfirmed = false
@@ -90,7 +109,10 @@ export function NativeChatResumeStatusSegment({
   for (const [machine, offer] of offers) {
     // A chat being resumed is counted once, as in flight, until the host answers for it. Only the
     // user's own chats count: another device's or an automation's are theirs to resume.
-    const inFlight = new Set(resumingByMachine.get(machine) ?? [])
+    const run = runs.get(machine)?.run
+    const inFlight = new Set(
+      run && resumeRunInFlight(run) ? run.entries.map((entry) => entry.candidate.sessionId) : []
+    )
     const counted = (row: ResumeCandidate): boolean =>
       !inFlight.has(row.sessionId) && resumeCandidateOwnership(row) === 'own'
     const waiting = offer.failed.filter(counted)
@@ -110,22 +132,19 @@ export function NativeChatResumeStatusSegment({
       })
     }
   }
-  for (const ids of resumingByMachine.values()) {
-    resuming += ids.length
-  }
   const onlyPairedName =
     breakdown.length === 1 && breakdown[0]!.machine !== LOCAL_RESTART_MACHINE
       ? breakdown[0]!.name
       : null
   return (
     <>
-      {resuming > 0 && (
+      {resumingMachines.length > 0 && (
         <Segment
           iconOnly={iconOnly}
-          count={resuming}
-          machines={[...resumingByMachine.keys()]}
+          count={resumingTotal}
+          machines={resumingMachines}
           icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
-          {...resumingText(resuming)}
+          {...resumingText(resumingDone, resumingTotal)}
         />
       )}
       {pending > 0 && (

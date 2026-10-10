@@ -5,6 +5,7 @@ import {
 import { hasRuntimeRpcErrorCode } from '@/runtime/runtime-rpc-client'
 import {
   announceRestartResults,
+  restartContinuationHistory,
   type RestartContinuationOutcome,
   type RestartContinueResult
 } from './native-chat-restart-action-notifications'
@@ -35,6 +36,7 @@ import {
 } from './native-chat-resume-on-restart-store'
 import { forgetUnsentResumes, markUnsentResumes } from './native-chat-resume-unsent-requests'
 import { reopenNativeChatRestartOffer } from './native-chat-restart-offer-reopen'
+import type { RestartRunAnswer } from './native-chat-restart-runs'
 
 /**
  * Acting on one machine's offer: continue the chats, or turn them down for good.
@@ -87,14 +89,16 @@ function showResult(machine: RestartMachineKey | null): void {
   void reopenNativeChatRestartOffer(machine ? [machine] : undefined)
 }
 
-type ContinueReply = HostOfferPayload & { continued?: RestartContinuationOutcome[] }
+type ContinueReply = HostOfferPayload & {
+  continued?: RestartContinuationOutcome[]
+  /** Named chats the host left out of this action; an older host never sends it. */
+  skipped?: string[]
+}
 type RestartFailureRow = Pick<ResumeFailure, 'sessionId' | 'outcome'>
 
 export type RestartContinueRequest = {
   machine: RestartMachineKey
   sessionIds: readonly string[]
-  /** What the notices count; by default the named chats. */
-  reported?: readonly string[]
 }
 
 /** A lost request's chats as the re-read shows them: each one still offered was marked failed.
@@ -126,30 +130,32 @@ async function continueOnMachine(
   expected: RestartMachineFence | undefined
 ): Promise<RestartContinueResult> {
   const { machine, sessionIds } = request
-  const reported = request.reported ?? sessionIds
   const target = restartMachineTarget(machine)
   const base = {
     machine,
-    requested: reported,
+    requested: sessionIds,
     ...(target.kind === 'local' ? {} : { machineName: restartMachineName(machine) })
   }
   const offer = currentOffer(machine, expected)
   if (offer === 'gone') {
     return { ...base, kind: 'answered', results: [], hostFailed: [] }
   }
-  if (offer === 'moved') {
+  // Re-paired since the listing: refused before anything is sent or followed.
+  if (
+    offer === 'moved' ||
+    !sameRestartMachineFence(currentRestartMachineFence(target), offer.fence)
+  ) {
     return { ...base, kind: 'not-sent' }
   }
   forgetUnsentResumes(machine, sessionIds)
-  const { ticket, settle } = beginNativeChatRestartAction(target, reported)
+  // The run follows each named chat's progress until the host answers.
+  const { ticket, settle } = beginNativeChatRestartAction(target, { listing: offer, sessionIds })
+  let answer: RestartRunAnswer | undefined
   if (target.kind === 'local') {
     // `resuming` now names this computer's chats, so the launch's one resume decision is made.
     markNativeChatLaunchResumeDecided()
   }
   try {
-    if (!sameRestartMachineFence(ticket.fence, offer.fence)) {
-      return { ...base, kind: 'not-sent' }
-    }
     const params = { sessionIds: [...sessionIds] }
     const callFence = restartMachineCallFence(target, offer.fence)
     const result = await (callFence
@@ -161,15 +167,16 @@ async function continueOnMachine(
         )
       : callStructuredAgentSession<ContinueReply>(target, 'agentSession.restartContinue', params))
     await publishOrReread(ticket, result)
-    return {
-      ...base,
-      kind: 'answered',
-      // A shape this side did not expect counts as unconfirmed: the message may well have gone out.
-      results: Array.isArray(result.continued) ? result.continued : undefined,
-      hostFailed: Array.isArray(result.failed)
-        ? projectRestartMachineRows(target, failedFrom(result))
-        : undefined
-    }
+    const skipped = new Set(Array.isArray(result.skipped) ? result.skipped : [])
+    // A chat another action was already resuming is that action's to report.
+    const actedOn = sessionIds.filter((sessionId) => !skipped.has(sessionId))
+    // A shape this side did not expect counts as unconfirmed: the message may well have gone out.
+    const results = Array.isArray(result.continued) ? result.continued : undefined
+    const hostFailed = Array.isArray(result.failed)
+      ? projectRestartMachineRows(target, failedFrom(result))
+      : undefined
+    answer = { skipped, continued: restartContinuationHistory(actedOn, results, hostFailed) }
+    return { ...base, requested: actedOn, kind: 'answered', results, hostFailed }
   } catch (error) {
     if (refusedAsStale(error)) {
       await readNativeChatRestartMachine(target)
@@ -185,7 +192,7 @@ async function continueOnMachine(
     }
     return { ...base, kind: 'answered', results: [], hostFailed: lostRequestFailures(read, base) }
   } finally {
-    settle()
+    settle(answer)
   }
 }
 

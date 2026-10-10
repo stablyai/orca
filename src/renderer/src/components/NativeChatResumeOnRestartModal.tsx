@@ -14,6 +14,7 @@ import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 import { ResumeOnRestartGroups } from './NativeChatResumeOnRestartGroups'
 import { ResumeTreeRow } from './NativeChatResumeTreeRow'
+import { moveInResumeTree } from './native-chat-resume-tree-keyboard'
 import { resumeTreeMachines, resumeTreeRowAction } from './native-chat-resume-tree-machines'
 import type { ResumeFailureAction } from './native-chat-resume-failure-guidance'
 import { consumeNativeChatResumeOnRestartDialogRequest } from './native-chat-resume-on-restart-dialog'
@@ -21,7 +22,11 @@ import {
   continueNativeChatRestartOffers,
   dismissNativeChatRestartOffer
 } from './native-chat-restart-offer-actions'
-import { useNativeChatRestartResuming } from './native-chat-resume-on-restart-store'
+import {
+  releaseFinishedNativeChatRestartRuns,
+  useNativeChatRestartResuming
+} from './native-chat-restart-runs'
+import { useResumeRunPanel } from './NativeChatResumeRunPanel'
 import type { MachineView } from './native-chat-resume-machine-views'
 import { useNativeChatResumeDialogOpening } from './native-chat-resume-dialog-opening'
 import { actOnResumeRow } from './native-chat-resume-failure-action'
@@ -51,10 +56,13 @@ import {
  * reconnect calls the same RPC, which re-derives the same predicate and staggers the same way.
  *
  * Resume closes the dialog at once and the status-bar entry carries the run, then any chat it could
- * not carry on. A chat an earlier resume could not carry on is listed too, as the same row plus
- * what went wrong and what to do; selecting it and resuming is a retry. Row actions act on their
- * row and leave the dialog open. It closes only on the user's own way out, or once no machine has
- * anything left.
+ * not carry on. Each machine's run lives in the store, so the dialog is one view of them: reopened
+ * mid-run, each chat in one shows where it stands in its checkbox's place, and the dialog stays on
+ * those runs until it is closed after they have finished.
+ *
+ * A chat an earlier resume could not carry on is listed too, as the same row plus what went wrong
+ * and what to do; selecting it and resuming is a retry. Row actions act on their row and leave the
+ * dialog open. It closes only on the user's own way out, or once no machine has anything left.
  *
  * Closing is a SNOOZE, so looking around before deciding cannot remove the recovery. Dismiss is the
  * explicit path that deletes the durable records, and only the user's own; any other chat ends when
@@ -94,58 +102,8 @@ function resumeButtonLabel(chosenCount: number, running: boolean): string {
       )
 }
 
-/**
- * Tree keys. On a row's checkbox: Up/Down step between the enabled checkboxes, Home/End jump to the
- * first/last, Left collapses and Right expands the node through its own disclosure; Space toggles
- * natively. On the tree itself (its Tab stop): Down/Home enter at the first checkbox, Up/End at
- * the last.
- */
-function moveInTree(event: React.KeyboardEvent<HTMLElement>): void {
-  const target = event.target
-  if (!(target instanceof HTMLElement)) {
-    return
-  }
-  const boxes = [
-    ...event.currentTarget.querySelectorAll<HTMLElement>('[role="checkbox"]:not(:disabled)')
-  ]
-  const onTree = target === event.currentTarget
-  if (!onTree && target.getAttribute('role') !== 'checkbox') {
-    return
-  }
-  const jump =
-    event.key === 'Home' || (onTree && event.key === 'ArrowDown')
-      ? boxes[0]
-      : event.key === 'End' || (onTree && event.key === 'ArrowUp')
-        ? boxes.at(-1)
-        : undefined
-  if (jump) {
-    event.preventDefault()
-    jump.focus()
-    return
-  }
-  if (onTree) {
-    return
-  }
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    boxes[boxes.indexOf(target) + (event.key === 'ArrowDown' ? 1 : -1)]?.focus()
-    return
-  }
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault()
-    // Rows are flat treeitems, so the nearest one is this checkbox's own node.
-    const disclosure = target
-      .closest('[role="treeitem"]')
-      ?.querySelector<HTMLButtonElement>('button[aria-expanded]')
-    const open = disclosure?.getAttribute('aria-expanded') === 'true'
-    if (disclosure && open === (event.key === 'ArrowLeft')) {
-      disclosure.click()
-    }
-  }
-}
-
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
-  const { machines, request, showing } = useNativeChatResumeDialogOpening()
+  const { machines, runs, request, showing } = useNativeChatResumeDialogOpening()
   const updateSettings = useAppStore((store) => store.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const resumeButtonRef = useRef<HTMLButtonElement>(null)
@@ -169,7 +127,10 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     () =>
       machines
         .filter((machine) => !resuming.has(machine.machine))
-        .map((machine) => ({ machine, ids: chosenResumeRows(machine, overrides) })),
+        .map((machine) => ({
+          machine,
+          ids: chosenResumeRows(machine, overrides)
+        })),
     [machines, overrides, resuming]
   )
   const dismissals = useMemo(
@@ -192,7 +153,10 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   // with every machine mid-resume it shows the run, as the rows below do, and stays disabled.
   const allSelection = useMemo(() => {
     const counted = allBusy
-      ? machines.map((machine) => ({ machine, ids: resuming.get(machine.machine) ?? [] }))
+      ? machines.map((machine) => ({
+          machine,
+          ids: resuming.get(machine.machine) ?? []
+        }))
       : chosen
     const keys = counted.flatMap(({ machine }) =>
       selectableResumeRows(machine).map((sessionId) => resumeRowKey(machine.identity, sessionId))
@@ -202,6 +166,16 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     )
     return { keys, state: resumeSelectionState(keys, ticked) }
   }, [allBusy, chosen, machines, resuming])
+
+  const runPanel = useResumeRunPanel({
+    parts: machines.map((machine) => ({
+      run: runs.get(machine.machine)?.run ?? null,
+      rows: machine.rows,
+      failureFor: machine.failureFor,
+      keyOf: (sessionId: string) => resumeRowKey(machine.identity, sessionId)
+    })),
+    open: showing
+  })
 
   const toggle = useCallback((key: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(key, checked))
@@ -226,6 +200,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   /** Closing is a snooze: each host keeps its offer and the status bar keeps the way back. */
   const snooze = useCallback((): void => {
     consumeNativeChatResumeOnRestartDialogRequest()
+    releaseFinishedNativeChatRestartRuns()
     void persistPreference()
   }, [persistPreference])
 
@@ -234,6 +209,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     // Bookkeeping never gates the user's own action: the dialog closes here whatever each host
     // answers, rather than being trapped open behind a rejected promise.
     consumeNativeChatResumeOnRestartDialogRequest()
+    releaseFinishedNativeChatRestartRuns()
     await Promise.all(
       dismissals
         .filter((entry) => entry.ids.length > 0)
@@ -251,7 +227,21 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   const flat = machines.length === 1 && machines[0]!.offer.target.kind === 'local'
   const rowsAcrossMachines = machines.flatMap((machine) => machine.rows)
   const interruptedByUpdate = rowsAcrossMachines.some((row) => row.trigger === 'update')
-  const tree = resumeTreeMachines(machines, resuming, request.focus)
+  // While a run is followed, each machine shows its run's rows, which keep a chat its host has
+  // already resumed and dropped from the list.
+  const runRows = runPanel?.rows
+  const tree = resumeTreeMachines(
+    machines,
+    resuming,
+    request.focus,
+    runRows ? (machine) => runRows[machines.indexOf(machine)] ?? machine.rows : undefined
+  )
+  // Group boxes count only chats still listed, never a run's finished history.
+  const selectableIds = new Set(
+    machines.flatMap((machine) =>
+      selectableResumeRows(machine).map((sessionId) => resumeRowKey(machine.identity, sessionId))
+    )
+  )
   const ticked = new Set(
     machines.flatMap((machine) =>
       // Mid-run the ticks show what is running; this opening's own ticks may name chats left out.
@@ -295,15 +285,20 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
         <DialogHeader>
           <DialogTitle>
             {/* Plain wrapper owns the icon spacing; DialogTitle owns its own. */}
-            <span className="flex items-center gap-2">
-              <RotateCcw className="size-4 text-muted-foreground" />
-              {translate(
-                'auto.components.NativeChatResumeOnRestartModal.title',
-                'Resume interrupted chats?'
-              )}
-            </span>
+            {runPanel?.title ?? (
+              <span className="flex items-center gap-2">
+                <RotateCcw className="size-4 text-muted-foreground" />
+                {translate(
+                  'auto.components.NativeChatResumeOnRestartModal.title',
+                  'Resume interrupted chats?'
+                )}
+              </span>
+            )}
           </DialogTitle>
-          <DialogDescription>{resumeDialogBody(flat, interruptedByUpdate)}</DialogDescription>
+          <DialogDescription>
+            {runPanel?.description ?? resumeDialogBody(flat, interruptedByUpdate)}
+          </DialogDescription>
+          {runPanel?.summary}
         </DialogHeader>
 
         <div
@@ -315,7 +310,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
           )}
           // The sidebar's own surface, so its workspaces read here as they do there.
           className="min-h-0 overflow-y-auto scrollbar-sleek rounded-md bg-worktree-sidebar p-1.5 pb-2"
-          onKeyDown={moveInTree}
+          onKeyDown={moveInResumeTree}
         >
           {/* Here, not in the tree: one Select all for every machine listed. The tree's one divider
               sets it apart from the nodes. */}
@@ -344,7 +339,10 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
                 {translate(
                   'auto.components.NativeChatResumeOnRestartModal.selectedCount',
                   '{{value0}} of {{value1}} selected',
-                  { value0: allSelection.state.selectedCount, value1: allSelection.state.total }
+                  {
+                    value0: allSelection.state.selectedCount,
+                    value1: allSelection.state.total
+                  }
                 )}
               </span>
             </ResumeTreeRow>
@@ -371,6 +369,8 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
               )
             }
             originLabelFor={tree.originLabelFor}
+            renderStatus={runPanel?.renderStatus}
+            selectableIds={selectableIds}
             defaultExpanded={tree.defaultExpanded}
             machineSubtitle={tree.machineSubtitle}
             listingOf={tree.listingOf}
@@ -403,36 +403,48 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
               </span>
             </span>
           </label>
-          {/* Quiet, explicit cleanup of the durable records. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={allBusy || dismissesNothing}
-            onClick={() => void dismissAll()}
-          >
-            {dismissesEverything
-              ? translate(
-                  'auto.components.NativeChatResumeOnRestartModal.dismissAll',
-                  'Dismiss all'
-                )
-              : translate('auto.components.NativeChatResumeOnRestartModal.dismiss', 'Dismiss')}
-          </Button>
-          <Button
-            ref={resumeButtonRef}
-            variant="default"
-            size="sm"
-            disabled={chosenCount === 0}
-            onClick={() => {
-              // Resume hands the run to the status bar, and its result to one notice.
-              consumeNativeChatResumeOnRestartDialogRequest()
-              void persistPreference()
-              void continueNativeChatRestartOffers(
-                chosen.map((entry) => ({ machine: entry.machine.machine, sessionIds: entry.ids }))
-              )
-            }}
-          >
-            {resumeButtonLabel(chosenCount, resuming.size > 0)}
-          </Button>
+          {rowsAcrossMachines.length === 0 ? (
+            // Only a finished run is left to look at.
+            <Button ref={resumeButtonRef} variant="default" size="sm" onClick={snooze}>
+              {translate('auto.components.NativeChatResumeOnRestartModal.done', 'Done')}
+            </Button>
+          ) : (
+            <>
+              {/* Quiet, explicit cleanup of the durable records. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={allBusy || dismissesNothing}
+                onClick={() => void dismissAll()}
+              >
+                {dismissesEverything
+                  ? translate(
+                      'auto.components.NativeChatResumeOnRestartModal.dismissAll',
+                      'Dismiss all'
+                    )
+                  : translate('auto.components.NativeChatResumeOnRestartModal.dismiss', 'Dismiss')}
+              </Button>
+              <Button
+                ref={resumeButtonRef}
+                variant="default"
+                size="sm"
+                disabled={chosenCount === 0}
+                onClick={() => {
+                  // Resume hands the run to the status bar, and its result to one notice.
+                  consumeNativeChatResumeOnRestartDialogRequest()
+                  void persistPreference()
+                  void continueNativeChatRestartOffers(
+                    chosen.map((entry) => ({
+                      machine: entry.machine.machine,
+                      sessionIds: entry.ids
+                    }))
+                  )
+                }}
+              >
+                {resumeButtonLabel(chosenCount, resuming.size > 0)}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

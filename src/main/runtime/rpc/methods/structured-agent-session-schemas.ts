@@ -37,3 +37,7 @@ export {
   RestartResumeParams
 } from '../../../../shared/rpc-contract/structured-agent-session-restart-params'
 export { ContinueInterruptedParams } from '../../../../shared/rpc-contract/structured-agent-session-continue-params'
+export {
+  QueuedMessageUpdateParams,
+  QueuedMessageEditHoldParams
+} from '../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'

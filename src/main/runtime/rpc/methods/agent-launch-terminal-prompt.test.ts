@@ -308,7 +308,8 @@ describe('writing a launch prompt into a terminal agent', () => {
         handle: 'term_1',
         agent,
         freshLaunch: true,
-        text: 'do the thing'
+        text: 'do the thing',
+        clock: fakeClock()
       })
 
       expect(delivered).toBe(true)
@@ -368,7 +369,8 @@ describe('writing a launch prompt into a terminal agent', () => {
       handle: 'term_existing',
       agent: 'grok',
       freshLaunch: false,
-      text: 'do the thing'
+      text: 'do the thing',
+      clock: fakeClock()
     })
 
     expect(delivered).toBe(true)

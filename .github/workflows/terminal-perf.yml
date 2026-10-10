@@ -81,11 +81,15 @@ jobs:
           const actionPath = '.github/actions/install-node-dependencies/action.yml'
           const action = fs.existsSync(actionPath) ? fs.readFileSync(actionPath, 'utf8') : ''
           const inputs = action.split(/^inputs:[ \t]*\r?$/m)[1]?.split(/^\S/m)[0] ?? ''
+          const supportedPostinstalls = [
+            'node config/scripts/rebuild-native-deps.mjs',
+            'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
+          ]
           const shared = process.env.RUNNER_KIND === 'github-hosted' && !process.env.JOB_CONTAINER &&
             process.env.RUNNER_OS === 'Linux' && process.env.RUNNER_ARCH === 'X64' &&
             manifest.engines?.node === '24' && typeof manifest.packageManager === 'string' &&
             manifest.packageManager.split('+')[0] === 'pnpm@12.8.1' &&
-            manifest.scripts?.postinstall === 'node config/scripts/rebuild-native-deps.mjs' &&
+            supportedPostinstalls.includes(manifest.scripts?.postinstall) &&
             /^  native-runtime:/m.test(inputs) && /^  cache-pnpm-store-lookup-only:/m.test(inputs) &&
             fs.existsSync('.github/actions/prepare-native-runtime/action.yml') &&
             fs.existsSync('config/scripts/ensure-native-runtime.mjs')

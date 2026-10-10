@@ -1,3 +1,5 @@
+import { agentSessionSignInFor } from './agent-session-sign-in'
+
 export type AgentSessionAccountKind = 'managed' | 'system'
 
 /** Why no chat can start under the account a chat runs with, as the host's catalog probe found it.
@@ -24,15 +26,19 @@ export function readAgentSessionUnavailable(value: unknown): AgentSessionUnavail
   }
 }
 
-export function agentSessionSignInCopyId(
-  provider: 'claude' | 'codex',
-  account?: AgentSessionAccountKind
-) {
-  return provider === 'claude'
+export function agentSessionSignInCopyId(provider: string, account?: AgentSessionAccountKind) {
+  const signIn = agentSessionSignInFor(provider)
+  return signIn?.agent === 'claude'
     ? account === 'managed'
       ? 'claudeManagedNotSignedIn'
       : 'claudeSystemNotSignedIn'
-    : account === 'managed'
-      ? 'codexManagedNotSignedIn'
-      : 'codexSystemNotSignedIn'
+    : signIn?.agent === 'codex'
+      ? account === 'managed'
+        ? 'codexManagedNotSignedIn'
+        : 'codexSystemNotSignedIn'
+      : signIn?.agent === 'pi'
+        ? 'interactiveAgentNotSignedIn'
+        : signIn?.loginCommand.length
+          ? 'agentCommandNotSignedIn'
+          : 'agentNotSignedIn'
 }

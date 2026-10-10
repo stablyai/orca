@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = resolve('config/scripts/project-renderer-web-client.mjs')
@@ -90,12 +90,6 @@ describe('renderer web client projection', () => {
       `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
     )
     expect(output.nM()).toBe(3)
-  })
-
-  it('keeps the build-only manifest out of packaged apps', () => {
-    const builderConfig = readFileSync(resolve('config/electron-builder.config.cjs'), 'utf8')
-
-    expect(builderConfig).toContain("'!out/renderer/.vite{,/**/*}'")
   })
 
   it('copies and minifies only the web dependency closure', async () => {

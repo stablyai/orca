@@ -18,6 +18,7 @@ import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
 /** Everything a row needs that is the same for every row. Held as one memoized
  *  object so a row's props change only when that row's own slot does. */
 export type NativeChatTranscriptRowContext = {
+  agentName?: string
   expandSignal: boolean
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
@@ -101,6 +102,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       ) : (
         <MessageRow
           message={message}
+          agentName={context.agentName}
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}
           revealedDiff={
@@ -121,7 +123,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
           rewind={
-            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined)
+            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
+            (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
               ? rewind
               : undefined
           }

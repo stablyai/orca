@@ -54,6 +54,19 @@ export type DaemonHostSources = {
   windowsProcessTreeDir: string
 }
 
+export function daemonHostProcessPackageDir(sources: DaemonHostSources): string {
+  return join(sources.resourcesPath, 'node_modules', '@orca', 'process-host')
+}
+
+function isRuntimeProcessHostPath(packageRel: string): boolean {
+  return (
+    packageRel === '' ||
+    packageRel === 'package.json' ||
+    packageRel === 'dist' ||
+    packageRel.startsWith('dist/')
+  )
+}
+
 /** A required file, a directory on the way to one, or anything in lib/ (index.js requires its siblings). */
 function isRuntimeProcessTreePath(packageRel: string): boolean {
   return (
@@ -116,6 +129,15 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     destRel: toPosixRelative(appDir, pkgJson),
     kind: 'file',
     optional: true
+  })
+
+  // Keep the external package complete so every public subpath shares the same process policy state.
+  const processHostDir = daemonHostProcessPackageDir(sources)
+  ops.push({
+    sourcePath: processHostDir,
+    destRel: toPosixRelative(appDir, processHostDir),
+    kind: 'dir',
+    filter: (sourcePath) => isRuntimeProcessHostPath(toPosixRelative(processHostDir, sourcePath))
   })
 
   // @vscode/windows-process-tree, mirrored so the daemon's require() resolves it; without it every snapshot forks a powershell.exe (#16905).

@@ -27,6 +27,7 @@ export function ResumeTreeRow({
   disabled,
   onCheckedChange,
   checkboxLabel,
+  checkboxSlot,
   compact = false,
   trailing,
   below,
@@ -42,6 +43,8 @@ export function ResumeTreeRow({
   disabled: boolean
   onCheckedChange: (checked: boolean) => void
   checkboxLabel: string
+  /** A run status replaces this leaf's checkbox in the same column. */
+  checkboxSlot?: React.ReactNode
   /** A chat row sits a little tighter than a group row. */
   compact?: boolean
   /** Controls beside the row that must not toggle its checkbox. */
@@ -51,26 +54,30 @@ export function ResumeTreeRow({
   children: React.ReactNode
 }): React.JSX.Element {
   const indent = depth * RESUME_TREE_INDENT_PX
+  const Content = checkboxSlot ? 'div' : 'label'
   return (
     <div role="treeitem" aria-level={depth + 1} aria-expanded={expanded} className="flex flex-col">
       <div className="group/row relative flex min-w-0 items-center gap-1">
-        <label
+        <Content
           data-compact={compact}
-          className="flex h-7 min-w-0 flex-1 cursor-pointer items-center rounded-md pr-2.5 group-hover/row:bg-worktree-sidebar-accent has-[:disabled]:cursor-default data-[compact=true]:h-6.5"
+          data-status={Boolean(checkboxSlot)}
+          className="flex h-7 min-w-0 flex-1 cursor-pointer items-center rounded-md pr-2.5 group-hover/row:bg-worktree-sidebar-accent has-[:disabled]:cursor-default data-[compact=true]:h-6.5 data-[status=true]:cursor-default"
         >
           <span className="flex w-7 shrink-0 justify-center">
-            <Checkbox
-              checked={checked}
-              disabled={disabled}
-              onCheckedChange={(next) => onCheckedChange(next === true)}
-              aria-label={checkboxLabel}
-            />
+            {checkboxSlot ?? (
+              <Checkbox
+                checked={checked}
+                disabled={disabled}
+                onCheckedChange={(next) => onCheckedChange(next === true)}
+                aria-label={checkboxLabel}
+              />
+            )}
           </span>
           <span aria-hidden="true" className="shrink-0" style={{ width: indent }} />
           {/* The arrow's slot, kept on a leaf too so icons line up. */}
           <span aria-hidden="true" className="size-4.5 shrink-0" />
           <span className="flex min-w-0 flex-1 items-center gap-1.5 pl-1">{children}</span>
-        </label>
+        </Content>
         {expanded !== undefined && (
           // Laid over its slot rather than inside the label, so pressing it never toggles the
           // checkbox. Off the tab order: Left/Right on the row's checkbox do the same.

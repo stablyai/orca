@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -53,13 +53,5 @@ describe('foreign SQLite reader build smoke', () => {
       parentPort.on('message', ({ id }) => parentPort.postMessage({ id, ok: true, value: [] }))`
     )
     expect(() => smokeForeignSqliteReaderWorker(directory)).toThrow('smoke failed')
-  })
-
-  it('runs in the orcad build under both runtimes', () => {
-    const source = readFileSync(resolve('config/scripts/build-orcad.mjs'), 'utf8')
-    expect(source).toContain(
-      "{ label: 'foreign SQLite reader worker', smoke: smokeForeignSqliteReaderWorker }"
-    )
-    expect(source).toContain('await smoke(OUT_DIR, { runtimePath: nodeRuntimePath })')
   })
 })

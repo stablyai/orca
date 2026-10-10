@@ -14,7 +14,7 @@ import {
   UnsupportedSftpPathError
 } from './system-ssh-sftp-path'
 import { SystemSshCommandExitError, throwIfAborted } from './system-ssh-operation-lifecycle'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 /** The host answered, but not with an sftp subsystem. The caller must fall back, not fail. */
 export class SftpSubsystemUnavailableError extends Error {

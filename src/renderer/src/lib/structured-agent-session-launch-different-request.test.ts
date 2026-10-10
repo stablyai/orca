@@ -65,15 +65,10 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
-import {
-  resetStructuredAgentSessionSendsForTests,
-  sendStructuredAgentSessionMessage
-} from '@/components/native-chat/structured-agent-session-message-sender'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import {
   clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache,
-  writeNativeChatDraftCache
+  readNativeChatDraftCache
 } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
@@ -282,7 +277,7 @@ describe('one action delivered twice while its chat is still starting', () => {
     })
   })
 
-  it('makes one chat from a double click with no text', () => {
+  it('makes one chat from a pick delivered twice with no text', () => {
     mocks.launch.mockImplementation(() => new Promise(() => undefined))
 
     const pick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'pick' })
@@ -404,9 +399,8 @@ describe('one action delivered twice while its chat is still starting', () => {
   })
 })
 
-describe('an empty chat still starting', () => {
+describe('an action with text beside an empty chat still starting', () => {
   let resolveFirstLaunch!: (receipt: { sessionId: string; fence: number }) => void
-  const third = launchIntent('session-third')
   const notesSend = {
     requestId: 'notes-send',
     prompt: 'review notes',
@@ -419,18 +413,14 @@ describe('an empty chat still starting', () => {
     resetStructuredAgentLaunchPersistenceForTests()
     resetStructuredAgentLaunchRegistryForTests()
     resetSends()
-    mocks.createIntent
-      .mockReturnValueOnce(first)
-      .mockReturnValueOnce(second)
-      .mockReturnValueOnce(third)
-    clearNativeChatDraftCacheForTests()
+    mocks.createIntent.mockReturnValueOnce(first).mockReturnValueOnce(second)
     mocks.launch.mockImplementation((intent: StructuredAgentSessionLaunchIntent) =>
       intent.sessionId === first.sessionId
         ? new Promise((resolve) => (resolveFirstLaunch = resolve))
         : Promise.resolve({ sessionId: intent.sessionId, fence: 1 })
     )
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
-      publishedSnapshot(first.sessionId, second.sessionId, third.sessionId)
+      publishedSnapshot(first.sessionId, second.sessionId)
     ])
     mocks.callRuntimeRpc.mockResolvedValue({
       ok: true,
@@ -438,134 +428,47 @@ describe('an empty chat still starting', () => {
     })
   })
 
-  it('takes notes sent to a new agent instead of opening a second chat', async () => {
+  it('opens its own chat for notes sent to a new agent', async () => {
     const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
 
     const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
     resolveFirstLaunch({ sessionId: first.sessionId, fence: 1 })
 
-    expect(notes.sessionId).toBe(blank.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(blank.sessionId).toBe(first.sessionId)
+    expect(notes.sessionId).toBe(second.sessionId)
     await expect(notes.promptDeliveryResult).resolves.toEqual({
       delivered: true,
       failureNotified: false
     })
-    expect(sends()).toEqual([[first.sessionId, 'review notes']])
+    expect(sends()).toEqual([[second.sessionId, 'review notes']])
+    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
   })
 
-  it('opens a new chat for any other action once its notes claimed it', async () => {
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-
-    const fix = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-click',
-      prompt: 'Fix check B',
-      promptDelivery: 'submit-after-ready'
-    })
-    // The pick that opened the empty chat is now the notes' chat, not the pick's.
-    const pick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-
-    expect(fix.sessionId).toBe(second.sessionId)
-    expect(pick.sessionId).toBe(third.sessionId)
-    await expect(fix.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(sends()).toEqual([[second.sessionId, 'Fix check B']])
-  })
-
-  it('delivers the claiming text the way its own request asked', async () => {
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'plus-pick',
-      promptDelivery: 'draft'
-    })
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-    resolveFirstLaunch({ sessionId: first.sessionId, fence: 1 })
-
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(sends()).toEqual([[first.sessionId, 'review notes']])
-    expect(mocks.seedDraft).not.toHaveBeenCalled()
-  })
-
-  it('sends the claiming notes once when that send is delivered twice', async () => {
+  it('sends notes delivered twice once, in their own chat', async () => {
     const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
     const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
     const again = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
     resolveFirstLaunch({ sessionId: first.sessionId, fence: 1 })
 
-    expect(again.sessionId).toBe(blank.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(again.sessionId).toBe(notes.sessionId)
+    expect(notes.sessionId).not.toBe(blank.sessionId)
+    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
     for (const caller of [notes, again]) {
       await expect(caller.promptDeliveryResult).resolves.toEqual({
         delivered: true,
         failureNotified: false
       })
     }
-    expect(sends()).toEqual([[first.sessionId, 'review notes']])
+    expect(sends()).toEqual([[second.sessionId, 'review notes']])
   })
 
-  it('opens a new chat for a second notes send with the same text', async () => {
+  it('leaves the empty chat to its own pick, whose re-delivery still joins it', () => {
     const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
     startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-    const secondSend = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      ...notesSend,
-      requestId: 'notes-send-2'
-    })
 
-    expect(secondSend.sessionId).toBe(second.sessionId)
-    expect(secondSend.sessionId).not.toBe(blank.sessionId)
-    await expect(secondSend.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(sends()).toEqual([[second.sessionId, 'review notes']])
-  })
+    const again = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
 
-  it('leaves a chat its user already sent into to them, and opens a new chat for the notes', async () => {
-    const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-    // The chat is not up yet, so its user's own send is still waiting on it.
-    mocks.callRuntimeRpc.mockImplementation((_target, method) =>
-      method === 'agentSession.history'
-        ? new Promise(() => undefined)
-        : Promise.resolve({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
-    )
-    sendStructuredAgentSessionMessage({
-      sessionId: blank.sessionId,
-      target: { kind: 'local' },
-      text: 'my own question'
-    })
-
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-
-    expect(notes.sessionId).toBe(second.sessionId)
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(sends()).toEqual([[second.sessionId, 'review notes']])
-    expect(
-      getStructuredAgentSessionPendingSends(blank.sessionId).map((entry) => entry.body.blocks)
-    ).toEqual([[{ type: 'text', text: 'my own question' }]])
-  })
-
-  it('leaves a chat its user is typing into to them, and opens a new chat for the notes', async () => {
-    const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-    // The conversation's draft, which its composer writes.
-    const paneKey = structuredAgentSessionDraftScopeKey(blank.sessionId)
-    writeNativeChatDraftCache(paneKey, 'half a question')
-
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-
-    expect(notes.sessionId).toBe(second.sessionId)
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(getStructuredAgentSessionPendingSends(blank.sessionId)).toEqual([])
-    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
-    expect(readNativeChatDraftCache(paneKey)).toBe('half a question')
+    expect(again.sessionId).toBe(blank.sessionId)
+    expect(mocks.createIntent).toHaveBeenCalledTimes(2)
   })
 })

@@ -166,6 +166,7 @@ function WorkspaceNode({
               failure={chat.failure}
               onFailureAction={chat.onFailureAction}
               originLabel={chat.originLabel}
+              renderStatus={chat.renderStatus}
             />
           )
         })}

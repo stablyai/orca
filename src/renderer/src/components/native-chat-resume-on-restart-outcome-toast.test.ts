@@ -169,9 +169,9 @@ it('raises no toast when the host had nothing left to resume', async () => {
   expect(toast).not.toHaveBeenCalled()
 })
 
-// The agent was seen carrying on while the toast was up, so the host retired the failure: Show
-// re-reads and opens nothing, rather than flashing a dialog with no rows to draw.
-it('opens nothing from Show once the host no longer lists the chat', async () => {
+// The agent was seen carrying on while the toast was up, so the host retired the failure. That
+// cannot bring the attention back, but the run's summary was never seen, so Show still opens it.
+it('opens the retained summary from Show after the host withdraws a failure', async () => {
   let failed = [{ ...offered[0]!, failedAt: 1, outcome: 'unconfirmed', reason: 'unknown' }]
   rpc.mockImplementation(async (_target, method) =>
     method === 'agentSession.restartResumable'
@@ -189,8 +189,7 @@ it('opens nothing from Show once the host no longer lists the chat', async () =>
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(rpc.mock.calls.at(-1)?.[1]).toBe('agentSession.restartResumable')
   expect(getNativeChatRestartOffers().get('local')).toBeUndefined()
-  expect(requests).toEqual([])
-  expect(getNativeChatResumeOnRestartDialogRequest()).toBeNull()
+  expect(requests).toEqual([{ focus: 'local' }])
 })
 
 // Session ids are each host's own: a lost request to one machine marks only that machine's rows.

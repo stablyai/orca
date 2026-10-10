@@ -201,7 +201,7 @@ function Surfaces(props: { roster: AgentSessionBackgroundTaskState | null }): Re
         paneKey={PANE_KEY}
         isVisible
         backgroundTasks={structuredSessionBackgroundTasksView(props.roster, null)}
-        stopBackgroundTask={async () => undefined}
+        stopBackgroundTask={async () => null}
       />
     </TooltipProvider>
   )

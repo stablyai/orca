@@ -14,6 +14,7 @@ import {
 } from '@/ssh/ssh-managed-server-move'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
+import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ssh-browser-pages'
 
 type ManagedServerStatus = SshConnectionState['managedServer']
 
@@ -23,18 +24,18 @@ export function applySshManagedServerTransition(
   next: ManagedServerStatus
 ): void {
   if (next?.kind === 'managed') {
-    // Why not `previous`: every start, wake and update passes through setting-up, which is no
-    // change of owner. Only a new environment for this host needs its catalogs loaded.
-    if (loadedEnvironmentByTarget.get(targetId) !== next.environmentId) {
-      loadedEnvironmentByTarget.set(targetId, next.environmentId)
-      void loadManagedServerCatalogs(targetId, next.environmentId).catch((error: unknown) =>
-        console.warn('[ssh] Could not load the managed server catalogs:', error)
-      )
+    // Starts and wakes keep the same owner; only a new server or a failed load needs a refresh.
+    const current = catalogLoadByTarget.get(targetId)
+    if (current?.environmentId !== next.environmentId) {
+      startManagedServerCatalogLoad(targetId, next.environmentId)
+    } else if (current.pending && previous?.kind !== 'managed') {
+      // Why: a reconnect during a doomed read must not be lost; replay it once if that read fails.
+      current.reconnectedWhilePending = true
     }
     return
   }
   if (next?.kind === 'relay') {
-    loadedEnvironmentByTarget.delete(targetId)
+    catalogLoadByTarget.delete(targetId)
   }
   if (isNewMoveOffer(previous, next) && canMoveSshHostToManagedServer()) {
     offerManagedServerMove(targetId, next.terminals)
@@ -59,24 +60,71 @@ export function applySshManagedServerTransition(
   }
 }
 
-const loadedEnvironmentByTarget = new Map<string, string>()
+type CatalogLoad = {
+  environmentId: string
+  pending: boolean
+  reconnectedWhilePending: boolean
+}
+
+const catalogLoadByTarget = new Map<string, CatalogLoad>()
+
+function startManagedServerCatalogLoad(targetId: string, environmentId: string): void {
+  const load: CatalogLoad = { environmentId, pending: true, reconnectedWhilePending: false }
+  catalogLoadByTarget.set(targetId, load)
+  void loadManagedServerCatalogs(targetId, load).then(
+    () => {
+      load.pending = false
+    },
+    (error: unknown) => {
+      load.pending = false
+      console.warn('[ssh] Could not load the managed server catalogs:', error)
+      // Why: relay fallback and server replacement swap the record, which drops any replay.
+      if (catalogLoadByTarget.get(targetId) !== load) {
+        return
+      }
+      catalogLoadByTarget.delete(targetId)
+      if (load.reconnectedWhilePending) {
+        startManagedServerCatalogLoad(targetId, environmentId)
+      }
+    }
+  )
+}
 
 /** Loads a newly managed host's server and the local catalogs, then drops its relay-era rows. */
-async function loadManagedServerCatalogs(targetId: string, environmentId: string): Promise<void> {
+async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): Promise<void> {
+  const { environmentId } = load
+  const isCurrent = (): boolean => catalogLoadByTarget.get(targetId) === load
+  // Pin existing desktop pages before the catalogs change their workspace owner.
+  useAppStore.setState((state) => {
+    const browserPagesByWorkspace = preserveConvertedSshBrowserPages(state, targetId)
+    return browserPagesByWorkspace === state.browserPagesByWorkspace
+      ? state
+      : { browserPagesByWorkspace }
+  })
   const store = useAppStore.getState()
-  try {
-    // Why: host badges read server names from this catalog, which a conversion does not refresh.
-    store.setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-    void store.refreshRuntimeEnvironmentStatus(environmentId)
-  } catch (error) {
-    console.warn('[ssh] Could not refresh the managed server list:', error)
+  // Why: host badges read server names from this catalog, which a conversion does not refresh.
+  const environments = await window.api.runtimeEnvironments.list()
+  if (!isCurrent()) {
+    return
   }
+  store.setRuntimeEnvironments(environments)
+  void store.refreshRuntimeEnvironmentStatus(environmentId)
   // Why local too: the host's relay-era rows come from the local catalog, which main now hides.
   for (const runtimeEnvironmentId of [null, environmentId]) {
-    await store.fetchRepos({ runtimeEnvironmentId })
+    const options = { runtimeEnvironmentId, throwOnError: true }
+    await store.fetchRepos(options)
+    if (!isCurrent()) {
+      return
+    }
     // Why groups before folders: folder workspaces are owned through their project groups.
-    await store.fetchProjectGroups({ runtimeEnvironmentId })
-    await store.fetchFolderWorkspaces({ runtimeEnvironmentId })
+    await store.fetchProjectGroups(options)
+    if (!isCurrent()) {
+      return
+    }
+    await store.fetchFolderWorkspaces(options)
+    if (!isCurrent()) {
+      return
+    }
   }
   // Why gated: startup runs its own scan once every host's catalog is in.
   if (useAppStore.getState().startupWorktreeRefreshCompleted) {
@@ -85,6 +133,9 @@ async function loadManagedServerCatalogs(targetId: string, environmentId: string
       .getState()
       .repos.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
     await Promise.all(repos.map((repo) => store.fetchWorktrees(repo.id, { executionHostId })))
+  }
+  if (!isCurrent()) {
+    return
   }
   useAppStore.setState((state) => withoutConvertedSshHostRows(state, targetId))
   rehomeActiveWorkspace(targetId, environmentId)

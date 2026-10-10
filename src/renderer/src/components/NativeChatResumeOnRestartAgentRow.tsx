@@ -51,7 +51,8 @@ export function ResumeCandidateRow({
   onCheckedChange,
   failure,
   onFailureAction,
-  originLabel
+  originLabel,
+  renderStatus
 }: {
   candidate: ResumeCandidate
   /** Named in the checkbox's accessible name: several rows otherwise read identically. */
@@ -65,6 +66,7 @@ export function ResumeCandidateRow({
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
   /** Where the chat came from, for one that does not start ticked; absent for the user's own. */
   originLabel?: string
+  renderStatus?: (sessionId: string, title: string) => React.ReactNode
 }): React.JSX.Element {
   const agentLabel = formatAgentTypeLabel(candidate.agent)
   const title =
@@ -73,6 +75,7 @@ export function ResumeCandidateRow({
   const model = candidate.model?.trim() ?? ''
   const activity = resumeActivityLabel(candidate.activity)
   const depth = useContext(ResumeTreeDepthContext)
+  const status = renderStatus?.(candidate.sessionId, title)
   const act = (action: ResumeFailureAction) => onFailureAction?.(action, candidate.sessionId)
   return (
     <ResumeTreeRow
@@ -88,10 +91,12 @@ export function ResumeCandidateRow({
         { value0: agentLabel, value1: title, value2: workspaceName }
       )}
       compact
+      checkboxSlot={status}
       // Outside the label, so pressing them never toggles the checkbox. A chat that is not the
-      // user's is never cleared by Dismiss; its own control ends it here.
+      // user's is never cleared by Dismiss; its own control ends it here. A run's status replaces
+      // both while it follows the chat.
       trailing={
-        failure ? (
+        status ? null : failure ? (
           <ResumeFailureStatus
             failure={failure}
             title={title}
@@ -112,7 +117,8 @@ export function ResumeCandidateRow({
         )
       }
       below={
-        failure && (
+        failure &&
+        !status && (
           <ResumeFailureGuidanceLine failure={failure} disabled={disabled} onAction={act} />
         )
       }

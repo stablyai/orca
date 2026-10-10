@@ -1,9 +1,8 @@
-// A message handed to an agent whose start never answers provably never ran: its CLI takes no
-// message before it answers initialize. So when the chat ends then, the message is settled as a
+// A message sent while the agent's start never answers provably never ran: the host hands a child
+// nothing until it proves its start. So when the chat ends then, the message is settled as a
 // queued one is for the same end (`journal-unsent-send-hold.ts`): a quit or a close keeps a
 // person's words as an ordinary card that waits for the chat's next turn, a person's Stop
-// withdraws it. Against the real host, store and
-// journal, with an agent that stays starting.
+// withdraws it. Against the real host, store and journal, with an agent that stays starting.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -46,20 +45,23 @@ afterEach(async () => {
   await rig.dispose()
 })
 
-/** Sent to the starting agent and handed over to it, never echoed. */
-async function handedToHungStart(text: string): Promise<string> {
+/** Sent while the agent starts, and held: never handed over. */
+async function heldBehindHungStart(text: string): Promise<string> {
   // No child, so this send starts one that never answers.
   await rig.host.close(SESSION, 'evict')
   const sent = rig.send(text)
   await sent.result
-  await eventually(async () => expect((await rig.submission(sent.id))?.handedOverAt).toBeDefined())
-  expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+  await eventually(() =>
+    expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+  )
+  expect((await rig.submission(sent.id))?.handedOverAt).toBeUndefined()
+  expect(rig.dispatch).not.toHaveBeenCalled()
   return sent.id
 }
 
-describe('a message handed to a start that never answered, then the chat ends', () => {
+describe('a message held behind a start that never answered, then the chat ends', () => {
   it('is a card after a quit, rejected as a restart, held by the reopen until a turn', async () => {
-    const id = await handedToHungStart('kept through quit')
+    const id = await heldBehindHungStart('kept through quit')
     await rig.quitRestartHostProcess()
 
     expect(await rig.submission(id)).toMatchObject({
@@ -76,7 +78,7 @@ describe('a message handed to a start that never answered, then the chat ends', 
     expect(await rig.restartOffers()).toEqual([])
   })
 
-  it('is offered for resume after a quit once the start answered, as the control', async () => {
+  it('is offered for resume after a quit once the start proved itself, as the control', async () => {
     await rig.dispose()
     rig = await createQueuedMessageTestRig({
       restartable: true,
@@ -84,7 +86,14 @@ describe('a message handed to a start that never answered, then the chat ends', 
       stopEndsSession: true,
       recoveryCapsule: true
     })
-    const id = await handedToHungStart('may have run')
+    await rig.host.close(SESSION, 'evict')
+    const sent = rig.send('may have run')
+    await sent.result
+    await rig.proveStart()
+    await eventually(async () =>
+      expect((await rig.submission(sent.id))?.handedOverAt).toBeDefined()
+    )
+    const id = sent.id
     await rig.quitRestartHostProcess()
 
     expect(await rig.restartOffers()).toEqual([
@@ -95,7 +104,7 @@ describe('a message handed to a start that never answered, then the chat ends', 
   it.each(['user-close', 'evict'] as const)(
     'is a card after a %s, rejected as closed, held by the reopen until a turn',
     async (cause) => {
-      const id = await handedToHungStart('kept at close')
+      const id = await heldBehindHungStart('kept at close')
       await rig.host.close(SESSION, cause)
       rig.crashRestartHostProcess()
 
@@ -110,7 +119,7 @@ describe('a message handed to a start that never answered, then the chat ends', 
   )
 
   it("is withdrawn by a person's Stop, as a queued one is, and kept as no card", async () => {
-    const id = await handedToHungStart('stopped')
+    const id = await heldBehindHungStart('stopped')
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 

@@ -4,17 +4,17 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, expect, it } from 'vitest'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resolveElectronProbeLaunch } from '../../browser/electron-probe-display-launch'
 
 const root = mkdtempSync(join(tmpdir(), 'orca-writer-electron-'))
 const entry = join(root, 'main.cjs')
-const timeoutMs = Number(process.env.ORCA_PROFILE_STALL_TIMEOUT_MS ?? 2_000)
-const processTimeoutMs = timeoutMs * 6 + 30_000
+const slowWarningMs = Number(process.env.ORCA_PROFILE_STALL_WARNING_MS ?? 2_000)
+const processTimeoutMs = slowWarningMs * 6 + 30_000
 
 beforeAll(async () => {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new Error('Invalid stall timeout')
+  if (!Number.isFinite(slowWarningMs) || slowWarningMs <= 0) {
+    throw new Error('Invalid stall warning threshold')
   }
   await Promise.all(
     [
@@ -60,7 +60,7 @@ it(
     }
     const launch = resolveElectronProbeLaunch({
       electronBinary,
-      electronArgs: [entry, root, String(timeoutMs)],
+      electronArgs: [entry, root, String(slowWarningMs)],
       platform: process.platform,
       display: process.env.DISPLAY
     })
@@ -77,9 +77,10 @@ it(
     const result: unknown = JSON.parse(readFileSync(join(root, 'result.json'), 'utf8'))
     expect(result).toMatchObject({
       electron: expect.any(String),
-      timeoutMs,
+      slowWarningMs,
       revisions: [2, 3, 4, 5],
       durableRevision: 6,
+      durableState: { ui: { marker: 'after' } },
       workerStarts: 1,
       failures: []
     })
