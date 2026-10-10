@@ -19075,6 +19075,12 @@
     "agentChildRow": {
       "ended": "Ended"
     },
+    "jiraIssueTitleField": {
+      "generate": "Generate title from description",
+      "stop": "Stop generating title",
+      "generating": "Generating title. Click to stop.",
+      "failed": "Failed to generate a summary from the description."
+    },
     "markdown-callout": {
       "note": "Note",
       "tip": "Tip",

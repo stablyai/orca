@@ -50,6 +50,14 @@ export const jiraApi = {
   }): Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('jira:createIssue', args),
 
+  generateIssueSummary: (args: {
+    description: string
+    projectName?: string
+    issueTypeName?: string
+  }) => ipcRenderer.invoke('jira:generateIssueSummary', args),
+  cancelGenerateIssueSummary: (): Promise<void> =>
+    ipcRenderer.invoke('jira:cancelGenerateIssueSummary'),
+
   updateIssue: (args: {
     key: string
     updates: unknown
