@@ -30,8 +30,12 @@ export type ReconcileSerializedMarkdownParams = {
   roundTrip: (markdown: string) => string | null
 }
 
-export function restoreMarkdownSourceEol(markdown: string, source: string): string {
-  return restoreEol(toLf(markdown), detectDominantEol(source))
+/** Restores the source's EOL sequence and final newline to canonical markdown. */
+export function restoreMarkdownSourceLineEndings(markdown: string, source: string): string {
+  return restoreEol(
+    preserveSourceTrailingNewline(toLf(markdown), toLf(source)),
+    detectDominantEol(source)
+  )
 }
 
 /**
@@ -70,24 +74,28 @@ export function reconcileSerializedMarkdown({
     Math.max(originalSource.length, baseCanonical.length, edited.length) >
     RECONCILE_SIZE_CAP_CODE_UNITS
   ) {
-    return restoreEol(editedLf, eol)
+    return restoreMarkdownSourceLineEndings(edited, originalSource)
   }
 
   // Branch 4: run the divergent-base patch entirely in LF space.
   // Why: dmp's half-match accelerator ignores the diff deadline (100ms+ on repeated seeds), so bail to canonical for highly repetitive replacements.
   if (hasRepeatedHalfMatchSeed(baseLf, editedLf)) {
-    return restoreEol(editedLf, eol)
+    return restoreMarkdownSourceLineEndings(edited, originalSource)
   }
-  let diffs = makeDiff(baseLf, editedLf, {
+
+  // Why: getMarkdown omits one non-semantic final newline; making it shared diff context keeps EOF edits before that newline.
+  const omittedSourceEof = !baseLf.endsWith('\n') && originalTrailingNewlines === '\n' ? '\n' : ''
+  const patchBase = baseLf + omittedSourceEof
+  const patchEdited = editedLf.endsWith('\n') ? editedLf : editedLf + omittedSourceEof
+  let diffs = makeDiff(patchBase, patchEdited, {
     checkLines: true,
     timeout: RECONCILE_DIFF_TIMEOUT_SECONDS
   })
-  // Match makePatches's cleanup while supplying our own bounded diff, avoiding the library's 1s timeout.
   if (diffs.length > 2) {
     diffs = cleanupSemantic(diffs)
     diffs = cleanupEfficiency(diffs)
   }
-  const patches = makePatches(baseLf, diffs)
+  const patches = makePatches(patchBase, diffs)
   // Why: applyPatches decodes starts as UTF-8 offsets even though makePatches returns UTF-16 indices; encode against the divergent text being patched so decoding preserves the fuzzy-match seed.
   const utf8Offsets = getUtf8OffsetsAtCodeUnitIndices(
     originalSourceLf,
@@ -101,17 +109,24 @@ export function reconcileSerializedMarkdown({
 
   // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to canonical.
   if (results.some((applied) => !applied)) {
-    return restoreEol(editedLf, eol)
+    return restoreMarkdownSourceLineEndings(edited, originalSource)
   }
 
   // Branch 6: prove reconciled bytes render-equal the editor's document — any fuzzy misplacement changes canonical output and is caught here → canonical fallback.
   const reparsed = roundTrip(reconciledLf)
   if (reparsed === null || normalizeForSafety(reparsed) !== normalizeForSafety(editedLf)) {
-    return restoreEol(editedLf, eol)
+    return restoreMarkdownSourceLineEndings(edited, originalSource)
   }
 
-  // Restore the detected EOL as the final step so reconciled CRLF stays CRLF.
-  return restoreEol(reconciledLf, eol)
+  return restoreEol(preserveSourceTrailingNewline(reconciledLf, originalSourceLf), eol)
+}
+
+function preserveSourceTrailingNewline(lfText: string, originalSourceLf: string): string {
+  // A single final newline is non-semantic; longer runs can create an empty paragraph.
+  if (lfText.endsWith('\n') || !originalSourceLf.endsWith('\n')) {
+    return lfText
+  }
+  return `${lfText}\n`
 }
 
 function stripTrailingNewlines(lfText: string): string {
