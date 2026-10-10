@@ -31,6 +31,7 @@ import { useNativeChatHeldQueueComposerSend } from './use-native-chat-held-queue
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
+import { useNativeChatAddressPreviews } from './use-native-chat-address-previews'
 
 export type {
   NativeChatComposerHandle,
@@ -54,6 +55,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       targetPtyId,
       agent,
       canSend = true,
+      isVisible = true,
       isWorking = false,
       isStopping = false,
       afterStop,
@@ -196,6 +198,20 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     })
 
+    const composerTargetKey = JSON.stringify([
+      paneKey,
+      targetPtyId,
+      structuredTransport?.sessionId,
+      structuredTransport?.worktreeId,
+      structuredTransport?.runtimeEnvironmentId
+    ])
+    const addressPreviews = useNativeChatAddressPreviews({
+      scopeKey: JSON.stringify([draftScopeKey, composerTargetKey]),
+      draft,
+      inputRef: textareaRef,
+      enabled: isVisible && !inputOwnedByCard && !disabled
+    })
+
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,
@@ -203,14 +219,9 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draft,
       setDraft,
       setCaret,
+      onTextPasted: addressPreviews.onTextPasted,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      targetKey: composerTargetKey,
       agent,
       disabled,
       resolveAttachmentOwner,
@@ -363,6 +374,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         activeSuggestion={activeSuggestion}
         notices={notices}
         imageAttachments={imageAttachments}
+        addressPreviews={addressPreviews}
         attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
         sendButtonDisabled={sendButtonDisabled}
         sendBlockedReason={imageBlock.reason}

@@ -28,7 +28,10 @@ function createSession() {
   }
   return {
     proxySession,
-    request: (callback: (result: { cancel?: boolean }) => void) => listener?.({}, callback)
+    request: (
+      callback: (result: { cancel?: boolean }) => void,
+      details = { url: 'https://example.com' }
+    ) => listener?.(details, callback)
   }
 }
 
@@ -139,6 +142,16 @@ describe('default-session proxy request guard', () => {
     const callback = vi.fn()
     request(callback)
 
+    expect(callback).toHaveBeenCalledWith({ cancel: true })
+  })
+
+  it('refuses an unowned preview URL even when ordinary network requests are ready', async () => {
+    const { proxySession, request } = createSession()
+    resetSessionProxyApplicationForTests(proxySession)
+    installElectronProxyRequestGuard(proxySession as never)
+    await applyProxySettingsToSession(proxySession, {}, { env: {} })
+    const callback = vi.fn()
+    request(callback, { url: 'orca-chat-preview://resource/unknown' })
     expect(callback).toHaveBeenCalledWith({ cancel: true })
   })
 })

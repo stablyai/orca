@@ -17779,6 +17779,31 @@
   },
   "components": {
     "native-chat": {
+      "addressPreview": {
+        "networkPolicyPending": "网络设置尚未就绪。请在代理连接可用后重试。",
+        "proxyUnavailable": "此地址需要使用预览功能无法安全连接的代理。请改为预览本地副本。",
+        "networkAddress": "网络地址",
+        "loading": "正在加载预览…",
+        "open": "打开预览：{{name}}",
+        "imageUnavailable": "无法显示此图片。",
+        "retry": "重试",
+        "list": "地址预览",
+        "remove": "移除预览：{{name}}",
+        "removeHint": "仅移除预览，保留已粘贴的文字",
+        "privateNetworkExplanation": "此地址指向私有网络。是否允许本次预览连接该网络并读取文件？",
+        "allowPrivateNetwork": "允许网络预览",
+        "embeddedImageDisabled": "未加载嵌入图片",
+        "tooLarge": "此文件过大，无法预览。",
+        "contentChanged": "文件在加载期间发生了变化。请重试以读取当前版本。",
+        "limitReached": "正在预览的文件过多。请移除一个预览后重试。",
+        "timedOut": "地址响应超时。请检查连接后重试。",
+        "unsupportedAddress": "请使用不含用户名或密码的 HTTP 或 HTTPS 地址。",
+        "unsupportedPath": "请使用本地文件的绝对路径。不支持预览文件夹或网络共享路径。",
+        "unsupportedImage": "此图片的尺寸不受支持，或过大而无法安全显示。",
+        "released": "此预览已不可用。请重试以重新加载。",
+        "unavailable": "无法加载预览。请检查地址后重试。",
+        "desktopRequired": "地址预览需要使用桌面应用。"
+      },
       "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",

@@ -18030,6 +18030,31 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "addressPreview": {
+        "networkPolicyPending": "Network settings are not ready. Try again after the proxy connection is available.",
+        "proxyUnavailable": "This address requires a proxy that previews cannot use safely. Preview a local copy instead.",
+        "networkAddress": "Network address",
+        "loading": "Loading preview…",
+        "open": "Open preview: {{name}}",
+        "imageUnavailable": "Unable to display this image.",
+        "retry": "Retry",
+        "list": "Address previews",
+        "remove": "Remove preview: {{name}}",
+        "removeHint": "Remove preview only; keep pasted text",
+        "privateNetworkExplanation": "This address reaches a private network. Allow this preview to connect to that network and read the file?",
+        "allowPrivateNetwork": "Allow network preview",
+        "embeddedImageDisabled": "Embedded image not loaded",
+        "tooLarge": "This file is too large to preview.",
+        "contentChanged": "The file changed while loading. Retry to read the current version.",
+        "limitReached": "Too many previews are active. Remove a preview and try again.",
+        "timedOut": "The address took too long to respond. Check the connection and try again.",
+        "unsupportedAddress": "Use an HTTP or HTTPS address without an embedded username or password.",
+        "unsupportedPath": "Use an absolute path to a local file. Folders and network shares cannot be previewed.",
+        "unsupportedImage": "This image has unsupported dimensions or is too large to display safely.",
+        "released": "This preview is no longer available. Retry to load it again.",
+        "unavailable": "Could not load this preview. Check the address and try again.",
+        "desktopRequired": "Address previews require the desktop app."
+      },
       "reasoning": "Reasoning",
       "failureWords": {
         "theAgent": "The agent",
