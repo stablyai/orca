@@ -15,7 +15,7 @@ export type WorkspaceCleanupPresence = 'any' | 'some' | 'none'
  */
 export type WorkspaceCleanupIdleSignal = 'last-visited' | 'last-activity' | 'created'
 
-export type WorkspaceCleanupGitState = 'clean' | 'dirty' | 'unpushed' | 'unknown'
+export type WorkspaceCleanupGitState = 'merged' | 'clean' | 'dirty' | 'unpushed' | 'unknown'
 export type WorkspaceCleanupAgentState = 'working' | 'permission' | 'idle'
 /** `draft` is a review STATE, not a separate flag. */
 export type WorkspaceCleanupReviewState = 'open' | 'draft' | 'merged' | 'closed' | 'unknown'

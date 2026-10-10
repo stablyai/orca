@@ -343,7 +343,7 @@ describe('agent, git, review, ticket, context, and location filters', () => {
   it('filters by git state, ahead counts, branch text, prunable and locked', () => {
     const unpushed = makeFacets({
       candidate: {
-        git: { clean: true, upstreamAhead: 3, upstreamBehind: 1, checkedAt: 1 }
+        git: { clean: true, upstreamAhead: 3, upstreamBehind: 1, merged: null, checkedAt: 1 }
       }
     })
     expect(unpushed.gitState).toBe('unpushed')
@@ -508,6 +508,7 @@ describe('query pipeline', () => {
           clean: null,
           upstreamAhead: null,
           upstreamBehind: null,
+          merged: null,
           checkedAt: null
         }
       }),
