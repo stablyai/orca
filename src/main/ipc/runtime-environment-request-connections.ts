@@ -11,6 +11,7 @@ import type {
 } from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
+import { probeAllRemoteRuntimeSocketsNow } from '../../shared/remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
@@ -198,6 +199,9 @@ export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
   }
+  // Why: a socket that still reads OPEN after wake arms no reconnect timer, so retryNow finds
+  // nothing; probing every socket (shared control and per-stream) settles a dead path quickly (#9092).
+  probeAllRemoteRuntimeSocketsNow()
 }
 
 function getSharedControlConnection(
