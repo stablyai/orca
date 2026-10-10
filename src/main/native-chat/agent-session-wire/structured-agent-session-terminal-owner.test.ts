@@ -226,7 +226,8 @@ async function rig() {
       callerKey: 'client',
       params,
       now: () => NOW,
-      findTerminalAgentSessionOwner: ownerRead
+      findTerminalAgentSessionOwner: ownerRead,
+      optionRevision: () => 0
     })
   }
   return {
