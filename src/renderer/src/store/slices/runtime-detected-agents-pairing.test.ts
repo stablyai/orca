@@ -53,10 +53,10 @@ describe('runtime detection pairing ownership', () => {
     const store = createTestStore()
     store.getState().setRuntimeEnvironments([environment(2)])
     await expect(
-      store.getState().ensureRuntimeDetectedAgents('detection-peer', 1)
+      store.getState().ensureRuntimeDetectedAgents('detection-peer', undefined, 1)
     ).resolves.toEqual([])
     await expect(
-      store.getState().refreshRuntimeDetectedAgents('detection-peer', 1)
+      store.getState().refreshRuntimeDetectedAgents('detection-peer', undefined, 1)
     ).resolves.toEqual([])
     expect(rpc.call).not.toHaveBeenCalled()
   })
@@ -70,10 +70,10 @@ describe('runtime detection pairing ownership', () => {
       })
     )
     store.getState().setRuntimeEnvironments([environment(1)])
-    const old = store.getState().refreshRuntimeDetectedAgents('detection-peer', 1)
+    const old = store.getState().refreshRuntimeDetectedAgents('detection-peer', undefined, 1)
     store.getState().setRuntimeEnvironments([environment(2)])
     rpc.call.mockResolvedValueOnce(['codex'])
-    await store.getState().ensureRuntimeDetectedAgents('detection-peer', 2)
+    await store.getState().ensureRuntimeDetectedAgents('detection-peer', undefined, 2)
     failOld(
       new RuntimeRpcCallError({
         id: 'refresh',

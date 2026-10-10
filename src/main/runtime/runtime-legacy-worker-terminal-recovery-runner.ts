@@ -1,5 +1,5 @@
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'
 import {
@@ -104,9 +104,7 @@ export async function runLegacyWorkerTerminalRecovery(
       ).values()
     ]
     const inventory = await ports.refreshInventory(resolvedWorktrees, provider.connectionId)
-    const hostId = provider.connectionId
-      ? toSshExecutionHostId(provider.connectionId)
-      : LOCAL_EXECUTION_HOST_ID
+    const hostId = getConnectionExecutionHostId(provider.connectionId)
     if (!inventory || !inventory.queriedHostIds.has(hostId)) {
       provider.entries.forEach(({ candidate }) => deferredDispatchIds.add(candidate.dispatchId))
       continue

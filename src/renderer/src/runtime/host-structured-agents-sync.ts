@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -17,7 +18,7 @@ import { localStructuredChatsInUse } from './local-structured-chats'
 // Why gated: a host older than this build installs its structured host to answer, which a profile
 // that never uses structured chat must not pay for; only with chats in use can a launch route to one.
 function structuredChatSettingOn(state: Pick<AppState, 'settings'>): boolean {
-  return state.settings?.experimentalStructuredNativeChat === true
+  return isNativeChatEnabled(state.settings)
 }
 
 async function syncLocalHost(settings: AppState['settings']): Promise<void> {

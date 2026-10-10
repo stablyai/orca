@@ -41,6 +41,9 @@ describe('normalizeDshEvent', () => {
     const started = normalizeAndAccept(state, 'dsh', event('SessionStart', { source: 'startup' }))
     expect(started?.payload.state).toBe('done')
     expect(started?.payload.agentType).toBe('dsh')
+    expect(started?.payload.sessionBoundary).toBe(true)
+    const stopped = normalizeAndAccept(state, 'dsh', event('Stop', { stop_hook_active: false }))
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
   })
 
   it('treats an ordinary tool as working and surfaces its name', () => {

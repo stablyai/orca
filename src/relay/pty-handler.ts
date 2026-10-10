@@ -12,7 +12,7 @@ import {
   applyOpenCodePluginSelection,
   restoreOpenCodeCapabilities
 } from './opencode-plugin-selection'
-import { resolveCommandPathForRelay } from './preflight-handler'
+import { resolveCommandPathForRelay } from '../wsl-guest/preflight-handler'
 import { applyRelayAgentWorkspaceTrust } from './agent-workspace-trust-spawn'
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
@@ -22,7 +22,7 @@ import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { isSupportedWindowsShellOverride } from '../shared/windows-terminal-shell'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import {
   resolveDefaultShell,
   resolveProcessCwd,
@@ -313,7 +313,6 @@ type RelayAgentSessionCreateResult = {
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
-const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
 
 type PendingPtyOutput = RelayPtySourceOutput & {
   data: string
@@ -1877,9 +1876,6 @@ export class PtyHandler {
         context && this.sourcePublication?.receivingActivation?.(result.id, context.clientId)
       const { sourceActivation: _staleActivation, ...stableResult } = result
       return { ...stableResult, ...(sourceActivation ? { sourceActivation } : {}) }
-    }
-    if (this.agentSessionCreateOperations.size >= AGENT_SESSION_CREATE_OPERATION_LIMIT) {
-      throw new Error('agent_session_operation_capacity')
     }
     const operation = this.spawnOnce(params, context)
     this.agentSessionCreateOperations.set(operationId, operation)

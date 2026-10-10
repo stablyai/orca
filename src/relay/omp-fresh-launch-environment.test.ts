@@ -1,14 +1,14 @@
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { PtyHandler } from './pty-handler'
 import { RelayAgentHookRuntime } from './relay-agent-hook-runtime'
-import { PluginOverlayManager } from './plugin-overlay'
+import { PluginOverlayManager } from '../wsl-guest/plugin-overlay'
 import { withFreshOmpLaunch } from '../shared/omp-fresh-launch'
 
 const state = vi.hoisted(() => ({ home: '' }))

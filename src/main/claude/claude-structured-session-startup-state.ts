@@ -1,11 +1,11 @@
 // Where a Claude start stands. A session is published once its child is spawned, launched with the
-// chat's saved options, before the CLI has answered initialize. Messages are written to it at once
-// (the CLI queues them behind its start); only an option write, a control request initialize must
-// answer first, waits for startup to land.
+// chat's saved options, before the CLI has answered initialize. The host hands it no message until
+// `started`; an option write, a control request initialize must answer first, waits here too.
 
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 
 export type ClaudeSessionStartup = {
   state: 'pending' | 'proven' | 'failed'
@@ -26,9 +26,20 @@ export function createClaudeSessionStartup(): ClaudeSessionStartup {
   return { state: 'pending', answered: false, failure: null, settled: ended, end }
 }
 
+/** Why a start failed; a CLI that was never found says so, whichever error the start met first. */
+export function claudeStartupFailureCause(
+  session: ClaudeSession,
+  fallback?: Error
+): Error | undefined {
+  const failure = session.startup.failure ?? fallback
+  return failure && session.connection.executableMissing
+    ? withMissingProviderExecutable(failure)
+    : failure
+}
+
 export function claudeStartupFailureFact(session: ClaudeSession): SubmissionRejectionFact | null {
   return session.startup.state === 'failed'
-    ? providerStartupFailureFact(session.startup.failure ?? undefined)
+    ? providerStartupFailureFact(claudeStartupFailureCause(session))
     : null
 }
 

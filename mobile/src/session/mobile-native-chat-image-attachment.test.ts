@@ -38,77 +38,6 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
 }
 
 describe('uploadMobileNativeChatImages', () => {
-  it('waits for each fingerprint before its callback and the next image', async () => {
-    const events: string[] = []
-    let completeFingerprint: (fingerprint: string) => void = () => {
-      throw new Error('fingerprint did not start')
-    }
-    let fingerprintStarted: () => void = () => {}
-    const started = new Promise<void>((resolve) => {
-      fingerprintStarted = resolve
-    })
-    const client = clientWithResponses([
-      methodNotFound('start-a'),
-      ok('save-a', '/tmp/a.png'),
-      methodNotFound('start-b'),
-      failed('save-b', 'second upload failed')
-    ])
-    const pending = uploadMobileNativeChatImages('library', {
-      client,
-      getConnectionId: async () => 'original-connection',
-      pickImages: async function* () {
-        events.push('read:first')
-        yield { base64: 'AAAA' }
-        events.push('read:second')
-        yield { base64: 'AQID' }
-      },
-      fingerprintImage: () => {
-        events.push('fingerprint')
-        fingerprintStarted()
-        return new Promise<string>((resolve) => {
-          completeFingerprint = resolve
-        })
-      },
-      onImageUploaded: (image) => events.push(`uploaded:${image.contentFingerprint}`)
-    })
-    const rejection = expect(pending).rejects.toThrow('second upload failed')
-    await started
-    expect(events).toEqual(['read:first', 'fingerprint'])
-    expect(client.calls).toHaveLength(2)
-
-    completeFingerprint('first-fingerprint')
-    await rejection
-    expect(events).toEqual([
-      'read:first',
-      'fingerprint',
-      'uploaded:first-fingerprint',
-      'read:second'
-    ])
-    expect(client.calls.map((call) => call.params)).toEqual([
-      { expectedBase64Length: 4, connectionId: 'original-connection' },
-      { contentBase64: 'AAAA', connectionId: 'original-connection' },
-      { expectedBase64Length: 4, connectionId: 'original-connection' },
-      { contentBase64: 'AQID', connectionId: 'original-connection' }
-    ])
-  })
-
-  it('does not add an await between a synchronous fingerprint and its callback', async () => {
-    const events: string[] = []
-    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/a.png')])
-    await uploadMobileNativeChatImages('library', {
-      client,
-      getConnectionId: async () => null,
-      pickImages: () => [{ base64: 'AAAA' }],
-      fingerprintImage: () => {
-        events.push('fingerprint')
-        queueMicrotask(() => events.push('microtask'))
-        return 'synchronous-fingerprint'
-      },
-      onImageUploaded: () => events.push('callback')
-    })
-    expect(events).toEqual(['fingerprint', 'callback', 'microtask'])
-  })
-
   it('uploads the picked image and returns its host path + local preview uri, without any terminal.send', async () => {
     const client = clientWithResponses([
       methodNotFound('start'),
@@ -124,8 +53,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/orca-attach.png',
-        previewUri: 'file:///photo.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///photo.jpg'
       }
     ])
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
@@ -165,18 +93,15 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///a.jpg'
       },
       {
         path: '/tmp/b.png',
-        previewUri: 'file:///b.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///b.jpg'
       },
       {
         path: '/tmp/c.png',
-        previewUri: 'file:///c.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///c.jpg'
       }
     ])
     expect(order).toEqual([
@@ -225,8 +150,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(onImageUploaded).toHaveBeenCalledOnce()
     expect(onImageUploaded).toHaveBeenCalledWith({
       path: '/tmp/a.png',
-      previewUri: 'file:///a.jpg',
-      contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      previewUri: 'file:///a.jpg'
     })
   })
 
@@ -242,8 +166,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/x.png',
-        previewUri: 'data:image/png;base64,BBBB',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'data:image/png;base64,BBBB'
       }
     ])
   })

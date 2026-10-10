@@ -298,7 +298,7 @@ describe('ACP structured session adapter: requests a Stop cancels', () => {
       cancelled: true
     })
     expect(await question).toMatchObject({ result: { outcome: 'cancelled' } })
-    expect(agent.frames.filter((frame) => frame.id === 5)).toHaveLength(1)
+    expect(agent.frames.filter((frame) => frame.id === 5 && !frame.method)).toHaveLength(1)
   })
 
   it("shows Grok's plan in the plan row and answers its plan-mode exit at once, with no card", async () => {
@@ -456,8 +456,19 @@ describe('ACP structured session adapter: close and exit', () => {
 
 describe('Grok launch spec', () => {
   it('runs `grok agent stdio`, asking for always-approve only with full access', () => {
-    expect(GROK.args({ fullAccess: false })).toEqual(['agent', 'stdio'])
-    expect(GROK.args({ fullAccess: true })).toEqual(['agent', '--always-approve', 'stdio'])
+    expect(GROK.args({ fullAccess: false, pluginDir: null })).toEqual(['agent', 'stdio'])
+    expect(GROK.args({ fullAccess: true, pluginDir: null })).toEqual([
+      'agent',
+      '--always-approve',
+      'stdio'
+    ])
+    expect(GROK.args({ fullAccess: true, pluginDir: '/orca/visuals' })).toEqual([
+      'agent',
+      '--always-approve',
+      '--plugin-dir',
+      '/orca/visuals',
+      'stdio'
+    ])
     expect(GROK.env).toEqual({})
   })
 })

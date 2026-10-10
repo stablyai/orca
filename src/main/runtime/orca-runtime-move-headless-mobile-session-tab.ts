@@ -9,8 +9,9 @@ import type {
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit
-} from './headless-tab-group-split-layout'
+} from '../../shared/workspace-layout/tab-group-moves'
 import { randomUUID } from 'node:crypto'
+import { withSelectedTabs } from './headless-tab-group-selection'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 
 export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWithPersistHeadlessSessionTabProps {
@@ -102,15 +103,16 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       // as a no-op; mirror that instead of churning the snapshot.
       return { moved: true }
     }
+    const groups = withSelectedTabs(snapshot.tabGroups ?? [], split.groups, hostTabId)
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeGroupId: split.newGroupId,
-      tabGroups: split.groups,
+      tabGroups: groups,
       tabGroupLayout: split.layout
     }
-    this.persistHeadlessTabGroups(worktreeId, split.groups, split.layout)
+    this.persistHeadlessTabGroups(worktreeId, groups, split.layout)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
@@ -138,15 +140,16 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       return { moved: true }
     }
     const layout = moved.layout ?? { type: 'leaf' as const, groupId: move.targetGroupId }
+    const groups = withSelectedTabs(snapshot.tabGroups ?? [], moved.groups, hostTabId)
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeGroupId: move.targetGroupId,
-      tabGroups: moved.groups,
+      tabGroups: groups,
       tabGroupLayout: layout
     }
-    this.persistHeadlessTabGroups(worktreeId, moved.groups, layout)
+    this.persistHeadlessTabGroups(worktreeId, groups, layout)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }

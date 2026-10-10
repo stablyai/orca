@@ -66,7 +66,7 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
     return
   }
   const read = await runtime.readTerminal(params.terminal)
-  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
   if (registration.released) {
     return
   }

@@ -192,7 +192,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
           )
           .map((tab) => tab.id)
       )
-    )
+    ),
+    state.remoteWorkspaceHydratedTargetIds.has(authority.targetId)
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return 'stale'

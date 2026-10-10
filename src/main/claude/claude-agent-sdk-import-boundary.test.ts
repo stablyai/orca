@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 
 /**
  * Keep the agent SDK on the structured-Claude side of the toggle.

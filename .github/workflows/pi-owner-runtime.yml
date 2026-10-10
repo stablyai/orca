@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/main/pi/**'
+      - '!src/main/pi/**/*.test.ts'
       - 'tests/tools/pi-owner-runtime-smoke.mjs'
       - 'tests/tools/omp-completion-runtime-smoke.mjs'
       - '.github/workflows/pi-owner-runtime.yml'

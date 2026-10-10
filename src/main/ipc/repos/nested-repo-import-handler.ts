@@ -7,14 +7,14 @@ import type { ProjectGroupImportResult } from '../../../shared/project-group-typ
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { isGitRepo, getRepoName } from '../../git/repo'
+import { isGitRepoAsync, getRepoName } from '../../git/repo'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { getActiveMultiplexer } from '../ssh'
@@ -83,7 +83,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
           } else {
             await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-            if (!isGitRepo(repoPath)) {
+            if (!(await isGitRepoAsync(repoPath))) {
               results.push({
                 path: repoPath,
                 status: 'failed',
@@ -123,9 +123,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           const detected = await detectRepoIconAndUpstream({
             repoPath: importRepoPath,
             kind: 'git',
-            executionHostId: args.connectionId
-              ? toSshExecutionHostId(args.connectionId)
-              : LOCAL_EXECUTION_HOST_ID
+            executionHostId: getConnectionExecutionHostId(args.connectionId)
           })
           const repo: Repo = {
             id: randomUUID(),
@@ -154,7 +152,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
-          // Why: reaches here only after the isGitRepo guard above confirmed a git repo, so always true.
+          // Why: reaches here only after the isGitRepoAsync guard above confirmed a git repo, so always true.
           emitRepoAdded('folder_picker', false, true)
         } catch (error) {
           results.push({

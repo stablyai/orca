@@ -22,7 +22,9 @@ function makeTarget(): SshTarget {
     configHost: 'fdpass-host',
     host: 'ignored.example.com',
     port: 22,
-    username: ''
+    username: '',
+    // The fixture pre-installs a host-Node relay tree.
+    remoteRuntime: 'legacy'
   }
 }
 

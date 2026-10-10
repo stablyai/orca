@@ -132,6 +132,16 @@ export class AcpSessionRuntime {
     return this.call('authenticate', { methodId }, AuthenticateResponseSchema)
   }
 
+  /** A vendor extension method, answered as the agent sent it. Core methods have typed calls here,
+   *  so a session-free caller can never create or touch a session through this. */
+  async requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> {
+    if (!method.includes('/') || method.startsWith('session/')) {
+      throw new Error(`Not an ACP extension method: ${method}`)
+    }
+    await this.initialize()
+    return this.peer.request(method, params, { timeoutMs: null })
+  }
+
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
     if (this.started) {
       return Promise.resolve(this.started)
@@ -185,6 +195,15 @@ export class AcpSessionRuntime {
     const params: SetSessionModeRequest = { sessionId: this.sessionId(), modeId, ...withMeta(meta) }
     return this.call('session/set_mode', params, SetSessionModeResponseSchema)
   }
+
+  /** Dialect-owned control requests share this session's transport and bounded lifetime. */
+  requestExtension(method: string, params: unknown, timeoutMs = 30_000): Promise<unknown> {
+    this.sessionId()
+    if (!method.startsWith('_')) {
+      throw new Error('ACP extension methods require an underscore')
+    }
+    return this.peer.request(method, params, { timeoutMs })
+  }
   async setModel(modelId: string, meta?: Meta): Promise<SetSessionModelResponse> {
     const params: SetSessionModelRequest = {
       sessionId: this.sessionId(),
@@ -220,6 +239,10 @@ export class AcpSessionRuntime {
   close(error?: Error): void {
     this.peer.close(error)
     this.listeners.clear()
+  }
+
+  protected drainNotifications(error?: Error): void {
+    this.peer.drainNotifications(error)
   }
 
   private sessionId(): string {

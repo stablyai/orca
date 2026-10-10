@@ -1,7 +1,7 @@
 import { throwIfSignalAborted } from '../shared/abort-signal-reason'
 import { annotateWorktreeLocksFromAdmin } from '../shared/git-worktree-admin'
 import * as path from 'node:path'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import { expandTilde } from './context'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { isUnsupportedWorktreeListZError } from './git-handler-utils'

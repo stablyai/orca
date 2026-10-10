@@ -34,7 +34,7 @@ import {
   hasStagedStructuredLaunchPrompt,
   settleStructuredAgentLaunchPrompt,
   stageStructuredLaunchPrompt,
-  takeBackStructuredLaunchPrompts
+  takeBackLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
 
 const SESSION = 'session-1'
@@ -188,7 +188,7 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     })
     expect(pendingTexts()).toEqual(['review this:sending'])
 
-    takeBackStructuredLaunchPrompts(SESSION)
+    takeBackLegacyStructuredLaunchPrompts(SESSION)
     publish({ sessionId: SESSION, fence: 1 })
 
     await expect(settled).resolves.toEqual({ delivered: false, failureNotified: true })

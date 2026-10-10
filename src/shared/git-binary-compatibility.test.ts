@@ -30,6 +30,7 @@ import { fastForwardLocalBaseBranch } from './worktree/local-base-branch-fast-fo
 import { gitChangeListArgs, parseGitChangeList } from './git-change-list'
 import { encodeGitPathspecs } from './git-pathspec-stdin'
 import { endSubprocessStdin } from './subprocess-stdin-write'
+import { registerGitRepositoryRegistrationBinaryCompatibilityCase } from './git-repository-registration-binary-compatibility.test-cases'
 import { registerGitResolutionBinaryCompatibilityCases } from './git-resolution-binary-compatibility.test-cases'
 
 const execFileAsync = promisify(execFile)
@@ -137,6 +138,8 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       await rm(repoPath, { recursive: true, force: true })
     }
   })
+
+  registerGitRepositoryRegistrationBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
 
   it('stages, unstages and restores NUL-delimited literal pathspecs from stdin', async () => {
     const fixturePath = join(repoPath, 'stdin-pathspec')

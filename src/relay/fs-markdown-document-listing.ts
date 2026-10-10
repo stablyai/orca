@@ -1,4 +1,4 @@
-import { spawnProcess } from '../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import {
   collectMarkdownDocuments,
   MARKDOWN_DOCUMENT_GLOB

@@ -505,7 +505,7 @@ describe('older history auto-load', () => {
     if (!row || !spacer) {
       throw new Error(`${text} is not a windowed row`)
     }
-    return spacer.offsetTop + Number.parseFloat(row.style.top)
+    return spacer.offsetTop + row.offsetTop
   }
 
   async function readerAtMarker140(loadEarlier: LoadEarlier) {

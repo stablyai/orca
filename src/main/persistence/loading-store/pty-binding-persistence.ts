@@ -23,7 +23,7 @@ import type {
   TerminalLeafMoveResult
 } from '../../../shared/terminal-leaf-move'
 import { moveLeaf } from '../terminal-topology/terminal-topology-commit'
-import { findTerminalBindingConflict } from '../terminal-topology/terminal-owner-invariants'
+import { findTerminalBindingConflict } from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -295,13 +295,4 @@ function writePtyBinding(
     restore()
     throw error
   }
-}
-
-export function installPtyBindingPersistenceOperationsContext(
-  target: PtyBindingPersistenceOperations,
-  source: PtyBindingPersistenceOperations
-): void {
-  Object.defineProperty(target, ptyBindingPersistenceOperationsContext, {
-    value: source[ptyBindingPersistenceOperationsContext]
-  })
 }

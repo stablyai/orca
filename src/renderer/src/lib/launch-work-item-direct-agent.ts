@@ -15,8 +15,6 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
-import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -28,14 +26,10 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         agentCmdOverrides?: Partial<Record<TuiAgent, string>>
         agentDefaultArgs?: Partial<Record<TuiAgent, string>>
         agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
-        experimentalNativeChat?: boolean
-        openAgentTabsInChatByDefault?: boolean
-        nativeChatSessionOptions?: PersistedNativeChatSessionOptions
       }
     | null
     | undefined
   launchPlatform: NodeJS.Platform
-  nativeChatTranscriptIsLocalReadable?: boolean
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
@@ -53,13 +47,6 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
-  const sessionOptions = resolveInitialNativeChatSessionOptions(args.settings, {
-    agent: args.agent,
-    ...(args.promptDelivery === 'draft'
-      ? { promptDelivery: 'draft' as const, launchDraftText: args.draftContent }
-      : {}),
-    nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable
-  })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -70,8 +57,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           platform: args.launchPlatform,
           isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv,
-          sessionOptions
+          agentEnv: effectiveAgentEnv
         })
 
   if (draftLaunchPlan) {
@@ -82,9 +68,6 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
-        ...(draftLaunchPlan.sessionOptions
-          ? { sessionOptions: draftLaunchPlan.sessionOptions }
-          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -103,7 +86,6 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
-    sessionOptions,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && args.promptDelivery === 'draft') {
@@ -119,10 +101,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
 export function buildDirectWorkItemStartupOpts(
   agent: TuiAgent | null,
   plan: AgentStartupPlan | null,
-  launchSource: LaunchSource,
-  /** Unsent launch context, for the view-mode decision only. Set it for every
-   *  draft launch — a natively-prefilled plan carries no `draftPrompt`. */
-  launchDraftText?: string
+  launchSource: LaunchSource
 ): {
   startup?: {
     command: string
@@ -130,7 +109,6 @@ export function buildDirectWorkItemStartupOpts(
     launchConfig?: SleepingAgentLaunchConfig
     launchAgent?: TuiAgent
     draftPrompt?: string
-    launchDraftText?: string
     sessionOptions?: AgentStartupPlan['sessionOptions']
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
@@ -151,7 +129,6 @@ export function buildDirectWorkItemStartupOpts(
       ...(plan.sessionOptions ? { sessionOptions: plan.sessionOptions } : {}),
       ...(agent ? { launchAgent: agent } : {}),
       ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-      ...(launchDraftText ? { launchDraftText } : {}),
       ...(plan.startupCommandDelivery
         ? { startupCommandDelivery: plan.startupCommandDelivery }
         : {}),

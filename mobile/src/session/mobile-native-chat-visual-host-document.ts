@@ -1,6 +1,9 @@
 import {
-  NATIVE_CHAT_VISUAL_CSP,
+  NATIVE_CHAT_VISUAL_HOST_CSP,
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
+  NATIVE_CHAT_VISUAL_PING_TYPE,
+  NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,
+  NATIVE_CHAT_VISUAL_PONG_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE
 } from '../../../src/shared/native-chat-visual-shell'
 import { inlineScriptLiteral } from '../components/inline-script-json'
@@ -27,13 +30,16 @@ const LINK_WINDOW_MS = 5_000
  *   and stamps them with `token`, which the child never sees.
  * - A link request is relayed only while the child frame holds focus and the page holds user
  *   activation, and at most once per activation window.
- * - A second `load` of the child means it navigated away from its document: the frame is removed
- *   and the app told, so a replacement document never inherits the frame.
+ * - A later `load` of the child (WebKit fires one for in-page links too) is pinged; if nothing
+ *   answers, the frame went blank or left, so it is removed and the app told. A tripwire only: this
+ *   page's policy (`frame-src`/`child-src 'none'`), the app's `allowsLoad` and the sandbox are the
+ *   navigation boundary.
  * - It never sizes the frame from a report itself; the app decides heights and calls back.
  * - Inline, the frame does not scroll, so a drag that starts on it scrolls the transcript.
  *
  * The child inherits this document's policy (a srcdoc frame has no URL of its own) and adds the
- * same policy from its own meta, so this document carries the visual policy too.
+ * same policy from its own meta, so this document carries the visual policy too, except that it
+ * admits the shell's `about:srcdoc` base, which the child's own policy then locks.
  */
 export function buildMobileNativeChatVisualHostDocument(input: {
   visualDocument: string
@@ -42,6 +48,8 @@ export function buildMobileNativeChatVisualHostDocument(input: {
   token: string
   title: string
   mode: MobileNativeChatVisualHostMode
+  /** Tests shorten the wait for the shell's answer. */
+  pongTimeoutMs?: number
 }): string {
   const frameHeight =
     input.mode === 'fullscreen' ? '100vh' : `${MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT}px`
@@ -54,13 +62,16 @@ export function buildMobileNativeChatVisualHostDocument(input: {
     link: NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
     applyHeight: MOBILE_NATIVE_CHAT_VISUAL_APPLY_HEIGHT,
     sizeIntervalMs: SIZE_FORWARD_INTERVAL_MS,
-    linkWindowMs: LINK_WINDOW_MS
+    linkWindowMs: LINK_WINDOW_MS,
+    ping: NATIVE_CHAT_VISUAL_PING_TYPE,
+    pong: NATIVE_CHAT_VISUAL_PONG_TYPE,
+    pongTimeoutMs: input.pongTimeoutMs ?? NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS
   })
   return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${NATIVE_CHAT_VISUAL_CSP}">
+<meta http-equiv="Content-Security-Policy" content="${NATIVE_CHAT_VISUAL_HOST_CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <style>html,body{margin:0;padding:0;background:transparent;overflow:hidden}iframe{display:block;border:0;width:100%;height:${frameHeight};background:transparent}</style>
 </head>
@@ -83,12 +94,17 @@ frame.setAttribute('title', C.title)
 // inline the frame is sized to its content (full screen still scrolls).
 if (!C.fullscreen) frame.setAttribute('scrolling', 'no')
 var loads = 0
+var unanswered = null
+function escaped() {
+  frame.remove()
+  send({ kind: 'escaped' })
+}
 frame.addEventListener('load', function () {
   loads += 1
-  if (loads > 1) {
-    frame.remove()
-    send({ kind: 'escaped' })
-  }
+  if (loads === 1) return
+  if (unanswered) clearTimeout(unanswered.timer)
+  unanswered = { id: loads, timer: setTimeout(escaped, C.pongTimeoutMs) }
+  frame.contentWindow.postMessage({ type: C.ping, channel: C.channel, id: loads }, '*')
 })
 window[C.applyHeight] = function (height) {
   if (!C.fullscreen && typeof height === 'number' && isFinite(height)) frame.style.height = height + 'px'
@@ -107,6 +123,13 @@ window.addEventListener('message', function (event) {
   var data = event.data
   // The visual chooses every field, so only an exact channel match is relayed, as the host's own copy.
   if (!data || typeof data !== 'object' || data.channel !== C.channel) return
+  if (data.type === C.pong) {
+    if (unanswered && data.id === unanswered.id) {
+      clearTimeout(unanswered.timer)
+      unanswered = null
+    }
+    return
+  }
   if (data.type === C.size) {
     if (C.fullscreen) return
     pendingSize = { type: C.size, channel: C.channel, height: Number(data.height) }

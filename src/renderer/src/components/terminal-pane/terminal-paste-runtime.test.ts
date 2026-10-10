@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRemoteRuntimePastePtyId, resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 
 describe('terminal paste runtime', () => {
   it('uses the platform-local runtime when no SSH identity is available', () => {
@@ -243,11 +243,5 @@ describe('terminal paste runtime', () => {
       runtimeKey: 'remote:remote:env-1@@terminal-1',
       kind: 'remote-runtime'
     })
-  })
-
-  it('recognizes remote runtime PTY ids', () => {
-    expect(isRemoteRuntimePastePtyId('remote:terminal-1')).toBe(true)
-    expect(isRemoteRuntimePastePtyId('pty-1')).toBe(false)
-    expect(isRemoteRuntimePastePtyId(null)).toBe(false)
   })
 })

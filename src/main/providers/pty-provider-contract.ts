@@ -122,6 +122,8 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  /** SSH providers only: the relay session generation that registered them. */
+  readonly providerGeneration?: number
   requestHostRpc?: (
     method: string,
     params: unknown,

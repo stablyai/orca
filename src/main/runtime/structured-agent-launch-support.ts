@@ -1,7 +1,6 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import {
@@ -9,26 +8,14 @@ import {
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
 } from '../native-chat/structured-agent-session-create-support'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 import { structuredAgentRuntimeRegistration } from './structured-agent-runtime-registrations'
-import { structuredAgentBaseEnvironment } from './structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from './structured-agent-shell-environment'
 
 type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
   'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
 > &
   Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
-
-/** The environment every agent's launch on this host starts from, for a check made before the
- *  session host is built. */
-async function resolveHostStructuredAgentBaseEnvironment(
-  settings: LaunchEnvironmentSettings
-): Promise<Record<string, string>> {
-  return structuredAgentBaseEnvironment({
-    shellEnv: await resolveLoginShellEnvironment(),
-    policy: nativeChatShellEnvironmentPolicy(settings)
-  })
-}
 
 /** What the check reads from the runtime asking it. */
 type LaunchSupportRuntime = {
@@ -50,7 +37,7 @@ export async function structuredAgentSupportsLaunch(
   }
   const settings = runtime.requireStore().getSettings()
   const env = {
-    ...(await resolveHostStructuredAgentBaseEnvironment(settings)),
+    ...(await resolveHostAgentBaseEnvironment(settings)),
     ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv) : {})
   }
   const cwd = (await runtime.resolveRuntimeFileTarget(worktreeSelector)).worktree.path

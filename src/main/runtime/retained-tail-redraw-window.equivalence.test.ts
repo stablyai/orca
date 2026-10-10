@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { mulberry32 } from '../../shared/agent-tui-ansi-fuzz-stream'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
+import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
+import {
+  appendNormalizedToMultilineTailBufferUnwindowed,
+  type RetainedTailRedrawCursor
+} from './terminal-tail-redraw-buffer'
 
 // Differential guard for the windowed redraw tail path: the public
 // appendNormalizedToTailBuffer routes vertical-control chunks through a
@@ -8,16 +13,6 @@ import { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail
 // O(tail) per chunk and dominated main's event loop under agent-TUI floods).
 // This fuzz asserts the windowed result is byte-identical to the reference
 // implementation across randomized tails and redraw chunks.
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
 
 function randomTail(rng: () => number, maxLines: number): string[] {
   const count = Math.floor(rng() * maxLines)
@@ -55,6 +50,25 @@ function randomRedrawChunk(rng: () => number): string {
   return parts.join('')
 }
 
+function expectMatchesUnwindowed(
+  tail: string[],
+  partial: string,
+  chunk: string,
+  redrawCursor: RetainedTailRedrawCursor | null,
+  label: string
+): void {
+  const actual = appendNormalizedToTailBuffer(tail, partial, chunk, redrawCursor)
+  // Reference path over the full tail.
+  const expected = appendNormalizedToMultilineTailBufferUnwindowed(
+    tail,
+    partial.slice(-MAX_TAIL_PARTIAL_CHARS),
+    chunk,
+    partial.length > MAX_TAIL_PARTIAL_CHARS,
+    redrawCursor
+  )
+  expect(actual, label).toEqual(expected)
+}
+
 describe('windowed redraw tail equivalence', () => {
   it('matches the unwindowed reference across 500 randomized cases', () => {
     const rng = mulberry32(42)
@@ -68,24 +82,28 @@ describe('windowed redraw tail equivalence', () => {
       // without one take the single-line fast path, which is out of scope.
       const chunk = `\x1b[${1 + Math.floor(rng() * 4)}A${randomRedrawChunk(rng)}`
 
-      const actual = appendNormalizedToTailBuffer(tail, partial, chunk, redrawCursor)
-      // Reference path over the full tail.
-      const expected = appendNormalizedToMultilineTailBufferUnwindowed(
-        tail,
-        partial.slice(-4000),
-        chunk,
-        partial.length > 4000,
-        redrawCursor
-      )
+      expectMatchesUnwindowed(tail, partial, chunk, redrawCursor, `round ${round}`)
+    }
+  })
 
-      expect(actual.lines, `round ${round} lines`).toEqual(expected.lines)
-      expect(actual.partialLine, `round ${round} partial`).toBe(expected.partialLine)
-      expect(actual.redrawCursor, `round ${round} cursor`).toEqual(expected.redrawCursor)
-      expect(actual.truncated, `round ${round} truncated`).toBe(expected.truncated)
-      expect(actual.newCompleteLines, `round ${round} newLines`).toBe(expected.newCompleteLines)
-      expect(actual.newlyCompletedLines, `round ${round} completedLines`).toEqual(
-        expected.newlyCompletedLines
-      )
+  it('matches the reference when a chunk repeats multi-row repaint frames', () => {
+    const rng = mulberry32(7)
+    for (let round = 0; round < 80; round++) {
+      // Why below the cap: both paths trim a full tail differently mid-chunk, which is out of scope.
+      const tail = randomTail(rng, 1900)
+      const partial = rng() < 0.5 ? `partial ${'z'.repeat(Math.floor(rng() * 30))}` : ''
+      const redrawCursor =
+        rng() < 0.3 ? { rowFromEnd: Math.floor(rng() * 20), column: Math.floor(rng() * 40) } : null
+      // Why repeated frames: their summed cursor-ups exceed the tail while the net reach does not,
+      // so only the net-reach window keeps these chunks windowed.
+      const panelRows = 1 + Math.floor(rng() * 30)
+      const frame = `\x1b[${panelRows}A${Array.from(
+        { length: panelRows + Math.floor(rng() * 3) - 1 },
+        () => `\r${randomRedrawChunk(rng).replace(/\n/g, '')}\n`
+      ).join('')}`
+      const chunk = frame.repeat(1 + Math.floor(rng() * 40))
+
+      expectMatchesUnwindowed(tail, partial, chunk, redrawCursor, `round ${round}`)
     }
   })
 })

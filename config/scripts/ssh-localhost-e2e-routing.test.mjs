@@ -38,8 +38,8 @@ it('selects the localhost journey for its remote hook authorities', () => {
   const spec = 'tests/e2e/ssh-localhost.spec.ts'
   for (const file of [
     'src/relay/relay-agent-hook-runtime.ts',
-    'src/relay/agent-hook-server.ts',
-    'src/relay/plugin-overlay.ts',
+    'src/wsl-guest/agent-hook-server.ts',
+    'src/wsl-guest/plugin-overlay.ts',
     'src/main/agent-hooks/server.ts',
     'src/main/ssh/ssh-relay-session.ts',
     'src/shared/agent-hook-relay.ts'

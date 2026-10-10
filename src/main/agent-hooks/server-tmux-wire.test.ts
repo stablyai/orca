@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { PANE } from './server.test-fixtures'
-import { buildRelayHookEnvelope } from '../../relay/agent-hook-envelope-build'
+import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))

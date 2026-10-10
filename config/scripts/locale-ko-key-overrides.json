@@ -1784,6 +1784,9 @@
   "auto.components.right.sidebar.FileExplorerRow.3161c4e425": {
     "ko": "폴더"
   },
+  "auto.components.right.sidebar.FileExplorerRow.revealInFinder": {
+    "ko": "Finder에서 보기"
+  },
   "auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2": {
     "ko": "{{value0}} commit 열기: {{value1}}"
   },

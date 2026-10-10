@@ -1,6 +1,16 @@
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
+// Only a relay-hello refusal is the relay's verdict on a credential; a bare 4401
+// close also covers a first-frame timeout, which proves nothing about it.
+export function isExplicitCredentialRejection(error: unknown): boolean {
+  return (
+    error instanceof RelayOuterError &&
+    error.rejectedByRelayHello &&
+    error.code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
+  )
+}
+
 type RelayCredentialLease = { expiresAt: number; version: number }
 
 // Why: only a rejected outer credential can be repaired by the grace token;

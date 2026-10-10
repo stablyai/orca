@@ -19,7 +19,7 @@ import {
   expandQuickOpenGitFileListing,
   parseQuickOpenGitLsFilesEntry
 } from '../shared/quick-open-readdir-walk'
-import { buildRelayGitEnv } from './relay-command-env'
+import { buildRelayGitEnv } from '../wsl-guest/relay-command-env'
 
 /**
  * List files using `git ls-files`. Fallback when rg is not installed.

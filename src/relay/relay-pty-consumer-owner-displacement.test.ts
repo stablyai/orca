@@ -3,8 +3,8 @@ import {
   RelayDispatcher,
   type RelayClientSessionIdentity,
   type SinkWriteSettlement
-} from './dispatcher'
-import { encodeJsonRpcFrame, MessageType } from './protocol'
+} from '../wsl-guest/dispatcher'
+import { encodeJsonRpcFrame, MessageType } from '../wsl-guest/protocol'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import {
   PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR,

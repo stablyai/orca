@@ -17,14 +17,14 @@ const BUILD_PREFIXES = [
   '.github/actions/prepare-orcad-prebuilds/'
 ]
 // A remote target's OS does not identify the client platform that builds its commands.
-const CROSS_HOST_PREFIXES = ['src/main/ssh/', 'src/main/providers/', 'src/relay/']
+const CROSS_HOST_PREFIXES = ['src/main/ssh/', 'src/main/providers/', 'src/relay/', 'src/wsl-guest/']
 const PLATFORM_PREFIXES = [
   'src/main/persistence/',
   'src/main/sqlite/',
   'src/main/orcad/',
   'src/main/daemon/',
   'src/main/wsl/',
-  'src/shared/child-process/'
+  'src/packages/process-host/'
 ]
 
 const PLATFORM_FAMILIES = [

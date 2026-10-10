@@ -11,9 +11,11 @@ vi.mock('../claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: calls.keychain
 }))
 const profileRouter = vi.hoisted((): { userConfigDir?: string } => ({}))
+const wslRouter = vi.hoisted(() => ({ accountUsagePreparation: vi.fn() }))
 vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
   getClaudeProfileRouter: () =>
-    profileRouter.userConfigDir ? { userConfigDir: () => profileRouter.userConfigDir } : undefined
+    profileRouter.userConfigDir ? { userConfigDir: () => profileRouter.userConfigDir } : undefined,
+  getClaudeWslProfileRouter: () => wslRouter
 }))
 vi.mock('./claude-oauth-usage-request', () => ({ fetchClaudeOAuthUsage: calls.usage }))
 const runningDistros = vi.hoisted(() => ({
@@ -22,7 +24,7 @@ const runningDistros = vi.hoisted(() => ({
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: runningDistros.filter
 }))
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   spawnProcess: () => {
     throw new Error('Usage must not launch a process')
   },
@@ -51,7 +53,6 @@ function profile() {
     authPreparation: {
       configDir: home,
       envPatch: { CLAUDE_CONFIG_DIR: home },
-      stripAuthEnv: true,
       provenance: 'profile:fake'
     }
   }
@@ -64,7 +65,7 @@ function systemDefault() {
   return {
     home,
     options: {
-      authPreparation: { configDir: home, envPatch: {}, stripAuthEnv: false, provenance: 'system' }
+      authPreparation: { configDir: home, envPatch: {}, provenance: 'system' }
     }
   }
 }
@@ -198,7 +199,6 @@ it("reads System default's own CLAUDE_CONFIG_DIR Keychain item before the unsuff
       resolveClaudeOAuthCredentialReadOptions({
         configDir: inherited,
         envPatch: {},
-        stripAuthEnv: false,
         provenance: 'system'
       })
     )
@@ -221,7 +221,6 @@ it("names System default's Keychain item from the login shell's CLAUDE_CONFIG_DI
       resolveClaudeOAuthCredentialReadOptions({
         configDir: '/shell/claude-config',
         envPatch: {},
-        stripAuthEnv: false,
         provenance: 'system'
       })?.keychainConfigDir
     ).toBe('/shell/claude-config')
@@ -241,31 +240,39 @@ it('reports a host problem as unavailable usage, never as a signed-out account',
     })
   ).toMatchObject({ status: 'error', usageMetadata: { failureKind: 'usage-unavailable' } })
 })
-it('asks an inactive account from an older Orca to sign in again, reading nothing', async () => {
+it('reads an inactive WSL account where the WSL router says its launches would run', async () => {
   const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')
-  expect(
-    await fetchInactiveClaudeAccountUsage({
-      id: 'acct',
-      managedAuthRuntime: 'wsl',
-      wslDistro: 'Ubuntu',
-      wslLinuxAuthPath: '/home/u/.local/share/orca/claude-accounts/acct/auth'
-    })
-  ).toMatchObject({ usageMetadata: { failureKind: 'missing-credentials' } })
-  expect(calls.keychain).not.toHaveBeenCalled()
+  const authPreparation = {
+    configDir: '\\\\wsl.localhost\\Ubuntu\\home\\u\\.claude',
+    runtime: 'wsl' as const,
+    wslDistro: 'Ubuntu',
+    envPatch: {},
+    provenance: 'wsl:Ubuntu:system'
+  }
+  wslRouter.accountUsagePreparation.mockResolvedValueOnce(authPreparation)
+  calls.usage.mockResolvedValueOnce({ five_hour: null, seven_day: null })
+  await fetchInactiveClaudeAccountUsage({
+    id: 'acct',
+    managedAuthRuntime: 'wsl',
+    wslDistro: 'Ubuntu',
+    wslLinuxAuthPath: '/home/u/.local/share/orca/claude-accounts/acct/auth'
+  })
+  expect(wslRouter.accountUsagePreparation).toHaveBeenCalledWith('Ubuntu', 'acct')
 })
 it('does not read an inactive WSL account through a stopped distro', async () => {
   const { fetchInactiveClaudeAccountUsage } = await import('./claude-managed-account-usage')
   runningDistros.filter.mockResolvedValueOnce([])
+  wslRouter.accountUsagePreparation.mockClear()
   const result = await fetchInactiveClaudeAccountUsage({
     id: 'acct',
     managedAuthRuntime: 'wsl',
     wslDistro: 'Ubuntu',
     wslLinuxAuthPath: '/home/u/.local/share/orca/claude-profiles/acct/home'
   })
-  expect(runningDistros.filter).toHaveBeenCalledWith(
-    ['\\\\wsl.localhost\\Ubuntu\\home\\u\\.local\\share\\orca\\claude-profiles\\acct\\home'],
-    { requireConfirmed: true }
-  )
+  expect(runningDistros.filter).toHaveBeenCalledWith(['\\\\wsl.localhost\\Ubuntu\\'], {
+    requireConfirmed: true
+  })
   expect(result).toMatchObject({ usageMetadata: { failureKind: 'usage-unavailable' } })
+  expect(wslRouter.accountUsagePreparation).not.toHaveBeenCalled()
   expect(calls.keychain).not.toHaveBeenCalled()
 })

@@ -1,6 +1,6 @@
 import { readFile, readdir, readlink } from 'node:fs/promises'
 import { getProcessOutputFields } from '../shared/process-output-field-scanner'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import { scanWindowsListeningPorts } from './windows-port-scan'
 
 // Keep in sync with src/shared/ssh-types.ts — DetectedPort
@@ -40,8 +40,8 @@ export class PortScanHandler {
   private async scanLinuxListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
     signal?.throwIfAborted()
     const [tcp4, tcp6] = await Promise.all([
-      this.readProcNet('/proc/net/tcp', signal),
-      this.readProcNet('/proc/net/tcp6', signal)
+      this.readProcNet('/proc/net/tcp', signal, false),
+      this.readProcNet('/proc/net/tcp6', signal, true)
     ])
     signal?.throwIfAborted()
 
@@ -97,15 +97,21 @@ export class PortScanHandler {
 
   private async readProcNet(
     path: string,
-    signal?: AbortSignal
+    signal: AbortSignal | undefined,
+    absentMeansNone: boolean
   ): Promise<{ port: number; host: string; inode: number }[]> {
     signal?.throwIfAborted()
     let content: string
     try {
       content = await readFile(path, 'utf-8')
-    } catch {
+    } catch (error) {
       signal?.throwIfAborted()
-      return []
+      // Why: tcp6 is absent when IPv6 is off; any other failure means the listeners were never
+      // read, which must not be reported as "none listening".
+      if (absentMeansNone && error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return []
+      }
+      throw new Error(`Could not read ${path} to list listening ports.`)
     }
     signal?.throwIfAborted()
 

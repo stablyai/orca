@@ -5,10 +5,7 @@ import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
-import {
-  consumeHangDetectionMarker,
-  hangDetectionMarkerPath
-} from '../hang-watchdog/hang-detection-marker'
+import { preservePreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
 import { browserCertificateTrustController } from '../browser/browser-manager'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence'
@@ -41,7 +38,6 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { syncMacMenuBarIcon } from './main-window-actions'
 import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import { reconcileManagedWslCliRegistrations } from '../cli/wsl-cli-registration-reconciliation'
@@ -49,6 +45,7 @@ import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliati
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { reportProfileStateWriteFailure } from './profile-state-write-failure'
+import { reportProfileStateSaveDelay } from './profile-state-save-delay'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -66,15 +63,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     )
   })
   const canonicalUserDataPath = getCanonicalUserDataPath()
+  preservePreviousHangDetection(canonicalUserDataPath)
   installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
-  state.hangDetection = consumeHangDetectionMarker(hangDetectionMarkerPath(canonicalUserDataPath))
-  if (state.hangDetection) {
-    recordDurableCrashBreadcrumb('main_thread_hang_detected', {
-      unresponsiveMs: state.hangDetection.unresponsiveMs,
-      previousPid: state.hangDetection.parentPid,
-      selfRecovered: state.hangDetection.selfRecovered
-    })
-  }
   // Why: install certificate decisions before any webview or headless window issues its first TLS request.
   app.on(
     'certificate-error',
@@ -140,7 +130,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     profileId: profile.profile.id,
     runtime: 'desktop',
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
-    onPersistenceFailure: reportProfileStateWriteFailure
+    onPersistenceFailure: reportProfileStateWriteFailure,
+    onPersistenceSaveDelayChanged: reportProfileStateSaveDelay
   })
   state.profileStateStartup = {
     backend: profileState.backend,

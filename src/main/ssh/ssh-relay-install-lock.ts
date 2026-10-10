@@ -1,5 +1,5 @@
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { isRelayGcClaimed, waitForRelayGcClaimRelease } from './ssh-relay-gc-claim'
@@ -45,16 +45,16 @@ export class RemoteInstallLockBusyError extends Error {
   }
 }
 
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  options?: { signal?: AbortSignal }
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell',
-    signal: options?.signal
-  })
+// Why: an unconfirmed termination may have run remotely, so it never becomes a fallback.
+async function unlessUnconfirmed<T>(work: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await work
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    return fallback
+  }
 }
 
 export async function isRelayInstallLockStale(
@@ -62,18 +62,14 @@ export async function isRelayInstallLockStale(
   lockDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<boolean> {
-  try {
-    // Why: remote time avoids clock skew between Orca clients making a live
-    // repair lock look old enough for GC or another installer to recover.
-    const out = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir))
-    const ageSec = Number.parseInt(out.trim(), 10)
-    return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
-  } catch (err) {
-    if (isUnconfirmedSshCommandTermination(err)) {
-      throw err
-    }
-    return false
-  }
+  // Why: remote time avoids clock skew between Orca clients making a live
+  // repair lock look old enough for GC or another installer to recover.
+  const out = await unlessUnconfirmed(
+    execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir)),
+    ''
+  )
+  const ageSec = Number.parseInt(out.trim(), 10)
+  return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
 }
 
 /**
@@ -109,6 +105,16 @@ export async function acquireInstallLock(
     relayGcClaim
       ? isRelayGcClaimed(conn, remoteRelayDir, host, options?.signal)
       : Promise.resolve(false)
+  // Why: GC may claim the sibling path between our probe and taking the lock.
+  // Recheck while holding the in-tree lock; one side backs off.
+  const keptAfterGcRecheck = async (): Promise<boolean> => {
+    if (!(await unlessUnconfirmed(isClaimed(), true)) && !options?.signal?.aborted) {
+      return true
+    }
+    await unlessUnconfirmed(execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)), '')
+    options?.signal?.throwIfAborted()
+    return false
+  }
 
   const start = Date.now()
   // Busy means a holder answered; a lock command that only ever failed reports its own error.
@@ -131,28 +137,10 @@ export async function acquireInstallLock(
       const result = await execHostCommand(conn, host, createCommand, {
         signal: options?.signal
       })
-      if (!result.trim().endsWith('OK')) {
-        sawHolder = true
-      } else {
-        // Why: GC may claim the sibling path between our first probe and lock
-        // creation. Recheck while holding the in-tree lock; one side backs off.
-        const claimedAfterAcquire = await isClaimed().catch((err) => {
-          if (isUnconfirmedSshCommandTermination(err)) {
-            throw err
-          }
-          return true
-        })
-        if (!claimedAfterAcquire && !options?.signal?.aborted) {
-          return
-        }
-        sawHolder = true
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch((err) => {
-          if (isUnconfirmedSshCommandTermination(err)) {
-            throw err
-          }
-        })
-        options?.signal?.throwIfAborted()
+      if (result.trim().endsWith('OK') && (await keptAfterGcRecheck())) {
+        return
       }
+      sawHolder = true
     } catch (err) {
       if (isUnconfirmedSshCommandTermination(err)) {
         throw err
@@ -169,23 +157,21 @@ export async function acquireInstallLock(
       const exitedOwner = await exitedOwnerFor(lockDir, options)
       // Why: recover an already-stale lock immediately, then keep checking in
       // case a fresh holder crosses the stale threshold while we are waiting.
-      const steal = await execHostCommand(
-        conn,
-        host,
-        tryStealInstallLockCommand(
+      const steal = await unlessUnconfirmed(
+        execHostCommand(
+          conn,
           host,
-          lockDir,
-          INSTALL_LOCK_STALE_SECONDS,
-          options?.owner,
-          exitedOwner
+          tryStealInstallLockCommand(
+            host,
+            lockDir,
+            INSTALL_LOCK_STALE_SECONDS,
+            options?.owner,
+            exitedOwner
+          ),
+          { signal: options?.signal }
         ),
-        { signal: options?.signal }
-      ).catch((err) => {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          throw err
-        }
-        return 'BUSY'
-      })
+        'BUSY'
+      )
       options?.signal?.throwIfAborted()
       if (steal.trim().endsWith('OK')) {
         const reason = steal.trim().endsWith('REBOOT_OK')
@@ -197,21 +183,9 @@ export async function acquireInstallLock(
           options?.exitedOwner?.reclaimed(exitedOwner.token)
         }
         console.warn(`[ssh-relay] Stealing ${reason} install lock at ${lockDir}`)
-        const claimedAfterSteal = await isClaimed().catch((err) => {
-          if (isUnconfirmedSshCommandTermination(err)) {
-            throw err
-          }
-          return true
-        })
-        if (!claimedAfterSteal && !options?.signal?.aborted) {
+        if (await keptAfterGcRecheck()) {
           return
         }
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch((err) => {
-          if (isUnconfirmedSshCommandTermination(err)) {
-            throw err
-          }
-        })
-        options?.signal?.throwIfAborted()
       }
     }
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {

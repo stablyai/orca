@@ -2,7 +2,7 @@ import {
   REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
   REMOTE_WORKSPACE_STALE_NOTIFICATION
 } from '../shared/remote-workspace-types'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import {
   createRelayClientResyncMarkerPublisher,
   type RelayClientResyncMarkerPublisher

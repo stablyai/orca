@@ -21,6 +21,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import process from 'node:process'
 import { isTestOnlyDirectoryName, isTestOnlySourcePath } from './test-only-source-path.mjs'
+import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 
 // Why absolute, not cwd-relative: `pnpm lint` runs from the repo root but CI steps and
 // editors do not always, and a cwd-relative miss surfaced as an unhandled ENOENT stack
@@ -47,6 +48,7 @@ export const STRUCTURED_CHAT_LANES = [
   { directory: ['src', 'main', 'claude'] },
   { directory: ['src', 'main', 'codex'] },
   { directory: ['src', 'shared'] },
+  { directory: ['src', 'packages', 'process-host', 'src'] },
   { directory: ['src', 'main', 'runtime'], basename: /^(?:structured-|agent-session-)/ },
   { directory: ['src', 'main', 'provider-process'] },
   { directory: ['src', 'main', 'acp'] },
@@ -114,6 +116,16 @@ const externalNativeAddons = {
 
 // Why `plugins`: lets a test add an Electron import to a real file in memory, never on disk.
 export async function collectElectronImporters(entryPoints, { plugins = [] } = {}) {
+  const workspace = createWorkspaceSourceResolver(ROOT)
+  const workspaceSources = {
+    name: 'runtime-workspace-sources',
+    setup(pluginBuild) {
+      pluginBuild.onResolve({ filter: /^@orca\// }, ({ path: specifier }) => {
+        const source = workspace.resolve(specifier)
+        return source ? { path: source.path } : undefined
+      })
+    }
+  }
   const result = await build({
     // Export every entry through one bundle so shared dependencies are emitted once.
     stdin: {
@@ -137,7 +149,7 @@ export async function collectElectronImporters(entryPoints, { plugins = [] } = {
     metafile: true,
     absWorkingDir: ROOT,
     logLevel: 'silent',
-    plugins: [externalNativeAddons, ...plugins]
+    plugins: [externalNativeAddons, workspaceSources, ...plugins]
   })
   const importers = new Set()
   for (const [file, info] of Object.entries(result.metafile.inputs)) {

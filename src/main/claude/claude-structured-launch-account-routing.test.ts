@@ -49,7 +49,7 @@ it('launches each acquisition under the current selection, not the account it wa
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
-    resolveAuthPolicy: () => ({ stripAuthEnv: false })
+    resolveAuthPolicy: () => ({ account: 'system' })
   })
   const identity = {
     sessionId: record.sessionId,
@@ -115,7 +115,7 @@ function routedResumeFixture() {
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
-    resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveAuthPolicy: () => ({ account: 'system' }),
     hasTranscript: async ({ claudeConfigDir }) => transcriptHomes.has(claudeConfigDir)
   })
   const identity = {

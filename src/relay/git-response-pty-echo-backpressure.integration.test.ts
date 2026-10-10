@@ -27,11 +27,11 @@ import {
 } from '../main/ssh/ssh-channel-multiplexer'
 import { requestGitStreamable } from '../main/ssh/ssh-git-response-stream-reader'
 
-import { RelayDispatcher } from './dispatcher'
-import type { SinkWriteSettlement } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import type { SinkWriteSettlement } from '../wsl-guest/dispatcher'
 import { RelayContext } from './context'
 import { GitHandler } from './git-handler'
-import { GIT_RESPONSE_CHUNK_SIZE } from './protocol'
+import { GIT_RESPONSE_CHUNK_SIZE } from '../wsl-guest/protocol'
 
 // One framed git.responseChunk: base64 (4/3) + JSON envelope + header slack.
 const FRAMED_CHUNK_BYTES = Math.ceil((GIT_RESPONSE_CHUNK_SIZE * 4) / 3) + 512

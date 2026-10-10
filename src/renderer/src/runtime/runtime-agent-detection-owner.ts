@@ -34,10 +34,9 @@ export function runtimeAgentDetectionOwnerIsCurrent(
 }
 
 export function runtimeAgentDetectionCacheMatchesOwner(
-  ownerKeys: Record<string, string>,
+  cachedOwnerKey: string | undefined,
   owner: RuntimeAgentDetectionOwner
 ): boolean {
-  const cachedOwnerKey = ownerKeys[owner.environmentId]
   return (
     cachedOwnerKey === runtimeAgentDetectionOwnerKey(owner) ||
     (cachedOwnerKey === undefined && owner.pairingRevision === undefined)

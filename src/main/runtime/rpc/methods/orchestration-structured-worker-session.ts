@@ -20,6 +20,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
@@ -79,13 +80,18 @@ export function releaseStructuredWorkerSession(
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
-  agent: 'claude' | 'codex'
+  agent: TuiAgent
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
   /** Retried whenever the session's journal moves, which is the structured idle edge. */
   onJournalActivity: (sessionId: string) => void
-}): Promise<{ identity: StructuredWorkerIdentity; host: StructuredAgentSessionHost }> {
+}): Promise<{
+  identity: StructuredWorkerIdentity
+  host: StructuredAgentSessionHost
+  /** The lease the create was admitted at. */
+  fence: number
+}> {
   const sessionId = randomUUID()
   // Registered BEFORE the session is created, because `attach` is what spawns the provider child
   // and the child's environment is read from this registry at spawn time. Registering afterwards
@@ -148,7 +154,7 @@ export async function createStructuredWorkerSession(args: {
       handle: identity.handle,
       disposeSubscription
     })
-    return { identity, host }
+    return { identity, host, fence: created.value.fence }
   } catch (error) {
     // A start that fails after the session exists would otherwise strand a live provider child
     // that no dispatch owns and that nothing else in the runtime will ever retire.

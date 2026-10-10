@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import {
   getExplorerDisplayRootOptions,
@@ -30,6 +33,7 @@ import {
 } from './file-explorer-name-filter-projection'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
@@ -45,8 +49,18 @@ function FileExplorerFiles(): React.JSX.Element {
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+  )
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  // Why: a folder workspace has no repo row, so only the catalog owner names its SSH host.
+  const openInOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, activeWorktreeId, {
+      connectionId: activeRepo?.connectionId,
+      runtimeEnvironmentId
+    })
+  )
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
   const activeFileId = useAppStore((s) => s.activeFileId)
@@ -248,7 +262,7 @@ function FileExplorerFiles(): React.JSX.Element {
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
-          connectionId={activeRepo?.connectionId ?? null}
+          {...getRouteForLocalPathOpenOwner(openInOwner)}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
@@ -376,7 +390,11 @@ function FileExplorerFiles(): React.JSX.Element {
 const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
 
 function FileExplorer(): React.JSX.Element {
-  return <FileExplorerFilesMemo />
+  const ownerKey = useAppStore((state) =>
+    JSON.stringify(getFileExplorerOperationOwnerFromState(state, state.activeWorktreeId))
+  )
+  // Different hosts can expose the same path; their explorer caches must have separate lifetimes.
+  return <FileExplorerFilesMemo key={ownerKey} />
 }
 
 export default React.memo(FileExplorer)

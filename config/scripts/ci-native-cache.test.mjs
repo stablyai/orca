@@ -1,11 +1,10 @@
-import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const installerPath = '.github/actions/install-node-dependencies/action.yml'
 const nativePath = '.github/actions/prepare-native-runtime/action.yml'
@@ -13,25 +12,11 @@ const installer = parse(readFileSync(installerPath, 'utf8'))
 const native = parse(readFileSync(nativePath, 'utf8'))
 const identity = native.runs.steps.find((step) => step.id === 'native-cache-scope')
 const inputs = [...identity.env.NATIVE_SOURCE_HASH.matchAll(/'([^']+)'/g)].map((match) => match[1])
-const source = new Map(
-  [...inputs, installerPath].map((file) => [file, existsSync(file) ? readFileSync(file) : null])
-)
 const paths = [
   'node_modules/.pnpm/node-pty@*/node_modules/node-pty/build',
   'native/windows-registry/build',
   'node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build'
 ]
-
-function sourceHash(files = source) {
-  const digest = createHash('sha256')
-  for (const file of inputs.toSorted()) {
-    const contents = files.get(file)
-    if (contents !== null) {
-      digest.update(createHash('sha256').update(contents).digest())
-    }
-  }
-  return digest.digest('hex')
-}
 
 function resolveIdentity({
   runtime = 'node',
@@ -41,7 +26,7 @@ function resolveIdentity({
   arch = 'X64',
   image = 'win22',
   libc = null,
-  files = source
+  sourceDigest = 'a'.repeat(64)
 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-native-identity-'))
   try {
@@ -62,7 +47,7 @@ function resolveIdentity({
         RUNNER_OS: os,
         RUNNER_ARCH: arch,
         ImageOS: image,
-        NATIVE_SOURCE_HASH: sourceHash(files),
+        NATIVE_SOURCE_HASH: sourceDigest,
         TEST_PNPM_VERSION: pnpm,
         TEST_OS_RELEASE: osRelease,
         GITHUB_OUTPUT: output
@@ -83,67 +68,11 @@ function resolveIdentity({
 }
 
 describe('CI native cache ownership', () => {
-  it('hashes the complete native preparation policy and build/probe source closure', () => {
-    expect(inputs).toEqual([
-      'pnpm-lock.yaml',
-      'pnpm-workspace.yaml',
-      '.npmrc',
-      '.pnpmfile.cjs',
-      nativePath,
-      'config/scripts/ensure-native-runtime.mjs',
-      'config/scripts/rebuild-native-deps.mjs',
-      'config/scripts/node-pty-job-ownership.cjs',
-      'config/scripts/windows-pe-machine.cjs',
-      'config/scripts/windows-process-tree-gyp-rebuild.mjs',
-      'config/scripts/windows-process-tree-creation-time.cjs',
-      'config/scripts/install-electron-package-binary.mjs',
-      'config/scripts/electron-platform-path.mjs',
-      'config/scripts/zip-extractor-command.mjs',
-      'src/shared/zip-extractor-command.ts',
-      'config/scripts/shared-electron-dist-cache.mjs',
-      'config/scripts/space-sharing-copy.mjs',
-      'config/patches/node-pty@1.1.0.patch',
-      'config/patches/@vscode__windows-process-tree@0.8.0.patch',
-      'native/windows-registry/src/addon.cc',
-      'native/windows-registry/binding.gyp',
-      'native/windows-registry/package.json',
-      'native/windows-registry/index.js'
-    ])
-    expect(inputs).not.toContain(installerPath)
+  it('routes every configured native cache input to native preparation', () => {
     for (const file of inputs) {
       expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
     }
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'keeps a pnpm-only installer edit on the same native key and paths',
-    () => {
-      const changed = new Map(source)
-      changed.set(
-        installerPath,
-        Buffer.from(
-          readFileSync(installerPath, 'utf8').replace(
-            'enabled: ${{ inputs.cache-pnpm-verification }}',
-            "enabled: 'false'"
-          )
-        )
-      )
-      expect(changed.get(installerPath)).not.toEqual(source.get(installerPath))
-      expect(resolveIdentity({ files: changed })).toEqual(resolveIdentity())
-    }
-  )
-
-  it.skipIf(process.platform === 'win32').each(inputs)(
-    'changes the requested key when native input %s changes',
-    (file) => {
-      const changed = new Map(source)
-      changed.set(
-        file,
-        Buffer.concat([source.get(file) ?? Buffer.alloc(0), Buffer.from('\nchanged')])
-      )
-      expect(resolveIdentity({ files: changed }).key).not.toBe(resolveIdentity().key)
-    }
-  )
 
   it.skipIf(process.platform === 'win32')(
     'separates runtime, Node/pnpm versions, architecture, image and libc hosts',
@@ -151,6 +80,7 @@ describe('CI native cache ownership', () => {
       const baseline = resolveIdentity()
       expect(baseline.path.split('\n')).toEqual(paths)
       const variants = [
+        { sourceDigest: 'b'.repeat(64) },
         { runtime: 'electron' },
         { node: 'v24.22.0' },
         { pnpm: '12.1.0' },

@@ -7,7 +7,7 @@ import {
 } from '../../shared/agent-session-journal-types'
 import {
   journalLifecycleItemMutation,
-  type JournalLifecycleMutationInput
+  type JournalLifecycleIdentityMutationInput
 } from '../native-chat/agent-session-journal/journal-row-builders'
 import type {
   StructuredAgentSessionEventSink,
@@ -52,7 +52,7 @@ export function settleCodexJournalSession(input: {
   now?: () => number
 }): StructuredAgentSessionSinkAdmission {
   // Rows from every thread settle in this one batch, so each names its own producer.
-  const mutations: JournalLifecycleMutationInput[] = []
+  const mutations: JournalLifecycleIdentityMutationInput[] = []
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
   for (const active of input.activeItems.values()) {
     // The host saw the child go, so its work was cut short.
@@ -118,9 +118,9 @@ export function settleCodexJournalTurn(input: {
   clearPromptTurn?: (threadId: string, turnId: string) => void
   attributionFor: CodexRowAttribution
   /** The end of a conversation command the turn carried, which settles with it. */
-  commandEnd?: readonly JournalLifecycleMutationInput[]
+  commandEnd?: readonly JournalLifecycleIdentityMutationInput[]
 }): StructuredAgentSessionSinkAdmission {
-  const mutations: JournalLifecycleMutationInput[] = []
+  const mutations: JournalLifecycleIdentityMutationInput[] = []
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
   const pendingPromptsToForget: string[] = []
   const pendingPrompts = input.pendingPrompts ?? new Map<string, CodexPendingJournalPrompt>()
@@ -184,7 +184,7 @@ function settledRow(
   attributionFor: CodexRowAttribution,
   row: { threadId: string; turnId: string | null; identity: AgentJournalItemIdentity },
   body: AgentJournalItemBody
-): JournalLifecycleMutationInput {
+): JournalLifecycleIdentityMutationInput {
   return journalLifecycleItemMutation(attributionFor(row.threadId, row.turnId), row.identity, body)
 }
 

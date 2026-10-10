@@ -3,10 +3,9 @@ import {
   getLocalBuildCompatibilityError,
   type LocalBuildCompatibility
 } from '../../shared/local-build-compatibility'
-import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import { getDaemonProvider } from '../daemon/daemon-init'
+import { getAllDaemonAdapters } from '../daemon/daemon-provider-routing'
 import { getLocalPtyProvider } from '../ipc/pty'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 
@@ -38,10 +37,8 @@ async function getLiveDaemonProtocols(): Promise<{
       'Local build switching is blocked while the terminal service is in fallback mode. Restart Orca first.'
     )
   }
-  const adapters =
-    provider instanceof DaemonPtyRouter ? provider.getAllAdapters() : [provider as DaemonPtyAdapter]
   const sessions = await Promise.all(
-    adapters.map(async (adapter) => ({
+    getAllDaemonAdapters(provider).map(async (adapter) => ({
       protocol: adapter.protocolVersion,
       count: (await adapter.listSessions()).length
     }))

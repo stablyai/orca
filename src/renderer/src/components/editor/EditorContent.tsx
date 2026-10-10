@@ -3,6 +3,8 @@ import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/sl
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import { NativeChatVisualTab } from '../native-chat/NativeChatVisualTab'
+import { NativeChatVisualUnavailable } from '../native-chat/NativeChatInlineVisual'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
@@ -149,6 +151,15 @@ export function EditorContent({
           void reloadOpenCheckRunDetailsTab(activeFile.id)
         }}
       />
+    )
+  }
+
+  if (activeFile.mode === 'chat-visual') {
+    // Why key: a different visual is a different frame, never a reused one.
+    return activeFile.chatVisual ? (
+      <NativeChatVisualTab key={activeFile.id} visual={activeFile.chatVisual} />
+    ) : (
+      <NativeChatVisualUnavailable />
     )
   }
 

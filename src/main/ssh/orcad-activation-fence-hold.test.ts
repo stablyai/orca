@@ -15,8 +15,7 @@ vi.mock('./orcad-activation-transaction-store', () => ({
 }))
 vi.mock('./orcad-activation-lock', () => ({
   orcadActivationFenceExists: mocks.fence,
-  withStaleOrcadActivationRecoveryLock: mocks.takeover,
-  orcadActivationTransactionRoot: () => '/home/u/.orca-remote/.orcad-activation-transaction'
+  withStaleOrcadActivationRecoveryLock: mocks.takeover
 }))
 
 const { orcadActivationFenceRefusal } = await import('./orcad-activation-fence-hold')

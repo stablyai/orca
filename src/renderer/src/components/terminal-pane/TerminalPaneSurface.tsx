@@ -27,7 +27,8 @@ import {
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { useAppStore } from '@/store'
-import { isTerminalPaneOnClient } from './terminal-pane-client-host'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 export function TerminalPaneSurface({
   controller
@@ -118,14 +119,16 @@ export function TerminalPaneSurface({
     visibleTerminalError,
     worktreeId
   } = controller
-  const paneOnClient = useAppStore((state) => isTerminalPaneOnClient(state, worktreeId))
+  // Why: an SSH, runtime, or not-yet-known host must not be described with this client's OS/shell.
+  const paneOnClient = useAppStore(
+    (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
+  )
 
   return (
     <>
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
-        data-os-file-drop-boundary=""
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}

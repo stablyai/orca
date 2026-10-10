@@ -2,6 +2,8 @@
 import { OrcaRuntimeWithOnPtyExit } from './orca-runtime-on-pty-exit'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { DriverState } from './orca-runtime-core'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import { isUntypedTerminalInput } from './terminal-run-facts'
 import { clampTerminalViewport } from './terminal-viewport'
 import { getPtyTerminalState, getTerminalState } from './terminal-wait-results'
 
@@ -245,6 +247,12 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   claimRemoteDesktopHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
     return this.remoteDesktopFloor.claimHost(ptyId, cols, rows)
+  }
+
+  noteRemoteDesktopHostInput(ptyId: string, inputKind: TerminalInputKind, data: string): void {
+    if (inputKind === 'driving' && !isUntypedTerminalInput(data)) {
+      this.remoteDesktopFloor.noteHostInput(ptyId)
+    }
   }
 
   unregisterRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {

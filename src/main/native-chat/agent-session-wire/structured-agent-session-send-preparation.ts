@@ -1,14 +1,13 @@
 // What a send or a Stop needs from the session before the ledger places its row: the
 // conversation open. Nothing here needs an owner — a send is accepted into the conversation and
 // the delivery loop makes the session ready — so a refusal before acceptance is only one the
-// conversation itself makes: a rewind in doubt, a cleared conversation, or a journal that cannot be
+// conversation itself makes: a rewind in doubt or a journal that cannot be
 // opened.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  refuse,
-  type AgentSessionMutationEnvelope,
-  type AgentSessionWireRefusal
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -42,23 +41,6 @@ export function structuredAgentSessionSendBlock(
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
   if (rewindInDoubt(record)) {
     return rewindRefusal('outcome-unknown')
-  }
-  const command = record?.conversationCommand
-  // Only a committed clear: one that never committed changed nothing, and an older build's
-  // unconfirmed record is one of those.
-  if (
-    command?.command === 'clear' &&
-    command.phase === 'committed' &&
-    command.replacementSessionId
-  ) {
-    return {
-      ok: false,
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'conversationCleared' },
-        'This conversation has been cleared. Use the current conversation.'
-      )
-    }
   }
   return null
 }
@@ -117,15 +99,20 @@ export function openForProviderWrite(
 /** For an operation only the provider can perform: the conversation, then its agent. */
 export function openWithAgent(
   context: Pick<StructuredAgentSessionMutationContext, 'openConversation' | 'ensureAgent' | 'deps'>,
-  envelope: AgentSessionMutationEnvelope
-): () => Promise<AgentSessionMutationSessionPreparation> {
-  return async () => {
+  envelope: AgentSessionMutationEnvelope,
+  beforeAgent?: () => AgentSessionMutationSessionPreparation
+): (ledger: 'admit' | 'replay') => Promise<AgentSessionMutationSessionPreparation> {
+  return async (ledger) => {
     const opened = await openConversationForWrite(
       context.openConversation,
       envelope,
       context.deps.logger
     )
-    return opened.ok ? context.ensureAgent(envelope.sessionId) : opened
+    if (!opened.ok || ledger === 'replay') {
+      return opened
+    }
+    const checked = beforeAgent?.()
+    return checked && !checked.ok ? checked : context.ensureAgent(envelope.sessionId)
   }
 }
 

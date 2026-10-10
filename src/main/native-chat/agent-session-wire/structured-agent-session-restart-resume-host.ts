@@ -3,6 +3,7 @@
 // action removes them — or files what went wrong. Starting the chat's agent again withdraws them.
 
 import { randomUUID } from 'node:crypto'
+import { createRestartResumeProgress } from './structured-agent-session-restart-resume-progress'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalFromReference
@@ -139,13 +140,14 @@ export function createStructuredAgentSessionRestartResume(
     stillResumable: (marker) => deriveAtSend([marker], 'may-be-held').candidates.length === 1
   }
 
-  /** One explicit action: reserve the offers, then continue each through `continueOne`, a few at
-   *  a time. The runner counts a chat as done once `continueOne` returns. */
+  /** One explicit action: reserve the offers, then continue each through `continueOne`, as many at
+   *  once as the admission's host-wide start limit allows. A chat is done once `continueOne` returns. */
   const run = async (
     sessionIds: readonly string[] | undefined,
     owner: string,
     audience: StructuredAgentSessionRestartAudience | undefined,
-    continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>
+    continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
+    progress: ReturnType<typeof createRestartResumeProgress>
   ) => {
     // An explicit action supersedes teardown witnesses captured by this host. The durable mutation
     // lane below also drains a publication already in flight before completion.
@@ -159,6 +161,7 @@ export function createStructuredAgentSessionRestartResume(
     const eligible = restartRowsFor(derived.candidates, audience).filter((candidate) =>
       requested.has(candidate.sessionId)
     )
+    progress.skipExcluded(sessionIds ?? [], eligible)
     if (eligible.length === 0) {
       return null
     }
@@ -178,10 +181,16 @@ export function createStructuredAgentSessionRestartResume(
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
     const candidates = derive(reserved, 'may-be-held').candidates
+    progress.skipExcluded(
+      eligible.map((candidate) => candidate.sessionId),
+      candidates
+    )
     try {
       const outcomes = await resumeStructuredAgentSessionsFromRestart(
         {
           admission,
+          onPhase: progress.set,
+          onRefused: (sessionId) => progress.set(sessionId, 'refused'),
           consumeMarker: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
             return (
@@ -219,55 +228,75 @@ export function createStructuredAgentSessionRestartResume(
     owner,
     audience
   ) => {
-    const continued: StructuredAgentSessionContinuationOutcome[] = []
-    const verdicts: Promise<void>[] = []
-    // A chat holds its slot until its agent took the continuation or its start failed, so a batch
-    // never starts more agents at once than the runner allows; the provider's answer comes after.
-    const action = await run(sessionIds, owner, audience, async (marker, continuationId) => {
-      const started = await startStructuredAgentSessionContinuation(
-        continuationDeps(continuationHost, () => continuationHost.stillResumable(marker)),
-        marker.sessionId,
-        marker,
-        continuationId
-      )
-      if ('done' in started) {
-        continued.push(started.done)
-        const { outcome, reason, refusal } = started.done
-        if (outcome === 'refused') {
-          // Thrown as a refusal so the filed failure keeps its details beside the code.
-          throw refusal
-            ? new AgentSessionRefusalError(agentSessionRefusalFromReference(refusal, refusal.code))
-            : new Error(reason ?? 'agent_session_continuation_refused')
-        }
-        return
-      }
-      verdicts.push(started.verdict().then((outcome) => void continued.push(outcome)))
-    })
-    await Promise.all(verdicts)
-    const resumed = action?.outcomes ?? []
-    if (action) {
-      await failures.settle(action.operationId, resumed, {
-        candidates: action.candidates,
-        markers: action.markers,
-        failureAfterResume: (sessionId) => {
-          const outcome = continued.find((entry) => entry.sessionId === sessionId)
-          return outcome ? continuationFailureOutcome(outcome.outcome) : null
+    const progress = createRestartResumeProgress(sessions, surfaces.publishStatus)
+    try {
+      const continued: StructuredAgentSessionContinuationOutcome[] = []
+      const verdicts: Promise<void>[] = []
+      // A chat holds its slot until its agent took the continuation or its start failed, so a batch
+      // never starts more agents at once than the runner allows; the provider's answer comes after.
+      const action = await run(
+        sessionIds,
+        owner,
+        audience,
+        async (marker, continuationId) => {
+          const started = await startStructuredAgentSessionContinuation(
+            continuationDeps(continuationHost, () => continuationHost.stillResumable(marker)),
+            marker.sessionId,
+            marker,
+            continuationId
+          )
+          if ('done' in started) {
+            continued.push(started.done)
+            progress.verdict(started.done)
+            const { outcome, reason, refusal } = started.done
+            if (outcome === 'refused') {
+              // Thrown as a refusal so the filed failure keeps its details beside the code.
+              throw refusal
+                ? new AgentSessionRefusalError(
+                    agentSessionRefusalFromReference(refusal, refusal.code)
+                  )
+                : new Error(reason ?? 'agent_session_continuation_refused')
+            }
+            return
+          }
+          verdicts.push(
+            started.verdict().then((outcome) => {
+              continued.push(outcome)
+              progress.verdict(outcome)
+            })
+          )
         },
-        failureReason: (sessionId) => {
-          const outcome = continued.find((entry) => entry.sessionId === sessionId)
-          return outcome?.reason ?? outcome?.outcome ?? 'agent_session_continuation_unknown'
-        }
-      })
-    }
-    continued.push(...unstartedRestartRefusals(resumed, continued))
-    return {
-      resumed,
-      continued,
-      ...(await remainingRestartRows(
-        () => list(audience),
-        () => listFailures(audience),
-        deps.logger
-      ))
+        progress
+      )
+      await Promise.all(verdicts)
+      const resumed = action?.outcomes ?? []
+      if (action) {
+        await failures.settle(action.operationId, resumed, {
+          candidates: action.candidates,
+          markers: action.markers,
+          failureAfterResume: (sessionId) => {
+            const outcome = continued.find((entry) => entry.sessionId === sessionId)
+            return outcome ? continuationFailureOutcome(outcome.outcome) : null
+          },
+          failureReason: (sessionId) => {
+            const outcome = continued.find((entry) => entry.sessionId === sessionId)
+            return outcome?.reason ?? outcome?.outcome ?? 'agent_session_continuation_unknown'
+          }
+        })
+      }
+      continued.push(...unstartedRestartRefusals(resumed, continued))
+      return {
+        resumed,
+        continued,
+        ...(progress.skipped.length > 0 ? { skipped: progress.skipped } : {}),
+        ...(await remainingRestartRows(
+          () => list(audience),
+          () => listFailures(audience),
+          deps.logger
+        ))
+      }
+    } finally {
+      progress.clear()
     }
   }
 

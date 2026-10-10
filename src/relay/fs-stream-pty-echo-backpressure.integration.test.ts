@@ -27,11 +27,11 @@ import {
 } from '../main/ssh/ssh-channel-multiplexer'
 import { readFileViaStream } from '../main/ssh/ssh-filesystem-stream-reader'
 
-import { RelayDispatcher } from './dispatcher'
-import type { SinkWriteSettlement } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import type { SinkWriteSettlement } from '../wsl-guest/dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
-import { STREAM_CHUNK_SIZE } from './protocol'
+import { STREAM_CHUNK_SIZE } from '../wsl-guest/protocol'
 
 // One framed fs.streamChunk: 256KB raw → base64 (4/3) + JSON envelope + header.
 const FRAMED_CHUNK_BYTES = Math.ceil((STREAM_CHUNK_SIZE * 4) / 3) + 512

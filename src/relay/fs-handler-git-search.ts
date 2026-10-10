@@ -3,7 +3,7 @@ import {
   GIT_GREP_MAX_RECORD_BYTES
 } from '../shared/git-grep-record-limit'
 import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import { spawnProcess } from '../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { abortSignalReason } from '../shared/abort-signal-reason'
 import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import {
@@ -18,7 +18,7 @@ import {
   absorbPendingRipgrepSpawnError,
   killSpawnedRipgrepProcess
 } from '../shared/ripgrep-process-availability'
-import { buildRelayGitEnv } from './relay-command-env'
+import { buildRelayGitEnv } from '../wsl-guest/relay-command-env'
 
 /**
  * Text search using `git grep`. Fallback when rg is not installed.

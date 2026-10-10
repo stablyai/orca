@@ -1,4 +1,4 @@
-import type { MethodHandler, RequestContext } from './dispatcher'
+import type { MethodHandler, RequestContext } from '../wsl-guest/dispatcher'
 import {
   admitPluginPanelCall,
   createPluginPanelCallAdmission,

@@ -7,7 +7,11 @@
 // the only truth a card action ever needs.
 
 import { useCallback, useMemo } from 'react'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session-journal-types'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
 import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
@@ -46,10 +50,13 @@ export type MobileStructuredQueuedMessageControls = {
 
 export function useMobileStructuredQueuedMessageControls(args: {
   sessionKey: string
+  agentName?: string
+  journalItems?: readonly AgentJournalRenderItem[]
   queuedMessages: MobileQueuedMessageFeed
   queuePause: MobileQueuePause
   submissions: readonly AgentJournalSubmission[]
-  pendingPrompt: boolean
+  /** The chat shows the agent working: a command card offers no send then. */
+  agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
   /** The active pane's live composer, Edit's copy target; absent = Edit refuses. False when
    *  nothing was copied. */
@@ -63,19 +70,22 @@ export function useMobileStructuredQueuedMessageControls(args: {
     mutate,
     onActionResolved,
     onSendError,
-    pendingPrompt,
     queuedMessages,
     queuePause,
     sessionKey,
     submissions
   } = args
+  const agentWorking = args.agentWorking === true
   const cards = useMemo(
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
-        pendingPrompt,
-        queuePaused: queuePause !== null
+        agentWorking,
+        agentName: args.agentName,
+        statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
+          ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
+          : []
       }),
-    [pendingPrompt, queuePause, queuedMessages, submissions]
+    [agentWorking, args.agentName, args.journalItems, queuedMessages, submissions]
   )
   const resolved = useCallback(
     (accepted: boolean): boolean => {
@@ -135,7 +145,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
       // leaves the card beside the copy, visibly, never a silent duplicate. No
       // copy (no composer yet, or an empty card) means no Delete: Edit never
       // removes text it did not keep.
-      if (!card || !appendComposerText?.(card.text)) {
+      // A command's text is not a draft: edited, it would become a message.
+      if (!card || card.command || !appendComposerText?.(card.text)) {
         return false
       }
       onCopied?.()

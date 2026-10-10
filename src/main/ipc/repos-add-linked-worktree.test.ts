@@ -26,7 +26,6 @@ const {
   mockStore: {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
-    removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn()
   },
@@ -45,19 +44,21 @@ vi.mock('electron', () => ({
 
 vi.mock('../git/repo', () => ({
   isGitRepo: isGitRepoMock,
-  inspectGitRepoForRegistration: vi.fn((path: string) => ({
+  isGitRepoAsync: isGitRepoMock,
+  inspectGitRepoForRegistrationAsync: vi.fn((path: string) => ({
     isRepo: isGitRepoMock(path),
     rootPath: getGitRepoRootMock(path),
     mainRepoPath: getLinkedWorktreeMainRepoRootMock(path)
   })),
   getGitRepoRoot: getGitRepoRootMock,
+  getGitRepoRootAsync: getGitRepoRootMock,
   getLinkedWorktreeMainRepoRoot: getLinkedWorktreeMainRepoRootMock,
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('../repo-detection', () => ({
+vi.mock('../repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: detectRepoIconAndUpstreamMock
 }))
 
@@ -160,6 +161,45 @@ describe('repos:add with git worktrees', () => {
     expect(getGitRepoRootMock).not.toHaveBeenCalled()
     expect(getLinkedWorktreeMainRepoRootMock).not.toHaveBeenCalled()
     expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['git', 'folder'] as const)(
+    'deduplicates concurrent %s registrations after pending icon discovery',
+    async (kind) => {
+      const repos: Repo[] = []
+      mockStore.getRepos.mockImplementation(() => repos)
+      mockStore.addRepo.mockImplementation((repo: Repo) => repos.push(repo))
+      const releases: (() => void)[] = []
+      detectRepoIconAndUpstreamMock.mockImplementation(
+        () => new Promise((resolve) => releases.push(() => resolve({})))
+      )
+      const first = callAdd({ path: MAIN_CHECKOUT, kind })
+      const second = callAdd({ path: MAIN_CHECKOUT, kind })
+      await vi.waitFor(() => expect(releases).toHaveLength(2))
+      releases[0]()
+      const winner = await first
+      releases[1]()
+      expect(await second).toEqual(winner)
+      expect(repos).toHaveLength(1)
+      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('returns a main checkout added while linked-worktree icon discovery is pending', async () => {
+    let release: () => void = () => {}
+    detectRepoIconAndUpstreamMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({})
+        })
+    )
+    getLinkedWorktreeMainRepoRootMock.mockReturnValue(MAIN_CHECKOUT)
+    const pending = callAdd({ path: LINKED_WORKTREE })
+    await vi.waitFor(() => expect(detectRepoIconAndUpstreamMock).toHaveBeenCalled())
+    mockStore.getRepos.mockReturnValue([trackedMainRepo()])
+    release()
+    expect(await pending).toEqual({ repo: expect.objectContaining({ id: 'main-repo-id' }) })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('matches the tracked main checkout across path separator differences', async () => {

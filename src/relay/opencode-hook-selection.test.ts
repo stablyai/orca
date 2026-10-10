@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beginPtyHandlerTest, endPtyHandlerTest } from './pty-handler-test-harness'
 import { RelayAgentHookRuntime } from './relay-agent-hook-runtime'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../shared/agent-hook-relay'
 
 const mocks = vi.hoisted(() => ({
@@ -33,7 +33,7 @@ vi.mock('../main/opencode/opencode-launch-capabilities', () => ({
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
-vi.mock('./agent-hook-server', () => ({
+vi.mock('../wsl-guest/agent-hook-server', () => ({
   RelayAgentHookServer: class {
     start = async () => {}
     stop = () => {}

@@ -10,7 +10,9 @@ import {
   releaseDaemonRetirementFence,
   requestIdleDaemonRetirement
 } from '../daemon/daemon-init'
+import type { DaemonIdleRetirementResult } from '../daemon/daemon-pty-runtime-state'
 import type { OrcadDaemonRetirementVerdict } from '../../shared/orcad-stop-request'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { ORCAD_DAEMON_RETIREMENT_TIMEOUT_MS } from './orcad-stop-deadlines'
 
 export type OrcadDaemonRetirement = {
@@ -48,7 +50,11 @@ export async function retireOrcadDaemonIfIdle(
 ): Promise<OrcadDaemonRetirement> {
   const { request, releaseFence, countLiveSessions, timeoutMs } = { ...DEFAULT_PORTS, ...ports }
   const attempt = request().catch(() => ({ state: 'unverifiable' as const }))
-  const result = await withTimeout(attempt, timeoutMs, { state: 'timed-out' as const })
+  const result = await withTimeout<DaemonIdleRetirementResult | { state: 'timed-out' }>(
+    attempt,
+    timeoutMs,
+    { state: 'timed-out' }
+  )
   if (result.state === 'timed-out') {
     // The fence cannot reopen while the attempt is pending; reopen it once a late refusal lands.
     void attempt.then((late) => late.state !== 'retiring' && releaseFence())
@@ -78,20 +84,5 @@ export async function retireOrcadDaemonIfIdle(
       result.state === 'unsupported'
         ? 'The terminal daemon predates idle retirement, so it was left running.'
         : 'The host could not prove the daemon idle, so it was left running.'
-  }
-}
-
-/** No answer within the bound is `fallback`; the caller treats it as unverifiable. */
-async function withTimeout<T, F>(work: Promise<T>, timeoutMs: number, fallback: F): Promise<T | F> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      work,
-      new Promise<F>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), timeoutMs)
-      })
-    ])
-  } finally {
-    clearTimeout(timer)
   }
 }

@@ -15,11 +15,11 @@ import {
   getOrCreateArtifactCreateIntent,
   removeArtifactCreateIntent
 } from './artifact-create-intent-store'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { __resetSecureFileWindowsUserSidForTests } from '../../shared/secure-file'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
 }))

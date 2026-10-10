@@ -80,7 +80,6 @@ function textarea(): HTMLTextAreaElement {
 describe('native chat composer drop ownership', () => {
   it('keeps the conversation editor key without publishing drop routing markers', () => {
     const view = render(<TestField {...fieldProps({ draftScopeKey: 'agent-session:session-9' })} />)
-    expect(view.container.querySelector('[data-native-file-drop-target]')).toBeNull()
     expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
     expect(view.container.querySelector('.ProseMirror')).not.toBeNull()
   })

@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
+  collectBaseLineBlocks,
   diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
@@ -124,6 +126,31 @@ describe('moved-code exemption', () => {
   it('never exempts an empty highlight', () => {
     expect(isMovedCode(['', '   '], [['a()']])).toBe(false)
   })
+
+  it('reads the base text of a file that was renamed away', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-rename-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({
+          program: 'git',
+          args: ['-c', 'commit.gpgsign=false', ...args],
+          cwd: repo
+        })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      writeFileSync(path.join(repo, 'old.ts'), 'const moved = value as Thing\n')
+      git('add', 'old.ts')
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      git('mv', 'old.ts', 'new.ts')
+
+      expect(collectBaseLineBlocks(repo, base)).toEqual([['const moved = value as Thing']])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('unloaded plugin directive unused warning', () => {
@@ -131,10 +158,10 @@ describe('unloaded plugin directive unused warning', () => {
   // Assembled so no line here is itself a directive the gate would scan.
   const directive = (rule) => `/* oxlint-disable ${rule} -- reason */`
 
-  const withFixture = (firstLine, assert) => {
+  const withFixture = (firstLine, assert, filename = 'fixture.ts') => {
     const directory = mkdtempSync(path.join(root, 'config', 'anti-slop-directive-test-'))
     try {
-      const file = path.join(directory, 'fixture.ts')
+      const file = path.join(directory, filename)
       writeFileSync(file, [firstLine, 'export const value = 1', ''].join('\n'))
       assert({
         message: 'Unused oxlint-disable directive (no problems were reported).',
@@ -185,6 +212,36 @@ describe('unloaded plugin directive unused warning', () => {
     })
     return JSON.parse(result.stdout).diagnostics
   }
+
+  it.each([
+    "import './web-session-tabs-sync-test-harness'",
+    "export * from '@/runtime/web-session-tabs-sync-test-harness'",
+    "void import('@renderer/runtime/web-session-tabs-sync-test-harness.ts')",
+    "import '../runtime/web-runtime-browser-creation-placement-test-rig'"
+  ])('rejects unit-support imports in production source: %s', (source) => {
+    withFixture(source, ({ filename }) => {
+      const diagnostics = scanFixture('code quality', filename).filter(
+        (diagnostic) => diagnostic.code === 'eslint(no-restricted-imports)'
+      )
+      expect(diagnostics).toHaveLength(1)
+    })
+  })
+
+  it.each(['fixture.test.ts', 'fixture.spec.ts'])(
+    'allows unit-support imports from the existing test convention: %s',
+    (filename) => {
+      withFixture(
+        "import '@/runtime/web-session-tabs-sync-test-harness'",
+        (diagnostic) => {
+          const diagnostics = scanFixture('code quality', diagnostic.filename).filter(
+            (finding) => finding.code === 'eslint(no-restricted-imports)'
+          )
+          expect(diagnostics).toEqual([])
+        },
+        filename
+      )
+    }
+  )
 
   it('accepts a used Doctor directive only through its loaded scan', () => {
     const source = [

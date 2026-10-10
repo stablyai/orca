@@ -15,7 +15,7 @@ export type ReposIpcMocks = {
   mockStore: Record<
     | 'getRepos'
     | 'addRepo'
-    | 'removeProject'
+    | 'removeProjectForHost'
     | 'getRepo'
     | 'getProjects'
     | 'getProjectHostSetups'
@@ -52,7 +52,7 @@ export function createReposIpcMocks(): ReposIpcMocks {
     mockStore: {
       getRepos: vi.fn().mockReturnValue([]),
       addRepo: vi.fn(),
-      removeProject: vi.fn(),
+      removeProjectForHost: vi.fn(),
       getRepo: vi.fn(),
       updateRepo: vi.fn(),
       getProjects: vi.fn().mockReturnValue([]),
@@ -121,8 +121,10 @@ export function gitRepoModuleMock(actual: typeof RepoModule): Record<string, unk
     ...actual,
     // Stub only the functions that spawn git / touch the filesystem.
     isGitRepo,
+    isGitRepoAsync: isGitRepo,
     getGitRepoRoot,
-    inspectGitRepoForRegistration: vi.fn((path: string) => ({
+    getGitRepoRootAsync: getGitRepoRoot,
+    inspectGitRepoForRegistrationAsync: vi.fn((path: string) => ({
       isRepo: isGitRepo(path),
       rootPath: getGitRepoRoot(path),
       mainRepoPath: null

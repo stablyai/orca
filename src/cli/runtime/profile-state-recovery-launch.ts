@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX,

@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import { spawnProcess } from '@orca/process-host'
+import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
+
 import { query, type CanUseTool, type Options } from '@anthropic-ai/claude-agent-sdk'
 import {
   openClaudeStreamJsonConnection,
@@ -22,6 +23,7 @@ import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resol
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 
 // These drive the real SDK against the scripted fake CLI, so every assertion is
 // about the environment, argv and frames a real child actually saw.
@@ -685,6 +687,9 @@ describe('Claude stream-json connection', () => {
       expect(reported.message).toBe(
         `claude stream-json exited (code 127): spawn ${missingCli} ENOENT`
       )
+      // Typed, so the start reads as a CLI that is not installed rather than a generic failure.
+      expect(providerExecutableMissing(reported)).toBe(true)
+      expect(connection.executableMissing).toBe(true)
       // A first-hand root exit, which releases the lease like a processless start did.
       expect(connection.exitVerdict.root).toBe('exited')
     }

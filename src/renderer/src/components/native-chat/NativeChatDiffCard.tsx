@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   unifiedLineNumber,
   type NativeChatEditFile,
@@ -141,11 +143,13 @@ export function NativeChatDiffCard({
   file,
   revealSignal,
   onReveal,
-  disclosureKey
+  disclosureKey,
+  onLinkClick
 }: {
   file: NativeChatEditFile
   revealSignal?: number
   onReveal?: (element: HTMLElement) => void
+  onLinkClick?: CommentMarkdownLinkClickHandler
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
 }): React.JSX.Element {
@@ -197,14 +201,13 @@ export function NativeChatDiffCard({
               <span className="shrink-0 text-chat-foreground-faint">→</span>
             </>
           ) : null}
-          <span
+          <NativeChatToolFileTarget
+            path={file.path}
+            label={baseName(file.path)}
             className="min-w-0 truncate text-chat-foreground"
-            title={file.path}
-            aria-hidden="true"
-          >
-            {baseName(file.path)}
-          </span>
-          <span className="sr-only">{file.path}</span>
+            // A deleted file has nothing left to open.
+            onLinkClick={file.changeKind === 'deleted' ? undefined : onLinkClick}
+          />
           <DiffLineCounts added={file.added} removed={file.removed} size="sm" />
           {file.truncated ? (
             <span className="shrink-0 text-xs text-chat-foreground-faint">
@@ -214,7 +217,7 @@ export function NativeChatDiffCard({
           {hasBody ? (
             <ChevronRight
               className={cn(
-                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform',
+                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
                 expanded && 'rotate-90'
               )}
             />

@@ -62,7 +62,7 @@ import {
   SshChannelMultiplexer,
   type MultiplexerTransport
 } from '../main/ssh/ssh-channel-multiplexer'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { LIST_FILES_SUPERSEDED_MESSAGE } from './fs-list-files-scan-coordinator'

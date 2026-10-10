@@ -4,7 +4,7 @@ import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { Tab } from '../../../../shared/tab-types'
-import { parseRemoteRuntimePtyId } from '../runtime-terminal-stream'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf,
@@ -14,10 +14,6 @@ import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from 
 
 export function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
   return `${parentTabId}::${leafId}`
-}
-
-export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
-  return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
 }
 
 export function isWebOnlyMirroredTerminalTab(
@@ -82,8 +78,9 @@ export function isMobileFileDiffSource(
 }
 
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
-  // Combined diff tabs use display labels as paths and need the desktop renderer.
+  // Combined diff tabs use display labels as paths and need the desktop renderer, as do chat visuals.
   return !(
+    file.mode === 'chat-visual' ||
     file.diffSource === 'combined-all' ||
     file.diffSource === 'combined-uncommitted' ||
     file.diffSource === 'combined-branch' ||

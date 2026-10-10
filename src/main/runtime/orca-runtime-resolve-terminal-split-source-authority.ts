@@ -133,14 +133,10 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       ...process.env,
       ...args.baseEnv
     }
-    const inheritedEnvKeys = new Set(Object.keys(baseEnv))
     const auth = args.prepareAuth && this.prepareClaudeAuth ? await this.prepareClaudeAuth() : null
     if (auth) {
-      applyClaudeEnvPatch(baseEnv, auth.envPatch, { stripAuthEnv: auth.stripAuthEnv })
+      applyClaudeEnvPatch(baseEnv, auth.envPatch)
     }
-    const envToDelete = auth?.stripAuthEnv
-      ? [...inheritedEnvKeys].filter((key) => !(key in baseEnv))
-      : undefined
     const shimDir = await ensureClaudeAgentTeamsShimDir()
     const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
     const launch = this.claudeAgentTeams.createLaunchEnv({
@@ -150,7 +146,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       shimBin
     })
     const env = auth ? { ...auth.envPatch, ...launch.env } : launch.env
-    return envToDelete ? { env, envToDelete } : { env }
+    return { env }
   }
 
   // Why: a leader handle that never binds to a PTY (lost pane race) has no exit
