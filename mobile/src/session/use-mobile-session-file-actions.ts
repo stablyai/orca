@@ -49,7 +49,9 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
   const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
   const handleFileOpenStart = useCallback(() => {
-    fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
+    const activeTabId = activeSessionTabIdRef.current
+    fileOpenStartActiveTabIdRef.current = activeTabId
+    return () => activeSessionTabIdRef.current === activeTabId
   }, [])
   const handleOpenedFileDiff = useCallback(
     (relativePath: string) => {
