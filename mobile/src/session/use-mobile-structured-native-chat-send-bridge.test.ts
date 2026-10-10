@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
@@ -27,7 +27,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
 
-  function Harness({ agent }: { agent: AgentSessionHandleProvider }): null {
+  function Harness({ agent }: { agent: StructuredAgentId }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
       agent,
       acceptSend,
@@ -41,7 +41,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     return null
   }
 
-  function mount(agent: AgentSessionHandleProvider): void {
+  function mount(agent: StructuredAgentId): void {
     act(() => {
       renderer = create(createElement(Harness, { agent }))
     })
@@ -97,5 +97,15 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
 
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
     expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+  })
+
+  it("reads another agent's sends by that agent's commands, never Codex's", async () => {
+    sendStructured.mockResolvedValue('unknown')
+    mount('grok')
+
+    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
+
+    expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, '/review', expect.any(Function))
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
 })

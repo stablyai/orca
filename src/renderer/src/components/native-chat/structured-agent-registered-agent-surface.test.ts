@@ -6,7 +6,7 @@ import { parseWorkspaceSession } from '../../../../shared/workspace-session-sche
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}), subscribe: () => () => {} } }))
 
-import { structuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
+import { structuredAgentAcceptsImages } from '../../../../shared/agent-session-registered-agents'
 import { isStructuredTab } from './structured-agent-session-tabs'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 

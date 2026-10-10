@@ -14,6 +14,8 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     session: MobileNativeChatSession
+    /** The agent takes images, by the record its host listed. */
+    acceptsImages: boolean
     isWorking: boolean
     turnId: string | null
     /** What labels the live turn's one indicator row. */

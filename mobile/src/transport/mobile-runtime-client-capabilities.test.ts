@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import {
@@ -28,6 +30,16 @@ describe('mobile runtime client capabilities', () => {
         CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
         AGENT_SESSION_TURN_ITEM_CAPABILITY,
         SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+      ])
+    )
+  })
+
+  it('reads every agent the host registers, Pi dialogs included', () => {
+    // Why: without these the host retitles Grok, OpenCode, OMP and Pi chat tabs "Update to view".
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
+      expect.arrayContaining([
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+        PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY
       ])
     )
   })

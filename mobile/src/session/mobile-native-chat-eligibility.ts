@@ -1,4 +1,4 @@
-import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { isStructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
 import {
@@ -49,9 +49,9 @@ export function resolveMobileNativeChat(
     return null
   }
   if (tab.type === 'agent-session') {
-    // Structured tabs are journal-backed, so any provider the shared reducer can
-    // replay renders here — there is no per-agent transcript layout to know.
-    return tab.sessionId && isAgentSessionHandleProvider(tab.agent)
+    // Structured tabs are journal-backed, so any agent the host lists renders here — there is no
+    // per-agent transcript layout to know.
+    return tab.sessionId && isStructuredAgentId(tab.agent)
       ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null }
       : null
   }

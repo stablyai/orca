@@ -226,7 +226,7 @@ export function useMobileNativeChatController(args: {
   })
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
-    agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
+    agent: activeChatResolution?.agent,
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
     clearDraftForSend,
@@ -332,6 +332,8 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChatSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
-    nativeChatSessionOptions
+    nativeChatSessionOptions,
+    // A terminal-backed chat pastes images into the agent's own input instead.
+    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
   }
 }

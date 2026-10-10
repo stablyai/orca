@@ -39,6 +39,7 @@ import {
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import { useMobileStructuredAgentAcceptsImages } from './use-mobile-structured-agent-accepts-images'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -111,6 +112,12 @@ export function useMobileStructuredAgentSession(args: {
     }),
     [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
   )
+
+  const acceptsImages = useMobileStructuredAgentAcceptsImages({
+    client,
+    hostListsAgents: hostSupport?.registeredAgents === true,
+    agent
+  })
 
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
@@ -258,6 +265,7 @@ export function useMobileStructuredAgentSession(args: {
 
   return {
     ...options,
+    acceptsImages,
     visualSource,
     session: {
       messages,
