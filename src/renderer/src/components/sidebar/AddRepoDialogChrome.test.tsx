@@ -80,19 +80,39 @@ describe('AddRepoDialogChrome dismissal', () => {
     expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
   })
 
-  it.each(['Escape', 'Close'])(
-    'keeps explicit %s dismissal available during a clone',
-    async (action) => {
-      const user = userEvent.setup()
-      const onOpenChange = vi.fn()
-      render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+  it('keeps an in-flight clone open after a stray ESC', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
 
-      await (action === 'Escape'
-        ? user.keyboard('{Escape}')
-        : user.click(screen.getByRole('button', { name: 'Close' })))
+    await user.keyboard('{Escape}')
 
-      expect(onOpenChange).toHaveBeenCalledWith(false)
-      expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
-    }
-  )
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).not.toBeNull()
+  })
+
+  it('allows ESC dismissal after the clone settles', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const view = render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+    await user.keyboard('{Escape}')
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    view.rerender(<CloneDialog isCloning={false} onOpenChange={onOpenChange} />)
+    await user.keyboard('{Escape}')
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
+  })
+
+  it('keeps explicit Close dismissal available during a clone', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
+  })
 })
