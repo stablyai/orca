@@ -72,10 +72,10 @@ export function mutateWithChatStop<TValue>(
   const accept = async (
     ctx: AgentSessionTurnContext,
     target: ChatStopTarget
-  ): Promise<TurnOutcome<{ settled: boolean }>> => {
+  ): Promise<TurnOutcome<{ settled: boolean; turnId: string | null }>> => {
     if (!target.marks) {
       const accepted = await acceptStopTarget(ctx)
-      return accepted.ok ? { ok: true, value: { settled: false } } : accepted
+      return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
     }
     const accepted = await acceptChatStop(ctx, {
       event: {
@@ -88,7 +88,9 @@ export function mutateWithChatStop<TValue>(
         surface: 'rejection'
       })
     })
-    return accepted.ok ? { ok: true, value: { settled: accepted.value.withdrewAny } } : accepted
+    return accepted.ok
+      ? { ok: true, value: { settled: target.queued, turnId: accepted.value.turnId } }
+      : accepted
   }
   /** After the acceptance commits: only while what it captured still stands. */
   const act = async (
@@ -152,9 +154,12 @@ export function mutateWithChatStop<TValue>(
       return await act(ctx, target, accepted.value.settled)
     } catch (error) {
       // Saved, then failed: noted on the chat, then thrown so the answer is the Stop's receipt.
+      // On the turn its event named, else the one it named, else the one live now.
+      const stoppedTurnId =
+        accepted.value.turnId ?? (target.named ? target.turnId : ctx.journal.activeTurnId())
       await noteStructuredAgentSessionStopUnconfirmed(
         ctx,
-        { turnId: target.turnId, operationId: envelope.clientOperationId },
+        { turnId: stoppedTurnId, operationId: envelope.clientOperationId },
         error
       )
       throw error

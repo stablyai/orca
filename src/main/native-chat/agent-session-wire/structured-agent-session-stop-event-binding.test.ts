@@ -12,6 +12,8 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
+import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
+import { structuredAgentSessionStopping } from './structured-agent-session-stopping'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
@@ -207,6 +209,65 @@ describe('a Stop of a start that never landed binds no later turn', () => {
 
     expect(await evictedAt()).toEqual(['user-stop', 'evict'])
     await expectNews()
+  })
+})
+
+describe('a Stop naming no turn binds the turn live as its event is written', () => {
+  const FIRST_TURN: AgentJournalItemIdentity = { ...LATER_TURN, turnId: 'turn-first', ordinal: 998 }
+
+  function firstTurn(state: 'running' | 'completed') {
+    return journal().appendItem(
+      FIRST_TURN,
+      {
+        kind: 'turn',
+        turnId: 'turn-first',
+        startedAt: 1,
+        ...(state === 'running' ? { state } : { state, completedAt: 2 })
+      },
+      { fence: fence(), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  }
+
+  // The turn the Stop read when captured ended while its save waited, and the send handed over
+  // before it opened the next: the Stop's event names that one, and only that one is stopped.
+  it('names and binds the turn that opened while its save waited, never the one before', async () => {
+    rig = await createQueuedMessageTestRig()
+    const working = await rig.workingSend()
+    await firstTurn('running')
+    const saving = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    const accept = JournalStopAcceptor.prototype.accept
+    const held = vi
+      .spyOn(JournalStopAcceptor.prototype, 'accept')
+      .mockImplementation(async function (this: JournalStopAcceptor, ...args) {
+        entered.resolve()
+        await saving.promise
+        return accept.apply(this, args)
+      })
+    const stopping = rig.stop()
+    await entered.promise
+    await firstTurn('completed')
+    await turnOpenedBy(working)
+    saving.resolve()
+
+    expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
+    held.mockRestore()
+    expect(stopEvents()).toEqual([expect.objectContaining({ turnId: 'turn-later' })])
+    expect(rig.cancelTurn).toHaveBeenCalledOnce()
+    const snapshot = await rig.host.journalSnapshot(HOST_TEST_SESSION)
+    expect(structuredAgentSessionStopping(journal(), snapshot.items, journal().submissions())).toBe(
+      true
+    )
+    await turnOpenedBy(working, 'interrupted')
+    expect(laterTurnEndRows()).toEqual([
+      expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+    ])
+    const { items } = await rig.host.journalSnapshot(HOST_TEST_SESSION)
+    const first = items
+      .map((item) => readAgentJournalTurn(item.body))
+      .find((turn) => turn?.turnId === 'turn-first')
+    expect(first).toMatchObject({ state: 'completed' })
+    expect(first).not.toHaveProperty('outcome', 'cancellation')
   })
 })
 

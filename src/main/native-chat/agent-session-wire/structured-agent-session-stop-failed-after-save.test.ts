@@ -14,6 +14,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,
+  eventually,
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
@@ -197,5 +198,49 @@ describe("a card's own Cancel", () => {
     }
     expect(cardRow(card.itemId)?.body).toMatchObject({ resolution: { state: 'pending' } })
     expect(receipt(id)).toEqual({ verdict: 'absent' })
+  })
+})
+
+describe('a saved Stop whose own step then throws', () => {
+  /** A chat whose agent is still starting, which a Stop ends rather than interrupts. */
+  async function startingChat(): Promise<void> {
+    rig.dispose()
+    rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
+    void rig.send('work on this')
+    await eventually(() =>
+      expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+    )
+    vi.spyOn(rig.host.collaboratorsForTests().lifetime, 'stopAgent').mockRejectedValue(
+      new Error('the exit could not be proven')
+    )
+  }
+
+  it('says the cancellation was not confirmed and answers from its receipt', async () => {
+    await startingChat()
+    const id = opId()
+
+    expect(await rig.stop(id)).toMatchObject({ ok: true })
+
+    expect(statusTexts()).toContain('Cancellation was not confirmed.')
+    expect(receipt(id)).toMatchObject({ verdict: 'readable', receipt: { status: 'accepted' } })
+    expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
+      expect.arrayContaining([expect.stringContaining('a saved Stop failed to take effect')])
+    )
+  })
+
+  it('logs a note it cannot write, and still answers from its receipt', async () => {
+    await startingChat()
+    const id = opId()
+    const restore = failNotes()
+    try {
+      expect(await rig.stop(id)).toMatchObject({ ok: true })
+    } finally {
+      restore()
+    }
+
+    expect(statusTexts()).not.toContain('Cancellation was not confirmed.')
+    expect(warned.mock.calls.map((call) => String(call[0]))).toEqual(
+      expect.arrayContaining([expect.stringContaining("writing a failed Stop's note failed")])
+    )
   })
 })

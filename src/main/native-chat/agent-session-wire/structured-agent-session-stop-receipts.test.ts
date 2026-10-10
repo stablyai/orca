@@ -9,6 +9,7 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
+import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
@@ -169,6 +170,15 @@ describe('what a Stop captures as it is accepted', () => {
 
     expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(rig.cancelTurn).toHaveBeenCalledOnce()
+    // As where its event is written: it names the turn live then, the one it stopped, never one
+    // that had already ended.
+    expect(stopEvents()).toEqual([
+      expect.objectContaining({ event: expect.objectContaining({ turnId: 'turn-2' }) })
+    ])
+    const note = journal()
+      .snapshot()
+      .items.find((item) => item.body.kind === 'status')
+    expect(note?.turnScope).toEqual(structuredAgentSessionNamedTurnScope(journal(), 'turn-2'))
   })
 
   it('a target-less Stop names the live turn, and its retry after a new turn does nothing', async () => {

@@ -22,6 +22,8 @@ export type JournalStopAcceptance = {
   mark: AgentJournalCursor
   /** The sends it withdrew, by client message id. */
   withdrawn: string[]
+  /** The turn its event names: the one it named, else the one live as it was written. */
+  turnId: string | null
 }
 
 export class JournalStopAcceptor {
@@ -29,6 +31,7 @@ export class JournalStopAcceptor {
     private readonly deps: {
       writer: Pick<JournalRowWriter, 'enqueueRows'>
       state: () => JournalReducerState
+      liveTurnId: () => string | null
     }
   ) {}
 
@@ -43,12 +46,18 @@ export class JournalStopAcceptor {
     receipt?: JournalOperationReceipt
   ): Promise<JournalStopAcceptance> {
     const { state } = this.deps
+    let turnId: string | null = null
     const rows = await this.deps.writer.enqueueRows(
-      // The same rows the chat's queued withdrawal always wrote, then the event.
-      () => [
-        ...journalQueuedRejectionRowBuilders(state, input.fence, input.withdrawal),
-        journalStopEventRowBuilder(state, input.event, input.fence)
-      ],
+      // The same rows the chat's queued withdrawal always wrote, then the event, naming the turn
+      // live as it is written unless the Stop named one.
+      () => {
+        turnId = input.event.turnId ?? this.deps.liveTurnId()
+        const event = { ...input.event, ...(turnId !== null ? { turnId } : {}) }
+        return [
+          ...journalQueuedRejectionRowBuilders(state, input.fence, input.withdrawal),
+          journalStopEventRowBuilder(state, event, input.fence)
+        ]
+      },
       receipt,
       (written) => written.at(-1)
     )
@@ -57,6 +66,6 @@ export class JournalStopAcceptor {
       throw new Error('an accepted Stop requires its Stop event')
     }
     const withdrawn = rows.flatMap((row) => (row.kind === 'dispatch' ? [row.clientMessageId] : []))
-    return { mark: { epoch: mark.epoch, sequence: mark.seq }, withdrawn }
+    return { mark: { epoch: mark.epoch, sequence: mark.seq }, withdrawn, turnId }
   }
 }

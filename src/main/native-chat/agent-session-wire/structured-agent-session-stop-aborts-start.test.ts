@@ -215,3 +215,27 @@ it('answers truthfully when the save is slow and an option pick waits behind it'
   expect(JSON.stringify(pick)).not.toContain('stopped while starting')
   expect(pick).toMatchObject({ ok: true })
 })
+
+// What it withdrew is read as it was captured, on the lane it holds: a throw after the commit
+// cannot turn the withdrawal it saved into "nothing stopped".
+it('answers that it stopped the queued message even when its write throws after the commit', async () => {
+  let stopping: ReturnType<QueuedMessageTestRig['stop']> | undefined
+  const accept = JournalStopAcceptor.prototype.accept
+  vi.spyOn(JournalStopAcceptor.prototype, 'accept').mockImplementationOnce(async function (
+    this: JournalStopAcceptor,
+    ...args
+  ) {
+    await accept.apply(this, args)
+    throw new Error('fold failed after commit')
+  })
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  await duringStart(() => {
+    stopping = rig.stop()
+  })
+  const first = rig.send('hello')
+  await first.result
+  await eventually(() => expect(stopping).toBeDefined())
+
+  expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(await rig.submission(first.id)).toMatchObject({ rejection: { kind: 'cancelled' } })
+})

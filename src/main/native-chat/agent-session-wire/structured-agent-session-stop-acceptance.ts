@@ -65,10 +65,11 @@ type Accepted<T> = { ok: true; value: T } | { ok: false; refusal: AgentSessionWi
 /** Commits the receipt alone, before a Stop that writes no row of its own acts. */
 export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Accepted<null>> {
   const receipt = stopReceipt(ctx)
+  const committedBefore = receipt.isCommitted()
   try {
     await receipt.commitAlone()
   } catch (error) {
-    if (!savedAnyway(ctx, receipt, error)) {
+    if (!savedAnyway(ctx, receipt, committedBefore, error)) {
       return stopNotSaved(ctx, error)
     }
   }
@@ -76,33 +77,32 @@ export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Ac
 }
 
 /** Commits the chat's Stop: the sends it withdraws, its event and its receipt, in one transaction.
- *  `withdrewAny`: whether it withdrew a queued send, false when that went unread. */
+ *  `turnId`: the turn its event names, null when that went unread. */
 export async function acceptChatStop(
   ctx: AgentSessionTurnContext,
   input: JournalStopAcceptanceInput
-): Promise<Accepted<{ withdrewAny: boolean }>> {
+): Promise<Accepted<{ turnId: string | null }>> {
   const receipt = stopReceipt(ctx)
+  const committedBefore = receipt.isCommitted()
   try {
-    const accepted = await ctx.journal.stops.accept(
-      input,
-      receipt.isCommitted() ? undefined : receipt
-    )
-    return { ok: true, value: { withdrewAny: accepted.withdrawn.length > 0 } }
+    const accepted = await ctx.journal.stops.accept(input, committedBefore ? undefined : receipt)
+    return { ok: true, value: { turnId: accepted.turnId } }
   } catch (error) {
-    return savedAnyway(ctx, receipt, error)
-      ? { ok: true, value: { withdrewAny: false } }
+    return savedAnyway(ctx, receipt, committedBefore, error)
+      ? { ok: true, value: { turnId: null } }
       : stopNotSaved(ctx, error)
   }
 }
 
-/** A throw once the receipt committed (the fold after COMMIT) leaves the Stop accepted: it acts on
- *  what it saved, and is never answered as not saved. */
+/** A throw once this write committed the receipt (the fold after COMMIT) leaves the Stop accepted:
+ *  it acts on what it saved, and is never answered as not saved. */
 function savedAnyway(
   ctx: AgentSessionTurnContext,
   receipt: AgentSessionOperationReceipt,
+  committedBefore: boolean,
   error: unknown
 ): boolean {
-  if (!receipt.isCommitted()) {
+  if (committedBefore || !receipt.isCommitted()) {
     return false
   }
   ctx.logger.warn('a Stop was saved, then its write failed; it acts on what it saved', {

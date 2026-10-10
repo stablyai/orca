@@ -27,8 +27,11 @@ export type ChatStopTarget = {
   /** The turn the Stop is about: the one it named, else the one live as it was accepted. */
   turnId: string | null
   named: boolean
-  /** The turn its event names: a Stop that ends the provider's session ends whatever runs. */
+  /** The turn its event names when the Stop named one; else, and for a Stop that ends the
+   *  provider's session, which ends whatever runs, the turn live as the event is written. */
   eventTurnId: string | null
+  /** Sends queued as it was captured: the lane it holds keeps them the ones it withdraws. */
+  queued: boolean
   /** It writes a Stop event of its own; else it repeats the one in force, or only joins a close. */
   marks: boolean
 }
@@ -53,10 +56,8 @@ export function captureChatStopTarget(
     child,
     turnId: structuredAgentSessionStoppedTurnId(ctx.journal, turnId),
     named: turnId !== undefined,
-    eventTurnId: structuredAgentSessionStoppedTurnId(
-      ctx.journal,
-      input.endsSession ? undefined : turnId
-    )
+    eventTurnId: input.endsSession ? null : (turnId ?? null),
+    queued
   }
   if (child?.close) {
     return { ...target, reach: 'close', marks: queued }
