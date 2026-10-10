@@ -218,11 +218,12 @@ export const profileStateAuthoritySelectedSchema = z
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
-// Why: config-shape errors (not user content); callers must truncate before `track` — `.max(200)` drops overlength strings.
+// Why (#26604): Node error codes / error class names only — raw messages can carry
+// paths and user names, which the telemetry docs promise never leave the machine.
 export const agentHookInstallFailedSchema = z
   .object({
     agent: hookInstallAgentSchema,
-    error_message: z.string().max(200)
+    error_code: z.string().max(64)
   })
   .strict()
 
