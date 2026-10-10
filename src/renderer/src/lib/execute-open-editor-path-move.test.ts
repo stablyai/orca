@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
-const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn() }))
+const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn(), quiesce: vi.fn() }))
 vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeFileClient>()
   return { ...actual, renameRuntimePath: mocks.renameRuntimePath }
 })
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
-  return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
+  return { ...actual, requestEditorSaveQuiesce: mocks.quiesce }
 })
 
 import { useAppStore } from '@/store'
@@ -49,6 +49,7 @@ describe('executeOpenEditorPathMove', () => {
   beforeEach(() => {
     useAppStore.setState(useAppStore.getInitialState(), true)
     mocks.renameRuntimePath.mockReset().mockResolvedValue(undefined)
+    mocks.quiesce.mockReset().mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -267,6 +268,26 @@ describe('executeOpenEditorPathMove', () => {
 
     // Commit-only: no store mutation on failure.
     expect(useAppStore.getState().openFiles).toEqual(before)
+    expect(__activeEditorPathMoveCountForTests()).toBe(0)
+  })
+
+  it('releases source suppression and retains the draft when quiescing fails', async () => {
+    const id = openDirtyTab()
+    mocks.quiesce.mockRejectedValue(new Error('serializer failure'))
+
+    await expect(
+      executeOpenEditorPathMove({
+        context: CONTEXT,
+        fromPath: '/repo/a.md',
+        toPath: '/repo/sub/a.md',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      })
+    ).rejects.toThrow('serializer failure')
+
+    expect(mocks.renameRuntimePath).not.toHaveBeenCalled()
+    expect(useAppStore.getState().openFiles[0]?.filePath).toBe('/repo/a.md')
+    expect(useAppStore.getState().editorDrafts[id]).toBe('unsaved work')
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
   })
 })

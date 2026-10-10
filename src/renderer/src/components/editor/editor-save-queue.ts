@@ -176,11 +176,14 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
   const quiesceFileSave = async (fileId: string): Promise<void> => {
     // Why: rich markdown debounces serialization, so force the pending draft out before we cancel timers.
-    flushPendingEditorChange(fileId)
-    const pendingSave = saveQueue.get(fileId)
-    clearAutoSaveTimer(fileId)
-    bumpSaveGeneration(fileId)
-    await pendingSave?.catch(() => undefined)
+    try {
+      flushPendingEditorChange(fileId)
+    } finally {
+      const pendingSave = saveQueue.get(fileId)
+      clearAutoSaveTimer(fileId)
+      bumpSaveGeneration(fileId)
+      await pendingSave?.catch(() => undefined)
+    }
   }
 
   const syncAutoSave = (): void => {

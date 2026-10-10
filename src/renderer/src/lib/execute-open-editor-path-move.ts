@@ -71,11 +71,9 @@ export async function executeOpenEditorPathMove(args: {
     })
   }
 
-  // Let any in-flight autosave settle so a trailing write can't recreate the old
-  // path after the rename.
-  await Promise.all(affected.map((f) => requestEditorSaveQuiesce({ fileId: f.id })))
-
   try {
+    // Let any in-flight autosave settle so a trailing write can't recreate the old path.
+    await Promise.all(affected.map((f) => requestEditorSaveQuiesce({ fileId: f.id })))
     await renameRuntimePath(
       context,
       fromPath,

@@ -94,15 +94,24 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     if (!detail) {
       return
     }
-    detail.claim()
+    try {
+      detail.claim()
+      const matchingFiles =
+        'fileId' in detail
+          ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
+          : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
 
-    const matchingFiles =
-      'fileId' in detail
-        ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
-        : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
-
-    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
-    detail.resolve()
+      const results = await Promise.allSettled(
+        matchingFiles.map((file) => quiesceFileSave(file.id))
+      )
+      const failure = results.find((result) => result.status === 'rejected')
+      if (failure?.status === 'rejected') {
+        throw failure.reason
+      }
+      detail.resolve()
+    } catch (error) {
+      detail.reject(error instanceof Error ? error.message : String(error))
+    }
   }
 
   // Why: the root subscriber fires on every store tick; skip the scan unless the four autosave inputs changed.

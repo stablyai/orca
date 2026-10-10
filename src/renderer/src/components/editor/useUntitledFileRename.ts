@@ -56,7 +56,12 @@ export function useUntitledFileRename({
         return
       }
 
-      await requestEditorSaveQuiesce({ fileId: renameDialogFile.id })
+      try {
+        await requestEditorSaveQuiesce({ fileId: renameDialogFile.id })
+      } catch (error) {
+        setRenameError(error instanceof Error ? error.message : 'Failed to prepare file for rename')
+        return
+      }
       const draft = useAppStore.getState().editorDrafts[renameDialogFile.id]
       if (draft !== undefined) {
         try {
