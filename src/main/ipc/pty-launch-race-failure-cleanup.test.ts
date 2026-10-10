@@ -80,9 +80,7 @@ const mintedFor = (worktreeId: string): string[] =>
 describe('launch race parity: cleanup when a start fails, both spawn lanes', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  // Row 5: a failed options build puts the session's size back (ipc/spawn-run.ts:66-69 with its
-  // capture at ipc/spawn-options.ts:154-157; runtime/spawn.ts:94-97 with runtime/spawn-options.ts:159-162).
-  // Each lane fails its options build its own way; the outcome is the same.
+  // Row 5: after a failed options build the session's size is what it was. Runtime overwrites a cached size then restores it (runtime/spawn.ts:94-97); IPC never overwrites one (ipc/spawn-options.ts:154-171), so it stays untouched.
   describe.each(LAUNCH_RACE_LANES)('%s lane: options build fails', (lane: LaunchRaceLane) => {
     it.each([
       { label: 'no size before', cached: undefined },
@@ -137,7 +135,7 @@ describe('launch race parity: cleanup when a start fails, both spawn lanes', () 
     })
   })
 
-  // Row 7 (window lane): the mark is set before preflight's first await (ipc/spawn-preflight.ts:42-48).
+  // Row 7: the mark is set before preflight's first await (ipc/spawn-preflight.ts:42-48).
   it('window lane marks a fresh daemon session hidden before its preflight awaits', async () => {
     const worktreeId = 'repo-1::/tmp/race-hidden-early'
     installLaunchRaceProvider(async (options) => ({ id: String(options.sessionId) }))
@@ -164,7 +162,7 @@ describe('launch race parity: cleanup when a start fails, both spawn lanes', () 
     expect(isHiddenRendererPty((await spawn).id)).toBe(true)
   })
 
-  // Row 7 (window lane): recovering daemon routing mints a session and marks it (ipc/spawn-preflight.ts:181-192).
+  // Row 7: recovering daemon routing mints a session and marks it (ipc/spawn-preflight.ts:181-192).
   it('window lane marks the session it recovers daemon routing for before preflight continues', async () => {
     const worktreeId = 'repo-1::/tmp/race-hidden-recovered'
     const { recoverFreshSpawnRouting } = installDegradedRaceProvider(async (options) => ({
@@ -220,8 +218,28 @@ describe('launch race parity: cleanup when a start fails, both spawn lanes', () 
     }
   )
 
-  // Row 7: the mark follows the id the provider returned (ipc/spawn-commit-persist.ts:122-125;
-  // runtime/spawn-hidden-delivery.ts:44-47).
+  // Row 7: a throw before the provider spawn also rolls the mark back (ipc/spawn-run.ts:82-84).
+  it('window lane rolls the pre-spawn hidden mark back when its worktree lock throws', async () => {
+    const worktreeId = 'repo-1::/tmp/race-hidden-rollback-early'
+    installLaunchRaceProvider(async () => ({ id: 'pty-must-not-spawn' }))
+    let markedWhileLocking: string[] = []
+    const runtime = createLaunchRaceRuntime({
+      acquireWorktreeTerminalSpawn: vi.fn(async () => {
+        markedWhileLocking = mintedFor(worktreeId)
+        throw new Error('lock failed')
+      })
+    })
+    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
+
+    await expect(
+      lanes.spawn.ipc({ cols: 80, rows: 24, cwd: '/tmp', worktreeId, initiallyHidden: true })
+    ).rejects.toThrow('lock failed')
+
+    expect(markedWhileLocking).toHaveLength(1)
+    expect(mintedFor(worktreeId)).toEqual([])
+  })
+
+  // Row 7: the mark follows the returned id (ipc/spawn-commit-persist.ts:122-125; runtime/spawn-hidden-delivery.ts:44-47).
   it.each(LAUNCH_RACE_LANES)(
     '%s lane: the hidden mark moves to the id the provider returned',
     async (lane) => {
@@ -238,9 +256,7 @@ describe('launch race parity: cleanup when a start fails, both spawn lanes', () 
     }
   )
 
-  // Row 7 drift: IPC re-marks every hidden-requested result after its save
-  // (ipc/spawn-commit-persist.ts:119-121); the runtime lane skips a reattach
-  // (runtime/spawn-hidden-delivery.ts:31; also pty-runtime-hidden-at-spawn-mark.test.ts).
+  // Row 7 drift: IPC keeps the hidden mark on a reattach (marked up to three times, never cleared); runtime skips a reattach (runtime/spawn-hidden-delivery.ts:31).
   const HIDDEN_REATTACH: Record<LaunchRaceLane, boolean> = { ipc: true, runtime: false }
   it.each(LAUNCH_RACE_LANES)('%s lane: a hidden-requested reattach', async (lane) => {
     const sessionId = `race-hidden-reattach-${lane}`

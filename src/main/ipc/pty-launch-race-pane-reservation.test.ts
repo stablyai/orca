@@ -61,8 +61,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('launch race parity: who owns the pane, both spawn lanes', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  // Row 2: a window mount waits for a host create in progress before its own preflight
-  // (ipc/spawn-begin.ts:108-113). The existing materialization-race test does not catch its removal.
+  // Row 2: the window waits for a host create in progress before its setup (ipc/spawn-begin.ts:108-113).
   it('a window mount waits for a host create in progress before preparing its own launch', async () => {
     const pane = launchRacePane('race-pending-create', '71717171-7171-4171-8171-717171717171')
     installLaunchRaceProvider(async () => ({ id: 'pty-after-create' }))
@@ -94,13 +93,12 @@ describe('launch race parity: who owns the pane, both spawn lanes', () => {
     expect(preparedAfterRelease).toEqual([true])
   })
 
-  // Row 2: IPC joins a spawn holding the pane as a reattach and checks nothing
-  // (ipc/spawn-begin.ts:114-119); the runtime lane refuses a winner it cannot verify as the pane
-  // owner (runtime/spawn-options.ts:252-273). Here the winner leaves no owner the runtime can see.
+  // Row 2 drift: IPC joins before its setup and checks nothing (ipc/spawn-begin.ts:114-119); runtime joins after its setup and refuses an unverified owner (runtime/spawn-options.ts:252-273).
   const JOINED_UNVERIFIED_WINNER: Record<LaunchRaceLane, 'reattach' | 'refused'> = {
     ipc: 'reattach',
     runtime: 'refused'
   }
+  const JOINER_PREPARES_ITS_OWN_LAUNCH: Record<LaunchRaceLane, number> = { ipc: 0, runtime: 1 }
   it.each(LAUNCH_RACE_LANES)(
     '%s lane: a spawn arriving while a window spawn is starting the pane joins it',
     async (lane) => {
@@ -112,15 +110,18 @@ describe('launch race parity: who owns the pane, both spawn lanes', () => {
             finishSpawn = () => resolve({ id: 'pty-join-winner' })
           })
       )
+      const auth = gatedClaudeAuth()
+      auth.release()
       const lanes = registerLaunchRaceLanes({
         handlers,
         mainWindow,
-        runtime: createLaunchRaceRuntime()
+        runtime: createLaunchRaceRuntime(),
+        prepareClaudeAuth: auth.prepareClaudeAuth
       })
 
       const winner = lanes.spawn.ipc(pane.args)
       await vi.waitFor(() => expect(provider.spawn).toHaveBeenCalledOnce())
-      const joiner = lanes.spawn[lane](pane.args)
+      const joiner = lanes.spawn[lane]({ ...pane.args, command: 'claude' })
       await flushMacrotasks()
       finishSpawn()
 
@@ -129,6 +130,7 @@ describe('launch race parity: who owns the pane, both spawn lanes', () => {
         ? expect(joiner).resolves.toMatchObject({ id: 'pty-join-winner', isReattach: true })
         : expect(joiner).rejects.toThrow('terminal_pane_owner_unknown'))
       expect(provider.spawn).toHaveBeenCalledOnce()
+      expect(auth.prepareClaudeAuth).toHaveBeenCalledTimes(JOINER_PREPARES_ITS_OWN_LAUNCH[lane])
     }
   )
 
@@ -146,13 +148,15 @@ describe('launch race parity: who owns the pane, both spawn lanes', () => {
 
     const held = lanes.spawn.runtime({ ...pane.args, command: 'claude' })
     await vi.waitFor(() => expect(auth.prepareClaudeAuth).toHaveBeenCalledOnce())
-    const mount = lanes.spawn.ipc(pane.args)
+    const mount = lanes.spawn.ipc({ ...pane.args, command: 'claude' })
     await flushMacrotasks()
     auth.release()
 
     await expect(held).resolves.toMatchObject({ id: 'pty-early-hold' })
     await expect(mount).resolves.toMatchObject({ id: 'pty-early-hold', isReattach: true })
     expect(provider.spawn).toHaveBeenCalledOnce()
+    // Only the held spawn prepared a launch; the mount joined without its own setup.
+    expect(auth.prepareClaudeAuth).toHaveBeenCalledOnce()
   })
 
   // Row 4: with an owner, the runtime lane reserves only after preflight (runtime/spawn.ts:78).
@@ -194,9 +198,7 @@ describe('launch race parity: who owns the pane, both spawn lanes', () => {
     await expect(held).resolves.toMatchObject({ id: 'pty-existing-owner' })
   })
 
-  // Row 3: the runtime lane joins with joinPaneSpawn (runtime/spawn-options.ts:257), so a slept
-  // refusal frees the pane; IPC awaits the other spawn's result as is (ipc/spawn-begin.ts:117-118).
-  // The IPC cell is a code-level drift no producer reaches today: see the next test.
+  // Row 3 drift (IPC cell unreachable today, see next test): ipc/spawn-begin.ts:117-118 vs runtime/spawn-options.ts:257.
   const JOINED_SLEPT_REFUSAL: Record<LaunchRaceLane, 'refused' | 'spawns itself'> = {
     ipc: 'refused',
     runtime: 'spawns itself'
@@ -236,8 +238,7 @@ describe('launch race parity: who owns the pane, both spawn lanes', () => {
     }
   )
 
-  // createTerminal holds a create claim across its spawn (orca-runtime-create-terminal.ts:45-50,
-  // 177-179) and the window waits on it (ipc/spawn-begin.ts:108-113), so the window wakes the pane.
+  // createTerminal claims the pane across its spawn (orca-runtime-create-terminal.ts:45-50,177-179), so the window waits, then wakes it.
   it('a window mount racing a claimed automatic spawn refused for a slept worktree spawns itself', async () => {
     const pane = launchRacePane('race-slept-claimed', '77777777-7777-4777-8777-777777777777')
     const provider = installLaunchRaceProvider(async () => ({ id: 'pty-user-mount' }))
