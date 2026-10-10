@@ -8,6 +8,7 @@ import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconc
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { WorktreeVisibilitySourceMatcher } from '../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from './runtime-store-contract'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type {
   WorkspacePortKillRequest,
@@ -116,7 +117,8 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
   }
 
   async showManagedWorktree(worktreeSelector: string) {
-    return await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
   }
 
   /**

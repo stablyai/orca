@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const build = workflow.jobs.build.steps.find((step) => step.id === 'e2e-cli')

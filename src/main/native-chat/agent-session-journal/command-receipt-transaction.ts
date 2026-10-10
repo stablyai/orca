@@ -1,6 +1,7 @@
 import type { CommandReceipt, CommandReceiptScope } from './command-receipt-schema'
 import { insertCommandReceiptIfAbsent, type CommandReceiptInsert } from './command-receipt-table'
 import type { JournalOperationReceipt } from './journal-row-writer'
+import type { JournalRow } from './journal-row-schema'
 
 type CommandReceiptNotInserted = Extract<CommandReceiptInsert, { inserted: false }>
 
@@ -14,14 +15,14 @@ export class CommandReceiptExistsError extends Error {
 
 export function buildCommandReceiptTransaction(
   scope: CommandReceiptScope,
-  receipt: CommandReceipt | (() => CommandReceipt)
+  receipt: CommandReceipt | ((row?: JournalRow) => CommandReceipt)
 ): JournalOperationReceipt {
   return {
-    write: (db) => {
+    write: (db, row) => {
       const result = insertCommandReceiptIfAbsent(
         db,
         scope,
-        typeof receipt === 'function' ? receipt() : receipt
+        typeof receipt === 'function' ? receipt(row) : receipt
       )
       if (!result.inserted) {
         throw new CommandReceiptExistsError(result)

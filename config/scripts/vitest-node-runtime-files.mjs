@@ -7,7 +7,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'config/scripts/skill-recipe-shell.test.mjs',
   'src/main/ssh/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
-  'src/shared/child-process/run-process.test.ts',
+  'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'src/main/ai-vault-search/session-search-index-writer.test.ts',
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
@@ -95,6 +95,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',
+  'config/scripts/process-host-dev-rebuild.test.ts',
   'config/scripts/vitest-node-runtime-boundary.test.ts',
   'config/scripts/vitest-node-runtime-pool.test.ts'
 ]

@@ -1,5 +1,4 @@
 import { useId } from 'react'
-import { Loader2 } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
@@ -14,6 +13,7 @@ import {
   NativeChatReasoningChevron
 } from './NativeChatReasoningDisclosure'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
 function statusLabel(key: Extract<NativeChatActiveTurnLabel, { source: 'status' }>['key']): string {
@@ -63,7 +63,7 @@ export function NativeChatTurnActivityLine({
         aria-live="polite"
         aria-atomic="true"
       >
-        <Loader2 aria-hidden className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
+        <LoadingSpinner className="size-4 shrink-0" />
         <span id={labelId} className="min-w-0 truncate text-foreground/85">
           {label}
         </span>

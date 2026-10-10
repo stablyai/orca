@@ -52,7 +52,7 @@ const OPUS: AgentSessionModelOption = {
 }
 
 function listing(models: AgentSessionModelOption[]): AgentModelCatalogSuccess {
-  return { models, fastModeTierByModel: new Map(), origin: 'probe' }
+  return { models, origin: 'probe' }
 }
 
 function restingChat(input: {

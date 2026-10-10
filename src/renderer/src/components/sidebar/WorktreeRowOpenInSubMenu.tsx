@@ -20,7 +20,7 @@ export function WorktreeRowOpenInSubMenu({
   return (
     <WorktreeOpenInSubMenu
       worktreePath={worktree.path}
-      connectionId={connectionId}
+      connectionId={owner.connectionId ?? connectionId}
       runtimeEnvironmentId={owner.runtimeEnvironmentId}
       ownerUnresolved={owner.ownerUnresolved}
       disabled={disabled}

@@ -18,6 +18,7 @@ import {
   setHostWorkspaceSession,
   withRequiredWorkspaceSessionMaps
 } from './session-host-partitions'
+import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { scheduleSave } from './write-scheduling'
 
 type SessionSnapshotOperationsRuntime = Pick<
@@ -95,6 +96,10 @@ export class SessionSnapshotOperations {
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
+    }
+    // Why: a unified-tabs patch skips full normalization, so it would bypass the close fence.
+    if (Object.hasOwn(patch, 'unifiedTabs')) {
+      next = dropClosedTerminalTabs(next)
     }
     this.publishSession(next, resolved)
   }

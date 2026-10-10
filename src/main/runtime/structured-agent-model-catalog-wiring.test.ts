@@ -56,7 +56,6 @@ async function hostCatalog(input: { agent?: 'claude' | 'codex'; stale?: boolean;
   const saved: AgentModelCatalogSuccess = {
     models: [SAVED_MODEL],
     fastModeSupport: { supported: false },
-    fastModeTierByModel: new Map(),
     origin: 'probe'
   }
   agentModelCatalogStore.recordSuccess(fingerprint, agent, saved, 'discovery')

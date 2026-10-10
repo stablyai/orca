@@ -8,7 +8,7 @@ import {
 } from './daemon-launched-child-spawn'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
-import { childProcessHasExited } from '../../shared/child-process/process-tree-termination'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000

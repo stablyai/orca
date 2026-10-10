@@ -18,7 +18,6 @@ const FINGERPRINT = agentModelCatalogFingerprint({
 function listing(id?: string): AgentModelCatalogSuccess {
   return {
     models: id ? [{ id, label: id, isDefault: true, efforts: [] }] : [],
-    fastModeTierByModel: new Map(),
     origin: 'probe'
   }
 }

@@ -21,6 +21,7 @@ export function createFallbackProxy(
   applyOverride?: (path: string[], args: unknown[]) => unknown
 ): never {
   const fn = () => undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proxy answers every property and call, so it stands in for any API member.
   return new Proxy(fn, {
     get(_target, property) {
       if (property === 'then') {
@@ -32,9 +33,24 @@ export function createFallbackProxy(
       if (applyOverride) {
         return applyOverride(path, args)
       }
+      warnFallbackNamespaceOnce(path)
       return getFallbackResult(path, args)
     }
   }) as never
+}
+
+const warnedFallbackNamespaces = new Set<string>()
+
+// Why: a missing web namespace otherwise fails silently with a default result (see #16802).
+function warnFallbackNamespaceOnce(path: string[]): void {
+  const namespace = path[0] ?? ''
+  if (warnedFallbackNamespaces.has(namespace)) {
+    return
+  }
+  warnedFallbackNamespaces.add(namespace)
+  console.warn(
+    `[web] window.api.${path.join('.')} has no web implementation; returning a default result.`
+  )
 }
 
 export function getFallbackResult(path: string[], args: unknown[]): unknown {

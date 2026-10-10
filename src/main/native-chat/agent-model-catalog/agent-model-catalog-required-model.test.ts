@@ -25,7 +25,6 @@ const HOME = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/claude' }
 function listing(...ids: string[]): AgentModelCatalogSuccess {
   return {
     models: ids.map((id, index) => ({ id, label: id, isDefault: index === 0, efforts: [] })),
-    fastModeTierByModel: new Map(),
     origin: 'probe'
   }
 }

@@ -11,10 +11,6 @@ import {
   localTerminalArtifactContentDigest,
   terminalFileStatIdentity
 } from './runtime-file-commands-terminal-artifact-access'
-import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
 import { open } from 'node:fs/promises'
 import type {
   RuntimeFileStatLike,
@@ -28,6 +24,11 @@ import {
   runtimeFileSshTargetId,
   type ResolvedRuntimeFileTarget
 } from './runtime-file-command-target'
+import {
+  requireReachableFilesystemRoute,
+  requireFilesystemProviderForHost
+} from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 
 export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends RuntimeFileCommandsWithResolveTerminalPath {
   protected async resolveAllowedTerminalArtifactPath(args: {
@@ -45,14 +46,10 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     absolutePath: string,
     connectionId?: string
   ): Promise<string> {
-    if (!connectionId) {
-      return canonicalPathForArtifactComparison(absolutePath)
-    }
-    const provider = getSshFilesystemProvider(connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
-    return provider.realpath(absolutePath)
+    const route = requireReachableFilesystemRoute(getConnectionExecutionHostId(connectionId))
+    return route.kind === 'ssh'
+      ? route.provider.realpath(absolutePath)
+      : canonicalPathForArtifactComparison(absolutePath)
   }
 
   protected async resolveAbsoluteFileGrant(args: {
@@ -118,10 +115,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     absolutePath: string,
     connectionId: string
   ): Promise<string | null> {
-    const provider = getSshFilesystemProvider(connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
+    const provider = requireFilesystemProviderForHost(toSshExecutionHostId(connectionId))
     const roots = ['/tmp', '/private/tmp']
     const providerTempDir = await provider.getTempDir?.().catch(() => null)
     if (providerTempDir) {

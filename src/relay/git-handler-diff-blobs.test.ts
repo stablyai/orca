@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { commitDiffEntry } from './git-handler-commit-diff-ops'
 import { computeDiff, type GitBufferExec } from './git-handler-ops'
 import { gitCommit, gitInit, type MockDispatcher } from './git-handler-test-setup'

@@ -75,7 +75,6 @@ export function createClaudeModelCatalogProbe(
           : {}),
         ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {})
       })),
-      fastModeTierByModel: new Map(),
       origin: 'probe'
     }
   }

@@ -203,6 +203,17 @@ jobs:
         with:
           bun-version-file: config/.bun-version
 
+      - name: Check process-host imports
+        if: '!cancelled()'
+        id: process-host-imports
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm run check:process-host-imports
+
       # Keep each check in its own log while sharing this runner.
       - name: Lint
         if: '!cancelled()'
@@ -440,6 +451,8 @@ jobs:
 
       - run: pnpm run typecheck
         if: needs.code_paths.outputs.typecheck == 'true'
+
+      - wait: process-host-imports
 
       - wait: unit-plan
 
@@ -1009,6 +1022,10 @@ jobs:
       - name: Smoke managed-hook companions
         run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
+      # The process-host package declares engines >=18; load its staged public output on Node 18.
+      - name: Smoke process-host package
+        run: node config/scripts/smoke-process-host-node18.mjs
+
   package:
     name: package
     needs: [code_paths, preflight]
@@ -1252,9 +1269,9 @@ jobs:
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
-          src/shared/child-process/windows-command-line.win32.test.ts
-          src/shared/child-process/windows-cmd-shim-resolution.test.ts
-          src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts
+          src/shared/__tests__/process-host/windows-command-line.win32.test.ts
+          src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
+          src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/jcode/hook-gate-script.test.ts
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts

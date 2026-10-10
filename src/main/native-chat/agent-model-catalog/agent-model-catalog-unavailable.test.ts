@@ -33,7 +33,6 @@ const SIGNED_OUT = { reason: 'notSignedIn', account: 'system' } as const
 function listing(id: string, origin: AgentModelCatalogSuccess['origin']): AgentModelCatalogSuccess {
   return {
     models: [{ id, label: id, isDefault: true, efforts: [] }],
-    fastModeTierByModel: new Map(),
     origin
   }
 }

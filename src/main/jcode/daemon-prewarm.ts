@@ -6,7 +6,7 @@
 // died with "Timed out waiting for responsive server socket" before its prompt was
 // ever delivered. Starting the daemon as the PTY spawns gives it the shell's own
 // startup time as head start, so the client finds a live socket instead of racing.
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 
 export type JcodeDaemonPrewarm = {

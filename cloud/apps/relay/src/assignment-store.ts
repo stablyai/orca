@@ -140,6 +140,15 @@ type RelayAssignmentStoreOptions = {
 
 export type { ControlRenewalOutcome, ControlRenewalRequest }
 
+type ControlActivationInput = {
+  cellId: string
+  assignmentEpoch: number
+  generation: number
+  idleRegionalRehome?: boolean
+  cellIncarnation?: string
+  connectionInclusionWatermark?: number
+}
+
 export type RelayAssignment = AssignmentIdentity & {
   cellId: string
   cellUrl: string
@@ -742,15 +751,26 @@ export class RelayAssignmentStore {
     placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
     // evacuateDeadCells re-enters placement from a sweep; it must not take the
     // bounded wait, whose 55P03 would surface as a terminal sweep failure.
-    lockMode: CellInventoryLockMode = 'request'
+    lockMode: CellInventoryLockMode = 'request',
+    // Step 5: a fresh placement may first be booked on a reserve-mode cell, outside any
+    // transaction; and a database mint stays above every epoch the director's map knew.
+    step5: { epochFloor?: number; placeFresh?: () => Promise<RelayAssignment | null> } = {}
   ): Promise<RelayAssignment> {
     const sticky = await this.assignStickyWithLockRetry(identity, lockMode, preferredRegion)
     if (sticky) return sticky
+    const booked = await step5.placeFresh?.()
+    if (booked) return booked
     // Only placement needs the global inventory critical section; queueing those
     // attempts locally avoids turning true placement bursts into NOWAIT storms.
     return await this.serializeAssignment(
       async () =>
-        await this.assignWithLockRetry(identity, lockMode, preferredRegion, placementRegion)
+        await this.assignWithLockRetry(
+          identity,
+          lockMode,
+          preferredRegion,
+          placementRegion,
+          step5.epochFloor ?? 0
+        )
     )
   }
 
@@ -769,7 +789,8 @@ export class RelayAssignmentStore {
     identity: AssignmentIdentity,
     lockMode: CellInventoryLockMode,
     preferredRegion?: RelayRegion,
-    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    epochFloor = 0
   ): Promise<RelayAssignment> {
     const deadline = Date.now() + ASSIGNMENT_LOCK_RETRY_DEADLINE_MS
     let inventoryScope: AssignmentInventoryScope = 'none'
@@ -780,7 +801,8 @@ export class RelayAssignmentStore {
           inventoryScope,
           lockMode,
           preferredRegion,
-          placementRegion
+          placementRegion,
+          epochFloor
         )
       } catch (error) {
         if (error instanceof AssignmentInventoryScopeChanged) {
@@ -1029,7 +1051,8 @@ export class RelayAssignmentStore {
     inventoryScope: AssignmentInventoryScope,
     lockMode: CellInventoryLockMode,
     preferredRegion?: RelayRegion,
-    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION
+    placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION,
+    epochFloor = 0
   ): Promise<RelayAssignment> {
     const now = this.now()
     // An isolated retry takes its tier's rows before anything reassigns this,
@@ -1304,7 +1327,9 @@ export class RelayAssignmentStore {
         }
       }
       await this.adjustCellReservation(transaction, target.cellId, 1)
-      const assignmentEpoch = existing ? integer(existing, 'assignment_epoch') + 1 : 1
+      // A host that left a reserve-mode cell inside the ledger's lag never reuses an epoch.
+      const assignmentEpoch =
+        Math.max(existing ? integer(existing, 'assignment_epoch') : 0, epochFloor) + 1
       // Counters follow the leases the host still holds, plus the new control.
       const counts = activityCounts(keptLeases)
       counts.control += 1
@@ -4279,15 +4304,38 @@ export class RelayAssignmentStore {
 
   async activateControl(
     identity: AssignmentIdentity,
-    input: {
-      cellId: string
-      assignmentEpoch: number
-      generation: number
-      idleRegionalRehome?: boolean
-      cellIncarnation?: string
-      connectionInclusionWatermark?: number
-    }
+    input: ControlActivationInput
   ): Promise<string> {
+    return (await this.activateControlOnce(identity, input, false)).activityId
+  }
+
+  // Step 5 flip back: the same activation, but the cell-row delta is returned for the caller
+  // to fold into one relay_cells write per batch (commitCellReservationDelta), not committed
+  // here. A dozen re-registrations from Asia each holding that row's lock convoy on it.
+  async activateControlDeferringCell(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput
+  ): Promise<{ activityId: string; reservationDelta: number }> {
+    return await this.activateControlOnce(identity, input, true)
+  }
+
+  // Unguarded by capacity: these hosts are already connected to the cell.
+  async commitCellReservationDelta(cellId: string, delta: number): Promise<void> {
+    if (delta === 0) return
+    await this.database.query(
+      `UPDATE relay_cells SET reserved_requests =
+         CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+         updated_at = ?
+       WHERE cell_id = ?`,
+      [delta, delta, this.now(), cellId]
+    )
+  }
+
+  private async activateControlOnce(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput,
+    deferCell: boolean
+  ): Promise<{ activityId: string; reservationDelta: number }> {
     const activityId = `control:${input.cellId}:${input.generation}`
     validateActivityId(activityId)
     return await this.activityQueue.run(identity, async () => {
@@ -4399,14 +4447,14 @@ export class RelayAssignmentStore {
         // every host on the cell, and this transaction spans a dozen round
         // trips. Holding its write lock from the first of them capped a
         // far-from-Postgres cell at a couple of accepts a second.
-        if (reservationDelta !== 0) {
+        if (reservationDelta !== 0 && !deferCell) {
           await this.commitCellReservationAtomically(
             transaction,
             input.cellId,
             reservationDelta
           )
         }
-        return activityId
+        return { activityId, reservationDelta: deferCell ? reservationDelta : 0 }
       })
     })
   }
@@ -7847,7 +7895,8 @@ export class RelayAssignmentStore {
     const now = this.now()
     const rows = await this.database.query(
       `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
-              admission.roll_isolated_at, runtime.ready, runtime.last_heartbeat_at
+              admission.admission_state, admission.roll_isolated_at, runtime.ready,
+              runtime.last_heartbeat_at
        FROM relay_cells cell
        LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
        LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
@@ -7870,7 +7919,12 @@ export class RelayAssignmentStore {
           heartbeatExpiresAt !== null &&
           heartbeatExpiresAt > now &&
           integer(row, 'capacity_requests') > 0 &&
-          optionalInteger(row, 'roll_isolated_at') === undefined
+          optionalInteger(row, 'roll_isolated_at') === undefined,
+        // Step 5 places only on general cells that are not isolated for a roll.
+        general:
+          optionalText(row, 'admission_state') === 'general' &&
+          optionalInteger(row, 'roll_isolated_at') === undefined &&
+          integer(row, 'capacity_requests') > 0
       }
     })
   }

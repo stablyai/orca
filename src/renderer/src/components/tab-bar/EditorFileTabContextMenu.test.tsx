@@ -107,6 +107,7 @@ const useAppStoreMock = Object.assign(
       settings: Record<string, unknown>
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
+      worktreesByRepo: Record<string, { id: string; repoId: string; hostId: 'local' }[]>
     }) => unknown
   ) =>
     selector({
@@ -116,7 +117,8 @@ const useAppStoreMock = Object.assign(
       },
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
-      }
+      },
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }] }
     }),
   {
     getState: () => ({
@@ -209,6 +211,7 @@ async function renderMenu(
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details' | 'chat-visual'
+    unifiedTabId?: string
   } = {}
 ): Promise<unknown> {
   const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
@@ -286,6 +289,26 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
+  it.each(['editor-view-1', 'editor-view-2'])(
+    'copies the individual editor view ID %s',
+    async (unifiedTabId) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      const onActivate = vi.fn()
+      vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
+      const tree = expandNode(await renderMenu({ unifiedTabId, onActivate }))
+      const item = findElementsByType(tree, 'DropdownMenuItem').find(
+        (candidate) => extractText(candidate.props.children) === 'Copy Tab ID'
+      )
+      const onSelect = item?.props.onSelect
+      if (typeof onSelect !== 'function') {
+        throw new Error('Missing Copy Tab ID action')
+      }
+      onSelect()
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(`orcaTabId: ${unifiedTabId}`)
+      expect(onActivate).not.toHaveBeenCalled()
+    }
+  )
 
   it('opens rename only after menu close releases focus and consumes the request once', async () => {
     const onActivate = vi.fn()
@@ -386,7 +409,13 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
       throw new Error('Reveal item has no select handler')
     }
     onSelect()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts', 'local')
+  })
+
+  it('reveals a local file while a remote server is focused', async () => {
+    storeSettings.activeRuntimeEnvironmentId = 'env-1'
+
+    expect((await renderRevealItem()).props.disabled).toBe(false)
   })
 
   it.each([

@@ -151,10 +151,7 @@ async function watchClient(): Promise<ClientView[]> {
       const hostWorking = isStructuredAgentSessionMainAgentWorking(running, all)
       // As use-structured-agent-session.ts derives it.
       const working = hostWorking || (nextQueuedMessageId !== null && !hostWorking)
-      const cards = projectQueuedMessageCards(queued, all, {
-        hasPendingPrompt: false,
-        queuePaused: queuePause !== null
-      })
+      const cards = projectQueuedMessageCards(queued, all, { queuePaused: queuePause !== null })
       // As use-structured-agent-session-queued-messages.ts derives them.
       const header = queuedMessagesQueuePause(cards, queuePause) !== null
       const queueHeld = header && !working

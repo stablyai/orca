@@ -303,7 +303,7 @@ export function createAgentModelCatalogService(
       const saved = deps.store.recordSuccess(
         fingerprint,
         record.provider,
-        { ...listed, ...listedAt, fastModeTierByModel: new Map(), origin: 'live-session' },
+        { ...listed, ...listedAt, origin: 'live-session' },
         'live'
       )
       if (saved && configuredDefault !== undefined) {
