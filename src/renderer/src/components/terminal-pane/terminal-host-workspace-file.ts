@@ -4,9 +4,14 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
 import { userNamedFileAccess } from '@/lib/local-file-access'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeTerminalPathResolution } from '../../../../shared/runtime-file-contracts'
+import {
+  TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
+  type RuntimeTerminalPathResolution
+} from '../../../../shared/runtime-file-contracts'
 
 export type HostWorkspaceFile = {
   kind: 'host'
@@ -34,9 +39,21 @@ function workspaceRootOf(absolutePath: string, relativePath: string): string | n
 }
 
 async function statClientLocalFile(
+  environmentId: string,
   absolutePath: string,
   hostRefusal: Error
 ): Promise<ClientLocalFile> {
+  if (
+    // Why: a paired web client's filesystem bridge answers from the server, not this computer.
+    isPairedWebClientWindow() ||
+    !(await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
+      15_000
+    ))
+  ) {
+    throw hostRefusal
+  }
   try {
     const stat = await statRuntimePath(
       { settings: CLIENT_LOCAL_FILE_SETTINGS, worktreeId: null, worktreePath: null },
@@ -86,7 +103,7 @@ export async function resolveHostWorkspaceFile(
       // Why: a host grant means the host owns the path; it never becomes a read of this computer.
       throw refusal
     }
-    return statClientLocalFile(absolutePath, refusal)
+    return statClientLocalFile(environmentId, absolutePath, refusal)
   }
   if (!resolved.exists) {
     throw new Error(`File not found on its host: ${absolutePath}`)

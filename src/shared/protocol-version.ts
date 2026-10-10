@@ -363,6 +363,7 @@ export const RUNTIME_CAPABILITIES = [
   ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
+  'files.resolve-terminal-path.cross-workspace.v1',
   'runtime.status.compat.v1',
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,

@@ -3,6 +3,11 @@ import { openDetectedFilePath } from './terminal-link-handlers'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY } from '../../../../shared/runtime-file-contracts'
+import {
   flushDoubleRaf,
   installTerminalLinkTestEnvironment
 } from './terminal-link-handlers-test-harness'
@@ -14,7 +19,8 @@ const {
   openFileMock,
   openFilePathMock,
   createBrowserTabMock,
-  runtimeEnvironmentCallMock
+  runtimeEnvironmentCallMock,
+  runtimeEnvironmentTransportCallMock
 } = doubles
 
 vi.mock('@/store', () => ({
@@ -136,6 +142,46 @@ describe('a link to this computer printed in a paired-server terminal', () => {
       ...serverWorkspace,
       onOpenFailure
     })
+    await flushDoubleRaf()
+
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
+  })
+
+  it('keeps the refusal from a host that cannot search its other workspaces', async () => {
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (!status?.ok) {
+          return runtimeEnvironmentCallMock(args)
+        }
+        const capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY
+        )
+        return { ...status, result: { ...status.result, capabilities } }
+      }
+    )
+    hostDisowns('/srv/other-project/config.json')
+    const onOpenFailure = vi.fn()
+
+    openDetectedFilePath('/srv/other-project/config.json', null, null, {
+      ...serverWorkspace,
+      onOpenFailure
+    })
+    await flushDoubleRaf()
+
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
+  })
+
+  it('never treats a paired web client filesystem as this computer', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    hostDisowns('/Users/me/notes.md')
+    const onOpenFailure = vi.fn()
+
+    openDetectedFilePath('/Users/me/notes.md', null, null, { ...serverWorkspace, onOpenFailure })
     await flushDoubleRaf()
 
     expect(statMock).not.toHaveBeenCalled()
