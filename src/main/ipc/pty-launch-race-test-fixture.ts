@@ -79,8 +79,8 @@ export function installLaunchRaceProvider(spawn: ProviderSpawn) {
   return provider
 }
 
-export function createLaunchRaceRuntime(overrides: Record<string, unknown> = {}) {
-  return {
+export function createLaunchRaceRuntime<T extends object = Record<never, never>>(overrides?: T) {
+  const base = {
     setPtyController: vi.fn(),
     resolveTerminalPane: vi.fn((): unknown => {
       throw new Error('terminal_not_found')
@@ -96,16 +96,16 @@ export function createLaunchRaceRuntime(overrides: Record<string, unknown> = {})
     seedHeadlessTerminal: vi.fn(),
     onPtySpawned: vi.fn(),
     onPtyExit: vi.fn(),
-    onPtyData: vi.fn(),
-    ...overrides
+    onPtyData: vi.fn()
   }
+  return { ...base, ...overrides }
 }
 
 /** Registers both lanes against one runtime: `pty:spawn` (IPC lane) and the runtime controller. */
 export function registerLaunchRaceLanes(args: {
   handlers: IpcHandlerMap
   mainWindow: unknown
-  runtime: ReturnType<typeof createLaunchRaceRuntime>
+  runtime: { setPtyController: ReturnType<typeof vi.fn> }
   prepareClaudeAuth?: () => Promise<unknown>
   store?: unknown
 }) {
