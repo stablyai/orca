@@ -139,7 +139,7 @@ describe('startShadowSeatPoller', () => {
     expect(cell.requests[1]?.searchParams.get('since')).toBe(`${INCARNATION}:2`)
     expect(cell.directory.seatsOf('user-a', 'host-1')).toEqual([])
     expect(cell.directory.recentlyLeftOf('user-a', 'host-1', 1_000)).toEqual([
-      { cellId: 'cell-a', epoch: 3, generation: 1, closeCode: 4001, at: 53 }
+      { cellId: 'cell-a', epoch: 3, generation: 1, incarnation: INCARNATION, closeCode: 4001, at: 53 }
     ])
     expect(cell.directory.seatsOf('user-a', 'host-2')).toMatchObject([{ state: 'drain-only' }])
     expect(cell.directory.seatsOf('user-a', 'host-3')).toMatchObject([
