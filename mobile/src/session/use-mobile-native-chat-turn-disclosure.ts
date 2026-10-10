@@ -1,10 +1,19 @@
-import { useCallback, useMemo, useState } from 'react'
-import { isSubagentGroupBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { useCallback, useMemo } from 'react'
+import {
+  isBackgroundTaskBlock,
+  isSubagentGroupBlock,
+  type NativeChatMessage
+} from '../../../src/shared/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../src/shared/native-chat-reasoning-row'
 import {
-  nativeChatLiveLine,
-  type NativeChatLiveLine
-} from '../../../src/shared/native-chat-live-line'
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../../../src/shared/native-chat-row-content'
+import { nativeChatLiveLine } from '../../../src/shared/native-chat-live-line'
+import {
+  nativeChatTurnFold,
+  nativeChatTurnAnswerRows
+} from '../../../src/shared/native-chat-turn-fold'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   isNativeChatRowInLiveWorkingTurn,
@@ -12,73 +21,16 @@ import {
   type NativeChatTurnJournal
 } from '../../../src/shared/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
-import {
-  nativeChatRowsInDrawOrder,
-  nativeChatTurnBarRows
-} from '../../../src/shared/native-chat-turn-grouping'
-import {
-  useMobileNativeChatTurnStatus,
-  type NativeChatTurnStatus
-} from './use-mobile-native-chat-turn-status'
-
-const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
+import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
+import { isStoppedBeforeStartBlock } from '../../../src/shared/native-chat-stopped-before-start'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../src/shared/agent-session-orca-stop'
+import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
+import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
+export type {
+  MobileNativeChatLiveLine,
+  MobileNativeChatTurnRow
+} from './mobile-native-chat-turn-disclosure-types'
 const NO_TURN_KEYS: readonly undefined[] = []
-const MAX_EXPANDED_TURNS = 128
-
-export type MobileNativeChatTurnRow = {
-  turnStatus: NativeChatTurnStatus | null
-  /** The bar renders above the row: its turn has no user bubble of its own. */
-  turnStatusAbove?: boolean
-  turnExpanded: boolean
-  /** Set only on a settled turn — the one row that has activity to disclose. */
-  turnKey?: string
-  activeTurnIsWorking: boolean
-  /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
-  mayStillGrow: boolean
-  /** The live activity line discloses this open reasoning block, so its row draws nothing. */
-  reasoningIsLive: boolean
-  /** A reasoning row's disclosure, keyed like the live line's so an opened block stays open. */
-  reasoningExpanded: boolean
-  onToggleReasoning: (key: string) => void
-  /** The roster groups the reader opened, by group id; set only on a row that carries one, so a
-   *  toggle re-renders roster rows alone. */
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup: (groupId: string) => void
-}
-
-/** The live activity line, when it draws, and whether the reader opened the block it discloses. */
-export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
-
-/** Keys the reader opened in this chat, bounded; another chat's never leak in. */
-function useScopedOpenKeys(scopeKey: string): [ReadonlySet<string>, (key: string) => void] {
-  const [state, setState] = useState<{ scopeKey: string; keys: ReadonlySet<string> }>(() => ({
-    scopeKey,
-    keys: new Set()
-  }))
-  const toggle = useCallback(
-    (key: string) => {
-      setState((current) => {
-        const next = new Set(current.scopeKey === scopeKey ? current.keys : [])
-        if (!next.delete(key)) {
-          if (next.size >= MAX_EXPANDED_TURNS) {
-            const oldest = next.values().next().value
-            if (oldest) {
-              next.delete(oldest)
-            }
-          }
-          next.add(key)
-        }
-        return { scopeKey, keys: next }
-      })
-    },
-    [scopeKey]
-  )
-  return [state.scopeKey === scopeKey ? state.keys : EMPTY_TURN_IDS, toggle]
-}
-
-/** Owns the transcript's per-turn status rows and their disclosure state, and
- *  resolves what one list row needs. Bridge-lane chats pass `enabled: false` and
- *  keep their single three-dot working indicator instead. */
 export function useMobileNativeChatTurnDisclosure({
   messages,
   enabled,
@@ -90,43 +42,22 @@ export function useMobileNativeChatTurnDisclosure({
   activityText = null,
   stopping = false,
   lineYields = false,
+  toolsExpanded = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
-  /** Host-recorded durations; they outrank whatever this client observed. */
   settledTurns?: NativeChatSettledTurns | null
-  /** The journal that places each row in its turn; absent groups rows by position. */
   turnJournal?: NativeChatTurnJournal | null
-  /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
-  /** What the provider says the live turn is doing; outranks the other labels. */
   activityText?: string | null
-  /** A person's Stop is ending the live turn: the sends the host holds draw after its status. */
   stopping?: boolean
-  /** A prompt the reader must answer replaces the live activity line. */
   lineYields?: boolean
-  /** Host/worktree/tab identity for timing and disclosure isolation. */
+  toolsExpanded?: boolean
   scopeKey: string
-}): {
-  active: NativeChatTurnStatus | null
-  /** The live turn's provider activity copy, for the footer row. */
-  activeActivityText: string | null
-  onToggleTurn: (turnKey: string) => void
-  resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
-  /** The list's rows, in the order they draw, less those waiting behind the live turn. */
-  listMessages: readonly NativeChatMessage[]
-  /** Rows waiting behind the live turn, drawn after its live status. */
-  waitingRows: readonly { item: NativeChatMessage; index: number }[]
-  /** The live activity line, or null while the turn is idle or a prompt replaces it. */
-  liveLine: MobileNativeChatLiveLine | null
-  /** Stable for a given chat scope, so it never disturbs a row's memo. */
-  onToggleReasoning: (key: string) => void
-} {
-  // Resolve each row's turn, which turn is live, and the order the rows draw in, once: from the
-  // turn record when the host states scopes, else by journal order.
+}) {
   const { rows, turnKeys, liveTurnKey } = useMemo(() => {
     if (!enabled) {
       return { rows: messages, turnKeys: NO_TURN_KEYS, liveTurnKey: undefined }
@@ -138,25 +69,6 @@ export function useMobileNativeChatTurnDisclosure({
       liveTurnKey: membership.liveTurnKey
     }
   }, [enabled, messages, turnJournal])
-  // A message waiting behind the live turn draws after that turn's live status, not in the list.
-  const waiting = useMemo(() => {
-    const ids = enabled
-      ? nativeChatMessagesWaitingBehindLiveTurn(
-          rows,
-          turnJournal?.items,
-          stopping,
-          turnJournal?.submissions
-        )
-      : null
-    if (!ids?.size) {
-      return { listMessages: rows, waitingRows: [], indexById: null }
-    }
-    return {
-      listMessages: rows.filter((message) => !ids.has(message.id)),
-      waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
-      indexById: new Map(rows.map((message, index) => [message.id, index]))
-    }
-  }, [enabled, rows, stopping, turnJournal])
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -167,11 +79,136 @@ export function useMobileNativeChatTurnDisclosure({
     thinking,
     scopeKey
   })
-  const [expandedTurnIds, toggleExpandedTurn] = useScopedOpenKeys(scopeKey)
-  const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
-  const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
-  const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
-
+  const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const waiting = useMemo(() => {
+    if (!enabled) {
+      return {
+        listMessages: rows,
+        waitingRows: [],
+        indexById: new Map<string, number>(),
+        foldedRows: new Set<number>(),
+        bars: new Map<string, { index: number; above: boolean }>()
+      }
+    }
+    const ids = nativeChatMessagesWaitingBehindLiveTurn(
+      rows,
+      turnJournal?.items,
+      stopping,
+      turnJournal?.submissions
+    )
+    const foldRows = rows.map((message, index) => {
+      const content = deriveNativeChatRowContent(message.blocks)
+      return {
+        turnKey: turnKeys[index],
+        role: message.role,
+        rendersProse: content.markdown.length > 0 || content.hasImages,
+        draws: nativeChatRowRendersContent(message.blocks),
+        outlivesTurn: message.blocks.some(
+          (block) =>
+            isSubagentGroupBlock(block) ||
+            isBackgroundTaskBlock(block) ||
+            isStoppedBeforeStartBlock(block)
+        ),
+        reportsFailure: message.blocks.some(
+          (block) =>
+            block.type === 'text' &&
+            block.tone === 'error' &&
+            block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
+        ),
+        explainsTurn: message.blocks.some(
+          (block) =>
+            block.type === 'text' &&
+            (block.presentation === 'compaction' ||
+              block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
+        )
+      }
+    })
+    const settledTurnKeys = new Set(
+      Object.entries(turnStatuses.completedByTurn)
+        .filter(([, status]) => status.workedSeconds != null)
+        .map(([turnKey]) => turnKey)
+        .filter((turnKey) => !(isWorking && turnKey === liveTurnKey))
+    )
+    const { foldedRows: folded } = nativeChatTurnFold({
+      rows: foldRows,
+      settledTurnKeys,
+      expandedTurnKeys: expandedTurnIds
+    })
+    const foldedRows = new Set(folded)
+    if (toolsExpanded) {
+      for (const [index, message] of rows.entries()) {
+        if (
+          foldedRows.has(index) &&
+          message.blocks.some((block) => block.type === 'tool-call' || block.type === 'tool-result')
+        ) {
+          foldedRows.delete(index)
+        }
+      }
+    }
+    const carrierRows = new Set<number>()
+    const firstRowByTurn = new Map<string, number>()
+    const answerRows = nativeChatTurnAnswerRows(foldRows)
+    for (const [index, row] of foldRows.entries()) {
+      if (row.turnKey === undefined) {
+        continue
+      }
+      if (!firstRowByTurn.has(row.turnKey)) {
+        firstRowByTurn.set(row.turnKey, index)
+      }
+    }
+    for (const [turnKey, index] of firstRowByTurn) {
+      if (
+        settledTurnKeys.has(turnKey) &&
+        !answerRows.has(turnKey) &&
+        !expandedTurnIds.has(turnKey) &&
+        foldedRows.has(index)
+      ) {
+        foldedRows.delete(index)
+        carrierRows.add(index)
+      }
+    }
+    const indexById = new Map(rows.map((message, index) => [message.id, index]))
+    const bars = new Map<string, { index: number; above: boolean }>()
+    rows.forEach((message, index) => {
+      const turnKey = turnKeys[index]
+      const isQueuedUser = message.role === 'user' && message.id !== turnKey
+      if (turnKey !== undefined && !isQueuedUser && !foldedRows.has(index) && !bars.has(turnKey)) {
+        bars.set(turnKey, { index, above: message.id !== turnKey })
+      }
+    })
+    const visibleMessage = (message: NativeChatMessage, index: number): NativeChatMessage =>
+      carrierRows.has(index) ? { ...message, blocks: [] } : message
+    const listMessages = rows.flatMap((message, index) =>
+      foldedRows.has(index) ? [] : [visibleMessage(message, index)]
+    )
+    if (!ids?.size) {
+      return { listMessages, waitingRows: [], indexById, foldedRows, bars }
+    }
+    return {
+      listMessages: listMessages.filter((message) => !ids.has(message.id)),
+      waitingRows: rows.flatMap((item, index) =>
+        ids.has(item.id) && !foldedRows.has(index)
+          ? [{ item: visibleMessage(item, index), index }]
+          : []
+      ),
+      indexById,
+      foldedRows,
+      bars
+    }
+  }, [
+    enabled,
+    isWorking,
+    liveTurnKey,
+    rows,
+    stopping,
+    toolsExpanded,
+    turnJournal,
+    turnKeys,
+    turnStatuses.completedByTurn,
+    expandedTurnIds
+  ])
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
@@ -191,8 +228,7 @@ export function useMobileNativeChatTurnDisclosure({
       }),
     [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
   )
-  const liveReasoningId = line?.reasoning?.message.id
-  const liveLine = useMemo<MobileNativeChatLiveLine | null>(
+  const liveLine = useMemo(
     () =>
       line && {
         ...line,
@@ -202,17 +238,13 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const latestAssistantId = useMemo(
-    () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
-    [waiting.listMessages]
-  )
+  const latestAssistantId =
+    waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null
   const resolveRow = useCallback(
-    (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
-      const index = waiting.indexById?.get(message.id) ?? listIndex
+    (listIndex: number, message: NativeChatMessage) => {
+      const index = waiting.indexById.get(message.id) ?? listIndex
       const turnKey = turnKeys[index]
-      const bar = turnKey === undefined ? undefined : bars.get(turnKey)
-      // A turn's bar draws at its first row; the live turn's carries its running clock and settles
-      // in place. A message folded into a turn (a steer) carries none.
+      const bar = turnKey === undefined ? undefined : waiting.bars.get(turnKey)
       const turnStatus =
         enabled && turnKey !== undefined && bar?.index === index
           ? turnKey === activeTurnKey
@@ -223,15 +255,10 @@ export function useMobileNativeChatTurnDisclosure({
         turnStatus,
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
-        // Why: the key travels and the row calls one stable handler with it. A
-        // closure per row would be a new identity every render of a streaming
-        // transcript, defeating the row's memo; caching one per turn would mean
-        // writing a ref during render, which react-freeze can discard.
         turnKey: turnKey && turnStatus?.workedSeconds != null ? turnKey : undefined,
-        // With no user boundary at all, the session's working state stays authoritative.
         activeTurnIsWorking: inLiveWorkingTurn(index),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
-        reasoningIsLive: message.id === liveReasoningId,
+        reasoningIsLive: message.id === line?.reasoning?.message.id,
         reasoningExpanded:
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
@@ -245,7 +272,6 @@ export function useMobileNativeChatTurnDisclosure({
     [
       turnKeys,
       waiting,
-      bars,
       enabled,
       activeTurnKey,
       active,
@@ -254,18 +280,16 @@ export function useMobileNativeChatTurnDisclosure({
       inLiveWorkingTurn,
       latestAssistantId,
       lineYields,
-      liveReasoningId,
+      line,
       expandedReasoning,
       toggleReasoning,
       openSubagentGroups,
       toggleSubagentGroup
     ]
   )
-
   return {
     active,
     activeActivityText,
-    /** Stable for a given chat scope, so it never disturbs a row's memo. */
     onToggleTurn: toggleExpandedTurn,
     resolveRow,
     listMessages: waiting.listMessages,

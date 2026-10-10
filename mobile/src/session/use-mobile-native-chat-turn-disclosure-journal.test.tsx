@@ -203,11 +203,12 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
           )
         })
         const disclosure = renderer!.root.findByType(Result).props.disclosure
-        const [rowW1, rowB] = messages.map((message, index) =>
+        const [rowW1, rowB, rowW2] = messages.map((message, index) =>
           disclosure.resolveRow(index, message)
         )
-        expect(rowW1.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: 15 })
+        expect(rowW1.turnStatus).toBeNull()
         expect(rowB.turnStatus).toBeNull()
+        expect(rowW2.turnStatus).toEqual({ startedAt: 5_000, thinking: false, workedSeconds: 15 })
       } finally {
         vi.useRealTimers()
       }
@@ -270,8 +271,6 @@ describe('useMobileNativeChatTurnDisclosure with a turn journal', () => {
         })
         expect(drawn).toEqual([
           ['A', 17, false],
-          ['a-tool-1', undefined, false],
-          ['a-tool-2', undefined, false],
           ['FIRST DONE', undefined, false],
           ['B', null, true],
           ['b-answer', undefined, true]

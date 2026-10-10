@@ -23,10 +23,12 @@ import {
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   resumeStructuredQueue,
   structuredAgentSessionHostInstance
 } from './structured-agent-session-queued-pause'
+import { unsettledQueuedMessages } from './structured-agent-session-queued-stop'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -68,6 +70,67 @@ export async function withdrawQueuedMessagesForOperation(
     messageIds: input.messageIds,
     settledByOp: agentSessionOperationKey(input.callerKey, input.operationId)
   })
+}
+
+/**
+ * /clear's carry: the source's unsettled drafts become rows on the replacement
+ * session — the SAME for every client version, with no text on the wire — so the
+ * cards stay visible where the user now is. The replacement's queue starts
+ * paused ('cleared'), lifted exactly like a Stop's: the cards were written for the context /clear just
+ * discarded, so they wait for the user's next turn there, or Resume, rather than
+ * sending into the fresh context unasked. The historical carriedFrom column is
+ * inert on current inserts, so the replacement journal's normal pause state
+ * provides the waiting behavior and no pause outlives the cards. Runs after the clear commits, opening the
+ * replacement's conversation only when there are drafts to carry; the source
+ * rows are then tombstoned. Bookkeeping around the clear: a failure, or a crash
+ * before the carry, leaves the cards on the superseded source — whose
+ * supersession fence already blocks the drain — reported, never gating the
+ * clear. A crash between the copy and the tombstone leaves both, which the
+ * fence also makes harmless: nothing is lost and nothing runs.
+ */
+export async function carryQueuedMessagesToClearReplacement(
+  ctx: AgentSessionTurnContext,
+  input: {
+    replacementSessionId: string
+    openReplacementJournal: () => Promise<AgentSessionJournal | undefined>
+    callerKey: string
+    operationId: string
+  }
+): Promise<void> {
+  try {
+    const rows = unsettledQueuedMessages(ctx.journal)
+    if (rows.length === 0) {
+      return
+    }
+    const replacement = await input.openReplacementJournal()
+    if (!replacement) {
+      throw new Error('the replacement journal is not open')
+    }
+    for (const row of rows) {
+      // A returned card carries over as a plain waiting draft — its refusal
+      // belonged to the source's submissions. The fingerprint is re-scoped to the
+      // replacement, or its echo could never alias the sent bubble.
+      await replacement.queuedMessages.insert({
+        messageId: row.messageId,
+        body: row.body,
+        fingerprint: agentSessionSendBodyFingerprint(input.replacementSessionId, row.body),
+        hostInstance: structuredAgentSessionHostInstance()
+      })
+    }
+    await withdrawQueuedMessagesForOperation(ctx.journal, {
+      sessionId: ctx.sessionId,
+      messageIds: rows.map((row) => row.messageId),
+      callerKey: input.callerKey,
+      operationId: input.operationId
+    })
+  } catch (error) {
+    ctx.logger.warn("carrying queued drafts to /clear's replacement failed", {
+      scope: 'clear-queued-carry',
+      sessionId: ctx.sessionId,
+      replacementSessionId: input.replacementSessionId,
+      error
+    })
+  }
 }
 
 /** Draft actions run like any mutation: admitted on the session's lane, the
