@@ -1,10 +1,6 @@
 import { getPtyIdsForHost } from '../provider/ownership-state'
 import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  getConnectionExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
@@ -49,14 +45,13 @@ export async function listProcessesWithHostScopeFromRuntimeController(
 
 export async function listProcessesFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
-  connectionId?: string | null,
+  hostId?: ExecutionHostId,
   opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
 ) {
-  if (connectionId === null) {
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
     return localProvider.listProcesses()
   }
-  if (connectionId !== undefined) {
-    const hostId = getConnectionExecutionHostId(connectionId)
+  if (hostId !== undefined) {
     try {
       return await getProvider(hostId).listProcesses(opts)
     } catch (error) {

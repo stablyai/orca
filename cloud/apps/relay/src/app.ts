@@ -40,7 +40,7 @@ import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
 import type { CellSeatFeedPage } from './cell-seat-log.js'
-import type { CellFlags } from './cell-flags.js'
+import { type CellFlags, supportedCellFlags } from './cell-flags.js'
 import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
@@ -783,7 +783,9 @@ export function createRelayApp(
       draining: operations.isDraining?.() ?? false,
       regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 3 : 0,
       // The flag workflow's read-back: applied switches, never the desired object.
-      ...(operations.cellFlags ? { flagsApplied: operations.cellFlags() } : {}),
+      ...(operations.cellFlags
+        ? { flagsApplied: operations.cellFlags(), supportedFlags: supportedCellFlags() }
+        : {}),
       connectionCapacity:
         config.connectionHardCap === undefined
           ? null

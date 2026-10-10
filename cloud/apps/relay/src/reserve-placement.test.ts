@@ -162,7 +162,6 @@ describe('reserve placer under concurrent placements', () => {
     refuseFirst!()
     await first
     // The cell's poll sent at 1,003 covers neither; only the second (counted at 1,005) is left.
-    placer.observePoll({ ...target, polledAt: 1_003 })
     expect(placer.load({ ...target, polledAt: 1_003 })).toBe(1)
   })
 })
