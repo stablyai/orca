@@ -20,6 +20,9 @@ const pairedRepairLane = createSessionTabsAuthorityRepairLane({
   isStillRetired: isRetiredSessionTabsPublicationEpoch
 })
 
+// Why: a drop from a resumed subscription coalesces into a timer an older one scheduled.
+const latestArgsByKey = new Map<string, RetiredEpochCensusArgs>()
+
 export type RetiredEpochCensusArgs = {
   environmentId: string
   expectedEnvironmentPairingRevision?: number
@@ -41,7 +44,10 @@ export function scheduleRetiredEpochCensus(
   publicationEpoch: string
 ): void {
   const key = sessionTabsFreshnessKey(args.environmentId, worktreeId)
-  pairedRepairLane.schedule(key, publicationEpoch, () => runCensus(args, key, worktreeId))
+  latestArgsByKey.set(key, args)
+  pairedRepairLane.schedule(key, publicationEpoch, () =>
+    runCensus(latestArgsByKey.get(key) ?? args, key, worktreeId)
+  )
 }
 
 async function runCensus(
@@ -49,6 +55,9 @@ async function runCensus(
   key: string,
   worktreeId: string
 ): Promise<void> {
+  if (!args.isCurrent()) {
+    return
+  }
   const requestFrame = nextReceivedSessionTabsFrame()
   const response = await window.api.runtimeEnvironments.call({
     selector: args.environmentId,
@@ -84,8 +93,14 @@ async function runCensus(
 
 export function forgetRetiredEpochCensuses(isGone: (key: string) => boolean): void {
   pairedRepairLane.forget(isGone)
+  for (const key of latestArgsByKey.keys()) {
+    if (isGone(key)) {
+      latestArgsByKey.delete(key)
+    }
+  }
 }
 
 export function resetRetiredEpochCensusesForTests(): void {
   pairedRepairLane.resetForTests()
+  latestArgsByKey.clear()
 }
