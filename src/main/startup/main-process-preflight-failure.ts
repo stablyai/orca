@@ -1,4 +1,5 @@
 import { app, dialog } from 'electron'
+import { translateMain } from '../i18n/main-i18n'
 import { formatProfileStateStartupFailure } from '../persistence/profile-state/profile-state-startup-failure'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { mainProcessState as state } from './main-process-state'
@@ -35,7 +36,7 @@ export function handleMainProcessPreflightFailure(error: unknown, exitCode = 1):
 
   const showDialogAndExit = (): void => {
     try {
-      dialog.showErrorBox('Orca could not start', message)
+      dialog.showErrorBox(translateMain('startupFailure.title', 'Orca could not start'), message)
     } catch (dialogError) {
       console.warn('[startup] Could not show startup failure:', dialogError)
     } finally {

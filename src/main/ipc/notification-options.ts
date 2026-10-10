@@ -1,8 +1,16 @@
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
-type NotificationStatusTranslator = (key: string, fallback: string) => string
+type NotificationStatusTranslator = (
+  key: string,
+  fallback: string,
+  values?: Record<string, string>
+) => string
 
-const englishNotificationStatus: NotificationStatusTranslator = (_key, fallback) => fallback
+// Why: headless hosts have no catalog, but their English copy still carries {{placeholders}}.
+const englishNotificationStatus: NotificationStatusTranslator = (_key, fallback, values) =>
+  values
+    ? fallback.replace(/\{\{(\w+)\}\}/g, (placeholder, name: string) => values[name] ?? placeholder)
+    : fallback
 
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
 const NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH = 80
@@ -34,16 +42,19 @@ export function buildNotificationOptions(
   sound?: string
 } {
   if (args.source === 'terminal-bell') {
+    const attention = translate('notifications.bell.attentionRequested', 'Attention requested')
     return {
-      title: `Bell in ${args.worktreeLabel ?? 'workspace'}`,
-      body: args.repoLabel ? `${args.repoLabel} · Attention requested` : 'Attention requested'
+      title: translate('notifications.bell.title', 'Bell in {{worktree}}', {
+        worktree: args.worktreeLabel ?? translateWorkspace(translate)
+      }),
+      body: args.repoLabel ? `${args.repoLabel} · ${attention}` : attention
     }
   }
 
   if (args.source === 'test') {
     return {
-      title: 'Orca notifications are on',
-      body: 'This is a test notification from Orca.'
+      title: translate('notifications.test.title', 'Orca notifications are on'),
+      body: translate('notifications.test.body', 'This is a test notification from Orca.')
     }
   }
 
@@ -52,7 +63,11 @@ export function buildNotificationOptions(
     return richOptions
   }
 
-  return buildAgentTaskCompleteFallbackNotificationOptions(args)
+  return buildAgentTaskCompleteFallbackNotificationOptions(args, translate)
+}
+
+function translateWorkspace(translate: NotificationStatusTranslator): string {
+  return translate('notifications.workspaceFallback', 'workspace')
 }
 
 function buildAgentTaskCompleteNotificationOptions(
@@ -64,12 +79,12 @@ function buildAgentTaskCompleteNotificationOptions(
   }
 
   const agentLabel = formatNotificationAgentLabel(args.agentType)
-  const worktreeContext = formatNotificationWorktreeContext(args)
+  const worktreeContext = formatNotificationWorktreeContext(args, translate)
   const statusText = formatAgentNotificationStatusText(args, translate)
 
   return {
     title: `${worktreeContext} - ${agentLabel} ${statusText}`,
-    body: buildAgentTaskCompleteRichBody(args) ?? `${agentLabel} ${statusText}.`
+    body: buildAgentTaskCompleteRichBody(args, translate) ?? `${agentLabel} ${statusText}.`
   }
 }
 
@@ -106,7 +121,10 @@ function formatAgentNotificationStatusText(
   }
 }
 
-function formatNotificationWorktreeContext(args: NotificationDispatchRequest): string {
+function formatNotificationWorktreeContext(
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator
+): string {
   const worktreeLabel = normalizeNotificationText(
     args.worktreeLabel,
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
@@ -118,7 +136,7 @@ function formatNotificationWorktreeContext(args: NotificationDispatchRequest): s
       NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
     )
   }
-  return worktreeLabel || repoLabel || 'workspace'
+  return worktreeLabel || repoLabel || translateWorkspace(translate)
 }
 
 function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolean {
@@ -133,7 +151,10 @@ function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolea
   )
 }
 
-function buildAgentTaskCompleteRichBody(args: NotificationDispatchRequest): string | null {
+function buildAgentTaskCompleteRichBody(
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator
+): string | null {
   const assistantMessage = normalizeNotificationText(
     args.agentLastAssistantMessage,
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
@@ -148,32 +169,44 @@ function buildAgentTaskCompleteRichBody(args: NotificationDispatchRequest): stri
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
   if (toolName && toolInput) {
-    return `Using ${toolName}: ${toolInput}`
+    return translate('notifications.agentTool.usingWithInput', 'Using {{tool}}: {{input}}', {
+      tool: toolName,
+      input: toolInput
+    })
   }
   if (toolName) {
-    return `Using ${toolName}`
+    return translate('notifications.agentTool.using', 'Using {{tool}}', { tool: toolName })
   }
   if (toolInput) {
-    return `Tool input: ${toolInput}`
+    return translate('notifications.agentTool.input', 'Tool input: {{input}}', { input: toolInput })
   }
 
   return null
 }
 
-function buildAgentTaskCompleteFallbackNotificationOptions(args: NotificationDispatchRequest): {
+function buildAgentTaskCompleteFallbackNotificationOptions(
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator
+): {
   title: string
   body: string
 } {
   return {
-    title: `Task complete in ${args.worktreeLabel ?? 'workspace'}`,
-    body: buildAgentTaskCompleteFallbackBody(args)
+    title: translate('notifications.taskComplete.title', 'Task complete in {{worktree}}', {
+      worktree: args.worktreeLabel ?? translateWorkspace(translate)
+    }),
+    body: buildAgentTaskCompleteFallbackBody(args, translate)
   }
 }
 
-function buildAgentTaskCompleteFallbackBody(args: NotificationDispatchRequest): string {
+function buildAgentTaskCompleteFallbackBody(
+  args: NotificationDispatchRequest,
+  translate: NotificationStatusTranslator
+): string {
   return args.repoLabel
     ? `${args.repoLabel}${args.terminalTitle ? ` · ${args.terminalTitle}` : ''}`
-    : (args.terminalTitle ?? 'A coding agent finished working.')
+    : (args.terminalTitle ??
+        translate('notifications.taskComplete.body', 'A coding agent finished working.'))
 }
 
 function formatNotificationAgentLabel(agentType: string | null | undefined): string {

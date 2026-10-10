@@ -19095,6 +19095,31 @@
       "stopped": "detenido",
       "failed": "fallido",
       "finished": "finalizado"
+    },
+    "bell": {
+      "attentionRequested": "Se solicita atención",
+      "title": "Campana en {{worktree}}"
+    },
+    "test": {
+      "title": "Las notificaciones de Orca están activadas",
+      "body": "Esta es una notificación de prueba de Orca."
+    },
+    "workspaceFallback": "espacio de trabajo",
+    "agentTool": {
+      "usingWithInput": "Usando {{tool}}: {{input}}",
+      "using": "Usando {{tool}}",
+      "input": "Entrada de la herramienta: {{input}}"
+    },
+    "taskComplete": {
+      "title": "Tarea completada en {{worktree}}",
+      "body": "Un agente de programación terminó de trabajar."
+    },
+    "permissionProbe": {
+      "body": "Orca te avisará cuando los agentes terminen o los terminales necesiten atención."
+    },
+    "startupRegistration": {
+      "title": "Orca está listo para enviarte notificaciones",
+      "body": "Permite las notificaciones para que Orca te avise cuando los agentes terminen o los terminales necesiten atención."
     }
   },
   "featureTips": {
@@ -19568,5 +19593,73 @@
   },
   "projectField": {
     "updateFailed": "No se pudo actualizar el campo del proyecto"
+  },
+  "gpuFallback": {
+    "recoveredLaunch": {
+      "keepSafeButton": "Mantener el modo de gráficos seguro",
+      "tryHardwareButton": "Probar la aceleración por hardware",
+      "title": "El modo de gráficos seguro está activo",
+      "message": "Orca se recuperó en el modo de gráficos seguro.",
+      "detail": "El modo de gráficos seguro se activó tras fallos gráficos repetidos. Mantenlo para mayor estabilidad, o reinicia y vuelve a probar la aceleración por hardware."
+    },
+    "restartPrompt": {
+      "restartButton": "Reiniciar en modo de gráficos seguro",
+      "keepRunningButton": "Seguir ejecutando",
+      "title": "¿Reiniciar Orca en modo de gráficos seguro?",
+      "message": "El proceso de gráficos de Orca ha fallado repetidamente.",
+      "detail": "El modo de gráficos seguro desactiva la aceleración por hardware y WebGL para esta versión de Orca. Los terminales y el contenido 3D pueden mostrarse más lentamente. Seguir ejecutando no cambia la configuración de gráficos."
+    }
+  },
+  "profileState": {
+    "startupRecovery": {
+      "quitButton": "Salir",
+      "copyCommandButton": "Copiar comando de recuperación",
+      "copyCommandDetail": "Copia el comando de recuperación y ejecútalo cuando Orca se cierre.",
+      "quitDetail": "Sal de Orca y resuelve qué estado del perfil es el válido antes de volver a intentarlo.",
+      "title": "No se puede abrir el estado del perfil de Orca",
+      "message": "Orca no puede abrir este perfil de forma segura."
+    },
+    "copyChoice": {
+      "lastSaved": "Guardado por última vez: {{time}}.",
+      "useSqliteButton": "Usar SQLite (recomendado)",
+      "useJsonButton": "Usar JSON",
+      "quitButton": "Salir",
+      "title": "Elegir el estado del perfil",
+      "message": "Este perfil tiene dos copias guardadas que no coinciden.",
+      "cause": "Esto suele ocurrir después de abrir el perfil en una versión anterior de Orca.",
+      "sqliteOption": "SQLite: lo que guardó esta versión de Orca. Se descartan los cambios hechos en la versión anterior.",
+      "jsonOption": "JSON: incluye los cambios hechos en la versión anterior. Se descartan los cambios que esta versión guardó desde entonces.",
+      "archiveNote": "Orca archiva ambas copias antes de cambiar y luego se reinicia."
+    },
+    "recoveryNotApplied": {
+      "quitButton": "Salir",
+      "title": "El estado del perfil de Orca no se modificó",
+      "message": "Orca no pudo aplicar el estado del perfil seleccionado.",
+      "reopenDetail": "Vuelve a abrir Orca para elegir de nuevo."
+    },
+    "writeFailure": {
+      "title": "Se detuvo el guardado",
+      "message": "Orca dejó de guardar este perfil.",
+      "indeterminateDetail": "Orca no pudo confirmar si se guardó tu cambio más reciente. Los cambios nuevos no se guardarán hasta que reinicies Orca.",
+      "safeDetail": "Los cambios guardados antes de este momento están a salvo. Los cambios nuevos no se guardarán hasta que reinicies Orca.",
+      "okButton": "Aceptar"
+    }
+  },
+  "startupFailure": {
+    "title": "Orca no pudo iniciarse"
+  },
+  "localBuild": {
+    "chooseTitle": "Elegir una compilación local de Orca",
+    "chooseButton": "Elegir compilación",
+    "manifestFilter": "Manifiesto de actualización de Orca",
+    "sameVersionError": "Esta compilación tiene la misma versión que la aplicación en ejecución. Vuelve a ejecutar pn build:mac para crear una compilación con una versión única.",
+    "noLiveTerminals": "No hay terminales activos que deban volver a conectarse.",
+    "oneLiveTerminal": "1 terminal activo se volverá a conectar tras el reinicio.",
+    "liveTerminals": "{{count}} terminales activos se volverán a conectar tras el reinicio.",
+    "confirmTitle": "¿Usar la compilación local de Orca?",
+    "schemaCompatibility": "Las tarjetas del espacio de trabajo y la configuración son compatibles con el esquema de estado {{schemaVersion}}.",
+    "signatureRequirement": "La compilación debe tener la misma firma de código válida que Orca; de lo contrario, la instalación se detendrá.",
+    "useButton": "Usar compilación local",
+    "cancelButton": "Cancelar"
   }
 }

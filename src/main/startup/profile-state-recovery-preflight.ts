@@ -10,6 +10,7 @@ import {
   profileStateRecoveryRequestSchema,
   type ProfileStateRecoveryResponse
 } from '../../shared/profile-state-recovery-command'
+import { translateMain } from '../i18n/main-i18n'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
 import { rollbackProfileState } from '../persistence/profile-state/profile-state-recovery-command'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
@@ -74,10 +75,19 @@ function runDesktopRecovery(argv: readonly string[]): void {
     .then(() =>
       dialog.showMessageBox({
         type: 'error',
-        buttons: ['Quit'],
-        title: 'Orca profile state was not changed',
-        message: 'Orca could not apply the selected profile state.',
-        detail: `${response.message}\n\nReopen Orca to choose again.`
+        buttons: [translateMain('profileState.recoveryNotApplied.quitButton', 'Quit')],
+        title: translateMain(
+          'profileState.recoveryNotApplied.title',
+          'Orca profile state was not changed'
+        ),
+        message: translateMain(
+          'profileState.recoveryNotApplied.message',
+          'Orca could not apply the selected profile state.'
+        ),
+        detail: `${response.message}\n\n${translateMain(
+          'profileState.recoveryNotApplied.reopenDetail',
+          'Reopen Orca to choose again.'
+        )}`
       })
     )
     .catch((error: unknown) => console.warn('[profile-state] Recovery error dialog failed:', error))

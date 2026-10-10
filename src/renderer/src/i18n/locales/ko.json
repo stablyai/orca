@@ -19095,6 +19095,31 @@
       "stopped": "중지됨",
       "failed": "실패함",
       "finished": "완료됨"
+    },
+    "bell": {
+      "attentionRequested": "확인이 필요합니다",
+      "title": "{{worktree}}에서 벨이 울림"
+    },
+    "test": {
+      "title": "Orca 알림이 켜져 있습니다",
+      "body": "Orca에서 보낸 테스트 알림입니다."
+    },
+    "workspaceFallback": "워크스페이스",
+    "agentTool": {
+      "usingWithInput": "{{tool}} 사용 중: {{input}}",
+      "using": "{{tool}} 사용 중",
+      "input": "도구 입력: {{input}}"
+    },
+    "taskComplete": {
+      "title": "{{worktree}}에서 작업 완료",
+      "body": "코딩 에이전트가 작업을 마쳤습니다."
+    },
+    "permissionProbe": {
+      "body": "에이전트가 작업을 마치거나 터미널에서 확인이 필요하면 Orca가 알려 드립니다."
+    },
+    "startupRegistration": {
+      "title": "Orca 알림을 받을 준비가 되었습니다",
+      "body": "알림을 허용하면 에이전트가 작업을 마치거나 터미널에서 확인이 필요할 때 Orca가 알려 드립니다."
     }
   },
   "sidebar": {
@@ -19568,5 +19593,73 @@
   },
   "projectField": {
     "updateFailed": "프로젝트 필드를 업데이트하지 못했습니다"
+  },
+  "gpuFallback": {
+    "recoveredLaunch": {
+      "keepSafeButton": "안전 그래픽 모드 유지",
+      "tryHardwareButton": "하드웨어 가속 시도",
+      "title": "안전 그래픽 모드가 활성화됨",
+      "message": "Orca가 안전 그래픽 모드로 복구되었습니다.",
+      "detail": "그래픽 충돌이 반복되어 안전 그래픽 모드가 활성화되었습니다. 안정성을 위해 유지하거나, 다시 시작하여 하드웨어 가속을 다시 시도하세요."
+    },
+    "restartPrompt": {
+      "restartButton": "안전 그래픽 모드로 다시 시작",
+      "keepRunningButton": "계속 실행",
+      "title": "Orca를 안전 그래픽 모드로 다시 시작할까요?",
+      "message": "Orca의 그래픽 프로세스가 반복적으로 충돌했습니다.",
+      "detail": "안전 그래픽 모드는 이 Orca 버전에서 하드웨어 가속과 WebGL을 비활성화합니다. 터미널과 3D 콘텐츠가 더 느리게 렌더링될 수 있습니다. 계속 실행을 선택하면 그래픽 설정이 변경되지 않습니다."
+    }
+  },
+  "profileState": {
+    "startupRecovery": {
+      "quitButton": "종료",
+      "copyCommandButton": "복구 명령 복사",
+      "copyCommandDetail": "복구 명령을 복사한 다음 Orca가 닫힌 후 실행하세요.",
+      "quitDetail": "Orca를 종료하고 어떤 프로필 상태를 기준으로 할지 정한 후 다시 시도하세요.",
+      "title": "Orca 프로필 상태를 열 수 없음",
+      "message": "Orca가 이 프로필을 안전하게 열 수 없습니다."
+    },
+    "copyChoice": {
+      "lastSaved": "마지막 저장: {{time}}.",
+      "useSqliteButton": "SQLite 사용(권장)",
+      "useJsonButton": "JSON 사용",
+      "quitButton": "종료",
+      "title": "프로필 상태 선택",
+      "message": "이 프로필에 서로 일치하지 않는 저장본이 두 개 있습니다.",
+      "cause": "이 문제는 보통 이전 버전의 Orca에서 프로필을 연 후에 발생합니다.",
+      "sqliteOption": "SQLite: 이 버전의 Orca가 저장한 내용입니다. 이전 버전에서 변경한 내용은 삭제됩니다.",
+      "jsonOption": "JSON: 이전 버전에서 변경한 내용이 포함됩니다. 그 이후 이 버전이 저장한 변경 내용은 삭제됩니다.",
+      "archiveNote": "Orca는 전환하기 전에 두 사본을 모두 보관한 다음 다시 시작합니다."
+    },
+    "recoveryNotApplied": {
+      "quitButton": "종료",
+      "title": "Orca 프로필 상태가 변경되지 않음",
+      "message": "Orca가 선택한 프로필 상태를 적용할 수 없습니다.",
+      "reopenDetail": "Orca를 다시 열어 다시 선택하세요."
+    },
+    "writeFailure": {
+      "title": "저장이 중지됨",
+      "message": "Orca가 이 프로필 저장을 중지했습니다.",
+      "indeterminateDetail": "Orca가 가장 최근 변경 내용이 저장되었는지 확인할 수 없습니다. Orca를 다시 시작할 때까지 새 변경 내용은 저장되지 않습니다.",
+      "safeDetail": "이 시점 이전에 저장된 변경 내용은 안전합니다. Orca를 다시 시작할 때까지 새 변경 내용은 저장되지 않습니다.",
+      "okButton": "확인"
+    }
+  },
+  "startupFailure": {
+    "title": "Orca를 시작할 수 없음"
+  },
+  "localBuild": {
+    "chooseTitle": "로컬 Orca 빌드 선택",
+    "chooseButton": "빌드 선택",
+    "manifestFilter": "Orca 업데이트 매니페스트",
+    "sameVersionError": "이 빌드는 실행 중인 앱과 버전이 같습니다. pn build:mac을 다시 실행하여 고유한 버전의 빌드를 만드세요.",
+    "noLiveTerminals": "다시 연결해야 하는 실행 중인 터미널이 없습니다.",
+    "oneLiveTerminal": "실행 중인 터미널 1개가 다시 시작 후 다시 연결됩니다.",
+    "liveTerminals": "실행 중인 터미널 {{count}}개가 다시 시작 후 다시 연결됩니다.",
+    "confirmTitle": "로컬 Orca 빌드를 사용할까요?",
+    "schemaCompatibility": "워크스페이스 카드와 설정은 상태 스키마 {{schemaVersion}}과(와) 호환됩니다.",
+    "signatureRequirement": "빌드에는 Orca와 동일한 유효한 코드 서명이 있어야 하며, 그렇지 않으면 설치가 중지됩니다.",
+    "useButton": "로컬 빌드 사용",
+    "cancelButton": "취소"
   }
 }
