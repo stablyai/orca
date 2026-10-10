@@ -12649,7 +12649,7 @@
           "keyStored": "API key saved · {{value0}}",
           "keyStoredHelp": "Stored locally and sent only to the selected site for usage refreshes. It takes priority over the ZCode CLI sign-in.",
           "usingCli": "Using the ZCode CLI sign-in",
-          "usingCliHelp": "Orca reads the Coding Plan key from ~/.zcode/cli/config.json. Save an API key below to link the plan here instead.",
+          "usingCliHelp": "Orca reads the selected Coding Plan from the ZCode CLI credential store on this computer. Save an API key below to link the plan here instead.",
           "notConfigured": "No GLM Coding Plan linked",
           "notConfiguredHelp": "Save the plan API key below, or sign in with the ZCode CLI on this computer.",
           "refreshUsage": "Refresh usage",
@@ -12670,6 +12670,20 @@
           "hostOnly": "Change the plan site and API key in the desktop app on the computer running Orca.",
           "detailsUnavailable": "Plan credential details are only readable on the computer running Orca.",
           "siteUnavailable": "Host plan site unavailable"
+        },
+        "ZcodeCliSetupSection": {
+          "title": "Use GLM with ZCode",
+          "description": "Sign in to use GLM as a coding agent. The quota API key above only monitors usage; ZCode owns its own sign-in and model selection.",
+          "help": "Choose browser sign-in for your plan site, or use ZCode’s masked API-key setup. After signing in, start ZCode and use /model to choose a GLM model.",
+          "zai": "Z.AI browser sign-in",
+          "bigmodel": "BigModel browser sign-in",
+          "apiKey": "ZCode API-key setup",
+          "close": "Close setup terminal",
+          "loading": "Loading sign-in terminal…",
+          "terminalTitle": "ZCode sign-in",
+          "terminalLabel": "ZCode sign-in terminal",
+          "apiKeyInstructions": "Press Enter to start ZCode, then enter /login and choose the API-key option for your plan site. Enter the key in ZCode’s masked prompt.",
+          "oauthInstructions": "Press Enter to run the sign-in command, then open the authorization URL printed by ZCode. Sign-in is saved on this terminal’s execution host."
         },
         "deltaMove": {
           "action": "Move the new projects…",

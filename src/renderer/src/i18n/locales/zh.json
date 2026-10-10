@@ -12263,7 +12263,7 @@
           "keyStored": "API key 已保存 · {{value0}}",
           "keyStoredHelp": "仅保存在本地，并只发送到所选站点用于用量刷新。优先级高于 ZCode CLI 登录。",
           "usingCli": "正在使用 ZCode CLI 登录",
-          "usingCliHelp": "Orca 从 ~/.zcode/cli/config.json 读取 Coding Plan key。在下方保存 API key 即可改为在此关联套餐。",
+          "usingCliHelp": "Orca 会从此电脑上的 ZCode CLI 凭据存储中读取所选编程套餐。您也可以在下方保存 API 密钥以直接关联套餐。",
           "notConfigured": "尚未关联 GLM Coding Plan",
           "notConfiguredHelp": "在下方保存套餐 API key，或在这台电脑上通过 ZCode CLI 登录。",
           "refreshUsage": "刷新用量",
@@ -12284,6 +12284,20 @@
           "hostOnly": "请在运行 Orca 的电脑上的桌面应用中更改套餐站点和 API 密钥。",
           "detailsUnavailable": "计划凭据详细信息只能在运行 Orca 的计算机上读取。",
           "siteUnavailable": "主机计划网站不可用"
+        },
+        "ZcodeCliSetupSection": {
+          "title": "通过 ZCode 使用 GLM",
+          "description": "登录后即可将 GLM 用作编程代理。上方的配额 API 密钥仅用于监控用量；ZCode 自行管理登录和模型选择。",
+          "help": "选择对应套餐站点的浏览器登录，或使用 ZCode 的隐藏输入 API 密钥设置。登录后，启动 ZCode 并使用 /model 选择 GLM 模型。",
+          "zai": "Z.AI 浏览器登录",
+          "bigmodel": "BigModel 浏览器登录",
+          "apiKey": "ZCode API 密钥设置",
+          "close": "关闭设置终端",
+          "loading": "正在加载登录终端…",
+          "terminalTitle": "ZCode 登录",
+          "terminalLabel": "ZCode 登录终端",
+          "apiKeyInstructions": "按 Enter 启动 ZCode，然后输入 /login 并选择套餐站点的 API 密钥选项。在 ZCode 的隐藏输入提示中输入密钥。",
+          "oauthInstructions": "按 Enter 运行登录命令，然后打开 ZCode 输出的授权网址。登录信息保存在此终端的执行主机上。"
         },
         "NotificationHostToggles": {
           "offCount": "{{count}} 台已关闭",

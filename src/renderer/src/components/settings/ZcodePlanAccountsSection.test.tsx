@@ -8,7 +8,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
-  const settings: { zcodePlanSite?: ZcodePlanSite } = { zcodePlanSite: 'zai' }
+  const settings: { zcodePlanSite?: ZcodePlanSite; agentCmdOverrides: { zcode?: string } } = {
+    agentCmdOverrides: {},
+    zcodePlanSite: 'zai'
+  }
   return {
     isWeb: vi.fn(() => false),
     getStatus: vi.fn(),
@@ -93,6 +96,7 @@ describe('ZcodePlanAccountsSection', () => {
     expect(screen.getByRole('combobox')).toHaveTextContent('Zhipu · BigModel')
     expect(screen.getByPlaceholderText('Paste your GLM Coding Plan API key')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Z.AI browser sign-in' })).not.toBeInTheDocument()
   })
 
   it('keeps paired host credentials unknown beside successful quota', async () => {
@@ -138,7 +142,9 @@ describe('ZcodePlanAccountsSection', () => {
     render(<ZcodePlanAccountsSection />)
 
     expect(await screen.findByText('Using the ZCode CLI sign-in')).toBeInTheDocument()
-    expect(screen.getByText(/~\/\.zcode\/cli\/config\.json/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/selected Coding Plan from the ZCode CLI credential store/)
+    ).toBeInTheDocument()
   })
 
   it('saves a trimmed API key through the credential IPC', async () => {
