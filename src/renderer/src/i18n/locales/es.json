@@ -12447,6 +12447,16 @@
           "description": "Este host vuelve a su servidor gestionado tal como está. Lo que la versión anterior de Orca agregó o cambió aquí no se mueve; permanece solo en los ajustes guardados de esta computadora hasta que se limpien.",
           "cancel": "Cancelar",
           "confirm": "Conservar la versión del servidor"
+        },
+        "offscreenBrowserPages": {
+          "detail": "Browser tabs render offscreen and paint into the pane, so an agent clicking or typing in a page never moves focus or interrupts IME composition in your terminal. Applies to tabs opened after the change.",
+          "search": {
+            "title": "Focus-safe browser pages",
+            "description": "Render browser tabs offscreen so agent clicks and typing never take focus from your terminal.",
+            "keywordBrowser": "browser",
+            "keywordFocus": "focus",
+            "keywordIme": "ime"
+          }
         }
       },
       "right": {

@@ -118,7 +118,7 @@ describe('main window webview security', () => {
       webSecurity: true
     })
     expect(preferences).not.toHaveProperty('preloadURL')
-    expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+    expect(String(preferences.preload)).toMatch(/browser-page-guest-preload\.js$/)
   })
 })
 
@@ -191,7 +191,7 @@ describe('orca-preview scheme admission', () => {
       { src: 'https://example.com' } as never
     )
 
-    expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+    expect(String(preferences.preload)).toMatch(/browser-page-guest-preload\.js$/)
   })
 
   it('denies a preview URL whose grant is unknown or revoked', () => {

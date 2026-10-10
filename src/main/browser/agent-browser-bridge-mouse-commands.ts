@@ -7,6 +7,7 @@ import {
   resolveMobileTouchClickPoint
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { sendPageMouseEvent } from './offscreen-page-frames'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
@@ -46,7 +47,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
           // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
           if (!point.handled) {
-            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+            await sendPageMouseEvent(wc, {
               type: 'mousePressed',
               x: point.x,
               y: point.y,
@@ -55,7 +56,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               modifiers: cdpModifiers,
               clickCount: 1
             })
-            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+            await sendPageMouseEvent(wc, {
               type: 'mouseReleased',
               x: point.x,
               y: point.y,

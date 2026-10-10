@@ -20,6 +20,7 @@ import {
   respondToBrowserWebAuthnAccountRequest
 } from '../browser/browser-webauthn-account-picker'
 import type { BrowserWebAuthnAccountResponse } from '../../shared/browser-webauthn-account'
+import { offscreenPageHost } from './offscreen-page'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -64,13 +65,17 @@ export function registerBrowserHandlers(): void {
     }
     if (repairPolicies) {
       const guest = webContents.fromId(args.webContentsId)
-      if (
-        !guest ||
-        guest.isDestroyed() ||
-        guest.getType() !== 'webview' ||
-        guest.hostWebContents?.id !== event.sender.id
-      ) {
+      const isWebview = guest?.getType() === 'webview'
+      // Why the host's record for offscreen pages: guest cleanup drops the manager's owner record,
+      // and repair is exactly the path that runs after that.
+      const ownedBySender = isWebview
+        ? guest?.hostWebContents?.id === event.sender.id
+        : offscreenPageHost.ownsWebContents(args.webContentsId, event.sender.id)
+      if (!guest || guest.isDestroyed() || !ownedBySender) {
         return false
+      }
+      if (!isWebview) {
+        browserManager.admitRendererOffscreenGuest(guest.id, event.sender.id)
       }
       browserManager.attachGuestPolicies(guest)
     }

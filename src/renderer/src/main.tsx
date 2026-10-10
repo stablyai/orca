@@ -5,6 +5,8 @@
 import './lib/react-devtools-commit-hook-shim'
 import './lib/react-commit-cascade-observer'
 import './assets/main.css'
+// Why this early: its window capture key listener must be registered before any other.
+import './components/browser-pane/host-guest/offscreen-page-key-isolation'
 
 import { StrictMode } from 'react'
 import { useTranslation } from 'react-i18next'
