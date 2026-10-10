@@ -96,17 +96,19 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
     assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field below is optional and re-checked, so a payload that does not match reads as no models.
     const parsed = JSON.parse(stdout) as {
       models?: {
         slug?: string
         display_name?: string
+        visibility?: string
         supported_reasoning_levels?: { effort?: string }[]
         default_reasoning_level?: string
       }[]
     }
     return uniqueModels(
       (parsed.models ?? [])
-        .filter((model) => model.slug && model.display_name)
+        .filter((model) => model.slug && model.display_name && model.visibility !== 'hide')
         .map((model) => ({
           id: model.slug!,
           label: model.display_name!,

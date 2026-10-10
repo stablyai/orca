@@ -90,6 +90,9 @@ export type RuntimeStore = {
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
+    orchestrationDefaultWorkerAgent?: GlobalSettings['orchestrationDefaultWorkerAgent']
+    orchestrationWorkerModels?: GlobalSettings['orchestrationWorkerModels']
+    orchestrationWorkerEfforts?: GlobalSettings['orchestrationWorkerEfforts']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     // Read by the launch-line carry rule to name the shell a local line is typed into.
