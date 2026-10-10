@@ -80,7 +80,7 @@ export function buildFileLinkActions(
     useAppStore.getState(),
     fileContext
   )
-  const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
+  const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
   const isMac = navigator.userAgent.includes('Mac')
 
   // Why: the OS can only launch a local file, so remote links keep the same row by

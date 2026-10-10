@@ -76,7 +76,7 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
   // OS; a resolved remote owner downloads first, and no owner at all is refused below.
   const ownedByThisMachine =
     connectionId === null && runtimeEnvironmentId === null && worktreeRoot !== null
-  if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext, document.filePath)) {
+  if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext)) {
     void window.api.shell.openFilePath(document.filePath, LOCAL_EXECUTION_HOST_ID)
     return
   }

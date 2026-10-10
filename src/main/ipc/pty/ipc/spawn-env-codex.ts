@@ -5,6 +5,8 @@ import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-ho
 import { isSafePtySessionId } from '../../../daemon/pty-session-id'
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
+import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import {
@@ -159,6 +161,10 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         ctx.env,
         ctx.deps.runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null
+      )
+      stampRuntimeSourceEnv(
+        ctx.env,
+        getRuntimeSourceStamp(ctx.deps.runtime, getAppEnvironment().getPath('userData'))
       )
       promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
     } catch (err) {

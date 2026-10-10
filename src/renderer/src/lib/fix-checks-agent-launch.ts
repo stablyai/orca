@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
+import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -81,11 +82,9 @@ async function resolveSavedAgentOverride(
 
 async function pickExistingWorktreeAgent(
   worktreeId: string,
-  savedAgent: TuiAgent | null | undefined,
-  repoConnectionId: string | null | undefined
+  savedAgent: TuiAgent | null | undefined
 ): Promise<TuiAgent | null> {
-  const connectionId = getConnectionId(worktreeId) ?? repoConnectionId ?? null
-  const detectedAgents = await detectAgentsForConnection(connectionId)
+  const detectedAgents = await ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
   if (savedAgent) {
     if (isAgentAvailable(savedAgent, detectedAgents)) {
       return savedAgent
@@ -160,11 +159,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       return false
     }
     const targetConnectionId = getConnectionId(targetWorktreeId) ?? repo?.connectionId ?? null
-    const agent = await pickExistingWorktreeAgent(
-      targetWorktreeId,
-      savedAgentId,
-      repo?.connectionId
-    )
+    const agent = await pickExistingWorktreeAgent(targetWorktreeId, savedAgentId)
     if (!agent) {
       return false
     }

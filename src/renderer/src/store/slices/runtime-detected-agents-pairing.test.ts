@@ -23,6 +23,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 globalThis.window = { api: {} }
 import { createTestStore } from './store-test-helpers'
 import { getRuntimeAgentInventoryKey } from './runtime-agent-inventory-key'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 
 function environment(pairingRevision: number): PublicKnownRuntimeEnvironment {
   return {
@@ -155,6 +156,30 @@ describe('runtime detection across a re-pair', () => {
     expect(rpc.call).toHaveBeenCalledTimes(1)
     expect(rpc.call.mock.calls[0]?.[3]).toEqual({ expectedEnvironmentPairingRevision: 1 })
     expect(store.getState().runtimeDetectedAgentIds[WORKSPACE_KEY]).toBeUndefined()
+  })
+
+  it("fences an old host's SSH-target probe to the pairing captured before its capability wait", async () => {
+    const store = createTestStore()
+    let answerCapability!: (supported: boolean) => void
+    rpc.supports.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        answerCapability = resolve
+      })
+    )
+    rpc.status.mockResolvedValue({ capabilities: [], hostPlatform: 'win32' })
+    rpc.call.mockResolvedValue(['claude'])
+    store.setState({
+      repos: [{ ...TEST_REPO, connectionId: 'target', executionHostId: 'runtime:detection-peer' }],
+      worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: WORKTREE, repoId: TEST_REPO.id })] }
+    })
+    store.getState().setRuntimeEnvironments([environment(1)])
+    const old = store.getState().ensureRuntimeDetectedAgents('detection-peer', WORKTREE)
+    store.getState().setRuntimeEnvironments([environment(2)])
+    answerCapability(false)
+    await old
+    expect(rpc.call.mock.calls.map((call) => [call[1], call[3]])).toEqual([
+      ['preflight.detectRemoteAgents', { expectedEnvironmentPairingRevision: 1 }]
+    ])
   })
 
   it("drops a retired pairing's needs-update flag", async () => {

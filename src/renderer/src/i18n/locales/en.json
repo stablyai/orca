@@ -3639,7 +3639,8 @@
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
-            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents"
+            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents",
+            "hostUnreachable": "Can’t reach this workspace’s host to list its agents"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",

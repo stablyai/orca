@@ -8,6 +8,7 @@ import type { RpcResponse } from '../runtime/rpc/core'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { getRuntimeSourceStamp } from '../runtime/host-descriptor'
 import {
   HostCliUnavailableError,
   runHostOrcaCliPassthrough,
@@ -84,7 +85,10 @@ export async function runRemoteOrcaCli(
 
   let passthroughFailure: HostCliUnavailableError | null = null
   try {
-    return await runHostOrcaCliPassthrough(request, passthroughOptions)
+    return await runHostOrcaCliPassthrough(request, {
+      runtimeSource: getRuntimeSourceStamp(runtime),
+      ...passthroughOptions
+    })
   } catch (err) {
     if (!(err instanceof HostCliUnavailableError)) {
       throw err

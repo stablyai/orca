@@ -319,6 +319,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:runtime-electron-ratchet
 
+      - name: Enforce owner-routing ratchet
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: pnpm run check:owner-routing-ratchet
+
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm run check:node-runtime-pin

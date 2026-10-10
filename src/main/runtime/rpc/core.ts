@@ -53,6 +53,8 @@ export type RpcRequest = {
   orchestrationRequestId?: string
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Why unknown: untrusted wire input; runtime-source-admission.ts validates it.
+  expectedRuntimeSource?: unknown
 }
 
 export type LegacyCoordinatorAuthorityProof = Readonly<{

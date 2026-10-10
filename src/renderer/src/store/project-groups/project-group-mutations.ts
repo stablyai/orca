@@ -15,8 +15,8 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
-import { repoWithFetchedOwner, settingsForRepoOwner } from '../repos/owner-routing'
-import { projectGroupWithFetchedOwner } from './project-group-owner-stamping'
+import { settingsForRepoOwner } from '../repos/owner-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -47,7 +47,7 @@ export function createProjectGroupMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).group
-        const ownedGroup = projectGroupWithFetchedOwner(group, target)
+        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: group })
         const ownerHostId = getProjectGroupHostId(ownedGroup)
         set((s) => {
           // An overlapping catalog refresh may have already inserted a newer copy.
@@ -92,7 +92,7 @@ export function createProjectGroupMutationActions(
         if (!updated) {
           return false
         }
-        const ownedGroup = projectGroupWithFetchedOwner(updated, target)
+        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: updated })
         set((s) => ({
           projectGroups: s.projectGroups.map((group) =>
             projectGroupMatchesOwnerHost(group, groupId, ownerHostId) ? ownedGroup : group
@@ -252,7 +252,7 @@ export function createProjectGroupMutationActions(
         if (!moved) {
           return false
         }
-        const ownedMoved = repoWithFetchedOwner(moved, target)
+        const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
         const movedHostId = getRepoExecutionHostId(ownedMoved)
         set((s) => {
           const nextRepos = s.repos.map((repo) =>

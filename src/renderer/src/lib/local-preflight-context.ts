@@ -200,8 +200,11 @@ export function getLocalAgentPreflightContext(
 
   // Why: Settings -> Agents is global and can mount before any project is
   // active; still respect the Windows/WSL runtime default for PATH detection.
+  // An active workspace on another host says nothing about this machine's context (#18837).
   const globalRuntime = getGlobalWindowsExecutionRuntimeContext(
-    state,
+    !worktreeId && isActiveWorkspaceOnAnotherHost(state)
+      ? { ...state, activeRepoId: null, activeWorktreeId: null }
+      : state,
     worktreeId,
     appPlatform,
     wslContext
@@ -254,6 +257,12 @@ export function getLocalAgentPreflightContext(
     return getWslPreflightContext(wslDistro)
   }
   return undefined
+}
+
+function isActiveWorkspaceOnAnotherHost(state: AppState): boolean {
+  const activeWorktree = getLocalProjectRuntimeWorkspace(state, undefined)
+  const repo = getLocalRuntimeRepoForWorktree(state, activeWorktree)
+  return Boolean(repo) && (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(activeWorktree))
 }
 
 function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {

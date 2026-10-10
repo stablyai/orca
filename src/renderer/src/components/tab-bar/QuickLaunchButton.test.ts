@@ -23,7 +23,9 @@ const {
   },
   openSettingsPageMock: vi.fn(),
   openSettingsTargetMock: vi.fn(),
-  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] }))
+  useDetectedAgentsMock: vi.fn((): { detectedIds: string[] | null; detectionFailed?: boolean } => ({
+    detectedIds: ['claude', 'codex', 'gemini']
+  }))
 }))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -197,6 +199,16 @@ describe('QuickLaunchAgentMenuItems', () => {
       kind: 'ssh',
       connectionId: 'ssh-target-1'
     })
+  })
+
+  // Why (#25523): a host that never answered is not a host with nothing installed.
+  it('says the host is unreachable instead of reporting no agents', () => {
+    useDetectedAgentsMock.mockReturnValueOnce({ detectedIds: null, detectionFailed: true })
+
+    const html = renderAgentMenuItems()
+
+    expect(html).toContain('reach this workspace')
+    expect(html).not.toContain('No agents detected')
   })
 
   it('does not label an auto-picked or blank default as configured', () => {

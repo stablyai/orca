@@ -132,6 +132,35 @@ describe('buildHostCliEnv', () => {
     expect(env.ORCA_CLI_COMMAND).toBe('orca')
   })
 
+  it('stamps this runtime as the source and ignores remote or inherited stamps', () => {
+    const remoteSource = {
+      ORCA_RUNTIME_SOURCE_ID: 'remote-chosen-source',
+      ORCA_RUNTIME_SOURCE_INCARNATION: 'remote-chosen-runtime'
+    }
+    const build = (runtimeSource?: { sourceId: string; incarnation: string } | null) =>
+      buildHostCliEnv({
+        bridgeCredential: 'sshb_test',
+        hostEnv: {
+          ORCA_RUNTIME_SOURCE_ID: 'parent-source',
+          ORCA_RUNTIME_SOURCE_INCARNATION: 'parent-runtime'
+        },
+        remoteEnv: remoteSource,
+        userDataPath: '/host/user-data',
+        remoteCwd: '/srv/repo',
+        runtimeSource
+      })
+
+    expect(build({ sourceId: 'this-source', incarnation: 'this-runtime' })).toMatchObject({
+      ORCA_RUNTIME_SOURCE_ID: 'this-source',
+      ORCA_RUNTIME_SOURCE_INCARNATION: 'this-runtime',
+      ORCA_RUNTIME_SOURCE_PROFILE_PATH: '/host/user-data',
+      ORCA_USER_DATA_PATH: '/host/user-data'
+    })
+    const unstamped = build(null)
+    expect(unstamped.ORCA_RUNTIME_SOURCE_ID).toBeUndefined()
+    expect(unstamped.ORCA_RUNTIME_SOURCE_INCARNATION).toBeUndefined()
+  })
+
   it('never lets a remote command claim a local agent session', () => {
     // The host's env carries a session id when Orca was launched inside a structured session; the
     // remote shell's own is from another machine. Session identity is same-host only.
