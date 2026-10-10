@@ -1,6 +1,7 @@
 import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
+import type { PlaybackSuppressionService } from './playback-suppression-service'
 
 /**
  * Lazy accessors for the speech services.
@@ -24,11 +25,13 @@ type SpeechSettingsStore = {
 export type SpeechServiceFactories = {
   createModelManager(customModelsDir: string | undefined): ModelManager
   createSttService(models: ModelManager): SttService
+  createPlaybackSuppressionService(): PlaybackSuppressionService
 }
 
 let factories: SpeechServiceFactories | null = null
 let modelManager: ModelManager | null = null
 let sttService: SttService | null = null
+let playbackSuppressionService: PlaybackSuppressionService | null = null
 
 export function setSpeechServiceFactories(next: SpeechServiceFactories | null): void {
   factories = next
@@ -57,4 +60,11 @@ export function getSpeechSttService(store: SpeechSettingsStore): SttService {
     sttService = requireFactories().createSttService(getSpeechModelManager(store))
   }
   return sttService
+}
+
+export function getPlaybackSuppressionService(): PlaybackSuppressionService {
+  if (!playbackSuppressionService) {
+    playbackSuppressionService = requireFactories().createPlaybackSuppressionService()
+  }
+  return playbackSuppressionService
 }

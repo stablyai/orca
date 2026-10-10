@@ -5,6 +5,7 @@ import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
+  runNodeScript('config/scripts/build-playback-suppression-windows.mjs')
   process.exit(0)
 }
 
@@ -36,9 +37,12 @@ for (const target of [process.stdout, process.stderr]) {
 }
 
 const exitCodes = await Promise.all(
-  ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
-    (scriptName) => runPnpmScript(scriptName)
-  )
+  [
+    'build:computer-macos',
+    'build:keyboard-layout-macos',
+    'build:notification-status-macos',
+    'build:playback-suppression-macos'
+  ].map((scriptName) => runPnpmScript(scriptName))
 )
 clearTimeout(forceTimer)
 for (const [signal, handler] of signalHandlers) {
@@ -91,6 +95,7 @@ function terminateAll(signal) {
     }
   }
 }
+
 
 function runPnpmScript(scriptName) {
   if (stopping) {

@@ -29,6 +29,7 @@ import {
   getDevBundlePlistPatches,
   getDevHelperPlistPatches
 } from './dev-electron-bundle-identity.mjs'
+import { preparePlaybackSuppressionHelper } from './dev-playback-suppression-helper.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -468,6 +469,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 }
 
 seedDevInstanceIdentityEnv()
+preparePlaybackSuppressionHelper()
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }

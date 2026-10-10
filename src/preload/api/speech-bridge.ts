@@ -41,6 +41,14 @@ export const speechApi = {
     ),
   stopDictation: (sessionId = 'desktop'): Promise<void> =>
     ipcRenderer.invoke('speech:stopDictation', sessionId),
+  getPlaybackSuppressionCapability: (): Promise<boolean> =>
+    ipcRenderer.invoke('speech:getPlaybackSuppressionCapability'),
+  acquirePlaybackSuppression: (
+    sessionId: string
+  ): Promise<{ active: true } | { active: false; reason: 'canceled' | 'unavailable' }> =>
+    ipcRenderer.invoke('speech:acquirePlaybackSuppression', sessionId),
+  releasePlaybackSuppression: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke('speech:releasePlaybackSuppression', sessionId),
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

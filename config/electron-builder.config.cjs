@@ -440,6 +440,7 @@ module.exports = {
         signMacStandaloneHelper(path, 'orcad template binary', context.packager)
     })
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
+    chmodMacPlaybackSuppressionHelper(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -459,6 +460,11 @@ module.exports = {
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-keyboard-layout'),
         'orca-keyboard-layout',
+        context.packager
+      )
+      await signMacStandaloneHelper(
+        join(resourcesDir, 'playback-suppression', 'orca-playback-suppression'),
+        'orca-playback-suppression',
         context.packager
       )
     }
@@ -498,6 +504,10 @@ module.exports = {
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
         to: 'bin/orca.exe'
+      },
+      {
+        from: 'native/playback-suppression-windows/.build/orca-playback-suppression.exe',
+        to: 'playback-suppression/orca-playback-suppression.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -595,6 +605,10 @@ module.exports = {
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
+      },
+      {
+        from: 'native/playback-suppression-macos/.build/release/orca-playback-suppression',
+        to: 'playback-suppression/orca-playback-suppression'
       },
       featureWallResources
     ],
@@ -759,6 +773,15 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   }
 }
 
+function chmodMacPlaybackSuppressionHelper(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const helperPath = join(resourcesDir, 'playback-suppression', 'orca-playback-suppression')
+  if (existsSync(helperPath)) {
+    chmodSync(helperPath, 0o755)
+  }
+}
 async function signMacComputerUseHelper(helperAppPath, packager) {
   if (!existsSync(helperAppPath)) {
     if (isMacRelease) {
@@ -804,7 +827,8 @@ async function signMacStandaloneHelper(helperPath, helperName, packager) {
   if (!identity) {
     throw new Error(`Missing signing identity for ${helperName} helper`)
   }
-  // Why: nested executables must be signed before the outer app bundle is sealed.
+  // Why: standalone Mach-O helpers must be signed before the outer app bundle
+  // is sealed or hardened-runtime release builds can reject their execution.
   const args = ['--force', '--sign', identity]
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')

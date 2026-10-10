@@ -8923,7 +8923,11 @@
           "1eac933202": "macOS 개인 정보 보호 및 보안을 열었습니다. 액세스 권한을 부여한 후 받아쓰기를 다시 활성화하세요.",
           "cd9fe37556": "마이크 권한이 부여되었습니다.",
           "6fa734ed95": "{{value0}} 삭제",
-          "openAiKeyName": "OpenAI 트랜스크립션 키"
+          "openAiKeyName": "OpenAI 트랜스크립션 키",
+          "6b0ed79a8f": "Mute other audio while dictating",
+          "66296e0568": "Temporarily mute this computer's output while the microphone is active.",
+          "a2f0263871": "System audio muting is not available on this computer.",
+          "50504af1f2": "Checking system audio support…"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -15903,7 +15907,9 @@
           "2d5b9fabf9": "마이크 액세스가 거부되었습니다. 시스템 설정에서 액세스 권한을 부여한 다음 Orca를 다시 시작하세요.",
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
-          "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다."
+          "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
+          "c97ad62022": "Could not mute other audio. Dictation will continue.",
+          "0080b89cf5": "Could not restore other audio. Unmute it in system controls."
         },
         "DictationIndicator": {
           "335e1bc6cb": "받아쓰기 중지",

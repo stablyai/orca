@@ -12,6 +12,8 @@ import { formatFinalTranscriptSegment } from './dictation-final-segments'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
 import { showDictationStartErrorToast } from './dictation-start-error-toast'
+import { useDictationPlaybackSuppression } from './use-dictation-playback-suppression'
+import * as dictationRunAbort from './dictation-run-abort'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
@@ -30,6 +32,8 @@ export function DictationController() {
     discardBufferedAudio,
     getCapturedChunkCount
   } = useAudioCapture(publishDictationMeter)
+  const { acquirePlaybackSuppression, releasePlaybackSuppression } =
+    useDictationPlaybackSuppression()
 
   const dictationStateRef = useRef(dictationState)
   dictationStateRef.current = dictationState
@@ -58,6 +62,7 @@ export function DictationController() {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture()
+      await releasePlaybackSuppression(sessionId)
       try {
         await window.api.speech.stopDictation(sessionId)
       } catch {
@@ -88,7 +93,7 @@ export function DictationController() {
       setDictationState('idle')
       setPartialTranscript('')
     },
-    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount]
+    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount, releasePlaybackSuppression]
   )
 
   const startDictation = useCallback(async () => {
@@ -98,18 +103,7 @@ export function DictationController() {
 
     const modelId = settings?.voice?.sttModel
     if (!modelId) {
-      toast('No speech model selected. Download one in Settings > Voice.', {
-        action: {
-          label: translate(
-            'auto.components.dictation.DictationController.bb7f599ee7',
-            'Open Settings'
-          ),
-          onClick: () => {
-            useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
-            useAppStore.getState().openSettingsPage()
-          }
-        }
-      })
+      dictationRunAbort.showNoSpeechModelToast()
       return
     }
 
@@ -134,6 +128,22 @@ export function DictationController() {
     let captureStarted = false
 
     try {
+      if (settings.voice.muteSystemAudioDuringDictation) {
+        const suppressionOutcome = await acquirePlaybackSuppression(sessionId)
+        if (suppressionOutcome === 'canceled') {
+          if (dictationRunRef.current === runId) {
+            activeSessionIdRef.current = null
+            dictationStateRef.current = 'idle'
+            setDictationState('idle')
+            setPartialTranscript('')
+          }
+          return
+        }
+      }
+      if (dictationRunRef.current !== runId) {
+        await releasePlaybackSuppression(sessionId)
+        return
+      }
       // Why: worker startup can take seconds after idle teardown. Capture first
       // and buffer locally so speech during "Starting..." is not discarded.
       const preferredMicrophoneDeviceId = settings?.voice?.microphoneDeviceId ?? null
@@ -143,16 +153,10 @@ export function DictationController() {
         microphoneDeviceId: preferredMicrophoneDeviceId,
         microphoneDeviceLabel: settings?.voice?.microphoneDeviceLabel ?? null,
         onCaptureLost: () => {
-          if (dictationRunRef.current !== runId) {
-            return
-          }
-          toast.message(
-            translate(
-              'auto.components.dictation.DictationController.micDisconnected',
-              'Microphone disconnected. Dictation stopped.'
-            )
-          )
-          stopDictationRef.current?.()
+          dictationRunAbort.handleDictationCaptureLost({
+            isStaleRun: dictationRunRef.current !== runId,
+            stopDictation: () => stopDictationRef.current?.()
+          })
         }
       })
       captureStarted = true
@@ -177,30 +181,31 @@ export function DictationController() {
       if (stopRequestedDuringStartRef.current) {
         stopCapture({ preserveBufferedAudio: true })
       }
+      const abortStaleRun = (): Promise<void> =>
+        dictationRunAbort.abortStaleDictationRun({
+          sessionId,
+          stopCapture,
+          releasePlaybackSuppression,
+          discardBufferedAudio,
+          drainStoppedSession
+        })
       if (dictationRunRef.current !== runId) {
-        discardBufferedAudio()
-        stopCapture()
         insertionTargetRef.current = null
+        await abortStaleRun()
         return
       }
 
       await window.api.speech.startDictation(modelId, undefined, sessionId)
       if (dictationRunRef.current !== runId) {
-        discardBufferedAudio()
         insertionTargetRef.current = null
-        stopCapture()
-        await window.api.speech.stopDictation(sessionId).catch(() => undefined)
-        drainStoppedSession(sessionId)
+        await abortStaleRun()
         return
       }
 
       await flushBufferedAudio()
       if (dictationRunRef.current !== runId) {
-        discardBufferedAudio()
         insertionTargetRef.current = null
-        stopCapture()
-        await window.api.speech.stopDictation(sessionId).catch(() => undefined)
-        drainStoppedSession(sessionId)
+        await abortStaleRun()
         return
       }
       if (stopRequestedDuringStartRef.current) {
@@ -215,12 +220,13 @@ export function DictationController() {
       if (dictationRunRef.current !== runId) {
         return
       }
-      await window.api.speech.stopDictation(sessionId).catch(() => undefined)
-      drainStoppedSession(sessionId)
-      if (captureStarted) {
-        stopCapture()
-      }
-      discardBufferedAudio()
+      await dictationRunAbort.abortStaleDictationRun({
+        sessionId,
+        stopCapture: captureStarted ? stopCapture : () => undefined,
+        releasePlaybackSuppression,
+        discardBufferedAudio,
+        drainStoppedSession
+      })
       const message = String(err)
       insertionTargetRef.current = null
       intentionalTargetCancellationRef.current = false
@@ -251,7 +257,9 @@ export function DictationController() {
     finishDictationSession,
     drainStoppedSession,
     setPartialTranscript,
-    recordFeatureInteraction
+    recordFeatureInteraction,
+    acquirePlaybackSuppression,
+    releasePlaybackSuppression
   ])
 
   const stopDictation = useCallback(async () => {
@@ -260,6 +268,9 @@ export function DictationController() {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture({ preserveBufferedAudio: true })
+      if (activeSessionIdRef.current) {
+        await releasePlaybackSuppression(activeSessionIdRef.current)
+      }
       return
     }
 
@@ -272,7 +283,7 @@ export function DictationController() {
       return
     }
     await finishDictationSession(sessionId)
-  }, [finishDictationSession, setDictationState, stopCapture])
+  }, [finishDictationSession, setDictationState, stopCapture, releasePlaybackSuppression])
 
   // Why: capture-loss fires from a stream opened before stopDictation exists;
   // route through a ref so the two callbacks do not depend on each other.
@@ -374,12 +385,7 @@ export function DictationController() {
         insertText(textToInsert, target)
         insertedFinalTranscriptRef.current += textToInsert
       } else if (!intentionalTargetCancellationRef.current) {
-        toast.message(
-          translate(
-            'auto.components.dictation.DictationController.7afff43472',
-            'Dictation finished, but no text field was focused.'
-          )
-        )
+        dictationRunAbort.showNoFocusedTargetToast()
       }
     })
 
@@ -407,6 +413,7 @@ export function DictationController() {
       stopCapture()
       discardBufferedAudio()
       void (async () => {
+        await releasePlaybackSuppression(sessionId)
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
         insertionTargetRef.current = null
@@ -426,7 +433,7 @@ export function DictationController() {
       cleanupStopped()
       cleanupError()
     }
-  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio])
+  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio, releasePlaybackSuppression])
 
   return <DictationIndicator />
 }

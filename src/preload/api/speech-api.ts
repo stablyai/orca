@@ -8,6 +8,11 @@ import type {
 } from '../../shared/speech-types'
 
 export type SpeechApi = {
+  getPlaybackSuppressionCapability: () => Promise<boolean>
+  acquirePlaybackSuppression: (
+    sessionId: string
+  ) => Promise<{ active: true } | { active: false; reason: 'canceled' | 'unavailable' }>
+  releasePlaybackSuppression: (sessionId: string) => Promise<void>
   getCatalog: () => Promise<SpeechModelManifest[]>
   getModelStates: () => Promise<SpeechModelState[]>
   getOpenAiApiKeyStatus: () => Promise<{
