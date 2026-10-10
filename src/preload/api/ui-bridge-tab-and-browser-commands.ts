@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import { admitCloseActiveTabPayload } from '../close-active-tab-payload-admission'
-import type { CloseActiveTabPayload } from '../api/ui-command-event-api'
+import type { CloseActiveTabPayload, MoveTabToSplitPayload } from '../api/ui-command-event-api'
 import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget
@@ -127,6 +127,22 @@ export const uiTabAndBrowserCommandsApi = {
       callback(payload)
     ipcRenderer.on('ui:selectFloatingIndex', listener)
     return () => ipcRenderer.removeListener('ui:selectFloatingIndex', listener)
+  },
+  onMoveTabToSplit: (callback: (payload: MoveTabToSplitPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown): void => {
+      const { direction, sourceId } = (payload ?? {}) as Partial<MoveTabToSplitPayload>
+      if (
+        (direction === 'left' ||
+          direction === 'right' ||
+          direction === 'up' ||
+          direction === 'down') &&
+        typeof sourceId === 'string'
+      ) {
+        callback({ direction, sourceId })
+      }
+    }
+    ipcRenderer.on('ui:moveTabToSplit', listener)
+    return () => ipcRenderer.removeListener('ui:moveTabToSplit', listener)
   },
   onSwitchTab: (callback: (direction: 1 | -1) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
