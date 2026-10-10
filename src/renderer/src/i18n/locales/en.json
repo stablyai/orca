@@ -7803,7 +7803,9 @@
           "3ba07f933b": "Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.",
           "70e885705b": "Task providers",
           "1683acbac4": "Connect the source hosts Orca can use for pull requests, merge requests, checks, and review status.",
-          "298c65ecac": "Review providers"
+          "298c65ecac": "Review providers",
+          "activitySharing": "Activity sharing",
+          "activitySharingDescription": "Let other apps on this computer show what Orca is doing."
         },
         "KagiSessionLinkForm": {
           "92f0b4e472": "Clear",
@@ -10294,7 +10296,12 @@
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
             "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "discordTitle": "Discord",
+            "discordDescription": "Show agent activity on your Discord profile.",
+            "discordKeyword": "discord",
+            "richPresenceKeyword": "rich presence",
+            "activityStatusKeyword": "activity status"
           }
         },
         "jira": {
@@ -12692,6 +12699,13 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "discordPresence": {
+          "statusConnected": "Connected",
+          "statusUnavailable": "Discord not running",
+          "statusOff": "Off",
+          "description": "Show how many agents you are running on your Discord profile. Project, branch, and file names are never shared.",
+          "toggleLabel": "Share activity on Discord"
         }
       },
       "right": {
@@ -19727,5 +19741,12 @@
     "browser": "Browser",
     "editor": "Editor",
     "terminal": "Terminal"
+  },
+  "discordPresence": {
+    "runningOneAgent": "Running 1 agent",
+    "runningAgents": "Running {{count}} agents",
+    "oneAgentWaiting": "1 agent waiting for input",
+    "agentsWaiting": "{{count}} agents waiting for input",
+    "idle": "Idle"
   }
 }

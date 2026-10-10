@@ -439,6 +439,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
   computerAwakeMode?: ComputerAwakeMode
+  /** Publish agent activity counts to the local Discord client as Rich Presence. Absent reads as off. */
+  discordPresenceEnabled?: boolean
   /** macOS Option key: compose layout chars (@ German, € French) vs act as Meta/Esc for readline.
    *  'auto' (default) = layout-aware via navigator.keyboard.getLayoutMap() (US → Meta, else compose);
    *  'false' = compose; 'true' = Meta on both Option keys; 'left'/'right' = only that key is Meta.

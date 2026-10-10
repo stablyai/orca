@@ -102,6 +102,8 @@ export const mainProcessState = {
   repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the teardown assigned by main-process-observers.
+  uninstallDiscordPresence: null as (() => void) | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,
   watcherShutdownDone: false,
