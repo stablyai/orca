@@ -58,6 +58,7 @@ vi.mock('./appimage-registration-lock', () => ({
 
 import { installLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
 import { resolveAppImageExtractedRoot } from './appimage-extracted-root'
+import { buildLegacyAppImageCliWrapper } from './legacy-appimage-cli-wrapper'
 
 const created: string[] = []
 
@@ -240,6 +241,95 @@ describe('installLinuxBareOrcaDispatcher', () => {
     expect(result.target).toBeNull()
     expect(extract).not.toHaveBeenCalled()
     expect(await readFile(dispatcherPath, 'utf8')).toBe('#!/bin/sh\necho my own orca\n')
+  })
+
+  it('replaces the legacy AppImage wrapper that AppRun feeds --no-sandbox', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const appImagePath = join(homePath, 'Orca.AppImage')
+    await mkdir(dirname(dispatcherPath), { recursive: true })
+    await writeFile(dispatcherPath, buildLegacyAppImageCliWrapper(appImagePath), {
+      encoding: 'utf8',
+      mode: 0o755
+    })
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath: null
+    })
+
+    expect(result.state).toBe('installed')
+    const content = await readFile(result.dispatcherPath, 'utf8')
+    expect(content).toContain('# orca-serve-bare-orca-dispatcher')
+    expect(content).toContain(`exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`)
+    expect(content).not.toContain('APPIMAGE=')
+    expect(content).not.toContain(appImagePath)
+  })
+
+  it('leaves a hand-edited legacy wrapper in place', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const edited = buildLegacyAppImageCliWrapper(join(homePath, 'Orca.AppImage')).replace(
+      'Orca AppImage runtime did not set APPDIR.',
+      'custom message'
+    )
+    await mkdir(dirname(dispatcherPath), { recursive: true })
+    await writeFile(dispatcherPath, edited, { encoding: 'utf8', mode: 0o755 })
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath: null
+    })
+
+    expect(result.state).toBe('skipped-foreign')
+    expect(result.target).toBeNull()
+    expect(await readFile(dispatcherPath, 'utf8')).toBe(edited)
+  })
+
+  it('leaves a legacy wrapper whose APPIMAGE path was edited', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const edited = buildLegacyAppImageCliWrapper(join(homePath, 'moved', 'Orca.AppImage'))
+    await mkdir(dirname(dispatcherPath), { recursive: true })
+    await writeFile(dispatcherPath, edited, { encoding: 'utf8', mode: 0o755 })
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath: join(homePath, 'Orca.AppImage')
+    })
+
+    expect(result.state).toBe('skipped-foreign')
+    expect(result.target).toBeNull()
+    expect(await readFile(dispatcherPath, 'utf8')).toBe(edited)
+  })
+
+  it('still replaces the legacy wrapper that points at the running AppImage', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const appImagePath = join(homePath, 'Orca.AppImage')
+    await mkdir(dirname(dispatcherPath), { recursive: true })
+    await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+    await writeFile(dispatcherPath, buildLegacyAppImageCliWrapper(appImagePath), {
+      encoding: 'utf8',
+      mode: 0o755
+    })
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath,
+      appImageCacheRootPath: join(homePath, 'cache'),
+      appImageExtractRunner: async (_path, cwd) => {
+        await writePayload(cwd)
+      }
+    })
+
+    expect(result.state).toBe('installed')
+    expect(await readFile(dispatcherPath, 'utf8')).toContain('# orca-serve-bare-orca-dispatcher')
+    expect(await readFile(dispatcherPath, 'utf8')).not.toContain('APPIMAGE=')
   })
 
   it('preserves a foreign dispatcher created while AppImage extraction is in flight', async () => {
