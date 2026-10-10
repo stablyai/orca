@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   getWebSessionTabsTrackingGeneration: vi.fn(() => 0),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
+  resolveHostSessionGroupIdForWebSessionTab: vi.fn(
+    (_args: { tabId: string }): string | null => null
+  ),
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
@@ -44,7 +47,8 @@ vi.mock('./web-session-tabs-sync', () => ({
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
-  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
+  resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab,
+  resolveHostSessionGroupIdForWebSessionTab: mocks.resolveHostSessionGroupIdForWebSessionTab
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
@@ -232,6 +236,103 @@ describe('moveWebRuntimeSessionTab', () => {
       },
       timeoutMs: 15_000
     })
+  })
+
+  it('names a group this desktop split off by the host group its other tabs sit in', async () => {
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      },
+      setActiveWorktree: mocks.setActiveWorktree,
+      groupsByWorktree: {
+        [WORKTREE_ID]: [
+          {
+            id: 'desktop-split-group',
+            activeTabId: 'local-terminal-unified',
+            tabOrder: ['local-only-unified', 'local-terminal-unified', 'local-browser-unified']
+          }
+        ]
+      }
+    })
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) =>
+        args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
+    )
+    mocks.resolveHostSessionGroupIdForWebSessionTab.mockImplementation((args: { tabId: string }) =>
+      args.tabId === 'local-terminal-unified'
+        ? 'host-split-group'
+        : args.tabId === 'local-browser-unified'
+          ? 'host-source-group'
+          : null
+    )
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'move',
+      ok: true,
+      result: { moved: true }
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      moveWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        targetGroupId: 'desktop-split-group',
+        kind: 'move-to-group',
+        index: 2
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ targetGroupId: 'host-split-group' })
+      })
+    )
+  })
+
+  it('falls back to the desktop id while a just-split group still records its old server group', async () => {
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      },
+      setActiveWorktree: mocks.setActiveWorktree,
+      groupsByWorktree: {
+        [WORKTREE_ID]: [
+          { id: 'desktop-source', activeTabId: 'local-third', tabOrder: ['local-third'] },
+          {
+            id: 'desktop-split-group',
+            activeTabId: 'local-moved',
+            tabOrder: ['local-split-off', 'local-moved']
+          }
+        ]
+      }
+    })
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) => `host-${args.tabId}`
+    )
+    // No server list since the split: every tab still records the source group.
+    mocks.resolveHostSessionGroupIdForWebSessionTab.mockReturnValue('host-source')
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'move',
+      ok: true,
+      result: { moved: true }
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      moveWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-moved',
+        targetGroupId: 'desktop-split-group',
+        kind: 'move-to-group',
+        index: 1
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ targetGroupId: 'desktop-split-group' })
+      })
+    )
   })
 
   it('does not mirror a reorder when the dragged tab is local-only', async () => {

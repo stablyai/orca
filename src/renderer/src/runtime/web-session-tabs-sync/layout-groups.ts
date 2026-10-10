@@ -57,24 +57,25 @@ export function updateHostSessionTabIdMappings(args: {
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
+  hostGroupIdByTabId: ReadonlyMap<string, string>
 }): void {
   clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
+  const map = (tabId: string, hostTabId: string): void =>
+    setHostSessionTabIdMapping(
+      { ...args, tabId },
+      hostTabId,
+      args.hostGroupIdByTabId.get(hostTabId)
+    )
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
   for (const surface of args.terminalSurfaces) {
     const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
     if (mirroredTerminalIds.has(localId)) {
-      setHostSessionTabIdMapping({ ...args, tabId: localId }, surface.parentTabId)
+      map(localId, surface.parentTabId)
     }
   }
-  for (const entry of args.browserTabs) {
-    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
-  }
-  for (const entry of args.editorTabs) {
-    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
-  }
-  for (const entry of args.agentTabs) {
-    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
+  for (const entry of [...args.browserTabs, ...args.editorTabs, ...args.agentTabs]) {
+    map(entry.unifiedTab.id, entry.hostTabId)
   }
 }
 

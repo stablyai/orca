@@ -22,7 +22,10 @@ export {
   _getWebSessionTabsReceiptTrackingCountsForTest,
   _getWebSessionTabsTrackingCountsForTest
 } from './web-session-tabs-sync/tracking-lifecycle'
-export { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+export {
+  resolveHostSessionGroupIdForWebSessionTab,
+  resolveHostSessionTabIdForWebSessionTab
+} from './web-session-tabs-sync/tracking-mappings'
 export {
   decideWebSessionTabsSnapshot,
   shouldApplyWebSessionTabsSnapshot,
