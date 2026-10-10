@@ -22,6 +22,8 @@ import {
 } from '../../../src/shared/agent-session-host-status-rows'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
+import { nativeChatMessagePlainText } from './mobile-native-chat-message-plain-text'
 import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
 import { MobileNativeChatReasoningRow } from './MobileNativeChatReasoningRow'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -254,6 +256,10 @@ function MobileNativeChatMessageImpl({
       </>
     )
   }
+  const copyText =
+    INLINE_TEXT_SELECTION && (message.role === 'user' || message.role === 'assistant')
+      ? nativeChatMessagePlainText(message)
+      : ''
   return (
     <>
       {/* A turn with no user bubble carries its bar above its first row. */}
@@ -308,6 +314,13 @@ function MobileNativeChatMessageImpl({
             />
           ) : null}
         </Content>
+        {copyText.length > 0 ? (
+          <MobileSourceCopyButton
+            key={message.id}
+            text={copyText}
+            accessibilityLabel="Copy message"
+          />
+        ) : null}
       </View>
       {actionsOpen ? (
         <MobileNativeChatMessageActionsSheet

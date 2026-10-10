@@ -51,9 +51,7 @@ export function MarkdownReader({
 
   const statusText = markdownReaderStatusText(doc)
   const showRefresh = (doc.stale && !doc.isDirty) || !doc.editable
-  const showCopy = doc.saveError || !doc.editable
   const showSave = doc.isDirty || doc.saving
-  const showFloatingActions = statusText || showRefresh || showCopy || showSave
 
   return (
     <View style={styles.markdownEditor}>
@@ -64,66 +62,71 @@ export function MarkdownReader({
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
       />
-      {showFloatingActions ? (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.markdownFloatingBar,
-            // Why: editor focus lives in a WebView, so lift native Save/Discard controls instead of resizing it.
-            {
-              bottom: resolveMarkdownFloatingActionsBottom({
-                keyboardLift: effectiveKeyboardLift,
-                restingBottom: spacing.lg,
-                liftedClearance: spacing.md
-              })
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.markdownFloatingBar,
+          // Why: editor focus lives in a WebView, so lift native Save/Discard controls instead of resizing it.
+          {
+            bottom: resolveMarkdownFloatingActionsBottom({
+              keyboardLift: effectiveKeyboardLift,
+              restingBottom: spacing.lg,
+              liftedClearance: spacing.md
+            })
+          }
+        ]}
+      >
+        {statusText ? (
+          <Text
+            style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
+            numberOfLines={2}
+          >
+            {statusText}
+          </Text>
+        ) : null}
+        <View style={styles.markdownFloatingActions}>
+          <Pressable
+            style={styles.markdownFloatingButton}
+            onPress={onCopy}
+            accessibilityRole="button"
+            accessibilityLabel={
+              doc.truncated ? 'Copy loaded Markdown source' : 'Copy Markdown source'
             }
-          ]}
-        >
-          {statusText ? (
-            <Text
-              style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
-              numberOfLines={2}
-            >
-              {statusText}
+          >
+            <Text style={styles.markdownFloatingButtonText}>
+              {doc.truncated ? 'Copy loaded' : 'Copy'}
             </Text>
+          </Pressable>
+          {showRefresh ? (
+            <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
+              <RefreshCw size={13} color={colors.textPrimary} />
+              <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
+            </Pressable>
           ) : null}
-          <View style={styles.markdownFloatingActions}>
-            {showCopy ? (
-              <Pressable style={styles.markdownFloatingButton} onPress={onCopy}>
-                <Text style={styles.markdownFloatingButtonText}>Copy</Text>
-              </Pressable>
-            ) : null}
-            {showRefresh ? (
-              <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
-                <RefreshCw size={13} color={colors.textPrimary} />
-                <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
-              </Pressable>
-            ) : null}
-            {doc.isDirty ? (
-              <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
-                <Text style={styles.markdownFloatingButtonText}>Discard</Text>
-              </Pressable>
-            ) : null}
-            {showSave ? (
-              <Pressable
-                style={[
-                  styles.markdownFloatingButton,
-                  styles.markdownSaveButton,
-                  (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
-                ]}
-                disabled={!doc.editable || !doc.isDirty || doc.saving}
-                onPress={onSave}
-              >
-                {doc.saving ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Text style={styles.markdownFloatingButtonText}>Save</Text>
-                )}
-              </Pressable>
-            ) : null}
-          </View>
+          {doc.isDirty ? (
+            <Pressable style={styles.markdownFloatingButton} onPress={onDiscard}>
+              <Text style={styles.markdownFloatingButtonText}>Discard</Text>
+            </Pressable>
+          ) : null}
+          {showSave ? (
+            <Pressable
+              style={[
+                styles.markdownFloatingButton,
+                styles.markdownSaveButton,
+                (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled
+              ]}
+              disabled={!doc.editable || !doc.isDirty || doc.saving}
+              onPress={onSave}
+            >
+              {doc.saving ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.markdownFloatingButtonText}>Save</Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
-      ) : null}
+      </View>
     </View>
   )
 }

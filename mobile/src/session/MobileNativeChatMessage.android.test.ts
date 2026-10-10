@@ -74,6 +74,9 @@ describe('MobileNativeChatMessage on Android', () => {
       renderer = create(createElement(MobileNativeChatMessage, { message }))
     })
     expect(byType('MessageActionsSheet')).toHaveLength(0)
+    expect(
+      byType('Pressable').filter((node) => node.props.accessibilityLabel === 'Copy message')
+    ).toHaveLength(0)
 
     const [bubble] = byType('Pressable')
     expect(typeof bubble!.props.onLongPress).toBe('function')
@@ -150,5 +153,10 @@ describe('MobileNativeChatMessage on Android', () => {
     for (const node of texts) {
       expect(node.props.selectable).toBe(false)
     }
+    expect(
+      byType('Pressable').filter((node) => node.props.accessibilityLabel === 'Copy message')
+    ).toHaveLength(0)
+    act(() => byType('Pressable')[0]!.props.onLongPress())
+    expect(byType('MessageActionsSheet')).toHaveLength(1)
   })
 })

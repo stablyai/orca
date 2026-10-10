@@ -221,6 +221,33 @@ describe('the call-site reader', () => {
 describeClosure(
   'what each page route reaches, against what it declared',
   () => {
+    it.each(['/h/[hostId]/files/[worktreeId]', '/h/[hostId]/files/preview/[worktreeId]'])(
+      'can copy preview source under the opening grants of %s',
+      async (pathname) => {
+        const route = MOBILE_WEB_PAGE_ROUTES.find((entry) => entry.pathname === pathname)
+        expect(route).toBeDefined()
+        const preview = await closureOf('/h/[hostId]/files/preview/[worktreeId]')
+        const writerRow = PAGE_GRANT_CALL_SITES[3]
+        const previewClosure = async () => preview
+        expect(
+          await grantsMissingForRow(mobileDir, [route], previewClosure, writerRow, readGrantModule)
+        ).toEqual([])
+        const withoutWriter = {
+          ...route,
+          grants: route.grants.filter((grant) => grant !== 'native.clipboard.write')
+        }
+        expect(
+          await grantsMissingForRow(
+            mobileDir,
+            [withoutWriter],
+            previewClosure,
+            writerRow,
+            readGrantModule
+          )
+        ).toEqual([`${pathname} needs native.clipboard.write`])
+      }
+    )
+
     it('covers every declared page route, so a new one cannot be missed by this file', () => {
       const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
       expect(mapped).toEqual(declared)

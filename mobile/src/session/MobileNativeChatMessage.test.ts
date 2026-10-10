@@ -134,7 +134,9 @@ describe('MobileNativeChatMessage', () => {
         { fontScale: 1.5 }
       )
       expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-      const text = tree.root.find((node) => String(node.type) === 'Text')
+      const text = tree.root.find(
+        (node) => String(node.type) === 'Text' && node.props.selectable === true
+      )
       expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'])
       expect(text.props.selectable).toBe(true)
       expect(Object.assign({}, ...text.props.style)).toMatchObject({
