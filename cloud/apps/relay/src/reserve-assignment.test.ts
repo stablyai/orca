@@ -82,7 +82,8 @@ function setup(
     random: () => 0.25,
     log: () => undefined
   })
-  for (const cell of assignment.placementCells()) placer.observePoll(cell)
+  // Starts each cell's refill clock, as a director's first look does.
+  for (const cell of assignment.placementCells()) placer.hasBudget(cell)
   now.value += 1_000
   for (const response of options.feeds ?? cells.map((cell) => feed(cell.cellId))) {
     directory.apply(response.cellId, { ...response, full: response.full ?? [] }, now.value - 1, now.value - 1)
