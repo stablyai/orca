@@ -319,6 +319,28 @@ describe('createPtySubprocess', () => {
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
 
+  it('does not inherit __CFBundleIdentifier from the daemon process env', async () => {
+    // Why: macOS LaunchServices treats terminal children that inherit __CFBundleIdentifier
+    // as extra instances of Orca, creating ghost Dock tiles (#21768).
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = process.env.__CFBundleIdentifier
+    process.env.__CFBundleIdentifier = 'com.stablyai.orca'
+
+    try {
+      await createPtySubprocess({ sessionId: 'test-bundle-id', cols: 80, rows: 24 })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.__CFBundleIdentifier
+      } else {
+        process.env.__CFBundleIdentifier = previous
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.__CFBundleIdentifier).toBeUndefined()
+  })
+
   it('does not forward a half-activated conda env from the daemon process env', async () => {
     // Why here as well as the main process: the daemon fork composes its own
     // inherited env, which main never sees, so it is the default terminal's

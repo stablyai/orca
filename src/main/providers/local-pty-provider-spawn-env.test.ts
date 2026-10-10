@@ -378,6 +378,23 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe('/usr/bin')
     })
 
+    it('does not inherit __CFBundleIdentifier from the Orca process env', async () => {
+      // Why: macOS LaunchServices treats terminal children that inherit __CFBundleIdentifier
+      // as extra instances of Orca, creating ghost Dock tiles (#21768).
+      const previous = process.env.__CFBundleIdentifier
+      process.env.__CFBundleIdentifier = 'com.stablyai.orca'
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.__CFBundleIdentifier
+        } else {
+          process.env.__CFBundleIdentifier = previous
+        }
+      }
+      expect(spawnMock.mock.calls.at(-1)?.[2].env.__CFBundleIdentifier).toBeUndefined()
+    })
+
     it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
       const keys = [
         'GIT_CONFIG_COUNT',

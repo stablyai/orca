@@ -199,6 +199,8 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   }
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   delete env.ELECTRON_RUN_AS_NODE
+  // Why: LaunchServices treats children inheriting __CFBundleIdentifier as Orca instances (#21768).
+  delete env.__CFBundleIdentifier
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
