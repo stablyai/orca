@@ -369,10 +369,15 @@ zle -N zle-line-init
   )
 
   const sqliteTest = hasZsh && existsSync('/usr/bin/sqlite3') ? it : it.skip
+  // Why pin the prompt: sqlite3 3.54 (macOS 27) replaced `sqlite> ` with a styled, versioned one.
+  const sqlitePinnedPrompt = `-cmd ".prompt 'sqlite> '"`
   sqliteTest(
     'does not treat an exec-replaced readline program as the shell prompt',
     async () => {
-      const running = await startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
+      const running = await startFixture(
+        zshFixture,
+        `exec /usr/bin/sqlite3 ${sqlitePinnedPrompt}\n`
+      )
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -390,7 +395,7 @@ zle -N zle-line-init
     async () => {
       const running = await startFixture(
         zshFixture,
-        'ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh"\n'
+        `ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh" ${sqlitePinnedPrompt}\n`
       )
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
