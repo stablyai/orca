@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { RuntimeMobileMarkdownRequest } from '../../../shared/mobile-markdown-document'
 import { useAppStore } from '../store'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -23,6 +24,9 @@ type WindowStub = {
 }
 
 let mobileMarkdownHandler: ((request: RuntimeMobileMarkdownRequest) => void) | null = null
+const TEST_WORKTREE_ID = 'wt-1'
+const TEST_MARKDOWN_FILE_ID = '/repo/README.md'
+const TEST_MARKDOWN_TAB_ID = 'tab-md'
 
 export function setupWindow({
   readFile,
@@ -60,27 +64,53 @@ export function resetEditorState(): void {
   useAppStore.setState({
     openFiles: [],
     editorDrafts: {},
+    groupsByWorktree: {},
+    activeGroupIdByWorktree: {},
+    unifiedTabsByWorktree: {},
+    layoutByWorktree: {},
+    tabsByWorktree: {},
+    tabBarOrderByWorktree: {},
     worktreesByRepo: {
-      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo', branch: 'main', hostId: 'local' }]
+      repo: [
+        makeWorktree({
+          id: TEST_WORKTREE_ID,
+          repoId: 'repo',
+          path: '/repo',
+          branch: 'main',
+          hostId: 'local'
+        })
+      ]
     },
     repos: [
       {
         id: 'repo',
         path: '/repo',
         displayName: 'repo',
+        badgeColor: '',
+        addedAt: 0,
         kind: 'git',
         executionHostId: 'local'
       }
     ]
-  } as never)
+  })
 }
 
-export function openMarkdownFile(): void {
-  useAppStore.getState().openFile({
-    filePath: '/repo/README.md',
+export function openMarkdownFile(options: { withUnifiedTab?: boolean } = {}): void {
+  const { withUnifiedTab = true } = options
+  const state = useAppStore.getState()
+  if (withUnifiedTab) {
+    state.createUnifiedTab(TEST_WORKTREE_ID, 'editor', {
+      id: TEST_MARKDOWN_TAB_ID,
+      entityId: TEST_MARKDOWN_FILE_ID,
+      recordInteraction: false
+    })
+  }
+  state.openFile({
+    filePath: TEST_MARKDOWN_FILE_ID,
     relativePath: 'README.md',
-    worktreeId: 'wt-1',
+    worktreeId: TEST_WORKTREE_ID,
     language: 'markdown',
+    runtimeEnvironmentId: null,
     mode: 'edit'
   })
 }
