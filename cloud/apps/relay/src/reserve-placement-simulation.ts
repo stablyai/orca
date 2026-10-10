@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { RelayRegion } from '@orca-cloud/relay-contract'
 import { CellReserveBook } from './cell-reserve-book.js'
 import { CELL_INTAKE_BURST, CELL_RESERVE_TTL_MS, type ReserveOutcome } from './cell-reserve-contract.js'
@@ -120,12 +121,24 @@ export type SimulationFaults = {
   noWrongCellRowRead?: boolean
   // Reserve placement re-uses the floor epoch instead of minting above it.
   mintAtFloor?: boolean
+  // Today's path skips every cell Postgres records as reserve, even one its feed says tripped to db.
+  pgReserveBlocksDatabase?: boolean
   unguardedLedger?: boolean
   noEpochFloor?: boolean
 }
 
+// shadow-seat-directory.ts SEAT_FEED_DB_ADMIT_FRESH_MS: a reserve cell whose feed said db this recently takes today's path.
+const TRIPPED_FEED_FRESH_MS = 5_000
+
+// cell-reserve-dead-man.ts's window: 60-120 s, fixed per cell.
+function deadManWindowMs(cellId: string): number {
+  return 60_000 + (createHash('sha256').update(cellId).digest().readUInt32BE(0) % 60_001)
+}
+
 class SimDatabase {
   up = true
+  // relay_cell_admit_modes: what the flag workflow recorded. A trip does not change it.
+  readonly reserveCells = new Set<string>()
   readonly rows = new Map<string, { cellId: string; epoch: number }>()
   private readonly counts = new Map<string, number>()
 
@@ -174,6 +187,10 @@ class SimCell {
   bookingUnits = 0
   // What relay_cells says to a director that predates step 5: frozen at the flip.
   frozenDatabaseCount = 0
+  // The dead-man (cell-reserve-dead-man.ts): a reserve cell no placing director has booked on or
+  // polled with reserver=1 for its window flips itself to db, latched.
+  lastContactAt = 0
+  trippedAt: number | null = null
   book: CellReserveBook
 
   constructor(
@@ -221,7 +238,18 @@ class SimCell {
     return this.seats.size + this.bookingUnits
   }
 
+  contact(): void {
+    this.lastContactAt = this.clock.now
+  }
+
+  checkDeadMan(windowMs: number): void {
+    if (this.mode !== 'reserve' || this.old || this.clock.now - this.lastContactAt <= windowMs) return
+    this.mode = 'db'
+    this.trippedAt = this.clock.now
+  }
+
   reserve(directorId: string, host: string, epoch: number, sticky: boolean): ReserveOutcome {
+    if (this.mode === 'reserve') this.contact()
     const outcome = this.book.reserve(
       directorId,
       { userId: host, relayHostId: 'abcdefghijklmnop', epoch, ttlMs: CELL_RESERVE_TTL_MS, sticky },
@@ -352,6 +380,8 @@ export type SimulationConfig = {
   cellRestarts?: Array<{ at: number; cellId: string }>
   directorRestarts?: Array<{ at: number; director: number }>
   databaseStalls?: Array<{ at: number; durationMs: number }>
+  // Every director misses every feed poll for this long (a director-side outage).
+  pollOutages?: Array<{ at: number; durationMs: number }>
   drains?: Array<{ at: number; cellId: string; paceMs: number }>
 }
 
@@ -370,6 +400,7 @@ export type SimulationReport = {
   rowAheadDemotions: number
   // Row-ahead demotions per demoted host: a repair that converges needs one.
   rowAheadDemotionsPerHost: { max: number; p99: number }
+  deadManTrips: number
   // First seats after a row-ahead demotion that land behind (or level with) the row again.
   badFirstReseats: number
   intakeRefusals: number
@@ -463,6 +494,12 @@ export async function runReservePlacementSimulation(
       )
   )
   const cellById = new Map(cells.map((cell) => [cell.cellId, cell]))
+  for (const cell of cells) if (cell.mode === 'reserve' && !cell.old) database.reserveCells.add(cell.cellId)
+  const inPollOutage = (at: number): boolean =>
+    (config.pollOutages ?? []).some((outage) => at >= outage.at && at < outage.at + outage.durationMs)
+  // Invariant 9 holds once the outage is over and every director has polled the tripped cells.
+  const afterOutageSettled = (at: number): boolean =>
+    (config.pollOutages ?? []).some((outage) => at >= outage.at + outage.durationMs + 15_000)
   const directors = Array.from(
     { length: config.directors },
     (_, index) =>
@@ -487,6 +524,7 @@ export async function runReservePlacementSimulation(
     directorRestarts: 0,
     rowAheadDemotions: 0,
     rowAheadDemotionsPerHost: { max: 0, p99: 0 },
+    deadManTrips: 0,
     badFirstReseats: 0,
     intakeRefusals: 0,
     stickyReserves: 0,
@@ -545,6 +583,9 @@ export async function runReservePlacementSimulation(
 
   // --- director polling ---
   function poll(director: SimDirector, cell: SimCell): void {
+    if (inPollOutage(clock.now)) return
+    // A placing director's poll carries reserver=1: it is the cell's dead-man contact.
+    if (!director.old && cell.mode === 'reserve') cell.contact()
     const requestedAt = clock.now
     const view = director.views.get(cell.cellId)
     const full = !view || view.incarnation !== cell.incarnation
@@ -756,6 +797,13 @@ export async function runReservePlacementSimulation(
       const view = director.views.get(cell.cellId)
       const reserve = !director.old && view?.placement.reserve === true
       if (reserve || cell.draining) return false
+      // Postgres still says reserve after a trip; the cell's own feed (fresh, db) lets today's
+      // path back in, while the census sweeps keep skipping it until the flag workflow says db.
+      const polledAt = view?.placement.polledAt ?? null
+      const feedSaysDb = polledAt !== null && clock.now - polledAt <= TRIPPED_FEED_FRESH_MS && !view!.placement.reserve
+      if (!director.old && database.reserveCells.has(cell.cellId) && (faults.pgReserveBlocksDatabase || !feedSaysDb)) {
+        return false
+      }
       const count = cell.mode === 'reserve' ? cell.frozenDatabaseCount : database.countOn(cell.cellId)
       return count < cell.ceiling
     })
@@ -763,7 +811,10 @@ export async function runReservePlacementSimulation(
       (cell.mode === 'reserve' ? cell.frozenDatabaseCount : database.countOn(cell.cellId)) / cell.ceiling
     const inRegion = eligible.filter((cell) => cell.region === host.region)
     const pool = inRegion.length > 0 ? inRegion : eligible
-    if (pool.length === 0) return { kind: 'retry', afterMs: 5_000, calls: 0 }
+    if (pool.length === 0) {
+      if (afterOutageSettled(clock.now)) violate(9, `${host.id}: no cell takes a fresh placement after the fleet tripped`)
+      return { kind: 'retry', afterMs: 5_000, calls: 0 }
+    }
     const target = pool.reduce((best, cell) => (load(cell) < load(best) ? cell : best))
     const epoch = Math.max(row?.epoch ?? 0, faults.noEpochFloor ? 0 : floor) + 1
     if (!director.old && epoch <= floor) violate(7, `db mint ${epoch} not above map floor ${floor}`)
@@ -929,6 +980,16 @@ export async function runReservePlacementSimulation(
   }
 
   // --- schedule ---
+  for (const cell of cells) {
+    const windowMs = deadManWindowMs(cell.cellId)
+    const check = (): void => {
+      const wasReserve = cell.mode === 'reserve'
+      cell.checkDeadMan(windowMs)
+      if (wasReserve && cell.mode === 'db') report.deadManTrips += 1
+      clock.schedule(1_000, check)
+    }
+    clock.schedule(1_000, check)
+  }
   for (const director of directors) {
     const tick = (): void => {
       for (const cell of cells) poll(director, cell)

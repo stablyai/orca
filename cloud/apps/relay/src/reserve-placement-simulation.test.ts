@@ -279,4 +279,33 @@ describe('step 5 deterministic simulation', () => {
       })}\n`
     )
   }, 240_000)
+
+  // Every director misses its feed polls for 150 s: each reserve cell's dead-man trips (60-120 s)
+  // while Postgres still says reserve, and fresh placement must find the tripped cells after.
+  const fleetTrip = (faults: SimulationConfig['faults']): SimulationConfig => ({
+    ...mixed(faults),
+    cells: Array.from({ length: 6 }, (_, index) => ({
+      cellId: `us${index}`,
+      region: 'us-central1' as const,
+      hardCap: 600,
+      ceiling: 480,
+      intakePerSec: 5,
+      mode: 'reserve' as const,
+      preseated: 100
+    })),
+    hosts: 1_200,
+    hostRegion: () => 'us-central1',
+    durationMs: 6 * 60_000,
+    pollOutages: [{ at: 60_000, durationMs: 150_000 }]
+  })
+
+  it('places fresh hosts on the tripped cells once a fleet-wide poll outage ends (invariant 9)', async () => {
+    const report = await runReservePlacementSimulation(fleetTrip({}))
+    expect(report.deadManTrips).toBe(6)
+    expect(report.violations.filter((violation) => violation.invariant === 9)).toEqual([])
+    expect(report.databasePlacements).toBeGreaterThan(0)
+    const blocked = await runReservePlacementSimulation(fleetTrip({ pgReserveBlocksDatabase: true }))
+    expect(blocked.deadManTrips).toBe(6)
+    expect(blocked.violations.map((violation) => violation.invariant)).toContain(9)
+  }, 240_000)
 })
