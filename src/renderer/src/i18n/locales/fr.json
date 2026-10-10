@@ -18253,8 +18253,10 @@
       },
       "transcriptLabel": "Conversation",
       "toggle": {
-        "showTerminal": "Afficher le terminal",
-        "showChat": "Afficher la vue chat"
+        "showTerminal": "Afficher le terminal"
+      },
+      "resumeInNewChat": {
+        "unavailable": "Impossible de reprendre cette session dans un chat natif pour le moment. Réessayez après la réponse de l'agent."
       },
       "state": {
         "loading": {

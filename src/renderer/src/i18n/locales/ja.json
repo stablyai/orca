@@ -18186,8 +18186,10 @@
       },
       "transcriptLabel": "会話",
       "toggle": {
-        "showTerminal": "ターミナルを表示",
-        "showChat": "チャットビューを表示"
+        "showTerminal": "ターミナルを表示"
+      },
+      "resumeInNewChat": {
+        "unavailable": "このセッションはまだネイティブチャットで再開できません。Agent が応答してから再度お試しください。"
       },
       "state": {
         "loading": {

@@ -18151,8 +18151,10 @@
       },
       "transcriptLabel": "对话",
       "toggle": {
-        "showTerminal": "显示终端",
-        "showChat": "显示聊天视图"
+        "showTerminal": "显示终端"
+      },
+      "resumeInNewChat": {
+        "unavailable": "此会话暂时无法在本机聊天中恢复。请在代理回复后重试。"
       },
       "state": {
         "loading": {

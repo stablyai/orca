@@ -18490,8 +18490,10 @@
       },
       "transcriptLabel": "Conversation",
       "toggle": {
-        "showTerminal": "Show terminal",
-        "showChat": "Show chat view"
+        "showTerminal": "Show terminal"
+      },
+      "resumeInNewChat": {
+        "unavailable": "This session can't be resumed in a native chat yet. Try again after the agent replies."
       },
       "state": {
         "loading": {

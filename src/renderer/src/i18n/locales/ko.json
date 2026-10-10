@@ -18186,8 +18186,10 @@
       },
       "transcriptLabel": "대화",
       "toggle": {
-        "showTerminal": "terminal 표시",
-        "showChat": "채팅 보기 표시"
+        "showTerminal": "terminal 표시"
+      },
+      "resumeInNewChat": {
+        "unavailable": "이 세션은 아직 기본 채팅에서 재개할 수 없습니다. 에이전트가 응답한 후 다시 시도하세요."
       },
       "state": {
         "loading": {

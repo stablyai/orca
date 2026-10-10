@@ -29,6 +29,8 @@ import {
   type AiVaultSessionListRequest
 } from '../right-sidebar/ai-vault-session-list-request'
 import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault-panel-session-list-request'
+import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault-host-scope'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
 
 /** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
@@ -62,6 +64,19 @@ function canHostOfferTabSessionMove(
   // Resume-in-chat refuses any row not recorded on this machine. A chat's row is owned only where an
   // Orca host projects chat ownership: this machine or a runtime server, never an SSH relay.
   return kind === 'chat' && parseExecutionHostId(hostScope)?.kind === 'runtime'
+}
+
+/** The host half of the gate without building the list request, for surfaces that stay rendered. */
+export function canWorkspaceOfferTabSessionMove(
+  state: AppState,
+  workspaceId: string,
+  kind: TabSessionHistorySubject['kind']
+): boolean {
+  const hostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, workspaceId),
+    workspaceId
+  ).defaultExecutionHostScope
+  return canHostOfferTabSessionMove(kind, hostScope)
 }
 
 export function resolveTabSessionHistorySubject(

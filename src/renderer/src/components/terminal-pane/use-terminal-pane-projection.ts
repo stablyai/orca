@@ -20,6 +20,7 @@ import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-ac
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { canWorkspaceOfferTabSessionMove } from '../tab-bar/tab-session-history-switch'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -51,7 +52,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     tabAgentTypeByLeaf,
     terminalError,
     terminalErrorsByPaneId,
-    terminalTab
+    terminalTab,
+    worktreeId
   } = controller
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
@@ -176,9 +178,18 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(contextMenuLeafId)
   )
-  // Each switcher gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
-  const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  // The menu switcher gates on the leaf it opened over, so mixed splits show it only where chat can render.
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
+  const activeLeafId = activePane?.leafId ?? null
+  const activePaneIsChatEligible = !activePaneIsChatLeaf && isChatEligibleForLeaf(activeLeafId)
+  // Cheap stand-in for the tab menu's gate; the history lookup itself runs on click.
+  const activePaneCanResumeInChat = useAppStore(
+    (state) =>
+      activePaneIsChatEligible &&
+      activeLeafId !== null &&
+      resolvePaneAgentSessionId(state, makePaneKey(tabId, activeLeafId)) !== null &&
+      canWorkspaceOfferTabSessionMove(state, worktreeId, 'cli')
+  )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
@@ -212,7 +223,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     resolveAgentForLeaf,
     activePaneCanContinueInNewSession,
     contextMenuCanContinueInNewSession,
-    activePaneCanToggleChat,
+    activePaneCanResumeInChat,
     contextMenuCanToggleChat,
     contextMenuIsChatView,
     handleContextMenuToggleNativeChat

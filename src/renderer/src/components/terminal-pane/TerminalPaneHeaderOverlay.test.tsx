@@ -42,6 +42,9 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+vi.mock('./TerminalPaneResumeInChatButton', () => ({
+  TerminalPaneResumeInChatButton: () => <button type="button">Resume in New Native Chat</button>
+}))
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
@@ -75,6 +78,8 @@ function renderOverlay({
   onRenameSubmit = vi.fn(),
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
+  canShowTerminal = false,
+  canResumeInNewNativeChat = false,
   renameValue = '',
   renamingPaneId = null,
   dropSetup
@@ -89,6 +94,8 @@ function renderOverlay({
   onRenameSubmit?: ReturnType<typeof vi.fn>
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
+  canShowTerminal?: boolean
+  canResumeInNewNativeChat?: boolean
   renameValue?: string
   renamingPaneId?: number | null
   dropSetup?: {
@@ -137,6 +144,9 @@ function renderOverlay({
         onContinueAgentSessionInNewSession={
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
+        canShowTerminal={canShowTerminal}
+        onShowTerminal={vi.fn()}
+        canResumeInNewNativeChat={canResumeInNewNativeChat}
         onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={dropSetup?.activate ?? vi.fn()}
@@ -181,6 +191,30 @@ afterEach(() => {
 })
 
 describe('TerminalPaneHeaderOverlay', () => {
+  it('offers Resume in New Native Chat instead of a chat view switch, on the active pane only', () => {
+    const { container } = renderOverlay({ paneTitles: {}, canResumeInNewNativeChat: true })
+
+    const resumeButtons = [...container.querySelectorAll('button')].filter(
+      (button) => button.textContent === 'Resume in New Native Chat'
+    )
+    expect(resumeButtons).toHaveLength(1)
+    expect(resumeButtons[0]?.closest('.pane-title-bar')?.hasAttribute('data-active-pane')).toBe(
+      true
+    )
+    expect(container.querySelector('button[aria-label="Show chat view"]')).toBeNull()
+  })
+
+  it('keeps Show terminal as the way back from chat view', () => {
+    const { container } = renderOverlay({
+      paneTitles: {},
+      canShowTerminal: true,
+      canResumeInNewNativeChat: true
+    })
+
+    expect(container.querySelector('button[aria-label="Show terminal"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('Resume in New Native Chat')
+  })
+
   it('keeps the titled split-pane X as remove-title only', () => {
     const { container, onClosePane, onRemoveTitle } = renderOverlay({
       paneTitles: { 1: 'server', 2: '' }
