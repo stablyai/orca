@@ -147,7 +147,7 @@ describe('a supervised agent one-shot that runs out of time', () => {
     await vi.advanceTimersByTimeAsync(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
     await expect(first).resolves.toMatchObject({
       success: false,
-      error: expect.stringMatching(/timed out/)
+      error: expect.stringMatching(/did not finish within/)
     })
     expect(agents[0]!.kill.mock.calls).toEqual([['SIGTERM']])
 
