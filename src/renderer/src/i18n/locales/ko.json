@@ -13962,6 +13962,30 @@
             "sourceMissing": "스크립트를 더 이상 사용할 수 없습니다.",
             "metadataMatch": "세션 메타데이터 일치",
             "sourceActionsUnavailable": "스크립트 소스를 사용할 수 없습니다."
+          },
+          "SearchReplace": {
+            "toggle": "바꾸기 전환",
+            "replaceAll": "모두 바꾸기",
+            "inputLabel": "바꾸기",
+            "preserveCase": "대/소문자 유지",
+            "replace": "바꾸기",
+            "occurrences": "{{count}}개 항목",
+            "occurrences_one": "{{count}}개 항목",
+            "occurrences_other": "{{count}}개 항목",
+            "files": "파일 {{count}}개",
+            "files_one": "파일 {{count}}개",
+            "files_other": "파일 {{count}}개",
+            "replacedWith": "{{files}}에서 {{occurrences}}을(를) '{{replaceText}}'(으)로 바꿨습니다.",
+            "replaced": "{{files}}에서 {{occurrences}}을(를) 바꿨습니다.",
+            "skippedDirty": "저장하지 않은 변경 사항이 있는 {{files}}을(를) 건너뛰었습니다. 저장한 후 다시 바꾸세요.",
+            "skippedStale": "검색 결과와 더 이상 일치하지 않는 {{files}}을(를) 건너뛰었습니다. 새로 고친 결과를 확인한 후 다시 바꾸세요.",
+            "skippedNotUtf8": "UTF-8 텍스트가 아닌 {{files}}을(를) 건너뛰었습니다.",
+            "andMore": "…외 {{count}}개",
+            "unsupportedRegex": "바꾸기는 이 정규식을 지원하지 않습니다.",
+            "failed": "{{files}}에서 바꾸지 못했습니다.",
+            "confirmWith": "{{files}}에서 {{occurrences}}을(를) '{{replaceText}}'(으)로 바꿀까요?",
+            "confirm": "{{files}}에서 {{occurrences}}을(를) 바꿀까요?",
+            "confirmTruncated": "결과가 잘렸습니다. 목록에 있는 일치 항목만 변경됩니다."
           }
         }
       },

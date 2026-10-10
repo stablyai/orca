@@ -8,6 +8,9 @@ import type { SearchResult } from '../../../../shared/code-search-types'
 
 const { search } = vi.hoisted(() => ({ search: vi.fn() }))
 vi.mock('@/runtime/runtime-file-client', () => ({ searchRuntimeFiles: search }))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn()
+}))
 const initial = useAppStore.getInitialState()
 const initialView: { view: 'files' | 'search' } = { view: 'search' }
 const empty: SearchResult = { files: [], totalMatches: 0, truncated: false }

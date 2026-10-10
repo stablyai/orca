@@ -13962,6 +13962,30 @@
             "sourceMissing": "成绩单不再可用",
             "metadataMatch": "会话元数据中的匹配",
             "sourceActionsUnavailable": "转录来源不可用。"
+          },
+          "SearchReplace": {
+            "toggle": "切换替换",
+            "replaceAll": "全部替换",
+            "inputLabel": "替换",
+            "preserveCase": "保留大小写",
+            "replace": "替换",
+            "occurrences": "{{count}} 处",
+            "occurrences_one": "{{count}} 处",
+            "occurrences_other": "{{count}} 处",
+            "files": "{{count}} 个文件",
+            "files_one": "{{count}} 个文件",
+            "files_other": "{{count}} 个文件",
+            "replacedWith": "已在 {{files}}中将 {{occurrences}}替换为“{{replaceText}}”。",
+            "replaced": "已在 {{files}}中替换 {{occurrences}}。",
+            "skippedDirty": "已跳过 {{files}}（有未保存的更改）。请先保存，然后再次替换。",
+            "skippedStale": "已跳过 {{files}}（与搜索结果不再匹配）。请检查刷新后的结果，然后再次替换。",
+            "skippedNotUtf8": "已跳过 {{files}}（不是 UTF-8 文本）。",
+            "andMore": "…以及另外 {{count}} 个",
+            "unsupportedRegex": "替换不支持此正则表达式。",
+            "failed": "无法在 {{files}}中替换。",
+            "confirmWith": "要在 {{files}}中将 {{occurrences}}替换为“{{replaceText}}”吗？",
+            "confirm": "要在 {{files}}中替换 {{occurrences}}吗？",
+            "confirmTruncated": "结果已被截断。只会更改列表中的匹配项。"
           }
         }
       },

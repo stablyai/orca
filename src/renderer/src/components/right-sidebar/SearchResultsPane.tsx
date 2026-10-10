@@ -8,10 +8,12 @@ import type {
 import type { SearchRow } from './search-rows'
 import { FileResultRow, MatchResultRow } from './SearchResultItems'
 import { translate } from '@/i18n/i18n'
+import { previewLineReplacement, type CompiledSearchReplace } from './search-replace-text'
+import type { SearchResultsReplaceProps } from './useFileSearchReplace'
 
 const SEARCH_VIRTUAL_OVERSCAN = 12
 
-type SearchResultsPaneProps = {
+export type SearchResultsPaneProps = {
   results: SearchResult | null
   error?: string | null
   hasCommittedResults: boolean
@@ -21,6 +23,25 @@ type SearchResultsPaneProps = {
   scrollRef: React.RefObject<HTMLDivElement | null>
   onToggleCollapsedFile: (filePath: string) => void
   onMatchClick: (fileResult: SearchFileResult, match: SearchMatch) => void
+  /** Present while the replace input is shown. */
+  replace?: SearchResultsReplaceProps
+}
+
+function matchReplacementPreview(
+  compiled: CompiledSearchReplace | null | undefined,
+  match: SearchMatch
+): string | undefined {
+  if (!compiled) {
+    return undefined
+  }
+  return (
+    previewLineReplacement(
+      compiled,
+      match.lineContent,
+      match.displayColumn ?? match.column,
+      match.displayMatchLength ?? match.matchLength
+    ) ?? undefined
+  )
 }
 
 export function SearchResultsPane({
@@ -32,7 +53,8 @@ export function SearchResultsPane({
   rows,
   scrollRef,
   onToggleCollapsedFile,
-  onMatchClick
+  onMatchClick,
+  replace
 }: SearchResultsPaneProps): React.JSX.Element {
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -112,6 +134,11 @@ export function SearchResultsPane({
                       fileResult={row.fileResult}
                       collapsed={row.collapsed}
                       onToggleCollapse={() => onToggleCollapsedFile(row.fileResult.filePath)}
+                      onReplaceAll={
+                        replace?.canReplace
+                          ? () => replace.onReplaceFile(row.fileResult)
+                          : undefined
+                      }
                     />
                   )}
                   {row.type === 'match' && (
@@ -119,6 +146,12 @@ export function SearchResultsPane({
                       match={row.match}
                       relativePath={row.fileResult.relativePath}
                       onClick={() => onMatchClick(row.fileResult, row.match)}
+                      replacement={matchReplacementPreview(replace?.compiled, row.match)}
+                      onReplace={
+                        replace?.canReplace
+                          ? () => replace.onReplaceMatch(row.fileResult, row.match)
+                          : undefined
+                      }
                     />
                   )}
                 </div>

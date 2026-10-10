@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { ChevronRight, Copy } from 'lucide-react'
+import { ChevronRight, Copy, Replace, ReplaceAll } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
@@ -51,15 +51,43 @@ export function ToggleButton({
   )
 }
 
+// ─── Row Action ───────────────────────────────────────────
+function RowActionButton({
+  label,
+  onClick,
+  children
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button type="button" variant="ghost" size="icon-xs" aria-label={label} onClick={onClick}>
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}
+
 // ─── File Result ──────────────────────────────────────────
 export function FileResultRow({
   fileResult,
   onToggleCollapse,
-  collapsed
+  collapsed,
+  onReplaceAll
 }: {
   fileResult: SearchFileResult
   onToggleCollapse: () => void
   collapsed: boolean
+  onReplaceAll?: () => void
 }): React.JSX.Element {
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
@@ -68,7 +96,7 @@ export function FileResultRow({
   const matchCount = normalizeSearchFileMatchCount(fileResult)
 
   return (
-    <div className="pt-1.5">
+    <div className="group relative pt-1.5">
       {/* File header with context menu */}
       <TooltipProvider delayDuration={400}>
         <Tooltip>
@@ -98,7 +126,12 @@ export function FileResultRow({
                       )}
                     </span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5">
+                  <span
+                    className={cn(
+                      'text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5',
+                      onReplaceAll && 'group-hover:invisible'
+                    )}
+                  >
                     {matchCount}
                   </span>
                 </Button>
@@ -124,20 +157,52 @@ export function FileResultRow({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      {onReplaceAll ? (
+        <RowActionButton
+          label={translate('auto.components.right.sidebar.SearchReplace.replaceAll', 'Replace All')}
+          onClick={onReplaceAll}
+        >
+          <ReplaceAll className="size-3.5" />
+        </RowActionButton>
+      ) : null}
     </div>
   )
 }
 
 // ─── Match Item ───────────────────────────────────────────
-export function MatchResultRow({
-  match,
-  relativePath,
-  onClick
-}: {
+type MatchResultRowProps = {
   match: SearchMatch
   relativePath: string
   onClick: () => void
-}): React.JSX.Element {
+  /** Text that replaces the match; renders VS Code's strike-and-insert preview when set. */
+  replacement?: string
+  onReplace?: () => void
+}
+
+export function MatchResultRow(props: MatchResultRowProps): React.JSX.Element {
+  if (!props.onReplace) {
+    return <MatchResultLine {...props} />
+  }
+  return (
+    <div className="group relative">
+      <MatchResultLine {...props} />
+      <RowActionButton
+        label={translate('auto.components.right.sidebar.SearchReplace.replace', 'Replace')}
+        onClick={props.onReplace}
+      >
+        <Replace className="size-3.5" />
+      </RowActionButton>
+    </div>
+  )
+}
+
+function MatchResultLine({
+  match,
+  relativePath,
+  onClick,
+  replacement,
+  onReplace
+}: MatchResultRowProps): React.JSX.Element {
   // Highlight the matched text within the line
   const parts = useMemo(() => {
     const content = match.lineContent
@@ -192,11 +257,26 @@ export function MatchResultRow({
           <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums mt-px">
             {match.line}
           </span>
-          <span className="text-xs flex min-w-0 items-baseline whitespace-pre">
+          <span
+            className={cn(
+              'text-xs flex min-w-0 items-baseline whitespace-pre',
+              onReplace && 'group-hover:pr-5'
+            )}
+          >
             <span className="text-muted-foreground flex-shrink-0">{parts.before}</span>
-            {parts.match && (
+            {parts.match && replacement === undefined && (
               <span className="bg-amber-500/30 text-foreground rounded-sm flex-shrink-0">
                 {parts.match}
+              </span>
+            )}
+            {parts.match && replacement !== undefined && (
+              <span className="bg-[var(--diff-removed-gutter)] text-foreground line-through rounded-sm flex-shrink-0">
+                {parts.match}
+              </span>
+            )}
+            {replacement && (
+              <span className="bg-[var(--diff-added-gutter)] text-foreground rounded-sm flex-shrink-0">
+                {replacement.replace(/\r?\n/g, '↵')}
               </span>
             )}
             <span className="text-muted-foreground min-w-0 truncate">{parts.after}</span>

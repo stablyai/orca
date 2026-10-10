@@ -14222,6 +14222,30 @@
             "sourceMissing": "Transcript is no longer available",
             "metadataMatch": "Match in session metadata",
             "sourceActionsUnavailable": "The transcript source is unavailable."
+          },
+          "SearchReplace": {
+            "toggle": "Toggle Replace",
+            "replaceAll": "Replace All",
+            "inputLabel": "Replace",
+            "preserveCase": "Preserve Case",
+            "replace": "Replace",
+            "occurrences": "{{count}} occurrences",
+            "occurrences_one": "{{count}} occurrence",
+            "occurrences_other": "{{count}} occurrences",
+            "files": "{{count}} files",
+            "files_one": "{{count}} file",
+            "files_other": "{{count}} files",
+            "replacedWith": "Replaced {{occurrences}} across {{files}} with '{{replaceText}}'.",
+            "replaced": "Replaced {{occurrences}} across {{files}}.",
+            "skippedDirty": "Skipped {{files}} with unsaved changes. Save them, then replace again.",
+            "skippedStale": "Skipped {{files}} that no longer match the search results. Check the refreshed results, then replace again.",
+            "skippedNotUtf8": "Skipped {{files}} that are not UTF-8 text.",
+            "andMore": "…and {{count}} more",
+            "unsupportedRegex": "Replace does not support this regular expression.",
+            "failed": "Could not replace in {{files}}.",
+            "confirmWith": "Replace {{occurrences}} across {{files}} with '{{replaceText}}'?",
+            "confirm": "Replace {{occurrences}} across {{files}}?",
+            "confirmTruncated": "Results were truncated. Only the matches listed are changed."
           }
         }
       },

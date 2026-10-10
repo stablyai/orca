@@ -14068,6 +14068,30 @@
             "sourceMissing": "La transcription n'est plus disponible",
             "metadataMatch": "Faire correspondre les métadonnées de la session",
             "sourceActionsUnavailable": "La source de la transcription n'est pas disponible."
+          },
+          "SearchReplace": {
+            "toggle": "Afficher/masquer le remplacement",
+            "replaceAll": "Tout remplacer",
+            "inputLabel": "Remplacer",
+            "preserveCase": "Conserver la casse",
+            "replace": "Remplacer",
+            "occurrences": "{{count}} occurrences",
+            "occurrences_one": "{{count}} occurrence",
+            "occurrences_other": "{{count}} occurrences",
+            "files": "{{count}} fichiers",
+            "files_one": "{{count}} fichier",
+            "files_other": "{{count}} fichiers",
+            "replacedWith": "{{occurrences}} remplacées dans {{files}} par « {{replaceText}} ».",
+            "replaced": "{{occurrences}} remplacées dans {{files}}.",
+            "skippedDirty": "{{files}} avec des modifications non enregistrées ignorés. Enregistrez-les, puis relancez le remplacement.",
+            "skippedStale": "{{files}} ne correspondant plus aux résultats de recherche ignorés. Vérifiez les résultats actualisés, puis relancez le remplacement.",
+            "skippedNotUtf8": "{{files}} qui ne sont pas du texte UTF-8 ignorés.",
+            "andMore": "…et {{count}} de plus",
+            "unsupportedRegex": "Le remplacement ne prend pas en charge cette expression régulière.",
+            "failed": "Impossible de remplacer dans {{files}}.",
+            "confirmWith": "Remplacer {{occurrences}} dans {{files}} par « {{replaceText}} » ?",
+            "confirm": "Remplacer {{occurrences}} dans {{files}} ?",
+            "confirmTruncated": "Les résultats ont été tronqués. Seules les occurrences listées sont modifiées."
           }
         }
       },

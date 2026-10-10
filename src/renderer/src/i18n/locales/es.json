@@ -13962,6 +13962,30 @@
             "sourceMissing": "La transcripción ya no está disponible",
             "metadataMatch": "Coincidencia en los metadatos de la sesión",
             "sourceActionsUnavailable": "La fuente de la transcripción no está disponible."
+          },
+          "SearchReplace": {
+            "toggle": "Alternar reemplazo",
+            "replaceAll": "Reemplazar todo",
+            "inputLabel": "Reemplazar",
+            "preserveCase": "Conservar mayúsculas y minúsculas",
+            "replace": "Reemplazar",
+            "occurrences": "{{count}} coincidencias",
+            "occurrences_one": "{{count}} coincidencia",
+            "occurrences_other": "{{count}} coincidencias",
+            "files": "{{count}} archivos",
+            "files_one": "{{count}} archivo",
+            "files_other": "{{count}} archivos",
+            "replacedWith": "Se reemplazaron {{occurrences}} en {{files}} por '{{replaceText}}'.",
+            "replaced": "Se reemplazaron {{occurrences}} en {{files}}.",
+            "skippedDirty": "Se omitieron {{files}} con cambios sin guardar. Guárdalos y vuelve a reemplazar.",
+            "skippedStale": "Se omitieron {{files}} que ya no coinciden con los resultados de la búsqueda. Revisa los resultados actualizados y vuelve a reemplazar.",
+            "skippedNotUtf8": "Se omitieron {{files}} que no son texto UTF-8.",
+            "andMore": "…y {{count}} más",
+            "unsupportedRegex": "Reemplazar no admite esta expresión regular.",
+            "failed": "No se pudo reemplazar en {{files}}.",
+            "confirmWith": "¿Reemplazar {{occurrences}} en {{files}} por '{{replaceText}}'?",
+            "confirm": "¿Reemplazar {{occurrences}} en {{files}}?",
+            "confirmTruncated": "Los resultados se truncaron. Solo se cambian las coincidencias de la lista."
           }
         }
       },

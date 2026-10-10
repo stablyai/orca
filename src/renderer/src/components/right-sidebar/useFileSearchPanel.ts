@@ -3,34 +3,22 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react
 import { useAppStore } from '@/store'
 import { useFileSearchScope } from './useFileSearchScope'
 import { useActiveWorktree } from '@/store/selectors'
-import type {
-  SearchFileResult,
-  SearchMatch,
-  SearchResult
-} from '../../../../shared/code-search-types'
+import type { SearchFileResult, SearchMatch } from '../../../../shared/code-search-types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import type { SearchQueryRowProps } from './SearchQueryRow'
 import type { SearchFiltersProps } from './SearchFilters'
+import type { SearchResultsPaneProps } from './SearchResultsPane'
 import { useFileSearchRunner } from './useFileSearchRunner'
+import { useFileSearchReplace, type FileSearchReplaceModel } from './useFileSearchReplace'
 
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 
-export type FileSearchPanelModel = {
+export type FileSearchPanelModel = Omit<FileSearchReplaceModel, 'resultsReplace'> & {
   activeWorktreeId: string | null
   queryRowProps: SearchQueryRowProps
   filtersProps: SearchFiltersProps
-  resultsProps: {
-    results: SearchResult | null
-    error?: string | null
-    hasCommittedResults: boolean
-    query: string
-    loading: boolean
-    rows: ReturnType<typeof buildSearchRows>
-    scrollRef: React.RefObject<HTMLDivElement | null>
-    onToggleCollapsedFile: (filePath: string) => void
-    onMatchClick: (fileResult: SearchFileResult, match: SearchMatch) => void
-  }
+  resultsProps: SearchResultsPaneProps
   focusQueryInput: () => void
 }
 
@@ -269,8 +257,19 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     [deferredSearchResults.owner, openFile, setPendingEditorReveal, deferredResultsAreCurrent]
   )
 
+  const { resultsReplace, ...replaceModel } = useFileSearchReplace({
+    activeWorktreeId,
+    worktreePath,
+    searchState,
+    results: committedSearchResults.results,
+    resultOwner: committedSearchResults.owner,
+    updateActiveSearchState,
+    rerunSearch
+  })
+
   return {
     activeWorktreeId,
+    ...replaceModel,
     queryRowProps: {
       inputRef,
       query: fileSearchQuery,
@@ -317,7 +316,8 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       rows: searchRows,
       scrollRef: resultsScrollRef,
       onToggleCollapsedFile: toggleActiveCollapsedFile,
-      onMatchClick: handleMatchClick
+      onMatchClick: handleMatchClick,
+      replace: resultsReplace
     },
     focusQueryInput
   }

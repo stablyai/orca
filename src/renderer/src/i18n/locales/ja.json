@@ -13962,6 +13962,30 @@
             "sourceMissing": "トランスクリプトは利用できなくなりました",
             "metadataMatch": "セッションメタデータ内の一致",
             "sourceActionsUnavailable": "トランスクリプトのソースが利用できません。"
+          },
+          "SearchReplace": {
+            "toggle": "置換の切り替え",
+            "replaceAll": "すべて置換",
+            "inputLabel": "置換",
+            "preserveCase": "大文字と小文字を保持",
+            "replace": "置換",
+            "occurrences": "{{count}} 件",
+            "occurrences_one": "{{count}} 件",
+            "occurrences_other": "{{count}} 件",
+            "files": "{{count}} 個のファイル",
+            "files_one": "{{count}} 個のファイル",
+            "files_other": "{{count}} 個のファイル",
+            "replacedWith": "{{files}}で {{occurrences}}を「{{replaceText}}」に置換しました。",
+            "replaced": "{{files}}で {{occurrences}}を置換しました。",
+            "skippedDirty": "未保存の変更がある {{files}}をスキップしました。保存してから、もう一度置換してください。",
+            "skippedStale": "検索結果と一致しなくなった {{files}}をスキップしました。更新された結果を確認してから、もう一度置換してください。",
+            "skippedNotUtf8": "UTF-8 テキストではない {{files}}をスキップしました。",
+            "andMore": "…ほか {{count}} 件",
+            "unsupportedRegex": "この正規表現は置換でサポートされていません。",
+            "failed": "{{files}}で置換できませんでした。",
+            "confirmWith": "{{files}}で {{occurrences}}を「{{replaceText}}」に置換しますか？",
+            "confirm": "{{files}}で {{occurrences}}を置換しますか？",
+            "confirmTruncated": "結果は切り詰められています。一覧にある一致のみが変更されます。"
           }
         }
       },
