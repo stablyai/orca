@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
 import {
@@ -25,6 +26,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
 }: SidebarWorkspaceOptionsMenuProps) {
   const [open, setOpen] = useState(false)
   const { hasAnyFilter, activeFilterCount, activeFilterLabel } = useWorkspaceOptionsFilterBadge()
+  const hideWorkspaceFilterBadge = useAppStore((s) => s.hideWorkspaceFilterBadge)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -59,7 +61,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
               <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
-              <OptionsFilterCountBadge count={activeFilterCount} />
+              {hasAnyFilter && !hideWorkspaceFilterBadge && (
+                <OptionsFilterCountBadge count={activeFilterCount} />
+              )}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

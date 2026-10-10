@@ -1,6 +1,7 @@
 import React from 'react'
 import {
   CalendarClock,
+  EyeOff,
   GitBranch,
   GitCommitHorizontal,
   MonitorSmartphone,
@@ -24,6 +25,8 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
+  const hideWorkspaceFilterBadge = useAppStore((s) => s.hideWorkspaceFilterBadge)
+  const setHideWorkspaceFilterBadge = useAppStore((s) => s.setHideWorkspaceFilterBadge)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const setHideWorkspacesFromOtherDevices = useAppStore((s) => s.setHideWorkspacesFromOtherDevices)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -121,6 +124,15 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
         )}
         checked={hideDetachedHeadWorkspaces}
         onChange={setHideDetachedHeadWorkspaces}
+      />
+      <FilterToggleRow
+        icon={<EyeOff className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarWorkspaceFilterSection.hideFilterBadge',
+          'Hide filter badge'
+        )}
+        checked={hideWorkspaceFilterBadge}
+        onChange={setHideWorkspaceFilterBadge}
       />
     </>
   )

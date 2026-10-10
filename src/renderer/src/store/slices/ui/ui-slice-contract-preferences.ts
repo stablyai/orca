@@ -55,6 +55,9 @@ export type UISlicePreferences = {
   setHideCliCreatedWorkspaces: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  /** Visual-only badge suppression; the count stays in the button's accessible name. */
+  hideWorkspaceFilterBadge: boolean
+  setHideWorkspaceFilterBadge: (v: boolean) => void
   hideWorkspacesFromOtherDevices: boolean
   setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean

@@ -103,6 +103,8 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
     hideDetachedHeadWorkspaces: false,
     setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+    hideWorkspaceFilterBadge: false,
+    setHideWorkspaceFilterBadge: (v) => set({ hideWorkspaceFilterBadge: v }),
     hideWorkspacesFromOtherDevices: false,
     setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
     alwaysShowDefaultBranchWorkspace: true,
