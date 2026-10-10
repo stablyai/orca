@@ -10963,6 +10963,26 @@
               "713c4a2f92": "Choisissez le shell par défaut pour les nouveaux volets de terminal sous Windows.",
               "13715f9d23": "Shell par défaut"
             }
+          },
+          "history": {
+            "scopeTitle": "Séparer l'historique de bash, zsh et fish par espace de travail",
+            "scopeDescription": "Conserve un historique des commandes distinct pour chaque espace de travail dans bash, zsh et fish. PowerShell et l'Invite de commandes ne sont pas concernés. Les modifications s'appliquent aux nouvelles sessions de terminal.",
+            "search": {
+              "shell": "shell",
+              "history": "historique",
+              "workspace": "espace de travail",
+              "worktree": "worktree",
+              "reverseSearch": "recherche inversée",
+              "autosuggestions": "suggestions automatiques",
+              "shared": "partagé",
+              "isolated": "isolé",
+              "arrowUp": "Flèche haut",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
+            }
           }
         },
         "voice": {
