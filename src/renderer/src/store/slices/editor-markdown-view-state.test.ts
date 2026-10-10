@@ -142,6 +142,35 @@ describe('createEditorSlice markdown view state', () => {
 })
 
 describe('createEditorSlice editor view mode', () => {
+  it('keeps Source Control Changes editable and refreshes its index baseline on reopen', () => {
+    const store = createEditorStore()
+    const file = {
+      filePath: '/repo/docs/guide.md',
+      relativePath: 'docs/guide.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit' as const
+    }
+
+    const fileId = store.getState().openFile({ ...file, changesAgainstIndex: true })
+    store.getState().setEditorViewMode(fileId, 'changes')
+    store.getState().setEditorDraft(fileId, 'unsaved newer text')
+    store.getState().markFileDirty(fileId, true)
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ mode: 'edit', changesAgainstIndex: true })
+    )
+
+    store.getState().openFile({ ...file, changesAgainstIndex: true })
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(1)
+    expect(store.getState().editorViewMode[fileId]).toBe('changes')
+
+    store.getState().openFile(file)
+    expect(store.getState().openFiles[0]?.changesAgainstIndex).toBeUndefined()
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
+    expect(store.getState().openFiles[0]?.isDirty).toBe(true)
+    expect(store.getState().editorDrafts[fileId]).toBe('unsaved newer text')
+  })
+
   it('stores changes mode as an explicit entry keyed by fileId', () => {
     const store = createEditorStore()
 
