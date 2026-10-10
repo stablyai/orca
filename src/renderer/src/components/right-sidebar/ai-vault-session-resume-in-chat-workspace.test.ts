@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
 const mocks = vi.hoisted(() => ({
   owner: vi.fn<() => string | null>(() => 'local'),
   localCapabilities: vi.fn<() => readonly string[] | null>(() => []),
+  callRuntimeRpc: vi.fn(),
   state: { runtimeStatusByEnvironmentId: new Map<string, unknown>() }
 }))
 
@@ -15,12 +19,17 @@ vi.mock('@/runtime/structured-agent-session-owner', () => ({
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.localCapabilities
 }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 // The route's own feasibility is pinned elsewhere; this suite pins the host rule on top of it.
 vi.mock('@/lib/agent-session-launch-plan', () => ({
   structuredAgentSessionLaunchFeasible: () => true
 }))
 
 import { resolveAiVaultSessionResumeInChatForWorkspace } from './ai-vault-session-resume-in-chat-workspace'
+import {
+  loadHostStructuredAgents,
+  resetHostStructuredAgentsForTests
+} from '@/runtime/host-structured-agents'
 
 const PAIRED_WORKSPACE = 'repo-1::/srv/orca'
 
@@ -59,6 +68,17 @@ beforeEach(() => {
   ])
 })
 
+afterEach(() => resetHostStructuredAgentsForTests())
+
+async function recordingHostLists(capabilities: Record<string, unknown>): Promise<void> {
+  mocks.callRuntimeRpc.mockResolvedValue({ agents: [{ agent: 'codex', capabilities }] })
+  await loadHostStructuredAgents(
+    'local',
+    [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+    null
+  )
+}
+
 describe('resuming a conversation from history in a chat', () => {
   // The conversation's transcript is on this machine, which the server cannot read; the
   // terminal resume refuses that target for the same reason.
@@ -79,5 +99,19 @@ describe('resuming a conversation from history in a chat', () => {
     mocks.localCapabilities.mockReturnValue([])
 
     expect(resumeInChat()).toEqual({ available: false, reason: 'workspace' })
+  })
+
+  it("follows the recording host's adoption flag once that host has listed its agents", async () => {
+    mocks.owner.mockReturnValue('local')
+    await recordingHostLists({ transcriptAdoption: false })
+
+    expect(resumeInChat()).toEqual({ available: false, reason: 'agent' })
+  })
+
+  it('keeps offering it from a host whose list predates the adoption flag', async () => {
+    mocks.owner.mockReturnValue('local')
+    await recordingHostLists({})
+
+    expect(resumeInChat()).toEqual({ available: true, workspaceId: PAIRED_WORKSPACE })
   })
 })

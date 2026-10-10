@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import {
   aiVaultSessionCwdMatchesWorkspace,
   resolveAiVaultSessionResumeInChatEligibility
@@ -26,11 +27,14 @@ function session(overrides: Partial<ResumeInChatSession> = {}): ResumeInChatSess
 function eligibility(
   overrides: Partial<Parameters<typeof resolveAiVaultSessionResumeInChatEligibility>[0]> = {}
 ) {
+  const row = overrides.session ?? session()
   return resolveAiVaultSessionResumeInChatEligibility({
-    session: session(),
+    session: row,
     targetWorkspaceId: 'repo-1::/repo/orca',
     targetWorkspacePath: WORKSPACE_PATH,
     structuredRouteAvailable: true,
+    // A host with no agent list: the two agents every build ships adopt.
+    transcriptAdoption: isAgentSessionHandleProvider(row.agent),
     ...overrides
   })
 }
@@ -49,6 +53,16 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
       })
     }
   )
+
+  it("follows the host's adoption flag rather than the agent's name", () => {
+    expect(
+      eligibility({ session: session({ agent: 'opencode' }), transcriptAdoption: true })
+    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca' })
+    expect(eligibility({ transcriptAdoption: false })).toEqual({
+      available: false,
+      reason: 'agent'
+    })
+  })
 
   it('refuses a row already adopted into a chat before any other check', () => {
     // That row reopens its own chat; a second adoption is a conflict the host would refuse.

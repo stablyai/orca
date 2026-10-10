@@ -15,10 +15,8 @@ import {
   parseExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import {
-  isAgentSessionHandleProvider,
-  type AgentSessionHandleProvider
-} from '../../../../shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { hostStructuredAgentClaims } from '@/runtime/use-host-structured-agent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'
 import { resolveAiVaultHistoryRowResume } from '../right-sidebar/ai-vault-session-resume-in-chat-workspace'
@@ -82,11 +80,18 @@ export function resolveTabSessionHistorySubject(
       : null
   }
   if (args.structuredSessionId !== undefined) {
-    // Only these providers have history rows either move can act on.
-    const target = isAgentSessionHandleProvider(args.tab.launchAgent)
-      ? workspace(args.tab.worktreeId, 'chat')
+    // Only an agent whose chats own history rows has one either move can act on.
+    const target = workspace(args.tab.worktreeId, 'chat')
+    return target &&
+      args.tab.launchAgent &&
+      hostStructuredAgentClaims(
+        state,
+        target.request.executionHostScope,
+        args.tab.launchAgent,
+        'sessionHistory'
+      )
+      ? { ...target, kind: 'chat', sessionId: args.structuredSessionId }
       : null
-    return target ? { ...target, kind: 'chat', sessionId: args.structuredSessionId } : null
   }
   // The same pane-to-conversation mapping tab titles use: live agent, then sleeping, then retained.
   const titleRequest = collectAiVaultTitleRequests(state).find(

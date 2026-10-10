@@ -72,6 +72,8 @@ export const PI_RPC_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = {
         : {})
     })
   }),
+  transcriptImport: null,
+  sessionHistory: null,
   supportsLocation: supportsSupervisedProviderChildLocation,
   supportsLaunch: async ({ cwd, env, commandSettings }) => {
     let command: string

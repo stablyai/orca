@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { decodeAgentSessionAgentsResult } from './agent-session-registered-agents'
 
+// What a host that predates the adoption and history flags lists.
+const OLDER_HOST_CODEX_CAPABILITIES = {
+  rewind: true,
+  compact: true,
+  threadGoal: true,
+  contextUsage: false,
+  imagePrompts: true,
+  steering: 'inject',
+  approvalEnforcement: 'provider'
+}
+
 const CODEX = {
   agent: 'codex',
-  capabilities: {
-    rewind: true,
-    compact: true,
-    threadGoal: true,
-    contextUsage: false,
-    imagePrompts: true,
-    steering: 'inject',
-    approvalEnforcement: 'provider'
-  }
+  capabilities: { ...OLDER_HOST_CODEX_CAPABILITIES, transcriptAdoption: true, sessionHistory: true }
 }
 
 describe('decodeAgentSessionAgentsResult', () => {
@@ -56,9 +59,56 @@ describe('decodeAgentSessionAgentsResult', () => {
           contextUsage: false,
           imagePrompts: false,
           steering: 'queue',
-          approvalEnforcement: 'orca'
+          approvalEnforcement: 'orca',
+          transcriptAdoption: false,
+          sessionHistory: false
         }
       }
+    ])
+  })
+
+  it("reads an older host's missing adoption and history flags as that build's answer", () => {
+    const older = OLDER_HOST_CODEX_CAPABILITIES
+    expect(
+      decodeAgentSessionAgentsResult({
+        agents: [
+          { agent: 'codex', capabilities: older },
+          { agent: 'claude', capabilities: older },
+          { agent: 'opencode', capabilities: older }
+        ]
+      })?.map(({ agent, capabilities }) => [
+        agent,
+        capabilities.transcriptAdoption,
+        capabilities.sessionHistory
+      ])
+    ).toEqual([
+      ['codex', true, true],
+      ['claude', true, true],
+      ['opencode', false, false]
+    ])
+  })
+
+  it("keeps a newer host's stated adoption and history flags", () => {
+    expect(
+      decodeAgentSessionAgentsResult({
+        agents: [
+          {
+            agent: 'opencode',
+            capabilities: { ...CODEX.capabilities, transcriptAdoption: false, sessionHistory: true }
+          },
+          {
+            agent: 'claude',
+            capabilities: {
+              ...CODEX.capabilities,
+              transcriptAdoption: false,
+              sessionHistory: false
+            }
+          }
+        ]
+      })?.map(({ capabilities }) => [capabilities.transcriptAdoption, capabilities.sessionHistory])
+    ).toEqual([
+      [false, true],
+      [false, false]
     ])
   })
 

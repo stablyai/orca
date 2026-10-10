@@ -28,6 +28,26 @@ describe('agentSession.agents', () => {
     expect(ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
   })
 
+  it('publishes adoption and history only for agents registered with them', async () => {
+    const result = await method.handler({}, context({}))
+
+    expect(
+      Object.fromEntries(
+        result.agents.map(({ agent, capabilities }) => [
+          agent,
+          [capabilities.transcriptAdoption, capabilities.sessionHistory]
+        ])
+      )
+    ).toEqual({
+      pi: [false, false],
+      codex: [true, true],
+      claude: [true, true],
+      grok: [false, false],
+      opencode: [false, false],
+      omp: [false, false]
+    })
+  })
+
   it('still refuses a remote client that cannot read structured sessions', async () => {
     await expect(
       method.handler({}, context({ clientKind: 'mobile', clientCapabilities: [] }))

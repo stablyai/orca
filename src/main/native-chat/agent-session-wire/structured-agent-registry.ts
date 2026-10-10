@@ -4,7 +4,7 @@
 // what an agent declares. A declaration the agent's adapter could not honour is refused here, so a
 // declared capability always has the adapter method behind it.
 
-import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
+import type { AgentSessionDeclaredCapabilities } from '../../../shared/agent-session-capabilities'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
@@ -17,7 +17,7 @@ export type StructuredAgentRegistration = {
 type AdapterMethod = keyof StructuredAgentSessionAdapter
 
 /** The adapter methods each declared capability needs. */
-function requiredAdapterMethods(capabilities: AgentSessionCapabilities): AdapterMethod[] {
+function requiredAdapterMethods(capabilities: AgentSessionDeclaredCapabilities): AdapterMethod[] {
   return [
     ...(capabilities.compact ? (['compact'] as const) : []),
     ...(capabilities.threadGoal ? (['changeThreadGoal'] as const) : []),
@@ -66,7 +66,7 @@ export class StructuredAgentRegistry {
   }
 
   /** What `agent` declares; a live session may narrow it (see `rewindSupport`), never widen it. */
-  capabilities(agent: string): AgentSessionCapabilities | null {
+  capabilities(agent: string): AgentSessionDeclaredCapabilities | null {
     return this.definition(agent)?.capabilities ?? null
   }
 }

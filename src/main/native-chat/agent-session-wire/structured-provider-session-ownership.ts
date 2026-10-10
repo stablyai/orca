@@ -1,5 +1,8 @@
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type {
+  AgentSessionProviderHandleLink,
+  StructuredAgentId
+} from '../../../shared/agent-session-provider-handle'
 
 export type StructuredProviderSessionOwnership = {
   sessionId: string
@@ -11,16 +14,28 @@ export type StructuredProviderSessionOwnership = {
 }
 
 export function listStructuredProviderSessionOwnership(
-  records: readonly AgentSessionRecord[]
+  records: readonly AgentSessionRecord[],
+  /** The id a link is owned under; a link it answers undefined for is owned under none. */
+  providerSessionId: (
+    record: AgentSessionRecord,
+    link: AgentSessionProviderHandleLink
+  ) => string | undefined = (_record, link) => link.handle.nativeId
 ): StructuredProviderSessionOwnership[] {
   return records.flatMap((record) =>
-    record.providerHandleChain.map((link) => ({
-      sessionId: record.sessionId,
-      workspaceId: record.location.workspaceId,
-      provider: record.provider,
-      providerSessionId: link.handle.nativeId,
-      conversationName: record.conversationName,
-      lease: record.lease
-    }))
+    record.providerHandleChain.flatMap((link) => {
+      const id = providerSessionId(record, link)
+      return id === undefined
+        ? []
+        : [
+            {
+              sessionId: record.sessionId,
+              workspaceId: record.location.workspaceId,
+              provider: record.provider,
+              providerSessionId: id,
+              conversationName: record.conversationName,
+              lease: record.lease
+            }
+          ]
+    })
   )
 }

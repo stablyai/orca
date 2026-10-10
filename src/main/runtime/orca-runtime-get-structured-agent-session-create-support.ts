@@ -26,10 +26,7 @@ import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session-account-home'
-import {
-  isAgentSessionHandleProvider,
-  type StructuredAgentId
-} from '../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import { agentSessionWireProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
@@ -208,9 +205,10 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
-    // Adopting a conversation reads the agent's own transcript, which only Claude and Codex have
-    // importers for.
-    if (!support.supported || (input.resumeFrom && !isAgentSessionHandleProvider(input.agent))) {
+    // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
+    // importer adopts.
+    const transcriptImport = structuredAgentRuntimeRegistration(input.agent)?.transcriptImport
+    if (!support.supported || (input.resumeFrom && !transcriptImport)) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
       })
@@ -241,11 +239,12 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
     // the wrong home finds nothing and lands the user in a blank chat wearing the old chat's name.
     const adoption =
-      input.resumeFrom && isLegacyAgentSessionAccountHome(selectedAccountHome)
+      input.resumeFrom && transcriptImport && isLegacyAgentSessionAccountHome(selectedAccountHome)
         ? await resolveStructuredAgentSessionAdoptionForCreate({
             host,
             settings,
             agent: input.agent,
+            transcriptImport,
             providerSessionId: input.resumeFrom.providerSessionId,
             selfSessionId: input.envelope.sessionId,
             selectedAccountHomePath: selectedAccountHome.path
