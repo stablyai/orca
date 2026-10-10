@@ -164,8 +164,20 @@ export function applyManagedHooks(
 
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
+    const previousAsync = (Array.isArray(current) ? current : [])
+      .flatMap((definition) => (Array.isArray(definition?.hooks) ? definition.hooks : []))
+      .find(
+        (previous) =>
+          previous?.type === 'command' &&
+          typeof previous.command === 'string' &&
+          isManagedCommand(previous.command) &&
+          typeof previous.async === 'boolean'
+      )?.async
     const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
-    const definition: HookDefinition = { ...event.definition, hooks: [hook] }
+    const definition: HookDefinition = {
+      ...event.definition,
+      hooks: [previousAsync === undefined ? hook : { ...hook, async: previousAsync }]
+    }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
