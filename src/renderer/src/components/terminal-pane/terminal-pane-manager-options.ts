@@ -161,6 +161,7 @@ export function createTerminalPaneManagerOptions(
     },
     terminalTuiScrollSensitivity: () =>
       normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
+    terminalSmoothScrolling: () => settingsRef.current?.terminalSmoothScrolling === true,
     onLinkClick: (paneId, event, url) => {
       const activePane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
       handleTerminalWebLinkClick(url, event, {

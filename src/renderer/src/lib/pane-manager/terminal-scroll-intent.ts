@@ -279,7 +279,7 @@ export function restoreTerminalStructuralScrollIntent(
     return
   }
   if (snapshot.kind === 'followOutput') {
-    if (safeTerminalScrollCall(() => terminal.scrollToBottom?.())) {
+    if (safeTerminalScrollCall(terminal, () => terminal.scrollToBottom?.())) {
       writeIntent(terminal, 'followOutput')
     }
     return
@@ -290,7 +290,7 @@ export function restoreTerminalStructuralScrollIntent(
       : snapshot.viewportY
   const targetY = clampTerminalViewportY(requestedY, current.baseY)
   if (current.viewportY !== targetY) {
-    if (!safeTerminalScrollCall(() => terminal.scrollToLine?.(targetY))) {
+    if (!safeTerminalScrollCall(terminal, () => terminal.scrollToLine?.(targetY))) {
       // Why: renderer teardown can reject the scroll before xterm changes its
       // native viewport; retain the intended pin for the next fit/retry rather
       // than latching the transient current bottom.

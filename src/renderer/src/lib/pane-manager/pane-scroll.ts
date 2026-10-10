@@ -5,6 +5,7 @@ import {
   resolveLogicalCellOffsetLine
 } from './terminal-reflow-scroll-anchor'
 import { forceTerminalViewportScrollbarSync } from './terminal-viewport-scrollbar-sync'
+import { safeTerminalScrollCall } from './terminal-scroll-buffer-snapshot'
 
 const terminalOutputEpochs = new WeakMap<Terminal, number>()
 const deferredScrollRestores = new WeakMap<
@@ -261,7 +262,7 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRe
   // throw "cannot read dimensions" until the pane re-attaches. Swallow that
   // window quietly — the next visibility flip re-fits and re-restores.
   if (state.wasAtBottom) {
-    if (safeScrollCall(() => terminal.scrollToBottom())) {
+    if (safeTerminalScrollCall(terminal, () => terminal.scrollToBottom())) {
       forceTerminalViewportScrollbarSync(terminal)
       return 'restored'
     }
@@ -293,26 +294,11 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRe
   // reflow settles; keep the marker alive so each call consults the live
   // line. Callers (restoreScrollState, the timeout in
   // restoreScrollStateAfterLayout, cancelDeferredScrollRestore) own disposal.
-  if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
+  if (safeTerminalScrollCall(terminal, () => terminal.scrollToLine(targetLine))) {
     forceTerminalViewportScrollbarSync(terminal)
     return 'restored'
   }
   return 'retry'
-}
-
-function safeScrollCall(fn: () => void): boolean {
-  try {
-    fn()
-    return true
-  } catch (err) {
-    // Why: xterm's renderer can null out internal dimensions during WebGL
-    // teardown, throwing "Cannot read properties of undefined (reading
-    // 'dimensions')". Tolerate that; surface anything else.
-    if (err instanceof TypeError && /dimensions/.test(err.message)) {
-      return false
-    }
-    throw err
-  }
 }
 
 export function releaseScrollStateMarker(state: ScrollState): void {

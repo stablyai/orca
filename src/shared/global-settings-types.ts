@@ -106,6 +106,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalScrollSensitivity: number
   terminalFastScrollSensitivity: number
   terminalTuiScrollSensitivity: number
+  /** Animates mouse-wheel scrollback; trackpads and programmatic scrolls stay immediate. Default off. */
+  terminalSmoothScrolling: boolean
   /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
   terminalTuiScrollSensitivityDefaultedToOne?: boolean
   /** Terminal renderer policy.

@@ -52,6 +52,22 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
     ]
   },
   {
+    title: translate('components.settings.TerminalInteraction.smoothScrolling', 'Smooth Scrolling'),
+    description: translate(
+      'components.settings.TerminalInteraction.smoothScrollingDescription',
+      'Animate mouse-wheel scrolling through terminal scrollback. Trackpads and full-screen terminal apps are unaffected.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.scroll', 'scroll'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.scrolling', 'scrolling'),
+      ...translateSearchKeyword('components.settings.terminal.search.smooth', 'smooth'),
+      ...translateSearchKeyword('components.settings.terminal.search.animation', 'animation'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.wheel', 'wheel'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.ea364ce6e4', 'mouse')
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.terminal.search.ask_before_closing_running_terminals_title',
       'Ask Before Closing Running Terminals'
