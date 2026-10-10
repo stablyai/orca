@@ -42,6 +42,7 @@
 1 src/renderer/src/components/sidebar/add-repo-runtime-owner.ts
 1 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
+1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
 1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
 2 src/renderer/src/components/task-page-github-reviewer-actions.ts
 1 src/renderer/src/components/task-page/github/AssigneesCell.tsx

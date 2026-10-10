@@ -4,6 +4,7 @@ import {
   countFocusRoutingCalls,
   diffCounts,
   formatBaseline,
+  hasFocusRoutingAlias,
   isScannedPath,
   parseBaseline
 } from './check-owner-routing-ratchet.mjs'
@@ -25,6 +26,28 @@ describe('countFocusRoutingCalls', () => {
       'mygetActiveRuntimeTarget(settings)'
     ].join('\n')
     expect(countFocusRoutingCalls(src)).toBe(0)
+  })
+
+  it('counts spaced calls and value uses but not import or export lists', () => {
+    const src = [
+      "import { callRuntimeRpc, getActiveRuntimeTarget } from './rpc'",
+      "export {\n  settingsForRuntimeOwner,\n  type RuntimeClientTarget\n} from './target'",
+      'const a = getActiveRuntimeTarget (settings)',
+      'const b = list.map(getActiveRuntimeTarget)'
+    ].join('\n')
+    expect(countFocusRoutingCalls(src)).toBe(2)
+  })
+})
+
+describe('hasFocusRoutingAlias', () => {
+  it('refuses an aliased import or re-export, which would hide its calls', () => {
+    expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget as route } from './rpc'")).toBe(
+      true
+    )
+    expect(
+      hasFocusRoutingAlias("export {\n  settingsForRuntimeOwner as owner\n} from './target'")
+    ).toBe(true)
+    expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget } from './rpc'")).toBe(false)
   })
 })
 

@@ -10,12 +10,10 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
-  getNestedSshTargetIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
 import { callHostRoute } from '@/runtime/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
@@ -69,15 +67,13 @@ async function persist(
       scope.folderWorkspaceId,
       executionHostId
     )
-    const nestedTargetId = runtimeEnvironmentId
-      ? getNestedSshTargetIdForFolderWorkspace(state, scope.folderWorkspaceId, executionHostId)
-      : null
     const updated = runtimeEnvironmentId
       ? (
           await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
+            // Why local: the folder's catalog row lives on the server even when it names an SSH target.
             hostRouteForAuthority({
               endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
-              at: nestedTargetId ? toSshExecutionHostId(nestedTargetId) : 'local'
+              at: 'local'
             }),
             'folderWorkspace.update',
             { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },

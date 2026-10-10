@@ -10,11 +10,20 @@ import { pathToFileURL } from 'node:url'
 
 const BASELINE_PATH = 'config/owner-routing-baseline.txt'
 const SCAN_ROOT = 'src/renderer/src'
-const FOCUS_ROUTING_CALL =
-  /(?<!function\s)\b(?:getActiveRuntimeTarget|legacyRouteFromSettings|settingsForRuntimeOwner)\(/g
+const HELPERS = '(?:getActiveRuntimeTarget|legacyRouteFromSettings|settingsForRuntimeOwner)'
+const IMPORT_EXPORT_LIST = /\b(?:import|export)\s+(?:type\s+)?\{[^}]*\}/g
+// Calls and value uses (`.map(helper)`); definitions and type queries are not routing.
+const FOCUS_ROUTING_USE = new RegExp(`(?<!(?:function|typeof)\\s+)\\b${HELPERS}\\b`, 'g')
+const FOCUS_ROUTING_ALIAS = new RegExp(`\\b${HELPERS}\\s+as\\b`)
 
+/** Imports and re-exports are not uses; an aliased one is reported by {@link hasFocusRoutingAlias}. */
 export function countFocusRoutingCalls(sourceText) {
-  return sourceText.match(FOCUS_ROUTING_CALL)?.length ?? 0
+  return sourceText.replace(IMPORT_EXPORT_LIST, '').match(FOCUS_ROUTING_USE)?.length ?? 0
+}
+
+/** An alias hides later calls from the count, so it is refused outright. */
+export function hasFocusRoutingAlias(sourceText) {
+  return (sourceText.match(IMPORT_EXPORT_LIST) ?? []).some((list) => FOCUS_ROUTING_ALIAS.test(list))
 }
 
 export function isScannedPath(rel) {
@@ -76,6 +85,7 @@ export function collectCurrentCounts(root = process.cwd()) {
     .split('\n')
     .filter((rel) => rel && isScannedPath(rel))
   const counts = new Map()
+  const aliased = []
   for (const rel of tracked) {
     let source
     try {
@@ -87,8 +97,11 @@ export function collectCurrentCounts(root = process.cwd()) {
     if (count > 0) {
       counts.set(rel, count)
     }
+    if (hasFocusRoutingAlias(source)) {
+      aliased.push(rel)
+    }
   }
-  return counts
+  return { counts, aliased }
 }
 
 function total(counts) {
@@ -102,8 +115,13 @@ export function main(root = process.cwd()) {
     return 1
   }
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
-  const current = collectCurrentCounts(root)
+  const { counts: current, aliased } = collectCurrentCounts(root)
   const { grown, shrunk } = diffCounts(current, baseline)
+  for (const file of aliased) {
+    console.error(
+      `::error file=${file}::A focus-routing helper is imported or exported under another name, which hides its calls from this ratchet. Use the original name.`
+    )
+  }
   for (const { file, now, allowed } of grown) {
     console.error(
       `::error file=${file}::${now} focus-routed call(s), baseline allows ${allowed}. Route by the resource's owner (resolveOwner + callHostRoute) instead of the Active Server setting.`
@@ -114,7 +132,7 @@ export function main(root = process.cwd()) {
       `::error file=${file}::${now} focus-routed call(s), baseline still allows ${allowed}. Run: pnpm check:owner-routing-ratchet --prune`
     )
   }
-  if (grown.length > 0 || shrunk.length > 0) {
+  if (aliased.length > 0 || grown.length > 0 || shrunk.length > 0) {
     return 1
   }
   console.log(`Owner-routing ratchet OK — ${total(current)} focus-routed call site(s).`)
@@ -126,7 +144,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (process.argv[2] === '--prune') {
     const baselineFile = path.join(root, BASELINE_PATH)
     const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
-    const current = collectCurrentCounts(root)
+    const { counts: current } = collectCurrentCounts(root)
     // Lowers entries only; growth still has to be fixed in the code.
     const pruned = new Map(
       [...baseline].map(([file, allowed]) => [file, Math.min(allowed, current.get(file) ?? 0)])
