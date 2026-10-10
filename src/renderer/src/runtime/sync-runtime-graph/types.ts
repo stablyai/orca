@@ -115,14 +115,77 @@ export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
   ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
 >
+/** Both sources are copy-on-write store slices, so identity equality proves contents are unchanged. */
+export type MobileSessionAgentStatusCache = {
+  agentStatusSource: AppState['agentStatusByPaneKey']
+  tabsSource: AppState['tabsByWorktree']
+  byWorktreeId: MobileSessionAgentStatusByWorktree
+}
+/** Tab->worktree ownership plus the duplicate ids that no worktree may claim. */
+export type TerminalTabOwnershipIndex = {
+  source: AppState['tabsByWorktree']
+  worktreeIdByTabId: ReadonlyMap<string, string>
+  tabById: ReadonlyMap<string, AppState['tabsByWorktree'][string][number]>
+  ambiguousTabIds: ReadonlySet<string>
+}
+/** One tab-keyed store record grouped by owning worktree; absent worktrees own nothing in it. */
+export type TabKeyedPartition<T> = ReadonlyMap<string, ReadonlyMap<string, T>>
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   openFileIndexes: OpenFileIndexes
   editorDraftVersionByFileId: ReadonlyMap<string, string>
   agentStatusByWorktreeId: MobileSessionAgentStatusByWorktree
+  terminalLayoutByWorktree: TabKeyedPartition<AppState['terminalLayoutsByTabId'][string]>
+  runtimePaneTitleByWorktree: TabKeyedPartition<AppState['runtimePaneTitlesByTabId'][string]>
+  launchDraftByWorktree: TabKeyedPartition<
+    NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
+  >
   generatedTitlesEnabled: boolean
   terminalTheme: RuntimeMobileTerminalTheme | undefined
+  ambiguousTabIds: ReadonlySet<string>
+}
+/**
+ * Every store and publication value one worktree's snapshot is derived from.
+ *
+ * Why a flat record of references: these cover every `AppState` and `MobileSessionPublicationInputs`
+ * read in `buildMobileSessionWorktreeInputs`, so an unchanged set proves no store input moved. It is
+ * not on its own a proof the snapshot is unchanged — the builder also reads live PaneManager/DOM
+ * state, which the call site fences with its own `registeredTabIdsByWorktree` guard. See
+ * `collectMobileSessionWorktreeSourceRefs`.
+ */
+export type MobileSessionWorktreeSourceRefs = {
+  terminalTabs: AppState['tabsByWorktree'][string] | undefined
+  unifiedTabs: AppState['unifiedTabsByWorktree'][string] | undefined
+  groups: AppState['groupsByWorktree'][string] | undefined
+  tabBarOrder: AppState['tabBarOrderByWorktree'][string] | undefined
+  activeGroupId: AppState['activeGroupIdByWorktree'][string] | undefined
+  tabGroupLayout: TabGroupLayoutNode | undefined
+  activeFileIdForWorktree: NonNullable<AppState['activeFileIdByWorktree']>[string] | undefined
+  activeTabTypeForWorktree: NonNullable<AppState['activeTabTypeByWorktree']>[string] | undefined
+  activeBrowserWorkspaceId:
+    | NonNullable<AppState['activeBrowserTabIdByWorktree']>[string]
+    | undefined
+  activeFileId: AppState['activeFileId']
+  activeTabId: AppState['activeTabId']
+  activeTabType: AppState['activeTabType']
+  browserPagesByWorkspace: AppState['browserPagesByWorkspace']
+  browserCertificateFailuresByPageId: AppState['browserCertificateFailuresByPageId']
+  worktreesByRepo: AppState['worktreesByRepo']
+  terminalLayoutBucket: ReadonlyMap<string, AppState['terminalLayoutsByTabId'][string]>
+  paneTitleBucket: ReadonlyMap<string, AppState['runtimePaneTitlesByTabId'][string]>
+  launchDraftBucket: ReadonlyMap<
+    string,
+    NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
+  >
+  browserWorkspaces: AppState['browserTabsByWorktree'][string] | undefined
+  openFilesById: ReadonlyMap<string, AppState['openFiles'][number]> | undefined
+  openFileIds: readonly string[] | undefined
+  editorDraftVersionByFileId: ReadonlyMap<string, string>
+  agentStatusBucket: ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]> | undefined
+  generatedTitlesEnabled: boolean
+  terminalTheme: RuntimeMobileTerminalTheme | undefined
+  ambiguousTabIds: ReadonlySet<string>
 }
 /**
  * Live PaneManager/DOM reads for one mounted terminal tab, captured once per

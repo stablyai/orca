@@ -50,7 +50,7 @@ export function narrowMapByKeys<T>(
 
 export function captureMountedTerminalSurfaces(
   terminalTabs: AppState['tabsByWorktree'][string],
-  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'],
+  terminalLayoutByTabId: ReadonlyMap<string, AppState['terminalLayoutsByTabId'][string]>,
   worktreeId: string
 ): ReadonlyMap<string, MountedTerminalSurfaceCapture> {
   let captures: Map<string, MountedTerminalSurfaceCapture> | null = null
@@ -60,7 +60,10 @@ export function captureMountedTerminalSurfaces(
       continue
     }
     captures ??= new Map()
-    captures.set(tab.id, captureMountedTerminalSurface(registered, terminalLayoutsByTabId[tab.id]))
+    captures.set(
+      tab.id,
+      captureMountedTerminalSurface(registered, terminalLayoutByTabId.get(tab.id))
+    )
   }
   return captures ?? EMPTY_NARROWED_BY_KEY
 }
@@ -100,7 +103,8 @@ function captureMountedTerminalSurface(
   }
 }
 
-function narrowedEntriesEqual<K, T>(a: ReadonlyMap<K, T>, b: ReadonlyMap<K, T>): boolean {
+/** Reference-equality of every entry; the callers' values are all copy-on-write store objects. */
+export function narrowedEntriesEqual<K, T>(a: ReadonlyMap<K, T>, b: ReadonlyMap<K, T>): boolean {
   if (a === b) {
     return true
   }
