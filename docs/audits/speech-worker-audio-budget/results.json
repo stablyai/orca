@@ -1,0 +1,182 @@
+{
+  "runtime": {
+    "node": "24.20.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "137",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.7",
+    "simdjson": "4.6.6",
+    "simdutf": "6.4.0",
+    "sqlite": "3.53.4",
+    "tz": "2026c",
+    "undici": "7.29.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "13.6.233.17-node.53",
+    "zlib": "1.3.2.1-motley-42c2f19",
+    "zstd": "1.5.7"
+  },
+  "byteLimit": 8388608,
+  "frameLimit": 1024,
+  "sourceHashes": {
+    "src/main/speech/stt-session-state.ts": {
+      "baseline": "77adc85a68bc66d03b48ddf52f497e292c6e584282686b8db857562cc5d7d603",
+      "fixed": "49f274da94f0c72be67d8d4dd626b7b995d194654402ffd9ab4a09cd1b7175d5"
+    },
+    "src/main/speech/stt-service.ts": {
+      "baseline": "464c6ca825277a6c834816ae4cd014c52f3a96d620f3146e65a6a7ed383c52ce",
+      "fixed": "4230b61a620dc0c06bdd6c87e20404eb1b67f27d8efdbea23330e81274fa2793"
+    },
+    "src/main/speech/stt-worker-startup.ts": {
+      "baseline": "519496e70e6652cbfe7b2030c8c6c5d16fa099203de117a883f6fe7fb7bec77a",
+      "fixed": "ca6bf612b71da11ea93e914bd44d844e49b7d627f0a72813f2bfb88ae4223628"
+    },
+    "src/main/speech/stt-session-start.ts": {
+      "baseline": "1d4f0905b9d969c78fd96874b3a1e25c67698848d856391f12f6cef5b36795d2",
+      "fixed": "41c3f36d31dbae337c636a5d8ed82250e9e3767d08c65daf5e258a007c6514ab"
+    },
+    "src/main/speech/stt-session-stop.ts": {
+      "baseline": "08d5db6147a929241e5fed3aa37bcf9597deca662e806ad9264349626ea9ea03",
+      "fixed": "54eb81b15d98ca36b691c4c19d2e58f70682ad7622f0928cc9e7e9dbc81220ba"
+    },
+    "src/main/speech/stt-worker.ts": {
+      "baseline": "4c94a138ed89373f5f8ed0da0375f3d5758aa24a58a0e1e52ae53d74cd7fe373",
+      "fixed": "fa016241c3fb70b100b0d5644069e88123bb45846ed5ee2046dc20b1389db07d"
+    },
+    "src/main/speech/stt-audio-pending-budget.ts": {
+      "baseline": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "fixed": "8cb41ca2e35c6af7af75fb8e6df9b7970a30d6fae1fabfef66ac783d68c00346"
+    }
+  },
+  "dependencyHashes": {
+    "src/main/speech/stt-audio-resample.ts": "a2c8d561a20a9d23c32ff1377c10a746fd1590c4f9a9ee15e6ba6ea1faf9fbbc",
+    "src/main/speech/stt-offline-audio-chunker.ts": "76a823c3e6bb9a6a70aabfc19246f086ae96574d7e500f6727cb760ce1dacafb",
+    "src/main/speech/stt-worker-model-config.ts": "dc5a63716f9d1a447421958ae5fb0e3ce89735324dc6650a21294f8b1bd368ee",
+    "src/main/speech/stt-worker-stop.ts": "2798b05eaac0a2564e4460425287b76720b77668fb0c592ddd51bc1713296044",
+    "src/main/speech/stt-session-timeouts.ts": "e684191bc1f5814853a19e9587227ea0cbf5907940df7fcccea6d637e0899785",
+    "src/main/speech/stt-audio-pending-budget.test.ts": "5dc5f7fcb896ade3d72305fc9516cd455fff7bb45fc4cea422026b3ae0ab4502",
+    "src/main/speech/stt-audio-pending-test-fixture.ts": "16a755c7aed4a70ed1346020ca6dd46af2467d8ed27f383f65a53a9b26408dda",
+    "src/main/speech/stt-audio-test-worker.ts": "855f01fd28c05824320a98da551de2d0d34b7a0f6195f7d26cea2f0ffc39aa86",
+    "src/main/speech/stt-worker-audio-ack.test.ts": "cae9a96dd82bbdd2493b6f7b0a0abec7612ead06505c4001daf495c1c0672a73"
+  },
+  "proofSources": {
+    "sources.cjs": "9bd20da9c7c82219edf0ad69d57f160e6f0ec3c0be8e696a27be057efaa3abed",
+    "run-case.cjs": "54e19d14d1ab8d2281b701f077c00caa7416566e9686e3625e4a49fb596815a3",
+    "recognizer.cjs": "a022d119f2d767df5d2a3e81d41b4b378ac3a3e0604ff9bd9128f02b05e77024",
+    "reproduce.cjs": "90a25caf22d590697e49867adfb298e24fb054c41bfe2c46a499f9e931a288e6",
+    "fix.patch": "7835bc2e2c8ff9bd45bcc1e8f04e8fc582493b6e1e7f688e0c89175bfb52b065",
+    "original-source-hashes.json": "b0a4703798b79ffd3ba0762fe245adb1aecddf0a6f14f0b9f0586c64ecb2c13a"
+  },
+  "cases": [
+    {
+      "phase": "baseline",
+      "kind": "bytes",
+      "attemptedFrames": 1024,
+      "held": {
+        "bytes": 16777216,
+        "frames": 1024,
+        "decoded": 0
+      },
+      "receivedFrames": 1024,
+      "reportedError": null,
+      "finalPendingBytes": null,
+      "warmReuse": true,
+      "rssDelta": 17301504,
+      "mainHeapDelta": 19616
+    },
+    {
+      "phase": "baseline",
+      "kind": "tiny",
+      "attemptedFrames": 2048,
+      "held": {
+        "bytes": 8192,
+        "frames": 2048,
+        "decoded": 0
+      },
+      "receivedFrames": 2048,
+      "reportedError": null,
+      "finalPendingBytes": null,
+      "warmReuse": true,
+      "rssDelta": 589824,
+      "mainHeapDelta": 440
+    },
+    {
+      "phase": "baseline",
+      "kind": "decode-error",
+      "attemptedFrames": 2,
+      "held": {
+        "bytes": 32768,
+        "frames": 2,
+        "decoded": 0
+      },
+      "receivedFrames": 2,
+      "reportedError": "Error: Controlled recognizer failure",
+      "finalPendingBytes": null,
+      "warmReuse": true,
+      "rssDelta": 0,
+      "mainHeapDelta": 896
+    },
+    {
+      "phase": "fixed",
+      "kind": "bytes",
+      "attemptedFrames": 1024,
+      "held": {
+        "bytes": 8388608,
+        "frames": 512,
+        "decoded": 0
+      },
+      "receivedFrames": 512,
+      "reportedError": "Speech recognition cannot keep up with microphone audio. Dictation stopped; please try again.",
+      "finalPendingBytes": 0,
+      "warmReuse": true,
+      "rssDelta": 212992,
+      "mainHeapDelta": 18688
+    },
+    {
+      "phase": "fixed",
+      "kind": "tiny",
+      "attemptedFrames": 2048,
+      "held": {
+        "bytes": 4096,
+        "frames": 1024,
+        "decoded": 0
+      },
+      "receivedFrames": 1024,
+      "reportedError": "Speech recognition cannot keep up with microphone audio. Dictation stopped; please try again.",
+      "finalPendingBytes": 0,
+      "warmReuse": true,
+      "rssDelta": 147456,
+      "mainHeapDelta": 7008
+    },
+    {
+      "phase": "fixed",
+      "kind": "decode-error",
+      "attemptedFrames": 2,
+      "held": {
+        "bytes": 32768,
+        "frames": 2,
+        "decoded": 0
+      },
+      "receivedFrames": 2,
+      "reportedError": "Error: Controlled recognizer failure",
+      "finalPendingBytes": 0,
+      "warmReuse": true,
+      "rssDelta": 0,
+      "mainHeapDelta": -7448
+    }
+  ]
+}

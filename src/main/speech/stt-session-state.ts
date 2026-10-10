@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import { SttAudioPendingBudget } from './stt-audio-pending-budget'
 import type { ModelManager } from './model-manager'
 import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'
@@ -10,6 +11,7 @@ export type StopInFlight = {
 }
 
 export type SttSessionState = {
+  audioPending: SttAudioPendingBudget
   worker: Worker | null
   cloudSession: OpenAiTranscriptionSession | null
   modelManager: ModelManager
@@ -29,6 +31,7 @@ export type SttSessionState = {
 
 export function createSttSessionState(modelManager: ModelManager): SttSessionState {
   return {
+    audioPending: new SttAudioPendingBudget(),
     worker: null,
     cloudSession: null,
     modelManager,

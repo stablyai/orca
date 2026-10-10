@@ -15,7 +15,7 @@ type WorkerMessage =
       hotwordsFilePath?: string
       modelingUnit?: string
     }
-  | { type: 'feed'; samples: Float32Array; sampleRate: number }
+  | { type: 'feed'; samples: Float32Array; sampleRate: number; byteEnd?: number; frameEnd?: number }
   | { type: 'stop' }
   | { type: 'teardown' }
 
@@ -318,7 +318,17 @@ parentPort?.on('message', (msg: WorkerMessage) => {
       handleInit(msg)
       break
     case 'feed':
-      handleFeed(msg)
+      try {
+        handleFeed(msg)
+      } finally {
+        if (msg.byteEnd !== undefined) {
+          parentPort?.postMessage({
+            type: 'audio-consumed',
+            byteEnd: msg.byteEnd,
+            frameEnd: msg.frameEnd
+          })
+        }
+      }
       break
     case 'stop':
       handleStop()

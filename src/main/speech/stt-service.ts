@@ -1,4 +1,5 @@
 import type { ModelManager } from './model-manager'
+import { STT_AUDIO_OVERLOAD_ERROR } from './stt-audio-pending-budget'
 import { startSttDictation } from './stt-session-start'
 import { createSttSessionState, type SttSessionState } from './stt-session-state'
 import { prepareSttModelForDeletion, stopSttDictation } from './stt-session-stop'
@@ -10,7 +11,7 @@ export type SttEvent =
   | { type: 'partial'; text?: string }
   | { type: 'final'; text?: string }
   | { type: 'stopped' }
-  | { type: 'error'; error?: string }
+  | { type: 'error'; error?: string; recoverable?: boolean }
 
 export type SttEventSink = (event: SttEvent) => void
 
@@ -45,9 +46,13 @@ export class SttService {
       this.state.cloudSession.feedAudio(samples, sampleRate)
       return
     }
-    this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
-      samples.buffer as ArrayBuffer
-    ])
+    const worker = this.state.worker
+    if (worker && !this.state.audioPending.tryPost(worker, samples, sampleRate)) {
+      const sink = this.state.eventSink
+      void stopSttDictation(this.state, owner).catch(() => undefined)
+      // Queue overload stops capture while preserving already accepted audio for final delivery.
+      sink?.({ type: 'error', error: STT_AUDIO_OVERLOAD_ERROR, recoverable: true })
+    }
   }
 
   stopDictation(
