@@ -241,6 +241,7 @@ test('the staging director deploy passes argument groups the deploy script accep
     '--role': 'director',
     '--max-instances': '2',
     '--capacity-service-account': account('gha-cap'),
+    '--deploy-service-account': account('gha-relay'),
     '--asia-proof-service-account': account('gha-aproof'),
     '--regional-placement-secret-version': '1',
     '--min-instances': '0',
@@ -255,6 +256,7 @@ test('the staging director deploy passes argument groups the deploy script accep
   }
   for (const flag of flags) assert.ok(flag in sample, `${flag} has no sample value`)
   assert.doesNotThrow(() => parseArguments(flags.flatMap((flag) => [flag, sample[flag]])))
+  assert.match(block, /--deploy-service-account "\$\{DEPLOY_SERVICE_ACCOUNT\}"/)
   assert.match(block, /--runtime-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
   assert.match(block, /--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
 })

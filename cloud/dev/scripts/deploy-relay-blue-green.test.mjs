@@ -1015,3 +1015,27 @@ test('reads a director placement from runtime-status, and reports an image witho
     else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
   }
 })
+
+// Why: staging drifted to a director that trusts gha-deploy while every staging workflow
+// authenticates as gha-relay; the deploy, not Terraform, owns the live value.
+test('a director deploy sets the trusted deploy identity only when asked', () => {
+  const config = { project: 'onorca-cloud-staging' }
+  const relay = 'orca-cloud-staging-gha-relay@onorca-cloud-staging.iam.gserviceaccount.com'
+  assert.equal(
+    directorDeploymentEnvironment({ ...config, 'deploy-service-account': relay })
+      .ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
+    relay
+  )
+  assert.equal(
+    'ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT' in directorDeploymentEnvironment(config),
+    false
+  )
+  assert.throws(
+    () =>
+      directorDeploymentEnvironment({
+        ...config,
+        'deploy-service-account': 'foreign@other-project.iam.gserviceaccount.com'
+      }),
+    /selected project/
+  )
+})
