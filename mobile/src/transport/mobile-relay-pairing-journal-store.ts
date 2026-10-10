@@ -16,6 +16,10 @@ import {
 const JOURNAL_STORAGE_KEY = 'orca:mobile-relay:pairing-journal:v1'
 const JOURNAL_SECRET_KEY = 'orca.mobile-relay.pairing-journal.v1'
 let journalMutation: Promise<void> = Promise.resolve()
+// Journals whose pairing attempt is still running in this process. Only these
+// are protected from replacement; a journal left by an ended attempt or an
+// earlier launch belongs to recovery, which a new scan supersedes.
+const inFlightJournalIds = new Set<string>()
 
 export async function saveMobileRelayPairingJournal(
   journal: MobileRelayPairingJournal
@@ -32,16 +36,20 @@ export async function saveMobileRelayPairingJournal(
     if (
       existing &&
       existing.journalId !== metadata.journalId &&
+      inFlightJournalIds.has(existing.journalId) &&
       (existing.winner !== undefined || existing.authorizationMode !== undefined)
     ) {
-      throw new Error('mobile relay pairing recovery pending')
+      // Why: an authorized attempt may have its install RPC in flight right now.
+      throw new Error('mobile relay pairing in progress')
     }
-    // Why: no install RPC can run before winner+authorization are durable, so
-    // a new user-initiated scan may safely supersede a pre-authorization attempt.
     // Why: metadata-first makes a crash before the keychain write recover as
     // an incomplete journal, never as an untracked bearer secret.
     await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(metadata))
     await writePairingKeychainItem(JOURNAL_SECRET_KEY, JSON.stringify(secrets))
+    if (existing) {
+      inFlightJournalIds.delete(existing.journalId)
+    }
+    inFlightJournalIds.add(metadata.journalId)
   })
   journalMutation = mutation.catch(() => {})
   return mutation
@@ -117,9 +125,16 @@ export async function clearMobileRelayPairingJournal(journalId: string): Promise
     }
     await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
     await deletePairingKeychainItem(JOURNAL_SECRET_KEY)
+    inFlightJournalIds.delete(journalId)
   })
   journalMutation = mutation.catch(() => {})
   return mutation
+}
+
+// The attempt that saved this journal ended; the journal stays for recovery,
+// and a later scan may replace it.
+export function releaseMobileRelayPairingJournal(journalId: string): void {
+  inFlightJournalIds.delete(journalId)
 }
 
 function parseMetadata(raw: string): MobileRelayPairingJournalMetadata | null {
@@ -149,5 +164,6 @@ function requireNativeSecretStore(): void {
 /** Test-only: drain the module mutation chain between cases. */
 export function resetMobileRelayPairingJournalStoreForTests(): void {
   journalMutation = Promise.resolve()
+  inFlightJournalIds.clear()
   resetPairingKeychainForTests()
 }
