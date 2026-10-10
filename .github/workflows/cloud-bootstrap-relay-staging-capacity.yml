@@ -544,7 +544,6 @@ jobs:
               --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
               --capacity-cell-id "${cell_id}" \
               --director-cells-json "${desired_cells_json}" \
-              --min-instances 0 \
               --prune-revisions true \
               --release-id "bootstrap-${cell_id}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")"
             echo "${director_result}"

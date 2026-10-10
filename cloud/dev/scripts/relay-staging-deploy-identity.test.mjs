@@ -223,3 +223,13 @@ test('the identity is exposed through its own outputs', () => {
   assert.match(outputs, /output "github_staging_relay_deploy_workload_identity_provider"/)
   assert.match(outputs, /output "github_staging_relay_deploy_service_account"/)
 })
+
+// Why: relay-deploy-workflow-argv.test.mjs proves the argv parses; this pins the identity it names.
+test('the staging director deploy runs as relay-dir with its rehome identity', () => {
+  const source = workflow('deploy-relay-staging.yml')
+  const start = source.indexOf('node dev/scripts/deploy-relay-blue-green.mjs')
+  const block = source.slice(start, source.indexOf('\n\n', start))
+  assert.match(block, /--runtime-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
+  assert.match(block, /--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
+  assert.match(source, /DIRECTOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay-dir@/)
+})

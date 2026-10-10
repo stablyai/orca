@@ -13,6 +13,35 @@ on:
         default: preserve
         type: choice
         options: [preserve, 'off', dry-run, 'on']
+      expected-rehome-generation:
+        description: Exact durable regional-rehome generation; it must remain disabled
+        required: true
+        type: string
+      bootstrap-runtime-identity:
+        description: One-time move from the stamped-cell identity to the director identity
+        required: true
+        default: false
+        type: boolean
+      predecessor-image-digest:
+        description: Bootstrap only. Exact immutable serving predecessor digest
+        required: false
+        type: string
+      capacity-cell-id:
+        description: Register this cell's reviewed staging.tfvars cap and bound with the director
+        required: true
+        default: none
+        type: choice
+        options: [none, staging-gce-c1, staging-gce-c2, staging-gce-c3, staging-gce-c4]
+      min-instances:
+        description: Director floor; preserve keeps the serving revision's, so a reserve run's 2 survives
+        required: true
+        default: preserve
+        type: choice
+        options: [preserve, '0', '2']
+      confirmation:
+        description: BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY for a bootstrap
+        required: false
+        type: string
       shadow-seat-feed-cells:
         description: Preserve the step-3 shadow seat-feed cells, or set all or a comma list of cell ids; dropping a reserve cell is refused
         required: true
@@ -47,11 +76,34 @@ jobs:
       CAPACITY_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
       ASIA_PROOF_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_SERVICE_ACCOUNT }}
       REGIONAL_PLACEMENT_SECRET: orca-cloud-relay-regional-placement-enabled
+      DIRECTOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay-dir@onorca-cloud-staging.iam.gserviceaccount.com
+      PREDECESSOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay@onorca-cloud-staging.iam.gserviceaccount.com
+      REHOME_AUDIENCE: https://relay-staging.onorca.dev/v1/admin/host-drain
+      EXPECTED_REHOME_GENERATION: ${{ inputs.expected-rehome-generation }}
+      BOOTSTRAP_RUNTIME_IDENTITY: ${{ inputs.bootstrap-runtime-identity }}
+      PREDECESSOR_IMAGE_DIGEST: ${{ inputs.predecessor-image-digest }}
+      CAPACITY_CELL_ID: ${{ inputs.capacity-cell-id }}
+      MIN_INSTANCES: ${{ inputs.min-instances }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Require the expected immutable image
-        run: '[[ "${EXPECTED_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]'
+      - name: Require the expected immutable image and identity request
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "${BOOTSTRAP_RUNTIME_IDENTITY}" =~ ^(true|false)$ ]]
+          [[ "${MIN_INSTANCES}" =~ ^(preserve|0|2)$ ]]
+          if test "${BOOTSTRAP_RUNTIME_IDENTITY}" = true; then
+            [[ "${PREDECESSOR_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+            test "${CAPACITY_CELL_ID}" = none
+            test "${CONFIRMATION}" = BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY
+          else
+            test -z "${PREDECESSOR_IMAGE_DIGEST}"
+          fi
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -79,6 +131,16 @@ jobs:
           test "${IMAGE}" = \
             "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}@${EXPECTED_IMAGE_DIGEST}"
           echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+          if test "${CAPACITY_CELL_ID}" != none; then
+            # The deploy script refuses any topology change beyond this one cell's cap and bound.
+            DESIRED_CELLS_JSON="$(terraform -chdir=infra/terraform console \
+              -var-file=environments/staging.tfvars \
+              <<< 'local.relay_director_cells_json' | jq -er '.')"
+            jq -e --arg cell "${CAPACITY_CELL_ID}" \
+              'any(.[]; .id == $cell and .connectionHardCap != null)' \
+              <<< "${DESIRED_CELLS_JSON}" >/dev/null
+            echo "DESIRED_CELLS_JSON=${DESIRED_CELLS_JSON}" >> "${GITHUB_ENV}"
+          fi
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -109,6 +171,26 @@ jobs:
             --format='value(name)' | awk -F/ '{print $NF}')"
           [[ "${regional_version}" =~ ^[1-9][0-9]*$ ]]
           RELEASE_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          identity_args=()
+          if test "${BOOTSTRAP_RUNTIME_IDENTITY}" = true; then
+            identity_args=(
+              --bootstrap-runtime-identity true
+              --predecessor-runtime-service-account "${PREDECESSOR_RUNTIME_SERVICE_ACCOUNT}"
+              --predecessor-image-digest "${PREDECESSOR_IMAGE_DIGEST}"
+            )
+          fi
+          # Omitted, the deploy script inherits the serving revision's floor.
+          floor_args=()
+          if test "${MIN_INSTANCES}" != preserve; then
+            floor_args=(--min-instances "${MIN_INSTANCES}")
+          fi
+          topology_args=()
+          if test "${CAPACITY_CELL_ID}" != none; then
+            topology_args=(
+              --capacity-cell-id "${CAPACITY_CELL_ID}"
+              --director-cells-json "${DESIRED_CELLS_JSON}"
+            )
+          fi
           node dev/scripts/deploy-relay-blue-green.mjs \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
@@ -119,7 +201,14 @@ jobs:
             --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
             --asia-proof-service-account "${ASIA_PROOF_SERVICE_ACCOUNT}" \
             --regional-placement-secret-version "${regional_version}" \
-            --min-instances 0 \
+            "${floor_args[@]}" \
+            --runtime-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
+            "${identity_args[@]}" \
+            --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
+            --rehome-audience "${REHOME_AUDIENCE}" \
+            --rehome-control-origin https://relay-staging.onorca.dev \
+            --expected-rehome-generation "${EXPECTED_REHOME_GENERATION}" \
+            "${topology_args[@]}" \
             --admin-audience https://relay-staging.onorca.dev/v1/admin/drain \
             --reserve-placement "${RESERVE_PLACEMENT}" \
             --shadow-seat-feed-cells "${SHADOW_SEAT_FEED_CELLS}" \

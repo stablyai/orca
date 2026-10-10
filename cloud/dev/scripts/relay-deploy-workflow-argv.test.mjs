@@ -40,6 +40,19 @@ function sample(flag) {
   return `sample-${flag}`
 }
 
+// Flags a workflow passes through a bash array (`"${name[@]}"`), from every `name=(...)` it
+// assigns; parsing them all at once is the widest set that workflow can send.
+function arrayArguments(source, name) {
+  const flags = []
+  for (const match of source.matchAll(new RegExp(`\\b${name}=\\(([^)]*)\\)`, 'g'))) {
+    for (const entry of match[1].matchAll(/(--[a-z0-9-]+)\s+("[^"]*"|\S+)/g)) {
+      flags.push([entry[1], entry[2].replace(/^"(.*)"$/, '$1')])
+    }
+  }
+  if (flags.length === 0) throw new Error(`no flags assigned to ${name}`)
+  return flags
+}
+
 function invocations(source, script) {
   const lines = source.split('\n')
   const found = []
@@ -49,6 +62,13 @@ function invocations(source, script) {
     let line = lines[index]
     while (line.trimEnd().endsWith('\\')) {
       line = lines[++index]
+      const array = /^\s*"\$\{([a-z_]+)\[@\]\}"\s*\\?\s*$/.exec(line)
+      if (array) {
+        for (const [flag, value] of arrayArguments(source, array[1])) {
+          argv.push(flag, value.includes('$') ? sample(flag.slice(2)) : value)
+        }
+        continue
+      }
       const match = /^\s*(--[a-z0-9-]+)\s+(.+?)\s*\\?\s*$/.exec(line)
       if (!match) throw new Error(`unparsed ${script} argument line: ${line.trim()}`)
       const [, flag, raw] = match
