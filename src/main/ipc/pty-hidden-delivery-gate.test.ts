@@ -4,11 +4,13 @@ import {
   clearHiddenRendererPtyDeliveryState,
   getHiddenRendererPtyDeliveryDebug,
   isHiddenPtyDeliveryGateEnabled,
+  isHiddenRendererPtyViewGated,
   markHiddenRendererPty,
   markRuntimeOwnedHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
   resetRendererScopedHiddenPtyDeliveryState,
   setRendererPtyDeliveryInterest,
+  shouldDeliverHiddenRendererPtyDataToSidecarsOnly,
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
 } from './pty-hidden-delivery-gate'
@@ -40,6 +42,26 @@ describe('pty hidden delivery gate', () => {
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
     setRendererPtyDeliveryInterest(PTY_ID, false)
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
+  })
+
+  it('keeps the view gated under delivery interest and sends those bytes to sidecars only', () => {
+    markHiddenRendererPty(PTY_ID)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(true)
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(true)
+    expect(
+      shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {
+        terminalHiddenDeliveryGate: false
+      })
+    ).toBe(false)
+
+    setRendererPtyDeliveryInterest(PTY_ID, false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
+    unmarkHiddenRendererPty(PTY_ID)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
   })
 
   it('requests the restore marker exactly once per drop episode, re-armed by unmark', () => {

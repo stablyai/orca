@@ -39,6 +39,7 @@ export const ptyStreamAndSerializationApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      sidecarOnly?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -51,6 +52,7 @@ export const ptyStreamAndSerializationApi = {
         transformed?: boolean
         background?: boolean
         droppedOutput?: boolean
+        sidecarOnly?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('pty:data', listener)
