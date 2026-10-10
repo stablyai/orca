@@ -4,7 +4,10 @@ import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
+  expectTerminalAccessibilityText,
+  readTerminalAccessibilityText,
   sendToTerminal,
+  splitActiveTerminalPane,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
@@ -26,6 +29,8 @@ process.stdin.on('data', bytes => {
     buffer = buffer.slice(end + 6)
     if (framed.includes('.png')) count++
     process.stdout.write('IMAGE_INPUT_COUNT=' + count + '\\r\\n')
+    if (framed.includes('draft-preserved')) process.stdout.write('DRAFT_PRESERVED\\r\\n')
+    if (/[\\r\\n]/.test(framed)) process.stdout.write('UNEXPECTED_SUBMIT\\r\\n')
   }
 })
 `
@@ -120,6 +125,7 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
     .getByRole('dialog')
     .screenshot({ path: testInfo.outputPath('image-tray-full-size.png') })
   await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await tray.getByRole('button', { name: 'Remove attachment' }).click()
   await expect(tray).toHaveCount(0)
   await paste()
@@ -128,7 +134,7 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   await paste()
   await page.getByRole('option', { name: /Inactive e2e-secondary/ }).click()
   await expect(tray).toHaveCount(0)
-  await page.getByRole('option', { name: /main primary main/ }).click()
+  await page.getByRole('option', { name: /primary/ }).click()
   await ensureTerminalVisible(page)
   await expect(tray).toHaveCount(0)
   await setCodexAuthority(page, true)
@@ -177,16 +183,30 @@ test('captures real clipboard bytes and adds multiple images without submitting 
   orcaPage: page,
   electronApp,
   testRepoPath
-}) => {
+}, testInfo) => {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
   const ptyId = await waitForActivePanePtyId(page)
   const script = path.join(testRepoPath, 'real-clipboard-recorder.cjs')
+  const tabId = await page.evaluate(() => window.__store?.getState().activeTabId)
+  if (!tabId) {
+    throw new Error('No terminal tab')
+  }
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((window) => !window.isDestroyed())
+      ?.setSize(900, 700)
+  })
+  await splitActiveTerminalPane(page, 'vertical')
+  await expect(page.locator('.xterm:visible')).toHaveCount(2)
+  const pane = page.locator(`[data-pty-id="${ptyId}"]`)
+  await pane.click()
   writeFileSync(script, recorder)
   await sendToTerminal(page, ptyId, `node ${JSON.stringify(script)}\r`)
   await waitForTerminalOutput(page, 'READY_IMAGE_TRAY', 10_000)
+  await expectTerminalAccessibilityText(page, tabId, 'READY_IMAGE_TRAY')
   await setCodexAuthority(page, true)
   // Only the isolated display's clipboard changes; production IPC handlers stay installed.
   await electronApp.evaluate(({ clipboard, nativeImage }) => {
@@ -198,7 +218,7 @@ test('captures real clipboard bytes and adds multiple images without submitting 
     )
   })
   const tray = page.locator('[data-terminal-image-attachments]')
-  const input = page.locator('.xterm-helper-textarea').first()
+  const input = pane.locator('.xterm-helper-textarea')
   const paste = async () => {
     await input.focus()
     await input.dispatchEvent('paste')
@@ -211,20 +231,33 @@ test('captures real clipboard bytes and adds multiple images without submitting 
     'src',
     /^data:image\/png;base64,/
   )
-  await page.keyboard.press('Escape')
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await tray.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(tray).toHaveCount(0)
   await paste()
   await paste()
   await expect(tray.locator('img')).toHaveCount(2)
+  const paneBounds = await pane.boundingBox()
+  const trayBounds = await tray.boundingBox()
+  if (!paneBounds || !trayBounds) {
+    throw new Error('No split pane preview bounds')
+  }
+  expect(paneBounds.width).toBeLessThan(400)
+  expect(trayBounds.x).toBeGreaterThanOrEqual(paneBounds.x)
+  expect(trayBounds.x + trayBounds.width).toBeLessThanOrEqual(paneBounds.x + paneBounds.width)
+  await tray.screenshot({ path: testInfo.outputPath('real-clipboard-narrow-tray.png') })
   await tray.getByRole('button', { name: 'Remove attachment' }).first().click()
   await expect(tray.locator('img')).toHaveCount(1)
   await paste()
   await expect(tray.locator('img')).toHaveCount(2)
   await sendToTerminal(page, ptyId, 'draft-preserved')
+  expect(await readTerminalAccessibilityText(page, tabId)).not.toContain('IMAGE_INPUT_COUNT=')
   await tray.getByRole('button', { name: 'Add to Codex', exact: true }).click()
   await expect(tray).toHaveCount(0)
-  await waitForTerminalOutput(page, 'IMAGE_INPUT_COUNT=2', 10_000)
+  await expectTerminalAccessibilityText(page, tabId, 'IMAGE_INPUT_COUNT=2')
+  await expectTerminalAccessibilityText(page, tabId, 'DRAFT_PRESERVED')
+  expect(await readTerminalAccessibilityText(page, tabId)).not.toContain('UNEXPECTED_SUBMIT')
   await electronApp.evaluate(({ clipboard }) => clipboard.clear())
   await sendToTerminal(page, ptyId, '\x03')
 })

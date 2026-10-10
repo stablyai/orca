@@ -33,6 +33,12 @@ const pendingImages = new Map<
   }
 >()
 
+function unrefImageCleanupTimer(timer: number | { unref?: () => void }): void {
+  if (typeof timer !== 'number') {
+    timer.unref?.()
+  }
+}
+
 function trackPendingImage(
   imagePath: string,
   connectionId: string | null,
@@ -42,7 +48,7 @@ function trackPendingImage(
     void discardClipboardImageTempFile(imagePath, connectionId).catch(() => {})
   }
   const timer = setTimeout(expire, PENDING_IMAGE_TTL_MS)
-  timer.unref()
+  unrefImageCleanupTimer(timer)
   pendingImages.set(imagePath, { connectionId, remove, timer, expire })
 }
 
@@ -63,7 +69,7 @@ export function retainClipboardImageTempFile(
     pendingImages.delete(imagePath)
   } else {
     image.timer = setTimeout(image.expire, PENDING_IMAGE_TTL_MS)
-    image.timer.unref()
+    unrefImageCleanupTimer(image.timer)
   }
 }
 
@@ -88,7 +94,7 @@ export async function discardClipboardImageTempFile(
       image.timer = setTimeout(() => {
         void discardClipboardImageTempFile(imagePath, connectionId).catch(() => {})
       }, CLEANUP_RETRY_MS)
-      image.timer.unref()
+      unrefImageCleanupTimer(image.timer)
       throw error
     }
   )

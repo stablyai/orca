@@ -30,13 +30,6 @@
       }
     },
     "terminal": {
-      "imageAttachments": {
-        "attach": "添加到 Codex",
-        "cancel": "取消",
-        "codexPreview": "Codex 图片预览 · 尚未添加",
-        "failed": "无法添加图片。请检查会话后重试。",
-        "noSubmit": "添加图片后，请在 Codex 中发送。其他 CLI 保持现有粘贴流程。"
-      },
       "optionLayoutAlt": "ABC 或 U.S. — Option 键发送 Alt/Esc 序列",
       "optionLayoutCompose": "此布局使用 Option 键输入 @、€、[、] 等字符",
       "optionLayoutUnknown": "未知布局 — Option 键输入字符（安全的默认设置）",
@@ -19444,6 +19437,13 @@
     "failed": "无法打开文件。"
   },
   "terminal": {
+    "imageAttachments": {
+      "attach": "添加到 Codex",
+      "cancel": "取消",
+      "codexPreview": "Codex 图片预览 · 尚未添加",
+      "failed": "无法添加图片。请检查会话后重试。",
+      "noSubmit": "添加图片后，请在 Codex 中发送。其他 CLI 保持现有粘贴流程。"
+    },
     "sessionSaveFailure": {
       "title": "无法保存终端会话",
       "capacity": "保存该终端的设备报告存储空间已满或超出存储配额。该设备上有可用空间，然后重试。",
