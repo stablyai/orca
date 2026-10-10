@@ -11,12 +11,22 @@ export function markAgentLaunchNothingRan(error: unknown): void {
   }
 }
 
-/** Adds the "nothing ran" data to a launch failure the host marked, unless it carries data already. */
+function isDataRecord(data: unknown): data is Record<string, unknown> {
+  return typeof data === 'object' && data !== null && !Array.isArray(data)
+}
+
+/** Adds the "nothing ran" data to a launch failure the host marked, beside any data it carries
+ *  (a refused journal open carries its refusal). */
 export function withAgentLaunchNothingRan(failure: RpcFailure, error: unknown): RpcFailure {
-  return failure.error.data === undefined &&
-    typeof error === 'object' &&
-    error !== null &&
-    nothingRanErrors.has(error)
-    ? { ...failure, error: { ...failure.error, data: AGENT_LAUNCH_NOTHING_RAN_DATA } }
+  if (typeof error !== 'object' || error === null || !nothingRanErrors.has(error)) {
+    return failure
+  }
+  const { data } = failure.error
+  const carried = data === undefined ? {} : isDataRecord(data) ? data : null
+  return carried
+    ? {
+        ...failure,
+        error: { ...failure.error, data: { ...carried, ...AGENT_LAUNCH_NOTHING_RAN_DATA } }
+      }
     : failure
 }

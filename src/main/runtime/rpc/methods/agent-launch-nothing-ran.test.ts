@@ -14,6 +14,7 @@ import {
 import { AGENT_LAUNCH_NOTHING_RAN_DATA } from '../../../../shared/agent-launch-nothing-ran'
 import { resetAgentLaunchPanesForTests } from '../../../agent-launch/agent-launch-pane-attachment'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/journal-open-failure'
 import { mapDispatcherError } from '../dispatcher-error-response'
 import type { RpcContext } from '../core'
 import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
@@ -60,9 +61,14 @@ function hostWithWindow() {
   })
 }
 
+/** The launch record will not open, refused as the journal open refuses it. */
 function withoutRecord(runtime: ReturnType<typeof hostWithWindow>) {
   runtime.openedAgentSessionRecordStore.mockReturnValue(null)
-  runtime.openAgentSessionRecordStore.mockRejectedValue(new Error('SQLITE_CANTOPEN'))
+  runtime.openAgentSessionRecordStore.mockRejectedValue(
+    journalOpenRefusalError(
+      Object.assign(new Error('unable to open database file'), { code: 'EACCES' })
+    )
+  )
   return runtime
 }
 
@@ -87,12 +93,13 @@ async function launchFailure(runtime: ReturnType<typeof hostWithWindow>) {
 }
 
 describe('a launch the host proves ran nothing', () => {
-  it('with no launch record: starts nothing, takes its tab back, keeps its code', async () => {
+  it('with no launch record: starts nothing, takes its tab back, keeps its refusal', async () => {
     const runtime = withoutRecord(hostWithWindow())
 
-    expect(await launchFailure(runtime)).toMatchObject({
-      code: 'runtime_error',
-      data: AGENT_LAUNCH_NOTHING_RAN_DATA
+    const failure = await launchFailure(runtime)
+    // Its refusal still reaches older peers as it did; the fact rides beside it.
+    expect(failure).toMatchObject({
+      data: { refusal: expect.anything(), ...AGENT_LAUNCH_NOTHING_RAN_DATA }
     })
     expect(runtime.createTerminal).not.toHaveBeenCalled()
     await expect
