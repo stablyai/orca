@@ -359,6 +359,13 @@ CREATE TABLE IF NOT EXISTS relay_cell_admission (
   roll_isolated_at BIGINT
 );
 
+-- Step 5: written by the flag workflow. A cell with no row is in database mode.
+CREATE TABLE IF NOT EXISTS relay_cell_admit_modes (
+  cell_id TEXT PRIMARY KEY,
+  admit_mode TEXT NOT NULL CHECK (admit_mode IN ('db', 'reserve')),
+  updated_at BIGINT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS relay_admission_selectors (
   selector_id TEXT PRIMARY KEY,
   generation BIGINT NOT NULL,
