@@ -38,6 +38,7 @@ describe('registerTextMateLanguage', () => {
     const createTextMateTokensProvider = vi.fn(async () => provider)
     const loadProviderModule = vi.fn(async () => ({ createTextMateTokensProvider }))
     const loadGrammar = vi.fn()
+    const mapTokenScopes = vi.fn()
     const configuration = { comments: { lineComment: '#' } }
 
     registerTextMateLanguage(monaco as never, {
@@ -49,6 +50,7 @@ describe('registerTextMateLanguage', () => {
       configuration,
       scopeName: 'source.nim',
       loadGrammar,
+      mapTokenScopes,
       loadProviderModule
     })
 
@@ -73,7 +75,8 @@ describe('registerTextMateLanguage', () => {
     expect(createTextMateTokensProvider).toHaveBeenCalledTimes(1)
     expect(createTextMateTokensProvider).toHaveBeenCalledWith({
       scopeName: 'source.nim',
-      loadGrammar
+      loadGrammar,
+      mapTokenScopes
     })
   })
 

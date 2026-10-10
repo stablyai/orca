@@ -5,6 +5,8 @@ import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
 import { loadTypstTextMateGrammar } from './register-typst'
+import { HASKELL_TEXTMATE_SCOPE, loadHaskellTextMateGrammar } from './register-haskell'
+import { mapHaskellTokenScopes } from './haskell-token-scopes'
 import { createTextMateTokensProvider } from './textmate-token-provider'
 
 const require = createRequire(import.meta.url)
@@ -27,6 +29,58 @@ async function loadNodeOniguruma(): Promise<IOnigLib> {
 }
 
 describe('createTextMateTokensProvider', () => {
+  it('colors Haskell keywords, type signatures, literals, and comments', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: HASKELL_TEXTMATE_SCOPE,
+      loadGrammar: loadHaskellTextMateGrammar,
+      mapTokenScopes: mapHaskellTokenScopes,
+      loadOniguruma: loadNodeOniguruma
+    })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('module Main where').some((scope) => scope.startsWith('keyword'))).toBe(true)
+    expect(scopesOf('count :: Int -> Int')).toEqual(
+      expect.arrayContaining([
+        'entity.name.function.haskell',
+        'keyword.haskell',
+        'operator.haskell'
+      ])
+    )
+    expect(scopesOf('count x = x + 42')).toContain('number.haskell')
+    expect(scopesOf('data Arbol a b = Hoja b | Nodo a (Arbol a b) (Arbol a b)')).toEqual(
+      expect.arrayContaining([
+        'keyword.haskell',
+        'variable.parameter.haskell',
+        'identifier.haskell'
+      ])
+    )
+    expect(scopesOf('message = "hello"').some((scope) => scope.startsWith('string'))).toBe(true)
+    expect(scopesOf("letter = 'a'").some((scope) => scope.startsWith('string'))).toBe(true)
+    expect(scopesOf('-- note').some((scope) => scope.startsWith('comment'))).toBe(true)
+    expect(scopesOf("value' = 42").some((scope) => scope.startsWith('string'))).toBe(false)
+  })
+
+  it('keeps nested Haskell comments active across lines and resumes code after both closers', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: HASKELL_TEXTMATE_SCOPE,
+      loadGrammar: loadHaskellTextMateGrammar,
+      mapTokenScopes: mapHaskellTokenScopes,
+      loadOniguruma: loadNodeOniguruma
+    })
+    let state = provider.getInitialState()
+    for (const line of ['{- outer', '{- inner -}', 'still outer']) {
+      const result = provider.tokenize(line, state)
+      expect(result.tokens.every((token) => token.scopes.includes('comment'))).toBe(true)
+      state = result.endState
+    }
+    state = provider.tokenize('-}', state).endState
+    const after = 'answer = 42'
+    expect(provider.tokenize(after, state).tokens).toEqual(
+      provider.tokenize(after, provider.getInitialState()).tokens
+    )
+  })
+
   it('tokenizes Nim with the vendored TextMate grammar', async () => {
     const provider = await createTextMateTokensProvider({
       scopeName: 'source.nim',
