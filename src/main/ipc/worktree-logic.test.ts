@@ -285,6 +285,15 @@ describe('computeBranchName', () => {
       'jdoe/feature'
     )
   })
+
+  it('omits a git username whose lowercase form git rejects', () => {
+    expect(computeBranchName('feature', { branchPrefix: 'git-username' }, 'Alice.LOCK')).toBe(
+      'feature'
+    )
+    expect(
+      computeValidatedBranchName('feature', { branchPrefix: 'git-username' }, 'Alice.LOCK')
+    ).toBe('feature')
+  })
 })
 
 describe('getConfiguredBranchPrefix', () => {

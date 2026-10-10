@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assertBranchPrefixValid,
   getBranchPrefixIssue,
+  gitUsernamePrefixOmission,
   normalizeBranchPrefix,
   selectBranchPrefixInput
 } from './branch-prefix'
@@ -111,6 +112,33 @@ describe('getBranchPrefixIssue', () => {
 describe('selectBranchPrefixInput', () => {
   it('returns the git username for the git-username strategy', () => {
     expect(selectBranchPrefixInput({ branchPrefix: 'git-username' }, 'jdoe')).toBe('jdoe')
+  })
+
+  it('lowercases a git-username prefix so it cannot collide with an existing ref directory', () => {
+    expect(selectBranchPrefixInput({ branchPrefix: 'git-username' }, 'EurFelux')).toBe('eurfelux')
+  })
+
+  it('drops a mixed-case login whose lowercase form git rejects', () => {
+    expect(selectBranchPrefixInput({ branchPrefix: 'git-username' }, 'Alice.LOCK')).toBeNull()
+    expect(gitUsernamePrefixOmission('Alice.LOCK')).toBe('lowercase-lock')
+    expect(gitUsernamePrefixOmission('alice.lock')).toBeNull()
+    expect(gitUsernamePrefixOmission('team x')).toBeNull()
+    expect(gitUsernamePrefixOmission('EurFelux')).toBeNull()
+    expect(gitUsernamePrefixOmission(null)).toBeNull()
+  })
+
+  it('returns an already-lowercase invalid login so settings can warn', () => {
+    expect(selectBranchPrefixInput({ branchPrefix: 'git-username' }, 'alice.lock')).toBe('alice.lock')
+    expect(selectBranchPrefixInput({ branchPrefix: 'git-username' }, 'team x')).toBe('team x')
+  })
+
+  it('leaves a custom prefix in the case the user typed', () => {
+    expect(
+      selectBranchPrefixInput(
+        { branchPrefix: 'custom', branchPrefixCustom: 'EurFelux' },
+        'eurfelux'
+      )
+    ).toBe('EurFelux')
   })
 
   it('returns null for git-username when no username is available', () => {

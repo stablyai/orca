@@ -7676,7 +7676,8 @@
         "BranchPrefixFeedback": {
           "6c40c0908f": "Prefix cannot contain spaces or special characters like ~ ^ : ? * [ \\",
           "64d70b156a": "Branches will be named {{example}}",
-          "808f9a726e": "No prefix will be applied"
+          "808f9a726e": "No prefix will be applied",
+          "c478cf4ec7": "No prefix will be applied because lowercasing this username ends in .lock, which Git rejects."
         },
         "GitPane": {
           "895d3f70b8": "gh",
