@@ -10,7 +10,8 @@ import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './gitlab-review-client'
-import { checksPanelLoadErrorMessage, checksPanelOwnerHostId } from './checks-panel-forge-owner'
+import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -128,7 +129,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         }
         console.warn('Failed to fetch PR checks:', err)
         setChecksError(
-          checksPanelLoadErrorMessage(err, checksPanelOwnerHostId(repo, activeWorktree))
+          checksPanelLoadErrorMessage(err, forgeOwnerHostIdForWorkspace(repo, activeWorktree))
         )
         policyRef.current.fail()
         pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
@@ -203,7 +204,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           repoPath: repo.path,
           repoId: repo.id,
           iid: targetMRNumber,
-          repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree)
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         })
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
@@ -229,7 +230,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         // Why: one MR details read carries both the pipeline and the discussion.
         const message = checksPanelLoadErrorMessage(
           err,
-          checksPanelOwnerHostId(repo, activeWorktree)
+          forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         )
         setChecksError(message)
         setCommentsError(message)

@@ -1,4 +1,4 @@
-import { checksPanelOwnerHostId } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
@@ -96,7 +96,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
               ? await loadGitLabJobLogDetails({
                   repoPath: repo.path,
                   repoId: repo.id,
-                  repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree),
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
                   check,
                   projectRef: gitLabProjectRefRef.current
                 })

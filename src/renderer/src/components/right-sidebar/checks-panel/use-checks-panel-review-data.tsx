@@ -1,7 +1,8 @@
 import { useCallback, useEffect } from 'react'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
-import { checksPanelLoadErrorMessage, checksPanelOwnerHostId } from './checks-panel-forge-owner'
+import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 
@@ -91,7 +92,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         console.warn('Failed to fetch PR comments:', err)
         setComments([])
         setCommentsError(
-          checksPanelLoadErrorMessage(err, checksPanelOwnerHostId(repo, activeWorktree))
+          checksPanelLoadErrorMessage(err, forgeOwnerHostIdForWorkspace(repo, activeWorktree))
         )
       } finally {
         if (
@@ -128,7 +129,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         return loadGitLabJobLogDetails({
           repoPath: repo.path,
           repoId: repo.id,
-          repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree),
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
           check,
           projectRef: gitLabProjectRefRef.current
         })

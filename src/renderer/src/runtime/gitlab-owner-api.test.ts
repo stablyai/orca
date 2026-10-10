@@ -8,7 +8,7 @@ vi.mock('./runtime-rpc-client', () => ({
 }))
 
 import { gitLabApiFor } from './gitlab-owner-api'
-import { forgeCredentialTarget } from './forge-credential-target'
+import { forgeCredentialTarget, forgeOwnerHostIdForWorkspace } from './forge-credential-target'
 
 const glListIssues = vi.fn()
 
@@ -83,5 +83,26 @@ describe('gitLabApiFor', () => {
     )
     expect(rpc.call).not.toHaveBeenCalled()
     expect(glListIssues).not.toHaveBeenCalled()
+  })
+
+  it('sends an SSH workspace behind a server to that server, a direct SSH one to this computer', async () => {
+    const repo = { executionHostId: 'runtime:owner-server' as const }
+    const nested = forgeOwnerHostIdForWorkspace(repo, {
+      hostId: 'ssh:devbox',
+      runtimeOwnerEnvironmentId: 'owner-server'
+    })
+    const selector = { repoPath: '/work/app', repoId: 'repo', repoOwnerExecutionHostId: nested }
+    await gitLabApiFor(selector).listIssues(selector)
+
+    expect(rpc.call).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'owner-server' },
+      'gitlab.listIssues',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(forgeOwnerHostIdForWorkspace({ connectionId: 'devbox' }, { hostId: 'ssh:devbox' })).toBe(
+      'ssh:devbox'
+    )
+    expect(forgeOwnerHostIdForWorkspace({ connectionId: 'devbox' }, null)).toBe('ssh:devbox')
   })
 })

@@ -17,7 +17,6 @@ import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import { buildSnapshottedThreadResolver } from '../pr-comment-snapshotted-thread-resolver'
 import { markPRCommentThreadResolved } from '../pr-comment-thread-resolution'
 import { resolveGitLabMRDiscussionForChecks } from './gitlab-review-client'
-import { repoOwnerHostIdForRepoId } from './checks-panel-forge-owner'
 import { clearPRCommentsListSelection } from '../pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 import type { ChecksAgentComposerState } from './panel-state-types'
@@ -108,11 +107,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
         githubResolveTarget: resolution.githubResolveTarget,
         gitlabTarget: resolution.gitlabTarget,
         resolveReviewThread,
-        resolveGitLabDiscussion: (args) =>
-          resolveGitLabMRDiscussionForChecks({
-            ...args,
-            repoOwnerExecutionHostId: repoOwnerHostIdForRepoId(args.repoId)
-          }),
+        resolveGitLabDiscussion: resolveGitLabMRDiscussionForChecks,
         isPanelStillOnLaunchReview,
         onResolvedOptimistically: (threadId) => {
           setComments((prev) => markPRCommentThreadResolved(prev, threadId, true))

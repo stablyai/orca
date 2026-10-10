@@ -1,4 +1,4 @@
-import { checksPanelOwnerHostId } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from '../checks-entry-refresh'
@@ -299,7 +299,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         const selector = {
           repoPath: repo.path,
           repoId: repo.id,
-          repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree)
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         }
         const result = await gitLabApiFor(selector).updateMR({
           ...selector,

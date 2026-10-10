@@ -1,4 +1,4 @@
-import { checksPanelOwnerHostId } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { pickDefaultSourceControlAgent } from '../SourceControl'
@@ -86,7 +86,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
           iid: activeGitLabReview.number,
           discussionId: threadId,
           resolved: resolve,
-          repoOwnerExecutionHostId: checksPanelOwnerHostId(repo, activeWorktree)
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         })
         if (!result.ok) {
           rollbackThread(previousThreadComments)
