@@ -1,6 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
+import { nameDarwinTerminals } from './darwin-terminal-names'
 import {
   PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   PS_ARGS,
@@ -272,7 +273,8 @@ async function captureProcessTable(args: readonly string[]): Promise<string> {
 
 const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
   runPs: async () => {
-    const stdout = await captureProcessTable(PS_ARGS)
+    const captured = await captureProcessTable(PS_ARGS)
+    const stdout = process.platform === 'darwin' ? await nameDarwinTerminals(captured) : captured
     const baseCapture = createProcessTableCapture(stdout)
     const startTimesByPid = await readLinuxProcessStartTimes(baseCapture.lenient())
     return createProcessTableCapture(stdout, startTimesByPid, process.platform === 'linux')

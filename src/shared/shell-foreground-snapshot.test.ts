@@ -8,7 +8,7 @@ import {
   getProcessTableSnapshot,
   resetProcessTableSnapshotForTests
 } from './process-table-snapshot-reader'
-import { parseShellForegroundRows } from './process-table-snapshot'
+import { PS_ARGS, parseShellForegroundRows } from './process-table-snapshot'
 
 type Callback = (error: Error | null, result: { stdout: string; stderr: string }) => void
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -24,7 +24,9 @@ afterEach(() => Object.defineProperty(process, 'platform', platform))
 it('answers concurrent shell proofs without waiting for a pending full capture', async () => {
   let finishFull!: Callback
   execFileMock.mockImplementation((_program, args: string[], _options, callback: Callback) => {
-    if (args[1]?.includes('tty=')) {
+    // The full capture's columns follow the real host (macOS asks for `tdev=`, Linux for
+    // `tty=`), not the platform this test stubs, so match its argv rather than one column.
+    if (args[1] === PS_ARGS[1]) {
       finishFull = callback
     } else {
       expect(args).toEqual(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='])
