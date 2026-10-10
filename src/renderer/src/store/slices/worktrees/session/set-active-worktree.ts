@@ -6,12 +6,7 @@ import { applyWorktreeUpdates } from '../../worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from '../../tabs'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
-import {
-  ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
-  ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS,
-  ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS
-} from '../listing/worktree-slice-constants'
+import { markInputQuietSchedulerInput } from '@/lib/input-quiet-scheduler'
 import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
 import {
   isWorkspaceKey,
@@ -29,11 +24,10 @@ import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   worktreeSelectionOwnerKey,
   getActiveWorktreeOwner,
-  isCurrentWorktreeSelection,
   withAvailableWorktreeSelectionInstance
 } from '@/lib/worktree-selection-owner'
 import {
-  pendingActivationTerminalPrepCancels,
+  prepareActivationTerminalTabs,
   shouldDeferActivationTerminalPrep
 } from './activation-terminal-prep'
 
@@ -249,57 +243,13 @@ export function createSetActiveWorktree(
     clearWorktreeSleepIntent(worktreeId)
 
     if (worktreeId && shouldPrepareTerminalTabs) {
-      const prepareTerminalTabs = (): void => {
-        pendingActivationTerminalPrepCancels.delete(worktreeId)
-        set((s) => {
-          if (!isCurrentWorktreeSelection(s, worktreeId, selectedOwner)) {
-            return s
-          }
-          const tabs = s.tabsByWorktree[worktreeId] ?? []
-          const wakeable = tabs.filter(isWakeable)
-          if (wakeable.length === 0) {
-            return s
-          }
-          const allDead = wakeable.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
-          if (!allDead && !shouldTagTerminalTabs) {
-            return s
-          }
-          return {
-            tabsByWorktree: {
-              ...s.tabsByWorktree,
-              [worktreeId]: tabs.map((tab) =>
-                !isWakeable(tab)
-                  ? tab
-                  : {
-                      ...tab,
-                      ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                      // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
-                      pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                        s.terminalLayoutsByTabId[tab.id]
-                      )
-                    }
-              )
-            }
-          }
-        })
-      }
-
-      const cancelExistingPrep = pendingActivationTerminalPrepCancels.get(worktreeId)
-      if (cancelExistingPrep) {
-        cancelExistingPrep()
-      }
-      if (shouldDeferActivationTerminalPrep()) {
-        pendingActivationTerminalPrepCancels.set(
-          worktreeId,
-          scheduleAfterInputQuiet(prepareTerminalTabs, {
-            delayMs: ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
-            quietMs: ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS,
-            idleTimeoutMs: ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS
-          })
-        )
-      } else {
-        prepareTerminalTabs()
-      }
+      prepareActivationTerminalTabs(
+        set,
+        worktreeId,
+        selectedOwner,
+        isWakeable,
+        shouldTagTerminalTabs
+      )
     }
 
     // Why: activation is explicit enough to revalidate PR state now; the coordinator still coalesces and rate-guards.
