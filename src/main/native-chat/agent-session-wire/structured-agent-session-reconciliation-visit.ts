@@ -37,7 +37,7 @@ export type StructuredAgentSessionRetryContext = StructuredAgentSessionReconcili
 }
 
 /** `again`: it wrote, or was signalled meanwhile, so the next round verifies nothing is left.
- *  `busy`: a person's operation held its lane, so it waits, owed, for that lane to free. */
+ *  `busy`: a person's operation held its lane, so it waits, owed, for a later round. */
 export type StructuredAgentSessionVisit =
   | 'settled'
   | 'again'
@@ -56,7 +56,8 @@ export type StructuredAgentSessionOwedChat = StructuredAgentSessionReconciliatio
   /** Signalled while its visit ran: the next round visits it again. */
   dirty: boolean
   attempted: (() => void)[]
-  /** The visit's own read of the chat while nobody has it open; closed when the chat settles. */
+  /** The visit's own read of the chat while nobody has it open, kept across rounds; closed when
+   *  the chat settles, a reader opens it, or another handle wrote past it. */
   loaded?: StructuredAgentSessionHostSession
 }
 
@@ -71,8 +72,6 @@ export type StructuredAgentSessionVisitHost = {
   warn: (sessionId: string, error: unknown) => void
   /** The round's one-at-a-time turn for a chat's writes; null once the round stopped. */
   inTurn: <T>(run: () => Promise<T>) => Promise<T | null>
-  /** A round once the chat's busy lane frees. */
-  afterLane: (sessionId: string) => void
 }
 
 type Chat = StructuredAgentSessionOwedChat
@@ -106,11 +105,8 @@ export async function visitStructuredAgentSessionOwedChat(
         return host.settle(sessionId, chat)
       }
     }
+    // Its read stays loaded should the round stop before its turn: the next one writes, not replays.
     const visit = await host.inTurn(() => write(host, sessionId, chat))
-    if (visit === null) {
-      // The round stopped before this chat's turn: its read is not kept open until the next.
-      dropStructuredAgentSessionLoaded(chat)
-    }
     return visit === 'settled' ? host.settle(sessionId, chat) : visit
   } catch (error) {
     host.warn(sessionId, error)
@@ -120,7 +116,7 @@ export async function visitStructuredAgentSessionOwedChat(
 
 /** The chat's writes, in its lane: the pass, then (d) once nothing else of it is due, the send it
  *  owes, with the card named again. Never waits for a lane inside the round's turn: a person's
- *  operation holding it leaves the chat owed for when it frees. */
+ *  operation holding it leaves the chat owed for a later round. */
 async function write(
   host: StructuredAgentSessionVisitHost,
   sessionId: string,
@@ -128,7 +124,6 @@ async function write(
 ): Promise<Visit> {
   const { context } = host
   if (context.laneBusy(sessionId)) {
-    host.afterLane(sessionId)
     return 'busy'
   }
   return context.serialize(sessionId, async () => {

@@ -105,15 +105,28 @@ export function createStructuredAgentSessionHostRestore(
     failures
   )
   const recoveryWrites = backgroundLeaseWrites(deps.store)
-  // The chats the restart restore was asked to make readable, the visible tabs: theirs is the one
-  // latched recovery startup owes. A chat a reader opened behind them never is: a read stops no one.
+  // The visible tabs the restart restore was asked for whose leases it found latched or not yet
+  // reconciled: theirs is the one recovery decision startup owes. One decided, or found unlatched,
+  // leaves; a latch that comes later waits for its chat's own attach, start or send, as on main.
   const restoreTargets = new Set<string>()
-  let restoresAll = false
-  const latchedTargets = () =>
-    (restoresAll
-      ? deps.store.listRecords().map((record) => record.sessionId)
-      : [...restoreTargets]
-    ).filter((sessionId) => deps.store.getRecord(sessionId)?.lease.handoffStage === 'recovering')
+  let restoring = false
+  const latchedTargets = () => {
+    for (const sessionId of restoreTargets) {
+      const lease = deps.store.getRecord(sessionId)?.lease
+      if (!lease?.unreconciled && lease?.handoffStage !== 'recovering') {
+        restoreTargets.delete(sessionId)
+      }
+    }
+    // Only one a probe can decide: never a conflicted claim, nor an owner on another host.
+    return [...restoreTargets].filter((sessionId) => {
+      const lease = deps.store.getRecord(sessionId)?.lease
+      return (
+        lease?.handoffStage === 'recovering' &&
+        lease.claimStatus !== 'conflicted' &&
+        (lease.ownerProcess?.hostId ?? deps.store.hostId) === deps.store.hostId
+      )
+    })
+  }
   const reconciliation = new StructuredAgentSessionRetry({
     deps,
     sessions: startup.sessions,
@@ -124,9 +137,11 @@ export function createStructuredAgentSessionHostRestore(
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
       startup.clientDelivery.publishGenerationEnded(sessionId, options),
+    // A read-only store decides nothing here; its chats' visits still run.
     reconcileOwed: () =>
-      deps.store.listRecords().some((record) => record.lease.unreconciled) ||
-      latchedTargets().length > 0,
+      !deps.store.readOnly &&
+      (deps.store.listRecords().some((record) => record.lease.unreconciled) ||
+        latchedTargets().length > 0),
     reconcile: async () => {
       try {
         const refusal = await reconcileLeases(null, BACKGROUND_WRITE)
@@ -138,6 +153,7 @@ export function createStructuredAgentSessionHostRestore(
         for (const sessionId of latchedTargets()) {
           await resolveRecovery(sessionId, recoveryWrites)
         }
+        latchedTargets() // a decided target leaves at once
         failures.clear()
         return 'settled'
       } catch (error) {
@@ -173,8 +189,16 @@ export function createStructuredAgentSessionHostRestore(
     },
     startupSettled: () => startupSettled,
     restoreReadableSessions: (sessionIds) => {
-      restoresAll ||= sessionIds === undefined
-      sessionIds?.forEach((sessionId) => restoreTargets.add(sessionId))
+      // Once, as the restorer restores once.
+      for (const { sessionId, lease } of restoring ? [] : deps.store.listRecords()) {
+        if (
+          (lease.unreconciled || lease.handoffStage === 'recovering') &&
+          (!sessionIds || sessionIds.includes(sessionId))
+        ) {
+          restoreTargets.add(sessionId)
+        }
+      }
+      restoring = true
       return gate.run(() => restorer.restore(sessionIds))
     },
     reconciliation

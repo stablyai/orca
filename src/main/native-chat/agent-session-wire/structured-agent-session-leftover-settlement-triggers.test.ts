@@ -210,7 +210,7 @@ describe('the retry', () => {
     }
   }
 
-  it('backs off from 1 s, doubling; a new signal starts a fresh episode at once; settles once the fault clears', async () => {
+  it('backs off from 1 s, doubling; a new signal adds no round to the backoff; settles once the fault clears', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       rig = await createQueuedMessageTestRig({ restartable: true })
@@ -236,15 +236,15 @@ describe('the retry', () => {
       await settleTurns()
       expect(attempts).toHaveBeenCalledTimes(2)
 
-      // A new signal is a fresh episode: a round at once, and the budget back at its first step.
+      // A new signal while it backs off adds no round: the timer's next step runs it.
       reconciliation.signal(SESSION)
       await settleTurns()
-      expect(attempts).toHaveBeenCalledTimes(3)
+      expect(attempts).toHaveBeenCalledTimes(2)
       expect(turnState(current)).toBe('running')
       database.db.exec('DROP TRIGGER reject_recovered')
-      await vi.advanceTimersByTimeAsync(990)
+      await vi.advanceTimersByTimeAsync(1_990)
       await settleTurns()
-      expect(attempts).toHaveBeenCalledTimes(3)
+      expect(attempts).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(10)
       await settleTurns()
       expect(retryOwes(reconciliation, SESSION)).toBe(false)

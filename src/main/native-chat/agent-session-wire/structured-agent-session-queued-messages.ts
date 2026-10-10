@@ -240,7 +240,7 @@ export type QueuedMessageDrainDeps = {
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
   /** The host's retry (`StructuredAgentSessionRetry`), read lazily: it is built after the drain. */
-  retry: () => Pick<StructuredAgentSessionRetry, 'sendContended' | 'sendWaits'>
+  retry: () => Pick<StructuredAgentSessionRetry, 'signal' | 'sendWaits'>
   /** Re-sends what clients read (`AgentSessionSubscribers.publish`): an abandon writes nothing. */
   publish: (sessionId: string, journal: AgentSessionJournal) => void
   logger: StructuredAgentSessionLogger
@@ -254,6 +254,8 @@ export type QueuedMessageDrainDeps = {
  * re-derives everything and consumes at most one draft — the consumed submission
  * then owes work, which gates the next.
  */
+const LOCKED = { contended: true } as const
+
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
   private disposed = false
@@ -322,7 +324,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
         return this.step(sessionId, false)
       })
       // Another connection holds the database: the retry sends it in its next round, nothing shown.
-      .then((outcome) => outcome === 'contended' && this.deps.retry().sendContended(sessionId))
+      .then((outcome) => outcome === 'contended' && this.deps.retry().signal(sessionId, LOCKED))
       .catch((error: unknown) => {
         this.scheduled.delete(sessionId)
         this.warn(sessionId, error)

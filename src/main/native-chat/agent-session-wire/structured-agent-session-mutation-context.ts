@@ -41,7 +41,7 @@ export type StructuredAgentSessionMutationContext = {
   /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
   /** The host's retry of background bookkeeping (`StructuredAgentSessionRetry`). */
-  retry: Pick<StructuredAgentSessionRetry, 'sendContended' | 'sendWaits'>
+  retry: Pick<StructuredAgentSessionRetry, 'signal' | 'sendWaits'>
   /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
    *  Each caller names why (`ending`). */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

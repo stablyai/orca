@@ -1,26 +1,14 @@
-// The host's one retry of background bookkeeping, scoped to its database connection: what ended
-// generations left, what an earlier host process left, and the queue's automatic sends that met
-// another connection's lock. One set of owed chats, one round at a time, one timer and one budget.
-//
-// Signals: every committed revocation or supersession of a generation (the record store's
-// `onGenerationEnded`), an exit this host observed (whether or not its release landed), a row an
-// ended generation committed late, a queue send that met contention, and startup. Each one
-// re-derives what readers see at once (the operational revision, the published view, the queued-
-// card drain) and marks the chat owed. A round visits every owed chat: closed ones load side by
-// side in the few background slots, a reader's first, and each writes in its turn, one chat at a
-// time with a yield between (`inTurn`):
-// (a) the store-wide restart reconcile and the restore's latched recovery, once, while either is
-// owed (`reconcileOwed`); then per chat, in
-// its lane, (b) release repair, (c) settlement and what an earlier
-// process left (`runStructuredAgentSessionReconciliationPass`), (d) the queue's next send. Every
-// write is background (`JournalWriteOptions`): another connection's lock fails it at once and ends
-// the round, since contention is connection-wide.
-//
-// A failed round backs off from 1 s to 2 s; about 3 minutes of them in a row end the episode
-// (`RECONCILIATION_GIVE_UP_MS`): the timer stops, the set is kept, and a queue send still owed
-// shows as not sent (`abandonSend`). A new signal, a reader's open, or a commit on the connection
-// after contention starts a fresh episode. A lease latched in recovery is decided in (a) only for a
-// chat the restart restore made readable; any other one's proofs wait in the set for its decision.
+// The host's one retry of background bookkeeping on its database connection: what ended
+// generations and an earlier host process left, and queue sends that met another connection's lock.
+// One owed set (`signal`; a reader's open puts an owed chat first). A round runs (a) the store-wide
+// step while owed (`reconcileOwed`), then per owed chat, one at a time in its lane, (b) release
+// repair, (c) settlement (`runStructuredAgentSessionReconciliationPass`), (d) the queue's next send.
+// Every write is background: a lock fails it at once and stops the round.
+// One wake (`wake`): marking a chat owed or any commit runs a round now unless one runs or the timer
+// waits; a commit after a lock refused the last round ends that wait. The timer is the backoff
+// after a refused round (1 s to 2 s), or its first step after a busy lane. One budget: about 3
+// minutes of refused rounds give up (`RECONCILIATION_GIVE_UP_MS`), keeping the set and showing owed
+// sends as not sent; the next wake after that is the only reset.
 
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
 import { setImmediate as yieldToEvents } from 'node:timers/promises'
@@ -52,7 +40,7 @@ export type StructuredAgentSessionReconciliationSignal = {
   exit?: StructuredAgentSessionExitSettlement
   /** Readers re-baseline at the moved fence (`publishGenerationEnded`). */
   restate?: boolean
-  /** The exit's own settlement met another connection's lock. */
+  /** The exit's own writes, or the queue's send, met another connection's lock. */
   contended?: boolean
 }
 
@@ -63,16 +51,16 @@ export class StructuredAgentSessionRetry {
   private readonly firstOpened = new Map<string, AgentJournalCursor>()
   private readonly slots = new StructuredAgentSessionReconciliationSlots(() => this.disposed)
   private readonly unsubscribe: () => void
+  /** The one timer ('soon': a round queued now). */
   private timer: ReturnType<typeof setTimeout> | 'soon' | null = null
   private running = false
-  /** A chat became due while a round ran: another follows at once. */
+  /** Woken while a round ran: another follows at once. */
   private again = false
-  /** Consecutive failed rounds in this episode, and the backoffs they waited out; at the budget
-   *  (`RECONCILIATION_GIVE_UP_MS`) the episode ends. */
+  /** Refused rounds in a row, and the backoffs they waited out; at the budget the episode ends.
+   *  `locked`: the last one met another connection's lock, which a commit here proves gone. */
   private failures = 0
   private failingFor = 0
-  /** The last round failed on another connection's lock, which a commit here proves gone. */
-  private contended = false
+  private locked = false
   private disposed = false
   /** The round's chain of chat turns (`inTurn`), and whether contention stopped the round. */
   private turn: Promise<unknown> = Promise.resolve()
@@ -86,13 +74,7 @@ export class StructuredAgentSessionRetry {
       firstOpened: this.firstOpened,
       settle: (sessionId, chat) => this.settle(sessionId, chat),
       warn: (sessionId, error) => this.warn(sessionId, error),
-      inTurn: (run) => this.inTurn(run),
-      // Once the lane's own bookkeeping has cleared too, so the next visit finds it free.
-      afterLane: (sessionId) =>
-        void context
-          .serialize(sessionId, async () => undefined)
-          .then(() => yieldToEvents())
-          .then(() => this.roundSoon())
+      inTurn: (run) => this.inTurn(run)
     }
     this.unsubscribe = context.deps.store.onGenerationEnded((ended) =>
       this.signal(ended.sessionId, { evidence: ended.evidence })
@@ -112,47 +94,32 @@ export class StructuredAgentSessionRetry {
       chat.debts.exit = signal.exit
     }
     if (chat && signal.contended) {
-      // The chat's queued send would meet the same lock: it waits for the round, which sends it.
+      // Its queued send met, or would meet, the same lock: the round sends it.
       chat.send = true
     }
     this.context.publishGenerationEnded(sessionId, signal.restate ? { restate: true } : {})
-    this.freshEpisode()
+    this.wake()
   }
 
-  /** A committed row: one below the lease's fence is an ended generation's late write, and any
-   *  commit proves the connection free again after contention. */
+  /** A committed row: one below the lease's fence is an ended generation's late write; any one
+   *  wakes the retry. */
   observeCommit = (sessionId: string, lowestFence: number | null): void => {
     const fence = this.context.deps.store.getRecord(sessionId)?.lease.runtimeFence
     if (lowestFence !== null && fence !== undefined && lowestFence < fence) {
       this.signal(sessionId)
-    } else if (this.contended) {
-      this.freshEpisode()
+    } else if ([...this.owed.values()].some((chat) => chat.due)) {
+      this.wake(this.locked)
     }
   }
 
-  /** A reader opened the chat: its handle marks the process boundary if it is the first, and what
-   *  it owes goes ahead of the scan, in a fresh episode unless a backoff runs. */
+  /** A reader opened the chat: its handle marks the process boundary if it is the first, and an
+   *  owed chat goes ahead of the scan. */
   opened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void => {
     noteStructuredAgentSessionOpened(this.firstOpened, sessionId, journal)
     const chat = this.owed.get(sessionId)
     if (chat) {
       this.slots.prioritize(chat)
-      // Backing off after a failed round, it goes first in the next, which an open does not
-      // hurry: a store that keeps refusing costs a write per round, never one per chat opened.
-      if (this.failures === 0 || this.failingFor >= RECONCILIATION_GIVE_UP_MS) {
-        this.freshEpisode()
-      }
-    }
-  }
-
-  /** The queue's automatic send met another connection's lock: the next round sends it again.
-   *  Owed, not a failure: only a round counts against the budget, however many sends collided. */
-  sendContended = (sessionId: string): void => {
-    if (!this.disposed) {
-      this.owe(sessionId).send = true
-      this.contended = true
-      this.context.publishGenerationEnded(sessionId)
-      this.roundSoon()
+      this.wake()
     }
   }
 
@@ -188,32 +155,32 @@ export class StructuredAgentSessionRetry {
     }
     chat.due = true
     chat.dirty = true
-    this.again ||= this.running
     return chat
   }
 
-  /** A new reason to try: the budget resets and a round runs now. */
-  private freshEpisode(): void {
+  /** The one wake: a round now, unless one runs (it runs again) or the timer is pending, which
+   *  `early` (a commit after a lock refused the last round) ends. After a give-up it starts a fresh
+   *  episode, the budget's only reset. */
+  private wake(early = false): void {
     if (this.disposed) {
       return
     }
-    this.failures = 0
-    this.failingFor = 0
-    this.contended = false
-    if (!this.running && this.timer !== 'soon') {
-      this.stopTimer()
-      this.roundSoon()
-    }
-  }
-
-  /** A round now unless one runs, is due or waits out a backoff; the budget stays as it is. */
-  private roundSoon(): void {
     if (this.running) {
       this.again = true
-    } else if (!this.disposed && this.timer === null) {
-      this.timer = 'soon'
-      queueMicrotask(() => void this.round())
+      return
     }
+    if (early) {
+      this.stopTimer()
+    }
+    if (this.timer !== null) {
+      return
+    }
+    if (this.failingFor >= RECONCILIATION_GIVE_UP_MS) {
+      this.failures = 0
+      this.failingFor = 0
+    }
+    this.timer = 'soon'
+    queueMicrotask(() => void this.round())
   }
 
   private async round(): Promise<void> {
@@ -225,10 +192,12 @@ export class StructuredAgentSessionRetry {
     this.again = false
     this.stopped = false
     let failed = false
-    let contended = false
+    let locked = false
+    let busy = false
     const end = (visit: Visit) => {
       failed ||= visit === 'failed' || visit === 'contended'
-      contended ||= visit === 'contended'
+      locked ||= visit === 'contended'
+      busy ||= visit === 'busy'
       this.stopped ||= visit === 'contended'
       this.again ||= visit === 'again'
     }
@@ -251,39 +220,37 @@ export class StructuredAgentSessionRetry {
       })
     )
     this.running = false
-    this.roundEnded(failed, contended)
+    this.roundEnded(failed, locked, busy)
     // After the round's outcome is set, so a waiter reads its backoff, never a round still running.
     for (const [, chat] of due) {
       chat.attempted.splice(0).forEach((resolve) => resolve())
     }
   }
 
-  private roundEnded(failed: boolean, contended: boolean): void {
-    if (this.disposed || this.running) {
+  private roundEnded(failed: boolean, locked: boolean, busy: boolean): void {
+    if (this.disposed) {
       return
     }
+    this.locked = locked
     if (!failed) {
       this.failures = 0
       this.failingFor = 0
-      this.contended = false
-      if (this.again && this.timer === null) {
-        this.freshEpisode()
+      if (this.again) {
+        this.wake()
+      } else if (busy) {
+        // A person's operation held a lane: its chat waits the timer's first step, not a budget.
+        this.arm(reconciliationBackoffDelay(1))
       }
       return
     }
     this.failures += 1
-    this.contended = contended
-    this.stopTimer()
     if (this.failingFor < RECONCILIATION_GIVE_UP_MS) {
       const delay = reconciliationBackoffDelay(this.failures)
       this.failingFor += delay
-      const timer = setTimeout(() => void this.round(), delay)
-      // A backoff alone never keeps the process alive.
-      timer.unref?.()
-      this.timer = timer
+      this.arm(delay)
       return
     }
-    // The episode ends; the set stays for the next signal, open or commit.
+    // The episode ends; the set stays for the next wake.
     this.context.deps.logger.warn("gave up settling a gone agent's leftover work for now", {
       scope: 'reconciliation',
       error: new Error(`${this.failures} rounds failed`)
@@ -295,18 +262,24 @@ export class StructuredAgentSessionRetry {
     }
   }
 
-  /** An open chat goes straight to its lane; a closed one is replayed in a background slot. */
+  private arm(delay: number): void {
+    this.stopTimer()
+    const timer = setTimeout(() => void this.round(), delay)
+    // A backoff alone never keeps the process alive.
+    timer.unref?.()
+    this.timer = timer
+  }
+
+  /** An open chat, or one already loaded, goes straight to its lane; a closed one is replayed in a
+   *  background slot, never once the round stopped. */
   private async visitInSlot(sessionId: string, chat: OwedChat): Promise<Visit | null> {
     if (this.context.sessions.has(sessionId) || chat.loaded) {
       return this.context.track(this.visit(sessionId, chat))
     }
     // The replay yields a macrotask first (`loadStructuredAgentSessionForReconciliation`).
-    const result = await this.slots.run(chat, async () => {
-      if (this.disposed) {
-        return null
-      }
-      return this.context.track(this.visit(sessionId, chat))
-    })
+    const result = await this.slots.run(chat, async () =>
+      this.disposed || this.stopped ? null : this.context.track(this.visit(sessionId, chat))
+    )
     return result?.value ?? null
   }
 

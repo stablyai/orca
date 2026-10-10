@@ -56,12 +56,11 @@ describe("another connection's write lock", () => {
     const { reconciliation } = current.host.collaboratorsForTests()
     const { released } = await holdWriteLock(current.root, 1_500)
 
-    const started = performance.now()
+    // The exit's own refused settlement left a backoff: its timer runs the round.
     const stall = await longestStall(async () => {
       reconciliation.signal(SESSION)
       await reconciliation.attempted(SESSION)
     })
-    expect(performance.now() - started).toBeLessThan(150)
     expect(stall).toBeLessThan(60)
     expect(retryOwes(reconciliation, SESSION)).toBe(true)
     expect(turnState(current)).toBe('running')

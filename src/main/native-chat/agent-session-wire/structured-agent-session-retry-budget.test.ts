@@ -60,7 +60,7 @@ it('ten chats whose automatic sends meet one lock cost one round, and send once 
 
   // Each chat's own drain met the lock at the same moment.
   for (const id of ids) {
-    retry.sendContended(id)
+    retry.signal(id, { contended: true })
   }
   await settleTurns()
   // One round, ended by the first send that met the lock: one failure, nobody given up on.
