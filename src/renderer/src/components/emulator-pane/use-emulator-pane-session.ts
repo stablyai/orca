@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import {
   deviceLabel,
@@ -90,6 +90,12 @@ export function useEmulatorPaneSession({
       }
       return next
     } catch (error) {
+      // Why: a transient post-attach refresh failure must not clobber a live
+      // preview — emptying the dropdown and showing an error banner over a
+      // working stream. Only surface the error when no session is live.
+      if (liveTargetRef.current) {
+        return []
+      }
       deviceRefreshErrorRef.current = error
       if (mountedRef.current) {
         setDevices([])
@@ -224,8 +230,11 @@ export function useEmulatorPaneSession({
           return
         }
         // Why: setup failures otherwise trigger the mount auto-attach loop again
-        // and erase the actionable error before the user can read it.
-        suppressAutoAttachRef.current = true
+        // and erase the actionable error before the user can read it. Only setup
+        // failures suppress auto-attach — a transient blip must still auto-recover.
+        if (e instanceof RuntimeRpcCallError && e.code === 'emulator_simctl_unavailable') {
+          suppressAutoAttachRef.current = true
+        }
         const msg = emulatorPaneErrorMessage(
           e,
           'Could not start the emulator. Make sure Xcode (iOS) or Android Studio (Android) is set up, then try another device.'
