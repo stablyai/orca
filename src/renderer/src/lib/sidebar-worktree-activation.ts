@@ -2,6 +2,7 @@ import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
 } from '@/lib/worktree-activation'
+import { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -11,10 +12,15 @@ export async function activateWorktreeFromSidebar(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Promise<void> {
+  const state = useAppStore.getState()
+  state.clearPendingRevealWorktreeId()
+  state.clearPendingRevealSidebarRow()
+
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
       navigationIntent: 'user-open',
+      revealInSidebar: false,
       ...(executionHostId ? { executionHostId } : {})
     })
     return
