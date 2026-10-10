@@ -1,18 +1,13 @@
 import { createElement } from 'react'
 import { projectMountedScreen, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
-import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import { loadHostClientContext } from '../host-client-context-exposure'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 
 const HOST = 'host-1'
 const WORKTREE = 'wt-history'
-
-/** The panel reads its client through the shared context, whose handle is module-private. */
-export const agentHistoryScreenMountExposures: readonly OperationExposure[] = [
-  hostClientContextExposure
-]
 
 /** The agent history screen: the worktree list that seeds its scopes, then the session scan. */
 export function agentHistoryScreenMountAdapters(

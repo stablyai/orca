@@ -59,8 +59,8 @@ vi.mock('./diff-editor-word-wrap-options', () => ({
   buildDiffEditorWordWrapOptions: () => ({}),
   syncDiffEditorOriginalWordWrap: syncWordWrap
 }))
-vi.mock('./diff-editor-shift-wheel-scroll', () => ({
-  installDiffEditorShiftWheelScroll: () => cleanupShiftWheel
+vi.mock('./diff-editor-horizontal-wheel-scroll', () => ({
+  installDiffEditorHorizontalWheelScroll: () => cleanupShiftWheel
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
