@@ -4089,7 +4089,12 @@
           },
           "usagePercentageLabel": {
             "used": "{{value0}} % utilisé",
-            "remaining": "{{value0}} % restants"
+            "remaining": "{{value0}} % restants",
+            "bare": "{{value0}} %"
+          },
+          "usageUnitLabel": {
+            "used": "Utilisé",
+            "remaining": "Restant"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "L’affichage de l’utilisation est désormais compact",

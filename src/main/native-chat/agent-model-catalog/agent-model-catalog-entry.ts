@@ -144,12 +144,11 @@ function mergedModels(
     const configuredEffort = runsConfigured ? configured?.effort : undefined
     const offersConfigured = (menu: AgentSessionModelOption['efforts']): boolean =>
       menu.some((choice) => choice.value === configuredEffort)
-    // A coarser newer menu (Pi's listing stops at high) must not drop the effort a chat ran.
-    const efforts =
-      model.efforts.length > 0 &&
-      (offersConfigured(model.efforts) || !offersConfigured(olderEfforts))
-        ? model.efforts
-        : olderEfforts
+    // A coarser newer probe menu (Pi's stops at high) must not drop the effort a chat ran; only the
+    // chat's own menu is trusted over it, never an older probe's.
+    const keepsChatMenu =
+      older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
+    const efforts = model.efforts.length > 0 && !keepsChatMenu ? model.efforts : olderEfforts
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )

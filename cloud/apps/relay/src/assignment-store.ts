@@ -140,6 +140,15 @@ type RelayAssignmentStoreOptions = {
 
 export type { ControlRenewalOutcome, ControlRenewalRequest }
 
+type ControlActivationInput = {
+  cellId: string
+  assignmentEpoch: number
+  generation: number
+  idleRegionalRehome?: boolean
+  cellIncarnation?: string
+  connectionInclusionWatermark?: number
+}
+
 export type RelayAssignment = AssignmentIdentity & {
   cellId: string
   cellUrl: string
@@ -4295,15 +4304,38 @@ export class RelayAssignmentStore {
 
   async activateControl(
     identity: AssignmentIdentity,
-    input: {
-      cellId: string
-      assignmentEpoch: number
-      generation: number
-      idleRegionalRehome?: boolean
-      cellIncarnation?: string
-      connectionInclusionWatermark?: number
-    }
+    input: ControlActivationInput
   ): Promise<string> {
+    return (await this.activateControlOnce(identity, input, false)).activityId
+  }
+
+  // Step 5 flip back: the same activation, but the cell-row delta is returned for the caller
+  // to fold into one relay_cells write per batch (commitCellReservationDelta), not committed
+  // here. A dozen re-registrations from Asia each holding that row's lock convoy on it.
+  async activateControlDeferringCell(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput
+  ): Promise<{ activityId: string; reservationDelta: number }> {
+    return await this.activateControlOnce(identity, input, true)
+  }
+
+  // Unguarded by capacity: these hosts are already connected to the cell.
+  async commitCellReservationDelta(cellId: string, delta: number): Promise<void> {
+    if (delta === 0) return
+    await this.database.query(
+      `UPDATE relay_cells SET reserved_requests =
+         CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+         updated_at = ?
+       WHERE cell_id = ?`,
+      [delta, delta, this.now(), cellId]
+    )
+  }
+
+  private async activateControlOnce(
+    identity: AssignmentIdentity,
+    input: ControlActivationInput,
+    deferCell: boolean
+  ): Promise<{ activityId: string; reservationDelta: number }> {
     const activityId = `control:${input.cellId}:${input.generation}`
     validateActivityId(activityId)
     return await this.activityQueue.run(identity, async () => {
@@ -4415,14 +4447,14 @@ export class RelayAssignmentStore {
         // every host on the cell, and this transaction spans a dozen round
         // trips. Holding its write lock from the first of them capped a
         // far-from-Postgres cell at a couple of accepts a second.
-        if (reservationDelta !== 0) {
+        if (reservationDelta !== 0 && !deferCell) {
           await this.commitCellReservationAtomically(
             transaction,
             input.cellId,
             reservationDelta
           )
         }
-        return activityId
+        return { activityId, reservationDelta: deferCell ? reservationDelta : 0 }
       })
     })
   }

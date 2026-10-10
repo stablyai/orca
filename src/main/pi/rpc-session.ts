@@ -22,7 +22,7 @@ import { applyPiRpcSessionOption, readPiRpcCommands, readPiRpcSessionOptions } f
 import {
   unpickedSessionConfiguredChoice,
   withLiveCatalogListing,
-  type AgentModelCatalogConfiguredChoice
+  type AgentModelCatalogLiveListing
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 
 export type PiRpcConnection = Pick<
@@ -62,9 +62,7 @@ export class PiRpcSession {
   readonly turns: PiRpcTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
-  /** What this child started on, as its config's default; never re-read, so a later switch (an
-   *  extension's or the user's) teaches nothing. */
-  private startChoice?: AgentModelCatalogConfiguredChoice | null
+  private startCatalogListing?: AgentModelCatalogLiveListing
   readonly skipped: string[] = []
   commands?: AgentSessionSlashCommand[]
   options?: AgentSessionOptionsResult
@@ -173,11 +171,14 @@ export class PiRpcSession {
       }
     }
     this.options = await readPiRpcSessionOptions(this.connection)
-    this.startChoice = unpickedSessionConfiguredChoice({
-      resolvesConfig: this.resolvesConfig,
-      picked,
-      ...this.options
-    })
+    this.startCatalogListing = withLiveCatalogListing(
+      this.options,
+      unpickedSessionConfiguredChoice({
+        resolvesConfig: this.resolvesConfig,
+        picked,
+        ...this.options
+      })
+    ).catalogListing
     try {
       this.commands = (await readPiRpcCommands(this.connection)).commands
     } catch (error) {
@@ -190,9 +191,14 @@ export class PiRpcSession {
     return state.sessionFile
   }
 
-  /** What the child reports now, with what its start said of its config's default. */
+  /** What this child listed at its start, with what its config resolved; the host saves it once. */
+  get startListing(): AgentModelCatalogLiveListing | undefined {
+    return this.startCatalogListing
+  }
+
+  /** What the child reports now; only the start says what its config resolved. */
   async readOptions() {
-    return withLiveCatalogListing(await readPiRpcSessionOptions(this.connection), this.startChoice)
+    return withLiveCatalogListing(await readPiRpcSessionOptions(this.connection))
   }
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {

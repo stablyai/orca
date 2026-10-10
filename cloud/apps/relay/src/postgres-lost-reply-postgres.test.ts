@@ -68,7 +68,11 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
 
   async function open(
     url: string,
-    options: { readTimeoutMarginMs?: number; poolMax?: number } = {}
+    options: {
+      readTimeoutMarginMs?: number
+      poolMax?: number
+      readTimeoutMarginOverrideMs?: () => number | undefined
+    } = {}
   ): Promise<RelayDatabase> {
     const database = await openRelayDatabase({
       databaseUrl: url,
@@ -76,7 +80,8 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
       appliesPostgresSchema: false,
       statementTimeoutMs: STATEMENT_TIMEOUT_MS,
       readTimeoutMarginMs: options.readTimeoutMarginMs ?? READ_TIMEOUT_MARGIN_MS,
-      poolMax: options.poolMax
+      poolMax: options.poolMax,
+      readTimeoutMarginOverrideMs: options.readTimeoutMarginOverrideMs
     })
     cleanups.push(async () => await database.close())
     return database
@@ -123,6 +128,32 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
           })
       )
     ).resolves.toEqual([{ id: 'c1' }])
+  }, 20_000)
+
+  // The per-cell switch moves the margin per query, with no restart and no new pool.
+  it('applies the switch file margin per query, over the pool margin', async () => {
+    const direct = await open(databaseUrl!)
+    await direct.query(`CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id TEXT PRIMARY KEY)`)
+    cleanups.push(async () => {
+      await direct.query(`DROP TABLE IF EXISTS ${PROBE_TABLE}`)
+    })
+    const proxy = await blackholeProxy(new URL(databaseUrl!), `FROM ${PROBE_TABLE}`)
+    cleanups.push(proxy.close)
+    let override: number | undefined = 1_000
+    // The pool's own margin would hold the lost reply for 30 s.
+    const database = await open(proxy.url, {
+      readTimeoutMarginMs: 30_000,
+      readTimeoutMarginOverrideMs: () => override
+    })
+    await expect(database.query('SELECT 1 AS one')).resolves.toEqual([{ one: 1 }])
+    const startedAt = performance.now()
+    const failure = await database
+      .query(`SELECT id FROM ${PROBE_TABLE}`)
+      .catch((error: unknown) => error)
+    expect(isRelayDatabaseTransientError(failure)).toBe(true)
+    expect(performance.now() - startedAt).toBeLessThan(STATEMENT_TIMEOUT_MS + 1_000 + 1_000)
+    override = undefined
+    await expect(database.query('SELECT 1 AS one')).resolves.toEqual([{ one: 1 }])
   }, 20_000)
 
   // A reply the server sent after statement_timeout, held up by a whole-VM stall, is still a

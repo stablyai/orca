@@ -33,7 +33,8 @@ export type CellBooking = {
   expiresAt: number
 }
 
-type HeldBooking = CellBooking & { unit: BookingUnit }
+// `handedOff`: the host's upgrade now counts this unit, so the booking holds none.
+type HeldBooking = CellBooking & { unit: BookingUnit; handedOff: boolean }
 
 function hostKey(userId: string, relayHostId: string): string {
   return `${userId}\u0000${relayHostId}`
@@ -104,11 +105,12 @@ export class CellReserveBook {
       return { outcome: 'seated-newer', epoch: known }
     }
     // A lower-epoch booking for this host hands its unit to the new one.
-    if (!booked && !this.capacity.canReserve()) return { outcome: 'full' }
+    const heldUnit = booked && !booked.handedOff ? booked.unit : undefined
+    if (!heldUnit && !this.capacity.canReserve()) return { outcome: 'full' }
     // The post-restart sticky re-booking books nothing new, so it takes no token.
     if (!item.sticky && this.intake.available(now) < 1) return { outcome: 'intake' }
     if (dryRun) return { outcome: 'ok' }
-    const unit = booked?.unit ?? this.capacity.tryReserve()
+    const unit = heldUnit ?? this.capacity.tryReserve()
     if (!unit) return { outcome: 'full' }
     if (!item.sticky) this.intake.take(now)
     this.bookings.set(key, {
@@ -117,7 +119,8 @@ export class CellReserveBook {
       epoch: item.epoch,
       directorId,
       expiresAt: now + item.ttlMs,
-      unit
+      unit,
+      handedOff: false
     })
     return { outcome: 'ok' }
   }
@@ -125,6 +128,15 @@ export class CellReserveBook {
   has(userId: string, relayHostId: string): boolean {
     const booking = this.bookings.get(hostKey(userId, relayHostId))
     return booking !== undefined && booking.expiresAt > this.now()
+  }
+
+  // The booked host's upgrade takes over its unit, so the host counts once until its hello.
+  // The upgrade carries no epoch; the hello's take() still requires the booked one.
+  handOff(userId: string, relayHostId: string): void {
+    const booking = this.bookings.get(hostKey(userId, relayHostId))
+    if (!booking || booking.handedOff || booking.expiresAt <= this.now()) return
+    booking.handedOff = true
+    booking.unit.release()
   }
 
   // The hello's rule 1: a booking for this host at exactly this epoch admits it once.
