@@ -594,6 +594,8 @@ describe('client UI RPC methods', () => {
     ['activeView', { activeView: 'tasks' }],
     ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
     ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
+    ['setupGuideSettingsDismissed true', { setupGuideSettingsDismissed: true }],
+    ['setupGuideSettingsDismissed false', { setupGuideSettingsDismissed: false }],
     ['setupGuideBrowserMilestoneMigrated', { setupGuideBrowserMilestoneMigrated: true }],
     [
       'setupGuideBrowserMilestoneLegacyComplete',
