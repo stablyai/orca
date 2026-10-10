@@ -390,7 +390,6 @@ export const SHUTDOWN_REAP_MAX_SWEEPS = 3
 export const MAX_RELAY_PTY_SESSIONS = 50
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
-const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
 const PTY_OUTPUT_FLUSH_CHUNK_CHARS = 16 * 1024
 const PTY_OUTPUT_FLUSH_MAX_WRITES = 2
 const PTY_OUTPUT_PRODUCER_HIGH_BYTES = 128 * 1024
@@ -552,6 +551,7 @@ export class PtyHandler {
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
+  private outputFlushImmediate: ReturnType<typeof setImmediate> | null = null
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingProducerBytesByPty = new Map<string, number>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
@@ -1404,7 +1404,7 @@ export class PtyHandler {
   }
 
   private scheduleOutputFlush(delayMs: number): void {
-    if (this.outputFlushTimer !== null) {
+    if (this.outputFlushTimer !== null || this.outputFlushImmediate !== null) {
       return
     }
     this.outputFlushTimer = setTimeout(() => this.flushPendingOutput(), delayMs)
@@ -1435,9 +1435,17 @@ export class PtyHandler {
         writes++
       }
     }
-    if (this.pendingOutputByPty.size > 0 && writes > 0) {
+    if (
+      this.pendingOutputByPty.size > 0 &&
+      writes > 0 &&
+      this.outputFlushTimer === null &&
+      this.outputFlushImmediate === null
+    ) {
       // Why: yield between slices of a large chunk so client input and control frames can interleave.
-      this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
+      this.outputFlushImmediate = setImmediate(() => {
+        this.outputFlushImmediate = null
+        this.flushPendingOutput()
+      })
     }
   }
 
@@ -1568,11 +1576,21 @@ export class PtyHandler {
   }
 
   private clearOutputFlushTimerIfIdle(): void {
-    if (this.pendingOutputByPty.size > 0 || this.outputFlushTimer === null) {
+    if (this.pendingOutputByPty.size > 0) {
       return
     }
-    clearTimeout(this.outputFlushTimer)
-    this.outputFlushTimer = null
+    this.cancelOutputFlush()
+  }
+
+  private cancelOutputFlush(): void {
+    if (this.outputFlushTimer !== null) {
+      clearTimeout(this.outputFlushTimer)
+      this.outputFlushTimer = null
+    }
+    if (this.outputFlushImmediate !== null) {
+      clearImmediate(this.outputFlushImmediate)
+      this.outputFlushImmediate = null
+    }
   }
 
   private clearPtyFlowState(id: string): void {
@@ -3460,10 +3478,7 @@ export class PtyHandler {
       this.releaseRelayIngress(managed)
       this.flushPtyOutput(managed.id)
     }
-    if (this.outputFlushTimer !== null) {
-      clearTimeout(this.outputFlushTimer)
-      this.outputFlushTimer = null
-    }
+    this.cancelOutputFlush()
     this.pendingOutputByPty.clear()
     this.pendingProducerBytesByPty.clear()
     this.pendingExitByPty.clear()
