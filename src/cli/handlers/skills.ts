@@ -17,7 +17,11 @@ import {
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
-import { isUsableSkillsCliAgentKey, toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
+import {
+  isUsableSkillsCliAgentKey,
+  toRequestedSkillsCliAgentKey,
+  toSkillsCliAgentKeys
+} from '../../shared/skills-cli-agent-keys'
 import {
   buildAgentFeatureSkillInstallArgs,
   buildAgentFeatureSkillUpdateArgs
@@ -143,6 +147,8 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
           .split(',')
           .map((entry) => entry.trim())
           .filter(Boolean)
+          // Why: dedupe after mapping so `claude,claude-code` yields one target.
+          .map(toRequestedSkillsCliAgentKey)
       )
     ]
     // Why: a value like "," parses to nothing. Falling through to detection would

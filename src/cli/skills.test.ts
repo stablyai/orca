@@ -778,7 +778,7 @@ describe('orca skills CLI', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     const resultPromise = main(
-      ['skills', 'install', '--skill', 'alpha', '--agent', 'codex, claude-code ,codex'],
+      ['skills', 'install', '--skill', 'alpha', '--agent', 'codex, claude-code ,codex,claude,trae'],
       '/tmp/repo'
     )
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
@@ -787,8 +787,9 @@ describe('orca skills CLI', () => {
 
     const argv = spawnMock.mock.calls[0]?.[1] ?? []
     const agents = argv.filter((_: string, i: number) => argv[i - 1] === '--agent')
-    // Why: trimmed and de-duplicated, and detection is not consulted at all.
-    expect(agents).toEqual(['codex', 'claude-code'])
+    // Why: trimmed and de-duplicated, and detection is not consulted at all. Orca's
+    // `claude` becomes `claude-code`; `trae` is the CLI's own key, so it is kept.
+    expect(agents).toEqual(['codex', 'claude-code', 'trae'])
     expect(detectCommandsMock).not.toHaveBeenCalled()
   })
 
