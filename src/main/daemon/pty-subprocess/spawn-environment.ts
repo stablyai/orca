@@ -36,6 +36,7 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_AGENT_LAUNCH_TOKEN',
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
+  'ORCA_CLI_OWNING_HOST',
   'JCODE_RUNTIME_DIR'
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i

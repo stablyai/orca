@@ -445,13 +445,11 @@ describe('registerPtyHandlers', () => {
         })
         try {
           // Why: overriding process.platform doesn't change the loaded node:path dialect; keep this synthetic PATH consistent.
-          // An inherited owning-host flag (Orca started from a server's terminal) must not reach the pane.
-          const env = await daemonSpawnAndGetEnv(
-            { PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter) },
-            undefined,
-            undefined,
-            { ORCA_CLI_OWNING_HOST: '1' }
-          )
+          // A copied owning-host flag must not reach a desktop pane; its CLI honours ambient selectors.
+          const env = await daemonSpawnAndGetEnv({
+            PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter),
+            ORCA_CLI_OWNING_HOST: '1'
+          })
           const entries = env.PATH.split(delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
