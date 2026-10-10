@@ -53,6 +53,11 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
+      ...(entry.children !== undefined ? { children: entry.children } : {}),
+      ...(entry.subagents !== undefined ? { subagents: entry.subagents } : {}),
+      ...(entry.subagents !== undefined && entry.connectionId === null
+        ? { subagentClockOffsetMs: 0 }
+        : {}),
       ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }

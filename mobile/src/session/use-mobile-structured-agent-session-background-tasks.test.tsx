@@ -145,7 +145,7 @@ describe('mobile structured session background tasks', () => {
     // The strip reads host-stamped clocks on the host's clock: the phone's now less the offset.
     return backgroundTaskRowMeta(
       group!.tasks[0]!.row,
-      Date.now() - tasks.rowContext.hostClockOffsetMs
+      Date.now() - (tasks.rowContext.hostClockOffsetMs ?? 0)
     )
   }
 

@@ -7,6 +7,8 @@
 import { settledOwnersOfLiveWork } from './agent-status-child-work-liveness'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 
+export const AGENT_CHILD_SUMMARY_CLOCK_GRAIN_MS = 60_000
+
 /** The one rule for what the sidebar and the strip list: a child that runs. A finished child whose
  *  own work still runs counts, since it reads monitoring and keeps that work's owner on screen. */
 export function agentChildWorkIsRunning(child: {
@@ -33,4 +35,30 @@ export function structuredRunningChildWork(
       ownsLiveWork: owners.has(view.id)
     })
   )
+}
+
+/** Workspace summaries omit settled history and usage that belongs to an open chat. */
+export function agentChildWorkSummaryViews(
+  views: readonly AgentChildWorkView[],
+  clockGrainMs = 0
+): AgentChildWorkView[] {
+  return structuredRunningChildWork(views).map(({ totalTokens: _totalTokens, ...view }) => {
+    if (clockGrainMs === 0) {
+      return view
+    }
+    const coarseClock = (at: number) =>
+      Math.max(view.firstObservedAt, Math.floor(at / clockGrainMs) * clockGrainMs)
+    return {
+      ...view,
+      observedAt: coarseClock(view.observedAt),
+      ...(view.operation
+        ? {
+            operation: {
+              ...view.operation,
+              observedAt: coarseClock(view.operation.observedAt)
+            }
+          }
+        : {})
+    }
+  })
 }

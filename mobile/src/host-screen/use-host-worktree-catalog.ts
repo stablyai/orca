@@ -85,18 +85,22 @@ export function useHostWorktreeCatalog(args: {
         }
         // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
         // host truth over optimistic local edits regardless of payload size.
-        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
+        const snapshots = worktreeCatalogRef.current
+        const beforeClock = snapshots.clockOffsetFor(requestClient, requestHostId)
+        const confirmed = snapshots.admit(fetched.pending)
+        const clockChanged = beforeClock !== snapshots.clockOffsetFor(requestClient, requestHostId)
         if (confirmed) {
+          const incoming = clockChanged ? [...confirmed] : confirmed
           setCatalogError(null)
           // A confirmed list is the host answering, which is the evidence a transient action
           // failure was about a moment that has passed.
           setActionError('')
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
-            areWorktreeListsEqual(current, confirmed) ? current : confirmed
+            !clockChanged && areWorktreeListsEqual(current, confirmed) ? current : incoming
           )
           setLastKnownWorktrees((current) =>
-            areWorktreeListsEqual(current, confirmed) ? current : confirmed
+            !clockChanged && areWorktreeListsEqual(current, confirmed) ? current : incoming
           )
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.

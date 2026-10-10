@@ -22,21 +22,37 @@ const CONFIRMED: Worktree[] = [{ worktreeId: 'wt-1', repo: 'orca', isPinned: fal
  * A confirmed catalog is the host answering, which is the evidence that a transient action failure
  * was about a moment that has passed. Nothing else clears it but the user's own dismiss.
  */
-function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (string | null)[]) {
+function catalogHook(
+  fetched: unknown,
+  actionErrors: string[],
+  catalogErrors: (string | null)[],
+  rowReuse: boolean[],
+  clocks: (number | undefined)[]
+) {
+  let admitted = false
+  const applyRows = (apply: (previous: Worktree[]) => Worktree[]) =>
+    rowReuse.push(apply(CONFIRMED) === CONFIRMED)
   const state = {
     clientRef: { current: {} },
     fetchWorktreesInFlightRef: { current: false },
     newWorktreeModalVisibleRef: { current: false },
     setActionError: (value: string) => actionErrors.push(value),
     setCatalogError: (value: string | null) => catalogErrors.push(value),
-    setLastKnownWorktrees: () => {},
+    setLastKnownWorktrees: applyRows,
     setOptimisticActiveWorktreeIdentity: () => {},
     setPinnedIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
     setSleptIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
-    setWorktrees: () => {},
+    setWorktrees: applyRows,
     setWorktreesLoaded: () => {},
     worktreeCatalogRef: {
-      current: { fetch: async () => fetched, admit: () => (fetched === null ? null : CONFIRMED) }
+      current: {
+        fetch: async () => fetched,
+        admit: () => {
+          admitted = true
+          return fetched === null ? null : CONFIRMED
+        },
+        clockOffsetFor: () => clocks[admitted ? 1 : 0]
+      }
     }
   }
   return {
@@ -50,16 +66,25 @@ function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (s
   }
 }
 
-async function fetchWith(fetched: unknown): Promise<{
+async function fetchWith(
+  fetched: unknown,
+  clocks: (number | undefined)[] = []
+): Promise<{
   actionErrors: string[]
   catalogErrors: (string | null)[]
+  rowReuse: boolean[]
 }> {
   const actionErrors: string[] = []
   const catalogErrors: (string | null)[] = []
+  const rowReuse: boolean[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads the members named above off `state` and the rest of its arguments only to decide whether to fetch; every module that would reach further is mocked in this file.
-  const args = catalogHook(fetched, actionErrors, catalogErrors) as unknown as Parameters<
-    typeof useHostWorktreeCatalog
-  >[0]
+  const args = catalogHook(
+    fetched,
+    actionErrors,
+    catalogErrors,
+    rowReuse,
+    clocks
+  ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
   const held: { fetchWorktrees: (() => Promise<void>) | null } = { fetchWorktrees: null }
   function Probe(): null {
     held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
@@ -72,10 +97,15 @@ async function fetchWith(fetched: unknown): Promise<{
     throw new Error('the catalog hook did not mount')
   }
   await act(held.fetchWorktrees)
-  return { actionErrors, catalogErrors }
+  return { actionErrors, catalogErrors, rowReuse }
 }
 
 describe('a catalog the host confirmed', () => {
+  it('redraws retained rows when an unchanged reply changes the clock calibration', async () => {
+    const response = { kind: 'response', pending: { admission: { kind: 'unchanged' } } }
+    expect((await fetchWith(response, [0, 60_000])).rowReuse).toEqual([false, false])
+    expect((await fetchWith(response, [0, 0])).rowReuse).toEqual([true, true])
+  })
   it('clears the action failure the list is still showing', async () => {
     const { actionErrors, catalogErrors } = await fetchWith({
       kind: 'response',

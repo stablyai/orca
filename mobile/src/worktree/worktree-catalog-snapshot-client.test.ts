@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 import {
@@ -95,6 +95,51 @@ function clientWithResults(...results: unknown[]): RpcClient {
 }
 
 describe('WorktreeCatalogSnapshotClient', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('samples the clock at response receipt and re-derives it on unchanged replies', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(3_601_000)
+    const client = clientWithResults(
+      { worktrees: [], snapshotId: 'one', observedAt: 1_000 },
+      { unchanged: true, snapshotId: 'one', observedAt: 3_002_000 }
+    )
+    const snapshots = new WorktreeCatalogSnapshotClient()
+    const pending = await snapshots.fetch(client, 'host')
+    clock.mockReturnValue(3_602_000)
+    admitFetched(snapshots, pending)
+    expect(snapshots.clockOffsetFor(client, 'host')).toBe(3_600_000)
+    admitFetched(snapshots, await snapshots.fetch(client, 'host'))
+    expect(snapshots.clockOffsetFor(client, 'host')).toBe(600_000)
+    await snapshots.fetch(clientWithResults({ worktrees: [] }), 'other-host')
+    expect(snapshots.clockOffsetFor(client, 'host')).toBeUndefined()
+  })
+
+  it('withholds another host/client calibration before a delayed or failed first catalog', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(3_602_000)
+    const clientA = clientWithResults({ worktrees: [], snapshotId: 'a', observedAt: 2_000 })
+    const clientB = clientWithResults('bad-response')
+    const snapshots = new WorktreeCatalogSnapshotClient()
+    admitFetched(snapshots, await snapshots.fetch(clientA, 'host-a'))
+    expect(snapshots.clockOffsetFor(clientA, 'host-a')).toBe(3_600_000)
+    expect(snapshots.clockOffsetFor(clientA, 'host-b')).toBeUndefined()
+    expect(snapshots.clockOffsetFor(clientB, 'host-b')).toBeUndefined()
+    await expect(snapshots.fetch(clientB, 'host-b')).rejects.toBeInstanceOf(
+      RpcIncompatibleReplyError
+    )
+    expect(snapshots.clockOffsetFor(clientB, 'host-b')).toBeUndefined()
+  })
+
+  it('fences a logical-client migration before stale calibration can be admitted', async () => {
+    let generation = 1
+    const client = Object.assign(clientWithResults({ worktrees: [], observedAt: 1_000 }), {
+      getGeneration: () => generation
+    })
+    const snapshots = new WorktreeCatalogSnapshotClient()
+    const response = await snapshots.fetch(client, 'host')
+    generation = 2
+    expect(admitFetched(snapshots, response)).toBeNull()
+    expect(snapshots.clockOffsetFor(client, 'host')).toBeUndefined()
+  })
   it('returns the confirmed rows on unchanged responses so callers can reassert them', async () => {
     const rows = [{ worktreeId: 'worktree-1' }]
     const client = clientWithResults(

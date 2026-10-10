@@ -35,6 +35,21 @@ const connected = {
 }
 
 describe('worktree agent source admission', () => {
+  it('keeps CLI rosters and preserves replay age; only local start clocks are comparable', () => {
+    const subagents = [{ id: 'child', state: 'working' as const, startedAt: now - 10_000 }]
+    for (const connectionId of [null, 'ssh:remote', 'wsl:Ubuntu']) {
+      const row = { ...hookRow, subagents, connectionId, evidenceObservedAt: now - 60_000 }
+      const source = collectRuntimeWorktreeAgentSources({ ...connected, hookSnapshots: [row] }).get(
+        paneKey
+      )
+      expect(source?.subagents).toEqual(subagents)
+      expect(source?.updatedAt).toBe(now - 60_000)
+      expect(source?.subagentClockOffsetMs).toBe(connectionId === null ? 0 : undefined)
+    }
+    expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)).not.toHaveProperty(
+      'subagents'
+    )
+  })
   it('rejects a disconnected local terminal before row assembly', () => {
     expect(collectRuntimeWorktreeAgentSources(base).size).toBe(0)
     expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)?.state).toBe('working')

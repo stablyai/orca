@@ -70,6 +70,9 @@ type Props<T extends WorktreeListRowItem> = {
   hideRepo?: boolean
   status: WorktreeRollupStatus
   onPress: (item: T) => void
+  onAgentPress?: (item: T, paneKey: string) => void
+  statusLive?: boolean
+  hostClockOffsetMs?: number
   onLongPress?: (item: T) => void
   onToggleLineage?: (item: T) => void
 }
@@ -83,6 +86,9 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
   hideRepo = false,
   status,
   onPress,
+  onAgentPress,
+  statusLive,
+  hostClockOffsetMs,
   onLongPress,
   onToggleLineage
 }: Props<T>) {
@@ -196,7 +202,15 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
         {/* Only agents get a secondary activity line, matching desktop. A plain
             terminal's shell-output tail is intentionally not surfaced here. */}
         {item.agents && item.agents.length > 0 ? (
-          <WorktreeAgentList agents={item.agents} now={now} unvisited={item.unread} />
+          <WorktreeAgentList
+            agents={item.agents}
+            now={now}
+            unvisited={item.unread}
+            statusLive={statusLive}
+            hostClockOffsetMs={hostClockOffsetMs}
+            isReadOnly={isReadOnly}
+            onAgentPress={onAgentPress ? (paneKey) => onAgentPress(item, paneKey) : undefined}
+          />
         ) : null}
         {lineageChildCount > 0 && onToggleLineage ? (
           <Pressable

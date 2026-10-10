@@ -44,6 +44,87 @@ describe('WorktreeAgentList', () => {
     renderer = null
   })
 
+  it('inserts CLI and native children immediately under their parent at one extra depth', async () => {
+    const cli = {
+      ...agent('cli'),
+      subagents: [
+        { id: 'review', description: 'Review tests', state: 'working' as const, startedAt: 100 },
+        {
+          id: 'navigation',
+          description: 'Check navigation',
+          state: 'waiting' as const,
+          startedAt: 200
+        }
+      ],
+      subagentClockOffsetMs: 0
+    }
+    const native = {
+      ...agent('native', 'cli'),
+      children: [
+        {
+          id: 'native-child',
+          kind: 'agent' as const,
+          name: 'Native review',
+          state: 'working' as const,
+          membership: 'live' as const,
+          firstObservedAt: 100,
+          observedAt: 900,
+          stoppable: false,
+          invocation: { invocationId: 'spawn', generation: 1 }
+        }
+      ]
+    }
+    const onAgentPress = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [cli, native],
+          now: 2_000,
+          unvisited: false,
+          statusLive: true,
+          hostClockOffsetMs: 0,
+          onAgentPress
+        })
+      )
+    })
+    const rows = renderer!.root.findAllByType('WorktreeAgentRow')
+    expect(
+      rows.map((row) => [row.props.agent.paneKey, row.props.childRow?.id, row.props.depth])
+    ).toEqual([
+      ['cli', undefined, 0],
+      ['cli', 'review', 1],
+      ['cli', 'navigation', 1],
+      ['native', undefined, 1],
+      ['native', 'native-child', 2]
+    ])
+    expect(rows[1].props.onPress).toBe(onAgentPress)
+    expect(rows[4].props.onPress).toBe(onAgentPress)
+    expect(renderer!.root.findAllByType('Pressable')).toHaveLength(0)
+  })
+
+  it('counts only real root parents when children are hidden by the existing summary', async () => {
+    const first = {
+      ...agent('first'),
+      subagents: [{ id: 'child', state: 'working' as const, startedAt: 100 }]
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [first, agent('second')],
+          now: 2_000,
+          unvisited: false,
+          statusLive: true,
+          hostClockOffsetMs: 0
+        })
+      )
+    })
+    const summary = renderer!.root.findByType('Pressable')
+    expect(summary.props.accessibilityLabel).toBe('Expand 2 agents')
+    expect(renderer!.root.findAllByType('WorktreeAgentRow')).toHaveLength(0)
+    await act(async () => summary.props.onPress({ stopPropagation: vi.fn() }))
+    expect(renderer!.root.findAllByType('WorktreeAgentRow')).toHaveLength(3)
+  })
+
   it('collapses multiple agents to their status icons by default', async () => {
     const stopPropagation = vi.fn()
     await act(async () => {

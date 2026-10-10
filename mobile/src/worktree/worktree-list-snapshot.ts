@@ -1,5 +1,8 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { Worktree } from './workspace-list-sections'
+import { agentChildWorkViewsEqual } from '../../../src/shared/agent-status-child-work-view-wire'
+import { agentSubagentsEqual } from '../../../src/shared/agent-status-subagent-snapshot'
+import { readWorktreeAgentChildSource } from './worktree-agent-child-rows'
 
 export function areWorktreeListsEqual(
   left: readonly Worktree[],
@@ -99,6 +102,8 @@ function areAgentRowsEqual(
   for (let index = 0; index < left.length; index += 1) {
     const a = left[index]!
     const b = right[index]!
+    const aChildren = readWorktreeAgentChildSource(a)
+    const bChildren = readWorktreeAgentChildSource(b)
     if (
       a.paneKey !== b.paneKey ||
       a.parentPaneKey !== b.parentPaneKey ||
@@ -110,6 +115,11 @@ function areAgentRowsEqual(
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
       a.interrupted !== b.interrupted ||
+      a.structuredHostOwned !== b.structuredHostOwned ||
+      a.restoredUnconfirmed !== b.restoredUnconfirmed ||
+      a.subagentClockOffsetMs !== b.subagentClockOffsetMs ||
+      !agentChildWorkViewsEqual(aChildren.children, bChildren.children) ||
+      !agentSubagentsEqual(aChildren.subagents, bChildren.subagents) ||
       !areMainAgentsEqual(a.mainAgent, b.mainAgent) ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt

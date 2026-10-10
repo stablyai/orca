@@ -20,6 +20,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     actions,
     activeWorktreeScroll,
     catalog,
+    client,
     connState,
     contentMaxWidth,
     displayWorktrees,
@@ -184,6 +185,9 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               repoIcon={state.repoIconsByName.get(item.repo) ?? null}
               hideRepo={state.groupMode === 'repo'}
               onPress={actions.openWorktreeSession}
+              onAgentPress={actions.openWorktreeSession}
+              statusLive={connState === 'connected'}
+              hostClockOffsetMs={state.worktreeCatalogRef.current.clockOffsetFor(client, hostId)}
               onLongPress={
                 item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
               }

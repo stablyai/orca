@@ -58,6 +58,54 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('areWorktreeListsEqual', () => {
+  it('detects child-only roster edits, disappearance, and source/ownership changes', () => {
+    const subagents = [{ id: 'child', state: 'working' as const, startedAt: 100 }]
+    const first = [worktree({ agents: [agent({ subagents })] })]
+    expect(
+      areWorktreeListsEqual(first, [worktree({ agents: [agent({ subagents: [...subagents] })] })])
+    ).toBe(true)
+    for (const fields of [
+      { subagents: [{ ...subagents[0], state: 'waiting' as const }] },
+      { subagents: [] },
+      { children: [] },
+      { structuredHostOwned: true as const },
+      { subagentClockOffsetMs: 0 }
+    ]) {
+      expect(
+        areWorktreeListsEqual(first, [worktree({ agents: [agent({ subagents, ...fields })] })])
+      ).toBe(false)
+    }
+  })
+
+  it('detects native child completion and activity independently of the parent', () => {
+    const child = {
+      id: 'child',
+      kind: 'agent' as const,
+      state: 'working' as const,
+      membership: 'live' as const,
+      firstObservedAt: 100,
+      observedAt: 200,
+      stoppable: false,
+      invocation: { invocationId: 'spawn', generation: 1 }
+    }
+    const first = [worktree({ agents: [agent({ children: [child] })] })]
+    for (const children of [
+      [],
+      [{ ...child, lastMessage: 'New progress' }],
+      [
+        {
+          ...child,
+          membership: 'settled' as const,
+          outcome: 'succeeded' as const,
+          settledAt: 300
+        }
+      ]
+    ]) {
+      expect(areWorktreeListsEqual(first, [worktree({ agents: [agent({ children })] })])).toBe(
+        false
+      )
+    }
+  })
   it('treats cloned snapshots with the same visible fields as equal', () => {
     const first = [worktree({ agents: [agent()] })]
     const second = [worktree({ agents: [agent()] })]

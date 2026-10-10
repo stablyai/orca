@@ -19,8 +19,19 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
-import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
+import {
+  serializeAgentStatusSubject,
+  type AgentStatusSubject
+} from '../../../shared/agent-status-subject'
+import {
+  projectAgentChildWorkViews,
+  type AgentChildWorkView
+} from '../../../shared/agent-status-child-work-view'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import {
+  agentChildWorkSummaryViews,
+  AGENT_CHILD_SUMMARY_CLOCK_GRAIN_MS
+} from '../../../shared/agent-child-work-listing'
 
 // Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
@@ -53,8 +64,19 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.resetCanonicalStatus()
   }
 
-  private combinedStatusEntries(): EnrichedAgentHookEventPayload[] {
-    const rows: { entry: EnrichedAgentHookEventPayload; order: number }[] = []
+  protected canonicalChildViews(subject: AgentStatusSubject): AgentChildWorkView[] {
+    const children = this.canonicalStatusStore.getChildren(subject)
+    return projectAgentChildWorkViews(
+      children,
+      children.flatMap((child) => this.canonicalStatusStore.getAliasesForChild(child.childWorkId))
+    )
+  }
+
+  private combinedStatusEntries(includeChildren = false) {
+    const rows: {
+      entry: EnrichedAgentHookEventPayload & { children?: AgentChildWorkView[] }
+      order: number
+    }[] = []
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       rows.push({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
@@ -67,7 +89,17 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         continue
       }
       rows.push({
-        entry: structuredStatusLegacyEvent(parent.status),
+        entry: {
+          ...structuredStatusLegacyEvent(parent.status),
+          ...(includeChildren
+            ? {
+                children: agentChildWorkSummaryViews(
+                  this.canonicalChildViews(parent.subject),
+                  AGENT_CHILD_SUMMARY_CLOCK_GRAIN_MS
+                )
+              }
+            : {})
+        },
         order:
           this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
           UNORDERED_STATUS_ROW
@@ -210,7 +242,10 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
    *  dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
-    return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
+    return this.combinedStatusEntries(true).map((entry) => ({
+      ...toAgentStatusIpcPayload(entry),
+      ...(entry.children !== undefined ? { children: entry.children } : {})
+    }))
   }
 
   /** Provider-session identities, including Pi's metadata-only rows. */
@@ -228,7 +263,13 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
       const status = this.canonicalStatusStore.getParent(subject)?.status
       if (status) {
-        rows.push(status)
+        rows.push({
+          ...status,
+          children: agentChildWorkSummaryViews(
+            this.canonicalChildViews(subject),
+            AGENT_CHILD_SUMMARY_CLOCK_GRAIN_MS
+          )
+        })
       }
     }
     return rows

@@ -1,5 +1,5 @@
 import '../unused-default-rpc-methods.test-fixture'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
@@ -17,7 +17,9 @@ function makeRuntime() {
 }
 
 describe('worktree.ps catalog snapshots', () => {
-  it('preserves the exact legacy response when no snapshot field is sent', async () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('preserves legacy fields and adds a clock sample without requiring a snapshot request', async () => {
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
     const response = await dispatcher.dispatch({
@@ -29,12 +31,13 @@ describe('worktree.ps catalog snapshots', () => {
 
     expect(response).toMatchObject({
       ok: true,
-      result: { worktrees: [], totalCount: 0, truncated: false }
+      result: { worktrees: [], totalCount: 0, truncated: false, observedAt: expect.any(Number) }
     })
     expect((response as { result: unknown }).result).not.toHaveProperty('snapshotId')
   })
 
   it('returns a full snapshot followed by a tiny unchanged response', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     const runtime = makeRuntime()
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
     const first = await dispatcher.dispatch({
@@ -44,6 +47,8 @@ describe('worktree.ps catalog snapshots', () => {
       params: { limit: 10_000, afterSnapshotId: null }
     })
     const snapshotId = (first as { result: { snapshotId: string } }).result.snapshotId
+    expect(first).toMatchObject({ result: { observedAt: 1_000 } })
+    clock.mockReturnValue(9_000)
 
     const second = await dispatcher.dispatch({
       id: 'second',
@@ -55,7 +60,7 @@ describe('worktree.ps catalog snapshots', () => {
     expect(snapshotId).toEqual(expect.any(String))
     expect(second).toMatchObject({
       ok: true,
-      result: { unchanged: true, snapshotId }
+      result: { unchanged: true, snapshotId, observedAt: 9_000 }
     })
     expect(runtime.getWorktreePs).toHaveBeenCalledTimes(2)
   })

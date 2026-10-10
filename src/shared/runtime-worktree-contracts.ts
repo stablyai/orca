@@ -1,5 +1,7 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -29,6 +31,11 @@ export type RuntimeWorktreeAgentRow = {
   mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
+  /** Native canonical views win over the CLI roster, including an explicit empty list. */
+  children?: AgentChildWorkView[]
+  subagents?: AgentSubagentSnapshot[]
+  /** Serving clock minus the CLI execution clock. Absent when relay clocks are unproven. */
+  subagentClockOffsetMs?: number
   restoredUnconfirmed?: boolean
   /** The structured session host still runs this row's provider child, so it is fresh regardless
    *  of age. Optional on the wire: old hosts never send it. */
@@ -141,6 +148,8 @@ export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
 }
 
 export type RuntimeWorktreePsResult = {
+  /** Serving-host clock sample, attached after snapshot hashing; absent on older hosts. */
+  observedAt?: number
   worktrees: RuntimeWorktreePsSummary[]
   totalCount: number
   truncated: boolean
@@ -151,6 +160,7 @@ export type RuntimeWorktreePsResult = {
 export type RuntimeWorktreePsSnapshotResult = RuntimeWorktreePsResult & { snapshotId: string }
 
 export type RuntimeWorktreePsUnchangedResult = {
+  observedAt?: number
   unchanged: true
   snapshotId: string
 }

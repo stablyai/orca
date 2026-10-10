@@ -11,10 +11,14 @@ export type WorktreeCatalogAdmission<T> =
   | { kind: 'unchanged'; snapshotId: string }
   | { kind: 'invalid' }
 
+const CATALOG_CLIENT_GENERATION = Symbol('catalog-client-generation')
+
 export type PendingWorktreeCatalog = {
   admission: WorktreeCatalogAdmission<Worktree>
   client: RpcClient
   hostId: string
+  hostClockOffsetMs?: number
+  [CATALOG_CLIENT_GENERATION]?: number
 }
 
 // Why (STA-3123): a failed worktree.ps must stay distinguishable from an empty
@@ -63,6 +67,16 @@ export class WorktreeCatalogSnapshotClient {
   private hostId: string | null = null
   private snapshotId: string | null = null
   private confirmedWorktrees: Worktree[] | null = null
+  private hostClockOffsetMs: number | undefined
+  private clockGeneration: number | undefined
+
+  clockOffsetFor(client: RpcClient | null, hostId: string | undefined): number | undefined {
+    return client === this.client &&
+      hostId === this.hostId &&
+      client?.getGeneration?.() === this.clockGeneration
+      ? this.hostClockOffsetMs
+      : undefined
+  }
 
   async fetch(client: RpcClient, hostId: string): Promise<WorktreeCatalogFetchResult> {
     if (this.client !== client || this.hostId !== hostId) {
@@ -70,12 +84,15 @@ export class WorktreeCatalogSnapshotClient {
       this.hostId = hostId
       this.snapshotId = null
       this.confirmedWorktrees = null
+      this.hostClockOffsetMs = undefined
     }
     const requestedSnapshotId = this.snapshotId
+    const clientGeneration = client.getGeneration?.()
     const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: requestedSnapshotId
     })
+    const receivedAt = Date.now()
     const catalog = worktreeCatalogRead.interpret(reply)
     if (!catalog.accepted) {
       // The refusal code the caller reports lives on the envelope; no acceptance policy carries it.
@@ -91,7 +108,15 @@ export class WorktreeCatalogSnapshotClient {
       pending: {
         admission: admitWorktreeCatalogResponse<Worktree>(catalog.value, requestedSnapshotId),
         client,
-        hostId
+        hostId,
+        ...(clientGeneration !== undefined
+          ? { [CATALOG_CLIENT_GENERATION]: clientGeneration }
+          : {}),
+        ...(catalog.value?.observedAt !== undefined
+          ? {
+              hostClockOffsetMs: Math.round((receivedAt - catalog.value.observedAt) / 1_000) * 1_000
+            }
+          : {})
       }
     }
   }
@@ -103,7 +128,11 @@ export class WorktreeCatalogSnapshotClient {
     }
     // Why: a response from a superseded client/host is stale, not wrong — dropping it
     // must not invalidate the token the current client/host just established.
-    if (pending.client !== this.client || pending.hostId !== this.hostId) {
+    if (
+      pending.client !== this.client ||
+      pending.hostId !== this.hostId ||
+      pending[CATALOG_CLIENT_GENERATION] !== pending.client.getGeneration?.()
+    ) {
       return null
     }
     if (pending.admission.kind === 'invalid') {
@@ -112,6 +141,8 @@ export class WorktreeCatalogSnapshotClient {
     }
 
     this.snapshotId = pending.admission.snapshotId
+    this.hostClockOffsetMs = pending.hostClockOffsetMs
+    this.clockGeneration = pending[CATALOG_CLIENT_GENERATION]
     if (pending.admission.kind === 'full') {
       this.confirmedWorktrees = pending.admission.worktrees
     }

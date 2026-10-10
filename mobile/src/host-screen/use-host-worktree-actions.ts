@@ -172,7 +172,10 @@ export function useHostWorktreeActions(args: {
         router.push(target)
         return
       }
-      if (pathname === (target.split('?')[0] ?? target)) {
+      if (
+        pathname === (target.split('?')[0] ?? target) &&
+        !new URLSearchParams(target.split('?')[1]).has('paneKey')
+      ) {
         return
       }
       if (pathname === `/h/${hostId}`) {
@@ -185,7 +188,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const openWorktreeSession = useCallback(
-    (item: Worktree) => {
+    (item: Worktree, paneKey?: string) => {
       setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
       if (client && connState === 'connected') {
         void worktreeActivate
@@ -199,7 +202,7 @@ export function useHostWorktreeActions(args: {
       // `?? ''` and not a cast: the hook takes `hostId` optional and every other member guards it,
       // so an absent one builds `/h//session/...` — a pathname the shell's segment rule refuses —
       // rather than the string "undefined", which it would accept as a host named undefined.
-      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
+      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''}`
       navigateFromHostList(target)
     },
     [client, connState, hostId, navigateFromHostList]

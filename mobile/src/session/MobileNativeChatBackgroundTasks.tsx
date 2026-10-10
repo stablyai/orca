@@ -169,7 +169,7 @@ function MobileNativeChatBackgroundTasksImpl({
     return null
   }
   // Elapsed anchors are host-stamped; read them on the host's clock, as the turn bar's start is.
-  const hostNow = now - rowContext.hostClockOffsetMs
+  const hostNow = now - (rowContext.hostClockOffsetMs ?? 0)
   const header = backgroundTasksHeaderContent(groups, { narrow, now: hostNow }, say)
 
   const onLayout = (event: LayoutChangeEvent): void => {

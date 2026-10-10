@@ -77,8 +77,13 @@ describe('structured child-work ingest', () => {
         membership: 'live'
       })
     ])
-    // Nothing reads the records yet: every published row is exactly what it was.
-    expect(server.getStatusSnapshot()).toEqual(rows)
+    const [row] = server.getStatusSnapshot()
+    expect({ ...row, children: [] }).toEqual(rows[0])
+    expect(row.children).toEqual(server.getStructuredChildWorkViews(SUBJECT))
+    expect(server.getStatusSnapshotForPane(row.paneKey)[0]).toEqual(row)
+    expect(row.children).toEqual([
+      expect.objectContaining({ providerId: 'agent-1', description: 'Audit the build' })
+    ])
     expect(changed).not.toHaveBeenCalled()
   })
 
@@ -114,6 +119,9 @@ describe('structured child-work ingest', () => {
       expect.objectContaining({ childWorkId: second.childWorkId, outcome: 'unknown' })
     ])
     expect(server.getStructuredChildWork(SUBJECT)).toEqual([first])
+    const snapshots = server.getStatusSnapshot()
+    expect(snapshots[0].children?.[0].id).toBe(first.childWorkId)
+    expect(snapshots[1].children).toEqual([])
   })
 
   it('rejects an address that names no session', () => {
