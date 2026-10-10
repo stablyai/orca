@@ -3,7 +3,6 @@ import {
   computeFitScale,
   flog,
   getCellWidth,
-  getMeasuredCellHeight,
   getTotalScale,
   updateTransform
 } from './viewport-transform'
@@ -12,9 +11,7 @@ import type { TerminalViewportChange } from './document-host-seams'
 import { scheduleDocumentFrame } from './document-frame-registry'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
-export function getCellHeight(scope: TerminalDocumentScope) {
-  return getMeasuredCellHeight(scope) || 15
-}
+export { getCellHeight } from './cell-geometry'
 
 // Why: clamp pan so the terminal content always covers the viewport
 // when zoomed in. When content is smaller than viewport in a
