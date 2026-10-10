@@ -7,6 +7,9 @@ import {
 } from '../../../../../shared/terminal-output-source-range'
 
 const TERMINAL_OUTPUT_FLUSH_MS = 5
+// Why: a keystroke echo after a quiet spell goes out at once instead of waiting out the coalescing timer;
+// output that keeps arriving still batches. Kill switch: ORCA_TERMINAL_OUTPUT_LEADING_EDGE=0.
+export const TERMINAL_OUTPUT_LEADING_EDGE_MAX_BYTES = 4 * 1024
 export type TerminalOutputBatcher = {
   push: (data: string, meta?: TerminalOutputMeta) => void
   flush: () => void
@@ -23,6 +26,8 @@ export function createTerminalOutputBatcher(
   let pendingRawLength = 0
   let pendingSourceRanges: TerminalOutputSourceRange[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
+  const leadingEdge = process.env.ORCA_TERMINAL_OUTPUT_LEADING_EDGE !== '0'
+  let lastEnqueueAt = Number.NEGATIVE_INFINITY
 
   const clearTimer = (): void => {
     if (!timer) {
@@ -64,6 +69,7 @@ export function createTerminalOutputBatcher(
         return
       }
       if (meta?.transformed || rawLength !== data.length) {
+        lastEnqueueAt = performance.now()
         flush()
         onFlush(data, { ...meta, rawLength, transformed: true })
         return
@@ -97,6 +103,19 @@ export function createTerminalOutputBatcher(
         lastSeq = meta.seq
       }
       if (measurement.exceededLimit || bytes >= TERMINAL_OUTPUT_BATCH_MAX_BYTES) {
+        lastEnqueueAt = performance.now()
+        flush()
+        return
+      }
+      const enqueuedAt = performance.now()
+      const idle = enqueuedAt - lastEnqueueAt >= TERMINAL_OUTPUT_FLUSH_MS
+      lastEnqueueAt = enqueuedAt
+      if (
+        leadingEdge &&
+        idle &&
+        chunks.length === 1 &&
+        bytes <= TERMINAL_OUTPUT_LEADING_EDGE_MAX_BYTES
+      ) {
         flush()
         return
       }

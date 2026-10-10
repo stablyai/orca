@@ -30,8 +30,9 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal output batching', () => {
-  it('coalesces desktop terminal output bursts before emitting stream data', async () => {
+  it('sends the first chunk after a quiet spell and coalesces the rest of the burst', async () => {
     vi.useFakeTimers()
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     try {
       const messages: string[] = []
       const registry = createSubscriptionRegistryDouble()
@@ -73,28 +74,31 @@ describe('terminal output batching', () => {
       }
       emitData('a')
       emitData('b')
+      emitData('c')
 
-      expect(messages.map((msg) => JSON.parse(msg).result?.type)).not.toContain('data')
+      const dataChunks = (): string[] =>
+        messages
+          .map((msg) => JSON.parse(msg))
+          .filter((message) => message.result?.type === 'data')
+          .map((message) => message.result.chunk)
+      // Why: the first chunk after a quiet spell is a keystroke echo, so it is not held back.
+      expect(dataChunks()).toEqual(['a'])
 
       await vi.runOnlyPendingTimersAsync()
 
-      const dataMessages = messages
-        .map((msg) => JSON.parse(msg))
-        .filter((message) => message.result?.type === 'data')
-      expect(dataMessages).toHaveLength(1)
-      expect(dataMessages[0]).toMatchObject({
-        result: { type: 'data', chunk: 'ab' }
-      })
+      expect(dataChunks()).toEqual(['a', 'bc'])
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise
     } finally {
       vi.useRealTimers()
+      vi.unstubAllEnvs()
     }
   })
 
-  it('streams desktop terminal output as coalesced binary frames when requested', async () => {
+  it('streams the rest of a binary terminal output burst as one coalesced frame', async () => {
     vi.useFakeTimers()
+    vi.stubEnv('ORCA_TERMINAL_OUTPUT_LEADING_EDGE', '1')
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
@@ -162,21 +166,25 @@ describe('terminal output batching', () => {
       }
       emitData('a')
       emitData('b')
+      emitData('c')
 
       expect(messages.map((msg) => JSON.parse(msg).result?.type)).not.toContain('data')
+      const outputTexts = (): string[] =>
+        binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      expect(outputTexts()).toEqual(['a'])
 
       await vi.runOnlyPendingTimersAsync()
 
-      const outputFrames = binaryFrames
-        .map((frame) => decodeTerminalStreamFrame(frame))
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
-      expect(outputFrames).toHaveLength(1)
-      expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe('ab')
+      expect(outputTexts()).toEqual(['a', 'bc'])
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise
     } finally {
       vi.useRealTimers()
+      vi.unstubAllEnvs()
     }
   })
 
