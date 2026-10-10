@@ -87,9 +87,13 @@ export function refreshLocalStructuredSessionTabs(
     })
 }
 
-/** Re-reads one worktree, re-applying the version already applied: the window dropped a chat the
- *  host kept, and nothing republishes an unchanged list. */
-export async function reacceptLocalStructuredSessionTabs(worktreeId: string): Promise<void> {
+/** Re-reads one worktree from this machine's host. `reacceptCurrentVersion` is for a window that
+ *  removed a chat before the host answered its close: nothing republishes an unchanged list. */
+export async function refreshLocalStructuredSessionWorktreeTabs(
+  worktreeId: string,
+  options: { reacceptCurrentVersion?: boolean } = {}
+): Promise<void> {
+  // Structured chat can be switched off mid-call, which wipes the mirror; a late answer must not re-seed it.
   const expectedGeneration = localStructuredSessionGeneration()
   const snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
     { kind: 'local' },
@@ -97,6 +101,6 @@ export async function reacceptLocalStructuredSessionTabs(worktreeId: string): Pr
     { worktree: toRuntimeWorktreeSelector(worktreeId) }
   )
   if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
-    applyStructuredSessionTabSnapshots([snapshot], undefined, { reacceptCurrentVersion: true })
+    applyStructuredSessionTabSnapshots([snapshot], undefined, options)
   }
 }

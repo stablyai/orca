@@ -8,6 +8,7 @@ import {
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -74,7 +75,8 @@ export function retireStructuredAgentSessionTab(args: {
   return promise
 }
 
-/** Re-reads one worktree from the host, including the version already applied. */
+/** Re-reads one worktree from the host, including the version already applied, which the window's
+ *  early removal left out of date. */
 function reacceptHostSessionTabs(target: RuntimeClientTarget, worktreeId: string): void {
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
@@ -85,10 +87,11 @@ function reacceptHostSessionTabs(target: RuntimeClientTarget, worktreeId: string
           })
         )
       : import('./local-structured-session-tabs-sync/inventory-refresh').then(
-          ({ reacceptLocalStructuredSessionTabs }) => reacceptLocalStructuredSessionTabs(worktreeId)
+          ({ refreshLocalStructuredSessionWorktreeTabs }) =>
+            refreshLocalStructuredSessionWorktreeTabs(worktreeId, { reacceptCurrentVersion: true })
         )
   reread.catch((error: unknown) =>
-    console.warn('[structured-agent-session] tab re-read after a failed close failed', error)
+    console.warn('[structured-agent-session] tab re-read after a close failed', error)
   )
 }
 
@@ -115,15 +118,19 @@ export function beginStructuredAgentSessionTabClose(args: {
   const intentOwner = structuredAgentSessionFocusOwner(args.target)
   const hostTabId = `agent-session:${args.sessionId}`
   // Why: a host frame sent before the host handles the close still lists the chat and would re-add
-  // it at the end of the strip; the intent lifts once a host frame stops listing it.
-  recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+  // it at the end of the strip; the intent lifts once a host frame stops listing it. Floating-panel
+  // frames are never applied, so nothing there could re-add the chat or ever end its intent.
+  if (args.worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+    recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+  }
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
     if (!hostTabClosed) {
-      // The host kept the chat: show it again. Its frame is at the version this window already
-      // applied, so only a re-read that accepts that version brings it back.
+      // The host may still have the chat: let its list show it again.
       clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
-      reacceptHostSessionTabs(args.target, args.worktreeId)
     }
+    // Why: only a host frame ends the intent, and none may follow a close the host had nothing to
+    // publish for; left alone, it would hide this chat reopened within its TTL.
+    reacceptHostSessionTabs(args.target, args.worktreeId)
   })
 }
 

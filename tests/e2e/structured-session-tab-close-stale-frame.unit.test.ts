@@ -79,7 +79,7 @@ vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => (
   closeStructuredAgentSession: async () => 'closed'
 }))
 
-async function setup(options: { hostFailsClose?: boolean } = {}) {
+async function setup(options: { hostFailsClose?: boolean; liveFrames?: boolean } = {}) {
   let closeRequest: ((request: CloseRequest) => void) | undefined
   const pendingResponses = new Map<string, (error?: string) => void>()
   const runtime = new OrcaRuntimeService()
@@ -133,7 +133,9 @@ async function setup(options: { hostFailsClose?: boolean } = {}) {
         hostSessionCloses.push(sessionId)
       },
       setSessionTabVisibility: async (sessionId: string, visible: boolean) => {
-        if (!visible) {
+        if (visible) {
+          hostTabs.add(sessionId)
+        } else {
           hostTabs.delete(sessionId)
         }
       },
@@ -145,8 +147,10 @@ async function setup(options: { hostFailsClose?: boolean } = {}) {
 
   useAppStore.setState({ activeWorktreeId: WORKTREE })
   applyStructuredSessionTabSnapshots([await runtime.listMobileSessionTabs(`id:${WORKTREE}`)])
-  // The window's live subscription to the host's tab list.
-  runtime.onMobileSessionTabsChanged((snapshot) => applyStructuredSessionTabSnapshots([snapshot]))
+  if (options.liveFrames !== false) {
+    // The window's live subscription to the host's tab list.
+    runtime.onMobileSessionTabsChanged((snapshot) => applyStructuredSessionTabSnapshots([snapshot]))
+  }
 
   const strip = (): string[] =>
     (useAppStore.getState().groupsByWorktree[WORKTREE] ?? []).flatMap((group) => group.tabOrder)
@@ -268,5 +272,32 @@ describe('a host frame published while a chat tab close is in flight', () => {
     // The server has not handled the close yet, so its next frame still lists chat-b.
     applyServerFrame(frame(2))
     expect(strip()).toEqual(after)
+  })
+
+  it('shows a chat reopened right after its close, even with no host frame in between', async () => {
+    // No frame reaches the window, so only its own re-read after the close can end the hide.
+    const { runtime, strip, hostSessionCloses } = await setup({ liveFrames: false })
+    useAppStore.getState().closeUnifiedTab(tabIdOf('chat-b'))
+    await vi.waitFor(() => expect(hostSessionCloses).toEqual(['chat-b']))
+    await vi.waitFor(() =>
+      expect(
+        isWebSessionCloseIntentPending(
+          { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+          WORKTREE,
+          'agent-session:chat-b',
+          Date.now()
+        )
+      ).toBe(false)
+    )
+
+    // Reopened from history: the host publishes the chat again.
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: WORKTREE,
+      sessionId: 'chat-b',
+      agent: 'claude',
+      activate: false
+    })
+    applyStructuredSessionTabSnapshots([await runtime.listMobileSessionTabs(`id:${WORKTREE}`)])
+    expect(strip()).toContain(tabIdOf('chat-b'))
   })
 })

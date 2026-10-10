@@ -47,7 +47,7 @@ vi.mock('./local-session-tab-close-owner', () => ({
   ) => close()
 }))
 vi.mock('./local-structured-session-tabs-sync/inventory-refresh', () => ({
-  reacceptLocalStructuredSessionTabs: mocks.reacceptLocal
+  refreshLocalStructuredSessionWorktreeTabs: (worktreeId: string) => mocks.reacceptLocal(worktreeId)
 }))
 vi.mock('./web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: mocks.refreshPaired
@@ -72,6 +72,7 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
@@ -186,19 +187,36 @@ describe('structured agent session tab retirement', () => {
       new Set(['agent-session:session-1'])
     )
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(true)
+    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
 
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     answerClose()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    // A successful close waits for the host's own removal frame: no re-read.
+    // A successful close keeps the intent and re-reads, so a frame without the chat always follows.
+    await vi.waitFor(() => expect(mocks.reacceptLocal).toHaveBeenCalledWith('wt-1'))
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(true)
-    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
     reconcileWebSessionCloseIntents(
       { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
       'wt-1',
       new Set()
     )
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
+  })
+
+  it('records no intent for a floating-panel chat, whose frames are never applied', () => {
+    beginStructuredAgentSessionTabClose({
+      target,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      sessionId: 'session-1',
+      provisional: false
+    })
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+        FLOATING_TERMINAL_WORKTREE_ID,
+        'agent-session:session-1',
+        Date.now()
+      )
+    ).toBe(false)
   })
 
   it('shows a chat the local host kept by re-reading its worktree', async () => {

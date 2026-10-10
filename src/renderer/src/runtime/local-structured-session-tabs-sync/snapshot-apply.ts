@@ -51,7 +51,7 @@ export type StructuredSessionSnapshotApplyOptions = {
    * whereas a subscription frame can be, and stays fenced.
    */
   authoritative?: boolean
-  /** Re-applies a publication at the version already applied: the window dropped a chat the host kept. */
+  /** Re-applies a publication at the version already applied: the window removed a chat early. */
   reacceptCurrentVersion?: boolean
   /** Sequence allocated when the inventory request began, before a close can race its reply. */
   authoritativeInventory?: number
