@@ -10,7 +10,9 @@ export function nativeChatToolLineIdentity(
   preserveAnonymousObject = false
 ): string {
   const providerCallId =
-    block.type === 'tool-call' && block.callId !== undefined && block.callId.trim().length > 0
+    (block.type === 'tool-call' || (preserveAnonymousObject && block.type === 'tool-result')) &&
+    block.callId !== undefined &&
+    block.callId.trim().length > 0
       ? block.callId
       : undefined
   if (providerCallId === undefined && preserveAnonymousObject) {
@@ -21,9 +23,10 @@ export function nativeChatToolLineIdentity(
     seen.set(signature, occurrence + 1)
     return `${signature}:${occurrence}`
   }
+  const providerKind = block.type === 'tool-result' ? 'result' : 'call'
   const signature =
     providerCallId !== undefined
-      ? `call:${providerCallId}`
+      ? `${providerKind}:${providerCallId}`
       : block.type === 'tool-call'
         ? `${block.type}:${block.name}:${JSON.stringify(block.input)}`
         : block.type === 'tool-result'
@@ -36,5 +39,5 @@ export function nativeChatToolLineIdentity(
   }
   return occurrence === 0
     ? signature
-    : `call-occurrence:${JSON.stringify([providerCallId, occurrence])}`
+    : `${providerKind}-occurrence:${JSON.stringify([providerCallId, occurrence])}`
 }

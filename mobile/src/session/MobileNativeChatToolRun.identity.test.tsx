@@ -103,3 +103,22 @@ it('does not transfer an opened orphan result to an unrelated command', async ()
   await update(blocks('first', 'echo first', 'FIRST_DETAIL'))
   expect(details(rendered)).not.toContain('FIRST_DETAIL')
 })
+
+it('keeps a named orphan result open after a copied history refresh and output update', async () => {
+  const orphan: NativeChatBlock = {
+    type: 'tool-result',
+    callId: 'missing',
+    output: 'ORPHAN\nORIGINAL_DETAIL'
+  }
+  const other: NativeChatBlock = {
+    type: 'tool-result',
+    callId: 'other',
+    output: 'OTHER\nOTHER_DETAIL'
+  }
+  const rendered = await update([orphan, other])
+  await open(rendered, 'ORPHAN')
+  expect(details(rendered)).toContain('ORIGINAL_DETAIL')
+  await update([structuredClone(other), { ...orphan, output: 'ORPHAN\nUPDATED_DETAIL' }])
+  expect(details(rendered)).toContain('UPDATED_DETAIL')
+  expect(details(rendered)).not.toContain('OTHER_DETAIL')
+})
