@@ -3,7 +3,7 @@ import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   callRuntimeRpc,
-  getCachedRuntimeEnvironmentStatus,
+  getRuntimeEnvironmentStatus,
   RuntimeRpcCallError,
   runtimeEnvironmentSupportsCapability
 } from '@/runtime/runtime-rpc-client'
@@ -71,16 +71,18 @@ export function callRuntimeAgentDetection<T>(
   if (!worktreeId) {
     return call(undefined)
   }
-  return runtimeEnvironmentSupportsCapability(
-    environmentId,
-    PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
-  ).then((supported) => {
+  const capability = PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
+  return runtimeEnvironmentSupportsCapability(environmentId, capability).then(async (supported) => {
     if (supported) {
       return call({ worktreeId })
     }
-    const hostPlatform = getCachedRuntimeEnvironmentStatus(environmentId)?.hostPlatform
+    // Why: a fresh status both reports the platform and catches an in-place upgrade.
+    const status = await getRuntimeEnvironmentStatus(environmentId)
+    if (status.capabilities?.includes(capability)) {
+      return call({ worktreeId })
+    }
     // Why: an old Windows host's default omits a WSL workspace's agents; an absent platform may be one.
-    if (!hostPlatform || hostPlatform === 'win32') {
+    if (!status.hostPlatform || status.hostPlatform === 'win32') {
       throw new RuntimeAgentDetectionNeedsServerUpdateError()
     }
     return call(undefined)

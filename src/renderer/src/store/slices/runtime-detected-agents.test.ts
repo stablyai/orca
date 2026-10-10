@@ -95,6 +95,19 @@ describe('workspace agent detection on a host without workspace-scoped detection
     expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[KEY]).toBeUndefined()
   })
 
+  it('answers concurrent workspaces of a known non-Windows host with its default list', async () => {
+    serveHost({ hostPlatform: 'linux', scoped: false })
+    const store = createTestStore()
+
+    const lists = await Promise.all([
+      store.getState().ensureRuntimeDetectedAgents('env-1', 'wt-1'),
+      store.getState().ensureRuntimeDetectedAgents('env-1', 'wt-2')
+    ])
+
+    expect(lists).toEqual([['codex'], ['codex']])
+    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate).toEqual({})
+  })
+
   it('still answers the host default list of an old Windows host', async () => {
     serveHost({ hostPlatform: 'win32', scoped: false })
     const store = createTestStore()
