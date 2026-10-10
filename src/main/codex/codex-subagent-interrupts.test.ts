@@ -160,6 +160,76 @@ describe('Codex sub-agent Stop', () => {
     expect(codex.interrupts()).toEqual([])
   })
 
+  it("ends the helper's own sub-agents with it", async () => {
+    const codex = await runningHelper({ 'turn/interrupt': () => ({}) })
+    codex.notify('item/started', {
+      threadId: HELPER,
+      turnId: HELPER_TURN,
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-nested',
+        kind: 'started',
+        agentThreadId: 'thread-nested',
+        agentPath: '/root/helper/nested'
+      }
+    })
+    codex.notify('turn/started', {
+      threadId: 'thread-nested',
+      turn: { id: 'nested-turn-1', status: 'inProgress' }
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: true })
+    expect(codex.interrupts()).toEqual([
+      { threadId: HELPER, turnId: HELPER_TURN },
+      { threadId: 'thread-nested', turnId: 'nested-turn-1' }
+    ])
+  })
+
+  it('terminates the command a helper is running, which its interrupt leaves running', async () => {
+    const running = ['4343']
+    const codex = await runningHelper({
+      'turn/interrupt': () => ({}),
+      'thread/backgroundTerminals/list': () => ({
+        data: running.map((processId) => ({ processId })),
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': (params) => {
+        running.splice(running.indexOf(String(params?.processId)), 1)
+        return { terminated: true }
+      }
+    })
+    const command = (status: 'inProgress' | 'completed') => ({
+      threadId: HELPER,
+      turnId: HELPER_TURN,
+      item: {
+        type: 'commandExecution',
+        id: 'helper-exec',
+        processId: '4343',
+        source: 'unifiedExecStartup',
+        command: 'sleep 90',
+        status
+      }
+    })
+    codex.notify('item/started', command('inProgress'))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: true })
+    expect(codex.interrupts()).toEqual([{ threadId: HELPER, turnId: HELPER_TURN }])
+    expect(running).toEqual([])
+    codex.notify('turn/completed', {
+      threadId: HELPER,
+      turn: { id: HELPER_TURN, status: 'interrupted' }
+    })
+    codex.notify('item/completed', command('completed'))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(helperEdges(codex.evidence).at(-1)).toMatchObject({
+      type: 'ended',
+      outcome: 'cancelled'
+    })
+    expect(codex.evidence.at(-1)).toMatchObject({ type: 'removed' })
+  })
+
   /** `runningHelper`, plus a dev server the session's own turn left running. */
   async function helperAndDevServer(interrupt: Route) {
     const running = ['4242']

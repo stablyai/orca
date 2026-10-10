@@ -300,4 +300,63 @@ describe('foreground commands in the background-task channel', () => {
     })
     expect(rosters.at(-1)).toBeNull()
   })
+
+  it("stops a sub-agent's running command with it, and the row leaves", async () => {
+    const helper = 'thread-helper'
+    let running = ['5151']
+    const { host, rosters, notify, turn, fence } = await rig({
+      'turn/interrupt': () => ({}),
+      'thread/backgroundTerminals/list': () => ({
+        data: running.map((processId) => ({ processId })),
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': (params) => {
+        running = running.filter((processId) => processId !== params?.processId)
+        return { terminated: true }
+      }
+    })
+    const helperCommand = (status: 'inProgress' | 'completed') =>
+      notify(status === 'completed' ? 'item/completed' : 'item/started', {
+        threadId: helper,
+        turnId: 'helper-turn',
+        item: {
+          type: 'commandExecution',
+          id: 'helper-exec',
+          processId: '5151',
+          command: 'sleep 90',
+          source: 'unifiedExecStartup',
+          status
+        }
+      })
+    await turn('turn/started', 'turn-1')
+    await notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-helper',
+        kind: 'started',
+        agentThreadId: helper,
+        agentPath: '/root/helper'
+      }
+    })
+    await notify('turn/started', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'inProgress' }
+    })
+    await helperCommand('inProgress')
+    await turn('turn/completed', 'turn-1')
+
+    await expect(stopFromStrip(host, fence, '6', helper)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(running).toEqual([])
+    await notify('turn/completed', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'interrupted' }
+    })
+    await helperCommand('completed')
+    expect(rosters.at(-1)).toBeNull()
+  })
 })

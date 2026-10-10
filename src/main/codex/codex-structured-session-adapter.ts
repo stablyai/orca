@@ -40,11 +40,8 @@ import {
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
-import {
-  codexBackgroundTaskStops,
-  startCodexTerminalStopProbe,
-  stopCodexBackgroundTasks
-} from './codex-background-terminals'
+import { startCodexTerminalStopProbe } from './codex-background-terminals'
+import { codexBackgroundTaskStops, stopCodexBackgroundTasks } from './codex-background-task-stops'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn

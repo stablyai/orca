@@ -2,7 +2,6 @@
 // the app-server's experimental background-terminal methods (Codex 0.140+). Each chat has its own
 // app-server, so one probe per app-server answers for the Codex binary on the host that runs it. The
 // killed process still ends its item with `item/completed`, which removes the command's record.
-// The one background Stop also reaches sub-agents here (`codex-subagent-interrupts.ts`).
 
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { isCodexAppServerRequestError } from './codex-app-server-request-error'
@@ -12,13 +11,10 @@ import {
 } from './codex-app-server-session'
 import type { CodexTerminalStopSupport } from './codex-background-task-tracker'
 import { readRecord } from './codex-item-field-readers'
-import {
-  requireLiveCodexSession,
-  type CodexSession,
-  type CodexStructuredSessionAdapterDeps
+import type {
+  CodexSession,
+  CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
-import { interruptCodexSubagents } from './codex-subagent-interrupts'
-import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
 
 type CodexTerminalRpc = Pick<CodexAppServerConnection, 'request'>
 
@@ -173,15 +169,6 @@ export async function terminateCodexBackgroundTerminals(
   return { stopped, survived }
 }
 
-/** A sub-agent stops by its own turn's interrupt on any Codex; a backgrounded command stops
- *  through its app-server's background terminals, once that app-server proved it has them. */
-export function codexBackgroundTaskStops(
-  session: CodexSession | undefined
-): AgentSessionBackgroundTaskStops | undefined {
-  const stops = session?.backgroundTasks.stopsTerminals
-  return stops === undefined ? undefined : { supportsTaskStop: true, supportsStopAll: stops }
-}
-
 /** Probes the session's app-server off the frame path when a running command has a process a stop
  *  could name, until it answers; a yes restates the running commands as stoppable. */
 export function startCodexTerminalStopProbe(
@@ -212,57 +199,4 @@ export function startCodexTerminalStopProbe(
       })
     }
   })
-}
-
-/** Stops the sub-agents and backgrounded commands the named tasks are, while `session` is still
- *  the one the host asked about. Cancelled when at least one is gone; throws, after trying every
- *  other, when one got no answer and none was shown still running. */
-export async function stopCodexBackgroundTasks(
-  sessions: Map<string, CodexSession>,
-  input: { sessionId: string; fence: number; taskIds: readonly string[] },
-  timeoutMs: number | undefined
-): Promise<{ cancelled: boolean; stillRunning?: true }> {
-  const session = requireLiveCodexSession(sessions, input.sessionId)
-  const subagents = session.backgroundTasks.subagentTurns(input.taskIds)
-  const terminals = session.backgroundTasks.backgroundProcesses(input.taskIds)
-  const { acquisitionGeneration } = session
-  const options = {
-    timeoutMs: boundedTimeout(timeoutMs),
-    isCurrent: () =>
-      sessions.get(input.sessionId) === session &&
-      !session.ended &&
-      session.fence === input.fence &&
-      session.acquisitionGeneration === acquisitionGeneration
-  }
-  const none = { stopped: 0, survived: false }
-  let failure: { error: unknown } | undefined
-  const settle = (stop: Promise<{ stopped: number; survived: boolean }>) =>
-    stop.catch((error: unknown) => {
-      failure ??= { error }
-      return none
-    })
-  const children = subagents.length
-    ? await settle(
-        interruptCodexSubagents(session.connection, subagents, {
-          ...options,
-          ended: ({ threadId, turnId }) =>
-            !session.backgroundTasks
-              .subagentTurns([threadId])
-              .some((running) => running.turnId === turnId)
-        })
-      )
-    : none
-  // An app-server that is not answering is not asked again within the same Stop.
-  const commands =
-    terminals.length && !(failure?.error instanceof CodexAppServerTimeoutError)
-      ? await settle(terminateCodexBackgroundTerminals(session.connection, terminals, options))
-      : none
-  const survived = children.survived || commands.survived
-  if (failure && !survived) {
-    throw failure.error
-  }
-  return {
-    cancelled: children.stopped + commands.stopped > 0,
-    ...(survived ? { stillRunning: true as const } : {})
-  }
 }

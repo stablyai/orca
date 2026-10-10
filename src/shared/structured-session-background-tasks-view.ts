@@ -77,22 +77,32 @@ export function structuredSessionBackgroundTasksView(
   }
 }
 
-/** Whether the strip still lists the task a Stop named, live or settled. */
-function listsTask(view: StructuredSessionBackgroundTasksView, providerId: string): boolean {
-  return (
-    view.show &&
-    (view.children
-      ? view.children.some((child) => child.providerId === providerId)
-      : view.tasks.some((task) => task.id === providerId))
-  )
+/** The run of the task the strip lists under `providerId`, live or settled: its record's
+ *  invocation, since a provider can reuse one id across a child's runs (a Codex sub-agent's thread),
+ *  or the id itself on an older host's roster. Null when the strip does not list it. */
+export function structuredSessionListedTaskRun(
+  view: StructuredSessionBackgroundTasksView,
+  providerId: string
+): string | null {
+  if (!view.show) {
+    return null
+  }
+  if (!view.children) {
+    return view.tasks.some((task) => task.id === providerId) ? providerId : null
+  }
+  const child = view.children.find((candidate) => candidate.providerId === providerId)
+  return child ? `${child.invocation.invocationId}#${child.invocation.generation}` : null
 }
 
-/** The host-confirmed Stops whose rows the strip still lists, each holding its row's button; the
- *  same set when none has left, so a caller can tell when to drop the rest. */
+/** The host-confirmed Stops, by provider id and the run each was pressed on, whose run the strip
+ *  still lists, each holding its row's button; the same map when none has left, so a caller can
+ *  tell when to drop the rest. */
 export function structuredSessionConfirmedStopsStillListed(
   view: StructuredSessionBackgroundTasksView,
-  confirmed: ReadonlySet<string>
-): ReadonlySet<string> {
-  const listed = [...confirmed].filter((providerId) => listsTask(view, providerId))
-  return listed.length === confirmed.size ? confirmed : new Set(listed)
+  confirmed: ReadonlyMap<string, string>
+): ReadonlyMap<string, string> {
+  const listed = [...confirmed].filter(
+    ([providerId, run]) => structuredSessionListedTaskRun(view, providerId) === run
+  )
+  return listed.length === confirmed.size ? confirmed : new Map(listed)
 }
