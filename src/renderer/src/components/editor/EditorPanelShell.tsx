@@ -51,7 +51,7 @@ type EditorPanelShellProps = {
   onReloadContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
-  onRenameConfirm: (newRelPath: string) => Promise<void>
+  onRenameConfirm: (newPath: string) => Promise<void>
   markdownAnnotationsEnabled: boolean
 }
 

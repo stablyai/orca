@@ -10,7 +10,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { getRelativePathInsideRoot } from '@/lib/path'
+import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -21,7 +22,7 @@ type UntitledFileRenameDialogProps = {
   externalError?: string | null
   disableBrowse?: boolean
   onClose: () => void
-  onConfirm: (newRelativePath: string) => void
+  onConfirm: (newPath: string) => void
 }
 
 export function UntitledFileRenameDialog({
@@ -100,22 +101,24 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
+    const trimmedDir = dir.trim()
     if (!trimmedDir) {
       setError('Folder path cannot be empty')
       return
     }
 
-    const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
-    if (relDir === null) {
+    if (!trimmedDir.startsWith('/') && !isWindowsAbsolutePathLike(trimmedDir)) {
+      setError('Folder path must be absolute')
+      return
+    }
+    if (disableBrowse && getRelativePathInsideRoot(trimmedDir, worktreePath) === null) {
       setError('Folder must be inside the current workspace')
       return
     }
 
     const fileName = `${trimmedName}.md`
-    const relativePath = relDir ? `${relDir}/${fileName}` : fileName
-    onConfirm(relativePath)
-  }, [name, dir, worktreePath, onConfirm])
+    onConfirm(joinPath(trimmedDir, fileName))
+  }, [name, dir, disableBrowse, worktreePath, onConfirm])
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>

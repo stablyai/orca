@@ -87,6 +87,20 @@ afterEach(async () => {
 })
 
 describe('renaming a document the user opened outside every project', () => {
+  it('saves a project note into a new outside folder without broadening createDir access', async () => {
+    projectPaths = [docFolder]
+    invalidateAuthorizedRootsCache()
+    const moved = join(base, 'new-notes', 'nested', 'scratch.md')
+
+    await call('fs:rename', { oldPath: note, newPath: moved, access: documentFolder(note) })
+
+    expect(await readdir(docFolder)).toEqual([])
+    expect(await readdir(join(base, 'new-notes', 'nested'))).toEqual(['scratch.md'])
+    await expect(call('fs:createDir', { dirPath: join(base, 'unrelated') })).rejects.toThrow(
+      'Access denied'
+    )
+  })
+
   it('renames it within its own folder', async () => {
     const renamed = join(docFolder, 'renamed.md')
 

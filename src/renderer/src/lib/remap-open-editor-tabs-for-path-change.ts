@@ -192,7 +192,8 @@ export function remapOpenEditorTabsForPathChange({
   toPath,
   worktreePath,
   worktreeId,
-  moveOperationId
+  moveOperationId,
+  documentScoped
 }: {
   fromPath: string
   toPath: string
@@ -201,6 +202,7 @@ export function remapOpenEditorTabsForPathChange({
   /** Passed by the move coordinator so dirty destinations get a content-verify
    * gate + provenance installed atomically with the re-home. */
   moveOperationId?: string
+  documentScoped?: boolean
 }): RekeyOpenFilesResult {
   const state = useAppStore.getState()
   // The rename only touched the initiating execution host. The same absolute
@@ -226,14 +228,16 @@ export function remapOpenEditorTabsForPathChange({
     relativePath: string
     worktreeId: string
   }): string =>
-    getUpdatedRelativePath({
-      filePath: file.filePath,
-      relativePath: file.relativePath,
-      worktreeId: file.worktreeId,
-      updatedPath: updatedPathOf(file),
-      initiatingWorktreeId: worktreeId,
-      initiatingWorktreePath: worktreePath
-    })
+    documentScoped && relativePathInsideRoot(worktreePath, updatedPathOf(file)) === null
+      ? updatedPathOf(file)
+      : getUpdatedRelativePath({
+          filePath: file.filePath,
+          relativePath: file.relativePath,
+          worktreeId: file.worktreeId,
+          updatedPath: updatedPathOf(file),
+          initiatingWorktreeId: worktreeId,
+          initiatingWorktreePath: worktreePath
+        })
 
   // First owner to claim a destination gets the plain-path id; other owners of
   // the same path get an owner-qualified id (as sequential openFile did). An

@@ -107,7 +107,8 @@ export async function executeOpenEditorPathMove(args: {
       toPath,
       worktreePath,
       worktreeId,
-      moveOperationId: operationId
+      moveOperationId: operationId,
+      documentScoped: args.documentScoped
     })
     if (!rekeyResult.ok) {
       // The disk rename succeeded but the editor state couldn't be retargeted

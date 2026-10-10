@@ -87,9 +87,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  // Note: fs.rename throws EXDEV if old and new paths are on different
-  // filesystems/volumes. This is unlikely since both paths are under the same
-  // workspace root, but a cross-drive rename would surface as an IPC error.
+  // Cross-volume renames surface EXDEV without changing the source file.
   ipcMain.handle(
     'fs:rename',
     async (
@@ -124,6 +122,9 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.access,
         store
       )
+      if (args.access?.kind === 'document-folder') {
+        await mkdir(dirname(to), { recursive: true })
+      }
       await renameLocalPathSerializedByDestination(from, to)
     }
   )
