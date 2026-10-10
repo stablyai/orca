@@ -1,6 +1,6 @@
 import { optionalSettingsRead } from '../transport/settings-read-operations'
 import { useCallback } from 'react'
-import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import { setCachedRepos } from '../cache/repo-cache'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcClient } from '../transport/rpc-client'
@@ -10,6 +10,7 @@ import {
   buildHostLabelById,
   buildRepoHostIdByRepoId
 } from '../worktree/worktree-host-context-labels'
+import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import {
   hostPlatformRead,
   hostRepoCatalogRead,
@@ -58,6 +59,7 @@ export function useHostRepoMetadata(args: {
     fetchRepoMetadataPendingRef,
     repoMetadataFetchedAtRef,
     setHostLabelById,
+    setHostHealthById,
     setHostPlatform,
     setRepoColorsByName,
     setRepoHostIdByRepoId,
@@ -116,11 +118,12 @@ export function useHostRepoMetadata(args: {
           )
           setRepoIdsByName(new Map(catalog.map((repo) => [repo.displayName, repo.id])))
           setRepoHostIdByRepoId(buildRepoHostIdByRepoId(catalog))
-          // Why: rows only name their host when the list spans hosts, so a single-host
-          // catalog never pays for the label lookups. Counted over repos, not the id-keyed
-          // map: one repo id registered on two hosts is two hosts.
+          // Why: rows name their host when the list spans hosts or an SSH host may be unhealthy,
+          // so a local-only catalog never pays for the label lookups. Counted over repos, not the
+          // id-keyed map: one repo id registered on two hosts is two hosts.
           const hostIds = new Set(catalog.map((repo) => getRepoExecutionHostId(repo)))
-          if (hostIds.size > 1) {
+          const hasSshHost = [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
+          if (hostIds.size > 1 || hasSshHost) {
             const [sshTargets, hostSettings, hostPlatform] = await Promise.all([
               settledMetadataReply(() => hostSshTargetSummariesRead.request(requestClient)),
               optionalSettingsRead.request(requestClient).catch(() => null),
@@ -132,16 +135,22 @@ export function useHostRepoMetadata(args: {
             const hostSettingsResult = hostSettings
               ? optionalSettingsRead.interpret(hostSettings)
               : null
+            const sshTargetSummaries =
+              acceptedMetadata(sshTargets, hostSshTargetSummariesRead.interpret) ?? []
+            setHostHealthById(buildSshHostHealthById(sshTargetSummaries))
             setHostLabelById(
               buildHostLabelById({
-                sshTargets:
-                  acceptedMetadata(sshTargets, hostSshTargetSummariesRead.interpret) ?? [],
+                sshTargets: sshTargetSummaries,
                 hostSettingOverrides: readHostSettingOverrides(
                   hostSettingsResult?.accepted ? hostSettingsResult.value : undefined
                 )
               })
             )
             setHostPlatform(acceptedMetadata(hostPlatform, hostPlatformRead.interpret) ?? null)
+          } else {
+            // Why: a host that left the catalog must not keep badging rows that still name it.
+            setHostHealthById(new Map())
+            setHostLabelById(new Map())
           }
         } while (fetchRepoMetadataPendingRef.current.has(requestClient))
       } catch {

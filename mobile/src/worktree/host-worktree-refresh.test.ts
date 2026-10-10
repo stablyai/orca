@@ -113,6 +113,21 @@ describe('startHostWorktreeRefresh', () => {
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
   })
 
+  it('re-reads repo metadata, which carries SSH host health, on sshStateChanged', () => {
+    start()
+    fetchWorktrees.mockClear()
+    fetchRepoMetadata.mockClear()
+
+    eventListener?.({
+      type: 'sshStateChanged',
+      targetId: 'ssh-1',
+      state: { targetId: 'ssh-1', status: 'reconnecting' }
+    })
+
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
+  })
+
   it('refreshes worktrees on worktreesChanged and both snapshots after stream replay', () => {
     start()
     fetchWorktrees.mockClear()

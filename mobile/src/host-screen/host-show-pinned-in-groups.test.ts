@@ -48,6 +48,7 @@ function screenState(clientRef: ClientRef, applied: boolean[]) {
         'setCatalogError',
         'setError',
         'setHostLabelById',
+        'setHostHealthById',
         'setHostName',
         'setHostPlatform',
         'setHostStoredDescriptor',

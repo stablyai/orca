@@ -4,11 +4,6 @@
   "family": "settings.repo-metadata",
   "namedDeltas": [],
   "values": {
-    "12ba3f41d4db": {
-      "name": "hostPlatform",
-      "ordinal": 14,
-      "value": "darwin"
-    },
     "19b2979d7fc2": {
       "name": "repo.list#1",
       "ordinal": 2,
@@ -49,15 +44,20 @@
         "startedAt": 0
       }
     },
+    "25b44bca9e45": {
+      "name": "hostPlatform",
+      "ordinal": 15,
+      "value": "darwin"
+    },
     "36a96ddbd396": {
       "name": "host.platform#1",
       "ordinal": 12,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
     },
-    "56ab81cb67dc": {
-      "name": "hostLabelById",
+    "6063e534d9db": {
+      "name": "hostHealthById",
       "ordinal": 13,
-      "value": [["ssh:ssh-1", "SSH"]]
+      "value": []
     },
     "6338d57f282f": {
       "repoColorsByName": [
@@ -293,46 +293,13 @@
       "ordinal": 11,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "c752e67787f9": {
-      "name": "ssh.listTargetSummaries#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "ssh.listTargetSummaries"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "targets": [
-              {
-                "id": "ssh-1",
-                "label": "SSH"
-              }
-            ]
-          }
-        }
-      }
+    "bea13a4a2e87": {
+      "name": "hostLabelById",
+      "ordinal": 14,
+      "value": [["ssh:ssh-1", "SSH"]]
     },
-    "e62b46a04ba1": {
+    "c020f709d835": {
+      "hostHealthById": [],
       "hostLabelById": [["ssh:ssh-1", "SSH"]],
       "hostPlatform": "darwin",
       "repoColorsByName": [
@@ -375,6 +342,45 @@
         ["Emoji", "repo-2"],
         ["Avatar", "repo-3"]
       ]
+    },
+    "c752e67787f9": {
+      "name": "ssh.listTargetSummaries#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.listTargetSummaries"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "targets": [
+              {
+                "id": "ssh-1",
+                "label": "SSH"
+              }
+            ]
+          }
+        }
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -444,14 +450,15 @@
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
           },
-          "state": "e62b46a04ba1",
+          "state": "c020f709d835",
           "effects": [
             "19bf6d2469a6",
             "ae27a5b525fa",
             "77cbfd1f087c",
             "6bc5e5b7a259",
-            "56ab81cb67dc",
-            "12ba3f41d4db"
+            "6063e534d9db",
+            "bea13a4a2e87",
+            "25b44bca9e45"
           ]
         }
       }

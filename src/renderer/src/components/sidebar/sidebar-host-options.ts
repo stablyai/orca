@@ -11,6 +11,7 @@ import {
   buildExecutionHostRegistry,
   type ExecutionHostHealth
 } from '../../../../shared/execution-host-registry'
+import { getExecutionHostHealthLabel } from '../../../../shared/execution-host-health'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts
@@ -162,22 +163,7 @@ export function getCheckedHostRows<T extends SidebarHostOption>(
 }
 
 export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health']): string {
-  switch (health) {
-    case 'local':
-      return 'Local'
-    case 'available':
-      return 'Connected'
-    case 'connecting':
-      return 'Connecting'
-    case 'blocked':
-      return 'Update needed'
-    case 'disconnected':
-      return 'Disconnected'
-    case 'error':
-      return 'Needs attention'
-    case 'mixed':
-      return 'Mixed'
-  }
+  return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health)
 }
 
 /**

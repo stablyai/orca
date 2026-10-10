@@ -9,6 +9,32 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
+    "1a160fc2d137": {
+      "name": "host.platform#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "host.platform"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "1ff13ee8621c": {
       "name": "repoIconsByName",
       "ordinal": 4,
@@ -28,6 +54,11 @@
         ["Remote", "repo-1"],
         ["Remote folder", "repo-2"]
       ]
+    },
+    "36a96ddbd396": {
+      "name": "host.platform#1",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
     },
     "4b6956e45bac": {
       "name": "repo.list#1",
@@ -74,6 +105,110 @@
         }
       }
     },
+    "4bf1ed33de14": {
+      "name": "ssh.listTargetSummaries#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.listTargetSummaries"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "53dea128b181": {
+      "name": "host.platform#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "host.platform"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "6063e534d9db": {
+      "name": "hostHealthById",
+      "ordinal": 13,
+      "value": []
+    },
+    "668a7e313975": {
+      "name": "ssh.listTargetSummaries#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
+    },
+    "6a227ad27189": {
+      "name": "ssh.listTargetSummaries#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.listTargetSummaries"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
     "937107a86348": {
       "name": "repoIdsByName",
       "ordinal": 5,
@@ -82,6 +217,39 @@
         ["Remote folder", "repo-2"]
       ]
     },
+    "96e0c54d86b0": {
+      "name": "settings.get#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9d20695fdb34": {
+      "name": "hostPlatform",
+      "ordinal": 15,
+      "value": {
+        "$rpc": "null"
+      }
+    },
     "a086cfd03185": {
       "name": "repoHostIdByRepoId",
       "ordinal": 6,
@@ -89,6 +257,48 @@
         ["repo-1", "ssh:ssh-1"],
         ["repo-2", "ssh:ssh-1"]
       ]
+    },
+    "b428bce85ee7": {
+      "name": "settings.get#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "daecdc0e521b": {
+      "name": "hostLabelById",
+      "ordinal": 14,
+      "value": []
+    },
+    "dd3998116e8e": {
+      "name": "settings.get#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -113,14 +323,35 @@
       {
         "id": "single-host-without-label-lookups",
         "observation": {
-          "sender": ["4b6956e45bac"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["4b6956e45bac", "6a227ad27189", "96e0c54d86b0", "1a160fc2d137"],
+          "payloads": ["19b2979d7fc2", "668a7e313975", "b428bce85ee7", "36a96ddbd396"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load": "9270aeb7d9c6"
+          },
+          "state": "2bd489a9fa29",
+          "effects": ["fc0785cc0b08", "1ff13ee8621c", "937107a86348", "a086cfd03185"]
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["4b6956e45bac", "4bf1ed33de14", "dd3998116e8e", "53dea128b181"],
+          "payloads": ["19b2979d7fc2", "668a7e313975", "b428bce85ee7", "36a96ddbd396"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
           },
           "state": "2bd489a9fa29",
-          "effects": ["fc0785cc0b08", "1ff13ee8621c", "937107a86348", "a086cfd03185"]
+          "effects": [
+            "fc0785cc0b08",
+            "1ff13ee8621c",
+            "937107a86348",
+            "a086cfd03185",
+            "6063e534d9db",
+            "daecdc0e521b",
+            "9d20695fdb34"
+          ]
         }
       }
     ]
