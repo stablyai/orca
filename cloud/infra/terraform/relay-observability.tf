@@ -1539,3 +1539,63 @@ resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature"
 
   depends_on = [google_logging_metric.relay_assignment_lease_shadow]
 }
+
+# cell-reserve-dead-man.ts logs once per switch-file generation when it trips, so any count is the signal.
+resource "google_logging_metric" "relay_cell_reserve_dead_man_tripped" {
+  project     = var.project_id
+  name        = "orca_relay_cell_reserve_dead_man_tripped"
+  description = "Reserve-mode cells that heard from no placing director for their dead-man window (60-120 s) and went back to admitting through the database."
+  filter      = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_cell_reserve_dead_man_tripped\""
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_reserve_dead_man_tripped" {
+  project               = var.project_id
+  display_name          = "Orca Relay: reserve cell lost its placing director"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "A reserve-mode cell tripped its dead-man"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cell_reserve_dead_man_tripped\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A cell with `admitMode=reserve` in its switch file heard from no placing director (no booking, no feed poll marked `reserver=1`) for its dead-man window, so it went back to database admission and is re-registering its controls. Nobody is disconnected. Postgres still records the cell as reserve, so sweeps keep skipping it while it is heartbeat-live. First find why placement stopped: a director rollback, placement turned off, or every director failing its feed polls. Then, once the cell's `runtime-status` reports `admitModeEffective=db`, run `cloud-operate-relay-production-cell-flags.yml` with `--set admitMode=db` for that cell: it writes db into the switch file and records db in Postgres, so sweeps resume. The trip is latched for this switch-file generation: the cell will not return to reserve until a new reserve write, even if a director comes back. Several cells at once points to the directors, not the cells."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_reserve_dead_man_tripped]
+}
