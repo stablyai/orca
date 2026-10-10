@@ -39,17 +39,11 @@ export class CdpElementStateCommands {
 
       const node = await this.refResolution.resolveRef(guest, sender, element)
       const refSender = this.refResolution.senderForRef(guest, node)
-      const { nodeId } = (await refSender('DOM.requestNode', {
-        backendNodeId: node.backendDOMNodeId
-      })) as { nodeId: number }
-
-      const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
-        object: { objectId: string }
-      }
+      const objectId = await this.refResolution.resolveNodeObjectId(refSender, node.backendDOMNodeId)
 
       // Labels allow selection when option values are opaque IDs.
       await refSender('Runtime.callFunctionOn', {
-        objectId: object.objectId,
+        objectId,
         functionDeclaration: `function(val) {
           if (this.options) {
             for (const opt of this.options) {
@@ -91,15 +85,11 @@ export class CdpElementStateCommands {
       const node = await this.refResolution.resolveRef(guest, sender, element)
       const refSender = this.refResolution.senderForRef(guest, node)
 
-      const { nodeId } = (await refSender('DOM.requestNode', {
-        backendNodeId: node.backendDOMNodeId
-      })) as { nodeId: number }
-      const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
-        object: { objectId: string }
-      }
+      const objectId = await this.refResolution.resolveNodeObjectId(refSender, node.backendDOMNodeId)
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callFunctionOn with returnByValue echoes the function's boolean return as result.value.
       const { result: currentState } = (await refSender('Runtime.callFunctionOn', {
-        objectId: object.objectId,
+        objectId,
         functionDeclaration: 'function() { return this.checked; }',
         returnByValue: true
       })) as { result: { value: boolean } }
@@ -134,15 +124,16 @@ export class CdpElementStateCommands {
 
         // Some custom checkboxes need a programmatic click after coordinate delivery.
         try {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callFunctionOn with returnByValue echoes the function's boolean return as result.value.
           const { result: afterState } = (await refSender('Runtime.callFunctionOn', {
-            objectId: object.objectId,
+            objectId,
             functionDeclaration: 'function() { return this.checked; }',
             returnByValue: true
           })) as { result: { value: boolean } }
 
           if (afterState.value !== checked) {
             await refSender('Runtime.callFunctionOn', {
-              objectId: object.objectId,
+              objectId,
               functionDeclaration: 'function() { this.click(); }'
             })
           }
