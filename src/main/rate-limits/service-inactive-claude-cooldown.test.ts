@@ -10,6 +10,8 @@ type CooldownFixture = {
   now: number
   status: number
   retryAfter: string | null
+  statusB: number
+  retryAfterB: string | null
   hold: boolean
   pending: ServerResponse | null
   arrived: () => void
@@ -22,6 +24,8 @@ const fixture = vi.hoisted((): CooldownFixture => ({
   now: 1800000000000,
   status: 200,
   retryAfter: '3600',
+  statusB: 200,
+  retryAfterB: '7200',
   hold: false,
   pending: null,
   arrived: () => {},
@@ -174,11 +178,11 @@ function preparation(id: string) {
   return router.accountUsagePreparation(id)
 }
 
-function reply(response: ServerResponse, status: number) {
+function reply(response: ServerResponse, status: number, retryAfter = fixture.retryAfter) {
   response.statusCode = status
   response.setHeader('Content-Type', 'application/json')
-  if (status === 429 && fixture.retryAfter) {
-    response.setHeader('Retry-After', fixture.retryAfter)
+  if (status === 429 && retryAfter) {
+    response.setHeader('Retry-After', retryAfter)
   }
   response.end(
     JSON.stringify(
@@ -209,7 +213,11 @@ const server = createServer((request, response) => {
     fixture.arrived()
     return
   }
-  reply(response, id === 'A' ? fixture.status : 200)
+  reply(
+    response,
+    id === 'A' ? fixture.status : fixture.statusB,
+    id === 'A' ? fixture.retryAfter : fixture.retryAfterB
+  )
 })
 
 function count(id: string) {
@@ -225,6 +233,8 @@ beforeEach(async () => {
   fixture.now = 1800000000000
   fixture.status = 200
   fixture.retryAfter = '3600'
+  fixture.statusB = 200
+  fixture.retryAfterB = '7200'
   fixture.hold = false
   fixture.pending = null
   fixture.requests = []
@@ -270,44 +280,74 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  service.stop()
+  service?.stop()
   installClaudeProfileRouter(undefined)
-  restoreClock()
+  restoreClock?.()
   server.closeAllConnections()
   await new Promise<void>((resolve) => server.close(() => resolve()))
   rmSync(fixture.userData, { recursive: true, force: true })
 })
 
-it('keeps A last-good usage, skips its one-hour server wait, and refreshes healthy B until exact expiry', async () => {
-  await service.fetchInactiveClaudeAccountsOnOpen()
-  const originalAt = cached('A')?.updatedAt
-  fixture.now += 61000
+it.each(['seconds', 'HTTP-date'] as const)(
+  'keeps A last-good usage and refreshes healthy B until the exact %s deadline',
+  async (format) => {
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    const originalAt = cached('A')?.updatedAt
+    fixture.now += 61000
+    fixture.status = 429
+    fixture.retryAfter =
+      format === 'seconds' ? '3600' : new Date(fixture.now + 3600000).toUTCString()
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    const retryAt = fixture.now + 3600000
+    expect(cached('A')).toMatchObject({
+      status: 'error',
+      updatedAt: originalAt,
+      session: { usedPercent: 21 },
+      usageMetadata: {
+        failureKind: 'rate-limited',
+        retryAtMs: retryAt,
+        authProvenance: 'profile:A',
+        credentialSource: process.platform === 'darwin' ? 'scoped-keychain' : 'credentials-file'
+      }
+    })
+    fixture.now += 61000
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(count('A')).toBe(2)
+    expect(count('B')).toBe(3)
+    expect(cached('A')?.updatedAt).toBe(originalAt)
+    expect(service.getState().inactiveClaudeAccounts.every((row) => !row.isFetching)).toBe(true)
+    fixture.now = retryAt
+    fixture.status = 200
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(count('A')).toBe(3)
+    expect(count('B')).toBe(4)
+    expect(cached('A')).toMatchObject({ status: 'ok', updatedAt: retryAt })
+  }
+)
+
+it('keeps two server waits independent when all inactive accounts are blocked', async () => {
   fixture.status = 429
+  fixture.statusB = 429
   await service.fetchInactiveClaudeAccountsOnOpen()
-  const retryAt = fixture.now + 3600000
-  expect(cached('A')).toMatchObject({
-    status: 'error',
-    updatedAt: originalAt,
-    session: { usedPercent: 21 },
-    usageMetadata: {
-      failureKind: 'rate-limited',
-      retryAtMs: retryAt,
-      authProvenance: 'profile:A',
-      credentialSource: process.platform === 'darwin' ? 'scoped-keychain' : 'credentials-file'
-    }
-  })
+  const retryAtA = fixture.now + 3600000
+  const retryAtB = fixture.now + 7200000
+  expect(cached('A')?.usageMetadata?.retryAtMs).toBe(retryAtA)
+  expect(cached('B')?.usageMetadata?.retryAtMs).toBe(retryAtB)
   fixture.now += 61000
   await service.fetchInactiveClaudeAccountsOnOpen()
-  expect(count('A')).toBe(2)
-  expect(count('B')).toBe(3)
-  expect(cached('A')?.updatedAt).toBe(originalAt)
+  expect(fixture.requests).toEqual(['A', 'B'])
   expect(service.getState().inactiveClaudeAccounts.every((row) => !row.isFetching)).toBe(true)
-  fixture.now = retryAt
+  fixture.now = retryAtA
   fixture.status = 200
   await service.fetchInactiveClaudeAccountsOnOpen()
-  expect(count('A')).toBe(3)
-  expect(count('B')).toBe(4)
-  expect(cached('A')).toMatchObject({ status: 'ok', updatedAt: retryAt })
+  expect(fixture.requests).toEqual(['A', 'B', 'A'])
+  expect(cached('A')?.status).toBe('ok')
+  expect(cached('B')?.usageMetadata?.retryAtMs).toBe(retryAtB)
+  fixture.now = retryAtB
+  fixture.statusB = 200
+  await service.fetchInactiveClaudeAccountsOnOpen()
+  expect(fixture.requests).toEqual(['A', 'B', 'A', 'A', 'B'])
+  expect(cached('B')?.status).toBe('ok')
 })
 
 it('honors a deadline seeded from live active usage and preserves forced account-change retries', async () => {
@@ -360,19 +400,22 @@ it.each([401, 503])(
   }
 )
 
-it('does not invent a wait when a 429 has no Retry-After header', async () => {
-  fixture.status = 429
-  fixture.retryAfter = null
-  await service.fetchInactiveClaudeAccountsOnOpen()
-  expect(cached('A')).toMatchObject({
-    status: 'error',
-    usageMetadata: { failureKind: 'rate-limited' }
-  })
-  expect(cached('A')?.usageMetadata?.retryAtMs).toBeUndefined()
-  fixture.now += 61000
-  await service.fetchInactiveClaudeAccountsOnOpen()
-  expect(count('A')).toBe(2)
-})
+it.each([null, '0', '-5', 'soon'])(
+  'does not invent a wait for Retry-After %s',
+  async (retryAfter) => {
+    fixture.status = 429
+    fixture.retryAfter = retryAfter
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(cached('A')).toMatchObject({
+      status: 'error',
+      usageMetadata: { failureKind: 'rate-limited' }
+    })
+    expect(cached('A')?.usageMetadata?.retryAtMs).toBeUndefined()
+    fixture.now += 61000
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(count('A')).toBe(2)
+  }
+)
 
 it.each(['remove', 'stop'])('discards a late 429 after account %s', async (action) => {
   fixture.hold = true
