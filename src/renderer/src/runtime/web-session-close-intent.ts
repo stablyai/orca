@@ -128,6 +128,7 @@ export function clearWebSessionCloseIntentsForWorktree(
   worktreeId: string
 ): void {
   pendingCloseByOwnerAndWorktree.delete(closeIntentPartitionKey(owner, worktreeId))
+  forgetUserEmptiedWorktree(worktreeId)
 }
 
 export function clearWebSessionCloseIntentsForOwner(owner: WebSessionIntentOwner): void {
@@ -141,4 +142,34 @@ export function clearWebSessionCloseIntentsForOwner(owner: WebSessionIntentOwner
 
 export function resetWebSessionCloseIntentForTests(): void {
   pendingCloseByOwnerAndWorktree.clear()
+  userEmptiedWorktreeIds.clear()
+}
+
+/**
+ * Why a separate marker and not a read of the intent map: the per-tab intents
+ * are the anti-rematerialization guard and clear the moment the host confirms
+ * a removal — exactly when the snapshot-apply path must decide whether an
+ * affirming-empty frame leaves the closed-last-terminal tombstone row. This
+ * marker is written synchronously at the user's close of the workspace's last
+ * terminal tab and lives until a terminal row returns, so only the user's own
+ * closes read as "emptied on purpose"; a host-side session exit leaves no
+ * marker, the row is deleted instead, and the next activation re-creates the
+ * surface instead of stranding the workspace empty until an app restart.
+ */
+const userEmptiedWorktreeIds = new Set<string>()
+
+export function rememberUserEmptiedWorktree(worktreeId: string): void {
+  // Why the exact ID: snapshot application checks and clears the marker with
+  // the ID it was given, so a trimmed key would never match a padded one.
+  if (worktreeId.trim()) {
+    userEmptiedWorktreeIds.add(worktreeId)
+  }
+}
+
+export function forgetUserEmptiedWorktree(worktreeId: string): void {
+  userEmptiedWorktreeIds.delete(worktreeId)
+}
+
+export function wasWorktreeEmptiedByUserClose(worktreeId: string): boolean {
+  return userEmptiedWorktreeIds.has(worktreeId)
 }

@@ -8,15 +8,17 @@ import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-cl
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   clearWebSessionCloseIntent,
+  forgetUserEmptiedWorktree,
   makeWebSessionCloseIntentDurable,
-  recordWebSessionCloseIntent
+  recordWebSessionCloseIntent,
+  rememberUserEmptiedWorktree
 } from './web-session-close-intent'
 import {
   clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent
 } from './web-session-focus-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
-import { toHostSessionTabId } from './web-terminal-surface-id'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -108,6 +110,22 @@ async function callWebRuntimeSessionTabMethod(
       // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
       closeIntentTabIds.add(hostTabId)
       recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+      // Why remember the emptying here: this is the one place that knows the
+      // close is the user's own. When the intents cover every terminal tab the
+      // row still holds, this close empties the workspace, and the mirror's
+      // affirming-empty frame may then leave its closed-last-terminal tombstone
+      // row. A session the host ends on its own never passes through here, so
+      // its emptying leaves no marker and the row is deleted instead.
+      const rowTabs = state.tabsByWorktree[args.worktreeId] ?? []
+      const terminalTabsWithoutCloseIntent = rowTabs.filter((tab) => {
+        if (!isWebTerminalSurfaceTabId(tab.id)) {
+          return false
+        }
+        return !closeIntentTabIds.has(toHostSessionTabId(tab.id))
+      })
+      if (terminalTabsWithoutCloseIntent.length === 0) {
+        rememberUserEmptiedWorktree(args.worktreeId)
+      }
     } else {
       activationHostTabId = hostTabId
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, hostTabId)
@@ -150,6 +168,8 @@ async function callWebRuntimeSessionTabMethod(
         // only when it republished; dead-leaf refusals must stay suppressed.
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, immediateHostTabId)
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
+        // Why: the live PTY means this close did not empty the workspace.
+        forgetUserEmptiedWorktree(args.worktreeId)
         const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
         acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       }
@@ -177,6 +197,10 @@ async function callWebRuntimeSessionTabMethod(
       } else {
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
       }
+    }
+    if (isClose && !hostHasNoSuchTab) {
+      // Why: a "not now" failure leaves the terminal alive, so the workspace was not emptied.
+      forgetUserEmptiedWorktree(args.worktreeId)
     }
     if (isLifecycleClose) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')

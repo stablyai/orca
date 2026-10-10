@@ -7,7 +7,8 @@ import {
 import {
   isWebSessionCloseIntentPending,
   recordWebSessionCloseIntent,
-  resetWebSessionCloseIntentForTests
+  resetWebSessionCloseIntentForTests,
+  wasWorktreeEmptiedByUserClose
 } from './web-session-close-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
 import { toHostSessionTabId } from './web-terminal-surface-id'
@@ -343,6 +344,55 @@ describe('web runtime session tab actions', () => {
       )
     ).toBe(stillPending)
   })
+
+  // The user-emptied marker lets an affirming-empty snapshot keep the closed-last-terminal row.
+  // A close that did not land leaves the terminal alive, so only definitive absence keeps it.
+  it.each([
+    ['tab_not_found', true],
+    ['selector_not_found', false],
+    ['terminal_tab_not_found', true],
+    ['runtime_rpc_timeout', false]
+  ])('keeps the user-emptied marker after a %s close failure: %s', async (code, kept) => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await closeWebRuntimeSessionTab({
+      worktreeId: WORKTREE_ID,
+      tabId: 'local-browser-unified',
+      reason: 'user'
+    })
+
+    expect(wasWorktreeEmptiedByUserClose(WORKTREE_ID)).toBe(kept)
+  })
+
+  it.each([
+    [true, false],
+    [false, true]
+  ])(
+    'keeps the user-emptied marker after a refusal with snapshotRepublished=%s: %s',
+    async (snapshotRepublished, kept) => {
+      const runtimeCall = vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'close',
+          ok: true,
+          result: { closed: true, refused: true, snapshotRepublished }
+        })
+        .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+      await closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+
+      expect(wasWorktreeEmptiedByUserClose(WORKTREE_ID)).toBe(kept)
+    }
+  )
 
   // #9194, slow host: the close RPC can answer `tab_not_found` at any point up to its own timeout,
   // and a host that still republishes the surface keeps querying the intent in the meantime. That
