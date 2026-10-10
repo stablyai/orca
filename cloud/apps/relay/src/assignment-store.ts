@@ -656,6 +656,14 @@ export class RelayAssignmentStore {
     return read && at - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
   }
 
+  private async liveReserveCell(
+    cellId: string,
+    database: RelayDatabase,
+    now: number
+  ): Promise<boolean> {
+    return (await this.mayBeReserveCell(cellId, database)) && (await this.cellIsLive(database, cellId, now))
+  }
+
   private async mayBeReserveCell(
     cellId: string,
     database: Pick<RelayDatabase, 'query'> = this.database
@@ -692,23 +700,34 @@ export class RelayAssignmentStore {
     const now = this.now()
     await this.database.transaction(async (transaction) => {
       if (admitMode === 'reserve') {
-        const open = await transaction.queryLocked(
-          `SELECT 'migration' AS kind FROM relay_assignment_migrations
-           WHERE (source_cell_id = ? OR target_cell_id = ?)
-             AND completed_at IS NULL AND aborted_at IS NULL
-           UNION ALL
-           SELECT 'rehome' AS kind FROM relay_region_rehome_attempts
-           WHERE (source_cell_id = ? OR target_cell_id = ?)
-             AND completed_at IS NULL AND aborted_at IS NULL
-           UNION ALL
-           SELECT 'drain' AS kind FROM relay_cell_drain_attempt_states drain
-           JOIN relay_cell_runtime runtime ON runtime.cell_id = drain.cell_id
-           WHERE drain.cell_id = ? AND drain.cell_incarnation = runtime.cell_incarnation
-             AND drain.state <> 'proven-not-delivered'
-           LIMIT 1`,
-          [cellId, cellId, cellId, cellId, cellId]
-        )
-        if (open[0]) throw new Error(`cell_has_open_${text(open[0], 'kind')}`)
+        // One locked read per table: Postgres refuses FOR UPDATE on a UNION.
+        const openFlows: Array<[string, string, unknown[]]> = [
+          [
+            'migration',
+            `SELECT user_id FROM relay_assignment_migrations
+             WHERE (source_cell_id = ? OR target_cell_id = ?)
+               AND completed_at IS NULL AND aborted_at IS NULL LIMIT 1`,
+            [cellId, cellId]
+          ],
+          [
+            'rehome',
+            `SELECT attempt_id FROM relay_region_rehome_attempts
+             WHERE (source_cell_id = ? OR target_cell_id = ?)
+               AND completed_at IS NULL AND aborted_at IS NULL LIMIT 1`,
+            [cellId, cellId]
+          ],
+          [
+            'drain',
+            `SELECT attempt_id FROM relay_cell_drain_attempt_states
+             WHERE cell_id = ? AND state <> 'proven-not-delivered'
+               AND cell_incarnation = (SELECT cell_incarnation FROM relay_cell_runtime WHERE cell_id = ?)
+             LIMIT 1`,
+            [cellId, cellId]
+          ]
+        ]
+        for (const [kind, sql, params] of openFlows) {
+          if ((await transaction.queryLocked(sql, params))[0]) throw new Error(`cell_has_open_${kind}`)
+        }
       }
       await transaction.query(
         `INSERT INTO relay_cell_admit_modes (cell_id, admit_mode, updated_at) VALUES (?, ?, ?)
@@ -965,9 +984,9 @@ export class RelayAssignmentStore {
       if (!existing) return null
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
       await this.recordRegionPreference(transaction, identity, preferredRegion, now)
-      // A reserve-mode cell's hosts hold no activity here, so idle is not evidence they left.
+      // A live reserve cell's hosts hold no activity here, so idle is not evidence they left.
       if (
-        !(await this.mayBeReserveCell(text(existing, 'cell_id'), transaction)) &&
+        !(await this.liveReserveCell(text(existing, 'cell_id'), transaction, now)) &&
         mayNormallyReassign(activity(existing), now)
       ) {
         return null
@@ -1043,6 +1062,17 @@ export class RelayAssignmentStore {
       ) {
         return null
       }
+      const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
+      // A reserve cell counts its own controls: the pin is returned with no row written,
+      // since the sweeps that would release those units skip this cell.
+      if (!hadControl && (await this.mayBeReserveCell(currentCellId, transaction))) {
+        return this.result(
+          identity,
+          existing,
+          cell(currentRow, await this.cellRegion(transaction, currentCellId)),
+          leaseExpiresAt
+        )
+      }
       if (
         !hadControl &&
         !(await this.cellHasConnectionHeadroom(transaction, currentCellId))
@@ -1051,7 +1081,6 @@ export class RelayAssignmentStore {
         throw new Error('relay_connection_headroom_exhausted')
       }
 
-      const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
       if (hadControl) {
         await this.touchAssignment(transaction, identity, leaseExpiresAt, now)
       } else {
@@ -1179,11 +1208,12 @@ export class RelayAssignmentStore {
       const existing = await this.assignmentRowOrBusy(transaction, identity)
       // A dormant host holds no units, so its placement never writes its old
       // cell and needs only the rows it could land on.
-      // A reserve cell's hosts hold no activity rows here: idle there is not dormant.
+      // A live reserve cell's hosts hold no activity rows here: idle there is not dormant. A
+      // dead one holds no duplicate, so its hosts are re-placed as any dormant host is.
       const dormant =
         !existing ||
         (mayNormallyReassign(activity(existing), now) &&
-          !(await this.mayBeReserveCell(text(existing, 'cell_id'), transaction)))
+          !(await this.liveReserveCell(text(existing, 'cell_id'), transaction, now)))
       retryScope = dormant ? 'general' : isolatedScope ? inventoryScope : 'all'
       if (
         (inventoryScope === 'general' && !dormant) ||
@@ -1303,6 +1333,19 @@ export class RelayAssignmentStore {
             current.cellId,
             integer(existing, 'assignment_epoch')
           )
+          // A reserve cell counts its own controls: the pin is returned with no row written,
+          // since the sweeps that would release those units skip this cell.
+          if (!hadControl && (await this.mayBeReserveCell(current.cellId, transaction))) {
+            return {
+              assignment: this.result(
+                identity,
+                existing,
+                current,
+                now + ASSIGNMENT_LIMITS.activityLeaseMs
+              ),
+              events
+            }
+          }
           const hasConnectionHeadroom =
             hadControl ||
             (await this.cellHasConnectionHeadroom(transaction, current.cellId))
@@ -4791,9 +4834,12 @@ export class RelayAssignmentStore {
     },
     inventoryFirst: boolean
   ): Promise<DeadSourceCompletionResult> {
-    // A silent reserve cell is unverifiable, not dead: its hosts are not provably off it.
-    await this.refuseReserveCell(input.sourceCellId)
+    // A heartbeating reserve source keeps no activity rows, so its hosts are not provably off
+    // it. A dead one holds no duplicate.
     const now = this.now()
+    if (await this.cellIsLive(this.database, input.sourceCellId, now)) {
+      await this.refuseReserveCell(input.sourceCellId)
+    }
     return await this.database.transaction(async (transaction) => {
       await this.lockControlConnectionReservations(transaction, identity)
       let lockedCells: SqlRow[] | undefined

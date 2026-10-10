@@ -1151,7 +1151,17 @@ export function createRelayApp(
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     try {
       if (body.data.admitMode) {
+        const before = await operations.assignments.cellAdmitMode(body.data.cellId)
         await operations.assignments.setCellAdmitMode(body.data.cellId, body.data.admitMode)
+        // The sweeps' switch: every write is on the record, the break-glass flip included.
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_cell_admit_mode_recorded',
+            cellId: body.data.cellId,
+            from: before.admitMode,
+            to: body.data.admitMode
+          })
+        )
       }
       return context.json({
         v: 1,
