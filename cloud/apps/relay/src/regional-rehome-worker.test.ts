@@ -145,7 +145,10 @@ describe('regional rehome worker', () => {
   })
 
   it('counts a source that answers with an error in the same summary', async () => {
-    const fetchImpl = vi.fn(async () => new Response('nope', { status: 503 }))
+    const cancel = vi.fn()
+    const fetchImpl = vi.fn(async () =>
+      new Response(new ReadableStream({ cancel }), { status: 503 })
+    )
     const summaries = collectSummaries()
     try {
       await runOnePoll(fetchImpl, 2, summaries)
@@ -154,6 +157,7 @@ describe('regional rehome worker', () => {
     }
 
     expect(summaries.entries[0]).toMatchObject({ dispatched: 2, outcomes: { failed: 2 } })
+    expect(cancel).toHaveBeenCalledTimes(2)
   })
 
   it('treats the reconnect threshold as per-cell and excludes the director', () => {
