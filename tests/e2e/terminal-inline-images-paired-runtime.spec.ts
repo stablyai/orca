@@ -6,6 +6,7 @@ import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   assertInlineImagePixels,
+  assertKittyPlaceholderPixels,
   enableInlineImages,
   inlineImageProducer,
   readInlineImageState
@@ -62,9 +63,10 @@ async function expectProtocolPixels(
     )
     .toContain(`LIVE:${marker}:`)
   await assertInlineImagePixels(client.page, screenshotPath)
+  await assertKittyPlaceholderPixels(client.page, `${screenshotPath}.placeholders.png`)
   await expect
     .poll(() => readInlineImageState(client.page))
-    .toMatchObject({ images: 3, pending: 0, decoderBytes: 0 })
+    .toMatchObject({ images: 4, pending: 0, decoderBytes: 0 })
 }
 
 test('paired runtime paints inline images and resumes the same PTY after host restart', async ({
@@ -104,7 +106,7 @@ test('paired runtime paints inline images and resumes the same PTY after host re
         'const record = line => appendFileSync(process.argv[2], line + "\\n")',
         'record(`READY:${process.pid}`)',
         'process.stdout.write(`READY:${process.pid}\\r\\n`)',
-        `function emitImages() { ${inlineImageProducer()} }`,
+        `function emitImages() { ${inlineImageProducer(true)} }`,
         'let pending = ""',
         'process.stdin.setEncoding("utf8")',
         'process.stdin.on("data", data => {',

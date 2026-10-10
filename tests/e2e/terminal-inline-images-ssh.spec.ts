@@ -19,6 +19,7 @@ import {
 } from './helpers/docker-ssh-relay-faults'
 import {
   inlineImageProducer,
+  assertKittyPlaceholderPixels,
   enableInlineImages,
   readInlineImageState,
   assertInlineImagePixels
@@ -33,7 +34,7 @@ test('inline images stay bounded and recover through SSH drop and stall', async 
   try {
     target = startDockerSshRelayTarget(testInfo)
     const producerPath = testInfo.outputPath('image-producer.cjs')
-    writeFileSync(producerPath, inlineImageProducer())
+    writeFileSync(producerPath, inlineImageProducer(true))
     copyFileIntoDockerSshRelayTarget(target, producerPath, '/tmp/image-producer.cjs')
     await waitForSessionReady(orcaPage)
     const remote = await connectDockerSshRelayTarget(orcaPage, target, {
@@ -45,6 +46,7 @@ test('inline images stay bounded and recover through SSH drop and stall', async 
       await execInTerminal(orcaPage, ptyId, `node /tmp/image-producer.cjs ${stage}`)
       await waitForTerminalOutput(orcaPage, `IMAGE_PROOF_${stage}`, 30_000)
       await assertInlineImagePixels(orcaPage, testInfo.outputPath(`${stage}.png`))
+      await assertKittyPlaceholderPixels(orcaPage, testInfo.outputPath(`${stage}-placeholders.png`))
     }
     await emit('before-drop')
     await execInTerminal(orcaPage, ptyId, 'export IMAGE_SHELL_ID=$$')
@@ -67,6 +69,10 @@ test('inline images stay bounded and recover through SSH drop and stall', async 
     await waitForTerminalOutput(orcaPage, 'IMAGE_PROOF_after-stall', 60_000)
     expect(await waitForActivePanePtyId(orcaPage)).toBe(ptyId)
     await assertInlineImagePixels(orcaPage, testInfo.outputPath('after-stall.png'))
+    await assertKittyPlaceholderPixels(
+      orcaPage,
+      testInfo.outputPath('after-stall-placeholders.png')
+    )
     const floodPath = testInfo.outputPath('image-flood.cjs')
     writeFileSync(
       floodPath,

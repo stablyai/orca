@@ -105,7 +105,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..73cedbe99f831bffd202697cc8ba80a4
      const cw = this._renderer.dimensions?.css.cell.width || CELL_SIZE_DEFAULT.width;
      const ch = this._renderer.dimensions?.css.cell.height || CELL_SIZE_DEFAULT.height;
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..0c44d2a81642113417bf8dc10a4faa76d7cc5864 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..963f814b9c1030912722909a59c94586bd3b732b 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
 @@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
@@ -116,11 +116,31 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..0c44d2a81642113417bf8dc10a4faa76
      for (const obj of this._disposables) {
        obj.dispose();
      }
+@@ -196,7 +197,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+ 
+     // Kitty graphics handler
+     if (this._opts.kittySupport) {
+-      const kittyStorage = new KittyImageStorage(this._storage!);
++      const kittyStorage = new KittyImageStorage(this._storage!, this._renderer!);
+       const kittyHandler = new KittyGraphicsHandler(this._opts, this._renderer!, kittyStorage, terminal);
+       this._handlers.set('kitty', kittyHandler);
+       this._disposeLater(
 diff --git a/src/ImageRenderer.ts b/src/ImageRenderer.ts
-index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33a8aa814f 100644
+index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af54feb0cb 100644
 --- a/src/ImageRenderer.ts
 +++ b/src/ImageRenderer.ts
-@@ -186,16 +186,17 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -140,6 +140,10 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     };
+   }
+ 
++  public refreshAll(): void {
++    this._renderService?.refreshRows(0, this._terminal.rows - 1);
++  }
++
+   /**
+    * Clear a region of the image layer canvas.
+    */
+@@ -186,16 +190,17 @@ export class ImageRenderer extends Disposable implements IDisposable {
  
      this._rescaleImage(imgSpec, width, height);
      const img = imgSpec.actual!;
@@ -143,7 +163,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33
  
      // Floor all pixel offsets to get stable tile mapping without any overflows.
      // Note: For not pixel perfect aligned cells like in the DOM renderer
-@@ -204,7 +205,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -204,10 +209,83 @@ export class ImageRenderer extends Disposable implements IDisposable {
      ctx.drawImage(
        img,
        Math.floor(sx), Math.floor(sy), Math.ceil(finalWidth), Math.ceil(finalHeight),
@@ -152,7 +172,83 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33
      );
    }
  
-@@ -219,19 +220,20 @@ export class ImageRenderer extends Disposable implements IDisposable {
++  // Fit the original source into the cell grid without distorting its aspect ratio.
++  public drawCellImage(imgSpec: IImageSpec, boxCols: number, boxRows: number, gridRow: number, gridCol: number, count: number, col: number, row: number): void {
++    const ctx = this._layers.get(imgSpec.layer);
++    if (!ctx) {
++      return;
++    }
++    const { width, height } = this.cellSize;
++    // Don't try to draw anything, if we cannot get valid renderer metrics.
++    if (width === -1 || height === -1) {
++      return;
++    }
++    const img = imgSpec.orig;
++    if (!img) {
++      return;
++    }
++
++    const boxWidth = boxCols * width;
++    const boxHeight = boxRows * height;
++    let xScale: number;
++    let yScale: number;
++    let xOffset: number;
++    let yOffset: number;
++    if (img.width * boxHeight > img.height * boxWidth) {
++      // Wider than the box: fit to width and center vertically.
++      xScale = boxWidth / Math.max(1, img.width);
++      yScale = xScale;
++      xOffset = 0;
++      yOffset = (boxHeight - img.height * yScale) / 2;
++    } else {
++      // Taller than the box: fit to height and center horizontally.
++      yScale = boxHeight / Math.max(1, img.height);
++      xScale = yScale;
++      xOffset = (boxWidth - img.width * xScale) / 2;
++      yOffset = 0;
++    }
++
++    // Clip source and destination together so edge tiles are not stretched.
++    let dx = col * width;
++    let dy = row * height;
++    let dw = count * width;
++    let dh = height;
++    let sx = (gridCol * width - xOffset) / xScale;
++    let sy = (gridRow * height - yOffset) / yScale;
++    let sw = dw / xScale;
++    let sh = dh / yScale;
++    if (sx < 0) {
++      const clipped = -sx * xScale;
++      dx += clipped;
++      dw -= clipped;
++      sw += sx;
++      sx = 0;
++    }
++    if (sy < 0) {
++      const clipped = -sy * yScale;
++      dy += clipped;
++      dh -= clipped;
++      sh += sy;
++      sy = 0;
++    }
++    if (sx + sw > img.width) {
++      sw = img.width - sx;
++      dw = sw * xScale;
++    }
++    if (sy + sh > img.height) {
++      sh = img.height - sy;
++      dh = sh * yScale;
++    }
++    if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {
++      return;
++    }
++    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
++  }
++
+   /**
+    * Extract a single tile from an image.
+    */
+@@ -219,19 +297,20 @@ export class ImageRenderer extends Disposable implements IDisposable {
      }
      this._rescaleImage(imgSpec, width, height);
      const img = imgSpec.actual!;
@@ -181,7 +277,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33
        );
        return canvas;
      }
-@@ -299,11 +301,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -299,11 +378,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
        spec.actualCellSize.height = originalHeight;
        return;
      }
@@ -203,7 +299,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33
      const ctx = canvas.getContext('2d');
      if (ctx) {
        ctx.drawImage(spec.orig!, 0, 0, canvas.width, canvas.height);
-@@ -415,7 +422,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -415,7 +499,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
      for (let i = 0; i < width; i += bWidth) {
        ctx2.drawImage(blueprint, i, 0);
      }
@@ -216,6 +312,124 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33
    }
  
    public get document(): Document | undefined {
+diff --git a/src/ImageStorage.ts b/src/ImageStorage.ts
+index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c8814ac0057 100644
+--- a/src/ImageStorage.ts
++++ b/src/ImageStorage.ts
+@@ -54,7 +54,7 @@ class ExtendedAttrsImage implements IExtendedAttrsImage {
+   }
+   public set underlineColor(value: number) {
+     this._ext &= ~(Attributes.CM_MASK | Attributes.RGB_MASK);
+-    this._ext |= value & (Attributes.CM_MASK | Attributes.RGB_MASK);
++    this._ext |= (value === -1 ? 0 : value) & (Attributes.CM_MASK | Attributes.RGB_MASK);
+   }
+ 
+   public get underlineVariantOffset(): number {
+@@ -100,7 +100,8 @@ class ExtendedAttrsImage implements IExtendedAttrsImage {
+   }
+ 
+   public isEmpty(): boolean {
+-    return this.underlineStyle === UnderlineStyle.NONE && this._urlId === 0 && this.imageId === -1;
++    return this.underlineStyle === UnderlineStyle.NONE && this._urlId === 0 && this.imageId === -1
++      && (this.underlineColor & Attributes.CM_MASK) === 0;
+   }
+ }
+ const EMPTY_ATTRS = new ExtendedAttrsImage();
+@@ -130,6 +131,8 @@ export class ImageStorage implements IDisposable {
+   private _viewportMetrics: { cols: number, rows: number };
+   public onImageAdded: (() => void) | undefined;
+   public onImageDeleted: ((storageId: number) => void) | undefined;
++  // Placeholder cells carry image references in text and colors, not tile attributes.
++  public onRenderLine: ((line: IBufferLineExt, row: number, cols: number) => void) | undefined;
+ 
+   constructor(
+     private _terminal: ITerminalExt,
+@@ -155,12 +158,9 @@ export class ImageStorage implements IDisposable {
+   }
+ 
+   public reset(): void {
+-    for (const spec of this._images.values()) {
+-      spec.marker?.dispose();
++    for (const id of [...this._images.keys()]) {
++      this.deleteImage(id);
+     }
+-    // NOTE: marker.dispose above already calls ImageBitmap.close
+-    // therefore we can just wipe the map here
+-    this._images.clear();
+     this._renderer.clearAll();
+   }
+ 
+@@ -202,6 +202,7 @@ export class ImageStorage implements IDisposable {
+       spec.orig.close();
+     }
+     this.onImageDeleted?.(id);
++    this._renderer.refreshAll();
+   }
+ 
+   /**
+@@ -236,6 +237,36 @@ export class ImageStorage implements IDisposable {
+     }
+   }
+ 
++  public addUnplacedImage(img: HTMLCanvasElement | ImageBitmap, opts: IAddImageOpts): number {
++    // never allow storage to exceed memory limit
++    this._evictOldest(img.width * img.height);
++
++    let cellSize = this._renderer.cellSize;
++    if (cellSize.width === -1 || cellSize.height === -1) {
++      cellSize = CELL_SIZE_DEFAULT;
++    }
++
++    const imageId = ++this._lastId;
++    this._images.set(imageId, {
++      orig: img,
++      origCellSize: cellSize,
++      actual: img,
++      actualCellSize: { ...cellSize },
++      marker: undefined,
++      tileCount: 0,
++      virtual: true,
++      bufferType: this._terminal.buffer.active.type,
++      layer: opts.layer,
++      zIndex: opts.zIndex
++    });
++    this.onImageAdded?.();
++    return imageId;
++  }
++
++  public getImageSpec(id: number): IImageSpec | undefined {
++    return this._images.get(id);
++  }
++
+   /**
+    * Method to add an image to the storage.
+    * @param img - The image to add (canvas or bitmap).
+@@ -307,7 +338,7 @@ export class ImageStorage implements IDisposable {
+     // deleted images with zero tile count
+     const zero = [];
+     for (const [id, spec] of this._images.entries()) {
+-      if (spec.tileCount < 1) {
++      if (spec.tileCount < 1 && !spec.virtual) {
+         spec.marker?.dispose();
+         zero.push(id);
+       }
+@@ -430,6 +461,7 @@ export class ImageStorage implements IDisposable {
+     for (let row = start; row <= end; ++row) {
+       const line = buffer.lines.get(row + buffer.ydisp) as IBufferLineExt;
+       if (!line) return;
++      this.onRenderLine?.(line, row, cols);
+       for (let col = 0; col < cols; ++col) {
+         if (line.getBg(col) & BgFlags.HAS_EXTENDED) {
+           let e: IExtendedAttrsImage = line._extendedAttrs[col] ?? EMPTY_ATTRS;
+@@ -656,7 +688,7 @@ export class ImageStorage implements IDisposable {
+     // deleted images with zero tile count
+     const zero = [];
+     for (const [id, spec] of this._images.entries()) {
+-      if (spec.bufferType === 'alternate' && !spec.tileCount) {
++      if (spec.bufferType === 'alternate' && !spec.tileCount && !spec.virtual) {
+         spec.marker?.dispose();
+         zero.push(id);
+       }
 diff --git a/src/SixelHandler.ts b/src/SixelHandler.ts
 index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..0711a122ea43d5212a2851add9e744b65550ec85 100644
 --- a/src/SixelHandler.ts
@@ -364,8 +578,20 @@ index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..0711a122ea43d5212a2851add9e744b6
      this._storage.addImage(canvas);
      return true;
    }
+diff --git a/src/Types.ts b/src/Types.ts
+index 53d357a973117b844ebf2e236d6892334f15c27b..0c28883daff5590eac3da8e4ea64477d2e429c05 100644
+--- a/src/Types.ts
++++ b/src/Types.ts
+@@ -117,6 +117,7 @@ export interface IImageSpec {
+   actualCellSize: ICellSize;
+   marker: IMarker | undefined;
+   tileCount: number;
++  virtual?: boolean;
+   bufferType: 'alternate' | 'normal';
+   layer: ImageLayer;
+   zIndex: number;
 diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
-index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d88201134f78 100644
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..7dea859440f8700d70461944e202e160c2c705b7 100644
 --- a/src/kitty/KittyGraphicsHandler.ts
 +++ b/src/kitty/KittyGraphicsHandler.ts
 @@ -7,6 +7,7 @@ import { IDisposable } from '@xterm/xterm';
@@ -433,7 +659,68 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d882
      }
  
      if (this._activeDecoder.put(data.subarray(start, end)) !== DECODER_OK) {
-@@ -550,9 +583,11 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -382,7 +415,9 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+       this._sendResponse(id, 'ENOENT:image not found', cmd.quiet ?? 0, cmd.placementId);
+       return true;
+     }
+-    const result = this._displayImage(image, cmd);
++    const result = cmd.unicodePlaceholder === 1
++      ? this._placeVirtual(image, cmd)
++      : this._displayImage(image, cmd);
+     return result.then(success => {
+       this._sendResponse(id, success ? 'OK' : 'EINVAL:image rendering failed', cmd.quiet ?? 0, cmd.placementId);
+       return true;
+@@ -433,7 +468,9 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+     const id = cmd.id ?? this._kittyStorage.lastImageId;
+     const image = this._kittyStorage.getImage(id);
+     if (image) {
+-      const result = this._displayImage(image, cmd);
++      const result = cmd.unicodePlaceholder === 1
++        ? this._placeVirtual(image, cmd)
++        : this._displayImage(image, cmd);
+       if (cmd.id !== undefined) {
+         return result.then(success => {
+           this._sendResponse(id, success ? 'OK' : 'EINVAL:image rendering failed', cmd.quiet ?? 0);
+@@ -500,28 +537,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+     // Per spec: default delete selector is 'a' (delete all visible placements)
+     const selector = cmd.deleteSelector ?? 'a';
+ 
+-    // TODO: Distinguish lowercase (delete placements only) from uppercase
+-    // (delete placements + free stored image data). Currently both variants
+-    // free everything since we don't separate stored data from placements.
+     switch (selector) {
+       case 'a':
++        this._kittyStorage.deletePhysicalPlacements();
++        break;
+       case 'A':
+         this._cleanupAllPending();
+-        this._kittyStorage.deleteAll();
++        this._kittyStorage.deleteAll(true);
+         break;
+       case 'i':
+       case 'I':
+-        // TODO: When placement id tracking is implemented (see TODO in
+-        // KittyImageStorage), d=i with p=<pid> should delete only that
+-        // specific placement, while d=i without p should delete all
+-        // placements for the image.
+         if (cmd.id !== undefined) {
+-          const pending = this._pendingTransmissions.get(cmd.id);
+-          if (pending) {
+-            pending.decoder.release();
++          if (selector === 'I') {
++            const pending = this._pendingTransmissions.get(cmd.id);
++            pending?.decoder.release();
++            this._removePendingEntry(cmd.id);
++            this._kittyStorage.deleteById(cmd.id, cmd.placementId);
++          } else {
++            this._kittyStorage.deletePlacementsById(cmd.id, cmd.placementId);
+           }
+-          this._removePendingEntry(cmd.id);
+-          this._kittyStorage.deleteById(cmd.id);
+         }
+         break;
+       default:
+@@ -550,49 +584,17 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    private async _decodeAndDisplay(image: IKittyImageData, cmd: IKittyCommand): Promise<void> {
@@ -441,11 +728,54 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d882
      let bitmap: ImageBitmap | undefined = await this._createBitmap(image);
  
      try {
+-      const cropX = Math.max(0, cmd.x ?? 0);
+-      const cropY = Math.max(0, cmd.y ?? 0);
+-      const cropW = cmd.sourceWidth || (bitmap.width - cropX);
+-      const cropH = cmd.sourceHeight || (bitmap.height - cropY);
+-
+-      const maxCropW = Math.max(0, bitmap.width - cropX);
+-      const maxCropH = Math.max(0, bitmap.height - cropY);
+-      const finalCropW = Math.max(0, Math.min(cropW, maxCropW));
+-      const finalCropH = Math.max(0, Math.min(cropH, maxCropH));
+-
+-      if (finalCropW === 0 || finalCropH === 0) {
+-        throw new Error('invalid source rectangle');
+-      }
+-
+-      if (cropX !== 0 || cropY !== 0 || finalCropW !== bitmap.width || finalCropH !== bitmap.height) {
+-        const cropped = await createImageBitmap(bitmap, cropX, cropY, finalCropW, finalCropH);
+-        bitmap.close();
+-        bitmap = cropped;
+-      }
 +      if (generation !== this._generation) throw new Error('image decode canceled');
-       const cropX = Math.max(0, cmd.x ?? 0);
-       const cropY = Math.max(0, cmd.y ?? 0);
-       const cropW = cmd.sourceWidth || (bitmap.width - cropX);
-@@ -660,6 +695,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
++      const cropped = this._cropImage(bitmap, cmd);
++      bitmap = cropped instanceof Promise ? await cropped : cropped;
+ 
+       const cw = this._renderer.dimensions?.css.cell.width || CELL_SIZE_DEFAULT.width;
+       const ch = this._renderer.dimensions?.css.cell.height || CELL_SIZE_DEFAULT.height;
+-
+-      // Per spec: c/r default to image's natural cell dimensions.
+-      // If only one of c/r is specified, compute the other from image aspect ratio.
+-      let imgCols: number;
+-      let imgRows: number;
+-      if (cmd.columns !== undefined && cmd.rows !== undefined) {
+-        imgCols = cmd.columns;
+-        imgRows = cmd.rows;
+-      } else if (cmd.columns !== undefined) {
+-        imgCols = cmd.columns;
+-        imgRows = Math.max(1, Math.ceil((bitmap.height / bitmap.width) * (imgCols * cw) / ch));
+-      } else if (cmd.rows !== undefined) {
+-        imgRows = cmd.rows;
+-        imgCols = Math.max(1, Math.ceil((bitmap.width / bitmap.height) * (imgRows * ch) / cw));
+-      } else {
+-        imgCols = Math.ceil(bitmap.width / cw);
+-        imgRows = Math.ceil(bitmap.height / ch);
+-      }
++      let { cols: imgCols, rows: imgRows } = this._placementGrid(bitmap, cmd, cw, ch);
+ 
+       let w = bitmap.width;
+       let h = bitmap.height;
+@@ -660,6 +662,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
          }
        }
  
@@ -453,7 +783,80 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d882
        const zIndex = cmd.zIndex ?? 0;
        this._kittyStorage.addImage(image.id, bitmap, true, layer, zIndex);
        bitmap = undefined;  // ownership transferred to storage
-@@ -693,6 +729,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -684,6 +687,72 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+     }
+   }
+ 
++  // Keep the uncropped path synchronous to preserve its parser scheduling.
++  private _cropImage(bitmap: ImageBitmap, cmd: IKittyCommand): ImageBitmap | Promise<ImageBitmap> {
++    const cropX = Math.max(0, cmd.x ?? 0);
++    const cropY = Math.max(0, cmd.y ?? 0);
++    const cropW = cmd.sourceWidth || (bitmap.width - cropX);
++    const cropH = cmd.sourceHeight || (bitmap.height - cropY);
++
++    const maxCropW = Math.max(0, bitmap.width - cropX);
++    const maxCropH = Math.max(0, bitmap.height - cropY);
++    const finalCropW = Math.max(0, Math.min(cropW, maxCropW));
++    const finalCropH = Math.max(0, Math.min(cropH, maxCropH));
++
++    if (finalCropW === 0 || finalCropH === 0) {
++      throw new Error('invalid source rectangle');
++    }
++
++    if (cropX !== 0 || cropY !== 0 || finalCropW !== bitmap.width || finalCropH !== bitmap.height) {
++      return createImageBitmap(bitmap, cropX, cropY, finalCropW, finalCropH).then(cropped => {
++        bitmap.close();
++        return cropped;
++      });
++    }
++    return bitmap;
++  }
++
++  // An omitted grid dimension follows the source aspect ratio.
++  private _placementGrid(bitmap: ImageBitmap, cmd: IKittyCommand, cw: number, ch: number): { cols: number; rows: number } {
++    if (cmd.columns !== undefined && cmd.rows !== undefined) {
++      return { cols: cmd.columns, rows: cmd.rows };
++    }
++    if (cmd.columns !== undefined) {
++      return { cols: cmd.columns, rows: Math.max(1, Math.ceil((bitmap.height / bitmap.width) * (cmd.columns * cw) / ch)) };
++    }
++    if (cmd.rows !== undefined) {
++      return { cols: Math.max(1, Math.ceil((bitmap.width / bitmap.height) * (cmd.rows * ch) / cw)), rows: cmd.rows };
++    }
++    return { cols: Math.ceil(bitmap.width / cw), rows: Math.ceil(bitmap.height / ch) };
++  }
++
++  private async _placeVirtual(image: IKittyImageData, cmd: IKittyCommand): Promise<boolean> {
++    const generation = this._generation;
++    let bitmap: ImageBitmap | undefined;
++    try {
++      bitmap = await this._createBitmap(image);
++      if (generation !== this._generation) throw new Error('image decode canceled');
++      const cropped = this._cropImage(bitmap, cmd);
++      bitmap = cropped instanceof Promise ? await cropped : cropped;
++
++      const cw = this._renderer.dimensions?.css.cell.width || CELL_SIZE_DEFAULT.width;
++      const ch = this._renderer.dimensions?.css.cell.height || CELL_SIZE_DEFAULT.height;
++      const { cols, rows } = this._placementGrid(bitmap, cmd, cw, ch);
++
++      if (bitmap.width * bitmap.height > this._opts.pixelLimit) {
++        throw new Error('image exceeds pixel limit');
++      }
++
++      if (generation !== this._generation) throw new Error('image decode canceled');
++      this._kittyStorage.addVirtualPlacement(image.id, cmd.placementId ?? 0, bitmap, cols, rows);
++      bitmap = undefined;  // ownership transferred to storage
++      return true;
++    } catch {
++      bitmap?.close();
++      return false;
++    }
++  }
++
+   // Create ImageBitmap from already-decoded image data.
+   private async _createBitmap(image: IKittyImageData): Promise<ImageBitmap> {
+     let bytes: Uint8Array = new Uint8Array(await image.data.arrayBuffer());
+@@ -693,6 +762,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
  
      if (image.format === KittyFormat.PNG) {
@@ -466,7 +869,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d882
        const blob = new Blob([bytes as BlobPart], { type: 'image/png' });
        if (!window.createImageBitmap) {
          const url = URL.createObjectURL(blob);
-@@ -775,27 +817,45 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -775,27 +850,45 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    private async _decompressZlib(compressed: Uint8Array): Promise<Uint8Array> {
      try {
        return await this._decompress(compressed, 'deflate');
@@ -525,11 +928,231 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d882
      const result = new Uint8Array(totalLength);
      let offset = 0;
      for (const chunk of chunks) {
+diff --git a/src/kitty/KittyGraphicsTypes.ts b/src/kitty/KittyGraphicsTypes.ts
+index 4288dd0a4180eca8f3ae28ec0805f834b2a0a629..158df006abdd348ca35cb1134eb3923ba5810c78 100644
+--- a/src/kitty/KittyGraphicsTypes.ts
++++ b/src/kitty/KittyGraphicsTypes.ts
+@@ -78,7 +78,9 @@ export const enum KittyKey {
+   // Delete selector (a/A=all, i/I=by id, c/C=at cursor, etc.) — only used when a=d
+   DELETE_SELECTOR = 'd',
+   // Placement ID for targeting specific placements
+-  PLACEMENT_ID = 'p'
++  PLACEMENT_ID = 'p',
++  // U=1 creates a prototype for placeholder cells without placing cursor tiles.
++  UNICODE_PLACEHOLDER = 'U'
+ }
+ 
+ // Pixel format constants
+@@ -112,6 +114,7 @@ export interface IKittyCommand {
+   deleteSelector?: string;
+   placementId?: number;
+   compression?: string;
++  unicodePlaceholder?: number;
+   payload?: string;
+ }
+ 
+@@ -139,6 +142,13 @@ export interface IKittyImageData {
+   compression?: string;
+ }
+ 
++export interface IVirtualPlacement {
++  placementId: number;
++  storageId: number;
++  cols: number;
++  rows: number;
++}
++
+ // Parses Kitty graphics control data into a command object.
+ export function parseKittyCommand(data: string): IKittyCommand {
+   const cmd: IKittyCommand = {};
+@@ -188,8 +198,78 @@ export function parseKittyCommand(data: string): IKittyCommand {
+       case KittyKey.CURSOR_MOVEMENT: cmd.cursorMovement = numValue; break;
+       case KittyKey.Z_INDEX: cmd.zIndex = numValue; break;
+       case KittyKey.PLACEMENT_ID: cmd.placementId = numValue; break;
++      case KittyKey.UNICODE_PLACEHOLDER: cmd.unicodePlaceholder = numValue; break;
+     }
+   }
+ 
+   return cmd;
+ }
++
++
++// Source patches can only name files included in the published package.
++
++export const PLACEHOLDER_CHAR = 0x10EEEE;
++
++// Protocol table order; values are one-based so zero can mean an omitted diacritic.
++export const PLACEHOLDER_DIACRITICS: readonly number[] = [
++  0x305, 0x30D, 0x30E, 0x310, 0x312, 0x33D, 0x33E, 0x33F, 0x346, 0x34A,
++  0x34B, 0x34C, 0x350, 0x351, 0x352, 0x357, 0x35B, 0x363, 0x364, 0x365,
++  0x366, 0x367, 0x368, 0x369, 0x36A, 0x36B, 0x36C, 0x36D, 0x36E, 0x36F,
++  0x483, 0x484, 0x485, 0x486, 0x487, 0x592, 0x593, 0x594, 0x595, 0x597,
++  0x598, 0x599, 0x59C, 0x59D, 0x59E, 0x59F, 0x5A0, 0x5A1, 0x5A8, 0x5A9,
++  0x5AB, 0x5AC, 0x5AF, 0x5C4, 0x610, 0x611, 0x612, 0x613, 0x614, 0x615,
++  0x616, 0x617, 0x657, 0x658, 0x659, 0x65A, 0x65B, 0x65D, 0x65E, 0x6D6,
++  0x6D7, 0x6D8, 0x6D9, 0x6DA, 0x6DB, 0x6DC, 0x6DF, 0x6E0, 0x6E1, 0x6E2,
++  0x6E4, 0x6E7, 0x6E8, 0x6EB, 0x6EC, 0x730, 0x732, 0x733, 0x735, 0x736,
++  0x73A, 0x73D, 0x73F, 0x740, 0x741, 0x743, 0x745, 0x747, 0x749, 0x74A,
++  0x7EB, 0x7EC, 0x7ED, 0x7EE, 0x7EF, 0x7F0, 0x7F1, 0x7F3, 0x816, 0x817,
++  0x818, 0x819, 0x81B, 0x81C, 0x81D, 0x81E, 0x81F, 0x820, 0x821, 0x822,
++  0x823, 0x825, 0x826, 0x827, 0x829, 0x82A, 0x82B, 0x82C, 0x82D, 0x951,
++  0x953, 0x954, 0xF82, 0xF83, 0xF86, 0xF87, 0x135D, 0x135E, 0x135F, 0x17DD,
++  0x193A, 0x1A17, 0x1A75, 0x1A76, 0x1A77, 0x1A78, 0x1A79, 0x1A7A, 0x1A7B, 0x1A7C,
++  0x1B6B, 0x1B6D, 0x1B6E, 0x1B6F, 0x1B70, 0x1B71, 0x1B72, 0x1B73, 0x1CD0, 0x1CD1,
++  0x1CD2, 0x1CDA, 0x1CDB, 0x1CE0, 0x1DC0, 0x1DC1, 0x1DC3, 0x1DC4, 0x1DC5, 0x1DC6,
++  0x1DC7, 0x1DC8, 0x1DC9, 0x1DCB, 0x1DCC, 0x1DD1, 0x1DD2, 0x1DD3, 0x1DD4, 0x1DD5,
++  0x1DD6, 0x1DD7, 0x1DD8, 0x1DD9, 0x1DDA, 0x1DDB, 0x1DDC, 0x1DDD, 0x1DDE, 0x1DDF,
++  0x1DE0, 0x1DE1, 0x1DE2, 0x1DE3, 0x1DE4, 0x1DE5, 0x1DE6, 0x1DFE, 0x20D0, 0x20D1,
++  0x20D4, 0x20D5, 0x20D6, 0x20D7, 0x20DB, 0x20DC, 0x20E1, 0x20E7, 0x20E9, 0x20F0,
++  0x2CEF, 0x2CF0, 0x2CF1, 0x2DE0, 0x2DE1, 0x2DE2, 0x2DE3, 0x2DE4, 0x2DE5, 0x2DE6,
++  0x2DE7, 0x2DE8, 0x2DE9, 0x2DEA, 0x2DEB, 0x2DEC, 0x2DED, 0x2DEE, 0x2DEF, 0x2DF0,
++  0x2DF1, 0x2DF2, 0x2DF3, 0x2DF4, 0x2DF5, 0x2DF6, 0x2DF7, 0x2DF8, 0x2DF9, 0x2DFA,
++  0x2DFB, 0x2DFC, 0x2DFD, 0x2DFE, 0x2DFF, 0xA66F, 0xA67C, 0xA67D, 0xA6F0, 0xA6F1,
++  0xA8E0, 0xA8E1, 0xA8E2, 0xA8E3, 0xA8E4, 0xA8E5, 0xA8E6, 0xA8E7, 0xA8E8, 0xA8E9,
++  0xA8EA, 0xA8EB, 0xA8EC, 0xA8ED, 0xA8EE, 0xA8EF, 0xA8F0, 0xA8F1, 0xAAB0, 0xAAB2,
++  0xAAB3, 0xAAB7, 0xAAB8, 0xAABE, 0xAABF, 0xAAC1, 0xFE20, 0xFE21, 0xFE22, 0xFE23,
++  0xFE24, 0xFE25, 0xFE26, 0x10A0F, 0x10A38, 0x1D185, 0x1D186, 0x1D187, 0x1D188, 0x1D189,
++  0x1D1AA, 0x1D1AB, 0x1D1AC, 0x1D1AD, 0x1D242, 0x1D243, 0x1D244,
++];
++
++const PLACEHOLDER_DIACRITIC_VALUES: Map<number, number> = new Map();
++for (let i = 0; i < PLACEHOLDER_DIACRITICS.length; ++i) {
++  PLACEHOLDER_DIACRITIC_VALUES.set(PLACEHOLDER_DIACRITICS[i], i + 1);
++}
++
++// Zero values may inherit from the preceding placeholder cell.
++export interface IPlaceholderLocation {
++  row: number;
++  column: number;
++  highByte: number;
++}
++
++export function decodePlaceholderLocation(chars: string): IPlaceholderLocation {
++  const location: IPlaceholderLocation = { row: 0, column: 0, highByte: 0 };
++  let index = 0;
++  for (const ch of chars) {
++    if (index === 1) {
++      location.row = PLACEHOLDER_DIACRITIC_VALUES.get(ch.codePointAt(0) ?? -1) ?? -1;
++    } else if (index === 2) {
++      location.column = PLACEHOLDER_DIACRITIC_VALUES.get(ch.codePointAt(0) ?? -1) ?? -1;
++    } else if (index === 3) {
++      location.highByte = PLACEHOLDER_DIACRITIC_VALUES.get(ch.codePointAt(0) ?? -1) ?? -1;
++    } else if (index > 3) {
++      break;
++    }
++    index++;
++  }
++  return location;
++}
 diff --git a/src/kitty/KittyImageStorage.ts b/src/kitty/KittyImageStorage.ts
-index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..016943a77c7e8e27da5899d54cd48d82761a87c8 100644
+index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7331b5c60 100644
 --- a/src/kitty/KittyImageStorage.ts
 +++ b/src/kitty/KittyImageStorage.ts
-@@ -83,6 +83,25 @@ export class KittyImageStorage implements IDisposable {
+@@ -4,15 +4,23 @@
+  */
+ 
+ import { IDisposable } from '@xterm/xterm';
++import { ImageRenderer } from '../ImageRenderer';
+ import { ImageStorage } from '../ImageStorage';
+-import { ImageLayer, IAddImageOpts } from '../Types';
+-import { IKittyImageData } from './KittyGraphicsTypes';
++import { Attributes, IBufferLineExt, ImageLayer, IAddImageOpts } from '../Types';
++import { decodePlaceholderLocation, IKittyImageData, IPlaceholderLocation, IVirtualPlacement, PLACEHOLDER_CHAR } from './KittyGraphicsTypes';
++
++interface IPlaceholderCell {
++  imageId: number;
++  placementId: number;
++  location: IPlaceholderLocation;
++}
+ 
+ // Kitty-specific image storage controller.
+ //
+ // Wraps shared ImageStorage with kitty protocol semantics:
+ // - tracks transmitted image payloads by kitty image id
+ // - tracks kitty image id -> shared ImageStorage id mapping for displayed images
++// - tracks virtual placements that U+10EEEE cells display
+ // - mirrors shared-storage evictions into kitty maps
+ // - applies protocol-level undisplayed-image eviction policy
+ export class KittyImageStorage implements IDisposable {
+@@ -20,32 +28,33 @@ export class KittyImageStorage implements IDisposable {
+ 
+   private _nextImageId = 1;
+   private readonly _images: Map<number, IKittyImageData> = new Map();
+-  // TODO: Support multiple placements per image. The kitty spec identifies
+-  // placements by an (image id, placement id) pair — same i + different p
+-  // values should coexist, and same i + same p should replace the prior
+-  // placement. Currently we track only one storage entry per kitty image id,
+-  // so multiple placements of the same image overwrite each other. Fixing
+-  // this requires changing these maps to Map<number, Map<number, number>>
+-  // (kittyId → placementId → storageId) and updating addImage/deleteById
+-  // accordingly. The underlying shared ImageStorage would also need to
+-  // support multiple entries per logical image.
++  // TODO: Track physical placements by (image id, placement id), like virtual placements.
+   private readonly _kittyIdToStorageId: Map<number, number> = new Map();
+   private readonly _storageIdToKittyId: Map<number, number> = new Map();
++  private readonly _virtualPlacements: Map<number, Map<number, IVirtualPlacement>> = new Map();
++  private readonly _virtualStorageIds = new Map<number, { kittyId: number, placementId: number }>();
+ 
+   private readonly _previousOnImageDeleted: ((storageId: number) => void) | undefined;
+   private readonly _wrappedOnImageDeleted: (storageId: number) => void;
+   private readonly _handleStorageImageDeleted = (storageId: number): void => {
++    const virtual = this._virtualStorageIds.get(storageId);
++    if (virtual) {
++      this._virtualStorageIds.delete(storageId);
++      const placements = this._virtualPlacements.get(virtual.kittyId);
++      placements?.delete(virtual.placementId);
++      if (!placements?.size) this._virtualPlacements.delete(virtual.kittyId);
++    }
+     const kittyId = this._storageIdToKittyId.get(storageId);
+     if (kittyId !== undefined) {
+       this._kittyIdToStorageId.delete(kittyId);
+       this._storageIdToKittyId.delete(storageId);
+-      this._images.delete(kittyId);
+     }
+   };
+   private _addImageOpts: IAddImageOpts = { scrolling: true, layer: 'top', zIndex: 0, cursorPos: 'iip' };
+ 
+   constructor(
+-    private readonly _storage: ImageStorage
++    private readonly _storage: ImageStorage,
++    private readonly _renderer: ImageRenderer
+   ) {
+     this._previousOnImageDeleted = this._storage.onImageDeleted;
+     this._wrappedOnImageDeleted = (storageId: number) => {
+@@ -53,6 +62,7 @@ export class KittyImageStorage implements IDisposable {
+       this._handleStorageImageDeleted(storageId);
+     };
+     this._storage.onImageDeleted = this._wrappedOnImageDeleted;
++    this._storage.onRenderLine = this._renderPlaceholderLine;
+   }
+ 
+   public reset(): void {
+@@ -60,6 +70,8 @@ export class KittyImageStorage implements IDisposable {
+     this._images.clear();
+     this._kittyIdToStorageId.clear();
+     this._storageIdToKittyId.clear();
++    this._virtualPlacements.clear();
++    this._virtualStorageIds.clear();
+   }
+ 
+   public dispose(): void {
+@@ -67,11 +79,15 @@ export class KittyImageStorage implements IDisposable {
+     if (this._storage.onImageDeleted === this._wrappedOnImageDeleted) {
+       this._storage.onImageDeleted = this._previousOnImageDeleted;
+     }
++    if (this._storage.onRenderLine === this._renderPlaceholderLine) {
++      this._storage.onRenderLine = undefined;
++    }
+   }
+ 
+   public storeImage(id: number | undefined, imageData: Omit<IKittyImageData, 'id'>): number {
+     const imageId = id ?? this._nextImageId++;
+ 
++    this._deleteVirtualPlacements(imageId);
+     const oldStorageId = this._kittyIdToStorageId.get(imageId);
+     if (oldStorageId !== undefined) {
+       this._storage.deleteImage(oldStorageId);
+@@ -83,6 +99,25 @@ export class KittyImageStorage implements IDisposable {
        this._evictUndisplayedImages();
      }
  
@@ -546,7 +1169,7 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..016943a77c7e8e27da5899d54cd48d82
 +    for (const evictPlaced of [false, true]) {
 +      for (const [oldestId, image] of this._images) {
 +        if (retainedBytes + imageData.data.size <= byteLimit) break;
-+        if (this._kittyIdToStorageId.has(oldestId) !== evictPlaced) continue;
++        if ((this._kittyIdToStorageId.has(oldestId) || this._virtualPlacements.has(oldestId)) !== evictPlaced) continue;
 +        retainedBytes -= image.data.size;
 +        this.deleteById(oldestId);
 +      }
@@ -555,3 +1178,177 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..016943a77c7e8e27da5899d54cd48d82
      this._images.set(imageId, {
        ...imageData,
        id: imageId
+@@ -111,23 +146,67 @@ export class KittyImageStorage implements IDisposable {
+     return this._images.get(kittyId);
+   }
+ 
+-  public deleteById(kittyId: number): void {
+-    this._images.delete(kittyId);
++  // Fit prototypes at render time so each placement holds only the source pixels.
++  public addVirtualPlacement(kittyId: number, placementId: number, image: HTMLCanvasElement | ImageBitmap, cols: number, rows: number): void {
++    const previous = this._virtualPlacements.get(kittyId)?.get(placementId);
++    if (previous) this._storage.deleteImage(previous.storageId);
++    const storageId = this._storage.addUnplacedImage(image, { scrolling: false, layer: 'top', zIndex: 0, cursorPos: 'iip' });
++    let placements = this._virtualPlacements.get(kittyId);
++    if (!placements) {
++      placements = new Map();
++      this._virtualPlacements.set(kittyId, placements);
++    }
++    placements.set(placementId, { placementId, storageId, cols, rows });
++    this._virtualStorageIds.set(storageId, { kittyId, placementId });
++    this._renderer.refreshAll();
++  }
++
++  private _virtualPlacementFor(kittyId: number, placementId: number): IVirtualPlacement | undefined {
++    const placements = this._virtualPlacements.get(kittyId);
++    return placementId === 0 ? placements?.values().next().value : placements?.get(placementId);
++  }
++
++  private _deleteVirtualPlacements(kittyId: number, placementId?: number): void {
++    const placements = this._virtualPlacements.get(kittyId);
++    if (!placements) return;
++    for (const placement of [...placements.values()]) {
++      if (placementId === undefined || placementId === placement.placementId) {
++        this._storage.deleteImage(placement.storageId);
++      }
++    }
++  }
++
++  public deletePlacementsById(kittyId: number, placementId?: number): void {
++    this._deleteVirtualPlacements(kittyId, placementId);
++    if (placementId !== undefined) return;
+     const storageId = this._kittyIdToStorageId.get(kittyId);
+     if (storageId !== undefined) {
+-      this._storage.deleteImage(storageId);
+       this._kittyIdToStorageId.delete(kittyId);
+       this._storageIdToKittyId.delete(storageId);
++      this._storage.deleteImage(storageId);
+     }
+   }
+ 
+-  public deleteAll(): void {
+-    this._images.clear();
+-    for (const storageId of this._kittyIdToStorageId.values()) {
++  public deleteById(kittyId: number, placementId?: number): void {
++    this.deletePlacementsById(kittyId, placementId);
++    if (!this._virtualPlacements.has(kittyId) && !this._kittyIdToStorageId.has(kittyId)) {
++      this._images.delete(kittyId);
++    }
++  }
++
++  public deletePhysicalPlacements(): void {
++    for (const [kittyId, storageId] of [...this._kittyIdToStorageId]) {
++      this._kittyIdToStorageId.delete(kittyId);
++      this._storageIdToKittyId.delete(storageId);
+       this._storage.deleteImage(storageId);
+     }
+-    this._kittyIdToStorageId.clear();
+-    this._storageIdToKittyId.clear();
++  }
++
++  public deleteAll(preserveVirtual = false): void {
++    if (preserveVirtual) this.deletePhysicalPlacements();
++    for (const kittyId of [...this._images.keys()]) {
++      if (!preserveVirtual || !this._virtualPlacements.has(kittyId)) this.deleteById(kittyId);
++    }
+   }
+ 
+   public get images(): ReadonlyMap<number, IKittyImageData> {
+@@ -147,9 +226,96 @@ export class KittyImageStorage implements IDisposable {
+       if (this._images.size <= KittyImageStorage._maxStoredImages / 2) {
+         break;
+       }
+-      if (!this._kittyIdToStorageId.has(kittyId)) {
++      if (!this._kittyIdToStorageId.has(kittyId) && !this._virtualPlacements.has(kittyId)) {
+         this._images.delete(kittyId);
++        this._virtualPlacements.delete(kittyId);
+       }
+     }
+   }
++
++  // Omitted diacritics inherit only from a consecutive matching placeholder.
++  private readonly _renderPlaceholderLine = (line: IBufferLineExt, row: number, cols: number): void => {
++    if (this._virtualPlacements.size === 0) {
++      return;
++    }
++    let runLength = 0;
++    let previous: IPlaceholderCell | undefined;
++    for (let col = 0; col <= cols; ++col) {
++      const cell = col < cols ? this._placeholderCell(line, col) : undefined;
++      if (runLength > 0 && cell !== undefined && previous !== undefined
++        && cell.imageId === previous.imageId
++        && cell.placementId === previous.placementId
++        && (cell.location.row === 0 || cell.location.row === previous.location.row)
++        && (cell.location.column === 0 || cell.location.column === previous.location.column + 1)
++        && (cell.location.highByte === 0 || cell.location.highByte === previous.location.highByte)) {
++        runLength++;
++        cell.location.row = Math.max(previous.location.row, 1);
++        cell.location.column = previous.location.column + 1;
++        cell.location.highByte = Math.max(previous.location.highByte, 1);
++      } else {
++        if (runLength > 0 && previous !== undefined) {
++          this._drawPlaceholderRun(previous, col - runLength, runLength, row);
++        }
++        runLength = 0;
++        if (cell !== undefined) {
++          runLength = 1;
++          if (!cell.location.row) cell.location.row = 1;
++          if (!cell.location.column) cell.location.column = 1;
++          if (!cell.location.highByte) cell.location.highByte = 1;
++        }
++      }
++      previous = cell ?? previous;
++    }
++  };
++
++  private _placeholderCell(line: IBufferLineExt, col: number): IPlaceholderCell | undefined {
++    if (!line.isCombined(col) && line.getCodePoint(col) !== PLACEHOLDER_CHAR) {
++      return undefined;
++    }
++    const chars = line.getString(col);
++    if (chars.codePointAt(0) !== PLACEHOLDER_CHAR) {
++      return undefined;
++    }
++
++    const fg = line.getFg(col);
++    const fgMode = fg & Attributes.CM_MASK;
++    const imageId = fgMode === Attributes.CM_RGB
++      ? fg & Attributes.RGB_MASK
++      : fgMode === 0 ? 0 : fg & Attributes.PCOLOR_MASK;
++    if (fgMode === 0) {
++      return undefined;
++    }
++
++    // Placement IDs use underline color without an underline style.
++    let placementId = 0;
++    const underlineColor = line._extendedAttrs?.[col]?.underlineColor ?? 0;
++    if (underlineColor > 0) {
++      const underlineMode = underlineColor & Attributes.CM_MASK;
++      placementId = underlineMode === Attributes.CM_RGB
++        ? underlineColor & Attributes.RGB_MASK
++        : underlineMode === 0 ? 0 : underlineColor & Attributes.PCOLOR_MASK;
++    }
++
++    const location = decodePlaceholderLocation(chars);
++    if (location.row < 0 || location.column < 0 || location.highByte < 0 || location.highByte > 256) return undefined;
++    return { imageId, placementId, location };
++  }
++
++  private _drawPlaceholderRun(cell: IPlaceholderCell, startCol: number, count: number, row: number): void {
++    const imageId = (cell.imageId | ((cell.location.highByte - 1) << 24)) >>> 0;
++    const placement = this._virtualPlacementFor(imageId, cell.placementId);
++    const spec = placement && this._storage.getImageSpec(placement.storageId);
++    // `column` is 1-based and holds the last cell of the run.
++    const gridRow = cell.location.row - 1;
++    const gridCol = cell.location.column - count;
++    if (!placement || !spec || gridRow < 0 || gridRow >= placement.rows || gridCol < 0) {
++      return;
++    }
++    // Cells past the placement's box show nothing.
++    const tiles = Math.min(count, placement.cols - gridCol);
++    if (tiles <= 0) {
++      return;
++    }
++    this._renderer.drawCellImage(spec, placement.cols, placement.rows, gridRow, gridCol, tiles, startCol, row);
++  }
+ }
