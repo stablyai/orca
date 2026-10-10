@@ -29,7 +29,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
-    const disposePopupPolicy = this.installGuestPopupPolicy(guest, !inheritedOwnerContext)
+    const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.

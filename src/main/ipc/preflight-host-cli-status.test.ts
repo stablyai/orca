@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 
 const {
   handleMock,
@@ -52,7 +52,7 @@ vi.mock('child_process', () => {
   }
 })
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: async (spec: ProcessSpec) => ({
     ...(await execFileAsyncMock(spec.program, spec.args, {
       encoding: 'utf-8',

@@ -18,17 +18,30 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
+it('keeps a skipped compaction warning truthful instead of showing the success separator', () => {
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    text: 'Nothing to compact (session too small)',
+    presentation: 'compaction-skipped'
+  })
+  expect(screen.getByText('Nothing to compact (session too small)')).toBeInTheDocument()
+  expect(screen.queryByText('Context compacted')).toBeNull()
+})
+
 function orcaStopView(
   hostLabel: string | null,
-  continueAvailable: boolean
+  continueAvailable: boolean,
+  remoteHost: boolean
 ): NativeChatOrcaStopView {
-  return { hostLabel, continueAvailable }
+  return { hostLabel, remoteHost, continueAvailable }
 }
 
 function renderStatus(
   body: AgentJournalStatusItem,
   hostLabel: string | null = null,
   continueAvailable = false,
+  remoteHost = false,
   agentName?: string
 ) {
   const [message] = projectStructuredItemsToNativeChat([
@@ -41,7 +54,7 @@ function renderStatus(
       turnScope: { kind: 'turn', turnItemId: 'cut-turn' }
     }
   ])
-  const view = orcaStopView(hostLabel, continueAvailable)
+  const view = orcaStopView(hostLabel, continueAvailable, remoteHost)
   return render(
     <NativeChatOrcaStopContext.Provider value={view}>
       <MessageRow
@@ -86,6 +99,30 @@ describe('the row an Orca stop leaves', () => {
         'Orca on studio-mac restarted for an update while this response was in progress.'
       )
     ).toBeInTheDocument()
+  })
+
+  it("says a remote host's Orca stopped, not that it was closed", () => {
+    renderStatus(orcaStopRow('quit'), 'QA SSH', true, true)
+    expect(
+      screen.getByText('Orca on QA SSH stopped while this response was in progress.').parentElement
+        ?.parentElement
+    ).toHaveClass('text-muted-foreground')
+    expect(screen.queryByText(/was closed/)).toBeNull()
+  })
+
+  it("keeps this desktop's quit as closed", () => {
+    renderStatus(orcaStopRow('quit'), 'studio-mac', true, false)
+    expect(
+      screen.getByText('Orca on studio-mac was closed while this response was in progress.')
+    ).toBeInTheDocument()
+  })
+
+  it.each([
+    ['update', 'Orca on QA SSH restarted for an update while this response was in progress.'],
+    ['crash', 'Orca on QA SSH stopped unexpectedly while this response was in progress.']
+  ])("keeps a remote host's %s words", (cause, sentence) => {
+    renderStatus(orcaStopRow(cause), 'QA SSH', true, true)
+    expect(screen.getByText(sentence)).toBeInTheDocument()
   })
 
   // A client that re-words unnamed host rows keeps this row's presentation and cause, neutral.
@@ -153,7 +190,7 @@ describe('notice rows', () => {
         { kind },
         { agentName: 'Grok', command: 'compact', surface: 'row' }
       )
-      renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, 'Grok')
+      renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, false, 'Grok')
       expect(screen.getByText(words.text)).toBeInTheDocument()
       expect(screen.getByText(/Run \/compact again\./)).toBeInTheDocument()
       expect(screen.queryByText(/send your message again/i)).toBeNull()
@@ -167,6 +204,7 @@ describe('notice rows', () => {
         ...agentSessionFailureWords({ kind: 'notSignedIn' }, { agentName: 'Grok', surface: 'row' })
       },
       null,
+      false,
       false,
       'Grok'
     )
@@ -216,6 +254,7 @@ describe('notice rows', () => {
         },
         null,
         false,
+        false,
         agentName
       )
       expect(
@@ -237,6 +276,7 @@ describe('notice rows', () => {
         )
       },
       null,
+      false,
       false,
       'Claude'
     )
@@ -260,7 +300,7 @@ describe('notice rows', () => {
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates an older client receiving a newer host's unknown failure fact.
       const row = newerRow as unknown as AgentJournalStatusItem
-      renderStatus(row, null, false, 'Grok')
+      renderStatus(row, null, false, false, 'Grok')
       expect(screen.getByText('Future host guidance')).toBeInTheDocument()
     }
   )

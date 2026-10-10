@@ -6,6 +6,7 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { uploadRelayDirectory } from './ssh-relay-install-transfers'
 import {
   ensureRemoteOrcadNodeRuntime,
+  NODE_RUNTIME_PROMOTE_TIMEOUT_MS,
   probeRemoteNodeRuntimeCommand,
   remoteNodeRuntimeDir,
   remoteNodeRuntimePresentCommand,
@@ -16,8 +17,7 @@ import {
 } from './orcad-remote-node-runtime'
 import {
   windowsNodeRuntimeProbeCommand,
-  windowsNodeRuntimePromoteCommand,
-  WINDOWS_NODE_RUNTIME_PROMOTE_TIMEOUT_MS
+  windowsNodeRuntimePromoteCommand
 } from './orcad-remote-node-runtime-windows'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
@@ -230,7 +230,7 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
     expect(locked).toBeGreaterThan(0)
     expect(promoted).toBeGreaterThan(locked)
     expect(released).toBeGreaterThan(promoted)
-    expect(calls[promoted][2]).toMatchObject({ timeoutMs: WINDOWS_NODE_RUNTIME_PROMOTE_TIMEOUT_MS })
+    expect(calls[promoted][2]).toMatchObject({ timeoutMs: NODE_RUNTIME_PROMOTE_TIMEOUT_MS })
     // The promote script removes its own stage, so no separate cleanup runs.
     expect(scripts.some((s) => s.startsWith('Remove-Item') && s.includes('.stage-node-'))).toBe(
       false

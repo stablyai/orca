@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SpawnOptions as SdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import { spawnProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_STDIN_END_GRACE_MS,

@@ -7,7 +7,8 @@ const { getSshGitProviderMock, gitExecFileAsyncMock } = vi.hoisted(() => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH Git provider unavailable'
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH Git provider unavailable',
+  sshGitProviderMissingError: () => new Error('SSH Git provider unavailable')
 }))
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))

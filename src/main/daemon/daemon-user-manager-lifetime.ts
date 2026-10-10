@@ -8,7 +8,8 @@
  * dies with it anyway, so the scope costs it nothing.
  */
 import { readFileSync } from 'node:fs'
-import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const LINGER_PROBE_TIMEOUT_MS = 2_000
 

@@ -120,6 +120,7 @@ export type RuntimePtySpawnArgs = {
   }
   agentSessionCreateOperationId?: string
   signal?: AbortSignal
+  refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
   adoptedStablePane?: {
     result: PtySpawnResult

@@ -5,6 +5,7 @@ import {
   parseNativeChatUpgradeTipAudience,
   type NativeChatUpgradeTipAudience
 } from '../../../shared/native-chat-upgrade-tip-audience'
+import { savedChatUiWithTerminalDefaultView } from '../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
@@ -51,9 +52,16 @@ export class LoadedCohortMigrationOperations {
     if (chatUi === true) {
       // Why: every build before the chat upgrade saved this key and the upgrade strips it, so
       // without it the opt-in may postdate the upgrade and cannot prove membership.
-      return settings && Object.hasOwn(settings, 'openAgentTabsInChatByDefault')
-        ? { version: 1, membership: 'eligible', basis: 'chat-ui-on' }
-        : { version: 1, membership: 'excluded', basis: 'chat-ui-on-unproven' }
+      if (!settings || !Object.hasOwn(settings, 'openAgentTabsInChatByDefault')) {
+        return { version: 1, membership: 'excluded', basis: 'chat-ui-on-unproven' }
+      }
+      return {
+        version: 1,
+        membership: 'eligible',
+        basis: savedChatUiWithTerminalDefaultView(settings)
+          ? 'chat-ui-on-terminal-default'
+          : 'chat-ui-on'
+      }
     }
     return {
       version: 1,

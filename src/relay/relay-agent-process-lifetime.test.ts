@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { spawnProcess } from '../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { RelayAgentProcessLifetime } from './relay-agent-process-lifetime'
 
 describe.skipIf(process.platform === 'win32')('RelayAgentProcessLifetime', () => {

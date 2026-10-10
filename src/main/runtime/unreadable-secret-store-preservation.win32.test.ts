@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
-import { windowsSystem32Binary } from '../../shared/child-process/windows-system-binary'
+import { runProcessSync } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 /**

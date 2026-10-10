@@ -41,7 +41,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     }
     this.token = randomUUID()
     this.endpointFileWritten = false
-    this.lastWrittenJson = null
+    this.closeStatusSnapshotWriter()
     if (this.statusHooksEnabled) {
       this.initializeStatusHookOwner()
     }
@@ -241,7 +241,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
-    this.lastWrittenJson = null
+    this.closeStatusSnapshotWriter()
     this.runtimeObservedStatusPaneKeys.clear()
     this.paneKeyByTerminalHandle.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])

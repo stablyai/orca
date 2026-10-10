@@ -19,6 +19,8 @@ it('reveals before launch Retry, but waits for a successful queue Resume', async
       steer: vi.fn(async () => {}),
       remove: vi.fn(async () => {}),
       edit: vi.fn(async () => {}),
+      editCapable: false,
+      editor: undefined,
       steerNewest: vi.fn(() => false),
       queueResume: undefined,
       queueHold: undefined

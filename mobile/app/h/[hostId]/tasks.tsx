@@ -1,8 +1,7 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
-import { ShellSwitchPendingScreen } from '../../../src/mobile-web-shell/ShellSwitchPendingScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { useShellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
+import { shellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
 import { firstParam } from '../../../src/navigation/route-param-reader'
 import { MobileTasksScreen } from '../../../src/tasks/MobileTasksScreen'
 
@@ -24,8 +23,6 @@ export default function MobileTasksRoute() {
   const taskSource = firstParam(params.taskSource)
   const native = <MobileTasksScreen />
 
-  // Built before the decision rather than after it, as every switch does now: the decision needs
-  // to know whether the shell is a possible outcome before it can say a neutral frame is owed.
   const route = hostId
     ? shellScreenRoute({
         pathname: `/h/${encodeURIComponent(hostId)}/tasks`,
@@ -34,11 +31,8 @@ export default function MobileTasksRoute() {
         ...(taskSource === '' ? {} : { params: { taskSource } })
       })
     : null
-  const decision = useShellSwitchDecision(route)
+  const decision = shellSwitchDecision(route)
 
-  if (decision.kind === 'pending') {
-    return <ShellSwitchPendingScreen />
-  }
   if (decision.kind === 'native') {
     return native
   }

@@ -14,6 +14,7 @@ import {
 } from '@/ssh/ssh-managed-server-move'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
+import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ssh-browser-pages'
 
 type ManagedServerStatus = SshConnectionState['managedServer']
 
@@ -93,6 +94,13 @@ function startManagedServerCatalogLoad(targetId: string, environmentId: string):
 async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): Promise<void> {
   const { environmentId } = load
   const isCurrent = (): boolean => catalogLoadByTarget.get(targetId) === load
+  // Pin existing desktop pages before the catalogs change their workspace owner.
+  useAppStore.setState((state) => {
+    const browserPagesByWorkspace = preserveConvertedSshBrowserPages(state, targetId)
+    return browserPagesByWorkspace === state.browserPagesByWorkspace
+      ? state
+      : { browserPagesByWorkspace }
+  })
   const store = useAppStore.getState()
   // Why: host badges read server names from this catalog, which a conversion does not refresh.
   const environments = await window.api.runtimeEnvironments.list()

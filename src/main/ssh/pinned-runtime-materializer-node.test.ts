@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   NODE_RUNTIME_ASSETS,
   NODE_RUNTIME_PIN,

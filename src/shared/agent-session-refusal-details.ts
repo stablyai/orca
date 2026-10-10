@@ -66,6 +66,10 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'launchFolderMissing',
     /** The chat's transcript is in a Claude account other than the selected one. */
     'historyInOtherAccount',
+    /** The selected Claude account's folder is gone. */
+    'claudeAccountFolderMissing',
+    /** The selected Claude account's folder could not be set up. */
+    'claudeAccountSetupFailed',
     /** Settings → Agents → Command names no program this host can run. */
     'agentCommandNotRunnable',
     /** The agent started, then Orca could not open the chat's conversation for it. */

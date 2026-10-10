@@ -1,5 +1,6 @@
-import { forkProcess, type ForkSpec } from '../../shared/child-process/fork-process'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { forkProcess, type ForkSpec } from '@orca/process-host/fork-process'
+import { spawnProcess } from '@orca/process-host'
+import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
@@ -50,7 +51,7 @@ function buildDaemonScriptArgs(options: DaemonChildSpawnOptions): string[] {
  * unchanged. Do not read the daemon's PID off the returned child; the daemon reports its own
  * (see daemon-ready-identity.ts).
  *
- * Both arms go through the shared child-process chokepoint (`src/shared/child-process`), which
+ * Both arms go through the process-host chokepoint (`@orca/process-host`), which
  * is what every caller outside that directory must use — `forkProcess` for the Node-module arm,
  * `spawnProcess` for the program arm.
  */

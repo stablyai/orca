@@ -37,7 +37,9 @@ export function mergeDirectSshRemoteWorkspaceSession(
   preserveLocalTerminalTabIds: ReadonlySet<string>,
   replaceExecutionHostId?: ExecutionHostId,
   closedTabRecords?: ClosedTerminalTabTombstonesByTabId,
-  preserveLocalLayoutTabIds: ReadonlySet<string> = new Set()
+  preserveLocalLayoutTabIds: ReadonlySet<string> = new Set(),
+  /** True once the target hydrated: selection is per view, so a republish must not move it. */
+  keepLocalSelection = false
 ): WorkspaceSessionState {
   // Live tabs across the worktrees this snapshot replaces. Close-suppression consults it so a tab
   // that is still live locally always beats its own tombstone.
@@ -264,22 +266,64 @@ export function mergeDirectSshRemoteWorkspaceSession(
   // worktree came from local state left the pair disagreeing — and precisely in the case the
   // preservation exists for, since "the host named no worktree" is exactly when it can still name a
   // repo.
+  // Why: every host republish carries the last uploaded selection, so after the first hydrate a
+  // title change while an agent works would otherwise steal focus back (#19697, #20938).
+  // The home screen is not kept: hydration reads a null worktree as "restore the repo's default".
+  const keepsLocalView = activeOutsideTarget || (keepLocalSelection && localActiveWorkspaceSurvives)
   const keepsLocalWorkspace =
-    !activeOutsideTarget && remote.activeWorktreeId == null && preservedActiveWorktreeId != null
-  const activeWorktreeId = activeOutsideTarget
+    !keepsLocalView && remote.activeWorktreeId == null && preservedActiveWorktreeId != null
+  const activeWorktreeId = keepsLocalView
     ? current.activeWorktreeId
     : (remote.activeWorktreeId ?? preservedActiveWorktreeId)
+  const namesMergedTab = (worktreeId: string, tabId: string | null | undefined): tabId is string =>
+    tabId != null && (tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+  const activeTabIdByWorktree = {
+    // Why the local entry survives: same rule one level down. A host that names no active tab for
+    // the target reopens the workspace on whatever sorts first, which is not where the user was.
+    ...omitTargetWorktrees(current.activeTabIdByWorktree),
+    ...Object.fromEntries(
+      [...replaceWorktreeIds].flatMap((worktreeId) => {
+        const localActiveTabId = current.activeTabIdByWorktree?.[worktreeId]
+        return localActiveTabId == null ? [] : [[worktreeId, localActiveTabId] as const]
+      })
+    ),
+    // Why a suppressed id is left in place here: hydration validates both active-tab pointers
+    // against the tab rows it just built and nulls anything they no longer name, so nulling twice
+    // would only add a second rule that has to stay in step with that one.
+    ...remote.activeTabIdByWorktree,
+    // The host's pointer is only a fallback for a local one that no longer names a tab.
+    ...Object.fromEntries(
+      [...replaceWorktreeIds].flatMap((worktreeId) => {
+        const localActiveTabId = current.activeTabIdByWorktree?.[worktreeId]
+        return keepLocalSelection && namesMergedTab(worktreeId, localActiveTabId)
+          ? [[worktreeId, localActiveTabId] as const]
+          : []
+      })
+    )
+  }
+  const localActiveTabStands =
+    activeOutsideTarget ||
+    current.activeWorktreeId == null ||
+    namesMergedTab(current.activeWorktreeId, current.activeTabId)
+  const fallbackActiveTabId =
+    current.activeWorktreeId == null
+      ? null
+      : (activeTabIdByWorktree[current.activeWorktreeId] ?? null)
   return {
     ...current,
     activeRepoId:
-      activeOutsideTarget || keepsLocalWorkspace ? current.activeRepoId : remote.activeRepoId,
+      keepsLocalView || keepsLocalWorkspace ? current.activeRepoId : remote.activeRepoId,
     activeWorktreeId,
-    activeWorkspaceKey: activeOutsideTarget
+    activeWorkspaceKey: keepsLocalView
       ? current.activeWorkspaceKey
       : activeWorktreeId
         ? worktreeWorkspaceKey(activeWorktreeId)
         : null,
-    activeTabId: activeOutsideTarget ? current.activeTabId : remote.activeTabId,
+    activeTabId: !keepsLocalView
+      ? remote.activeTabId
+      : localActiveTabStands
+        ? current.activeTabId
+        : fallbackActiveTabId,
     tabsByWorktree: {
       ...omitTargetWorktrees(current.tabsByWorktree),
       ...tabsByWorktree
@@ -289,21 +333,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
       ...(remote.activeWorktreeIdsOnShutdown ?? [])
     ],
-    activeTabIdByWorktree: {
-      // Why the local entry survives: same rule one level down. A host that names no active tab for
-      // the target reopens the workspace on whatever sorts first, which is not where the user was.
-      ...omitTargetWorktrees(current.activeTabIdByWorktree),
-      ...Object.fromEntries(
-        [...replaceWorktreeIds].flatMap((worktreeId) => {
-          const localActiveTabId = current.activeTabIdByWorktree?.[worktreeId]
-          return localActiveTabId == null ? [] : [[worktreeId, localActiveTabId] as const]
-        })
-      ),
-      // Why a suppressed id is left in place here: hydration validates both active-tab pointers
-      // against the tab rows it just built and nulls anything they no longer name, so nulling twice
-      // would only add a second rule that has to stay in step with that one.
-      ...remote.activeTabIdByWorktree
-    },
+    activeTabIdByWorktree,
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(
         Object.entries(current.remoteSessionIdsByTabId ?? {}).filter(

@@ -234,6 +234,37 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
       expect(state.addForward).toHaveBeenCalledTimes(2)
     })
 
+    it.each([
+      ['a fallback port to the preferred one', 6_770, 6_768],
+      ['the preferred port to a fallback one', 6_768, 6_770]
+    ])('rebuilds a reused forward after a redeploy moves %s', async (_name, before, after) => {
+      let bound = before
+      const state = setup(
+        {},
+        {
+          resolveRemotePort: async () => bound,
+          verifyIdentity: async () => ({ verdict: 'verified' })
+        }
+      )
+      await state.manager.ensure(environment())
+      bound = after
+      // A plain ensure keeps the forward: nothing it compares names the bound port.
+      await state.manager.ensure(environment())
+      expect(state.addForward).toHaveBeenCalledOnce()
+
+      await state.manager.rebuild(environment())
+
+      expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+      expect(state.addForward).toHaveBeenLastCalledWith(
+        'ssh-1',
+        expect.anything(),
+        46_768,
+        '127.0.0.1',
+        after,
+        'Managed Orca server: Managed server'
+      )
+    })
+
     it.each(['ensure', 'resume'] as const)(
       'discards a forward when SSH reconnects during %s binding',
       async (operation) => {

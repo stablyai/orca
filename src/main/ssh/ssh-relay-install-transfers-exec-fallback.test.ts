@@ -11,6 +11,7 @@ import {
   writeRelayFile
 } from './ssh-relay-install-transfers'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { tagSftpHandshakeCorruption } from './sftp-handshake-corruption'
 
 vi.mock('./ssh-exec-stdin-file-transfer', () => ({
   uploadDirectoryViaExecStdin: vi.fn(async () => {}),
@@ -64,6 +65,21 @@ describe('classifySftpFailureForExecFallback', () => {
       )
     ).toBe('sftp-unavailable')
     expect(classifySftpFailureForExecFallback(sandboxed())).toBe('sftp-sandboxed')
+  })
+
+  it('falls back only for a parse failure ssh2 reported before the SFTP session was ready', () => {
+    const corrupted = (): Error =>
+      Object.assign(new Error('Packet length 1111577416 exceeds max length of 262144'), {
+        level: 'sftp-protocol'
+      })
+    expect(classifySftpFailureForExecFallback(tagSftpHandshakeCorruption(corrupted()))).toBe(
+      'sftp-unavailable'
+    )
+    // Untagged: the same words mid-transfer could follow writes already sent.
+    expect(classifySftpFailureForExecFallback(corrupted())).toBeNull()
+    expect(
+      classifySftpFailureForExecFallback(tagSftpHandshakeCorruption(new Error('No response')))
+    ).toBeNull()
   })
 
   it('never treats unverifiable transport loss or a refusal of the write itself as a verdict', () => {

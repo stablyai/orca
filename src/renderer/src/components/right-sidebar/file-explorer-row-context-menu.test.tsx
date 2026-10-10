@@ -13,11 +13,17 @@ const storeState = vi.hoisted(
     activeWorkspaceExecutionHostId: 'local' | `runtime:${string}` | null
     openMarkdownPreview: () => void
     settings: { activeRuntimeEnvironmentId: string | null }
+    worktreesByRepo: Record<string, { id: string; repoId: string; hostId: 'local' }[]>
+    folderWorkspaces: { id: string; projectGroupId: string }[]
+    projectGroups: { id: string }[]
   } => ({
     activeWorktreeId: 'wt-1',
     activeWorkspaceExecutionHostId: null,
     openMarkdownPreview: () => {},
-    settings: { activeRuntimeEnvironmentId: null }
+    settings: { activeRuntimeEnvironmentId: null },
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }] },
+    folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'group-1' }],
+    projectGroups: [{ id: 'group-1' }]
   })
 )
 const revealInFileManager = vi.hoisted(() => vi.fn())
@@ -69,7 +75,9 @@ const fileNode: TreeNode = {
 }
 
 function renderRevealItem(
-  owner: Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId'> = {}
+  owner: Partial<
+    Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId' | 'node'>
+  > = {}
 ): ItemProps | undefined {
   renderToStaticMarkup(
     <FileExplorerRowContextMenu
@@ -104,7 +112,7 @@ function showsLocalOnlyHint(item: ItemProps | undefined): boolean {
   return renderToStaticMarkup(<>{item?.children}</>).includes('Local only')
 }
 
-describe('FileExplorerRowContextMenu reveal in file manager', () => {
+describe('FileExplorerRowContextMenu host capabilities', () => {
   beforeEach(() => {
     items.list = []
     storeState.activeWorktreeId = 'wt-1'
@@ -113,13 +121,41 @@ describe('FileExplorerRowContextMenu reveal in file manager', () => {
     revealInFileManager.mockReset()
   })
 
+  it.each(['runtime:remote', 'ssh:nested'] as const)(
+    'keeps runtime-owned file Copy out of a %s row while retaining path copy',
+    (executionHostId) => {
+      renderRevealItem({
+        node: {
+          ...fileNode,
+          operationOwner: { kind: 'runtime', environmentId: 'remote', executionHostId }
+        }
+      })
+      const labels = items.list.flatMap((item) => React.Children.toArray(item.children))
+      expect(labels).not.toContain('Copy')
+      expect(labels).toContain('Copy Path')
+      expect(labels).toContain('Copy Relative Path')
+    }
+  )
+
   it('reveals a local row through the shared reveal action', () => {
     const reveal = renderRevealItem()
 
     expect(reveal?.disabled).toBe(false)
     expect(showsLocalOnlyHint(reveal)).toBe(false)
     reveal?.onSelect?.()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/index.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/index.ts', 'local')
+  })
+
+  it('reveals a local row while a remote server is focused', () => {
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+
+    expect(renderRevealItem()?.disabled).toBe(false)
+  })
+
+  it('disables reveal for a row whose workspace the catalog cannot place', () => {
+    storeState.activeWorktreeId = 'wt-unknown'
+
+    expect(renderRevealItem()?.disabled).toBe(true)
   })
 
   it('disables reveal as local-only for a row on an SSH host', () => {

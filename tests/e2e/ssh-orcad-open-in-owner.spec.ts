@@ -73,7 +73,11 @@ for (const surface of [
       expect(
         await first.page.evaluate(
           async ({ filePath, recorder }) =>
-            window.api.shell.openInExternalEditor({ path: filePath, command: recorder }),
+            window.api.shell.openInExternalEditor({
+              path: filePath,
+              command: recorder,
+              ownerHostId: 'local'
+            }),
           { filePath, recorder }
         )
       ).toEqual({ ok: true })

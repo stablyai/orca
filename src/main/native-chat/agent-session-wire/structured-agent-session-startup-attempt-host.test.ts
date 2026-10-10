@@ -90,7 +90,13 @@ async function startHost(): Promise<void> {
       setOption,
       ...(readAcquisitionOptions ? { readAcquisitionOptions } : {})
     },
-    modelCatalog: { read: vi.fn(), providerStarted },
+    modelCatalog: {
+      read: vi.fn(),
+      recordLiveListing: vi.fn(),
+      prewarm: vi.fn(async () => {}),
+      stop: vi.fn(),
+      providerStarted
+    },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,

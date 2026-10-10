@@ -1,9 +1,9 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-terminal-multiplexer'
 import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { readE2eHiddenSnapshotOverride } from './e2e-terminal-pty-harness'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { PtyBufferSnapshot } from '../pty-transport'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

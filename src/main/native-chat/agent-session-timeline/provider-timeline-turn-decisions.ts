@@ -260,6 +260,7 @@ export function decideSessionEnd(
   return {
     settle: {
       what: 'session-end',
+      recovered: true,
       resolve: (journal) =>
         providerTimelineSettlement(journal, 'session', {
           turns: runningProviderTimelineTurns(journal),

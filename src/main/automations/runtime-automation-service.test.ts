@@ -67,7 +67,7 @@ describe('headless automation dispatch', () => {
     expect(launch.terminalPaneKey).toBe('tab-1:pane-1')
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
       agent: 'goose',
-      prompt: undefined,
+      prompt: '',
       title: 'Nightly'
     })
     expect(runtime.waitForTerminal).not.toHaveBeenCalled()

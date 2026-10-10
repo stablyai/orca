@@ -385,7 +385,9 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     // Both discovery paths, proven against real files rather than fixtures: one
     // found by filename plus ternary alias, one found only by its gate
     // expression because its name says nothing about Windows gating.
-    expect(gatedFiles).toContain('src/shared/child-process/windows-command-line.win32.test.ts')
+    expect(gatedFiles).toContain(
+      'src/shared/__tests__/process-host/windows-command-line.win32.test.ts'
+    )
     expect(gatedFiles).toContain('src/main/agent-hooks/windows-hook-payload-delivery.test.ts')
     // And a compound gate, the case this guard was blind to at first.
     expect(gatedFiles).toContain('src/main/git/runner-wsl-linked-gitdir-windows.test.ts')

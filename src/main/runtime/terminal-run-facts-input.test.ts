@@ -93,14 +93,23 @@ describe('run facts: the controller write funnel', () => {
   it('records terminal.send input before the write that could end the process', async () => {
     const run = await createFreshRun()
 
-    await run.runtime.sendTerminal(
-      run.handle,
-      { text: 'exit', enter: true },
-      { inputKind: 'driving' }
-    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+    try {
+      await Promise.all([
+        run.runtime.sendTerminal(
+          run.handle,
+          { text: 'exit', enter: true },
+          { inputKind: 'driving' }
+        ),
+        vi.runAllTimersAsync()
+      ])
 
-    expect(run.firstUserInputAt()).not.toBeNull()
-    expect(run.writes.map((write) => write.inputRecorded)).toEqual([true, true])
+      expect(run.firstUserInputAt()).not.toBeNull()
+      expect(run.writes.map((write) => write.inputRecorded)).toEqual([true, true])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('records stream input from a client', async () => {

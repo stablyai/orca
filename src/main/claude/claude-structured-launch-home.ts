@@ -32,7 +32,7 @@ export async function resolveClaudeStructuredLaunchHome(
 }
 
 /** Whether Claude wrote a transcript for this id under the given config folder. */
-export async function claudeTranscriptExists(input: {
+async function claudeTranscriptExists(input: {
   providerSessionId: string
   claudeConfigDir: string
 }): Promise<boolean> {

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const COMMAND_TIMEOUT_MS = 90_000
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024

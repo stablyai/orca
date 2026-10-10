@@ -12,8 +12,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "check:tests-typecheck": "node scripts/check-tests-typecheck-ratchet.mjs",
-    "rpc:record": "tsx scripts/rpc-recording.mts",
-    "rpc:diff": "tsx scripts/rpc-diff.mts",
+    "rpc:record": "tsx --conditions=orca-source scripts/rpc-recording.mts",
+    "rpc:diff": "tsx --conditions=orca-source scripts/rpc-diff.mts",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
@@ -73,6 +73,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@orca/process-host": "link:../src/packages/process-host",
     "@types/react": "~19.2.18",
     "@types/react-test-renderer": "19.1.0",
     "@types/ws": "^8.18.1",

@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { claudeAcquireCatalogAccess } from './claude-structured-acquire-catalog'
-import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
-import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import {
-  claudeCatalogRowsOfAccount,
-  retireClaudeLaunchedModel
-} from './claude-structured-retired-model'
+  AgentModelCatalogStore,
+  type AgentModelCatalogLiveListing
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { retireClaudeLaunchedModel } from './claude-structured-retired-model'
 import {
   adapterFor,
   claudeFrame,
@@ -18,15 +15,6 @@ import {
   recordingJournalSink
 } from './claude-structured-session-test-support'
 
-const ACCOUNT_HOME = '/accounts/claude'
-
-function catalogAccess(store: AgentModelCatalogStore) {
-  const access = claudeAcquireCatalogAccess(store, ACCOUNT_HOME)
-  if (!access) {
-    throw new Error('a store and an account home always give access')
-  }
-  return access
-}
 const RETIRED = 'claude-retired-1'
 /** The rows Claude Code 2.1.280 lists for a child launched with `--model claude-bogus-9`: its own
  *  native rows, then one for the launched id, named by that id. */
@@ -79,76 +67,58 @@ describe("the CLI's word that a launched model does not exist", () => {
   })
 })
 
-describe("the account catalog a child's listing writes through", () => {
-  const rows = [
-    { id: 'opus', label: 'Opus' },
-    { id: RETIRED, label: RETIRED }
-  ]
-
-  function access(cached: string[] | null) {
-    const store = new AgentModelCatalogStore()
-    const handle = catalogAccess(store)
-    if (cached) {
-      store.recordSuccess(handle.fingerprint, 'claude', {
-        models: cached.map((id) => ({ id, label: id, isDefault: false, efforts: [] })),
-        fastModeTierByModel: new Map(),
-        origin: 'probe'
-      })
-    }
-    return handle
-  }
-
-  it('leaves out the row the launch added for its own model', () => {
-    expect(claudeCatalogRowsOfAccount(access(null), rows, RETIRED)).toEqual([rows[0]])
-  })
-
-  it('keeps that row when the account already listed the model', () => {
-    expect(claudeCatalogRowsOfAccount(access([RETIRED]), rows, RETIRED)).toEqual(rows)
-  })
-
-  it('keeps a launched native model, which carries its own display name', () => {
-    expect(claudeCatalogRowsOfAccount(access(null), rows, 'opus')).toEqual(rows)
-  })
-
-  it('keeps every row for a launch that named no model', () => {
-    expect(claudeCatalogRowsOfAccount(access(null), rows, null)).toEqual(rows)
-  })
-
-  it('never writes a launched-only model into the account catalog at start', async () => {
-    const store = new AgentModelCatalogStore()
-    const handle = catalogAccess(store)
-    const claude = fakeClaude({ initModels: [NATIVE_OPUS, LAUNCHED_ROW] })
-    const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = new ClaudeStructuredSessionAdapter({
-      resolveLaunch: async () => ({
-        pathToClaudeCodeExecutable: 'claude',
-        options: {},
-        cwd: '/work/repo',
-        claudeConfigDir: ACCOUNT_HOME,
-        providerSessionId: PROVIDER_SESSION_ID,
-        resumeLeafUuid: null,
-        resumesTranscript: true,
-        continuesChain: true
-      }),
-      onEvent: (event) => events.push(event),
-      openConnection: claude.openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000,
-      now: () => 1_700_000_000_500,
-      persistHandle: async () => {},
-      modelCatalog: store
+describe("the account catalog facts a child's listing hands the host", () => {
+  async function listingOfChildLaunchedWith(model: string) {
+    const claude = fakeClaude({
+      initModels: [NATIVE_OPUS, LAUNCHED_ROW],
+      routes: { list_models: () => [NATIVE_OPUS, LAUNCHED_ROW] }
     })
+    const adapter = adapterFor(claude)
     await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-9',
       events: recordingJournalSink(),
-      options: { model: RETIRED }
+      options: { model }
     })
     await claudeStartupSettled(adapter, 'session-1')
-
-    expect(events.some((event) => event.type === 'started')).toBe(true)
-    expect(store.get(handle.fingerprint)?.models.map((model) => model.id)).toEqual(['opus'])
+    const { catalogListing } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     await adapter.closeAll()
+    return catalogListing
+  }
+
+  function savedIds(cached: string[] | null, listing: AgentModelCatalogLiveListing) {
+    const store = new AgentModelCatalogStore()
+    if (cached) {
+      store.recordSuccess(
+        'fp',
+        'claude',
+        {
+          models: cached.map((id) => ({ id, label: id, isDefault: false, efforts: [] })),
+          origin: 'probe'
+        },
+        'discovery'
+      )
+    }
+    store.recordSuccess('fp', 'claude', { ...listing, origin: 'live-session' }, 'live')
+    return store.get('fp')?.models.map((model) => model.id)
+  }
+
+  it('marks the row the launch added for its own model, which the account catalog leaves out', async () => {
+    const listing = await listingOfChildLaunchedWith(RETIRED)
+    expect(listing?.launchOnlyModelId).toBe(RETIRED)
+    expect(savedIds(null, listing!)).toEqual(['opus'])
+  })
+
+  it('keeps that row when the account already listed the model', async () => {
+    const listing = await listingOfChildLaunchedWith(RETIRED)
+    expect(savedIds([RETIRED], listing!)).toEqual(['opus', RETIRED])
+  })
+
+  it('marks nothing for a launched native model, which carries its own display name', async () => {
+    const listing = await listingOfChildLaunchedWith('opus')
+    expect(listing?.launchOnlyModelId).toBeUndefined()
+    expect(savedIds(null, listing!)).toEqual(['opus', RETIRED])
   })
 })
 

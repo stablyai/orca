@@ -9,13 +9,17 @@ import { orcadRemoteBaseDir } from './orcad-remote-windows-node'
 import { randomUUID } from 'node:crypto'
 import type { OrcadDeployOptions, OrcadDeployResult } from './orcad-remote-deploy'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
-import { withActivatedVersion, type OrcadStateSnapshot } from './orcad-activation-record'
+import {
+  withActivatedVersion,
+  type OrcadActivationRecord,
+  type OrcadStateSnapshot
+} from './orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
 } from './orcad-activation-record-store'
 import { launchAndJudgeOrcadSlot } from './orcad-candidate-launch-verdict'
-import { planOrcadUpdate } from './orcad-update-plan'
+import { planOrcadUpdate, type OrcadTerminalCensus } from './orcad-update-plan'
 import { CURRENT_ORCAD_DAEMON_PROTOCOL } from './orcad-daemon-protocol-crossing'
 import { ORCAD_LOG_FILENAME } from './orcad-remote-launch'
 import {
@@ -58,6 +62,27 @@ import { errorMessage } from '../../shared/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>
 
+/** The caller's `admitRecord` refused the record found under the fence; nothing was touched. */
+export const ORCAD_ACTIVATION_POLICY_REFUSED_CODE = 'orcad_activation_policy_refused'
+
+const UNVERIFIABLE_CENSUS: OrcadTerminalCensus = {
+  liveSessions: null,
+  startedSinceActivation: null,
+  daemonProtocolVersion: null
+}
+
+/** A census counted against another incumbent says nothing about this one's terminals. */
+function censusForLockedRecord(
+  options: OrcadDeployOptions,
+  record: OrcadActivationRecord
+): OrcadTerminalCensus {
+  const counted = options.censusRecord
+  return !counted ||
+    (counted.active === record.active && counted.activatedAt === record.activatedAt)
+    ? options.census
+    : UNVERIFIABLE_CENSUS
+}
+
 export async function activateInstalledOrcad(
   options: OrcadDeployOptions & { localOrcadDir: string },
   fullVersion: string,
@@ -75,19 +100,27 @@ export async function activateInstalledOrcad(
   const plan = planOrcadUpdate({
     record,
     candidateVersion: fullVersion,
-    census: options.census,
+    census: censusForLockedRecord(options, record),
     candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
     ...(options.force !== undefined ? { force: options.force } : {})
   })
   if (plan.action === 'noop') {
     return { outcome: 'already-active', fullVersion }
   }
+  const refusal = options.admitRecord?.(record, fullVersion)
+  if (refusal) {
+    return notActivated(ORCAD_ACTIVATION_POLICY_REFUSED_CODE, refusal)
+  }
   if (plan.action === 'defer') {
     return notActivated(plan.code, plan.reason)
   }
 
   try {
-    await preflightInstalledOrcad({ ...options, remoteInstallDir: remoteDir, fullVersion })
+    await preflightInstalledOrcad({
+      ...options,
+      remoteInstallDir: remoteDir,
+      fullVersion
+    })
   } catch (error) {
     options.signal?.throwIfAborted()
     return notActivated(
@@ -131,6 +164,7 @@ export async function activateInstalledOrcad(
   let transaction: OrcadActivateTransaction = createOrcadActivationTransaction({
     transactionId: randomUUID(),
     candidateVersion: fullVersion,
+    appVersion: options.appVersion,
     recordBefore: record,
     snapshotDirName: orcadSnapshotDirName(fullVersion, startedAt.getTime()),
     now: startedAt

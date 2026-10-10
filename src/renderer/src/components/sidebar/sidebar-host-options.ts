@@ -4,6 +4,7 @@ import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import {
@@ -69,7 +70,7 @@ export function buildSidebarHostOptions(args: {
     }
   }
   const activeRuntimeHostId = args.settings?.activeRuntimeEnvironmentId?.trim()
-    ? (`runtime:${encodeURIComponent(args.settings.activeRuntimeEnvironmentId.trim())}` as const)
+    ? toRuntimeExecutionHostId(args.settings.activeRuntimeEnvironmentId.trim())
     : null
   return buildExecutionHostRegistry({
     repos: args.repos,

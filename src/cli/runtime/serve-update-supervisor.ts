@@ -34,20 +34,29 @@ type ServeSupervisorArgs = {
 export async function resumeInterruptedServeUpdate(
   args: ServeSupervisorArgs & { handoffPath: string; handoff: InstallRequestedHandoff }
 ): Promise<number> {
-  const installed = await waitForMacBundleVersion(args.executable, args.handoff.targetVersion)
-  if (!installed) {
-    await recordServeUpdateHandoffFailure(
-      args.handoffPath,
-      args.handoff,
-      `Timed out waiting for Orca ${args.handoff.targetVersion} to be installed.`
-    )
-  }
+  const expectedHandoff = await awaitInstalledHandoff(
+    args.executable,
+    args.handoffPath,
+    args.handoff
+  )
   const child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
-  return superviseForegroundServe({
-    ...args,
-    child,
-    expectedHandoff: installed ? args.handoff : null
-  })
+  return superviseForegroundServe({ ...args, child, expectedHandoff })
+}
+
+async function awaitInstalledHandoff(
+  executable: string,
+  handoffPath: string,
+  handoff: InstallRequestedHandoff
+): Promise<InstallRequestedHandoff | null> {
+  if (await waitForMacBundleVersion(executable, handoff.targetVersion)) {
+    return handoff
+  }
+  await recordServeUpdateHandoffFailure(
+    handoffPath,
+    handoff,
+    `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
+  )
+  return null
 }
 
 export async function superviseForegroundServe(
@@ -83,6 +92,7 @@ export async function superviseForegroundServe(
 
     const handoff = args.handoffPath ? await readServeUpdateHandoff(args.handoffPath) : null
     if (
+      !args.handoffPath ||
       handoff?.phase !== 'install-requested' ||
       (child.pid !== undefined && handoff.servingPid !== child.pid)
     ) {
@@ -92,17 +102,7 @@ export async function superviseForegroundServe(
       throw serveSignalExitError(result.signal)
     }
 
-    const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
-    if (!installed) {
-      await recordServeUpdateHandoffFailure(
-        args.handoffPath!,
-        handoff,
-        `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
-      )
-      expectedHandoff = null
-    } else {
-      expectedHandoff = handoff
-    }
+    expectedHandoff = await awaitInstalledHandoff(args.executable, args.handoffPath, handoff)
     child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
   }
 }
@@ -256,10 +256,6 @@ export function readServeUpdateHandoffSync(handoffPath: string): ServeUpdateHand
   }
 }
 
-export async function clearServeUpdateHandoff(handoffPath: string): Promise<void> {
-  await unlink(handoffPath).catch(() => undefined)
-}
-
 export async function completeServeUpdateHandoff(
   handoffPath: string,
   state: InstallRequestedHandoff,
@@ -270,7 +266,7 @@ export async function completeServeUpdateHandoff(
     phase: 'completed',
     runtimeId
   })
-  await clearServeUpdateHandoff(handoffPath)
+  await unlink(handoffPath).catch(() => undefined)
 }
 
 export async function recordServeUpdateHandoffFailure(

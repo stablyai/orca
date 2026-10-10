@@ -94,7 +94,7 @@ export async function acquireAcpStructuredSession(input: {
     lane: null,
     reattaching: false
   }
-  const options = new AcpStructuredOptions()
+  const options = new AcpStructuredOptions(launch.spec.dialect)
   // Only Orca's own prompt may ask the person, as with permissions: a turn the agent began itself
   // has nobody waiting on it. What a settled request carries still shows in that turn.
   const prompts = new AcpStructuredPrompts(
@@ -262,7 +262,7 @@ export async function acquireAcpStructuredSession(input: {
       liveLane = makeLane(started.sessionId)
     }
     subagentStopSupported = await probeAcpChildStop(connection, spec.dialect)
-    options.adoptSession(started.response)
+    options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
     liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
     const restoreSkipped = await restoreAcpSessionOptions(connection, options, acquire.options)
     const process = await identity.read(pid)

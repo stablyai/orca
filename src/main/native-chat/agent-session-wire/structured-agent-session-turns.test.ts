@@ -267,6 +267,66 @@ describe('performCancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(journal.snapshot().items).toEqual([])
   })
+
+  async function backgroundStopWith(
+    stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'],
+    operation: string
+  ) {
+    root = await mkdtemp(join(tmpdir(), 'orca-background-task-failed-cancel-'))
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    const cancelTurn = vi.fn(async () => ({ cancelled: true }))
+    const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
+      sessionId: 'session-1',
+      journal,
+      fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
+      adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
+      persistOptions: async () => undefined,
+      resolvedBy: 'client-1',
+      publish: vi.fn(),
+      now: () => 1
+    }
+    const result = await performCancel(ctx, {
+      clientOperationId: operation,
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: 'task-1',
+      childWork: () => [liveTask('task-1')]
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(journal.snapshot().items).toEqual([])
+    return result
+  }
+
+  it('refuses a background Stop the agent shows still running, so the person hears it failed', async () => {
+    const result = await backgroundStopWith(
+      async () => ({ cancelled: false, stillRunning: true }),
+      'cancel-background-task-survived'
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid' }
+    })
+    expect(result.ok ? undefined : result.refusal.details).toBeUndefined()
+  })
+
+  it.each([
+    ['timed out', 'codex app-server request timed out'],
+    ['lost the agent', 'codex app-server connection closed']
+  ])('answers a background Stop that %s as unconfirmed, never not stopped', async (_, message) => {
+    const result = await backgroundStopWith(async () => {
+      throw new Error(message)
+    }, 'cancel-background-task-unconfirmed')
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown' }
+    })
+    expect(result.ok ? undefined : result.refusal.details).toBeUndefined()
+  })
 })
 
 /** A live child record the strip would offer a stop, named by the provider as `providerId`. */

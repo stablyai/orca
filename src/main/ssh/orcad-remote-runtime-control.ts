@@ -27,7 +27,7 @@ import {
   OrcadFenceLostError,
   posixOrcadFenceGuard
 } from './orcad-activation-fence-scope'
-import { orcadRemoteBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_FENCE_ARG } from './orcad-windows-host-fence-ops'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -63,8 +63,7 @@ export async function execOrcadRemote(
     }
     // A host op checks inside the host script; anything else is checked by one op just before it.
     if (!command.includes(ORCAD_WINDOWS_FENCE_ARG) && target.remoteHome) {
-      const baseDir = orcadRemoteBaseDir(target.host, target.remoteHome)
-      await run(orcadWindowsHostOpCommand(target.host, baseDir, 'fence-check', []))
+      await run(orcadWindowsHomeOpCommand(target.host, target.remoteHome, 'fence-check', []))
     }
     return await run(command)
   } catch (error) {

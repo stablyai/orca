@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resetLoginShellEnvironmentCacheForTests } from '../../src/main/startup/login-shell-environment'
 import { PluginOverlayManager } from '../../src/relay/plugin-overlay'
 import { resolveOmpConfigDirName } from '../../src/relay/plugin-overlay-env'
