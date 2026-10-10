@@ -210,6 +210,8 @@ async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unkno
   const response = await dispatcher.dispatch(
     {
       id: 'parity',
+      // The transport authenticated the caller before dispatch; the dispatcher only carries it.
+      authToken: 'token',
       method,
       params:
         method === 'terminal.createAgentSession'

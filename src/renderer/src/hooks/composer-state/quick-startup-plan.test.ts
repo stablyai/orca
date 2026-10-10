@@ -32,6 +32,7 @@ vi.mock('@/hooks/useEphemeralVmRecipeOptions', () => ({
 const load = perClientLoader(async () => ({
   quick: await import('./quick-startup-plan'),
   selection: await import('./runtime-target-selection'),
+  composerRepo: await import('@/lib/new-workspace-composer-repo'),
   // Same module graph as the hook, so both see one React.
   react: await import('@testing-library/react')
 }))
@@ -52,7 +53,7 @@ type QuickCase = {
 
 /** runtime-target-selection.ts's platform and shell, handed to the startup builder as quick-creation-execution.ts does. */
 async function quickStartup(c: QuickCase) {
-  const { quick, selection, react, createStore } = await load(c.client)
+  const { quick, selection, composerRepo, react, createStore } = await load(c.client)
   const store = createStore()
   store.setState(
     launchWorkspaceState(c.workspace, {
@@ -67,9 +68,9 @@ async function quickStartup(c: QuickCase) {
     selection.useComposerRuntimeTargetSelection({
       actionableHostIds: new Set(),
       activeRepoId: null,
-      eligibleRepos: state.repos,
+      eligibleRepos: composerRepo.getComposerEligibleRepos(state.repos),
       hostOptions: [],
-      initialEphemeralVmRecipeId: null,
+      initialEphemeralVmRecipeId: undefined,
       projectGroups: state.projectGroups,
       projectHostSetups: [],
       projects: state.projects,
