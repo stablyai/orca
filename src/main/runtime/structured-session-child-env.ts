@@ -111,13 +111,6 @@ export function sealStructuredSessionChild(input: {
   }
 }
 
-export function structuredSessionChildIdentityEnv(
-  sessionId: string,
-  childEnv: Record<string, string>
-): Record<string, string> {
-  return childIdentity(sessionId, childEnv).env
-}
-
 function childIdentity(
   sessionId: string,
   childEnv: Record<string, string>

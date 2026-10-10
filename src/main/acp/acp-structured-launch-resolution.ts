@@ -27,11 +27,7 @@ import {
   providerTimelineKeyPart,
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type {
-  StructuredAgentLaunchBasis,
-  StructuredAgentLaunchPart,
-  StructuredLaunchRequest
-} from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {
   NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -173,11 +169,8 @@ export async function resolveAcpLaunchInvocation(
 export function acpStructuredLaunchPart(
   spec: AcpLaunchSpec,
   deps: AcpStructuredLaunchPartDeps
-): (
-  basis: StructuredAgentLaunchBasis,
-  request: StructuredLaunchRequest
-) => Promise<StructuredAgentLaunchPart<AcpStructuredLaunch>> {
-  return async (basis, { identity }) => {
+): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
+  return async (basis, identity) => {
     const { record } = basis
     const { env, envToDelete, command } = await resolveAcpLaunchInvocation(
       spec,

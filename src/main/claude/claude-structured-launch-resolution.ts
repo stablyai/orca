@@ -23,11 +23,7 @@ import {
   claudeLaunchResumesTranscript,
   resolveClaudeStructuredLaunchHome
 } from './claude-structured-launch-home'
-import type {
-  StructuredAgentLaunchBasis,
-  StructuredAgentLaunchPart,
-  StructuredLaunchRequest
-} from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from './claude-structured-session-id'
 
 export { claudeSessionIdForOrcaSession }
@@ -156,11 +152,8 @@ export async function resolveClaudeStructuredInvocation(
  *  auth, with the account-switch recheck last. */
 export function claudeStructuredLaunchPart(
   deps: ClaudeStructuredLaunchPartDeps
-): (
-  basis: StructuredAgentLaunchBasis,
-  request: StructuredLaunchRequest
-) => Promise<StructuredAgentLaunchPart<ClaudeStructuredLaunch>> {
-  return async (basis, { identity }) => {
+): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
+  return async (basis, identity) => {
     const { record } = basis
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const router = getClaudeProfileRouter()

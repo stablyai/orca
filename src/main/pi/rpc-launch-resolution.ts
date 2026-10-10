@@ -14,10 +14,7 @@ import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
-import type {
-  StructuredAgentLaunchBasis,
-  StructuredAgentLaunchPart
-} from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
@@ -104,7 +101,7 @@ async function sameDirectory(left: string, right: string): Promise<boolean> {
 /** Pi's part of a launch: its account directory, session file or fork, binary and release check. */
 export function piRpcLaunchPart(
   deps: PiRpcLaunchPartDeps
-): (basis: StructuredAgentLaunchBasis) => Promise<StructuredAgentLaunchPart<PiRpcResolvedLaunch>> {
+): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
   return async (basis) => {
     const { record } = basis
     if (process.platform === 'win32' && !isWindowsProcessStartTimeAvailable()) {

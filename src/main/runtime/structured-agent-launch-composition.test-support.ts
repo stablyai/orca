@@ -23,9 +23,11 @@ import type { PrepareNativeChatVisuals } from '../native-chat/native-chat-visual
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'
 import { piRpcLaunchPart, type PiRpcLaunchPartDeps } from '../pi/rpc-launch-resolution'
+import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import {
   composeStructuredLaunch,
-  type StructuredAgentLaunchResolver,
+  composeStructuredLaunchRead,
+  type StructuredAgentLaunchPartResolver,
   type StructuredAgentLaunchSources
 } from './structured-agent-launch-composition'
 
@@ -48,26 +50,36 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 
 function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
   const resolveEnvironment = deps.resolveEnvironment
+  const resolveBaseEnvironment = async () => definedEnv((await resolveEnvironment?.()) ?? {})
   return {
     store: deps.store,
     resolveWorkspacePath: deps.resolveWorkspacePath ?? (async (id) => `/repos/${id}`),
-    resolveBaseEnvironment: async () => definedEnv((await resolveEnvironment?.()) ?? {}),
+    resolveBaseEnvironment,
+    resolveAgentEnvironment: async (agent) => ({
+      ...(await resolveBaseEnvironment()),
+      ...deps.resolveLaunchEnv?.(agent)
+    }),
     ...(deps.resolveLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveLaunchEnv } : {}),
     ...(deps.resolveCommandSettings ? { resolveCommandSettings: deps.resolveCommandSettings } : {}),
     ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {})
   }
 }
 
-/** Called as an adapter calls it: with a spawn token, unless the test asks for an unsealed read. */
+/** Sealed with a spawn token, as an adapter's start calls it; with none, the unsealed read. */
 function withTestSpawnToken<L>(
-  resolve: StructuredAgentLaunchResolver<L>,
+  definition: StructuredAgentDefinition,
+  sources: StructuredAgentLaunchSources,
+  part: StructuredAgentLaunchPartResolver<L>,
   defaultToken: string | null
 ) {
-  return (input: { identity: AgentSessionJournalIdentity; spawnToken?: string | null }) =>
-    resolve({
-      identity: input.identity,
-      spawnToken: input.spawnToken === undefined ? defaultToken : input.spawnToken
-    })
+  const resolve = composeStructuredLaunch(definition, sources, part)
+  const read = composeStructuredLaunchRead(definition, sources, part)
+  return (input: { identity: AgentSessionJournalIdentity; spawnToken?: string | null }) => {
+    const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
+    return spawnToken === null
+      ? read(input.identity)
+      : resolve({ identity: input.identity, spawnToken })
+  }
 }
 
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
@@ -75,11 +87,9 @@ export function createCodexStructuredLaunchResolver(
   deps: LaunchTestSources & CodexStructuredLaunchPartDeps
 ) {
   return withTestSpawnToken(
-    composeStructuredLaunch(
-      CODEX_STRUCTURED_AGENT,
-      launchSources(deps),
-      codexStructuredLaunchPart(deps)
-    ),
+    CODEX_STRUCTURED_AGENT,
+    launchSources(deps),
+    codexStructuredLaunchPart(deps),
     null
   )
 }
@@ -90,18 +100,16 @@ export function createAcpStructuredLaunchResolver(
   deps: LaunchTestSources & AcpStructuredLaunchPartDeps
 ) {
   return withTestSpawnToken(
-    composeStructuredLaunch(
-      acpStructuredAgentDefinition(spec),
-      launchSources(deps),
-      acpStructuredLaunchPart(spec, deps)
-    ),
+    acpStructuredAgentDefinition(spec),
+    launchSources(deps),
+    acpStructuredLaunchPart(spec, deps),
     null
   )
 }
 
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createPiRpcLaunchResolver(deps: LaunchTestSources & PiRpcLaunchPartDeps) {
-  const resolve = composeStructuredLaunch(PI_RPC_AGENT, launchSources(deps), piRpcLaunchPart(deps))
+  const resolve = withTestSpawnToken(PI_RPC_AGENT, launchSources(deps), piRpcLaunchPart(deps), null)
   return (identity: AgentSessionJournalIdentity, spawnToken: string | null = null) =>
     resolve({ identity, spawnToken })
 }
@@ -117,15 +125,13 @@ export function createClaudeStructuredLaunchResolver(
 ) {
   const { resolveEnv, resolveInheritedEnv } = deps
   return withTestSpawnToken(
-    composeStructuredLaunch(
-      CLAUDE_STRUCTURED_AGENT,
-      launchSources({
-        ...deps,
-        resolveEnvironment: resolveInheritedEnv ?? (async () => process.env),
-        ...(resolveEnv ? { resolveLaunchEnv: () => resolveEnv() ?? {} } : {})
-      }),
-      claudeStructuredLaunchPart(deps)
-    ),
+    CLAUDE_STRUCTURED_AGENT,
+    launchSources({
+      ...deps,
+      resolveEnvironment: resolveInheritedEnv ?? (async () => process.env),
+      ...(resolveEnv ? { resolveLaunchEnv: () => resolveEnv() ?? {} } : {})
+    }),
+    claudeStructuredLaunchPart(deps),
     TEST_SPAWN_TOKEN
   )
 }

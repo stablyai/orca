@@ -56,6 +56,7 @@ import {
 } from './structured-agent-model-catalog-discovery'
 import {
   composeStructuredLaunch,
+  composeStructuredLaunchRead,
   structuredAgentLaunchSources
 } from './structured-agent-launch-composition'
 
@@ -223,20 +224,18 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
       const { deps, followUps } = context
       const readJournal = (sessionId: string) =>
         replayJournal(context.journalDatabase.db, sessionId)
+      const definition = acpStructuredAgentDefinition(spec)
+      const sources = structuredAgentLaunchSources(context)
+      const part = acpStructuredLaunchPart(spec, {
+        readJournal,
+        ...(deps.resolveAgentFullAccess ? { resolveFullAccess: deps.resolveAgentFullAccess } : {}),
+        logger: deps.logger
+      })
       return new AcpStructuredSessionAdapter({
         spec,
         readJournal,
-        resolveLaunch: composeStructuredLaunch(
-          acpStructuredAgentDefinition(spec),
-          structuredAgentLaunchSources(context),
-          acpStructuredLaunchPart(spec, {
-            readJournal,
-            ...(deps.resolveAgentFullAccess
-              ? { resolveFullAccess: deps.resolveAgentFullAccess }
-              : {}),
-            logger: deps.logger
-          })
-        ),
+        resolveLaunch: composeStructuredLaunch(definition, sources, part),
+        readLaunch: composeStructuredLaunchRead(definition, sources, part),
         connect: (launch, options) => createAcpAgentConnection(launch, options),
         onChildWorkEvidence: (sessionId, evidence) =>
           context.host()?.publishChildWorkEvidence(sessionId, evidence),

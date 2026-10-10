@@ -5,7 +5,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
-import { structuredSessionChildIdentityEnv } from './structured-session-child-env'
+import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {
   StructuredWorkerIdentityRegistry,
   isStructuredWorkerHandle,
@@ -300,7 +300,7 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       hostScope: { kind: 'local', hostId: 'local' }
     })
     try {
-      const env = structuredSessionChildIdentityEnv(SESSION_ID, {})
+      const env = sealedChildEnv(SESSION_ID)
       // Registered, so the worker's handle is present; without it the pane-key assertion would pass
       // for the wrong reason.
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)

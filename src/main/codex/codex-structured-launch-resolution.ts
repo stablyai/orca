@@ -9,10 +9,7 @@
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
-import type {
-  StructuredAgentLaunchBasis,
-  StructuredAgentLaunchPart
-} from '../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
@@ -68,9 +65,7 @@ export async function resolveCodexStructuredInvocation(
 /** Codex's part of a launch: its binary, thread arguments, account home, resume proof and visuals. */
 export function codexStructuredLaunchPart(
   deps: CodexStructuredLaunchPartDeps
-): (
-  basis: StructuredAgentLaunchBasis
-) => Promise<StructuredAgentLaunchPart<CodexStructuredLaunch>> {
+): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
   return async (basis) => {
     const { record } = basis
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
