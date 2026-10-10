@@ -23,9 +23,18 @@ export function shouldSuppressInheritedTerminalStatus(args: {
   inheritedFromActivePane: boolean
   incomingState: AgentStatusState
 }): boolean {
-  // Why: nested child hooks inherit the parent's ORCA_PANE_KEY. A child
-  // completion does not prove the active parent turn completed.
+  // Why: a child completion does not prove the parent turn ended.
   return args.inheritedFromActivePane && args.incomingState === 'done'
+}
+
+export function shouldRetainInheritedPaneContext(args: {
+  inheritedFromActivePane: boolean
+  incomingState: AgentStatusState
+  /** False when another connection collides on this pane key and may own it. */
+  sameTerminalOwner: boolean
+}): boolean {
+  // Why: a nested CLI inherits ORCA_PANE_KEY. Preserve the foreground identity context, not just its transcript.
+  return args.inheritedFromActivePane && args.sameTerminalOwner && args.incomingState !== 'done'
 }
 
 function normalizedKnownAgentType(agentType: AgentType | null | undefined): AgentType | null {

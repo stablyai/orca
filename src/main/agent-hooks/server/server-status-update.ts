@@ -5,6 +5,7 @@ import {
 } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   resolveAgentStatusIdentity,
+  shouldRetainInheritedPaneContext,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status-identity'
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -181,12 +182,29 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const identityResolvedPayload =
-      identity.agentType === rootContextPreservingPayload.payload.agentType
-        ? rootContextPreservingPayload
-        : {
+    const contextPinnedPayload =
+      previous &&
+      shouldRetainInheritedPaneContext({
+        inheritedFromActivePane: identity.inheritedFromActivePane,
+        incomingState: rootContextPreservingPayload.payload.state,
+        sameTerminalOwner: this.sameTerminalOwner(previous, rootContextPreservingPayload)
+      })
+        ? {
             ...rootContextPreservingPayload,
-            payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
+            providerSession: previous.providerSession,
+            payload: {
+              ...rootContextPreservingPayload.payload,
+              model: previous.payload.model,
+              prompt: previous.payload.prompt
+            }
+          }
+        : rootContextPreservingPayload
+    const identityResolvedPayload =
+      identity.agentType === contextPinnedPayload.payload.agentType
+        ? contextPinnedPayload
+        : {
+            ...contextPinnedPayload,
+            payload: { ...contextPinnedPayload.payload, agentType: identity.agentType }
           }
     const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     // Why before the permission hold: that hold adopts the event's `mainAgent`, and a relay's

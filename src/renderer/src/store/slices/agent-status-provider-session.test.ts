@@ -63,6 +63,151 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
+  // Why: a background Codex CLI inherits the foreground pane's ORCA_PANE_KEY. Mobile needs
+  // the foreground transcript, model, and prompt to stay paired (#22767, #22866).
+  it('keeps the foreground transcript when a nested agent reports its own session', () => {
+    const store = createTestStore()
+    const foreground = {
+      key: 'session_id' as const,
+      id: 'claude-session',
+      transcriptPath: '/tmp/claude.jsonl'
+    }
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'foreground claude',
+        model: 'claude-sonnet',
+        agentType: 'claude'
+      },
+      'Claude',
+      { updatedAt: 10, stateStartedAt: 10 },
+      undefined,
+      { providerSession: foreground }
+    )
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'background codex',
+        model: 'gpt-6-astra',
+        agentType: 'codex',
+        lastAssistantMessage: 'codex output'
+      },
+      'Codex',
+      { updatedAt: 20, stateStartedAt: 20 },
+      undefined,
+      {
+        providerSession: {
+          key: 'session_id',
+          id: 'codex-session',
+          transcriptPath: '/tmp/codex.jsonl'
+        }
+      }
+    )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'working',
+      prompt: 'foreground claude',
+      model: 'claude-sonnet',
+      agentType: 'claude',
+      providerSession: foreground,
+      lastAssistantMessage: 'codex output'
+    })
+  })
+
+  it('lets a different connection replace the foreground transcript', () => {
+    const store = createTestStore()
+    const nested = {
+      key: 'session_id' as const,
+      id: 'codex-session',
+      transcriptPath: '/tmp/codex.jsonl'
+    }
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'foreground claude',
+        model: 'claude-sonnet',
+        agentType: 'claude'
+      },
+      'Claude',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { connectionId: 'conn-a' },
+      {
+        providerSession: {
+          key: 'session_id',
+          id: 'claude-session',
+          transcriptPath: '/tmp/claude.jsonl'
+        }
+      }
+    )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'other connection', model: 'gpt-6-astra', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { connectionId: 'conn-b' },
+        { providerSession: nested }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'working',
+      prompt: 'other connection',
+      model: 'gpt-6-astra',
+      agentType: 'claude',
+      providerSession: nested,
+      connectionId: 'conn-b'
+    })
+  })
+
+  it('adopts a new agent session after the foreground turn is done', () => {
+    const store = createTestStore()
+    const codex = {
+      key: 'session_id' as const,
+      id: 'codex-session',
+      transcriptPath: '/tmp/codex.jsonl'
+    }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'foreground claude', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        undefined,
+        {
+          providerSession: {
+            key: 'session_id',
+            id: 'claude-session',
+            transcriptPath: '/tmp/claude.jsonl'
+          }
+        }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'now codex', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 20, stateStartedAt: 20 },
+        undefined,
+        { providerSession: codex }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'working',
+      prompt: 'now codex',
+      agentType: 'codex',
+      providerSession: codex
+    })
+  })
+
   // Why: mobile Chat UI keys its transcript subscription on providerSession.id, so a
   // metadata-less end-of-turn `done` used to blank the chat every turn (#10630).
   it('keeps the provider session when the turn completes without session metadata', () => {
