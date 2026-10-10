@@ -1520,12 +1520,6 @@ jobs:
           node config/scripts/runtime-file-watcher-fault-harness.mjs
           ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
 
-      - name: Gate SSH relay watcher process isolation
-        run: |
-          # Why: the remote native watcher shares a daemon with live PTYs.
-          # Kill only its child and require both PTY and watch recovery before packaging.
-          node config/scripts/relay-watcher-fault-harness.mjs
-
       # Why: main ships minified with sourcemap:'hidden' and packaging drops
       # out/**/*.map from app.asar, so a crash trace from a released build is
       # otherwise undecodable. The main bundle is platform-independent, so one

@@ -4,11 +4,6 @@ import { readlink } from 'node:fs/promises'
 /**
  * Resolve the current working directory of a local process by pid.
  *
- * Why duplicated from `src/relay/pty-shell-utils.ts`: the relay and Electron
- * main process have separate build graphs, and cross-importing across them
- * is not a pattern used in this repo. The function is short and pure, and
- * the duplication is cheaper than reshaping both bundle graphs.
- *
  * Tries `/proc/<pid>/cwd` on Linux, falls back to `lsof -d cwd` on macOS.
  * Returns `''` when neither works (including Windows, where `/proc` is
  * absent and `lsof` is not native).

@@ -122,16 +122,6 @@ src/main/wsl-availability.ts
 src/main/wsl-unc-delete.ts
 src/main/wsl.ts
 src/main/zsh-startup-hook-pty-harness.ts
-src/relay/agent-exec-handler.ts
-src/relay/ai-vault-service-client-state.ts
-src/relay/ai-vault-service-client.ts
-src/relay/ai-vault-service-spawn.ts
-src/relay/external-automations-handler.ts
-src/relay/fs-handler-git-fallback.ts
-src/relay/fs-handler-list-files.ts
-src/relay/pty-shell-utils.ts
-src/relay/subprocess-tree-termination.ts
-src/relay/workspace-space-scan.ts
 src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts

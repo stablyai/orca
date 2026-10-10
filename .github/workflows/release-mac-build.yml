@@ -195,12 +195,6 @@ jobs:
           node config/scripts/runtime-file-watcher-fault-harness.mjs
           ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
 
-      - name: Gate SSH relay watcher process isolation
-        run: |
-          # Why: the remote native watcher shares a daemon with live PTYs.
-          # Kill only its child and require both PTY and watch recovery before packaging.
-          node config/scripts/relay-watcher-fault-harness.mjs
-
       - name: Abort if the parent release-cut run was cancelled
         # Why: this workflow is dispatched separately, so cancelling release-cut
         # does not stop mac `--publish always`. A cancelled parent left v1.4.206

@@ -92,7 +92,6 @@ function Invoke-AppCell($Account,[string]$Descriptor,[string]$Log,[string]$Spec,
 New-Item -ItemType Directory -Force -Path $ReceiptRoot | Out-Null
 Push-Location $SourceRoot
 try {
-  if(-not (Test-Path -LiteralPath "out\relay\$Target\relay.js")){throw 'Build the relay before provisioning'}
   if(-not (Test-Path -LiteralPath 'out\orcad-template')){throw 'Build the orcad template before provisioning'}
   # ssh2 consults the runner's known_hosts: pin only this private endpoint, restored below.
   New-Item -ItemType Directory -Force -Path (Split-Path $knownPath) | Out-Null

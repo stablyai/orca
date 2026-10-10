@@ -102,9 +102,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     return result.stdout.trim()
   }
   const app = getAppEnvironment()
-  // The reader is plain JavaScript; either packaged Linux architecture is usable.
-  const reader = (['linux-x64', 'linux-arm64'] as const)
-    .flatMap((platform) => relayBundleCandidates(platform, app.getAppPath()))
+  const reader = relayBundleCandidates('wsl', app.getAppPath())
     .map((directory) => join(directory, RELAY_OPENCODE_SQLITE_READER_FILENAME))
     .find(existsSync)
   if (!reader) {

@@ -22,7 +22,6 @@ on:
       - 'src/main/codex-usage/scanner-incremental-append.test.ts'
       - 'src/main/usage/jsonl-file-reader.test.ts'
       - 'src/main/usage/jsonl-file-snapshot.test.ts'
-      - 'src/relay/fs-path-metadata-symlink-concurrency.test.ts'
       - 'src/renderer/src/components/editor/rich-markdown-list-tokenizers.test.ts'
       - 'src/renderer/src/components/editor/rich-markdown-lowlight-cache.test.ts'
       - 'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts'

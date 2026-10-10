@@ -253,7 +253,6 @@ async function performAddWorktree(
     await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
   }
 
-  // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
   // Why: --no-track leaves no upstream until first push; push.autoSetupRemote=true lets a plain
   // `git push` create+set origin/<branch> (git >=2.37; older clients ignore it). `--local` on a
   // linked worktree writes the shared common-dir config (whole repo) — intentional and idempotent,

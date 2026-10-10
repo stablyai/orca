@@ -51,7 +51,6 @@ const GIT_COMPAT_PREFIXES = [
   'src/shared/review-head-tracking-ref',
   'src/shared/worktree/local-base-branch-fast-forward',
   'src/main/git/',
-  'src/relay/git-',
   'config/scripts/git-binary-compatibility'
 ]
 
@@ -244,12 +243,10 @@ const CROSS_VERSION_WIRE_PREFIXES = [
 ]
 
 const MANAGED_HOOK_PREFIXES = [
-  'config/scripts/smoke-managed-hook-runtime-node18',
   'config/scripts/smoke-process-host-node18',
   'config/scripts/packaged-process-host-fixture',
   'src/packages/process-host/',
   'config/scripts/build-relay',
-  'src/relay/',
   'src/wsl-guest/',
   'src/shared/agent-hook',
   'src/main/agent-hooks/'
@@ -411,7 +408,6 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
-  'src/relay/windows-port-scan.win32.test.ts',
   'src/main/ssh/remote-node-runtime-store-windows.test.ts'
 ]
 
