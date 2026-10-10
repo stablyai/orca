@@ -53,6 +53,8 @@ export function buildDefaultSettings(args: {
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
+    editorThemeDark: 'vs-dark',
+    editorThemeLight: 'vs',
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,
