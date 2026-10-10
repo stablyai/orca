@@ -22,9 +22,11 @@ describe('filesystem watcher native ignores', () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-ignore-')))
     const rootModules = join(root, 'node_modules')
     const nestedModules = join(root, 'packages', 'app', 'node_modules')
+    const rootWorktree = join(root, '.worktrees', 'task', 'src')
+    const nestedWorktree = join(root, 'packages', 'app', '.worktrees', 'task', 'src')
     const nestedSource = join(root, 'packages', 'app', 'src')
     await Promise.all(
-      [rootModules, nestedModules, nestedSource].map((directory) =>
+      [rootModules, nestedModules, rootWorktree, nestedWorktree, nestedSource].map((directory) =>
         mkdir(directory, { recursive: true })
       )
     )
@@ -47,8 +49,8 @@ describe('filesystem watcher native ignores', () => {
     if (process.platform !== 'win32') {
       generatedNames.push('generated\nnewline.js')
     }
-    const generatedFiles = [rootModules, nestedModules].flatMap((directory) =>
-      generatedNames.map((name) => join(directory, name))
+    const generatedFiles = [rootModules, nestedModules, rootWorktree, nestedWorktree].flatMap(
+      (directory) => generatedNames.map((name) => join(directory, name))
     )
     await Promise.all(generatedFiles.map((file) => writeFile(file, 'generated')))
     const sourceFiles = [join(root, 'source.ts'), join(nestedSource, 'source.ts')]
@@ -70,5 +72,29 @@ describe('filesystem watcher native ignores', () => {
     expect(errors).toEqual([])
     const generatedPaths = new Set(generatedFiles)
     expect(events.filter((event) => generatedPaths.has(event.path))).toEqual([])
+  })
+
+  it('delivers source edits when a nested worktree is watched directly', async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-worktree-')))
+    const worktree = join(root, '.worktrees', 'task')
+    await mkdir(join(worktree, 'src'), { recursive: true })
+    const events: Event[] = []
+    const errors: Error[] = []
+    subscription = await subscribe(
+      worktree,
+      (error, batch) => {
+        if (error) {
+          errors.push(error)
+        }
+        events.push(...batch)
+      },
+      buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+    )
+    const sourceFile = join(worktree, 'src', 'index.ts')
+    await writeFile(sourceFile, 'source')
+    await vi.waitFor(() => expect(events.some((event) => event.path === sourceFile)).toBe(true), {
+      timeout: 8_000
+    })
+    expect(errors).toEqual([])
   })
 })

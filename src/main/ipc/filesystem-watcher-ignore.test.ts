@@ -56,6 +56,19 @@ describe('buildParcelWatcherIgnoreOptions', () => {
     }
   })
 
+  it('excludes nested worktrees without excluding source paths inside their own watch root', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      setPlatform(platform)
+      const options = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+      const regex = new RegExp(options.ignoreGlobs?.[0] ?? '(?!)')
+      expect(regex.test('.worktrees/task/src/index.ts')).toBe(true)
+      expect(regex.test('packages/app/.worktrees/task/src/index.ts')).toBe(true)
+      expect(regex.test('.worktrees\\task\\src\\index.ts')).toBe(platform === 'win32')
+      expect(regex.test('src/index.ts')).toBe(false)
+      expect(regex.test('.worktrees-backup/src/index.ts')).toBe(false)
+    }
+  })
+
   it('matches newline-containing paths only under ignored names', () => {
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
       setPlatform(platform)
