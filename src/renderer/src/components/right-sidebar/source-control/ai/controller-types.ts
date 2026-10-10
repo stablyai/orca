@@ -1,4 +1,5 @@
 import type { AppState } from '@/store'
+import type { WorktreeAgentInventoryState } from '@/lib/agent-detection-target-inventory'
 import type {
   GitConflictOperation,
   GitStatusEntry
@@ -6,10 +7,8 @@ import type {
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 
-export type SourceControlAiStoreSnapshot = Pick<
-  AppState,
-  'settings' | 'repos' | 'ensureDetectedAgents' | 'ensureRemoteDetectedAgents'
->
+export type SourceControlAiStoreSnapshot = Pick<AppState, 'settings' | 'repos'> &
+  WorktreeAgentInventoryState
 
 export type SourceControlAiControllerParams = {
   settings: GlobalSettings | null
