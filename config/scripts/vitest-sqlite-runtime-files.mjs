@@ -194,6 +194,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/opencode/opencode-acp-stored-messages.test.ts',
   'src/main/orcad/orcad-automations.test.ts',
   'src/main/orcad/orcad-local-serve-selection.test.ts',
+  'src/main/orcad/orcad-managed-idle-exit-chat-provider.test.ts',
   'src/main/orcad/serve-profile-ssh-targets.test.ts',
   'src/main/pi/rpc-launch-resolution.test.ts',
   'src/main/runtime/agent-session-conversation-clear-commit.test.ts',
