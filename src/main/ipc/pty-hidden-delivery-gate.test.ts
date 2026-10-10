@@ -4,11 +4,16 @@ import {
   clearHiddenRendererPtyDeliveryState,
   getHiddenRendererPtyDeliveryDebug,
   isHiddenPtyDeliveryGateEnabled,
+  isHiddenRendererPtyViewGated,
   markHiddenRendererPty,
   markRuntimeOwnedHiddenRendererPty,
   recordHiddenRendererPtyDataDrop,
+  registerHiddenRendererPtyMarkListener,
   resetRendererScopedHiddenPtyDeliveryState,
+  setHiddenDeliveryModelHandoff,
+  setHiddenDeliveryModelHandoffChangeListener,
   setRendererPtyDeliveryInterest,
+  shouldDeliverHiddenRendererPtyDataToSidecarsOnly,
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
 } from './pty-hidden-delivery-gate'
@@ -40,6 +45,26 @@ describe('pty hidden delivery gate', () => {
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
     setRendererPtyDeliveryInterest(PTY_ID, false)
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
+  })
+
+  it('keeps the view gated under delivery interest and sends those bytes to sidecars only', () => {
+    markHiddenRendererPty(PTY_ID)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(true)
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(true)
+    expect(
+      shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {
+        terminalHiddenDeliveryGate: false
+      })
+    ).toBe(false)
+
+    setRendererPtyDeliveryInterest(PTY_ID, false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
+    unmarkHiddenRendererPty(PTY_ID)
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
   })
 
   it('requests the restore marker exactly once per drop episode, re-armed by unmark', () => {
@@ -129,5 +154,39 @@ describe('pty hidden delivery gate', () => {
       deliveryInterestPtyCount: 0
     })
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+  })
+
+  it('keeps feeding a hidden PTY while its main model hands off, opened from the mark itself', () => {
+    const changes: string[] = []
+    setHiddenDeliveryModelHandoffChangeListener((id) => changes.push(id))
+    registerHiddenRendererPtyMarkListener((id) => setHiddenDeliveryModelHandoff(id, true))
+
+    markHiddenRendererPty(PTY_ID)
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
+    markRuntimeOwnedHiddenRendererPty('pty-2')
+    expect(shouldDropHiddenRendererPtyData('pty-2', {})).toBe(false)
+
+    setHiddenDeliveryModelHandoff(PTY_ID, false)
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
+    setHiddenDeliveryModelHandoff(PTY_ID, false)
+    expect(changes).toEqual([PTY_ID, 'pty-2', PTY_ID])
+
+    clearHiddenRendererPtyDeliveryState('pty-2')
+    markHiddenRendererPty('pty-2')
+    setHiddenDeliveryModelHandoff('pty-2', false)
+    expect(shouldDropHiddenRendererPtyData('pty-2', {})).toBe(true)
+  })
+
+  it('keeps a sidecar-interest PTY fully delivered to its view during a model handoff', () => {
+    registerHiddenRendererPtyMarkListener((id) => setHiddenDeliveryModelHandoff(id, true))
+    setRendererPtyDeliveryInterest(PTY_ID, true)
+    markHiddenRendererPty(PTY_ID)
+
+    // Why: the view answers this PTY's queries until main's model catches up, so main must not.
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(false)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(false)
+    setHiddenDeliveryModelHandoff(PTY_ID, false)
+    expect(isHiddenRendererPtyViewGated(PTY_ID, {})).toBe(true)
+    expect(shouldDeliverHiddenRendererPtyDataToSidecarsOnly(PTY_ID, {})).toBe(true)
   })
 })

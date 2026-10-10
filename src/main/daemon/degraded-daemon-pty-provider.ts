@@ -85,6 +85,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
+  canProvideSettledBufferSnapshot = (id: string): boolean =>
+    this.sessionProviders.get(id)?.canProvideSettledBufferSnapshot?.(id) === true
+
   spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
 
   // Why refuse the fallback route (unknown ids resolve to it): see attachDaemonOwnedSession.

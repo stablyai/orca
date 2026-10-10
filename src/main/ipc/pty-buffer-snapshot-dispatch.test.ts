@@ -307,6 +307,7 @@ describe('registerPtyHandlers', () => {
       const runtime = {
         setPtyController: vi.fn(),
         getPtyOutputSequence: vi.fn(() => 42),
+        prefersProviderRecoverySnapshot: vi.fn(() => false),
         serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
           data: 'snapshot\r\n',
           cols: 120,
@@ -385,6 +386,45 @@ describe('registerPtyHandlers', () => {
       })
       provider.emitExit('daemon-pty')
     })
+    it('reads the daemon for recovery once main dropped its model, falling back to main', async () => {
+      const daemonSnapshot = {
+        data: 'full daemon history\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 900,
+        source: 'headless'
+      }
+      const runtime = {
+        setPtyController: vi.fn(),
+        getPtyOutputSequence: vi.fn(() => 640),
+        prefersProviderRecoverySnapshot: vi.fn(() => true),
+        serializeProviderRecoveryBuffer: vi.fn().mockResolvedValueOnce(daemonSnapshot),
+        serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
+          data: 'rebuilt model\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 640,
+          source: 'headless'
+        })
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const read = () =>
+        handlers.get('pty:getMainBufferSnapshot')!(null, {
+          id: 'daemon-pty',
+          opts: { scrollbackRows: 5000 }
+        })
+
+      // Bytes between main's seq and the daemon's may still be in flight and must dedupe on arrival.
+      await expect(read()).resolves.toEqual({ ...daemonSnapshot, pendingDeliveryStartSeq: 640 })
+      expect(runtime.serializeProviderRecoveryBuffer).toHaveBeenCalledWith('daemon-pty', {
+        scrollbackRows: 5000
+      })
+      expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
+
+      runtime.serializeProviderRecoveryBuffer.mockResolvedValueOnce(null)
+      await expect(read()).resolves.toMatchObject({ data: 'rebuilt model\r\n', seq: 640 })
+    })
     it("never paints main's incomplete tail when a required provider snapshot is unavailable", async () => {
       const provider = installObservableDaemonTestProvider()
       provider.getBufferSnapshot.mockResolvedValue(null)
@@ -430,6 +470,7 @@ describe('registerPtyHandlers', () => {
         onPtyData: vi.fn(),
         preAllocateHandleForPty: vi.fn(() => null),
         getPtyOutputSequence: vi.fn(() => 2_472),
+        prefersProviderRecoverySnapshot: vi.fn(() => false),
         hasRemoteTerminalViewSubscriber: vi.fn(() => false),
         serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
           data: 'snapshot\r\n',

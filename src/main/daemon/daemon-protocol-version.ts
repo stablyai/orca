@@ -15,6 +15,9 @@ export const CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION = 36
 export const ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION = 35
 export const CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION = 34
 export const WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION = 33
+// Why: from v36 getSnapshot awaits the emulator's parse queue, so its outputSequence never
+// counts a byte the image does not show; older snapshots can trail their own seq.
+export const SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION = 36
 export const SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION = 32
 export const STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION = 31
 export const HISTORY_SEED_TRANSFER_PROTOCOL_VERSION = 30

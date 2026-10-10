@@ -160,6 +160,8 @@ export type RuntimePtyController = {
     lastTitle?: string
     kittyKeyboardFlags?: number
   } | null>
+  /** True when serializeProviderBuffer's seq is settled for this PTY, so main can rebuild its model from it. */
+  canProvideSettledBufferSnapshot?(ptyId: string): boolean
   /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
   serializeProviderBuffer?(
     ptyId: string,

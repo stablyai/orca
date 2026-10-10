@@ -5,6 +5,7 @@ import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
+import { chunkDataAfterSeed } from './main-terminal-model-dormancy'
 
 export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   // Why: hydrate the runtime headless emulator from the desktop renderer's
@@ -170,16 +171,30 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies = false
+    forwardQueryReplies = false,
+    rawLength = data.length
   ): Promise<void> {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const completion = state.writeChain.then(async () => {
+      // Why: a daemon-snapshot seed may already hold some of these bytes (main-terminal-model-dormancy.ts).
+      const fresh =
+        state.seedCoverageSeq === undefined
+          ? data
+          : chunkDataAfterSeed(data, outputSequence, rawLength, state.seedCoverageSeq)
+      if (fresh === null) {
+        // Why: an unsplittable chunk straddles the seed; mark the model partial so it is replaced.
+        this.providerSnapshotPreferredPtys.add(ptyId)
+        this.headlessHydrationState.delete(ptyId)
+      }
       // Why: the ingestion-time ownership decision is closed over this
       // chain link; async scheduling cannot retroactively change it.
       // Why inside the chain: the ownership mirror must observe live bytes in
       // the same total order as seeds (seedOwner also runs on this chain).
-      state.ownership.scan(data)
-      for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+      state.ownership.scan(fresh ?? '')
+      for (const chunk of splitFreebuffScreenUpdates(
+        fresh ?? '',
+        state.emulator.partialEscapeTailAnsi
+      )) {
         await state.emulator.write(chunk, { forwardQueryReplies })
         const pty = this.ptysById.get(ptyId)
         if (pty && !pty.connectionId && this.headlessTerminals.get(ptyId) === state) {
@@ -203,7 +218,10 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
           }
         }
       }
-      state.outputSequence = outputSequence
+      state.outputSequence =
+        state.seedCoverageSeq === undefined
+          ? outputSequence
+          : Math.max(state.outputSequence, outputSequence)
     })
     // Legacy callers remain best-effort; bounded SSH admission observes the raw receipt.
     state.writeChain = completion.catch(() => {})

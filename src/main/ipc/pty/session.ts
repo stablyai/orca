@@ -29,6 +29,8 @@ export type PtyDataPayload = {
   transformed?: boolean
   background?: boolean
   droppedOutput?: boolean
+  /** Hidden-view bytes for raw-byte sidecars only; the view restores from the model. */
+  sidecarOnly?: boolean
 }
 
 export type RendererPtyDeliveryAccounting = {

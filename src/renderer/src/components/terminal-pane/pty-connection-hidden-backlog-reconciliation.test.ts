@@ -343,6 +343,20 @@ describe('connectPanePty', () => {
         }
       })
 
+      it('answers queries in live bytes queued during a restore whose snapshot covers them', async () => {
+        const { transport, dataCallback, resolveFirstSnapshot } = await startInFlightRestore()
+
+        dataCallback('covered\x1b[6n', { seq: 50, rawLength: 11 })
+        dataCallback('\x1b[cnew', { seq: 66, rawLength: 6 })
+        resolveFirstSnapshot({ data: 'restored\r\n', cols: 100, rows: 30, seq: 63 })
+        await flushAsyncTicks(20)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(1)
+        expect(replies.filter((reply) => reply === DEFAULT_DA1_RESPONSE)).toHaveLength(1)
+      })
+
       it('sends salvaged queries immediately from an overflowing restore queue', async () => {
         const { pane, transport, dataCallback } = await startInFlightRestore()
 
@@ -365,6 +379,27 @@ describe('connectPanePty', () => {
         const written = writtenFloodData(pane)
         expect(written).not.toContain('aaaa')
         expect(written).not.toContain('bbbb')
+      })
+
+      it('answers queries in a hidden chunk dropped behind a latched restore', async () => {
+        enableMainAuthority()
+        const { transport, dataCallback } = await connectHiddenPane(
+          createDeps({ isVisibleRef: { current: false } })
+        )
+        const transportOptions = createdTransportOptions.at(-1) as {
+          onPtySpawn?: (ptyId: string) => void
+        }
+        transportOptions.onPtySpawn?.('pty-id')
+        dataCallback('', { droppedOutput: true })
+        await flushAsyncTicks(8)
+
+        dataCallback('hidden\x1b[6n\x1b[c')
+        await flushAsyncTicks(8)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(1)
+        expect(replies.filter((reply) => reply === DEFAULT_DA1_RESPONSE)).toHaveLength(1)
       })
 
       it('keeps the hidden-pane drop sentinel arming a reveal restore (gate unchanged)', async () => {
@@ -492,6 +527,25 @@ describe('connectPanePty', () => {
         const written = writtenData(pane)
         expect(written).toContain('DEF')
         expect(written).not.toContain('ABC')
+      })
+
+      // Why: the view owns these chunks' queries (main answered none), and a dropped CPR or DA
+      // leaves the program waiting.
+      it('answers queries in backlog bytes the restored snapshot already covers', async () => {
+        const { pane, transport, dataCallback } = await restoreVisiblePaneToBaseline()
+
+        dataCallback('OLD\x1b[6n\x1b[c', { seq: 60, rawLength: 10 })
+        // start seq 61 < baseline 64: the covered DA1 is answered, the new tail is written.
+        dataCallback('\x1b[cNEW', { seq: 67, rawLength: 6 })
+        await flushAsyncTicks(8)
+
+        const replies = transport.sendInputImmediate.mock.calls.map((call) => String(call[0]))
+        // oxlint-disable-next-line no-control-regex -- the ESC byte IS the payload: this matches the CPR reply
+        expect(replies.filter((reply) => /^\u001b\[\d+;\d+R$/.test(reply))).toHaveLength(1)
+        expect(replies.filter((reply) => reply === DEFAULT_DA1_RESPONSE)).toHaveLength(2)
+        const written = writtenData(pane)
+        expect(written).not.toContain('OLD')
+        expect(written).toContain('NEW')
       })
 
       it('forces a fresh snapshot for an overlap whose offsets cannot be mapped', async () => {

@@ -285,7 +285,7 @@ describe('registerPtyHandlers', () => {
         vi.useRealTimers()
       }
     })
-    it('suppresses the gate while renderer delivery interest is registered', async () => {
+    it('sends hidden bytes to sidecars only while renderer delivery interest is registered', async () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)
@@ -305,20 +305,25 @@ describe('registerPtyHandlers', () => {
         setInterest(null, { id: spawnResult.id, interested: true })
         mockProc.emitData('sidecar bytes')
         vi.advanceTimersByTime(2)
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-          id: spawnResult.id,
-          data: 'sidecar bytes'
-        })
+        // Why: the view skips sidecar-only bytes like a drop, so it learns to restore on reveal.
+        expect(mainWindow.webContents.send.mock.calls).toEqual([
+          ['pty:modelRestoreNeeded', { id: spawnResult.id, reason: 'hidden-drop' }],
+          ['pty:data', { id: spawnResult.id, data: 'sidecar bytes', sidecarOnly: true }]
+        ])
+
+        mainWindow.webContents.send.mockClear()
+        mockProc.emitData('more sidecar bytes')
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send.mock.calls).toEqual([
+          ['pty:data', { id: spawnResult.id, data: 'more sidecar bytes', sidecarOnly: true }]
+        ])
 
         setInterest(null, { id: spawnResult.id, interested: false })
         mainWindow.webContents.send.mockClear()
         mockProc.emitData('gated bytes')
         vi.advanceTimersByTime(2)
-        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
-          id: spawnResult.id,
-          reason: 'hidden-drop'
-        })
+        // The restore is already latched, so a plain drop sends nothing.
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
       }
@@ -688,14 +693,19 @@ describe('registerPtyHandlers', () => {
         const setInterest = getPtySetDeliveryInterestListener()
         mainWindow.webContents.send.mockClear()
 
-        // A sidecar holds interest, so hidden bytes still flow.
+        // A sidecar holds interest, so hidden bytes still flow — to sidecars only.
         setInterest(null, { id: result.id, interested: true })
         setHidden(null, { id: result.id, hidden: true })
         daemon.emitData(result.id, 'sidecar bytes')
         vi.advanceTimersByTime(50)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: result.id,
+          reason: 'hidden-drop',
+          markerSeq: 42
+        })
         expect(mainWindow.webContents.send).toHaveBeenLastCalledWith(
           'pty:data',
-          expect.objectContaining({ id: result.id, data: 'sidecar bytes' })
+          expect.objectContaining({ id: result.id, data: 'sidecar bytes', sidecarOnly: true })
         )
 
         // Why: the renderer reload killed the sidecar's ref count without a release IPC — the leaked hold must not force-feed the PTY forever.
@@ -705,12 +715,8 @@ describe('registerPtyHandlers', () => {
         daemon.emitData(result.id, 'gated after reload')
         vi.advanceTimersByTime(50)
 
-        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
-          id: result.id,
-          reason: 'hidden-drop',
-          markerSeq: 42
-        })
+        // Drop memory survives the reload, so the gated chunk needs no second marker.
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
       }

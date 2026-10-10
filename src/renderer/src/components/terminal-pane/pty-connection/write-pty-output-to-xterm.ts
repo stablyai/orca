@@ -103,7 +103,11 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       ...(onParsed ? { onParsed } : {}),
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
-      onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,
+      // Why salvage: the dropped bytes were the view's to answer, and a lost reply hangs the program.
+      onBackgroundBacklogDropped: (droppedData) => {
+        session.markHiddenOutputRestoreNeeded()
+        session.salvageRendererQueriesFromDiscardedRestoreData(droppedData)
+      },
       latencySensitive:
         !foreground || parseHiddenStartupOutput
           ? true

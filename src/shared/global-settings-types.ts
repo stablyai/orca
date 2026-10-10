@@ -335,6 +335,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalHiddenDeliveryGate?: boolean
   /** Kill switch for main's model query responder (Phase 5); active only when both Phase-4 gates are also on. */
   terminalModelQueryAuthority?: boolean
+  /** Kill switch for dropping main's model of a visible local daemon PTY nothing reads; demand rebuilds it from the daemon snapshot. */
+  terminalMainModelDormancy?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)

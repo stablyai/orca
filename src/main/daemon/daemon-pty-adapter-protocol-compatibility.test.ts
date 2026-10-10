@@ -9,7 +9,8 @@ import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   GET_SIZE_PROTOCOL_VERSION,
-  PROTOCOL_VERSION
+  PROTOCOL_VERSION,
+  SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
 import type { DaemonServer } from './daemon-server'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
@@ -251,6 +252,32 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(adapter.canProvideAuthoritativeBufferSnapshot(id)).toBe(true)
       } finally {
         legacy.dispose()
+      }
+    })
+
+    // Why: main rebuilds a dropped model from this snapshot and skips live bytes its seq claims,
+    // which a pre-v36 daemon can count before its emulator has parsed them.
+    it('reports a settled snapshot only from the protocol that parses before it snapshots', () => {
+      const legacy = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION - 1
+      })
+      const settled = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION
+      })
+      try {
+        legacy['activeSessionIds'].add('session-a')
+        settled['activeSessionIds'].add('session-a')
+        expect(legacy.canProvideAuthoritativeBufferSnapshot('session-a')).toBe(true)
+        expect(legacy.canProvideSettledBufferSnapshot('session-a')).toBe(false)
+        expect(settled.canProvideSettledBufferSnapshot('session-a')).toBe(true)
+        expect(settled.canProvideSettledBufferSnapshot('never-spawned-session')).toBe(false)
+      } finally {
+        legacy.dispose()
+        settled.dispose()
       }
     })
 

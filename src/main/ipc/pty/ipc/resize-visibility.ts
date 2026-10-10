@@ -26,7 +26,8 @@ import {
 } from '../delivery/debug'
 import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
-import { sendModelRestoreNeededMarker } from '../delivery/payload'
+import { sendModelRestoreNeededMarker, sendSkippedViewQueries } from '../delivery/payload'
+import { viewOwesPendingReplies } from '../delivery/pending-delivery-stamp'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import type { PtyIpcSession } from '../session'
 
@@ -244,6 +245,10 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       const pending = session.pendingData.get(args.id)
       if (pending && transition.droppable) {
         session.pendingData.delete(args.id)
+        if (viewOwesPendingReplies(pending)) {
+          // Queued while the view parsed, so its queries are still the view's to answer.
+          sendSkippedViewQueries(session, args.id, pending.data)
+        }
         if (pending.projectionAdmissionIds) {
           session.sshOutputIntake?.transferProjections(
             pending.projectionAdmissionIds,

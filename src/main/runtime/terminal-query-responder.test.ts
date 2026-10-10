@@ -198,7 +198,7 @@ describe('reply ownership matrix', () => {
     expect(replies).toEqual([])
   })
 
-  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
+  it('answers while renderer delivery interest holds the chunk — it reaches sidecars, not the view', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-i')
     setRendererPtyDeliveryInterest('pty-i', true)
@@ -206,7 +206,7 @@ describe('reply ownership matrix', () => {
     runtime.onPtyData('pty-i', DA1, Date.now())
     await settle(runtime, 'pty-i')
 
-    expect(replies).toEqual([])
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
   })
 
   it.each([
@@ -801,7 +801,7 @@ describe('view-attribute replay guard and suppression', () => {
     expect(replies).toEqual([])
   })
 
-  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
+  it('answers view-attribute queries while renderer delivery interest holds the chunk', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-vint')
     setRendererPtyDeliveryInterest('pty-vint', true)
@@ -810,7 +810,7 @@ describe('view-attribute replay guard and suppression', () => {
     runtime.onPtyData('pty-vint', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-vint')
 
-    expect(replies).toEqual([])
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'])
   })
 
   it('yields view-attribute replies while a remote view subscriber is attached', async () => {
