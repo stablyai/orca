@@ -27,6 +27,7 @@ export function waitForSentinel(
     // into a typed RelayVersionMismatchError so the relay-lost retry loop
     // can skip backoff for this terminal condition.
     let lastExitCode: number | null = null
+    let exitObserved = false
 
     // Why: when the sentinel timeout fires we close the channel and wait a
     // short grace window for the 'close' handler to surface the typed
@@ -86,6 +87,7 @@ export function waitForSentinel(
     }
 
     channel.on('exit', (code: number | null) => {
+      exitObserved = true
       if (typeof code === 'number') {
         lastExitCode = code
       }
@@ -132,7 +134,11 @@ export function waitForSentinel(
     channel.on('error', (err: Error) => failOrClose(err))
     channel.stderr.on('error', (err: Error) => failOrClose(err))
 
-    channel.on('close', () => {
+    channel.on('close', (code?: number | null) => {
+      // The exit event can precede the exec promise; close repeats its status.
+      if (!exitObserved && typeof code === 'number') {
+        lastExitCode = code
+      }
       if (!sentinelReceived) {
         if (!settled) {
           // Why: a wire-handshake mismatch on the daemon side closes the

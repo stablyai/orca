@@ -128,7 +128,17 @@ export class SshPlainShellPtyProvider implements IPtyProvider {
     })
     // Why: channel errors surface as close; the close handler owns the verdict.
     shell.channel.on('error', () => {})
-    shell.channel.on('close', () => this.settleClose(id, shell))
+    shell.channel.on('close', (code?: number | null, signal?: string | null) => {
+      // A fast shell can report exit before the shell-open promise resumes.
+      if (shell.exitCode === null) {
+        if (typeof code === 'number') {
+          shell.exitCode = code
+        } else if (typeof signal === 'string' && signal.length > 0) {
+          shell.exitCode = SIGNALLED_EXIT_CODE
+        }
+      }
+      this.settleClose(id, shell)
+    })
   }
 
   private settleClose(id: string, shell: PlainShell): void {

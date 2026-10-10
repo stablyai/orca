@@ -109,6 +109,89 @@ describe('registerSshBrowseHandler', () => {
     )
   })
 
+  it.each([
+    { observedExit: false, exitCode: 0, closeCode: 0 },
+    { observedExit: true, exitCode: 0, closeCode: 1 }
+  ])(
+    'reads successful close status without overriding an observed exit ($observedExit)',
+    async ({ observedExit, exitCode, closeCode }) => {
+      const channel = createMockChannel()
+      const exec = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          if (!observedExit) {
+            channel.emit('exit', exitCode)
+          }
+          return channel
+        })
+        .mockRejectedValue(new Error('Unexpected PowerShell fallback'))
+      const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the mocked manager's getConnection and exec methods.
+      registerSshBrowseHandler(getConnectionManager as never)
+
+      const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
+      await Promise.resolve()
+      const command = String(exec.mock.calls[0]?.[0])
+      const begin = (/__ORCA_SSH_CAPTURE_BEGIN_ \w+?__/.exec(command)?.[0] ?? '').replace(' ', '')
+      const end = (/__ORCA_SSH_CAPTURE_END_ \w+?__/.exec(command)?.[0] ?? '').replace(' ', '')
+      channel.emit('data', Buffer.from(`RC BANNER\n${begin}/home/user\nproject/\n${end}`))
+      if (observedExit) {
+        channel.emit('exit', exitCode)
+      }
+      channel.emit('close', closeCode)
+
+      await expect(resultPromise).resolves.toEqual({
+        resolvedPath: '/home/user',
+        pathFlavor: 'posix',
+        entries: [{ name: 'project', isDirectory: true }]
+      })
+      expect(exec).toHaveBeenCalledTimes(1)
+      expect(channel.eventNames()).toEqual([])
+      expect(channel.stderr.eventNames()).toEqual([])
+    }
+  )
+
+  it.each([
+    { observedExit: true, exitCode: 7, closeCode: 0, message: 'exit 7' },
+    { observedExit: true, exitCode: null, closeCode: 0, message: 'without exit status' },
+    { observedExit: false, exitCode: null, closeCode: undefined, message: 'without exit status' },
+    { observedExit: false, exitCode: null, closeCode: null, message: 'without exit status' }
+  ])(
+    'keeps failed or unknown listing status ($observedExit, $exitCode, $closeCode)',
+    async ({ observedExit, exitCode, closeCode, message }) => {
+      const channel = createMockChannel()
+      const fallback = createMockChannel()
+      const exec = vi
+        .fn()
+        .mockResolvedValueOnce(channel)
+        .mockImplementationOnce(async () => {
+          fallback.emit('exit', 127)
+          return fallback
+        })
+      const getConnectionManager = () => ({ getConnection: () => ({ exec }) })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the mocked manager's getConnection and exec methods.
+      registerSshBrowseHandler(getConnectionManager as never)
+
+      const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
+      const rejected = expect(resultPromise).rejects.toThrow(message)
+      await Promise.resolve()
+      channel.emit('data', Buffer.from('/home/user\n'))
+      if (observedExit) {
+        channel.emit('exit', exitCode, 'TERM')
+      }
+      channel.emit('close', closeCode)
+      await vi.waitFor(() => expect(fallback.listenerCount('close')).toBe(1))
+      fallback.stderr.emit('data', Buffer.from('powershell.exe: command not found'))
+      fallback.emit('close', 127)
+
+      await rejected
+      expect(exec).toHaveBeenCalledTimes(2)
+      expect(channel.eventNames()).toEqual([])
+      expect(fallback.eventNames()).toEqual([])
+      expect(fallback.stderr.eventNames()).toEqual([])
+    }
+  )
+
   it('falls back to PowerShell when a Windows SSH shell rejects POSIX exec', async () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
@@ -409,11 +492,11 @@ describe('registerSshBrowseHandler', () => {
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
+    posixChannel.emit('exit', 127)
     await Promise.resolve()
     // A non-zero POSIX failure triggers the fallback probe on any host...
     posixChannel.stderr.emit('data', Buffer.from('exec: command not found'))
-    posixChannel.emit('exit', 127)
-    posixChannel.emit('close')
+    posixChannel.emit('close', 127)
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })

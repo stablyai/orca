@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { shouldProbeBuildToolchainAfterNativeDepsFailure } from './ssh-relay-build-toolchain'
-import { RELAY_SENTINEL } from './relay-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH
@@ -48,6 +48,7 @@ describe('waitForSentinel', () => {
 
       expect(vi.getTimerCount()).toBe(1)
       controller.abort()
+      channel.emit('close', 42)
 
       await expect(transportPromise).rejects.toMatchObject({ name: 'AbortError' })
       expect(channel.close).toHaveBeenCalledTimes(1)
@@ -185,6 +186,70 @@ describe('waitForSentinel', () => {
       expect(err).not.toBeInstanceOf(RelayVersionMismatchError)
     })
   })
+
+  it.each([
+    { code: 42, ErrorType: RelayVersionMismatchError },
+    { code: 43, ErrorType: RelayCredentialMismatchError }
+  ])('recovers a pre-subscription refusal from close $code', async ({ code, ErrorType }) => {
+    const channel = createMockChannel()
+    channel.emit('exit', code)
+    const transportPromise = waitForSentinel(channel)
+    channel.stderr.emit('data', Buffer.from('Handshake mismatch: expected=new, daemon=old'))
+    channel.emit('close', code)
+    await expect(transportPromise).rejects.toBeInstanceOf(ErrorType)
+  })
+
+  it('recovers a close-only refusal during the sentinel timeout grace', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const transportPromise = waitForSentinel(channel)
+      const rejected = expect(transportPromise).rejects.toBeInstanceOf(RelayVersionMismatchError)
+      await vi.advanceTimersByTimeAsync(RELAY_SENTINEL_TIMEOUT_MS)
+      expect(channel.close).toHaveBeenCalledOnce()
+      channel.emit('close', 42)
+      await rejected
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    { exitCode: 42, closeCode: 0, ErrorType: RelayVersionMismatchError },
+    { exitCode: 43, closeCode: 42, ErrorType: RelayCredentialMismatchError }
+  ])(
+    'preserves an observed refusal $exitCode over close $closeCode',
+    async ({ exitCode, closeCode, ErrorType }) => {
+      const channel = createMockChannel()
+      const transportPromise = waitForSentinel(channel)
+      channel.emit('exit', exitCode)
+      channel.emit('close', closeCode)
+      await expect(transportPromise).rejects.toBeInstanceOf(ErrorType)
+    }
+  )
+
+  it.each([
+    { observedExit: true, exitCode: 0, closeCode: 42 },
+    { observedExit: true, exitCode: null, closeCode: 43 },
+    { observedExit: false, exitCode: null, closeCode: null },
+    { observedExit: false, exitCode: null, closeCode: undefined }
+  ])(
+    'does not manufacture a refusal ($observedExit, $exitCode, $closeCode)',
+    async ({ observedExit, exitCode, closeCode }) => {
+      const channel = createMockChannel()
+      const transportPromise = waitForSentinel(channel)
+      if (observedExit) {
+        channel.emit('exit', exitCode, 'TERM')
+      }
+      channel.emit('close', closeCode)
+      await expect(transportPromise).rejects.toThrow('Relay process exited before ready')
+      await transportPromise.catch((error: unknown) => {
+        expect(error).not.toBeInstanceOf(RelayVersionMismatchError)
+        expect(error).not.toBeInstanceOf(RelayCredentialMismatchError)
+      })
+    }
+  )
 
   it('rejects and closes the channel when pre-sentinel stdout exceeds the startup buffer cap', async () => {
     const channel = createMockChannel()

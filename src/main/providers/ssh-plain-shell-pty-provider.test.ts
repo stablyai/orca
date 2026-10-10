@@ -17,7 +17,12 @@ class FakeShellChannel extends EventEmitter {
 
 const MODE = { reason: 'no_runtime', message: 'No runtime here.' }
 
-function createProvider(options: { posixHost?: boolean } = {}) {
+function createProvider(
+  options: {
+    posixHost?: boolean
+    earlyExit?: { code: number | null; signal?: string }
+  } = {}
+) {
   const channels: FakeShellChannel[] = []
   const opened: PseudoTtyOptions[] = []
   const provider = new SshPlainShellPtyProvider(
@@ -26,6 +31,9 @@ function createProvider(options: { posixHost?: boolean } = {}) {
       opened.push(pty)
       const channel = new FakeShellChannel()
       channels.push(channel)
+      if (options.earlyExit) {
+        channel.emit('exit', options.earlyExit.code, options.earlyExit.signal)
+      }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fake implements every ClientChannel member the provider touches.
       return channel as unknown as ClientChannel
     },
@@ -99,19 +107,57 @@ describe('SshPlainShellPtyProvider', () => {
     await expect(provider.probePtyLiveness(id)).resolves.toBe(false)
   })
 
-  it('treats a close without an exit status as unverifiable, not exited', async () => {
-    const { provider, channels, exits, data } = createProvider()
-    const { id } = await provider.spawn({ cols: 80, rows: 24 })
-    channels[0]!.emit('close')
+  it.each([
+    { code: 0, signal: undefined, expected: 0 },
+    { code: 7, signal: undefined, expected: 7 },
+    { code: null, signal: 'SIGTERM', expected: 129 }
+  ])(
+    'recovers an early host exit from close ($code, $signal)',
+    async ({ code, signal, expected }) => {
+      const { provider, channels, exits, data } = createProvider({ earlyExit: { code, signal } })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      channels[0]!.emit('close', code, signal)
+      channels[0]!.emit('close', code, signal)
 
-    expect(exits).toEqual([])
-    expect(data.at(-1)?.data).toContain('unverifiable')
-    await expect(provider.probePtyLiveness(id)).resolves.toBeNull()
-    expect(provider.writeWithSettlement(id, 'x')).toEqual({
-      outcome: 'refused',
-      reason: 'provider_unavailable'
-    })
-  })
+      expect(exits).toEqual([
+        expect.objectContaining({ id, code: expected, providerGeneration: 7 })
+      ])
+      expect(data.map((payload) => payload.data).join('')).not.toContain('unverifiable')
+      await expect(provider.probePtyLiveness(id)).resolves.toBe(false)
+    }
+  )
+
+  it.each([
+    { exitCode: 3, closeCode: 0, expected: 3 },
+    { exitCode: null, closeCode: 0, expected: 129 }
+  ])(
+    'preserves observed exit $exitCode over close $closeCode',
+    async ({ exitCode, closeCode, expected }) => {
+      const { provider, channels, exits } = createProvider()
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      channels[0]!.emit('exit', exitCode)
+      channels[0]!.emit('close', closeCode)
+      expect(exits).toEqual([expect.objectContaining({ id, code: expected })])
+      await expect(provider.probePtyLiveness(id)).resolves.toBe(false)
+    }
+  )
+
+  it.each([undefined, null])(
+    'treats close %s without an exit status as unverifiable, not exited',
+    async (code) => {
+      const { provider, channels, exits, data } = createProvider()
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      channels[0]!.emit('close', code)
+
+      expect(exits).toEqual([])
+      expect(data.at(-1)?.data).toContain('unverifiable')
+      await expect(provider.probePtyLiveness(id)).resolves.toBeNull()
+      expect(provider.writeWithSettlement(id, 'x')).toEqual({
+        outcome: 'refused',
+        reason: 'provider_unavailable'
+      })
+    }
+  )
 
   it('reports an operator close as an exit once the channel closes', async () => {
     const { provider, channels, exits } = createProvider()
@@ -126,7 +172,7 @@ describe('SshPlainShellPtyProvider', () => {
     const { provider, channels, exits } = createProvider()
     const { id } = await provider.spawn({ cols: 80, rows: 24 })
     provider.dispose()
-    channels[0]!.emit('close')
+    channels[0]!.emit('close', 7)
 
     expect(exits).toEqual([])
     await expect(provider.probePtyLiveness(id)).resolves.toBeNull()
