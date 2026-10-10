@@ -90,6 +90,15 @@ export function workItemsInflightRequestKey(
   return `${cacheKey}::${targetPart}`
 }
 
+export function issueCacheSuffix(
+  issueNumber: number | string,
+  ownerRepo?: GitHubOwnerRepo
+): string {
+  return ownerRepo
+    ? `issue::${githubRepoIdentityKey(ownerRepo)}::${issueNumber}`
+    : String(issueNumber)
+}
+
 export function issueCacheKey(
   repoPath: string,
   repoId: string | undefined,
@@ -97,12 +106,13 @@ export function issueCacheKey(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   connectionId?: string | null,
   executionHostId?: string | null,
-  hasRepoOwner = false
+  hasRepoOwner = false,
+  ownerRepo?: GitHubOwnerRepo
 ): string {
   return getGitHubRepoCacheKey(
     repoPath,
     repoId,
-    String(issueNumber),
+    issueCacheSuffix(issueNumber, ownerRepo),
     settings,
     connectionId,
     executionHostId,

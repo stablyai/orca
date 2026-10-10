@@ -11,6 +11,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getWorktreeGitHubIssueRepository } from '../../../../shared/worktree/github-issue-repository'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
@@ -80,7 +81,8 @@ export function useWorktreeCardReviewDetails({
           settings,
           repo.connectionId,
           repo.executionHostId,
-          true
+          true,
+          getWorktreeGitHubIssueRepository(worktree)
         )
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.

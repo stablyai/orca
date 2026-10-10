@@ -32,9 +32,19 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
         repoId?: string | null
         sourceContext?: TaskSourceContext | null
         number: number
+        ownerRepo?: GitHubOwnerRepo
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+      if (args.ownerRepo) {
+        return getIssue(
+          repo.path,
+          args.number,
+          getGitHubRepoConnectionId(repo),
+          getGitHubLocalGitOptionArgs(store, repo)[0] ?? {},
+          args.ownerRepo
+        )
+      }
       return getIssue(
         repo.path,
         args.number,

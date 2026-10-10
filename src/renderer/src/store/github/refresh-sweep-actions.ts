@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeGitHubIssueRepository } from '../../../../shared/worktree/github-issue-repository'
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { issueCacheKey, prCacheKey } from './cache-identity'
 import { CACHE_TTL, evictStaleEntries } from './cache-policy'
@@ -55,6 +56,7 @@ export const createRefreshSweepActions = (
         }
 
         if (wt.linkedIssue) {
+          const ownerRepo = getWorktreeGitHubIssueRepository(wt)
           const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
           const issueKey = issueCacheKey(
             repo.path,
@@ -63,11 +65,15 @@ export const createRefreshSweepActions = (
             ownerSettings,
             repo.connectionId,
             repo.executionHostId,
-            true
+            true,
+            ownerRepo
           )
           const issueEntry = state.issueCache[issueKey]
           if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
-            void get().fetchIssue(repo.path, wt.linkedIssue, { repoId: repo.id })
+            void get().fetchIssue(repo.path, wt.linkedIssue, {
+              repoId: repo.id,
+              ...(ownerRepo ? { ownerRepo } : {})
+            })
           }
         }
       }
@@ -95,6 +101,7 @@ export const createRefreshSweepActions = (
     // Invalidate this worktree's cache entries
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
     const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+    const ownerRepo = getWorktreeGitHubIssueRepository(worktree)
     const prKey = prCacheKey(
       repo.path,
       repo.id,
@@ -111,7 +118,8 @@ export const createRefreshSweepActions = (
           ownerSettings,
           repo.connectionId,
           repo.executionHostId,
-          true
+          true,
+          ownerRepo
         )
       : ''
 
@@ -134,7 +142,10 @@ export const createRefreshSweepActions = (
       get().enqueueGitHubPRRefresh(worktreeId, 'post-push', 100)
     }
     if ((state.worktreeCardProperties ?? []).includes('issue') && worktree.linkedIssue) {
-      void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+      void get().fetchIssue(repo.path, worktree.linkedIssue, {
+        repoId: repo.id,
+        ...(ownerRepo ? { ownerRepo } : {})
+      })
     }
   }
 })

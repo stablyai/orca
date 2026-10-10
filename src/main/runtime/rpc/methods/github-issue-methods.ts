@@ -11,7 +11,10 @@ export const GITHUB_ISSUE_METHODS = [
     name: 'github.issue',
     permission: 'workspace',
     params: Issue,
-    handler: async (params, { runtime }) => runtime.getRepoIssue(params.repo, params.number)
+    handler: async (params, { runtime }) =>
+      params.ownerRepo
+        ? runtime.getRepoIssue(params.repo, params.number, params.ownerRepo)
+        : runtime.getRepoIssue(params.repo, params.number)
   }),
   defineMethod({
     name: 'github.createIssue',

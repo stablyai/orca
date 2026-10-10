@@ -16,9 +16,19 @@ export class RuntimeGitHubReviewQueryCommands {
 
   async getRepoIssue(
     repoSelector: string,
-    number: number
+    number: number,
+    ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof getIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+    if (ownerRepo) {
+      return getIssue(
+        repo.path,
+        number,
+        repo.connectionId ?? null,
+        this.deps.getLocalGitArgs(repo)[0] ?? {},
+        ownerRepo
+      )
+    }
     return getIssue(
       repo.path,
       number,
