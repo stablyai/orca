@@ -2931,7 +2931,6 @@
             "efb3843e75": "워크스페이스 필터링 및 정렬",
             "93b7381d50": "필터",
             "a615e24679": "종류",
-            "4cc5b73efe": "비활성 워크스페이스를 찾는 중...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} 스캔됨",
             "searchPlaceholder": "워크스페이스 검색",
             "ageFilter": "나이",
@@ -2943,7 +2942,6 @@
             "1d3503357d": "삭제가 계속되는 동안 이 창을 닫고 나중에 돌아올 수 있습니다.",
             "4c2990886e": "{{value0}}/{{value1}}개 삭제됨",
             "86ba852118": "{{value0}}, {{value1}}개 실패",
-            "7b7bde5181": "지금까지 확인한 워크스페이스: {{value0}}",
             "deletingCount": "삭제 중인 워크스페이스: {{value0}}",
             "deleteCount": "워크스페이스 삭제: {{value0}}?",
             "selectedForDeletionCount": "삭제 대상으로 선택됨: {{value0}}",
@@ -12003,7 +12001,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "터미널 URL 클릭",
-          "description": "터미널의 링크나 채팅 내용을 클릭하면 사용 가능한 작업이 표시됩니다. 터미널에서 {{modifier}}-클릭을 요구하려면 이 기능을 끄십시오.",
           "descriptionV2": "터미널 창과 채팅 기록에 인쇄된 감지된 URL에 대한 클릭을 제어합니다.",
           "plainClickLabel": "일반 클릭",
           "plainClickDescription": "왼쪽 클릭으로 작업을 표시할지, URL을 열지, 터미널에 그대로 둘지 선택하세요. Cmd/Ctrl 키를 누른 채 클릭하면 항상 바로 열립니다.",

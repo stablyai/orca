@@ -3145,7 +3145,6 @@
             "efb3843e75": "Filter and sort workspaces",
             "93b7381d50": "Filters",
             "a615e24679": "Sort",
-            "4cc5b73efe": "Finding workspaces...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} scanned",
             "searchPlaceholder": "Search workspaces",
             "ageFilter": "Age",
@@ -3157,7 +3156,6 @@
             "1d3503357d": "You can close this and come back while deletion continues.",
             "4c2990886e": "{{value0}}/{{value1}} deleted",
             "86ba852118": "{{value0}}, {{value1}} failed",
-            "7b7bde5181": "Checked workspaces so far: {{value0}}",
             "deletingCount": "Deleting workspaces: {{value0}}",
             "deleteCount": "Delete workspaces: {{value0}}?",
             "selectedForDeletionCount": "Selected for deletion: {{value0}}",
@@ -11806,7 +11804,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Terminal URL clicks",
-          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal.",
           "descriptionV2": "Control clicks on detected URLs printed in terminal panes and chat transcripts.",
           "plainClickLabel": "Plain click",
           "plainClickDescription": "Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly.",

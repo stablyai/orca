@@ -2931,7 +2931,6 @@
             "efb3843e75": "筛选并排序工作区",
             "93b7381d50": "筛选",
             "a615e24679": "排序",
-            "4cc5b73efe": "正在查找非活动工作区...",
             "5bf2e88480": "已扫描 {{value0}}/{{value1}} 个{{value2}}",
             "searchPlaceholder": "搜索工作区",
             "ageFilter": "时间",
@@ -2943,7 +2942,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "7b7bde5181": "到目前为止已检查工作区：{{value0}}",
             "deletingCount": "正在删除工作区：{{value0}}",
             "deleteCount": "删除工作区：{{value0}}？",
             "selectedForDeletionCount": "已选择删除：{{value0}}",
@@ -11968,7 +11966,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "终端 URL 点击次数",
-          "description": "单击终端或聊天记录中的链接时显示可用的操作。关闭此功能需要在终端中单击 {{modifier}}。",
           "descriptionV2": "控制点击终端窗格和聊天记录中打印的已检测的 URL。",
           "plainClickLabel": "简单的点击",
           "plainClickDescription": "选择左键单击是显示操作、打开 URL 还是将其留给终端。 Cmd/Ctrl-单击始终直接打开。",

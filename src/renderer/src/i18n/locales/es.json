@@ -2931,7 +2931,6 @@
             "efb3843e75": "Filtrar y ordenar espacios de trabajo",
             "93b7381d50": "Filtros",
             "a615e24679": "Ordenar",
-            "4cc5b73efe": "Buscando espacios de trabajo inactivos...",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} escaneados",
             "searchPlaceholder": "Buscar espacios de trabajo",
             "ageFilter": "Edad",
@@ -2943,7 +2942,6 @@
             "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
             "4c2990886e": "{{value0}}/{{value1}} eliminados",
             "86ba852118": "{{value0}}, {{value1}} fallidos",
-            "7b7bde5181": "Espacios de trabajo comprobados hasta ahora: {{value0}}",
             "deletingCount": "Eliminando espacios de trabajo: {{value0}}",
             "deleteCount": "¿Eliminar espacios de trabajo: {{value0}}?",
             "selectedForDeletionCount": "Seleccionados para eliminar: {{value0}}",
@@ -12252,7 +12250,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Clics en la URL del terminal",
-          "description": "Muestra las acciones disponibles al hacer clic en un enlace en la terminal o en una transcripción de chat. Desactive esto para requerir {{modifier}}-hacer clic en la terminal.",
           "descriptionV2": "Controle los clics en las URL detectadas impresas en paneles de terminales y transcripciones de chat.",
           "plainClickLabel": "clic simple",
           "plainClickDescription": "Elija si un clic izquierdo muestra acciones, abre la URL o la deja en el terminal. Cmd/Ctrl-clic siempre se abre directamente.",
