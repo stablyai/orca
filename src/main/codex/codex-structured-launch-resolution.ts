@@ -9,7 +9,7 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { isNativeLocalLocation } from '../../shared/execution-host'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
@@ -79,7 +79,7 @@ export function createCodexStructuredLaunchResolver(
     // This adapter spawns a child on the machine the runtime itself runs on.
     // A session pinned elsewhere belongs to that host's runtime, and quietly
     // starting it here would put a second writer on the same thread.
-    if (location.executionHostId !== LOCAL_EXECUTION_HOST_ID || location.wslDistro !== null) {
+    if (!isNativeLocalLocation(location)) {
       throw new Error(
         `codex structured sessions run on the local host, not ${location.executionHostId}`
       )

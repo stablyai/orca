@@ -6,7 +6,7 @@ import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   resolveStructuredAgentSessionAdoptionForCreate
 } from './structured-agent-session-create-adoption'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { isNativeLocalLocation, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
@@ -137,7 +137,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   /** Where a structured chat here would run, when that is a directory on this machine. */
   async resolveStructuredAgentSessionLocalWorkspacePath(worktreeSelector: string) {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
-    if (location.executionHostId !== LOCAL_EXECUTION_HOST_ID || location.wslDistro) {
+    if (!isNativeLocalLocation(location)) {
       return null
     }
     return (await this.resolveRuntimeFileTarget(worktreeSelector)).worktree.path
