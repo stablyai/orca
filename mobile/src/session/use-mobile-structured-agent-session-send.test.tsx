@@ -65,6 +65,7 @@ describe('mobile structured send actions', () => {
   let banner: ReturnType<typeof useMobileNativeChatSendError> | null = null
   let listener: ((value: unknown) => void) | null = null
   let storedOperations: Map<string, string>
+  let agent = 'codex'
   const onSendError = vi.fn()
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
@@ -92,7 +93,7 @@ describe('mobile structured send actions', () => {
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
       connected: true,
-      agent: 'codex',
+      agent,
       hostSupport: null,
       onSendError
     })
@@ -148,6 +149,20 @@ describe('mobile structured send actions', () => {
     hook = null
     banner = null
     listener = null
+    agent = 'codex'
+  })
+
+  it("sends a command the chat's own agent runs as a message, though Codex's host claims it", async () => {
+    sendRequest.mockImplementation(async (method) =>
+      method === 'agentSession.send' ? sendResult('accepted') : ok({ models: [], current: {} })
+    )
+    agent = 'opencode'
+    await mountSession()
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('/review')).toBe('accepted')
+    })
+    expect(calls()).toHaveLength(1)
+    expect(onSendError).not.toHaveBeenCalled()
   })
 
   it.each(['unknown', 'pending', 'accepted'] as const)(

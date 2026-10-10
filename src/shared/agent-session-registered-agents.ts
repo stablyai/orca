@@ -11,6 +11,7 @@
 import { z } from 'zod'
 import type { AgentSessionCapabilities } from './agent-session-capabilities'
 import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
+import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
 import { openEnum } from './zod-salvage'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
@@ -70,4 +71,13 @@ export function decodeAgentSessionAgentsResult(
     }
   }
   return decoded
+}
+
+/** Whether a chat may carry images: what its host registered for the agent, else what every build
+ *  has always sent the agents it ships. An unlisted agent claims nothing. */
+export function structuredAgentAcceptsImages(
+  record: AgentSessionRegisteredAgent | undefined,
+  agent: string
+): boolean {
+  return record ? record.capabilities.imagePrompts : isAgentSessionHandleProvider(agent)
 }

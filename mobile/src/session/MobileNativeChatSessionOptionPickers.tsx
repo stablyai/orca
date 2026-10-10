@@ -92,7 +92,7 @@ export function MobileNativeChatSessionOptionPickers({
   }
 
   return (
-    <View>
+    <View style={styles.pillSlot}>
       <Pill
         label={pillLabel}
         accessibleName={`Model, ${pillLabel}`}
@@ -160,6 +160,11 @@ export function MobileNativeChatSessionOptionPickers({
 }
 
 const styles = StyleSheet.create({
+  // The composer row's only shrinkable item: a long label truncates before it pushes Send off.
+  pillSlot: {
+    flexShrink: 1,
+    minWidth: 0
+  },
   sheet: {
     paddingBottom: spacing.xs
   },

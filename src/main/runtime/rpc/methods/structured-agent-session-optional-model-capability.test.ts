@@ -90,6 +90,18 @@ describe('options without a selected model across client versions', () => {
     }
   )
 
+  it('returns the captured absence to a phone that reads options without a model', async () => {
+    const report = missingModelReport()
+    hostCalls.readOptions.mockResolvedValue(report)
+    const reply = await call(
+      'agentSession.options',
+      { sessionId: SESSION },
+      { ...CURRENT_CLIENT, clientKind: 'mobile' }
+    )
+    expect(reply).toMatchObject({ ok: true, result: report })
+    expect(reply).not.toHaveProperty('result.current.model')
+  })
+
   it('keeps same-build in-process reads available', async () => {
     const report = missingModelReport()
     hostCalls.readOptions.mockResolvedValue(report)

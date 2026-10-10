@@ -181,6 +181,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(labels).toContain('Sonnet 5 High')
   })
 
+  it('lets the pill shrink so a long label never pushes the composer buttons off the row', () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
+    // Style-level only: the test renderer runs no layout.
+    expect(renderer!.root.findAllByType('View')[0]!.props.style).toMatchObject({ flexShrink: 1 })
+  })
+
   it('opens the model sheet and applies a picked model', async () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
     await act(async () => pill('Model').props.onPress())

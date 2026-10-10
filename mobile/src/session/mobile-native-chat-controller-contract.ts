@@ -110,4 +110,6 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  /** Whether the composer offers images: a structured chat by its agent's host record. */
+  nativeChatAcceptsImages: boolean
 }

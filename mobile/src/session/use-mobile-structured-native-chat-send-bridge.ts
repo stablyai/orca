@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
@@ -11,7 +11,7 @@ type StructuredNativeChatAttachment = {
 }
 
 export function useMobileStructuredNativeChatSendBridge(args: {
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId | undefined
   sendStructured: (
     text: string,
     images?: string[],
