@@ -80,7 +80,10 @@ export function detectLibc(platform = process.platform, header = readReportHeade
   if (platform !== 'linux') {
     return 'none'
   }
-  return header && typeof header === 'object' && 'glibcVersionRuntime' in header ? 'glibc' : 'musl'
+  if (!header || typeof header !== 'object') {
+    throw new Error('[orcad-prebuilds] cannot determine the build host libc from the Node report')
+  }
+  return 'glibcVersionRuntime' in header ? 'glibc' : 'musl'
 }
 
 function readReportHeader() {
@@ -130,13 +133,21 @@ export function assertNodePtyPatchApplied(nodePtyDir) {
   if (!ptySource.includes('.symver openpty,openpty@')) {
     missing.push('src/unix/pty.cc is missing the .symver glibc pins')
   }
+  // Why: glibc 2.42 re-versioned the baud-rate setters separately from the
+  // 2.32-2.34 libpthread/libutil merge, so the openpty pin alone does not prove
+  // a build on a 2.42+ host stays loadable on 2.31.
+  for (const symbol of ['cfsetispeed', 'cfsetospeed']) {
+    if (!ptySource.includes(`.symver ${symbol},${symbol}@`)) {
+      missing.push(`src/unix/pty.cc is missing the .symver ${symbol} pin (glibc 2.42)`)
+    }
+  }
   if (missing.length > 0) {
     throw new Error(
       [
         '[orcad-prebuilds] refusing to build: config/patches/node-pty@1.1.0.patch is not applied.',
         ...missing.map((line) => `  - ${line}`),
-        'A prebuilt compiled without it will not load on Ubuntu 20.04 (see',
-        'docs/reference/linux-glibc-compatibility.md and #9902). Run `pnpm install` to apply patches.'
+        'A prebuilt compiled without it will not load on Ubuntu 20.04 (see #9902).',
+        'Run `pnpm install` to apply patches.'
       ].join('\n')
     )
   }
@@ -171,6 +182,13 @@ export function ptySourceForLibc(ptySource, libc) {
   if (libc !== 'musl') {
     return ptySource
   }
+  const guarded = GLIBC_SYMVER_GUARD.replace(
+    'defined(__linux__)',
+    'defined(__linux__) && defined(__GLIBC__)'
+  )
+  if (ptySource.includes(guarded)) {
+    return ptySource
+  }
   if (!ptySource.includes(GLIBC_SYMVER_GUARD)) {
     throw new Error(
       '[orcad-prebuilds] pty.cc no longer carries the glibc .symver guard this build scopes on musl'
@@ -195,7 +213,7 @@ async function compileNodePty(sourceDir, slot) {
   const stagedDir = join(workDir, 'node-pty')
   rmSync(workDir, { recursive: true, force: true })
   mkdirSync(stagedDir, { recursive: true })
-  for (const entry of ['package.json', 'src']) {
+  for (const entry of ['package.json', 'src', 'scripts']) {
     cpSync(join(sourceDir, entry), join(stagedDir, entry), { recursive: true })
   }
   const libc = detectLibc()
