@@ -1,6 +1,6 @@
 // Why: this is the original Unix socket / named pipe transport extracted from
-// runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
-// 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
+// runtime-rpc.ts: newline-delimited JSON, 30s idle timeout, 1MB max message,
+// 128 max connections (raised from 32), chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1.
@@ -10,7 +10,8 @@ import type { RpcMessageContext, RpcTransport } from './transport'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
-const MAX_RUNTIME_RPC_CONNECTIONS = 32
+// Why: observers cap at 16 but slow user actions are uncounted (deadline-bounded), so leave room for both plus short RPCs; past this Node drops new sockets ("Restart Orca").
+const MAX_RUNTIME_RPC_CONNECTIONS = 128
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 
 export type UnixSocketTransportOptions = {
