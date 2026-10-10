@@ -21,8 +21,7 @@ import {
   didAnotherRuntimeHandleTerminalPrompt
 } from './terminal-prompt-mutation-recovery'
 import { markEnvironmentUsed } from './environments'
-import { readRuntimeSourceStamp } from '../../shared/runtime-source-env'
-import { RuntimeSourceFence } from './runtime-source-fence'
+import { createRuntimeSourceFence, type RuntimeSourceFence } from './runtime-source-fence'
 import { resolveRemotePairing } from './runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -58,7 +57,7 @@ export class RuntimeClient {
   private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
     process.env
   )
-  private readonly runtimeSourceFence = new RuntimeSourceFence(readRuntimeSourceStamp(process.env))
+  private readonly runtimeSourceFence: RuntimeSourceFence
 
   // Why: browser commands trigger first-time session init (agent-browser connect +
   // CDP proxy setup) which can take 15-30s. 60s accommodates cold start without
@@ -78,6 +77,7 @@ export class RuntimeClient {
     this.originalArgs = originalArgs ? [...originalArgs] : undefined
     this.remotePairing = resolveRemotePairing(userDataPath, remotePairingCode, environmentSelector)
     this.remoteCompat = new RemoteRuntimeCompatGate(userDataPath, environmentSelector)
+    this.runtimeSourceFence = createRuntimeSourceFence(process.env, userDataPath)
   }
 
   get isRemote(): boolean {

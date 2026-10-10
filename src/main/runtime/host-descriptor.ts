@@ -123,11 +123,16 @@ export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescri
 
 /** Null until this runtime publishes a descriptor; unstamped processes keep the unfenced CLI path. */
 export function getRuntimeSourceStamp(
-  runtime: { getRuntimeId?: () => string } | null | undefined
+  runtime: { getRuntimeId?: () => string } | null | undefined,
+  userDataPath?: string
 ): RuntimeSourceStamp | null {
   const runtimeId = runtime?.getRuntimeId?.()
   const descriptor = runtimeId ? getPublishedHostDescriptor(runtimeId) : null
   return runtimeId && descriptor
-    ? { sourceId: descriptor.installationId, incarnation: runtimeId }
+    ? {
+        sourceId: descriptor.installationId,
+        incarnation: runtimeId,
+        ...(userDataPath ? { profilePath: userDataPath } : {})
+      }
     : null
 }

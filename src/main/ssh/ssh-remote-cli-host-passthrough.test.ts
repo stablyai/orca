@@ -152,7 +152,9 @@ describe('buildHostCliEnv', () => {
 
     expect(build({ sourceId: 'this-source', incarnation: 'this-runtime' })).toMatchObject({
       ORCA_RUNTIME_SOURCE_ID: 'this-source',
-      ORCA_RUNTIME_SOURCE_INCARNATION: 'this-runtime'
+      ORCA_RUNTIME_SOURCE_INCARNATION: 'this-runtime',
+      ORCA_RUNTIME_SOURCE_PROFILE_PATH: '/host/user-data',
+      ORCA_USER_DATA_PATH: '/host/user-data'
     })
     const unstamped = build(null)
     expect(unstamped.ORCA_RUNTIME_SOURCE_ID).toBeUndefined()

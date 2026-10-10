@@ -24,7 +24,7 @@ describe('runtime source env', () => {
     expect(readRuntimeSourceStamp({ ORCA_RUNTIME_SOURCE_ID: 'only-id' })).toBeNull()
     expect(
       readRuntimeSourceStamp({
-        ORCA_RUNTIME_SOURCE_ID: 'x'.repeat(257),
+        ORCA_RUNTIME_SOURCE_ID: 'x'.repeat(4_097),
         ORCA_RUNTIME_SOURCE_INCARNATION: 'runtime'
       })
     ).toBeNull()

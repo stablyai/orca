@@ -286,7 +286,10 @@ export async function prepareRuntimePtySpawn(
         ctx.deps.runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null
       )
-      stampRuntimeSourceEnv(ctx.env, getRuntimeSourceStamp(ctx.deps.runtime))
+      stampRuntimeSourceEnv(
+        ctx.env,
+        getRuntimeSourceStamp(ctx.deps.runtime, getAppEnvironment().getPath('userData'))
+      )
       promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
     } catch (error) {
       // Why: host-env setup can materialize agent hooks/extensions before failing.

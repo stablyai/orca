@@ -6,9 +6,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   RUNTIME_SOURCE_ID_ENV,
-  RUNTIME_SOURCE_INCARNATION_ENV
+  RUNTIME_SOURCE_INCARNATION_ENV,
+  RUNTIME_SOURCE_PROFILE_PATH_ENV
 } from '../../shared/runtime-source-env'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
+import { resolveFencedRuntimeSource } from './runtime-source-fence'
 
 const SOURCE_A = '11111111-1111-4111-8111-111111111111'
 const SOURCE_B = '22222222-2222-4222-8222-222222222222'
@@ -16,7 +18,8 @@ const SOURCE_B = '22222222-2222-4222-8222-222222222222'
 const servers = new Set<Server>()
 const savedEnv = {
   id: process.env[RUNTIME_SOURCE_ID_ENV],
-  incarnation: process.env[RUNTIME_SOURCE_INCARNATION_ENV]
+  incarnation: process.env[RUNTIME_SOURCE_INCARNATION_ENV],
+  profilePath: process.env[RUNTIME_SOURCE_PROFILE_PATH_ENV]
 }
 
 function restoreEnv(name: string, value: string | undefined): void {
@@ -30,6 +33,7 @@ function restoreEnv(name: string, value: string | undefined): void {
 afterEach(async () => {
   restoreEnv(RUNTIME_SOURCE_ID_ENV, savedEnv.id)
   restoreEnv(RUNTIME_SOURCE_INCARNATION_ENV, savedEnv.incarnation)
+  restoreEnv(RUNTIME_SOURCE_PROFILE_PATH_ENV, savedEnv.profilePath)
   await Promise.all(
     [...servers].map((server) => new Promise<void>((resolve) => server.close(() => resolve())))
   )
@@ -89,9 +93,10 @@ async function startRuntime(args: {
   return { userDataPath, methods }
 }
 
-function launchedBy(sourceId: string, incarnation: string): void {
+function launchedBy(sourceId: string, incarnation: string, profilePath?: string): void {
   process.env[RUNTIME_SOURCE_ID_ENV] = sourceId
   process.env[RUNTIME_SOURCE_INCARNATION_ENV] = incarnation
+  restoreEnv(RUNTIME_SOURCE_PROFILE_PATH_ENV, profilePath)
 }
 
 async function expectRefusal(promise: Promise<unknown>, code: string): Promise<void> {
@@ -153,5 +158,21 @@ describe('RuntimeClient runtime-source fence', () => {
 
     await client.call('worktree.list')
     expect(runtime.methods).toEqual(['worktree.list'])
+  })
+
+  it('lets an explicit switch to another profile through, e.g. orca-dev from a packaged terminal', async () => {
+    const runtime = await startRuntime({ runtimeId: 'runtime-dev', installationId: SOURCE_B })
+    launchedBy(SOURCE_A, 'runtime-a', join(tmpdir(), 'orca-packaged-profile'))
+    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
+
+    await client.call('worktree.list')
+    expect(runtime.methods).toEqual(['worktree.list'])
+  })
+
+  it('still fences a terminal whose CLI fell back to the platform default profile', () => {
+    const stamp = { sourceId: SOURCE_A, incarnation: 'runtime-a', profilePath: '/profiles/custom' }
+    expect(resolveFencedRuntimeSource(stamp, '/profiles/default', '/profiles/default')).toBe(stamp)
+    expect(resolveFencedRuntimeSource(stamp, '/profiles/custom', '/profiles/default')).toBe(stamp)
+    expect(resolveFencedRuntimeSource(stamp, '/profiles/dev', '/profiles/default')).toBeNull()
   })
 })

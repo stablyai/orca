@@ -1,9 +1,35 @@
+import { resolve } from 'node:path'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import type { RuntimeSourceStamp } from '../../shared/runtime-source-env'
+import { readRuntimeSourceStamp, type RuntimeSourceStamp } from '../../shared/runtime-source-env'
 import type { RuntimeStatus } from '../../shared/runtime-types'
+import { getPlatformUserDataPath } from './metadata'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
 type StatusProbe = (metadata: RuntimeMetadata) => Promise<RuntimeRpcResponse<RuntimeStatus>>
+
+function sameProfilePath(left: string, right: string): boolean {
+  const a = resolve(left)
+  const b = resolve(right)
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
+/**
+ * The stamp to enforce for a CLI dialing `userDataPath`. Explicitly choosing another profile (e.g.
+ * `orca-dev` from a packaged Orca's terminal) is the user's target, not a fallback, so it is not fenced.
+ */
+export function resolveFencedRuntimeSource(
+  stamp: RuntimeSourceStamp | null,
+  userDataPath: string,
+  platformDefaultPath: string | null
+): RuntimeSourceStamp | null {
+  if (!stamp?.profilePath || sameProfilePath(userDataPath, stamp.profilePath)) {
+    return stamp
+  }
+  // Why: the platform default is what an unpinned terminal falls back to, which is the case to fence.
+  return platformDefaultPath !== null && sameProfilePath(userDataPath, platformDefaultPath)
+    ? stamp
+    : null
+}
 
 /**
  * Refuses, before the request is sent, a runtime other than the one that launched this process.
@@ -49,4 +75,19 @@ export class RuntimeSourceFence {
     }
     this.verifiedRuntimeIds.add(metadata.runtimeId)
   }
+}
+
+export function createRuntimeSourceFence(
+  env: Readonly<Record<string, string | undefined>>,
+  userDataPath: string
+): RuntimeSourceFence {
+  let platformDefaultPath: string | null = null
+  try {
+    platformDefaultPath = getPlatformUserDataPath()
+  } catch {
+    // Why: no resolvable default (Windows without APPDATA) means nothing can fall back to it.
+  }
+  return new RuntimeSourceFence(
+    resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath)
+  )
 }

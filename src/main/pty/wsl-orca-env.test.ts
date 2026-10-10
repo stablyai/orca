@@ -83,7 +83,8 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu',
       ORCA_RUNTIME_SOURCE_ID: '11111111-1111-4111-8111-111111111111',
-      ORCA_RUNTIME_SOURCE_INCARNATION: 'runtime-a'
+      ORCA_RUNTIME_SOURCE_INCARNATION: 'runtime-a',
+      ORCA_RUNTIME_SOURCE_PROFILE_PATH: 'C:\\Users\\a\\AppData\\Roaming\\orca'
     }
 
     addOrcaWslInteropEnv(env)
@@ -113,6 +114,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u')
     expect(env.WSLENV).toContain('ORCA_RUNTIME_SOURCE_ID/u')
     expect(env.WSLENV).toContain('ORCA_RUNTIME_SOURCE_INCARNATION/u')
+    expect(env.WSLENV).toContain('ORCA_RUNTIME_SOURCE_PROFILE_PATH/u')
   })
 
   it('overwrites caller host evidence with native runtime WSL authority', () => {

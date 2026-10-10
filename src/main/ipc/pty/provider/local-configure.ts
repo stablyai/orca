@@ -115,7 +115,10 @@ export function configureLocalPtyProvider(args: {
         runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx?.isWsl === true ? ctx.wslDistro : null
       )
-      stampRuntimeSourceEnv(env, getRuntimeSourceStamp(runtime))
+      stampRuntimeSourceEnv(
+        env,
+        getRuntimeSourceStamp(runtime, getAppEnvironment().getPath('userData'))
+      )
       if (ctx?.isWsl === true) {
         addOrcaWslInteropEnv(env)
       }

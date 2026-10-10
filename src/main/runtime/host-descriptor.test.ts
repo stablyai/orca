@@ -104,9 +104,12 @@ describe('getRuntimeSourceStamp', () => {
     const installationId = '0b4c3d5e-1f2a-4b6c-8d7e-9f0a1b2c3d4e'
     publishHostDescriptor('runtime-stamp-1', { installationId })
     try {
-      expect(getRuntimeSourceStamp({ getRuntimeId: () => 'runtime-stamp-1' })).toEqual({
+      expect(
+        getRuntimeSourceStamp({ getRuntimeId: () => 'runtime-stamp-1' }, '/profiles/a')
+      ).toEqual({
         sourceId: installationId,
-        incarnation: 'runtime-stamp-1'
+        incarnation: 'runtime-stamp-1',
+        profilePath: '/profiles/a'
       })
     } finally {
       publishHostDescriptor('runtime-stamp-1', null)

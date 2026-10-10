@@ -157,7 +157,11 @@ export function buildHostCliEnv(args: {
   delete env.ORCA_ENVIRONMENT
   env[ORCA_SSH_BRIDGE_CREDENTIAL_ENV] = args.bridgeCredential
   // Why: stamped from this process, never from the remote env, so remote input cannot pick the runtime.
-  stampRuntimeSourceEnv(env, args.runtimeSource ?? null)
+  // The host CLI dials exactly this profile, so the stamp names the same one.
+  stampRuntimeSourceEnv(
+    env,
+    args.runtimeSource ? { ...args.runtimeSource, profilePath: args.userDataPath } : null
+  )
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
     env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
