@@ -350,6 +350,36 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
     expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
   })
 
+  it('reads target states concurrently instead of chaining one RPC timeout per target', async () => {
+    const envId = nextEnvId()
+    const releaseStateReads: (() => void)[] = []
+    installRpcResponses({
+      targets: [
+        { id: 'ssh-1', label: 'a' },
+        { id: 'ssh-2', label: 'b' },
+        { id: 'ssh-3', label: 'c' }
+      ]
+    })
+    const listResponses = callRuntimeRpcMock.getMockImplementation()!
+    callRuntimeRpcMock.mockImplementation((target, method, params, options) => {
+      if (method !== 'ssh.getState') {
+        return listResponses(target, method, params, options)
+      }
+      const targetId = (params as { targetId: string }).targetId
+      return new Promise((resolve) => {
+        releaseStateReads.push(() => resolve({ state: connState(targetId) } as never))
+      }) as never
+    })
+
+    const hydration = hydrateRuntimeEnvironmentSshState(envId)
+    // A serial chain keeps exactly one read in flight until it resolves.
+    await vi.waitFor(() => expect(releaseStateReads).toHaveLength(3))
+    releaseStateReads.forEach((release) => release())
+    await hydration
+
+    expect(useAppStore.getState().sshStateByEnvironment.get(envId)?.connectionStates.size).toBe(3)
+  })
+
   it('does not let an in-flight response resurrect readiness after disconnect', async () => {
     const envId = nextEnvId()
     let resolveTargets!: (value: { targets: { id: string; label: string }[] }) => void

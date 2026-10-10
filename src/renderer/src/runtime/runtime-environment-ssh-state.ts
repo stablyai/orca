@@ -81,32 +81,37 @@ async function syncEnvironmentRemovedSshTargetLabels(
   }
 }
 
+/** Seeds each target's connection state from the HUB, dropping results from a superseded generation. */
 async function fetchEnvironmentSshConnectionStates(
   environmentId: string,
   targets: readonly SshTargetSummary[],
   generation: number
 ): Promise<void> {
-  for (const target of targets) {
-    if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
-      return
-    }
-    try {
-      const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
-        environmentTarget(environmentId),
-        'ssh.getState',
-        { targetId: target.id },
-        { timeoutMs: SSH_RPC_TIMEOUT_MS }
-      )
-      const admittedState = state ? admitSshConnectionState(state, target.id) : null
-      if (admittedState) {
-        useAppStore
-          .getState()
-          .setEnvironmentSshConnectionState(environmentId, target.id, admittedState, generation)
-      }
-    } catch {
-      // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
-    }
+  if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
+    return
   }
+  // Why: each read writes its own generation-guarded key, so a serial chain only stacked one
+  // 15s timeout per target; main's runtime call queue bounds the fan-out.
+  await Promise.all(
+    targets.map(async (target) => {
+      try {
+        const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
+          environmentTarget(environmentId),
+          'ssh.getState',
+          { targetId: target.id },
+          { timeoutMs: SSH_RPC_TIMEOUT_MS }
+        )
+        const admittedState = state ? admitSshConnectionState(state, target.id) : null
+        if (admittedState) {
+          useAppStore
+            .getState()
+            .setEnvironmentSshConnectionState(environmentId, target.id, admittedState, generation)
+        }
+      } catch {
+        // Why: a timeout or unsupported RPC is not authoritative evidence that the HUB's SSH link disconnected.
+      }
+    })
+  )
 }
 
 type SshRefreshKind = 'metadata' | 'full'
