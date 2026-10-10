@@ -84,6 +84,37 @@ export function getZcodePlanApiKeyProtection(): SecretAtRestProtection | null {
   }
 }
 
+function rollbackPlaintextEnvelope(
+  keyPath: string,
+  attemptedEnvelope: string,
+  previousEnvelope: Buffer | null
+): void {
+  const attempted = Buffer.from(attemptedEnvelope, 'utf8')
+  try {
+    if (!readFileSync(keyPath).equals(attempted)) {
+      return
+    }
+    if (previousEnvelope) {
+      try {
+        writeSecureFile(keyPath, previousEnvelope.toString('utf8'), {
+          shouldPublish: () => readFileSync(keyPath).equals(attempted)
+        })
+      } catch {
+        // A failed restore may already have published the previous envelope.
+      }
+    }
+    const currentEnvelope = readFileSync(keyPath)
+    if (
+      currentEnvelope.equals(attempted) &&
+      (!previousEnvelope || !currentEnvelope.equals(previousEnvelope))
+    ) {
+      rmSync(keyPath, { force: true })
+    }
+  } catch {
+    // Unreadable current bytes do not establish ownership of the rejected write.
+  }
+}
+
 export function saveZcodePlanApiKey(key: string): void {
   const trimmed = key.trim()
   if (!trimmed) {
@@ -115,23 +146,11 @@ export function saveZcodePlanApiKey(key: string): void {
       previousEnvelope = null
     }
   }
-  const wroteRestricted = writeSecureFile(
-    keyPath,
-    encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
-  )
+  const attemptedEnvelope = encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
+  const wroteRestricted = writeSecureFile(keyPath, attemptedEnvelope)
   // Why: an unrestricted plaintext credential must never be reported as saved.
   if (!wroteRestricted) {
-    if (!previousEnvelope) {
-      rmSync(keyPath, { force: true })
-    } else {
-      try {
-        writeSecureFile(keyPath, previousEnvelope.toString('utf8'))
-      } catch {
-        // Why: restriction is failing device-wide; the restored bytes keep the
-        // previous credential available instead of deleting it, and the thrown
-        // save error still tells the user the store is not secure.
-      }
-    }
+    rollbackPlaintextEnvelope(keyPath, attemptedEnvelope, previousEnvelope)
     throw new Error('GLM Coding Plan API key could not be stored securely on this device')
   }
   cachedZcodePlanApiKey = trimmed
