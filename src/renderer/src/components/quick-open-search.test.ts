@@ -70,6 +70,22 @@ describe('quick-open-search', () => {
     ).toEqual(['src/components/Button.tsx', 'button-area/deep/path/file.tsx'])
   })
 
+  it('ranks an exact filename or path-suffix match above longer names that tie on substring', () => {
+    // #26142: 60 `default.ini.example` decoys sort ahead of the target on path and fill the limit.
+    const decoys = Array.from(
+      { length: 60 },
+      (_, i) => `packages/pkg${String(i).padStart(3, '0')}/config/default.ini.example`
+    )
+    const files = prepareQuickOpenFiles([...decoys, 'packages/pkg777/config/default.ini'])
+
+    for (const query of [
+      'default.ini',
+      'config/default.ini',
+      'packages/pkg777/config/default.ini'
+    ]) {
+      expect(rankQuickOpenFiles(query, files)[0]?.path).toBe('packages/pkg777/config/default.ini')
+    }
+  })
   it('uses natural order for tie-heavy results at the limit boundary', () => {
     const files = Array.from({ length: 10 }, (_, index) => `src/path-${9 - index}.bin`)
 

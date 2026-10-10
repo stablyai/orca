@@ -61,6 +61,7 @@ type ProbeProps = {
   onState: (state: RuntimeFileListState) => void
   query?: string
   hostFilterWhenCapped?: boolean
+  keepCappedListing?: boolean
   worktreeId: string | null
 }
 
@@ -223,6 +224,47 @@ describe('useRuntimeFileListForWorktree host name filter', () => {
       const nameFilters = listRuntimeFilesMock.mock.calls.map((call) => call[1].nameFilter)
       expect(nameFilters.filter(Boolean)).toEqual(['f-1'])
       expect(states.at(-1)).toMatchObject({ files: capped, loadError: null, truncated: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('merges host matches into the capped listing when keepCappedListing is set', async () => {
+    vi.useFakeTimers()
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [makeProjectGroup()],
+      repos: [],
+      worktreesByRepo: {}
+    })
+    // #26142: the exact match sits past the cap, so only the host scan can find it.
+    const capped = Array.from({ length: QUICK_OPEN_LISTING_MAX_RESULTS }, (_, i) => `src/f-${i}.ts`)
+    listRuntimeFilesMock
+      .mockResolvedValueOnce(capped)
+      .mockResolvedValueOnce(['packages/api/config/default.ini'])
+    const states: RuntimeFileListState[] = []
+
+    try {
+      await renderProbe({
+        enabled: true,
+        onState: (state) => states.push(state),
+        query: 'config/default.ini',
+        hostFilterWhenCapped: true,
+        keepCappedListing: true,
+        worktreeId: folderWorkspaceKey('folder-workspace-1')
+      })
+      await flushEffects()
+      await act(async () => vi.advanceTimersByTimeAsync(120))
+      await flushEffects()
+
+      expect(listRuntimeFilesMock.mock.calls[1][1]).toMatchObject({
+        nameFilter: 'config/default.ini'
+      })
+      const last = states.at(-1)
+      expect(last).toMatchObject({ loading: false, truncated: false })
+      expect(last?.files[0]).toBe('packages/api/config/default.ini')
+      // Why: fuzzy-only matches the host substring filter drops must still be rankable.
+      expect(last?.files).toHaveLength(capped.length + 1)
     } finally {
       vi.useRealTimers()
     }
