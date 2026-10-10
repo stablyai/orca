@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   makePaneSpawnReservationKey,
@@ -23,6 +23,27 @@ export type LaunchRaceController = {
   }): () => void
 }
 type ProviderSpawn = (options: Record<string, unknown>) => Promise<Record<string, unknown>>
+export type LaunchRaceProvider = {
+  spawn: Mock<ProviderSpawn>
+  shutdown: Mock<(...args: unknown[]) => Promise<void>>
+}
+type LaunchRaceRuntimeBase = Record<
+  | 'setPtyController'
+  | 'resolveTerminalPane'
+  | 'createPreAllocatedTerminalHandle'
+  | 'preAllocateHandleForPty'
+  | 'registerPreAllocatedHandleForPty'
+  | 'beginPtyRegistration'
+  | 'cancelPendingPtyRegistration'
+  | 'assertPtyRegistrationAllowed'
+  | 'registerPty'
+  | 'noteTerminalSpawnCommand'
+  | 'seedHeadlessTerminal'
+  | 'onPtySpawned'
+  | 'onPtyExit'
+  | 'onPtyData',
+  Mock
+>
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test doubles implement only the members the two spawn lanes read.
 const testDouble = <T>(value: unknown): T => value as T
@@ -51,13 +72,13 @@ export function launchRacePane(tag: string, leafId: string) {
 }
 
 /** A non-local provider, so both lanes treat the spawn as daemon-hosted. */
-export function installLaunchRaceProvider(spawn: ProviderSpawn) {
+export function installLaunchRaceProvider(spawn: ProviderSpawn): LaunchRaceProvider {
   const provider = {
     spawn: vi.fn(spawn),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
-    shutdown: vi.fn(async () => {}),
+    shutdown: vi.fn(async (..._args: unknown[]) => {}),
     sendSignal: vi.fn(),
     getCwd: vi.fn(),
     getInitialCwd: vi.fn(),
@@ -79,8 +100,10 @@ export function installLaunchRaceProvider(spawn: ProviderSpawn) {
   return provider
 }
 
-export function createLaunchRaceRuntime<T extends object = Record<never, never>>(overrides?: T) {
-  const base = {
+export function createLaunchRaceRuntime<T extends object = Record<never, never>>(
+  overrides?: T
+): LaunchRaceRuntimeBase & T {
+  const base: LaunchRaceRuntimeBase = {
     setPtyController: vi.fn(),
     resolveTerminalPane: vi.fn((): unknown => {
       throw new Error('terminal_not_found')
@@ -98,7 +121,7 @@ export function createLaunchRaceRuntime<T extends object = Record<never, never>>
     onPtyExit: vi.fn(),
     onPtyData: vi.fn()
   }
-  return { ...base, ...overrides }
+  return Object.assign(base, overrides)
 }
 
 /** Registers both lanes against one runtime: `pty:spawn` (IPC lane) and the runtime controller. */
