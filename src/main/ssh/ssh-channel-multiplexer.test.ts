@@ -190,6 +190,40 @@ describe('SshChannelMultiplexer', () => {
       await expect(promise).rejects.toThrow('timed out after 60000ms')
     })
 
+    it('can disable request timeout while preserving abort cancellation', async () => {
+      const controller = new AbortController()
+      const promise = mux.request(
+        'fs.workspaceSpaceScan',
+        {},
+        {
+          signal: controller.signal,
+          timeoutMs: null
+        }
+      )
+
+      for (let i = 0; i < 8; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
+      }
+      await Promise.resolve()
+      const requestWrites = transport.written.filter((frame) => frame[0] === MessageType.Regular)
+      expect(requestWrites).toHaveLength(1)
+
+      controller.abort()
+
+      await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+      const cancelPayload = JSON.parse(
+        transport.written
+          .at(-1)!
+          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written.at(-1)!.readUInt32BE(9))
+          .toString()
+      )
+      expect(cancelPayload).toMatchObject({
+        method: 'rpc.cancel',
+        params: { id: 1 }
+      })
+    })
+
     it('assigns unique request IDs', async () => {
       void mux.request('method1').catch(() => {})
       void mux.request('method2').catch(() => {})
