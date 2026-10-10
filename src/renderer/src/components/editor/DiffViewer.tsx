@@ -202,6 +202,27 @@ export default function DiffViewer({
     onEnterFallback: handleEnterLargeDiffFallback
   })
 
+  useEffect(() => {
+    const diffEditor = diffEditorRef.current
+    if (!editable || !modifiedEditor || !diffEditor) {
+      return
+    }
+    const cleanupSave = installEditorSaveShortcut(modifiedEditor.getContainerDomNode(), () => {
+      onSaveRef.current?.(modifiedEditor.getValue())
+    })
+    const cleanupOriginalFind = installMonacoEditorFindShortcut(diffEditor.getOriginalEditor())
+    const cleanupModifiedFind = installMonacoEditorFindShortcut(modifiedEditor)
+    const changes = modifiedEditor.onDidChangeModelContent(() => {
+      onContentChangeRef.current?.(modifiedEditor.getValue())
+    })
+    return () => {
+      cleanupSave()
+      cleanupOriginalFind()
+      cleanupModifiedFind()
+      changes.dispose()
+    }
+  }, [editable, modifiedEditor])
+
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
@@ -249,27 +270,6 @@ export default function DiffViewer({
       // Auto-scroll to first diff lives in a separate effect below so it sequences after the decorator's view zones land.
 
       if (editable) {
-        const cleanupSaveShortcut = installEditorSaveShortcut(
-          modifiedEditor.getContainerDomNode(),
-          () => {
-            onSaveRef.current?.(modifiedEditor.getValue())
-          }
-        )
-        const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
-        const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
-
-        // Track changes
-        const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
-          onContentChangeRef.current?.(modifiedEditor.getValue())
-        })
-        modifiedEditor.onDidDispose(() => {
-          // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
-          cleanupSaveShortcut()
-          cleanupOriginalFindShortcut()
-          cleanupModifiedFindShortcut()
-          modelContentSub.dispose()
-        })
-
         modifiedEditor.focus()
       } else {
         diffEditor.focus()

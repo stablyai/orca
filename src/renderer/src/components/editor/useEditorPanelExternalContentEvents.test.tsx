@@ -4,7 +4,10 @@ import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  ORCA_EDITOR_FILE_SAVED_EVENT
+} from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
 
@@ -20,15 +23,30 @@ type ProbeProps = {
   calls: ProbeCalls
   isVisible: boolean
   openFiles: OpenFile[]
+  initialDiffContents?: Record<string, DiffContent>
+  onDiffContents?: (contents: Record<string, DiffContent>) => void
 }
 
-function ExternalContentProbe({ activeFileId, calls, isVisible, openFiles }: ProbeProps): null {
+function ExternalContentProbe({
+  activeFileId,
+  calls,
+  isVisible,
+  openFiles,
+  initialDiffContents,
+  onDiffContents
+}: ProbeProps): null {
   const activeContentFileIdRef = useRef(activeFileId)
   const isVisibleRef = useRef(isVisible)
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef({})
   const [, setFileContents] = useState<Record<string, FileContent>>({})
-  const [, setDiffContents] = useState<Record<string, DiffContent>>({})
+  const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>(
+    initialDiffContents ?? {}
+  )
+
+  useLayoutEffect(() => {
+    onDiffContents?.(diffContents)
+  }, [diffContents, onDiffContents])
 
   useLayoutEffect(() => {
     activeContentFileIdRef.current = activeFileId
@@ -238,5 +256,41 @@ describe('useEditorPanelExternalContentEvents', () => {
     const previewOptions = previewCalls.loadFile.mock.calls[0]?.[4]
     expect(sourceOptions?.externalEventGeneration).toBeTypeOf('number')
     expect(previewOptions?.externalEventGeneration).toBe(sourceOptions?.externalEventGeneration)
+  })
+
+  it('clears a prior load error after an existing diff draft is saved', () => {
+    const file = makeFile('saved-diff', { mode: 'diff', diffSource: 'unstaged', isDirty: true })
+    const failed: DiffContent = {
+      kind: 'text',
+      originalContent: '',
+      modifiedContent: 'Error loading diff',
+      loadError: true,
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    let savedContents: Record<string, DiffContent> = {}
+    act(() =>
+      root.render(
+        <ExternalContentProbe
+          activeFileId={file.id}
+          calls={makeCalls()}
+          isVisible
+          openFiles={[file]}
+          initialDiffContents={{ [file.id]: failed }}
+          onDiffContents={(contents) => {
+            savedContents = contents
+          }}
+        />
+      )
+    )
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_FILE_SAVED_EVENT, {
+          detail: { fileId: file.id, content: 'saved real draft' }
+        })
+      )
+    })
+    expect(savedContents[file.id]?.modifiedContent).toBe('saved real draft')
+    expect(savedContents[file.id]?.loadError).toBeUndefined()
   })
 })
