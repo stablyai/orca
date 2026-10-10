@@ -124,7 +124,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   protected readonly terminalList = new RuntimeTerminalList({
     getGraphEpoch: () => (this.graphStatus === 'ready' ? this.rendererGraphEpoch : null),
     assertGraphEpoch: (epoch) => this.assertStableReadyGraph(epoch),
-    getExplicitWorktreeId: (selector) => this.getValidatedExplicitWorktreeIdSelector(selector),
+    getExplicitWorktreeId: (selector) => this.getExplicitSessionWorktreeIdSelector(selector),
     getResolvedCache: () => this.resolvedWorktrees.peek(),
     buildWorktreeFromId: (worktreeId) => this.buildResolvedWorktreeFromId(worktreeId),
     resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),

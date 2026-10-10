@@ -9,6 +9,7 @@ import type {
 } from '../../shared/runtime-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../shared/runtime-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
@@ -119,7 +120,10 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
       this.sessionTabsInventoryWaiters.delete(onPublished)
       this.worktreesAwaitingSessionTabsPublication.delete(worktreeId)
       const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
-      if (publishedEpoch === null || this.mobileSessionTabsByWorktree.has(worktreeId)) {
+      if (
+        publishedEpoch === null ||
+        [...this.mobileSessionTabsByWorktree.keys()].some((id) => worktreeIdsEqual(id, worktreeId))
+      ) {
         return
       }
       const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
@@ -155,7 +159,7 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     tabId: string
   ): Promise<string> {
     const worktreeId =
-      this.getValidatedExplicitWorktreeIdSelector(worktreeSelector) ??
+      this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
       (await this.resolveWorktreeSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(

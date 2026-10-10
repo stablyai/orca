@@ -70,7 +70,7 @@ export class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithC
     }
     if (select) {
       const worktreeId =
-        this.getValidatedExplicitWorktreeIdSelector(worktreeSelector) ??
+        this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorktreeSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
         this.getMobileSessionTabsForWorktree(worktreeId),
