@@ -1,0 +1,1737 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Claude subagent roster rows (characterization) > a child announced outside any turn is not swept by a turn end 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Loose",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "outside-turn",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:outside-turn",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "thread",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Loose",
+              "settledAt": 1030,
+              "startedAt": 1010,
+              "state": "unverifiable",
+            },
+          ],
+          "groupId": "outside-turn",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:outside-turn",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "thread",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > a later run inherits the row an earlier run journaled and revises it 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": undefined,
+              "startedAt": 5,
+              "state": "completed",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "settledAt": 9,
+              "startedAt": 6,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-0",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-0",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-0",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": undefined,
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "settledAt": 9,
+              "startedAt": 6,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-0",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-0",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-0",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t4",
+              "label": "Audit",
+              "startedAt": 1030,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-3",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-3",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-3",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 2 subagents (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1040,
+              "startedAt": 1020,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "settledAt": 9,
+              "startedAt": 6,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-0",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-0",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-0",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t4",
+              "label": "Audit",
+              "settledAt": 1040,
+              "startedAt": 1030,
+              "state": "unverifiable",
+            },
+          ],
+          "groupId": "s:turn-3",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-3",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-3",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > a provisional row from child traffic takes the announced name and canonical id 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "u1",
+              "label": "subagent",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Named",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Named",
+              "settledAt": 1050,
+              "startedAt": 1010,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > a refused append or publish is retried by the next write of that row 1`] = `
+[
+  {
+    "accepted": false,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "startedAt": 1030,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1030,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": false,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1030,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 2 subagents (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "settledAt": 1060,
+              "startedAt": 1010,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1030,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > a resume under a new tool id in a later turn reopens the original row 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1020,
+              "startedAt": 1010,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": undefined,
+              "startedAt": 1040,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1060,
+              "startedAt": 1040,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > an announcement that is not a subagent tombstones the provisional row 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "u1",
+              "label": "subagent",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "tombstone",
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > more than 32 settled groups, then a late frame for an evicted child 1`] = `138`;
+
+exports[`Claude subagent roster rows (characterization) > more than 32 settled groups, then a late frame for an evicted child 2`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t33",
+              "label": "Job 33",
+              "startedAt": 1670,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-33",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-33",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-33",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t33",
+              "label": "Job 33",
+              "settledAt": 1680,
+              "startedAt": 1670,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-33",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-33",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-33",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "live",
+              "label": "Live",
+              "startedAt": 1690,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-live",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-live",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-live",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > one foreground child settled by its spawn call result 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1030,
+              "startedAt": 1010,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > two children sharing a label, one backgrounded, through turn end and session end 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "t3",
+              "label": "Audit 2 2",
+              "startedAt": 1030,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents (2 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1040,
+              "startedAt": 1010,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "t3",
+              "label": "Audit 2 2",
+              "settledAt": 1040,
+              "startedAt": 1030,
+              "state": "unverifiable",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1040,
+              "startedAt": 1010,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "t3",
+              "label": "Audit 2 2",
+              "settledAt": 1050,
+              "startedAt": 1030,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 3 subagents (2 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "Audit",
+              "settledAt": 1040,
+              "startedAt": 1010,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t2",
+              "label": "Audit 2",
+              "settledAt": 1060,
+              "startedAt": 1020,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t3",
+              "label": "Audit 2 2",
+              "settledAt": 1050,
+              "startedAt": 1030,
+              "state": "completed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Claude subagent roster rows (characterization) > verdicts after lost contact, failures and stops 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "t3",
+              "label": "C",
+              "startedAt": 1030,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents (1 stopped)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1020,
+              "state": "stopped",
+            },
+            {
+              "id": "t3",
+              "label": "C",
+              "startedAt": 1030,
+              "state": "working",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents (1 failed)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "startedAt": 1010,
+              "state": "working",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1020,
+              "state": "stopped",
+            },
+            {
+              "id": "t3",
+              "label": "C",
+              "settledAt": 1050,
+              "startedAt": 1030,
+              "state": "failed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 3 subagents (1 failed)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "settledAt": 1060,
+              "startedAt": 1010,
+              "state": "unverifiable",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1020,
+              "state": "stopped",
+            },
+            {
+              "id": "t3",
+              "label": "C",
+              "settledAt": 1050,
+              "startedAt": 1030,
+              "state": "failed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 3 subagents (1 failed)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "t1",
+              "label": "A",
+              "settledAt": 1070,
+              "startedAt": 1010,
+              "state": "completed",
+            },
+            {
+              "id": "t2",
+              "label": "B",
+              "settledAt": 1040,
+              "startedAt": 1020,
+              "state": "stopped",
+            },
+            {
+              "id": "t3",
+              "label": "C",
+              "settledAt": 1050,
+              "startedAt": 1030,
+              "state": "failed",
+            },
+          ],
+          "groupId": "s:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "claude-subagents:s:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "turn-row:s:turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;

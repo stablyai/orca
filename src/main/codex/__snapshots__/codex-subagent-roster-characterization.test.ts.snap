@@ -1,0 +1,1386 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Codex subagent roster rows (characterization) > a child announced outside any parent turn 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "loose",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:outside-turn",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:outside-turn",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "thread",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "loose",
+              "settledAt": 1030,
+              "startedAt": 1020,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:outside-turn",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:outside-turn",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "thread",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Codex subagent roster rows (characterization) > a child given new work in a later parent turn, and a late end of its earlier run 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "reader",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "reader",
+              "settledAt": 1030,
+              "startedAt": 1020,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "reader",
+              "startedAt": 1050,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-2",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-2",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-2",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "reader",
+              "settledAt": 1080,
+              "startedAt": 1050,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-2",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-2",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-2",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Codex subagent roster rows (characterization) > a child running when the session ends, then a late verdict 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "c2",
+              "label": "b",
+              "startedAt": 1040,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "c2",
+              "label": "b",
+              "settledAt": 1050,
+              "startedAt": 1040,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 2 subagents (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "settledAt": 1060,
+              "startedAt": 1020,
+              "state": "unverifiable",
+            },
+            {
+              "id": "c2",
+              "label": "b",
+              "settledAt": 1050,
+              "startedAt": 1040,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "settledAt": 1070,
+              "startedAt": 1020,
+              "state": "completed",
+            },
+            {
+              "id": "c2",
+              "label": "b",
+              "settledAt": 1050,
+              "startedAt": 1040,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Codex subagent roster rows (characterization) > a child thread closing mid-turn, then its turn completing 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent (1 unverifiable)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "settledAt": 1030,
+              "startedAt": 1020,
+              "state": "unverifiable",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Codex subagent roster rows (characterization) > a refused append or publish is handed back, and the redelivered frame writes it 1`] = `
+{
+  "admissions": [
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+  ],
+  "log": [
+    {
+      "accepted": false,
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "a",
+                "startedAt": 1020,
+                "state": "working",
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "a",
+                "startedAt": 1020,
+                "state": "working",
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Ran 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "a",
+                "settledAt": 1040,
+                "startedAt": 1020,
+                "state": "completed",
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": false,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Ran 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "a",
+                "settledAt": 1040,
+                "startedAt": 1020,
+                "state": "completed",
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Ran 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "a",
+                "settledAt": 1040,
+                "startedAt": 1020,
+                "state": "completed",
+                "tokens": 50,
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+  ],
+}
+`;
+
+exports[`Codex subagent roster rows (characterization) > more than 32 settled groups, then a late frame for an evicted run 1`] = `138`;
+
+exports[`Codex subagent roster rows (characterization) > more than 32 settled groups, then a late frame for an evicted run 2`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c33",
+              "label": "job33",
+              "startedAt": 2010,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-33",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-33",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-33",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c33",
+              "label": "job33",
+              "settledAt": 2020,
+              "startedAt": 2010,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-33",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-33",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-33",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "live",
+              "label": "live",
+              "startedAt": 2040,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-live",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-live",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-live",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
+
+exports[`Codex subagent roster rows (characterization) > more than 32 settled groups, then a late frame for an evicted run 3`] = `
+{
+  "groups": 32,
+  "settledIdentities": 3,
+}
+`;
+
+exports[`Codex subagent roster rows (characterization) > one child: announced, runs a turn, reports tokens, completes 1`] = `
+{
+  "admissions": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+  ],
+  "log": [
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "reader",
+                "startedAt": 1020,
+                "state": "working",
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "reader",
+                "startedAt": 1020,
+                "state": "working",
+                "tokens": 120,
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "reader",
+                "startedAt": 1020,
+                "state": "working",
+                "tokens": 340,
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Ran 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "reader",
+                "settledAt": 1070,
+                "startedAt": 1020,
+                "state": "completed",
+                "tokens": 340,
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+    {
+      "accepted": true,
+      "body": {
+        "blocks": [
+          {
+            "text": "Ran 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "c1",
+                "label": "reader",
+                "settledAt": 1070,
+                "startedAt": 1020,
+                "state": "completed",
+                "tokens": 400,
+              },
+            ],
+            "groupId": "thread-parent:turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "identity": {
+        "clientMessageId": "codex-subagents:thread-parent:turn-1",
+        "provider": "orca",
+      },
+      "op": "append",
+      "turnScope": {
+        "kind": "turn",
+        "turnItemId": "thread-parent/turn-1",
+      },
+    },
+    {
+      "accepted": true,
+      "op": "publish",
+    },
+  ],
+}
+`;
+
+exports[`Codex subagent roster rows (characterization) > two children sharing a path label, one failing and one interrupted 1`] = `
+[
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "worker",
+              "startedAt": 1020,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 2 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "worker",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "c2",
+              "label": "worker 2",
+              "startedAt": 1040,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "worker",
+              "startedAt": 1020,
+              "state": "working",
+            },
+            {
+              "id": "c2",
+              "label": "worker 2",
+              "startedAt": 1040,
+              "state": "working",
+            },
+            {
+              "id": "c3",
+              "label": "worker 2",
+              "startedAt": 1060,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents (1 failed)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "worker",
+              "settledAt": 1070,
+              "startedAt": 1020,
+              "state": "failed",
+            },
+            {
+              "id": "c2",
+              "label": "worker 2",
+              "startedAt": 1040,
+              "state": "working",
+            },
+            {
+              "id": "c3",
+              "label": "worker 2",
+              "startedAt": 1060,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Kicked off 3 subagents (1 failed)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "worker",
+              "settledAt": 1070,
+              "startedAt": 1020,
+              "state": "failed",
+            },
+            {
+              "id": "c2",
+              "label": "worker 2",
+              "settledAt": 1080,
+              "startedAt": 1040,
+              "state": "stopped",
+            },
+            {
+              "id": "c3",
+              "label": "worker 2",
+              "startedAt": 1060,
+              "state": "working",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 3 subagents (1 failed)",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "worker",
+              "settledAt": 1070,
+              "startedAt": 1020,
+              "state": "failed",
+            },
+            {
+              "id": "c2",
+              "label": "worker 2",
+              "settledAt": 1080,
+              "startedAt": 1040,
+              "state": "stopped",
+            },
+            {
+              "id": "c3",
+              "label": "worker 2",
+              "settledAt": 1090,
+              "startedAt": 1060,
+              "state": "unverifiable",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
+]
+`;
