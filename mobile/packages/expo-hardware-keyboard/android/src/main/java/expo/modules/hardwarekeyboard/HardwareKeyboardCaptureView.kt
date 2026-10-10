@@ -2,6 +2,8 @@ package expo.modules.hardwarekeyboard
 
 import android.content.Context
 import android.view.KeyEvent
+import android.view.inputmethod.BaseInputConnection
+import android.widget.EditText
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -21,6 +23,10 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
 
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
     if (!captureEnabled || event.action != KeyEvent.ACTION_DOWN) {
+      return super.dispatchKeyEvent(event)
+    }
+
+    if (hasFocusedComposingText()) {
       return super.dispatchKeyEvent(event)
     }
 
@@ -76,6 +82,12 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
       )
     )
     return true
+  }
+
+  private fun hasFocusedComposingText(): Boolean {
+    val editable = (findFocus() as? EditText)?.editableText ?: return false
+    return BaseInputConnection.getComposingSpanStart(editable) >= 0 &&
+      BaseInputConnection.getComposingSpanEnd(editable) >= 0
   }
 
   private fun producesAlternateLayoutText(event: KeyEvent): Boolean {

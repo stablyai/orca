@@ -248,6 +248,10 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         return
       }
       const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      // Native key events can already be queued when the IME starts composing.
+      if (ownsPendingState && liveInputComposingRef.current === true) {
+        return
+      }
       if (pendingLiveInputHandleRef.current && !ownsPendingState) {
         clearPendingLiveInputCommit()
       }
@@ -291,6 +295,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       connected,
       flushPendingLiveInputText,
       handleLiveInputAccessoryBytes,
+      liveInputComposingRef,
       liveInputTerminalHandles,
       sendLiveTerminalInputRef,
       waitForPendingLiveInputFlush

@@ -17,6 +17,31 @@ function hardwareKey(key: string): TerminalLiveHardwareKeyEvent {
 describe('terminal live hardware input', () => {
   afterEach(() => vi.useRealTimers())
 
+  it.each([
+    ['ArrowLeft', '\x1b[D'],
+    ['Backspace', '\x7f'],
+    ['Escape', '\x1b']
+  ])('leaves %s to the IME until composition commits', async (key, bytes) => {
+    const { handlers, sent, captures, unmount } = createTerminalLiveInputCommitHarness()
+    try {
+      handlers.handleLiveInputChange({ nativeEvent: { text: 'nihao', isComposing: true } })
+      const generation = handlers.getLiveInputInteractionGeneration()
+      handlers.handleLiveInputHardwareKey(hardwareKey(key))
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+      expect(sent).toEqual([])
+      expect(captures.at(-1)).toBe('nihao')
+      expect(handlers.getLiveInputInteractionGeneration()).toBe(generation)
+
+      handlers.handleLiveInputChange({ nativeEvent: { text: '你好', isComposing: false } })
+      await vi.waitFor(() => expect(sent.join('')).toBe('你好'))
+      handlers.handleLiveInputHardwareKey(hardwareKey(key))
+      await vi.waitFor(() => expect(sent.join('')).toBe(`你好${bytes}`))
+    } finally {
+      unmount()
+    }
+  })
+
   it('Given hardware ArrowLeft When the event arrives Then sends CSI left without field text', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
     handlers.handleLiveInputHardwareKey({

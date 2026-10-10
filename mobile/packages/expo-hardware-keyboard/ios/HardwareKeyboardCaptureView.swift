@@ -22,14 +22,14 @@ public class HardwareKeyboardCaptureView: ExpoView {
   }
 
   public override var keyCommands: [UIKeyCommand]? {
-    guard enabled else {
+    guard enabled, !hasFocusedMarkedText(in: self) else {
       return nil
     }
     return Self.buildTerminalKeyCommands(action: #selector(handleKeyCommand(_:)))
   }
 
   @objc func handleKeyCommand(_ sender: UIKeyCommand) {
-    guard enabled else {
+    guard enabled, !hasFocusedMarkedText(in: self) else {
       return
     }
     // Why: Meta/Command stays system-owned (copy/paste/select-all).
@@ -52,6 +52,13 @@ public class HardwareKeyboardCaptureView: ExpoView {
       ],
       "repeat": false
     ])
+  }
+
+  private func hasFocusedMarkedText(in view: UIView) -> Bool {
+    if view.isFirstResponder, let input = view as? UITextInput {
+      return input.markedTextRange != nil
+    }
+    return view.subviews.contains { hasFocusedMarkedText(in: $0) }
   }
 
   private static func buildTerminalKeyCommands(action: Selector) -> [UIKeyCommand] {

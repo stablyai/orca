@@ -27,6 +27,32 @@ function expectPassThroughBeforeCanonicalKey(guard: string): void {
 }
 
 describe('terminal live hardware key native contract', () => {
+  // These source contracts guard wiring, not native IME event delivery.
+  it('passes Android composing input through before mapping terminal keys', () => {
+    expectPassThroughBeforeCanonicalKey('if (hasFocusedComposingText())')
+    expect(androidSource).toContain('(findFocus() as? EditText)?.editableText')
+    expect(androidSource).toContain('BaseInputConnection.getComposingSpanStart(editable) >= 0')
+    expect(androidSource).toContain('BaseInputConnection.getComposingSpanEnd(editable) >= 0')
+    expect(androidSource).not.toContain('requestFocus(')
+    expect(androidSource).not.toContain('clearFocus(')
+  })
+
+  it('checks focused marked text before iOS command registration and dispatch', () => {
+    const registrationStart = iosSource.indexOf('public override var keyCommands:')
+    const dispatchStart = iosSource.indexOf('@objc func handleKeyCommand(')
+    const registration = iosSource.slice(registrationStart, dispatchStart)
+    const dispatch = iosSource.slice(dispatchStart, iosSource.indexOf('onHardwareKey(['))
+    const guard = 'guard enabled, !hasFocusedMarkedText(in: self) else'
+    expect(registration).toContain(guard)
+    expect(registration).toContain('return nil')
+    expect(dispatch).toContain(guard)
+    expect(iosSource).toContain('view.isFirstResponder, let input = view as? UITextInput')
+    expect(iosSource).toContain('input.markedTextRange != nil')
+    expect(iosSource).toContain('view.subviews.contains { hasFocusedMarkedText(in: $0) }')
+    expect(iosSource).not.toContain('becomeFirstResponder(')
+    expect(iosSource).not.toContain('resignFirstResponder(')
+  })
+
   it('leaves Android Enter on the TextInput submit path', () => {
     expectPassThroughBeforeCanonicalKey('event.keyCode == KeyEvent.KEYCODE_ENTER')
   })
