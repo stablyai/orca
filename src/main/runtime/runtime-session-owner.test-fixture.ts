@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
 import { Store } from '../persistence'
-import type * as TerminalHistoryDeletion from '../terminal-history-deletion'
 import { createSqliteTestStore, closeTestStores } from '../persistence-test-harness'
 import { makeTerminalTab } from '../persistence-session-fixtures'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
@@ -17,17 +16,6 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
 import { WORKTREE_METHODS } from './rpc/methods/worktree'
-
-vi.mock('electron', () => ({
-  app: { getPath: () => tmpdir(), isPackaged: false },
-  BrowserWindow: { fromId: () => null },
-  webContents: { fromId: () => null },
-  ipcMain: { on: vi.fn(), removeListener: vi.fn() }
-}))
-vi.mock('../terminal-history-deletion', async (importOriginal) => ({
-  ...(await importOriginal<typeof TerminalHistoryDeletion>()),
-  deleteWorktreeHistoryDir: vi.fn()
-}))
 
 export const SESSION_OWNER_WORKTREE_ID = 'repo-session-owner::/repo/checkout'
 const directories: string[] = []

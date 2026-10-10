@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import type * as TerminalHistoryDeletion from '../terminal-history-deletion'
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../shared/ssh-pty-id'
@@ -9,6 +11,17 @@ import {
   createSessionOwnerFixture,
   SESSION_OWNER_WORKTREE_ID as id
 } from './runtime-session-owner.test-fixture'
+
+vi.mock('electron', () => ({
+  app: { getPath: () => tmpdir(), isPackaged: false },
+  BrowserWindow: { fromId: () => null },
+  webContents: { fromId: () => null },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() }
+}))
+vi.mock('../terminal-history-deletion', async (importOriginal) => ({
+  ...(await importOriginal<typeof TerminalHistoryDeletion>()),
+  deleteWorktreeHistoryDir: vi.fn()
+}))
 
 describe('saved tabs remain attached to their checked session owner', () => {
   it('releases a durably retired local pane while its same-ID SSH sibling survives', async () => {

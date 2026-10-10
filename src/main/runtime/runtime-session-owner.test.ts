@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import type * as TerminalHistoryDeletion from '../terminal-history-deletion'
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
@@ -8,6 +10,17 @@ import {
   SESSION_OWNER_WORKTREE_ID as id,
   sessionOwnerDeferred
 } from './runtime-session-owner.test-fixture'
+
+vi.mock('electron', () => ({
+  app: { getPath: () => tmpdir(), isPackaged: false },
+  BrowserWindow: { fromId: () => null },
+  webContents: { fromId: () => null },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() }
+}))
+vi.mock('../terminal-history-deletion', async (importOriginal) => ({
+  ...(await importOriginal<typeof TerminalHistoryDeletion>()),
+  deleteWorktreeHistoryDir: vi.fn()
+}))
 
 async function subscribeEmptyOwner(f: ReturnType<typeof createSessionOwnerFixture>, raw: string) {
   const frames: unknown[] = []

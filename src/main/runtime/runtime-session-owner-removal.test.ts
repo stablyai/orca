@@ -1,10 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'node:os'
+import type * as TerminalHistoryDeletion from '../terminal-history-deletion'
+import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
 import {
   createSessionOwnerFixture,
   SESSION_OWNER_WORKTREE_ID as id
 } from './runtime-session-owner.test-fixture'
+
+vi.mock('electron', () => ({
+  app: { getPath: () => tmpdir(), isPackaged: false },
+  BrowserWindow: { fromId: () => null },
+  webContents: { fromId: () => null },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() }
+}))
+vi.mock('../terminal-history-deletion', async (importOriginal) => ({
+  ...(await importOriginal<typeof TerminalHistoryDeletion>()),
+  deleteWorktreeHistoryDir: vi.fn()
+}))
 
 function legacyFrame(snapshot: RuntimeMobileSessionTabsSnapshot) {
   const { worktreeIdentity: _owner, worktreeInstanceId: _instance, ...frame } = snapshot
