@@ -62,15 +62,13 @@ export async function listLocalBranches(
     branches.push(name)
   }
   // Why: surface the checked-out branch first so the picker reads "you are here"
-  // at the top, then the rest in git's ref order.
-  branches.sort((a, b) => {
-    if (a === current) {
-      return -1
+  // at the top, then the rest in git's ref order. Avoid O(N log N) full-array sort.
+  if (current !== null) {
+    const currentIndex = branches.indexOf(current)
+    if (currentIndex > 0) {
+      branches.splice(currentIndex, 1)
+      branches.unshift(current)
     }
-    if (b === current) {
-      return 1
-    }
-    return 0
-  })
+  }
   return { current, branches }
 }
