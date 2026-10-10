@@ -1,3 +1,4 @@
+import { registerLocalBaseDriftWarningTest } from './worktrees-local-base-drift-warning.spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -161,6 +162,8 @@ describe('registerWorktreeHandlers', () => {
       worktree: expect.objectContaining({ branch: 'jdoe/concurrent-probe' })
     })
   })
+
+  registerLocalBaseDriftWarningTest(() => runtimeStub)
 
   it('prefetches the local default create base through the runtime refresh cache', async () => {
     const repo = {
