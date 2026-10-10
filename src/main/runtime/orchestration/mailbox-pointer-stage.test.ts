@@ -29,6 +29,7 @@ function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
     getLiveLeafForHandle: () => LEAF,
     // These cases exercise staging and Enter phases, not the idle gate; the pane is settled.
     isAgentSettledForDelivery: () => true,
+    hasUnsubmittedInput: () => false,
     getMessageWaiters: () => undefined,
     getTabTitle: () => null,
     getCliCommand: () => 'orca' as const,
@@ -201,6 +202,31 @@ describe('mailbox pointer staging watermark', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(writePty.mock.calls.length).toBeGreaterThan(0)
+    db.close()
+  })
+})
+
+describe('a draft in the composer', () => {
+  it('holds a new pointer until the draft is sent, then points the same mail', async () => {
+    const db = new OrchestrationDb(':memory:')
+    db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'mail' })
+    let draft = true
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pointerDeps fakes only the members this delivery path reads, as the other cases here do.
+    const delivery = new OrchestrationMailboxPointerDelivery<never>({
+      ...pointerDeps(db, writePty),
+      hasUnsubmittedInput: (ptyId: string) => ptyId === LEAF.ptyId && draft
+    } as never)
+
+    delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(writePty).not.toHaveBeenCalled()
+    expect(db.getPendingMailboxPointerMessages('run:run-1')).toHaveLength(0)
+
+    draft = false
+    delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(writePty).toHaveBeenCalledWith(LEAF.ptyId, expect.stringContaining('orchestration'))
     db.close()
   })
 })
