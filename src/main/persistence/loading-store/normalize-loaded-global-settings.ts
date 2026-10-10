@@ -1,5 +1,9 @@
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
+import {
+  hasCustomSttEndpointApiKey,
+  readCustomSttEndpointConfig
+} from '../../speech/custom-stt-endpoint-store'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
@@ -24,6 +28,7 @@ export function normalizeLoadedGlobalSettings(
   terminal: PreparedLoadedTerminalSettings,
   profile: PreparedLoadedProfileSettings
 ): PersistedState['settings'] {
+  const customSttEndpoint = readCustomSttEndpointConfig()
   const {
     defaults,
     migratedExternalVisibility,
@@ -155,7 +160,13 @@ export function normalizeLoadedGlobalSettings(
     ),
     voice: {
       ...getDefaultVoiceSettings(),
-      ...parsed.settings?.voice
+      ...parsed.settings?.voice,
+      // Why: custom-endpoint URL/model/key-presence are owned by the dedicated store,
+      // not settings; keep the persisted copy truthful so the UI row cannot go stale.
+      customSttBaseUrl: customSttEndpoint?.baseUrl ?? '',
+      customSttModel: customSttEndpoint?.model ?? '',
+      customSttLanguage: customSttEndpoint?.language ?? '',
+      customSttApiKeyConfigured: hasCustomSttEndpointApiKey()
     }
   }
 }

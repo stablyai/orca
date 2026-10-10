@@ -11,6 +11,17 @@ import {
   hasOpenAiSpeechApiKey,
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import {
+  clearCustomSttEndpointApiKey,
+  clearCustomSttEndpointConfig,
+  hasCustomSttEndpointApiKey,
+  readCustomSttEndpointConfig,
+  resolveCustomSttApiKeyFor,
+  saveCustomSttEndpointApiKey,
+  saveCustomSttEndpointConfig
+} from '../speech/custom-stt-endpoint-store'
+import { testCustomSttEndpoint } from '../speech/custom-stt-endpoint-test'
+import { discoverCustomSttModels } from '../speech/custom-stt-endpoint-models'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -35,6 +46,74 @@ export function registerSpeechHandlers(store: Store): void {
     clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
+
+  const readCustomEndpointStatus = (): {
+    baseUrl: string
+    model: string
+    language: string
+    apiKeyConfigured: boolean
+  } => {
+    const config = readCustomSttEndpointConfig()
+    return {
+      baseUrl: config?.baseUrl ?? '',
+      model: config?.model ?? '',
+      language: config?.language ?? '',
+      apiKeyConfigured: hasCustomSttEndpointApiKey()
+    }
+  }
+
+  ipcMain.handle('speech:getCustomEndpointStatus', async () => readCustomEndpointStatus())
+
+  ipcMain.handle(
+    'speech:saveCustomEndpoint',
+    async (
+      _event,
+      input: { baseUrl: string; model: string; language?: string; apiKey?: string }
+    ) => {
+      saveCustomSttEndpointConfig({
+        baseUrl: input.baseUrl,
+        model: input.model,
+        language: input.language
+      })
+      // Why: an empty key field must mean "no token" — otherwise the previous token
+      // would silently be reused and sent to the new base URL. Save binds a new
+      // token to the base URL it was entered for.
+      if (typeof input.apiKey === 'string') {
+        if (input.apiKey.trim()) {
+          saveCustomSttEndpointApiKey(input.apiKey, input.baseUrl)
+        } else {
+          clearCustomSttEndpointApiKey()
+        }
+      }
+      return readCustomEndpointStatus()
+    }
+  )
+
+  ipcMain.handle('speech:clearCustomEndpoint', async () => {
+    clearCustomSttEndpointConfig()
+    return { baseUrl: '', model: '', language: '', apiKeyConfigured: false }
+  })
+
+  ipcMain.handle(
+    'speech:testCustomEndpoint',
+    async (
+      _event,
+      probe?: { baseUrl: string; model: string; language: string; apiKey?: string }
+    ) => {
+      return testCustomSttEndpoint(probe)
+    }
+  )
+
+  ipcMain.handle(
+    'speech:discoverCustomEndpointModels',
+    async (_event, input: { baseUrl: string; apiKey?: string }) => {
+      return discoverCustomSttModels({
+        baseUrl: input.baseUrl,
+        // Only the draft token, or a saved token bound to this exact base URL.
+        apiKey: resolveCustomSttApiKeyFor(input.baseUrl, input.apiKey)
+      })
+    }
+  )
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
     const manager = getSpeechModelManager(store)
