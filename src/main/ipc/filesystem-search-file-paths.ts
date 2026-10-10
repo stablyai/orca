@@ -26,7 +26,7 @@ import {
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
-import { QuickOpenSubprocessPathAccumulator } from '../../shared/quick-open-listing-limits'
+import { QuickOpenSubprocessPathAccumulator } from '../../shared/quick-open-subprocess-path-accumulator'
 import { bundledRipgrepUnavailableError } from '../ripgrep/bundled-ripgrep-path'
 import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
 
