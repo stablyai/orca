@@ -1003,3 +1003,34 @@ for (const outcome of ['success', 'failure']) {
     })
   }
 }
+
+test('a twin shares its host keys and connects with a given assignment, not the director', async (context) => {
+  const originalFetch = global.fetch
+  context.after(() => {
+    global.fetch = originalFetch
+  })
+  const fetched = []
+  global.fetch = async (url) => {
+    fetched.push(String(url))
+    throw new Error('the director must not be asked')
+  }
+  const primary = new RelayLoadControlPeer(0, peerOptions(), () => undefined)
+  const twin = new RelayLoadControlPeer(0, peerOptions({ keys: primary.keys }), () => undefined)
+  assert.equal(twin.relayHostId, primary.relayHostId)
+  const socket = fakeHandshakeSocket()
+  let socketCell
+  twin.createSocket = (assignment) => {
+    socketCell = assignment.cellUrl
+    openOnNextTurn(socket)
+    return socket
+  }
+
+  const connecting = twin.connect({ cellUrl: 'https://c3.relay.test', assignmentEpoch: 7 })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  await twin.shutdown()
+  await connecting.catch(() => undefined)
+
+  assert.equal(socketCell, 'https://c3.relay.test')
+  assert.equal(JSON.parse(socket.sent[0]).assignmentEpoch, 7)
+  assert.equal(fetched.some((url) => url.endsWith('/v1/assign')), false)
+})
