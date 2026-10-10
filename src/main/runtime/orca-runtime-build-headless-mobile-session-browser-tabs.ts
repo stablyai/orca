@@ -132,14 +132,15 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     let refusal: Error | undefined
     // Why by tab: one worktree's tabs can be split across local and runtime partitions (#18202).
     const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
-    const [requestedHostId] = hostIds()
+    const requested = new Map(hostIds().map((id) => [id, store.getWorkspaceSession(id)] as const))
     try {
       refusal = await store.runDurableMutation(
         closeLeafOrTab({
           worktreeId,
           target,
           options,
-          requestedSession: requestedHostId ? store.getWorkspaceSession(requestedHostId) : null,
+          requestedSession: requested.values().next().value ?? null,
+          ...(acknowledgeTabRetirement ? { requestedHolders: requested } : {}),
           ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
           hostIds,
           getSession: (hostId) => store.getWorkspaceSession(hostId),

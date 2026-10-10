@@ -7,6 +7,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-type
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
 import { OrcaRuntimeService } from './orca-runtime'
+import { terminalSurfaceCloseMutation } from './terminal-surface-close'
 
 const REPO = {
   id: 'repo',
@@ -155,6 +156,39 @@ describe('terminal close across local and runtime session partitions (#18202)', 
       )
     }
     expect(sessions.get(LOCAL_EXECUTION_HOST_ID)?.tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
+  })
+
+  it('refuses when a second copy was rebound after the close was asked', () => {
+    const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
+      [SPILL_HOST_ID, sessionWithTab('target', 'target-pty')],
+      ['runtime:env-0', sessionWithTab('target', 'target-pty')]
+    ])
+    const requestedHolders = new Map(sessions)
+    const rebound = sessionWithTab('target', 'replacement-pty')
+    rebound.terminalPtyIncarnationsByPaneKey = { [`target:${LEAF}`]: 'replacement-incarnation' }
+    sessions.set('runtime:env-0', rebound)
+    const setSession = vi.fn()
+    const onClosed = vi.fn()
+
+    const mutation = terminalSurfaceCloseMutation({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: 'target' },
+      options: {},
+      requestedSession: requestedHolders.get(SPILL_HOST_ID),
+      requestedHolders,
+      ownerMatches: () => true,
+      hostIds: () => [...sessions.keys()],
+      getSession: (hostId) => sessions.get(hostId),
+      setSession,
+      onClosed
+    })()
+
+    expect(mutation).toEqual({
+      value: new Error('terminal_pane_owner_changed'),
+      persist: false
+    })
+    expect(setSession).not.toHaveBeenCalled()
+    expect(onClosed).not.toHaveBeenCalled()
   })
 
   it('keeps the pin guard of the partition that holds the tab', async () => {

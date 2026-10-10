@@ -17,6 +17,7 @@ import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { isSamePersistedTerminalTab } from './workspace-session-terminal-tab-retirement-identity'
 
 /** Where a pane close lands: its own removal, its tab's last pane, or a pane the copy lacks. */
 export type PaneCloseResolution = 'pane' | 'last-pane' | 'absent'
@@ -187,6 +188,9 @@ export type TerminalSurfaceCloseCommit = {
   ownerMatches: () => boolean
   /** The partitions holding the tab, routed partition first; empty when unroutable. */
   hostIds: () => readonly ExecutionHostId[]
+  /** Owner-fenced closes only: each holder's session when the close was asked. A second copy that
+   *  is new or rebound since refuses the close, since `ownerMatches` fences only the first. */
+  requestedHolders?: ReadonlyMap<ExecutionHostId, WorkspaceSessionState>
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
   setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
   onClosed: (ptyIdsToKill: string[]) => void
@@ -227,6 +231,17 @@ export function terminalSurfaceCloseMutation(
         return { value: new Error('terminal_tab_pinned'), persist: false }
       }
       results.push({ hostId, session, result })
+    }
+    const changedCopy = results.slice(1).some(({ hostId, session }) => {
+      const requested = commit.requestedHolders?.get(hostId)
+      return (
+        commit.requestedHolders !== undefined &&
+        (!requested ||
+          !isSamePersistedTerminalTab(requested, session, commit.worktreeId, target.tabId))
+      )
+    })
+    if (changedCopy) {
+      return { value: new Error('terminal_pane_owner_changed'), persist: false }
     }
     const closed = results.filter(({ result }) => result.closed)
     if (closed.length === 0) {
