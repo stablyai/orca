@@ -4,8 +4,11 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
+  aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionOwnerWorkspaces,
+  aiVaultSessionWorkspaceHeading,
   aiVaultWorktreeCompactPath,
+  aiVaultWorktreeStatusLabel,
   aiVaultWorktreeJumpTooltip,
   canJumpToAiVaultSessionWorktree,
   isAiVaultSessionInCurrentWorktree,
@@ -284,6 +287,45 @@ describe('folder workspaces as session owners', () => {
     const info = resolveOwner('/work/notes', [makeFolderWorkspace({ isArchived: true })])
     expect(info?.status).toBe('archived')
     expect(canJumpToAiVaultSessionWorktree(info)).toBe(false)
+  })
+})
+
+describe('folder rows are labelled as folders, worktree rows as worktrees', () => {
+  const folderId = 'folder:folder-1'
+  const worktreeId = 'repo-1::/repo/orca'
+
+  it('names the resume action, heading and status by workspace kind', () => {
+    expect(aiVaultResumeInSessionWorkspaceLabel(folderId)).toBe('Resume in Folder')
+    expect(aiVaultResumeInSessionWorkspaceLabel(worktreeId)).toBe('Resume in Worktree')
+    expect(aiVaultSessionWorkspaceHeading(folderId)).toBe('Folder')
+    expect(aiVaultSessionWorkspaceHeading(worktreeId)).toBe('Worktree')
+    expect(
+      (['current', 'active', 'archived'] as const).map((s) =>
+        aiVaultWorktreeStatusLabel(s, folderId)
+      )
+    ).toEqual(['Current folder', 'Folder', 'Archived folder'])
+    expect(
+      (['current', 'active', 'archived'] as const).map((s) =>
+        aiVaultWorktreeStatusLabel(s, worktreeId)
+      )
+    ).toEqual(['Current worktree', 'Active worktree', 'Archived worktree'])
+  })
+
+  it('names the jump tooltip by workspace kind', () => {
+    const info = (status: AiVaultSessionWorktreeInfo['status'], id: string) => ({
+      status,
+      label: 'x',
+      path: '/x',
+      worktreeId: id
+    })
+    expect(aiVaultWorktreeJumpTooltip(info('active', folderId))).toBe('Jump to Folder')
+    expect(aiVaultWorktreeJumpTooltip(info('active', worktreeId))).toBe('Jump to Worktree')
+    expect(aiVaultWorktreeJumpTooltip(info('archived', folderId))).toBe(
+      'This session is in an archived folder.'
+    )
+    expect(aiVaultWorktreeJumpTooltip(info('archived', worktreeId))).toBe(
+      'This session is in an archived worktree.'
+    )
   })
 })
 

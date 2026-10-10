@@ -125,10 +125,15 @@ function revealSessionWorkspace(workspaceId: string): boolean {
     findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId) !== null
   if (!reported) {
     toast.error(
-      translate(
-        'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
-        'Worktree is no longer available.'
-      )
+      scope?.type === 'folder'
+        ? translate(
+            'auto.components.right.sidebar.AiVaultPanel.folderWorkspaceUnavailable',
+            'Folder workspace is no longer available.'
+          )
+        : translate(
+            'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
+            'Worktree is no longer available.'
+          )
     )
   }
   return false

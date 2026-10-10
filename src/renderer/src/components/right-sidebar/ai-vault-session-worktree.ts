@@ -20,10 +20,13 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { aiVaultWorktreeCompactPath } from './ai-vault-session-worktree-affordances'
 
 export {
+  aiVaultResumeInSessionWorkspaceLabel,
+  aiVaultSessionWorkspaceHeading,
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeJumpTooltip,
   aiVaultWorktreeStatusLabel,
   canJumpToAiVaultSessionWorktree,
+  isAiVaultFolderWorkspaceId,
   isAiVaultSessionInCurrentWorktree,
   shouldShowAiVaultSessionWorktreeLine,
   shouldShowAiVaultWorktreeStatusBadge

@@ -13659,7 +13659,8 @@
             "resumeInChatTranscriptMissing": "この会話の履歴を読み込めなかったため、チャットで再開できません。",
             "resumeInChatFailed": "新規チャットでこのセッションを再開できませんでした。",
             "resumeInNewCliUnavailable": "このセッションは CLI で開けません。",
-            "resumeInNewCliHostTooOld": "このチャットを新しい CLI で再開するには、チャットを実行しているホストの Orca を更新してください。"
+            "resumeInNewCliHostTooOld": "このチャットを新しい CLI で再開するには、チャットを実行しているホストの Orca を更新してください。",
+            "folderWorkspaceUnavailable": "フォルダーワークスペースは利用できなくなりました。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "セッションをスキャンしています",
@@ -13761,7 +13762,9 @@
             "copied": "コピーしました",
             "copy": "コピー",
             "noFirstPromptAvailable": "最初のプロンプトはありません",
-            "loadingFirstPrompt": "最初のプロンプトを読み込み中…"
+            "loadingFirstPrompt": "最初のプロンプトを読み込み中…",
+            "folder": "フォルダー",
+            "resumeInFolder": "フォルダーで再開"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",
@@ -13857,7 +13860,12 @@
             "noRecordedWorktree": "このセッションに記録されたワークツリーはありません。",
             "archivedJumpUnavailable": "このセッションはアーカイブされたワークツリーにあります。",
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
-            "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。"
+            "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。",
+            "activeFolder": "フォルダー",
+            "archivedFolder": "アーカイブ済みのフォルダー",
+            "archivedFolderJumpUnavailable": "このセッションはアーカイブ済みのフォルダーにあります。",
+            "currentFolder": "現在のフォルダー",
+            "jumpToFolder": "フォルダーに移動"
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "サブ Agent ({{value0}})",

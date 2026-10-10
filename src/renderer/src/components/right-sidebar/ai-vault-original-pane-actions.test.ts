@@ -76,6 +76,10 @@ describe('jumpToWorktree', () => {
     mocks.activateAndRevealWorkspace.mockReturnValue(false)
     const { result } = renderHook(() => useAiVaultOriginalPaneActions())
     result.current.jumpToWorktree(id)
-    expect(mocks.toastError).toHaveBeenCalledWith('Worktree is no longer available.')
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      id.startsWith('folder:')
+        ? 'Folder workspace is no longer available.'
+        : 'Worktree is no longer available.'
+    )
   })
 })
