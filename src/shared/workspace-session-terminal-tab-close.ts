@@ -33,7 +33,7 @@ function pickNextActiveTab(
   )
 }
 
-function pruneGroupLayout(
+export function pruneGroupLayout(
   node: TabGroupLayoutNode | undefined,
   validGroupIds: ReadonlySet<string>
 ): TabGroupLayoutNode | undefined {
@@ -157,6 +157,18 @@ function deriveActiveSurface(
     }
   }
   return { terminalTabId: terminalFallback, browserTabId: null, fileId: null, type: 'terminal' }
+}
+
+/** Whether this session holds the terminal tab, as a row or a unified tab. */
+export function workspaceSessionListsTerminalTab(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  tabId: string
+): boolean {
+  return (
+    session.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true ||
+    findUnifiedTerminalTabs(session, worktreeId, tabId).length > 0
+  )
 }
 
 export function closeTerminalTabInWorkspaceSession(

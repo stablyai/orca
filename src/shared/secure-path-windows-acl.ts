@@ -2,8 +2,8 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 as pathWin32 } from 'node:path'
-import { runProcess, runProcessSync } from './child-process/run-process'
-import { windowsSystem32Binary } from './child-process/windows-system-binary'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import {
   reportSecurePathHardening,
   type SecurePathHardeningReport

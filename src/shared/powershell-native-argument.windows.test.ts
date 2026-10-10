@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { quotePowerShellLiteral } from './powershell-native-argument'
 
 async function captureNativeArgv(root: string, quotedArg: string): Promise<string[]> {

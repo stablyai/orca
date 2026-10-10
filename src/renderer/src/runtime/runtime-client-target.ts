@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { parseRoutableExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
 
@@ -10,11 +10,11 @@ export function getActiveRuntimeTarget(
   return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
 }
 
-/** RPC target for a dispatchable host; direct SSH cannot use this client path. */
+/** RPC target for a dispatchable host; direct SSH and the unresolved-owner sentinel have none. */
 export function runtimeTargetForExecutionHostId(
   hostId: ExecutionHostId
 ): RuntimeClientTarget | null {
-  const parsed = parseExecutionHostId(hostId)
+  const parsed = parseRoutableExecutionHostId(hostId)
   if (parsed?.kind === 'local') {
     return { kind: 'local' }
   }

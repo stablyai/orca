@@ -17,6 +17,8 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
+  fileReferenceContent,
+  NativeChatFileReference,
   NativeChatSkill,
   promptTextContent,
   promptTextMap,
@@ -69,6 +71,7 @@ export function NativeChatPromptEditor({
           trailingNode: false
         }),
         NativeChatSkill,
+        NativeChatFileReference,
         Placeholder.configure({ placeholder: () => placeholderRef.current })
       ],
       content:
@@ -83,7 +86,7 @@ export function NativeChatPromptEditor({
           class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
           ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
         },
-        // Clipboard input is always literal text; only the picker creates skill nodes.
+        // Clipboard input is always literal text; only the picker and attachments create pills.
         handlePaste: (view, event) => {
           if (event.defaultPrevented) {
             return true
@@ -219,7 +222,12 @@ export function NativeChatPromptEditor({
               return promptTextOffset(editor.state.doc, editor.state.selection.to)
             },
             focus: () => {
-              editor.view.dom.focus()
+              // Why: a blurred editor never writes its caret to the page, so focusing the element
+              // alone would bring back the stale one and undo a caret moved by an insertion.
+              editor.view.focus()
+              if (!editor.isEditable) {
+                editor.view.dom.focus()
+              }
             },
             contains: (node) => editor.view.dom.contains(node),
             isCaretOnVisualEdge: (edge) => {
@@ -261,6 +269,12 @@ export function NativeChatPromptEditor({
                 ])
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
+            },
+            insertFileReferences: (paths) => {
+              editor.commands.insertContentAt(
+                editor.state.selection.from,
+                paths.flatMap((path) => [fileReferenceContent(path), { type: 'text', text: ' ' }])
+              )
             }
           }
         : null,

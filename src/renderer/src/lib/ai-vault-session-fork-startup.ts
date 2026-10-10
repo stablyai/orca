@@ -1,3 +1,4 @@
+import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
 import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
 import {
   buildAiVaultResumeShellCommand,
@@ -26,11 +27,14 @@ export function buildAiVaultForkStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup | null {
   const { session, state } = args
-  const providerSession = getAiVaultAgentProviderSession(session)
+  const { platform, codexHome, liveShell } = resolveAiVaultResumeHost(args)
+  const providerSession = getAiVaultAgentProviderSession({
+    ...session,
+    filePath: normalizeAiVaultResumeFilePath(session.filePath, platform)
+  })
   if (!providerSession || !isResumableTuiAgent(session.agent)) {
     return null
   }
-  const { platform, codexHome, liveShell } = resolveAiVaultResumeHost(args)
   const plan = buildAgentResumeStartupPlan({
     agent: session.agent,
     providerSession,

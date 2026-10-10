@@ -1,7 +1,6 @@
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
-  decodeTerminalStreamText,
   type TerminalStreamFrame
 } from '../../../../../shared/terminal-stream-protocol'
 import {
@@ -9,7 +8,8 @@ import {
   TerminalMultiplexSnapshotRequestFrame,
   TerminalMultiplexSourceRangeAckFrame
 } from './stream-schemas'
-import { isTerminalInputLockedForClient, sendTerminalStreamInput } from './terminal-input-delivery'
+import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
+import { handleMultiplexInputFrame } from './terminal-multiplex-input-frame'
 import {
   getOutputAfterSnapshotSeq,
   normalizeMultiplexSnapshotScrollbackRows
@@ -19,21 +19,42 @@ import {
   serializeBudgetedRequestedSnapshot
 } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
-import type {
-  MultiplexSnapshotRequest,
-  TerminalMultiplexCleanupStage,
-  TerminalMultiplexConnection,
-  TerminalMultiplexSlotFramesStage
+import {
+  isMultiplexStreamAttached,
+  type MultiplexSnapshotRequest,
+  type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
-import type { TerminalMultiplexStream } from './terminal-stream-types'
+import type { TerminalMultiplexStream, TerminalViewportClient } from './terminal-stream-types'
 
-export function installMultiplexSlotFrames(
-  build: TerminalMultiplexCleanupStage
-): asserts build is TerminalMultiplexSlotFramesStage {
-  const state = build as TerminalMultiplexConnection
+function decodeViewportFrame(
+  payload: TerminalStreamFrame['payload']
+): { cols: number; rows: number } | null {
+  const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(payload)
+  return viewport && typeof viewport.cols === 'number' && typeof viewport.rows === 'number'
+    ? { cols: viewport.cols, rows: viewport.rows }
+    : null
+}
+
+export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): void {
   const { runtime, streams } = state
+  const inputSequenceLedger = getTerminalInputSequenceLedger(runtime)
+  const applyStreamViewport = (
+    stream: TerminalMultiplexStream,
+    client: TerminalViewportClient,
+    viewport: { cols: number; rows: number }
+  ) =>
+    updateViewportForClient(
+      runtime,
+      stream.ptyId,
+      stream.remoteDesktopSubscriptionKey,
+      client,
+      viewport,
+      stream.isMobile ? 'mobile' : 'desktop',
+      'register',
+      !stream.supportsDesktopViewportClaims
+    )
   state.handleSlotFrame = (stream: TerminalMultiplexStream, frame: TerminalStreamFrame): void => {
-    if (state.closed || streams.get(stream.streamId) !== stream) {
+    if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
@@ -61,27 +82,7 @@ export function installMultiplexSlotFrames(
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Input) {
-      const text = decodeTerminalStreamText(frame.payload)
-      if (!text) {
-        return
-      }
-      if (isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
-        return
-      }
-      // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
-      const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
-      void inputClaimTail.then(async (claimed) => {
-        if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
-          return
-        }
-        const outcome = await sendTerminalStreamInput(runtime, {
-          terminal: stream.terminal,
-          text,
-          client: stream.client,
-          isMobile: stream.isMobile
-        })
-        state.notifyStreamWriteUnavailable(stream, outcome)
-      })
+      handleMultiplexInputFrame(state, inputSequenceLedger, stream, frame)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SetOutputPaused && stream.supportsOutputPause) {
@@ -99,32 +100,21 @@ export function installMultiplexSlotFrames(
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
-      const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(frame.payload)
-      if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
+      const viewport = decodeViewportFrame(frame.payload)
+      if (!viewport) {
         return
       }
-      const cols = viewport.cols
-      const rows = viewport.rows
       // Why: resize registers stream-scoped geometry so detach can release it; older clients lack explicit claims.
       if (!stream.isMobile && stream.client?.id) {
         stream.registeredRemoteDesktopDriver = true
         if (stream.buffering) {
-          stream.pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+          stream.pendingRemoteDesktopViewport = viewport
           return
         }
       }
       stream.desktopClaimTail = stream.desktopClaimTail
         .then(async (priorClaimed) => {
-          const result = await updateViewportForClient(
-            runtime,
-            stream.ptyId,
-            stream.remoteDesktopSubscriptionKey,
-            stream.client!,
-            { cols, rows },
-            stream.isMobile ? 'mobile' : 'desktop',
-            'register',
-            !stream.supportsDesktopViewportClaims
-          )
+          const result = await applyStreamViewport(stream, stream.client!, viewport)
           return stream.supportsDesktopViewportClaims
             ? priorClaimed && result.applied
             : result.applied
@@ -133,35 +123,21 @@ export function installMultiplexSlotFrames(
       return
     }
     if (frame.opcode === TerminalStreamOpcode.ClaimViewport && stream.client && !stream.isMobile) {
-      const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(frame.payload)
-      if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
+      const viewport = decodeViewportFrame(frame.payload)
+      if (!viewport) {
         return
       }
-      const cols = viewport.cols
-      const rows = viewport.rows
       stream.registeredRemoteDesktopDriver = true
-      stream.desktopClaimTail = stream.desktopClaimTail
-        .then(
-          () =>
-            runtime.updateRemoteDesktopViewer(
-              stream.ptyId,
-              stream.remoteDesktopSubscriptionKey,
-              stream.client!.id,
-              cols,
-              rows,
-              true
-            ),
-          () =>
-            runtime.updateRemoteDesktopViewer(
-              stream.ptyId,
-              stream.remoteDesktopSubscriptionKey,
-              stream.client!.id,
-              cols,
-              rows,
-              true
-            )
+      const claim = () =>
+        runtime.updateRemoteDesktopViewer(
+          stream.ptyId,
+          stream.remoteDesktopSubscriptionKey,
+          stream.client!.id,
+          viewport.cols,
+          viewport.rows,
+          true
         )
-        .catch(() => false)
+      stream.desktopClaimTail = stream.desktopClaimTail.then(claim, claim).catch(() => false)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotRequest) {
@@ -175,7 +151,7 @@ export function installMultiplexSlotFrames(
     stream: TerminalMultiplexStream,
     request: MultiplexSnapshotRequest
   ): Promise<void> => {
-    if (state.closed || streams.get(stream.streamId) !== stream) {
+    if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
     stream.outputBatcher.flush()
@@ -190,7 +166,7 @@ export function installMultiplexSlotFrames(
         stream.ptyId,
         scrollbackRows
       )
-      if (state.closed || streams.get(stream.streamId) !== stream) {
+      if (!isMultiplexStreamAttached(state, stream)) {
         return
       }
       let size = runtime.getTerminalSize(stream.ptyId)
@@ -201,7 +177,7 @@ export function installMultiplexSlotFrames(
         stream.pendingOutputBytes = 0
         stream.pendingOutputOverflowed = false
         serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, scrollbackRows)
-        if (state.closed || streams.get(stream.streamId) !== stream) {
+        if (!isMultiplexStreamAttached(state, stream)) {
           return
         }
         size = runtime.getTerminalSize(stream.ptyId)
@@ -283,16 +259,7 @@ export function installMultiplexSlotFrames(
         ) {
           const viewport = stream.pendingRemoteDesktopViewport
           stream.pendingRemoteDesktopViewport = null
-          void updateViewportForClient(
-            runtime,
-            stream.ptyId,
-            stream.remoteDesktopSubscriptionKey,
-            stream.client,
-            viewport,
-            'desktop',
-            'register',
-            !stream.supportsDesktopViewportClaims
-          ).catch(() => {})
+          void applyStreamViewport(stream, stream.client, viewport).catch(() => {})
         }
       }
     }

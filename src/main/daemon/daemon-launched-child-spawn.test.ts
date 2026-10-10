@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnDaemonChildProcess } from './daemon-launched-child-spawn'
 
 const { spawn, fork } = vi.hoisted(() => ({ spawn: vi.fn(), fork: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawn }))
-vi.mock('../../shared/child-process/fork-process', () => ({ forkProcess: fork }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawn }))
+vi.mock('@orca/process-host/fork-process', () => ({ forkProcess: fork }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.0.0' })
 }))

@@ -50,9 +50,20 @@ describe('retired chat default selectors', () => {
     const normalized = normalizeLegacyProfile({
       experimentalNativeChat: true,
       experimentalStructuredNativeChat: false,
-      openAgentTabsInChatByDefault: false
+      openAgentTabsInChatByDefault: true
     })
     expect(normalized.experimentalNativeChat).toBe(true)
+    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
+    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
+  })
+
+  it('turns Chat UI off when new tabs opened in the terminal, dropping both older keys', () => {
+    const normalized = normalizeLegacyProfile({
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: false,
+      openAgentTabsInChatByDefault: false
+    })
+    expect(normalized.experimentalNativeChat).toBe(false)
     expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
     expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
   })

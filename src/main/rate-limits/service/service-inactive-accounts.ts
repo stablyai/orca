@@ -1,11 +1,8 @@
 import { fetchManagedAccountUsage } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
-import {
-  INACTIVE_CODEX_PROBE_STAGGER_MS,
-  INACTIVE_FETCH_DEBOUNCE_MS,
-  delayUnlessAborted
-} from './service-types'
+import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
+import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {

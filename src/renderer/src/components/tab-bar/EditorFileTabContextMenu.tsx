@@ -32,6 +32,7 @@ import {
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type EditorFileTabContextMenuProps = {
   open: boolean
@@ -190,7 +191,7 @@ export function EditorFileTabContextMenu({
             'Close Tabs To The Left'
           )}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {isVirtualEditorFile(file) ? null : <DropdownMenuSeparator />}
         {canShowMarkdownPreview ? (
           <>
             <DropdownMenuItem
@@ -217,28 +218,31 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.filePath)
-          }}
-        >
-          <Copy className="size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.relativePath)
-          }}
-        >
-          <Copy className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
-            'Copy Relative Path'
-          )}
-        </DropdownMenuItem>
         {/* Why: virtual editor tabs use synthetic ids instead of on-disk paths. */}
-        {file.mode !== 'check-details' && (
+        {!isVirtualEditorFile(file) && (
           <>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.filePath)
+              }}
+            >
+              <Copy className="size-3.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.5b85754786',
+                'Copy Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.relativePath)
+              }}
+            >
+              <Copy className="size-3.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
+                'Copy Relative Path'
+              )}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={revealBlocked}

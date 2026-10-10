@@ -43,17 +43,20 @@ vi.mock('@/lib/connection-context', () => ({
 
 installTerminalLinkTestEnvironment(doubles)
 
+// The source pane's own row: an unplaceable source must not get a root shortcut.
+const SOURCE_WORKTREE = { id: 'wt-1', path: '/tmp' }
+
 describe('handleOscLink', () => {
   it('switches to an exact known worktree root without local auth or stat', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+      repo: [SOURCE_WORKTREE, { id: 'wt-2', path: '/tmp/other-worktree' }]
     }
 
     openDetectedFilePath('/tmp/other-worktree', null, null, deps)
     await flushAsyncWork()
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2', { executionHostId: 'local' })
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
@@ -62,7 +65,7 @@ describe('handleOscLink', () => {
   it('coalesces duplicate known-root activation from provider and mouseup fallback', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+      repo: [SOURCE_WORKTREE, { id: 'wt-2', path: '/tmp/other-worktree' }]
     }
 
     openDetectedFilePath('/tmp/other-worktree', null, null, deps)
@@ -70,7 +73,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2', { executionHostId: 'local' })
     expect(statMock).not.toHaveBeenCalled()
   })
 
@@ -78,7 +81,7 @@ describe('handleOscLink', () => {
     setPlatform('Macintosh')
     statMock.mockResolvedValueOnce({ isDirectory: true })
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+      repo: [SOURCE_WORKTREE, { id: 'wt-2', path: '/tmp/other-worktree' }]
     }
 
     openDetectedFilePath('/tmp/other-worktree', null, null, {
@@ -100,7 +103,7 @@ describe('handleOscLink', () => {
     setPlatform('Macintosh')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-2', path: '/home/me/other-worktree' }]
+      repo: [{ id: 'wt-2', repoId: 'repo', path: '/home/me/other-worktree', hostId: 'ssh:ssh-1' }]
     }
 
     openDetectedFilePath('/home/me/other-worktree', null, null, {
@@ -109,7 +112,7 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2', { executionHostId: 'ssh:ssh-1' })
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -117,7 +120,7 @@ describe('handleOscLink', () => {
   it('switches to a Windows worktree root when resolved separators differ from store state', async () => {
     setPlatform('Windows')
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-win', path: 'C:\\Users\\Alice\\Repo' }]
+      repo: [SOURCE_WORKTREE, { id: 'wt-win', path: 'C:\\Users\\Alice\\Repo' }]
     }
 
     openDetectedFilePath('C:/Users/Alice/Repo', null, null, {
@@ -126,7 +129,7 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-win')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-win', { executionHostId: 'local' })
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -135,13 +138,13 @@ describe('handleOscLink', () => {
     setPlatform('Macintosh')
     vi.mocked(activateAndRevealWorktree).mockReturnValueOnce(false)
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+      repo: [SOURCE_WORKTREE, { id: 'wt-2', path: '/tmp/other-worktree' }]
     }
 
     openDetectedFilePath('/tmp/other-worktree', null, null, deps)
     await flushAsyncWork()
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2', { executionHostId: 'local' })
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
@@ -211,7 +214,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     setPlatform('Windows')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-1', path: '/repo' }]
+      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo', hostId: 'ssh:ssh-1' }]
     }
     const { provider, linkTooltip } = createProviderSetup([makeBufferLine('/repo')])
 
@@ -229,7 +232,7 @@ describe('createFilePathLinkProvider range bounds', () => {
   it('switches to a known worktree root from direct fallback even when cache says missing', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {
-      repo: [{ id: 'wt-2', path: '/tmp/other-worktree' }]
+      repo: [SOURCE_WORKTREE, { id: 'wt-2', path: '/tmp/other-worktree' }]
     }
 
     const opened = openFilePathLinkAtBufferPosition(
@@ -247,7 +250,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     await flushAsyncWork()
 
     expect(opened).toBe(true)
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2', { executionHostId: 'local' })
     expect(statMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()

@@ -229,7 +229,7 @@ describe('structured agent-session runtime install', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory!,
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({})
     })
     let finishWrite = (): void => {}
@@ -271,7 +271,7 @@ describe('structured agent-session runtime install', () => {
         resolveWorkspacePath: async () => stateDirectory!,
         resolveEnvironment: async () => ({}),
         resolveLaunchArgs: () => [],
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+        resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
         readProcessStartTime: async () => 1_700_000_000_000
       })
 

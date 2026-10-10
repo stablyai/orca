@@ -32,7 +32,9 @@ it.each([
   '.github/actions/prepare-orcad-prebuilds/action.yml',
   'src/main/ssh/ssh-provider.ts',
   'src/main/providers/local-pty-provider.ts',
-  'src/shared/child-process/run-process.ts',
+  'src/packages/process-host/src/run-process.ts',
+  'src/packages/process-host/src/growing-byte-buffer.ts',
+  'src/packages/process-host/package.json',
   'src/main/persistence/profile-state/store.ts',
   'src/main/sqlite/database.ts',
   'src/main/orcad/entry.ts',
@@ -70,6 +72,16 @@ it.each([
     false
   ],
   ['src/main/wsl/runner.ts', ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'], false],
+  [
+    'src/packages/process-host/src/windows-command-line.ts',
+    ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
+    false
+  ],
+  [
+    'src/shared/__tests__/process-host/windows-command-line.win32.test.ts',
+    ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],
+    false
+  ],
   [
     'src/main/orcad/orcad-launcher.win32.test.ts',
     ['ubuntu-22.04', 'windows-2022', 'windows-11-arm'],

@@ -89,7 +89,9 @@ async function loadDetectedAgents(
         repo
       }
     : {
-        reply: await preflightDetectAgentsRead.request(client),
+        // Why the workspace: the host resolves its project runtime (a WSL distro on Windows). An
+        // older host discards the params and answers with its own default, as it always has.
+        reply: await preflightDetectAgentsRead.request(client, { worktreeId }),
         interpret: preflightDetectAgentsRead.interpret,
         repo
       }

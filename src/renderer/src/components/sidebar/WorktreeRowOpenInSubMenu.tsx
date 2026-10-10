@@ -1,7 +1,7 @@
 import type React from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
+import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/worktree-row-open-in-owner'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 
@@ -11,23 +11,18 @@ export function WorktreeRowOpenInSubMenu({
   connectionId,
   disabled
 }: {
-  worktree: Pick<Worktree, 'id' | 'path' | 'hostId'>
+  worktree: Pick<Worktree, 'id' | 'path' | 'hostId' | 'runtimeOwnerEnvironmentId'>
   connectionId: string | null
   disabled?: boolean
 }): React.JSX.Element {
-  // Why: resolved only while the menu is open, not per row on every store update. An inactive
-  // row can name its host before the catalog has it, so the explicit host wins.
-  const runtimeEnvironmentId = useAppStore((s) =>
-    worktree.hostId
-      ? (resolveWorktreeOperationRouteForHost(s, worktree.id, worktree.hostId)
-          ?.runtimeEnvironmentId ?? null)
-      : getRuntimeEnvironmentIdForWorktree(s, worktree.id)
-  )
+  // Why: resolved only while the menu is open, not per row on every store update.
+  const owner = useAppStore(useShallow((s) => resolveWorktreeRowOpenInRuntimeOwner(s, worktree)))
   return (
     <WorktreeOpenInSubMenu
       worktreePath={worktree.path}
       connectionId={connectionId}
-      runtimeEnvironmentId={runtimeEnvironmentId}
+      runtimeEnvironmentId={owner.runtimeEnvironmentId}
+      ownerUnresolved={owner.ownerUnresolved}
       disabled={disabled}
     />
   )

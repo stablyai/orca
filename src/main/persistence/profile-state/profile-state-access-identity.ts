@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { runProcessSync } from '../../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { parseLinuxProcStartTicks } from '../../daemon/daemon-process-start-time'
 import { getPsProcessIdentity } from '../../daemon/daemon-process-identity-query'
 import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../../windows-native-registry'

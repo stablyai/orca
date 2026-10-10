@@ -27,6 +27,7 @@ import {
   sameProviderChild
 } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 
 export type StructuredAgentSessionProviderStartedContext = {
@@ -97,7 +98,35 @@ export function settleStructuredAgentSessionOptionsReported(
   context: StructuredAgentSessionProviderStartedContext,
   event: StructuredAgentSessionOptionsReportedEvent
 ): Promise<void> {
-  return persistReportedOptions(context, event, admitReportedOptions(context, event))
+  const admitted = admitReportedOptions(context, event)
+  if (event.catalogListing) {
+    void saveStartReadbackListing(context, event, event.catalogListing)
+  }
+  return persistReportedOptions(context, event, admitted)
+}
+
+/** A start's late readback (Claude's settings) says once what the config resolved. Serialized
+ *  behind the attach that published the child, which may still be indexing it. */
+function saveStartReadbackListing(
+  context: StructuredAgentSessionProviderStartedContext,
+  event: ReportedOptions,
+  listing: AgentModelCatalogLiveListing
+): Promise<void> {
+  return context
+    .serialize(event.sessionId, async () => {
+      const child = context.sessions.get(event.sessionId)?.child
+      const reporter = { generation: event.acquisitionGeneration, fence: event.fence }
+      if (child && sameProviderChild(child, reporter)) {
+        context.deps.modelCatalog?.recordLiveListing(event.sessionId, listing)
+      }
+    })
+    .catch((error: unknown) => {
+      context.deps.logger.warn('saving what a started provider resolved failed', {
+        scope: 'provider-started-catalog',
+        sessionId: event.sessionId,
+        error
+      })
+    })
 }
 
 function admitReportedOptions(

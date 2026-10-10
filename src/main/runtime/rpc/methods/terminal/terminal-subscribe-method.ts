@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../core'
-import { TerminalSubscribe } from './stream-schemas'
+import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
 import { isTerminalReadPayloadIncomplete } from './terminal-stream-replay'
 import { runTerminalBinarySubscription } from './terminal-legacy-subscribe-binary'
 import {

@@ -1,8 +1,4 @@
 import { gitExecFileAsync } from '../../gh-utils'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from '../../local-git-config-signature'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
 import {
@@ -21,6 +17,8 @@ import {
   type TrackedUpstreamBranch,
   type TrackedUpstreamSnapshotProbeResult
 } from './tracked-upstream-cache'
+import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 export async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
@@ -136,12 +134,9 @@ export async function probeTrackedUpstreamBranches(
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 }> {
   const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
-  const provider = connectionId ? getSshGitProvider(connectionId) : null
-  if (connectionId && !provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-  }
-  if (provider) {
-    const result = await provider.exec(args, repoPath)
+  const route = requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
+  if (route.kind === 'ssh') {
+    const result = await route.provider.exec(args, repoPath)
     return {
       probeFailed: false,
       upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)

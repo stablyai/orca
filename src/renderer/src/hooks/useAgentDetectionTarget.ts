@@ -14,6 +14,11 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 export const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
 
+// Why the workspace rides along: the paired host resolves that workspace's runtime (e.g. WSL).
+function getRuntimeAgentDetectionTargetKey(environmentId: string, worktreeId: string): string {
+  return `runtime:${encodeURIComponent(environmentId)}:${encodeURIComponent(worktreeId)}`
+}
+
 function getLocalAgentDetectionTargetKey(worktreeId: string): string {
   return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
     ? `${AGENT_DETECTION_LOCAL_TARGET_KEY}:${encodeURIComponent(worktreeId)}:host`
@@ -45,7 +50,7 @@ export function getAgentDetectionTargetKeyForWorktree(
       worktreeId
     )
     if (explicitRuntimeEnvironmentId) {
-      return `runtime:${explicitRuntimeEnvironmentId}`
+      return getRuntimeAgentDetectionTargetKey(explicitRuntimeEnvironmentId, worktreeId)
     }
     // Why: a hostless folder can span local and SSH children, so keep the
     // ambiguity gate before applying its focused-runtime fallback.
@@ -62,7 +67,7 @@ export function getAgentDetectionTargetKeyForWorktree(
     return `ssh:${executionHost.targetId}`
   }
   if (executionHost?.kind === 'runtime') {
-    return `runtime:${executionHost.environmentId}`
+    return getRuntimeAgentDetectionTargetKey(executionHost.environmentId, worktreeId)
   }
   return getLocalAgentDetectionTargetKey(worktreeId)
 }
@@ -97,7 +102,15 @@ export function parseAgentDetectionTargetKey(
     return { kind: 'ssh', connectionId: key.slice('ssh:'.length) }
   }
   if (key.startsWith('runtime:')) {
-    return { kind: 'runtime', environmentId: key.slice('runtime:'.length) }
+    const [encodedEnvironmentId = '', encodedWorktreeId] = key.slice('runtime:'.length).split(':')
+    try {
+      const environmentId = decodeURIComponent(encodedEnvironmentId)
+      return encodedWorktreeId
+        ? { kind: 'runtime', environmentId, worktreeId: decodeURIComponent(encodedWorktreeId) }
+        : { kind: 'runtime', environmentId }
+    } catch {
+      return { kind: 'runtime', environmentId: encodedEnvironmentId }
+    }
   }
   return { kind: 'local' }
 }

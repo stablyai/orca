@@ -103,7 +103,7 @@ export async function startLateExitHarness() {
     sendPtyExitToRenderer: session.sendPtyExitToRenderer
   })
   const result = await harness.adapter.spawn({ cols: 80, rows: 24, sessionId: PTY_ID })
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   if (result.incarnationId) {
     ptyIncarnationById.set(PTY_ID, result.incarnationId)
   }
@@ -133,7 +133,7 @@ export async function startLateExitHarness() {
     respawn: async () => {
       harness.adapter.clearTombstone(PTY_ID)
       const replacement = await harness.adapter.spawn({ cols: 80, rows: 24, sessionId: PTY_ID })
-      ptyOwnership.set(PTY_ID, null)
+      ptyOwnership.set(PTY_ID, 'local')
       if (replacement.incarnationId) {
         ptyIncarnationById.set(PTY_ID, replacement.incarnationId)
       }

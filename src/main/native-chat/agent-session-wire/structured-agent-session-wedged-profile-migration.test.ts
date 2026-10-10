@@ -552,9 +552,10 @@ describe('already-wedged profiles become usable on load', () => {
     }
   )
 
-  it('marks a running turn left behind by a released lease unverifiable on a cold acquire', async () => {
+  it('interrupts a running turn left behind by a released lease on a cold acquire', async () => {
     // No settlement latch: the record was released cleanly, but the journal still says a turn is
-    // running. The child that wrote it is gone and nothing observed its exit.
+    // running. Nothing observed the child's exit, but the runtime that held it was replaced, and
+    // nothing after its start proves it alive.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
     await seedRunningTurn()
     openHost()
@@ -564,8 +565,9 @@ describe('already-wedged profiles become usable on load', () => {
     expect(acquire).toHaveBeenCalledOnce()
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
-      state: 'unverifiable',
+      state: 'interrupted',
       startedAt: NOW - 5_000,
+      completedAt: NOW - 5_000,
       recovered: true
     })
     expect(

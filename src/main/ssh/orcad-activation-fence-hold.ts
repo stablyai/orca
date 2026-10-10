@@ -6,20 +6,19 @@
  */
 import {
   orcadActivationFenceExists,
-  orcadActivationTransactionRoot,
   withStaleOrcadActivationRecoveryLock,
   type OrcadActivationLockOptions
 } from './orcad-activation-lock'
 import { readOrcadActivationTransaction } from './orcad-activation-transaction-store'
-import { isRelayInstallLockStale, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
-import { joinRemotePath } from './ssh-remote-platform'
+import { orcadActivationFenceLockDir } from './orcad-activation-transaction'
+import { isRelayInstallLockStale } from './ssh-relay-install-lock'
 import { findExitedOwnLockToken } from './orcad-exited-own-lock'
 import { orcadRemoteBaseDir } from './orcad-remote-windows-node'
 
 export const ORCAD_ACTIVATION_FENCE_BUSY_CODE = 'orcad_activation_fence_busy'
-export const ORCAD_ACTIVATION_RECOVERY_REQUIRED_CODE = 'orcad_activation_recovery_required'
+const ORCAD_ACTIVATION_RECOVERY_REQUIRED_CODE = 'orcad_activation_recovery_required'
 
-export type OrcadActivationFenceRefusal = {
+type OrcadActivationFenceRefusal = {
   code: string
   reason: string
   /** A stale fence no journal backed was cleared, so the attempt may run again at once. */
@@ -30,11 +29,7 @@ export async function orcadActivationFenceRefusal(
   options: OrcadActivationLockOptions,
   attempt: string
 ): Promise<OrcadActivationFenceRefusal> {
-  const lockDir = joinRemotePath(
-    options.host,
-    orcadActivationTransactionRoot(options.host, options.remoteHome),
-    RELAY_INSTALL_LOCK_NAME
-  )
+  const lockDir = orcadActivationFenceLockDir(options.host, options.remoteHome)
   // An unreadable answer reads as busy: retrying later is never wrong, a sticky failure can be.
   const journal = (await readOrcadActivationTransaction(options).catch(() => null)) !== null
   const baseDir = orcadRemoteBaseDir(options.host, options.remoteHome)

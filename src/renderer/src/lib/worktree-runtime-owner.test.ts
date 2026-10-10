@@ -645,6 +645,12 @@ describe('getKnownExecutionHostIdForWorktree', () => {
     ['an ownerless repo row', { repos: [{ id: 'r' }] }, 'r::wt', 'local'],
     ['an SSH repo row', { repos: [{ id: 'r', connectionId: 'box' }] }, 'r::wt', 'ssh:box'],
     [
+      'a runtime repo row',
+      { repos: [{ id: 'r', executionHostId: 'runtime:env-1' }] },
+      'r::wt',
+      'runtime:env-1'
+    ],
+    [
       'a per-worktree host',
       { worktreesByRepo: { r: [{ id: 'r::wt', repoId: 'r', hostId: 'ssh:box' }] } },
       'r::wt',

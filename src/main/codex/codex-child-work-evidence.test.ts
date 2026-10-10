@@ -124,7 +124,7 @@ describe('Codex child-work evidence', () => {
         residency: 'background',
         description: 'audit_build',
         invocation: { invocationId: 'c1', generation: 1 },
-        stoppable: false
+        stoppable: true
       })
     ])
     const aliases = store.getAliasesForChild(records()[0]!.childWorkId)

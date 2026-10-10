@@ -7,6 +7,12 @@ import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 const contracts = [
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
+  'src/shared/native-chat-tool-attribution-allocation.test.ts',
+  'src/shared/native-chat-tool-pairing.performance.test.ts',
+  'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
+  'src/main/codex-usage/scanner-incremental-append.test.ts',
+  'src/main/usage/jsonl-file-reader.test.ts',
+  'src/main/usage/jsonl-file-snapshot.test.ts',
   'src/relay/fs-path-metadata-symlink-concurrency.test.ts',
   'src/renderer/src/components/editor/rich-markdown-list-tokenizers.test.ts',
   'src/renderer/src/components/editor/rich-markdown-lowlight-cache.test.ts',

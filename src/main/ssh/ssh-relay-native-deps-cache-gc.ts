@@ -16,7 +16,7 @@
  */
 import { randomInt } from 'node:crypto'
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   isRelayNativeDepsCacheEntryName,
@@ -62,16 +62,6 @@ function staleTombstoneKey(name: string): string | null {
     return null
   }
   return match[1]
-}
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell'
-  })
 }
 
 /**

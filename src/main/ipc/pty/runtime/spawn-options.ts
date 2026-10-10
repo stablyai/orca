@@ -19,7 +19,6 @@ import {
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
 import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
@@ -28,6 +27,7 @@ import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-com
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import {
+  joinPaneSpawn,
   makePaneSpawnReservationKey,
   reservePaneSpawn,
   paneSpawnReservationsByOwnerKey
@@ -47,9 +47,6 @@ export async function buildRuntimePtySpawnOptions(
 
   // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
   ctx.env = withCodexTerminalServerIsolationEnv(ctx.env, ctx.deps.getSettings?.())
-  const authEnvToDelete = ctx.claudeAuth?.stripAuthEnv
-    ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
-    : undefined
   ctx.spawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -74,7 +71,6 @@ export async function buildRuntimePtySpawnOptions(
     args.onPtySpawnCommitted?.()
   }
   ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
-    authEnvToDelete,
     args.envToDelete ?? [],
     // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
     PI_PROCESS_OWNER_ENV_KEYS,
@@ -258,8 +254,8 @@ export async function buildRuntimePtySpawnOptions(
     const existingPaneSpawn = ctx.spawnIdentityPaneKey
       ? paneSpawnReservationsByOwnerKey.get(resolvedPaneSpawnReservationKey!)
       : undefined
-    if (existingPaneSpawn) {
-      const concurrentResult = await existingPaneSpawn.promise
+    const concurrentResult = existingPaneSpawn ? await joinPaneSpawn(existingPaneSpawn) : null
+    if (concurrentResult) {
       const concurrentOwner = resolveStablePaneOwner(
         ctx.deps.runtime,
         ctx.deps.store,

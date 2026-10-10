@@ -9,15 +9,15 @@ import type { RemoteOperatingSystem } from './ssh-remote-platform'
 import {
   relayRuntimeLadder,
   relayRuntimeStepAfterRefusal,
-  type RelayRuntimeStep,
-  type RelayRuntimeStepReason
+  type RelayRuntimeStep
 } from './ssh-relay-runtime-ladder'
+import type { RelayRuntimeFallbackReason } from './ssh-relay-pinned-node'
 
 /**
  * A rung launches or answers with a refusal. Transport loss is covered in
  * ssh-relay-host-answered-failure.test.ts.
  */
-type RungAnswer = 'launch' | RelayRuntimeStepReason
+type RungAnswer = 'launch' | RelayRuntimeFallbackReason
 /**
  * The host-Node relay: it launches, its strict probe answers "no Node", its npm install answers
  * with a failure, or its relay launch fails after starting (which propagates, as before).
