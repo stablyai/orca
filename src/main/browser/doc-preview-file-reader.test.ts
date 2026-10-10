@@ -107,8 +107,7 @@ describe('readDocPreviewFile — ssh owner', () => {
     expect(await readDocPreviewFile(sshGrant(), 'index.html')).toMatchObject({ ok: true })
   })
 
-  // Why: the SSH read path only serves images and PDFs as bytes, so a font is refused there by
-  // design — the failure must name the file type, not a stale server.
+  // Older hosts refuse fonts without bytes or a MIME type; keep that answer explicit.
   it('reports a file type the host will not send as unsupported-asset', async () => {
     mocks.readDocPreviewFile.mockResolvedValue({ content: '', isBinary: true })
 

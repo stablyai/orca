@@ -1,6 +1,7 @@
 import { extname } from 'node:path'
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
+import { FONT_FILE_MIME_TYPES } from '../../shared/font-file-extensions'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { FileReadCapExceededError } from '../ssh/ssh-filesystem-stream-reader'
 import { getCanonicalUserDataPath } from '../persistence'
@@ -18,8 +19,7 @@ const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
 const DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES = 10 * 1024 * 1024
 const DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES = 10 * 1024 * 1024
 
-/** Why not "needs a newer server": the SSH read path only ever serves images and PDFs as bytes, so
- *  a font is refused there by design, not by version. Name the file type, not the host's age. */
+/** Older hosts may refuse a binary format, so report the file type they cannot send. */
 const UNSERVABLE_ASSET_PREVIEW_MESSAGE = 'This workspace cannot send this file type to a preview.'
 
 /** `files.read` clamps text at the host's cap and reports it; serving the clamped bytes would
@@ -64,10 +64,7 @@ const DOC_PREVIEW_CONTENT_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.otf': 'font/otf'
+  ...FONT_FILE_MIME_TYPES
 }
 
 export function docPreviewContentType(relativePath: string): string {

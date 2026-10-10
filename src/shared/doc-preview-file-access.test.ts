@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -161,5 +161,66 @@ describe('readAuthorizedDocPreviewFile', () => {
     await expect(readAuthorizedDocPreviewFile({ ...request, maxBinaryBytes: 3 })).rejects.toThrow(
       'file_too_large'
     )
+  })
+
+  it.each([
+    { extension: '.woff', mimeType: 'font/woff' },
+    { extension: '.WOFF2', mimeType: 'font/woff2' },
+    { extension: '.ttf', mimeType: 'font/ttf' },
+    { extension: '.otf', mimeType: 'font/otf' }
+  ])(
+    'serves authorized $extension fonts within the binary read cap',
+    async ({ extension, mimeType }) => {
+      const fixture = await createFixture()
+      const font = join(fixture.assets, `typeface${extension}`)
+      const bytes = Buffer.from([0x77, 0x4f, 0x46, 0x32, 0x00, 0x01, 0x00, 0x00])
+      await writeFile(font, bytes)
+      const request = {
+        boundaryPath: fixture.workspace,
+        entryPath: fixture.entry,
+        implicitRootPath: fixture.docs,
+        authorizedRootPaths: [fixture.assets],
+        targetPath: font,
+        maxTextBytes: 1,
+        maxBinaryBytes: bytes.length
+      }
+
+      await expect(readAuthorizedDocPreviewFile(request)).resolves.toEqual({
+        content: bytes.toString('base64'),
+        isBinary: true,
+        mimeType
+      })
+      await expect(
+        readAuthorizedDocPreviewFile({ ...request, authorizedRootPaths: [] })
+      ).rejects.toThrow(DOC_PREVIEW_PATH_AUTHORIZATION_ERROR)
+      await expect(
+        readAuthorizedDocPreviewFile({ ...request, maxBinaryBytes: bytes.length - 1 })
+      ).rejects.toThrow('file_too_large')
+    }
+  )
+
+  it('preserves real bundled font bytes for an HTML preview', async () => {
+    const fixture = await createFixture()
+    const font = join(fixture.assets, 'geist.woff2')
+    const bytes = await readFile(
+      join(process.cwd(), 'src/renderer/src/assets/fonts/Geist-Variable.woff2')
+    )
+    await writeFile(font, bytes)
+
+    await expect(
+      readAuthorizedDocPreviewFile({
+        boundaryPath: fixture.workspace,
+        entryPath: fixture.entry,
+        implicitRootPath: fixture.docs,
+        authorizedRootPaths: [fixture.assets],
+        targetPath: font,
+        maxTextBytes: 1024,
+        maxBinaryBytes: bytes.length
+      })
+    ).resolves.toEqual({
+      content: bytes.toString('base64'),
+      isBinary: true,
+      mimeType: 'font/woff2'
+    })
   })
 })
