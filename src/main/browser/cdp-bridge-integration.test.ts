@@ -157,8 +157,9 @@ function createMockGuest(
         return {}
       case 'DOM.describeNode':
         return { node: { nodeId: 1 } }
-      case 'DOM.requestNode':
-        return { nodeId: 1 }
+      // DOM.requestNode deliberately unstubbed: it takes a Runtime objectId, not a
+      // backendNodeId (CDP-probed — the old two-hop form died with "Invalid parameters"
+      // on every call), so a regression hits the default rejection.
       case 'DOM.resolveNode':
         return { object: { objectId: 'obj-1' } }
       case 'Runtime.callFunctionOn':

@@ -86,6 +86,10 @@ export abstract class CdpBridgeCommandModule {
     return this.refResolution.scrollIntoView(sender, backendNodeId)
   }
 
+  protected resolveNodeObjectId(sender: CdpCommandSender, backendNodeId: number): Promise<string> {
+    return this.refResolution.resolveNodeObjectId(sender, backendNodeId)
+  }
+
   protected getElementCenter(
     sender: CdpCommandSender,
     backendNodeId: number
