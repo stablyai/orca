@@ -417,7 +417,6 @@ jobs:
             --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
             --capacity-cell-id "${TARGET_CELL_ID}" \
             --director-cells-json "${DESIRED_CELLS_JSON}" \
-            --min-instances 0 \
             --prune-revisions true \
             --release-id "${RELEASE_ID}")"
           echo "${DEPLOY_RESULT}"
