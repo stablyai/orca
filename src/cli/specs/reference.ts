@@ -23,6 +23,7 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['reference', 'remove'],
+    aliases: [['reference', 'rm']],
     summary: 'Detach reviews or issues from a workspace',
     usage: 'orca reference remove [<url>...] [--key <key>...] --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url', 'key'],
