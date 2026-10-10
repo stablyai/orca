@@ -9,13 +9,14 @@ import { resolveFloatingTerminalCwd } from '../ipc/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
 } from '../../shared/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from './runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
-import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
+import { resolveWorktreeHostRouting, resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -29,7 +30,12 @@ import { ensureJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
-import { WORKTREE_ID_SEPARATOR, worktreeIdsEqual } from '../../shared/worktree/id'
+import {
+  WORKTREE_ID_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  worktreeIdsEqual
+} from '../../shared/worktree/id'
+import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-resolution'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
@@ -229,6 +235,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     return worktreeId
   }
 
+  /** Keeps host-owned session keys intact; accepts one path alias and rejects ambiguous matches. */
   getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null {
     const worktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     if (
@@ -256,6 +263,40 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     if (matches.length > 1) {
       throw new Error('selector_ambiguous')
     }
-    return matches[0] ?? worktreeId
+    const matchedId = matches[0]
+    if (!matchedId) {
+      return worktreeId
+    }
+    const owner = resolveWorktreeHostRouting(this.store?.getRepos?.() ?? [], {
+      repoId: getRepoIdFromWorktreeId(worktreeId)
+    })
+    if (owner.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    if (owner.kind === 'resolved' && parseExecutionHostId(owner.hostId)?.kind !== 'runtime') {
+      const ptyIds = new Set<string>()
+      for (const tab of this.mobileSessionTabsByWorktree.get(matchedId)?.tabs ?? []) {
+        if (tab.type === 'terminal' && tab.ptyId) {
+          ptyIds.add(tab.ptyId)
+        }
+      }
+      for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
+        const pty = this.ptysById.get(ptyId)
+        if (pty?.connected && worktreeIdsEqual(pty.worktreeId, matchedId)) {
+          ptyIds.add(ptyId)
+        }
+      }
+      for (const ptyId of ptyIds) {
+        const pty = this.ptysById.get(ptyId)
+        const hostId =
+          getPtyExecutionHost(ptyId) ??
+          (pty ? getConnectionExecutionHostId(pty.connectionId) : null)
+        // Why: returning the raw alias after a conflict lets PTY rescue adopt the foreign terminal.
+        if (hostId && hostId !== 'foreign' && hostId !== owner.hostId) {
+          throw new Error('worktree_execution_host_unresolved')
+        }
+      }
+    }
+    return matchedId
   }
 }

@@ -1,6 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -19,7 +20,8 @@ const ALIAS = 'repo::G:/git/example'
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const TAB = `tab::${LEAF}`
 
-function snapshot(worktree = WORKTREE): RuntimeMobileSessionTabsSnapshot {
+/** Uses stable tab and leaf IDs so both path spellings must recover the same terminal. */
+function snapshot(worktree = WORKTREE, ptyId = 'pty-existing'): RuntimeMobileSessionTabsSnapshot {
   return {
     worktree,
     publicationEpoch: 'renderer',
@@ -33,7 +35,7 @@ function snapshot(worktree = WORKTREE): RuntimeMobileSessionTabsSnapshot {
         id: TAB,
         parentTabId: 'tab',
         leafId: LEAF,
-        ptyId: 'pty-existing',
+        ptyId,
         title: 'Existing conversation',
         isActive: true
       }
@@ -41,6 +43,7 @@ function snapshot(worktree = WORKTREE): RuntimeMobileSessionTabsSnapshot {
   }
 }
 
+/** Keeps the renderer authoritative so alias tests cannot pass through saved-session hydration. */
 function liveRuntime(
   worktree = WORKTREE,
   additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = []
@@ -51,10 +54,12 @@ function liveRuntime(
   return runtime
 }
 
+/** Publishes tab, leaf, and mobile views together to match an actual renderer graph update. */
 function publishGraph(
   runtime: OrcaRuntimeService,
   worktree = WORKTREE,
-  additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = []
+  additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = [],
+  ptyId = 'pty-existing'
 ): void {
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -72,15 +77,95 @@ function publishGraph(
         worktreeId: worktree,
         leafId: LEAF,
         paneRuntimeId: 1,
-        ptyId: 'pty-existing',
+        ptyId,
         paneTitle: 'Existing conversation'
       }
     ],
-    mobileSessionTabs: [snapshot(worktree), ...additionalSnapshots]
+    mobileSessionTabs: [snapshot(worktree, ptyId), ...additionalSnapshots]
   })
 }
 
 describe('session tab workspace path aliases', () => {
+  it.each(
+    [
+      { connectionId: undefined, ptyConnectionId: 'ssh-host', ownsSession: false },
+      { connectionId: 'ssh-host', ptyConnectionId: undefined, ownsSession: false },
+      { connectionId: 'ssh-host', ptyConnectionId: 'other-ssh-host', ownsSession: false },
+      { connectionId: undefined, ptyConnectionId: undefined, ownsSession: true },
+      { connectionId: 'ssh-host', ptyConnectionId: 'ssh-host', ownsSession: true }
+    ].flatMap((entry) => [true, false].map((published) => ({ ...entry, published })))
+  )(
+    'keeps live alias adoption within the execution host: %j',
+    async ({ connectionId, ptyConnectionId, ownsSession, published }) => {
+      const repo = { id: 'repo', path: 'G:\\git\\example', connectionId }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture only needs the registered repository's execution host.
+      const runtime = new OrcaRuntimeService({
+        getRepo: () => repo,
+        getRepos: () => [repo]
+      } as never)
+      runtime.attachWindow(1)
+      const ptyId = ptyConnectionId
+        ? toAppSshPtyId(ptyConnectionId, 'pty-existing')
+        : 'pty-existing'
+      runtime.registerPty(ptyId, WORKTREE, ptyConnectionId ?? null, { tabId: 'tab', leafId: LEAF })
+      if (published) {
+        publishGraph(runtime, WORKTREE, [], ptyId)
+      } else {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: model a surviving renderer-owned PTY before its graph has arrived.
+        const ownership = runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
+        ownership.pairedRendererSessionOwnedPtyIds.add(ptyId)
+      }
+
+      if (ownsSession) {
+        const listed = await runtime.listMobileSessionTabs(`id:${ALIAS}`)
+        expect(listed.worktree).toBe(WORKTREE)
+        expect(listed.tabs).toContainEqual(expect.objectContaining({ ptyId }))
+      } else {
+        await expect(runtime.listMobileSessionTabs(`id:${ALIAS}`)).rejects.toThrow(
+          'worktree_execution_host_unresolved'
+        )
+        await expect(runtime.activateMobileSessionTab(`id:${ALIAS}`, TAB)).rejects.toThrow(
+          'worktree_execution_host_unresolved'
+        )
+      }
+    }
+  )
+
+  it('refuses alias adoption when repository rows disagree about the execution host', async () => {
+    const local = { id: 'repo', path: 'G:\\git\\example' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: duplicate repo rows model an ambiguous host without any external services.
+    const runtime = new OrcaRuntimeService({
+      getRepo: () => local,
+      getRepos: () => [local, { ...local, connectionId: 'ssh-host' }]
+    } as never)
+    runtime.attachWindow(1)
+    publishGraph(runtime)
+    await expect(runtime.listMobileSessionTabs(`id:${ALIAS}`)).rejects.toThrow(
+      'worktree_execution_host_unresolved'
+    )
+  })
+
+  it.each([WORKTREE, ALIAS])(
+    'activates %s when its renderer publishes during refresh',
+    async (requested) => {
+      const runtime = new OrcaRuntimeService()
+      runtime.attachWindow(1)
+      vi.spyOn(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: publish through the real graph API at the asynchronous inventory boundary.
+        runtime as unknown as { refreshMobileSessionPtyRecords: () => Promise<void> },
+        'refreshMobileSessionPtyRecords'
+      ).mockImplementation(async () => {
+        publishGraph(runtime)
+      })
+
+      const selected = await runtime.activateMobileSessionTab(`id:${requested}`, TAB, undefined, {
+        notifyClients: false
+      })
+      expect(selected.worktree).toBe(WORKTREE)
+      expect(selected.activeTabId).toBe(TAB)
+    }
+  )
+
   it.each([false, true])(
     'recovers a surviving renderer PTY without pinning an empty alias (discovered during refresh: %s)',
     async (duringRefresh) => {

@@ -140,6 +140,7 @@ describe('session tab unsubscribe RPC methods', () => {
   )
 })
 
+/** Separates the requested spelling from the host's reply to expose stream cleanup mismatches. */
 async function subscribeTwiceToOneWorktree(selector = 'id:wt-1', resolvedWorktree = 'wt-1') {
   const registry = new RuntimeSubscriptionRegistry()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Partial runtime backed by the real subscription registry; it supplies every member session.tabs subscribe/unsubscribe call.
