@@ -137,6 +137,24 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
 
+CREATE TABLE IF NOT EXISTS task_topic_policies (
+  task_id       TEXT PRIMARY KEY,
+  run_id        TEXT NOT NULL,
+  publishes     TEXT NOT NULL DEFAULT '[]',
+  subscribes    TEXT NOT NULL DEFAULT '[]',
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_topic_policies_run ON task_topic_policies(run_id);
+
+-- Separate additive trigger: existing installs already own trg_tasks_delete_additive_lifecycle,
+-- and CREATE TRIGGER IF NOT EXISTS cannot update that older body during upgrade.
+CREATE TRIGGER IF NOT EXISTS trg_tasks_delete_topic_policy
+AFTER DELETE ON tasks
+BEGIN
+  DELETE FROM task_topic_policies WHERE task_id = OLD.id;
+END;
+
 CREATE TABLE IF NOT EXISTS dispatch_contexts (
   id                  TEXT PRIMARY KEY,
   run_id              TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',

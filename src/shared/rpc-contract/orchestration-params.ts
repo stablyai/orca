@@ -85,6 +85,20 @@ export const TaskCreateParams = z.object({
   run: OptionalString
 })
 
+export const TopicSetParams = z.object({
+  task: requiredString('Missing --task'),
+  publishes: requiredString('Missing --publishes'),
+  subscribes: requiredString('Missing --subscribes'),
+  run: OptionalString,
+  callerTerminalHandle: OptionalString
+})
+
+export const TopicShowParams = z.object({
+  task: requiredString('Missing --task'),
+  run: OptionalString,
+  callerTerminalHandle: OptionalString
+})
+
 export const TaskListParams = z.object({
   status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
   ready: OptionalBoolean,

@@ -407,7 +407,9 @@ import {
   ResetParams,
   SessionAddressParams,
   TaskCreateParams,
-  TaskListParams
+  TaskListParams,
+  TopicSetParams,
+  TopicShowParams
 } from './orchestration-params'
 import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
 import {
@@ -1099,6 +1101,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.sessionAddress': SessionAddressParams,
   'orchestration.taskCreate': TaskCreateParams,
   'orchestration.taskList': TaskListParams,
+  'orchestration.topicSet': TopicSetParams,
+  'orchestration.topicShow': TopicShowParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,

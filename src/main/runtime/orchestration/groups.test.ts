@@ -36,6 +36,7 @@ describe('isGroupAddress', () => {
     expect(isGroupAddress('@grok')).toBe(true)
     expect(isGroupAddress('@cursor')).toBe(true)
     expect(isGroupAddress('@worktree:wt_1')).toBe(true)
+    expect(isGroupAddress('@topic:findings')).toBe(true)
   })
 
   it('returns false for regular handles', () => {
@@ -106,6 +107,16 @@ describe('resolveGroupAddress', () => {
       const terminals = [makeSummary('term_a', { worktreeId: 'wt_1' })]
       const result = resolveGroupAddress('@worktree:wt_99', 'term_a', terminals, noStatus)
       expect(result).toEqual([])
+    })
+  })
+
+  describe('@topic:<name>', () => {
+    it('returns the prefiltered topic candidates except the sender', () => {
+      const terminals = [makeSummary('term_a'), makeSummary('term_b'), makeSummary('term_c')]
+      expect(resolveGroupAddress('@topic:findings', 'term_a', terminals, noStatus)).toEqual([
+        'term_b',
+        'term_c'
+      ])
     })
   })
 
