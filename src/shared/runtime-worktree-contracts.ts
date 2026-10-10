@@ -1,5 +1,6 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
+import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -27,6 +28,10 @@ export type RuntimeWorktreeAgentRow = {
    *  while subagents hold the row `working`. Optional on the wire: old hosts never send it, and a
    *  reader without it falls back to `interrupted`. */
   mainAgent?: AgentMainAgentStatus
+  /** The richer human-wait signal `terminal show` reports, resolved for rows whose terminal
+   *  handle the ps sweep could look up. Null means evaluated with no wait; absent means not
+   *  evaluated — structured workers have no terminal to scan, so theirs stays absent. */
+  agentWait?: RuntimeTerminalInteractiveWait | null
   stateStartedAt: number
   updatedAt: number
   restoredUnconfirmed?: boolean

@@ -15,6 +15,7 @@ import {
 } from './runtime-worktree-ps-activity'
 import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-ps-unverifiable-terminals'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
+import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
@@ -125,12 +126,15 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
     attachRuntimeWorktreeAgentRows({
       summaries,
       workingTerminalEvidenceByWorktreeId,
-      rowSources: collectRuntimeWorktreeAgentSources({
-        mirroredWorktreeIdByTabId,
-        connectedPtyEvidence,
-        // Structured sessions are in here too: the host publishes them into the same store.
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
-      }),
+      rowSources: await attachRuntimeWorktreeAgentRowWaits(
+        collectRuntimeWorktreeAgentSources({
+          mirroredWorktreeIdByTabId,
+          connectedPtyEvidence,
+          // Structured sessions are in here too: the host publishes them into the same store.
+          hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
+        }),
+        (handle) => this.getTerminalInteractiveWait(handle)
+      ),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary
     })
