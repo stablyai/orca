@@ -220,6 +220,34 @@ describe('launch race parity: provisional size and hidden mark, both spawn lanes
     expect(mintedFor(worktreeId)).toEqual([])
   })
 
+  it('runtime lane rolls the pre-spawn hidden mark back on a throw after the provider spawn (runtime/spawn.ts:106)', async () => {
+    const worktreeId = 'repo-1::/tmp/race-hidden-rollback-runtime'
+    let markedWhileSpawning: string[] = []
+    installLaunchRaceProvider(async (options) => {
+      markedWhileSpawning = mintedFor(worktreeId)
+      return { id: String(options.sessionId) }
+    })
+    const runtime = createLaunchRaceRuntime({
+      registerPty: vi.fn(() => {
+        throw new Error('register failed')
+      })
+    })
+    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
+
+    await expect(
+      lanes.controller.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/race-hidden-rollback-runtime',
+        worktreeId,
+        initiallyHidden: true
+      })
+    ).rejects.toThrow('register failed')
+
+    expect(markedWhileSpawning).toHaveLength(1)
+    expect(mintedFor(worktreeId)).toEqual([])
+  })
+
   it('IPC lane moves the hidden mark to the id the provider returned (ipc/spawn-commit-persist.ts:119-125)', async () => {
     installLaunchRaceProvider(async () => ({ id: 'pty-renamed-ipc' }))
     const lanes = registerLaunchRaceLanes({
