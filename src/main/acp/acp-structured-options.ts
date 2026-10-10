@@ -12,7 +12,12 @@ import { isAcpStructuredOptionKey } from './acp-structured-agent-definitions'
 import { AcpRpcError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
-import type { AgentModelCatalogConfiguredChoice } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import {
+  unpickedSessionConfiguredChoice,
+  withLiveCatalogListing,
+  type AgentModelCatalogConfiguredChoice,
+  type AgentModelCatalogLiveListing
+} from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import {
   SessionConfigSelectGroupSchema,
   SessionConfigSelectOptionSchema,
@@ -171,21 +176,18 @@ export class AcpStructuredOptions {
    *  resolution: that scope's configured default. Null when that names no listed model; undefined
    *  when this session can't say. */
   configuredDefault(): AgentModelCatalogConfiguredChoice | null | undefined {
-    if (!this.resolvesConfig || this.picked.has('model')) {
-      return undefined
-    }
     const { models, current } = this.read()
-    if (!current.model) {
-      return undefined
-    }
-    if (!models.some((model) => model.id === current.model)) {
-      return null
-    }
-    return {
-      modelId: current.model,
-      // An effort this session picked is its own and says nothing of the config's.
-      ...(this.picked.has('effort') ? {} : { effort: current.effort ?? null })
-    }
+    return unpickedSessionConfiguredChoice({
+      resolvesConfig: this.resolvesConfig,
+      picked: this.picked,
+      models,
+      current
+    })
+  }
+
+  /** What this session's start hands the host once: its listing, with what it resolved. */
+  startListing(): AgentModelCatalogLiveListing {
+    return withLiveCatalogListing(this.read(), this.configuredDefault()).catalogListing
   }
 
   /** The values the agent reports now, as the record's options would name them. */

@@ -1,12 +1,11 @@
 /**
  * Rung C's host Node lookup (design D6): the same candidates as the npm path, but the
- * check asks only for Node >= 24 and the addons' N-API level, never npm.
+ * check asks only for Node >= 18 and the addons' N-API level, never npm.
  */
 import type { SshConnection } from './ssh-connection'
 import type { RemoteNodeResolutionOptions } from './ssh-remote-node-install-guidance'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import {
-  commandOptions,
   memoizeCandidateCheck,
   throwIfAborted,
   tryResolveViaKnownPaths,
@@ -52,11 +51,10 @@ async function probeHostNodeAddonFacts(
   options: ProbeOptions
 ): Promise<HostNodeAddonFacts | null> {
   try {
-    const output = await execCommand(
-      conn,
-      buildPosixNodeToolchainProbe(nodePath, 'addon-only'),
-      commandOptions({ wrapCommand: true }, options)
-    )
+    const output = await execCommand(conn, buildPosixNodeToolchainProbe(nodePath, 'addon-only'), {
+      wrapCommand: true,
+      signal: options?.signal
+    })
     return parseHostNodeAddonFacts(output)
   } catch (err) {
     if (options.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {

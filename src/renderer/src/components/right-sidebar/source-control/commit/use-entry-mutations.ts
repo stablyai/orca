@@ -13,7 +13,6 @@ import {
   unstageRuntimeGitPath,
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
-import { useAppStore } from '@/store'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
@@ -98,8 +97,7 @@ export function useSourceControlEntryMutations({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
-      const runtimeEnvironmentId =
-        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      const runtimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
       // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
       await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
@@ -133,8 +131,7 @@ export function useSourceControlEntryMutations({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
-      const runtimeEnvironmentId =
-        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+      const runtimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
       // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
       await Promise.all(
         filePaths.map((relativePath) =>

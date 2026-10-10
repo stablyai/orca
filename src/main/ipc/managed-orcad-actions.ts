@@ -1,6 +1,7 @@
 /** The managed-server actions behind both the Managed servers settings and runtime RPC. */
 import {
   cancelManagedOrcadStop,
+  forgetManagedOrcadEnvironment,
   getManagedOrcadRuntimeStatus,
   recoverManagedOrcadEnvironment,
   rollbackManagedOrcadEnvironment,
@@ -27,6 +28,16 @@ export function createManagedOrcadActions(
   options: ManagedOrcadActionOptions
 ): ManagedServerActions {
   const userDataPath = options.getUserDataPath
+  const unlinkPolicy = {
+    isActiveEnvironment: (environmentId: string) =>
+      options.getActiveEnvironmentId() === environmentId,
+    retireLocalState: (environmentId: string) =>
+      retireRemovedRuntimeEnvironment(
+        environmentId,
+        options.invalidateTransport,
+        options.forgetHostSession
+      )
+  }
   return {
     status: (selector) => getManagedOrcadRuntimeStatus(userDataPath(), selector),
     update: async (selector, force) => {
@@ -61,25 +72,19 @@ export function createManagedOrcadActions(
       return result
     },
     stop: async (selector) => {
-      const result = await stopManagedOrcadEnvironment(
-        userDataPath(),
-        { selector },
-        {
-          isActiveEnvironment: (environmentId) =>
-            options.getActiveEnvironmentId() === environmentId,
-          retireLocalState: (environmentId) =>
-            retireRemovedRuntimeEnvironment(
-              environmentId,
-              options.invalidateTransport,
-              options.forgetHostSession
-            )
-        }
-      )
+      const result = await stopManagedOrcadEnvironment(userDataPath(), { selector }, unlinkPolicy)
       if (result.outcome === 'unlinked') {
         options.clearHostServerStatus(result.sshTargetId)
       }
       return result
     },
-    cancelStop: (selector) => cancelManagedOrcadStop(userDataPath(), { selector })
+    cancelStop: (selector) => cancelManagedOrcadStop(userDataPath(), { selector }),
+    forget: async (selector) => {
+      const result = await forgetManagedOrcadEnvironment(userDataPath(), { selector }, unlinkPolicy)
+      if (result.outcome === 'forgotten') {
+        options.clearHostServerStatus(result.sshTargetId)
+      }
+      return result
+    }
   }
 }

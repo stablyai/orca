@@ -66,8 +66,7 @@ function createSupport(settings: ReturnType<typeof rigSettings>) {
     runtime: {
       requireStore: () => ({ getSettings: () => settings }),
       resolveRuntimeFileTarget: async () => ({ worktree: { path: join(root, 'proj') } })
-    },
-    getSettings: () => ({ claudeManagedAccounts: [], activeClaudeManagedAccountId: null })
+    }
   })
 }
 

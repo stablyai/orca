@@ -32,24 +32,19 @@ export type PreviousRelayCensusInput = {
 
 const MAX_CENSUS_ENDPOINTS = 32
 /**
- * `complete` only when every older endpoint was censused. `unverifiable` otherwise: an unknown host
- * platform, a failed run, missing inputs, or too many endpoints. `bridgeable` endpoints are POSIX
- * sockets an older relay's own bridge can reach; Windows pipes are held, never routed.
+ * `complete` when every older endpoint was censused; `unverifiable` for an unknown host platform,
+ * a failed run, missing inputs, or too many endpoints; `none` when no census started for this
+ * target. `bridgeable` endpoints are POSIX sockets an older relay's own bridge can reach; Windows
+ * pipes are held, never routed.
  */
 type PreviousRelayCensus = {
   endpoints: string[]
   nodePath?: string
-  complete: boolean
-  unverifiable: boolean
+  status: 'none' | 'complete' | 'unverifiable'
   bridgeable: boolean
 }
 const censusByTarget = new Map<string, Promise<PreviousRelayCensus>>()
-const NO_CENSUS: PreviousRelayCensus = {
-  endpoints: [],
-  complete: false,
-  unverifiable: false,
-  bridgeable: false
-}
+const NO_CENSUS: PreviousRelayCensus = { endpoints: [], status: 'none', bridgeable: false }
 
 /** An older relay that holds nothing, or is gone, cannot be running this target's terminals. */
 export function mayHoldTerminals(incumbent: RelayEndpointIncumbent): boolean {
@@ -107,16 +102,12 @@ export function startPreviousRelayCensus(
   input: PreviousRelayCensusInput
 ): Promise<PreviousRelayCensus> {
   const census = runPreviousRelayCensus(conn, targetId, input).then(
-    (ran): PreviousRelayCensus => {
-      const unverifiable = !ran || ran.truncated
-      return {
-        endpoints: ran?.endpoints ?? [],
-        nodePath: input.nodePath,
-        complete: !unverifiable,
-        unverifiable,
-        bridgeable: Boolean(input.hostPlatform && !isWindowsRemoteHost(input.hostPlatform))
-      }
-    },
+    (ran): PreviousRelayCensus => ({
+      endpoints: ran?.endpoints ?? [],
+      nodePath: input.nodePath,
+      status: !ran || ran.truncated ? 'unverifiable' : 'complete',
+      bridgeable: Boolean(input.hostPlatform && !isWindowsRemoteHost(input.hostPlatform))
+    }),
     (error: unknown): PreviousRelayCensus => {
       // Not "no older relay": a census that could not run leaves its terminals unverifiable.
       console.warn(
@@ -124,7 +115,7 @@ export function startPreviousRelayCensus(
           error instanceof Error ? error.message : String(error)
         }`
       )
-      return { endpoints: [], complete: false, unverifiable: true, bridgeable: false }
+      return { endpoints: [], status: 'unverifiable', bridgeable: false }
     }
   )
   censusByTarget.set(targetId, census)
@@ -138,7 +129,7 @@ export function previousRelayCensus(targetId: string): Promise<PreviousRelayCens
 
 export async function previousRelayMayHoldTerminals(targetId: string): Promise<boolean> {
   const census = await previousRelayCensus(targetId)
-  return census.endpoints.length > 0 || census.unverifiable
+  return census.endpoints.length > 0 || census.status === 'unverifiable'
 }
 
 /** A session's teardown passes the census it started, so a newer deploy's census survives it. */

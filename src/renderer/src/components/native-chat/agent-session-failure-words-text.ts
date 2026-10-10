@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/agent-session-failure-copy'
 import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
 import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
+import { PROVIDER_EXIT_PIECES } from './agent-session-provider-exit-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
@@ -116,6 +117,16 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.historyInOtherAccount',
         COPY.historyInOtherAccount
       ),
+    claudeAccountFolderMissing: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountFolderMissing',
+        COPY.claudeAccountFolderMissing
+      ),
+    claudeAccountSetupFailed: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountSetupFailed',
+        COPY.claudeAccountSetupFailed
+      ),
     agentCommandNotRunnable: (values) =>
       translate(
         'components.native-chat.failureWords.agentCommandNotRunnable',
@@ -138,24 +149,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.chooseClaudeAccountThenSend',
         COPY.chooseClaudeAccountThenSend
       ),
-    providerExitedRow: (values) =>
-      translate(
-        'components.native-chat.failureWords.providerExitedRow',
-        COPY.providerExitedRow,
-        values
-      ),
-    providerExitedRejection: (values) =>
-      translate(
-        'components.native-chat.failureWords.providerExitedRejection',
-        COPY.providerExitedRejection,
-        values
-      ),
-    providerExitedAnswer: (values) =>
-      translate(
-        'components.native-chat.failureWords.providerExitedAnswer',
-        COPY.providerExitedAnswer,
-        values
-      ),
+    ...PROVIDER_EXIT_PIECES,
     providerRejected: () =>
       translate('components.native-chat.failureWords.providerRejected', COPY.providerRejected),
     providerRejectedQuoted: (values) =>

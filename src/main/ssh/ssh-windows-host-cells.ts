@@ -72,10 +72,6 @@ export function isWindowsOrcadCellId(id: string): id is WindowsOrcadCellId {
   return WINDOWS_ORCAD_CELL_IDS.some((candidate) => candidate === id)
 }
 
-export function windowsOrcadCellShell(id: WindowsOrcadCellId): WindowsSshDefaultShell {
-  return id === 'orcad-cmd' ? 'cmd' : 'powershell'
-}
-
 /** The app connects a relay-era host and converts it to managed orcad (tests/e2e). */
 export const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
 

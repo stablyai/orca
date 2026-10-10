@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
-import type { AcpDialect } from './acp-dialect'
+import type { AcpCompactionReply, AcpDialect } from './acp-dialect'
 
 // OMP sends a tool's result as `rawOutput: {content: [{type: 'text', text}], details}`, with a
 // command's non-zero exit at `details.exitCode`, and repeats the text as content behind a
@@ -94,8 +94,24 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
+// OMP ends a `/compact` it could not do as a normal turn whose reply says `Compaction failed`;
+// "Nothing to compact" and "Already compacted" are its no-ops (its RPC errors say the same).
+const COMPACTION_FAILED = /\bcompaction failed\b/i
+const COMPACTION_NOOP = /\b(?:nothing to compact|already compacted)\b/i
+
+function compactionReply(text: string): AcpCompactionReply | undefined {
+  const reply = text.trim()
+  if (!COMPACTION_FAILED.test(reply)) {
+    return undefined
+  }
+  return COMPACTION_NOOP.test(reply)
+    ? { outcome: 'skipped', detail: reply.replace(/^compaction failed:\s*/i, '') }
+    : { outcome: 'failed', detail: reply }
+}
+
 export const OMP_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
+  compactionReply,
   authenticationRequired: (error) => {
     const details = promptErrorDataSchema.safeParse(error.data).data?.details
     return (

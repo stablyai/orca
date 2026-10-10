@@ -187,13 +187,3 @@ export function isRuntimeDirectoryEntry(entry: {
   }
   return false
 }
-
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i += 1) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
-}

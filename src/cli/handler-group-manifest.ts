@@ -225,7 +225,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'environment rollback',
       'environment recover',
       'environment stop',
-      'environment cancel-stop'
+      'environment cancel-stop',
+      'environment forget'
     ],
     load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ServeOrcadLaunch from './serve-orcad-launch'
 
 const { spawnMock, resolveLocalServeRuntimeMock, serveWithOrcadMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -9,7 +10,8 @@ const { spawnMock, resolveLocalServeRuntimeMock, serveWithOrcadMock } = vi.hoist
 }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
-vi.mock('./serve-orcad-launch', () => ({
+vi.mock('./serve-orcad-launch', async (importOriginal) => ({
+  ...(await importOriginal<typeof ServeOrcadLaunch>()),
   resolveLocalServeRuntime: resolveLocalServeRuntimeMock,
   serveWithOrcad: serveWithOrcadMock
 }))

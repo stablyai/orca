@@ -144,11 +144,7 @@ export function hostStub(): StructuredAgentSessionHost {
           items: [],
           removedItemIds: [],
           submissions: [],
-          window: {
-            oldest: null,
-            newest: null,
-            nextCursor: { epoch: 'epoch-a', sequence: 0 }
-          },
+          window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-a', sequence: 0 } },
           liveCursor: { epoch: 'epoch-a', sequence: 0 },
           hasOlder: false,
           hasNewer: false
@@ -213,7 +209,8 @@ export function hostStub(): StructuredAgentSessionHost {
     unsubscribe: vi.fn()
   })
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger })
+  const logger = recordingStructuredAgentSessionLogger().logger
+  Reflect.set(hostCalls, 'deps', { logger, store: { getOperationRow: vi.fn(() => null) } })
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 

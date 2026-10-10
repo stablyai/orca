@@ -1,7 +1,6 @@
 import type { Store } from '../../../persistence'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { getRelayPtyId } from '../provider/registry'
+import { ptyIncarnationById } from '../provider/ownership-state'
+import { getPtySshConnectionId, getRelayPtyId } from '../provider/registry'
 import { isEpochScopedRelayPtyId } from '../../../../shared/ssh-pending-pty-kill'
 
 export type UndeliveredSshPtyKill = {
@@ -64,6 +63,6 @@ export function recordUnconfirmedExplicitSshStop(args: {
 }): boolean {
   return recordUndeliveredSshPtyKill({
     ...args,
-    connectionId: ptyOwnership.get(args.ptyId) ?? parseAppSshPtyId(args.ptyId)?.connectionId
+    connectionId: getPtySshConnectionId(args.ptyId)
   })
 }

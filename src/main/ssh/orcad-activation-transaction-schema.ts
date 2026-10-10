@@ -42,6 +42,8 @@ export const OrcadActivationTransactionSchema = z
       operation: z.literal('activate'),
       phase: z.enum(['prepared', 'incumbent-stopped', 'snapshot-captured', 'candidate-ready']),
       candidateVersion: RemoteVersionSchema,
+      /** Absent in journals that predate it; null when the activating run had no app version. */
+      candidateAppVersion: z.string().min(1).nullable().optional(),
       recordAfter: z.unknown().nullable(),
       snapshot: SnapshotVerdictSchema
     }),
@@ -67,16 +69,33 @@ export const OrcadActivationTransactionSchema = z
       activeVersion: RemoteVersionSchema,
       recordAfter: z.unknown(),
       /** The instance-bound stop request; durable before it can reach the host. */
-      request: OrcadManagedStopRequestSchema.nullable()
+      request: OrcadManagedStopRequestSchema.nullable(),
+      /** Where current builds file a dispatched stop; see orcadDecommissionJournal. */
+      dispatched: z
+        .object({
+          phase: z.enum(['stop-dispatched', 'process-exited']),
+          request: OrcadManagedStopRequestSchema
+        })
+        .optional()
     })
   ])
   .superRefine((transaction, context) => {
     if (transaction.operation === 'decommission') {
       if ((transaction.phase === 'prepared') !== (transaction.request === null)) {
-        context.addIssue({ code: 'custom', message: 'Stop request is inconsistent with phase' })
+        context.addIssue({
+          code: 'custom',
+          message: 'Stop request is inconsistent with phase'
+        })
       }
-      if (transaction.request && transaction.request.transactionId !== transaction.transactionId) {
-        context.addIssue({ code: 'custom', message: 'Stop request names another transaction' })
+      if (transaction.dispatched && transaction.phase !== 'prepared') {
+        context.addIssue({ code: 'custom', message: 'Dispatched stop is filed twice' })
+      }
+      const request = transaction.dispatched?.request ?? transaction.request
+      if (request && request.transactionId !== transaction.transactionId) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Stop request names another transaction'
+        })
       }
       return
     }
@@ -84,15 +103,24 @@ export const OrcadActivationTransactionSchema = z
       transaction.phase === 'prepared' || transaction.phase === 'incumbent-stopped'
     const verdict = transaction.operation === 'activate' ? transaction.snapshot : transaction.rescue
     if (beforeVerdict && verdict.state !== 'pending') {
-      context.addIssue({ code: 'custom', message: 'Snapshot state advanced before its phase' })
+      context.addIssue({
+        code: 'custom',
+        message: 'Snapshot state advanced before its phase'
+      })
     }
     if (!beforeVerdict && verdict.state === 'pending') {
-      context.addIssue({ code: 'custom', message: 'Snapshot phase has no durable verdict' })
+      context.addIssue({
+        code: 'custom',
+        message: 'Snapshot phase has no durable verdict'
+      })
     }
     if (
       transaction.operation === 'activate' &&
       (transaction.phase === 'candidate-ready') !== (transaction.recordAfter !== null)
     ) {
-      context.addIssue({ code: 'custom', message: 'Committed record is inconsistent with phase' })
+      context.addIssue({
+        code: 'custom',
+        message: 'Committed record is inconsistent with phase'
+      })
     }
   })

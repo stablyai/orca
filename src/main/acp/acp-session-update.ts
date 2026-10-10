@@ -11,6 +11,16 @@ import type { AcpToolTimeline } from './acp-tool-timeline'
 import type { SessionNotification } from './generated/acp-protocol.generated'
 import { acpNamedTextKey } from './acp-turn-messages'
 
+/** Updates that open the turn they belong to. */
+export const ACP_SUBSTANTIVE_UPDATES = [
+  'user_message_chunk',
+  'agent_message_chunk',
+  'agent_thought_chunk',
+  'tool_call',
+  'tool_call_update',
+  'plan'
+]
+
 export function acpSessionUpdate(
   notification: SessionNotification,
   turn: string | undefined,

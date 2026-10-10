@@ -1,6 +1,11 @@
 // The pieces every failure sentence is made of, in English. The host fills them in as they are;
 // desktop translates each piece whole with this as its fallback, so the two never differ.
 
+import {
+  CLAUDE_PROFILE_MISSING_MESSAGE,
+  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
+} from './claude-profile-routing'
+
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
 export const QUIT_TERMINAL_AGENT = 'Quit that agent to continue the chat here.'
@@ -59,6 +64,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     'The folder this chat ran in no longer exists. Restore it to continue this chat.',
   historyInOtherAccount:
     "This chat's history is in another Claude account. Switch back to that account to continue it.",
+  claudeAccountFolderMissing: CLAUDE_PROFILE_MISSING_MESSAGE,
+  claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',

@@ -13,6 +13,11 @@ import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invali
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
+import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import {
+  shouldWatchLayoutRoundTrip,
+  watchLayoutRoundTrip
+} from './workspace-layout-round-trip-watch'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 
 class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
@@ -23,6 +28,9 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
     // module registers the generation bump at load; a headless host never loads it.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    if (this.store && shouldWatchLayoutRoundTrip()) {
+      watchLayoutRoundTrip(this.store)
+    }
   }
 
   /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
@@ -68,6 +76,18 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
   /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
   hasLiveTerminalForPaneKey(paneKey: string): boolean {
     return this.getPtyRecordForPaneKey(paneKey)?.connected === true
+  }
+
+  private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
+    store: () => this.store,
+    homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key)
+  })
+
+  /** The read-only layout stream (`layout.subscribe`, not advertised yet). */
+  subscribeWorkspaceLayouts(
+    listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
+  ): ReturnType<WorkspaceLayoutStream['subscribe']> {
+    return this.workspaceLayoutStream.subscribe(listener)
   }
 
   /** The launch record when it is already open, for a reader that must not wait for it. */

@@ -1,6 +1,7 @@
 /** Executable entry for `orcad`. See `./orcad-entry.ts`. */
 import process from 'node:process'
-import { main, resolveOrcadExitCode } from './orcad-entry'
+import { main } from './orcad-entry'
+import { resolveOrcadExitCode } from './orcad-exit-code'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { runOrcadNativePreflight } from './orcad-native-preflight'
 import {
@@ -22,6 +23,7 @@ import {
   WINDOWS_BREAKAWAY_LAUNCH_FLAG
 } from '../../shared/windows-breakaway-launch'
 import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-breakaway-launcher'
+import { parseArgs } from './orcad-command-arguments'
 
 // Why exit before the preflight: reaching this line means the whole module graph resolved
 // under plain Node, which is all the build guard needs to prove. Probing natives or
@@ -31,11 +33,6 @@ if (process.argv.includes('--orcad-smoke-load-check')) {
   process.exit(0)
 }
 
-// Why here and not inside startOrcad: this must run before anything requires node-pty,
-// and `orcad-entry` reaches it through `await import('../ipc/pty')`. Static imports are
-// evaluated before this statement, so the guarantee is that no module in the graph
-// requires node-pty at import time — which the bundle's lazy `require("node-pty")` in
-// local-pty-provider satisfies. See ./node-pty-precondition.ts for why a child process.
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
   // Why a resolved code and not a bare 1: a data-root or bind-address refusal is a
@@ -60,6 +57,11 @@ if (process.argv[2] === WINDOWS_BREAKAWAY_LAUNCH_FLAG) {
 
 function startOrcadProcess(): void {
   try {
+    const argv = process.argv.slice(2)
+    if ((argv.includes('--help') || argv.includes('-h')) && parseArgs(argv).help) {
+      void main(argv).catch(failStartup)
+      return
+    }
     assertOrcadServerRuntime()
     const flag = process.argv[2]
     if (flag === ORCAD_NATIVE_PREFLIGHT_FLAG && process.argv.length === 3) {
@@ -83,6 +85,8 @@ function startOrcadProcess(): void {
       reserveServeStdoutForReadiness()
       void preflightBundledOrcadStartup()
         .then(() => {
+          // Why: must run before anything requires node-pty; the bundle defers require("node-pty")
+          // so no import does. See ./node-pty-precondition.ts.
           runOrcadNativePreflight()
           return main()
         })

@@ -53,7 +53,7 @@ function resolve(
   )
   const logger = { warn: vi.fn(), error: vi.fn() }
   const launch = createAcpStructuredLaunchResolver(spec, {
-    store: { getRecord: () => record(spec) },
+    store: { getRecord: () => record(spec), pinLaunchDirectory: vi.fn() },
     readJournal: () => null,
     resolveWorkspacePath: async () => '/repo/worktree',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),

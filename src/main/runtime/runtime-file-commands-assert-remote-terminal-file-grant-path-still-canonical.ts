@@ -1,5 +1,4 @@
 // @ts-nocheck -- mechanically split class members.
-import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem-symlink-directory-entries'
 import { RuntimeFileCommandsWithWriteTerminalArtifactFile } from './runtime-file-commands-write-terminal-artifact-file'
 import type { TerminalFileGrant } from './runtime-file-commands-mobile-file-list-limit'
 import {
@@ -16,7 +15,7 @@ import {
   runtimeFileRouteForTarget,
   runtimeFileSshTargetId
 } from './runtime-file-command-target'
-import { readdir, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -63,23 +62,10 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     options: { followSymlinks?: boolean } = {}
   ): Promise<DirEntry[]> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = requireRuntimeFileProvider(target)
-    if (provider) {
-      // Why: re-sort locally — the remote relay may be an older build with
-      // lexicographic ordering.
-      return sortDirEntries(await provider.readDir(target.path, options))
-    }
-
-    const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    const store = this.host.requireStore()
-    const mapped = await classifyFilesystemDirectoryEntries(
-      target.path,
-      entries,
-      options.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
-      (path) => resolveAuthorizedPath(path, store)
+    // Why: re-sort here — the remote relay may be an older build with lexicographic ordering.
+    return sortDirEntries(
+      await requireRuntimeFileProvider(target, this.host).readDir(target.path, options)
     )
-    return sortDirEntries(mapped)
   }
 
   async watchFileExplorer(

@@ -20,7 +20,7 @@ import {
 } from './cli-command-filesystem-transaction'
 import { DEV_LAUNCHER_DIR, LEGACY_LINUX_COMMAND_NAME } from './cli-install-constants'
 import { buildWindowsForwarder } from './cli-dev-launcher'
-import { isPermissionError } from './cli-install-errors'
+import { isPermissionError } from '../win32-utils'
 import { isPathInsideOrEqual } from './cli-install-path-format'
 
 export class CliCommandInstallation extends CliCommandInspection {
