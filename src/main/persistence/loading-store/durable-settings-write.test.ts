@@ -94,3 +94,39 @@ it('removes previously absent optional keys after a failed preference payload wr
   expect(Object.hasOwn(store.getSettings(), 'editorWordWrap')).toBe(false)
   expect(store.getSettings().alwaysForceDeleteWorktrees).toBe(previous)
 })
+
+it('publishes both click preference fields after a durable Actions selection', async () => {
+  const { store, readState } = await createWorkerMaintenanceFixture()
+  await store.updateSettingsAndFlush({ terminalLinkClickBehavior: 'none' })
+  const onChanged = vi.fn()
+  store.onSettingsChanged(onChanged)
+
+  await store.updateSettingsAndFlush(
+    { terminalLinkClickBehavior: 'actions' },
+    { notifyListeners: true, originWebContentsId: 7 }
+  )
+
+  const expected = {
+    terminalLinkClickBehavior: 'actions',
+    terminalLinkActionPopoverEnabled: true
+  }
+  expect(readState().settings).toMatchObject(expected)
+  expect(onChanged).toHaveBeenCalledWith(expected, expect.objectContaining(expected), 7)
+})
+
+it('rolls back both click preference fields when the durable write fails', async () => {
+  const { store, authority, readState } = await createWorkerMaintenanceFixture()
+  await store.updateSettingsAndFlush({ terminalLinkClickBehavior: 'none' })
+  vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(new Error('Disk full'))
+
+  await expect(
+    store.updateSettingsAndFlush({ terminalLinkClickBehavior: 'actions' })
+  ).rejects.toThrow('Disk full')
+
+  const expected = {
+    terminalLinkClickBehavior: 'none',
+    terminalLinkActionPopoverEnabled: false
+  }
+  expect(store.getSettings()).toMatchObject(expected)
+  expect(readState().settings).toMatchObject(expected)
+})

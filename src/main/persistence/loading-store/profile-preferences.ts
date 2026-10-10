@@ -40,13 +40,14 @@ const profilePreferencesContext = Symbol('ProfilePreferences')
 type ProfilePreferencesContext = {
   runtime: ProfilePreferencesRuntime
   scheduling: WriteSchedulingOperations
+  settingsWriteOwners: Map<string, symbol>
 }
 
 export class ProfilePreferences {
   readonly [profilePreferencesContext]: ProfilePreferencesContext
 
   constructor(runtime: ProfilePreferencesRuntime, scheduling: WriteSchedulingOperations) {
-    this[profilePreferencesContext] = { runtime, scheduling }
+    this[profilePreferencesContext] = { runtime, scheduling, settingsWriteOwners: new Map() }
   }
 
   getSettings(): GlobalSettings {
@@ -84,44 +85,76 @@ export class ProfilePreferences {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): Promise<GlobalSettings> {
-    const { runtime } = this[profilePreferencesContext]
+    const { runtime, settingsWriteOwners } = this[profilePreferencesContext]
     let changedUpdates: Partial<GlobalSettings> = {}
-    await runtime.runDurableMutation(() => {
-      const previous = runtime.state.settings
-      const next = this.updateSettings(updates)
-      const previousEntries = new Map(Object.entries(previous))
-      const updateKeys = new Set(Object.keys(updates))
-      changedUpdates = Object.fromEntries(
-        Object.entries(next).filter(
-          ([key, value]) => updateKeys.has(key) && !Object.is(previousEntries.get(key), value)
-        )
-      )
-      return {
-        value: undefined,
-        rollback: () => {
-          const currentEntries = new Map(Object.entries(runtime.state.settings))
-          const nextEntries = new Map(Object.entries(next))
-          const restoredUpdates = Object.fromEntries(
-            Object.entries(previous).filter(
-              ([key]) =>
-                updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
-            )
-          )
-          const restoredSettings = { ...runtime.state.settings, ...restoredUpdates }
-          for (const key of updateKeys) {
-            if (
-              !previousEntries.has(key) &&
-              Object.is(currentEntries.get(key), nextEntries.get(key))
-            ) {
-              Reflect.deleteProperty(restoredSettings, key)
-            }
-          }
-          runtime.state.settings = restoredSettings
+    let rollbackKeys: readonly string[] | undefined
+    let writeOwners = new Map<string, symbol | undefined>()
+    await runtime
+      .runDurableMutation(() => {
+        const previous = runtime.state.settings
+        const next = this.updateSettings(updates)
+        const previousEntries = new Map(Object.entries(previous))
+        const updateKeys = new Set(Object.keys(updates))
+        if (previous.terminalLinkActionPopoverEnabled !== next.terminalLinkActionPopoverEnabled) {
+          // Keep the legacy switch inside the click choice's durability boundary.
+          updateKeys.add('terminalLinkActionPopoverEnabled')
         }
+        changedUpdates = Object.fromEntries(
+          Object.entries(next).filter(
+            ([key, value]) => updateKeys.has(key) && !Object.is(previousEntries.get(key), value)
+          )
+        )
+        writeOwners = new Map([...updateKeys].map((key) => [key, settingsWriteOwners.get(key)]))
+        return {
+          value: undefined,
+          rollback: () => {
+            // Same-value writes still own their choice; failed predecessors cannot restore over them.
+            const stillOwned = (key: string): boolean =>
+              settingsWriteOwners.get(key) === writeOwners.get(key)
+            const restoredUpdates = Object.fromEntries(
+              Object.entries(previous).filter(([key]) => updateKeys.has(key) && stillOwned(key))
+            )
+            const restoredSettings = { ...runtime.state.settings, ...restoredUpdates }
+            for (const key of updateKeys) {
+              if (!previousEntries.has(key) && stillOwned(key)) {
+                Reflect.deleteProperty(restoredSettings, key)
+              }
+            }
+            if (options.notifyListeners && runtime.state.settings !== next) {
+              rollbackKeys = [...updateKeys]
+            }
+            runtime.state.settings = restoredSettings
+          }
+        }
+      })
+      .catch((error) => {
+        if (rollbackKeys) {
+          try {
+            const currentEntries = new Map(Object.entries(runtime.state.settings))
+            notifySettingsChanged(
+              this,
+              Object.fromEntries(rollbackKeys.map((key) => [key, currentEntries.get(key)]))
+            )
+          } catch (notificationError) {
+            console.warn('[persistence] Failed to publish restored settings:', notificationError)
+          }
+        }
+        throw error
+      })
+    if (options.notifyListeners) {
+      const currentEntries = new Map(Object.entries(runtime.state.settings))
+      const currentUpdates = Object.fromEntries(
+        Object.entries(changedUpdates)
+          .filter(
+            ([key, value]) =>
+              settingsWriteOwners.get(key) === writeOwners.get(key) ||
+              Object.is(currentEntries.get(key), value)
+          )
+          .map(([key]) => [key, currentEntries.get(key)])
+      )
+      if (Object.keys(currentUpdates).length > 0) {
+        notifySettingsChanged(this, currentUpdates, options.originWebContentsId)
       }
-    })
-    if (options.notifyListeners && Object.keys(changedUpdates).length > 0) {
-      notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
     }
     return this.getSettings()
   }
@@ -221,6 +254,12 @@ export function getSettingsMutationOperations(
     removeRetainedBlob: (slot) =>
       owner[profilePreferencesContext].runtime.protectedSecrets.removeRetainedBlob(slot),
     scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['settings']),
+    recordSettingsWrite: (keys) => {
+      const writeOwner = Symbol('settings write')
+      for (const key of keys) {
+        owner[profilePreferencesContext].settingsWriteOwners.set(key, writeOwner)
+      }
+    },
     notifySettingsChanged: (updates, originWebContentsId) =>
       notifySettingsChanged(owner, updates, originWebContentsId)
   }

@@ -49,6 +49,7 @@ export type SettingsMutationOperations = {
     slot: Parameters<ProtectedSecretPersistence['removeRetainedBlob']>[0]
   ) => void
   scheduleSave: () => void
+  recordSettingsWrite?: (keys: readonly string[]) => void
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
 }
 
@@ -58,6 +59,11 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = stripRetiredGlobalSettings(updates)
+  const linkBehavior = updates.terminalLinkClickBehavior
+  if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
+    // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
+    sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
+  }
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
   }
@@ -263,6 +269,7 @@ export function updateSettings(
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
   }
+  operations.recordSettingsWrite?.(Object.keys(sanitizedUpdates))
   if (
     !Object.is(
       previousSettings.localWindowsRuntimeDefault,
