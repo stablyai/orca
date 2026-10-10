@@ -41,6 +41,14 @@
   transition: none !important;
 }
 
+/* Why: a stationary pointer matches :hover on every explorer row that slides
+   under it. transition-colors turns that into a strobe during wheel scroll and
+   middle-button autoscroll (#22692). Hit-testing returns once scrolling idles. */
+[data-file-explorer-scrolling] [data-file-explorer-row] {
+  pointer-events: none;
+  transition: none;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

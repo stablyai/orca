@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DirCache } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import { bindFileExplorerScrollHover } from './file-explorer-scroll-hover'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
 
@@ -129,6 +130,15 @@ export function useFileExplorerRowScrolling({
       virtualizer.scrollToIndex(inlineInputIndex, { align: 'auto' })
     }
   }, [inlineInputIndex, virtualizer])
+
+  // Why: the viewport ref is filled by the child ScrollArea before this effect.
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) {
+      return
+    }
+    return bindFileExplorerScrollHover(container)
+  }, [scrollRef])
 
   const scrollToIndex = useCallback(
     (index: number) => {
