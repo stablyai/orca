@@ -246,6 +246,15 @@ test('captures real clipboard bytes and adds multiple images without submitting 
   expect(paneBounds.width).toBeLessThan(400)
   expect(trayBounds.x).toBeGreaterThanOrEqual(paneBounds.x)
   expect(trayBounds.x + trayBounds.width).toBeLessThanOrEqual(paneBounds.x + paneBounds.width)
+  for (const label of ['Add to Codex', 'Cancel']) {
+    const bounds = await tray.getByRole('button', { name: label, exact: true }).boundingBox()
+    if (!bounds) {
+      throw new Error(`Missing ${label} bounds`)
+    }
+    expect(bounds.x).toBeGreaterThanOrEqual(trayBounds.x)
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(trayBounds.x + trayBounds.width)
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(paneBounds.y + paneBounds.height)
+  }
   await tray.screenshot({ path: testInfo.outputPath('real-clipboard-narrow-tray.png') })
   await tray.getByRole('button', { name: 'Remove attachment' }).first().click()
   await expect(tray.locator('img')).toHaveCount(1)

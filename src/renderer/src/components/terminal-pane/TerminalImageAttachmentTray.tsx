@@ -67,7 +67,7 @@ export function TerminalImageAttachmentTray({ container }: { container: HTMLElem
   return (
     <div
       data-terminal-image-attachments
-      className="absolute inset-x-2 top-10 z-20 max-w-sm rounded-lg border border-border bg-background p-3 text-foreground shadow-xs"
+      className="scrollbar-sleek absolute inset-x-2 top-10 z-20 max-h-[calc(100%-3rem)] max-w-sm overflow-y-auto rounded-lg border border-border bg-background p-3 text-foreground shadow-xs"
       onKeyDown={(event) => event.stopPropagation()}
     >
       <p className="mb-2 text-xs text-muted-foreground">
@@ -101,11 +101,22 @@ export function TerminalImageAttachmentTray({ container }: { container: HTMLElem
           )}
         </p>
       )}
-      <div className="flex gap-2">
-        <Button size="sm" disabled={busy} onClick={() => void attach()}>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          className="h-auto min-h-8 max-w-full whitespace-normal"
+          disabled={busy}
+          onClick={() => void attach()}
+        >
           {translate('terminal.imageAttachments.attach', 'Add to Codex')}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={cancelAll}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-auto min-h-8 max-w-full whitespace-normal"
+          disabled={busy}
+          onClick={cancelAll}
+        >
           {translate('terminal.imageAttachments.cancel', 'Cancel')}
         </Button>
       </div>
