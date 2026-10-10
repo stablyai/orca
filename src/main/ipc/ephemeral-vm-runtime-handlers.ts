@@ -31,7 +31,13 @@ import {
 } from '../ephemeral-vm-runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
+import {
+  ensureRemoteRuntimeSharedControlConnection,
+  getRemoteRuntimeSharedControlDiagnostics,
+  reconnectRemoteRuntimeSharedControlConnection
+} from './runtime-environment-request-connections'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm-runtime-attachment'
+import { ensureEphemeralVmRuntimeControlConnection } from '../ephemeral-vm-runtime-wake'
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -203,6 +209,30 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         return null
       }
       if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+        // Why: a runtime that never left 'running' skips the resume recipe,
+        // but the wake must still hold a usable control connection — the
+        // sidebar fires this IPC on every workspace open, and a wedged cached
+        // connection otherwise surfaces as a silent spinner only an app
+        // restart clears. 'suspend_failed' runtimes are still up the same way
+        // and need the same repair. 'provisioning'/'failed' runtimes have no
+        // connection worth verifying yet and keep the passthrough.
+        if (
+          (runtime.status === 'running' || runtime.status === 'suspend_failed') &&
+          runtime.runtimeEnvironmentId
+        ) {
+          const wake = await ensureEphemeralVmRuntimeControlConnection({
+            userDataPath,
+            runtimeEnvironmentId: runtime.runtimeEnvironmentId,
+            getDiagnostics: getRemoteRuntimeSharedControlDiagnostics,
+            reconnect: reconnectRemoteRuntimeSharedControlConnection,
+            ensureConnection: ensureRemoteRuntimeSharedControlConnection
+          })
+          if (!wake.ok) {
+            throw new Error(
+              `Ephemeral VM runtime is ${runtime.status}, but its Orca Server connection could not be re-established (${wake.connectionState}).`
+            )
+          }
+        }
         return runtime
       }
       const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
