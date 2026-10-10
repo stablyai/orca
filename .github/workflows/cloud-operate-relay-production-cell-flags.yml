@@ -64,7 +64,7 @@ jobs:
     if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     # A flip back waits up to 8 minutes for the cell to lease every control.
-    timeout-minutes: 15
+    timeout-minutes: 60
     environment: production
     env:
       MODE: ${{ inputs.mode }}

@@ -50,8 +50,20 @@ export const RESERVE_CONFIRMATION = 'RESERVE'
 export const BREAK_GLASS_CONFIRMATION = 'BREAK GLASS'
 // Longer than a director's cached read of the admit-mode table (5 s).
 export const RESERVE_MODE_CACHE_WAIT_MS = 10_000
-// How long a flip back may take to lease every control the cell admitted from memory.
-export const REREGISTER_WAIT_MS = 8 * 60_000
+// How long a flip back may take to lease every control the cell admitted from memory: its
+// control count at a per-lane pace below the measured 0.38/s (170 ms trips), within the job.
+export const REREGISTER_WAIT_MIN_MS = 8 * 60_000
+export const REREGISTER_WAIT_MAX_MS = 50 * 60_000
+const REREGISTER_CONTROLS_PER_LANE_PER_SEC = 0.3
+// The smallest default a cell uses (a third of a US pool of 10).
+const REREGISTER_DEFAULT_LANES = 3
+
+export function reregisterWaitMs(runtime) {
+  const controls = Number(runtime?.runtime?.controls ?? 0)
+  const lanes = Number(runtime?.flagsApplied?.flags?.reregisterInFlight ?? REREGISTER_DEFAULT_LANES)
+  const estimate = (controls / (lanes * REREGISTER_CONTROLS_PER_LANE_PER_SEC)) * 1_000
+  return Math.min(REREGISTER_WAIT_MAX_MS, Math.max(REREGISTER_WAIT_MIN_MS, Math.ceil(estimate)))
+}
 
 // An image from before `supportedFlags` accepts the keys its applied flags list, and only
 // ticketCheck off/shadow: anything else is dropped there, or voids the whole object.
@@ -318,17 +330,24 @@ export function sameFlags(applied, desired) {
 
 // Sweeps resume only once every control the cell admitted from memory holds a lease again.
 async function waitForLeasedControls(fetchImpl, request, idToken, { now, sleep, log }) {
-  const deadline = now() + REREGISTER_WAIT_MS
+  let waitMs
+  let deadline = now() + REREGISTER_WAIT_MIN_MS
   while (now() < deadline) {
     const runtime = await readRuntime(fetchImpl, request, idToken, sleep).catch(() => null)
     // An image without the field never admitted from memory.
     if (runtime && (runtime.admitModeEffective ?? 'db') === 'db') return
+    if (runtime && waitMs === undefined) {
+      waitMs = reregisterWaitMs(runtime)
+      deadline = now() + waitMs
+      log(JSON.stringify({ event: 'orca_relay_cell_reregistration_wait', cellId: request.cellId, waitMs }))
+    }
     await sleep(5_000)
   }
   log(JSON.stringify({ event: 'orca_relay_cell_reregistration_still_running', cellId: request.cellId }))
   throw new Error(
-    `cell still re-registering after ${REREGISTER_WAIT_MS} ms; Postgres keeps reserve, so sweeps stay off. ` +
-      'Run again with the same --set once it reports db'
+    `cell still re-registering after ${waitMs ?? REREGISTER_WAIT_MIN_MS} ms. Its connections are safe and Postgres ` +
+      'keeps reserve, so sweeps stay off the cell. Raise reregisterInFlight to speed it up, and once runtime-status ' +
+      'reports admitModeEffective=db run again with --set admitMode=db to record db'
   )
 }
 

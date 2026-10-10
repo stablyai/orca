@@ -7,6 +7,9 @@ import {
   parseCellFlagsRequest,
   parseFlagChanges,
   READ_BACK_TIMEOUT_MS,
+  REREGISTER_WAIT_MAX_MS,
+  REREGISTER_WAIT_MIN_MS,
+  reregisterWaitMs,
   WRITE_CONFIRMATION
 } from './operate-relay-cell-flags.mjs'
 
@@ -42,7 +45,8 @@ function fakeGoogleAndCell({
   cellId = CELL,
   supportedFlags = SUPPORTED,
   // Polls that still report admitModeEffective=reserve after a flip back.
-  reregisteringPolls = 0
+  reregisteringPolls = 0,
+  controls
 } = {}) {
   const state = {
     stored,
@@ -79,6 +83,7 @@ function fakeGoogleAndCell({
         cellId,
         flagsApplied: state.applied,
         admitModeEffective: effective,
+        ...(controls === undefined ? {} : { runtime: { controls } }),
         ...(supportedFlags ? { supportedFlags } : {})
       })
     }
@@ -399,6 +404,31 @@ test('a flip back records db in Postgres only after the cell has leased every co
   assert.equal((await run(request, fake).result).written, true)
   assert.deepEqual(fake.state.order, ['file:db', 'director:db'])
   assert.equal(fake.state.reregisteringPolls, -1)
+})
+
+test('the flip-back wait scales with the control count and the switch-file pace', () => {
+  assert.equal(reregisterWaitMs({ runtime: { controls: 100 } }), REREGISTER_WAIT_MIN_MS)
+  // 1,500 controls at the default 3 lanes: 1,667 s.
+  assert.equal(reregisterWaitMs({ runtime: { controls: 1_500 } }), 1_666_667)
+  assert.equal(
+    reregisterWaitMs({ runtime: { controls: 1_500 }, flagsApplied: { flags: { reregisterInFlight: 10 } } }),
+    500_000
+  )
+  assert.equal(reregisterWaitMs({ runtime: { controls: 3_000 } }), REREGISTER_WAIT_MAX_MS)
+})
+
+test('a flip back that outlasts its wait keeps Postgres on reserve and says how to finish', async () => {
+  const fake = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { admitMode: 'reserve' } } },
+    reregisteringPolls: Number.POSITIVE_INFINITY,
+    controls: 1_500
+  })
+  fake.state.directorAdmitMode = 'reserve'
+  const request = parseCellFlagsRequest(values({ ...DIRECTOR, set: 'admitMode=default', 'expected-generation': '7' }))
+  const { lines, result } = run(request, fake)
+  await assert.rejects(result, /after 1666667 ms[\s\S]*reports admitModeEffective=db run again with --set admitMode=db/)
+  assert.deepEqual(fake.state.order, ['file:db'])
+  assert.equal(lines.find((line) => line.event === 'orca_relay_cell_reregistration_wait')?.waitMs, 1_666_667)
 })
 
 test('break glass records db for a cell that cannot answer, typed for that cell only', async () => {
